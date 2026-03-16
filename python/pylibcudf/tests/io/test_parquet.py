@@ -30,13 +30,15 @@ _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
 
 
 @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
 @pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_parquet_basic(
     table_data,
     binary_source_or_sink,
     nrows_skiprows,
-    columns,
+    column_names,
+    column_indices,
     stream,
     source_strategy,
 ):
@@ -59,13 +61,18 @@ def test_read_parquet_basic(
         options.set_num_rows(nrows)
     if skiprows != 0:
         options.set_skip_rows(skiprows)
-    if columns is not None:
-        options.set_columns(columns)
+    if column_names is not None:
+        options.set_column_names(column_names)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
-    if columns is not None:
-        pa_table = pa_table.select(columns)
+    if column_names is not None:
+        pa_table = pa_table.select(column_names)
+    elif column_indices is not None:
+        column_names = [pa_table.column_names[idx] for idx in column_indices]
+        pa_table = pa_table.select(column_names)
 
     # Adapt to nrows/skiprows
     pa_table = pa_table.slice(
@@ -93,16 +100,16 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
     if if_prune_rowgroup:
         # Prune the only row group since the filter aims to find elements larger than the max
         filter = Operation(
-            ASTOperator.GREATER,
-            ColumnNameReference("a"),
+            ASTOperator.LESS,
             Literal(plc.Scalar.from_arrow(pa.scalar(max_element))),
+            ColumnNameReference("a"),
         )
     else:
         # No real pruning
         filter = Operation(
-            ASTOperator.GREATER,
-            ColumnNameReference("a"),
+            ASTOperator.LESS,
             Literal(plc.Scalar.from_arrow(pa.scalar(min_element))),
+            ColumnNameReference("a"),
         )
     options.set_filter(filter)
     plc_table_w_meta = plc.io.parquet.read_parquet(options)
@@ -133,9 +140,9 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
                     Literal(plc.Scalar.from_arrow(pa.scalar(10))),
                 ),
                 Operation(
-                    ASTOperator.LESS,
-                    ColumnNameReference("col_double"),
+                    ASTOperator.GREATER,
                     Literal(plc.Scalar.from_arrow(pa.scalar(0.0))),
+                    ColumnNameReference("col_double"),
                 ),
             ),
         ),
@@ -186,14 +193,16 @@ class FooSpan:
 
 @pytest.mark.parametrize("num_buffers", [1, 2])
 @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("columns", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_names", [None, ["col_int64", "col_bool"]])
+@pytest.mark.parametrize("column_indices", [None, [2, 0]])
 @pytest.mark.parametrize("use_foo_span", [False, True])
 def test_read_parquet_from_device_buffers(
     table_data,
     binary_source_or_sink,
     nrows_skiprows,
     stream,
-    columns,
+    column_names,
+    column_indices,
     num_buffers,
     use_foo_span,
 ):
@@ -219,8 +228,10 @@ def test_read_parquet_from_device_buffers(
         options.set_num_rows(nrows)
     if skiprows != 0:
         options.set_skip_rows(skiprows)
-    if columns is not None:
-        options.set_columns(columns)
+    if column_names is not None:
+        options.set_column_names(column_names)
+    elif column_indices is not None:
+        options.set_column_indices(column_indices)
 
     res = plc.io.parquet.read_parquet(options, stream)
 
@@ -229,8 +240,12 @@ def test_read_parquet_from_device_buffers(
         if num_buffers == 1
         else pa.concat_tables([pa_table] * num_buffers)
     )
-    if columns is not None:
-        expected = expected.select(columns)
+    if column_names is not None:
+        expected = expected.select(column_names)
+    elif column_indices is not None:
+        column_names = [expected.column_names[idx] for idx in column_indices]
+        expected = expected.select(column_names)
+
     expected = expected.slice(skiprows, nrows if nrows > -1 else None)
 
     assert_table_and_meta_eq(expected, res, check_field_nullability=False)
@@ -331,10 +346,10 @@ def test_write_parquet(
             pc.field("col_str") == "foo",
             Operation(
                 ASTOperator.EQUAL,
-                ColumnNameReference("col_str"),
                 Literal(
                     plc.Scalar.from_arrow(pa.scalar("foo", type=pa.string()))
                 ),
+                ColumnNameReference("col_str"),
             ),
         ),
     ],

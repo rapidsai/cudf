@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import datetime
 import zoneinfo
@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column.decimal import Decimal32Column, Decimal64Column
 from cudf.core.column.numerical import NumericalColumn
 from cudf.testing import assert_eq
@@ -211,27 +212,12 @@ def test_numeric_to_timedelta(
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "alias,expect_dtype",
-    [
-        ("UInt8", "uint8"),
-        ("UInt16", "uint16"),
-        ("UInt32", "uint32"),
-        ("UInt64", "uint64"),
-        ("Int8", "int8"),
-        ("Int16", "int16"),
-        ("Int32", "int32"),
-        ("Int64", "int64"),
-        ("boolean", "bool"),
-        ("Float32", "float32"),
-        ("Float64", "float64"),
-    ],
-)
-def test_astype_with_aliases(alias, expect_dtype):
-    pd_data = pd.Series([1, 2, 0])
-    gd_data = cudf.Series(pd_data)
+def test_astype_with_aliases(all_supported_pandas_nullable_extension_dtypes):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    expected = pd.Series([scalar]).astype(str(dtype))
+    result = cudf.Series([scalar]).astype(str(dtype))
 
-    assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+    assert_eq(expected, result)
 
 
 def test_timedelta_datetime_cast_invalid():
@@ -387,6 +373,99 @@ def test_timedelta_str_roundtrip(sr_data, sr_dtype, exp_data, exp_dtype):
     assert_eq(gsr, actual_series.astype(gsr.dtype))
 
 
+def test_timedelta_astype_object_raises_pandas_compat():
+    sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(TypeError):
+            sr.astype(object)
+        with pytest.raises(TypeError):
+            sr.astype(np.dtype("object"))
+
+
+def test_timedelta_astype_unicode_dtype_pandas_compat():
+    sr = cudf.Series([1000000000], dtype="timedelta64[ns]")
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = sr.astype(np.dtype("U"))
+    expected = pd.Series(pd.to_timedelta([1000000000], unit="ns")).astype(str)
+    assert result.dtype == np.dtype("object")
+    assert_eq(result, cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
+    "data, min_unit",
+    [
+        # days-only
+        (["1 days", "5 days", "0 days"], "s"),
+        # whole seconds (sub-day, no fractions)
+        (["1 days 02:03:04", "0 days 00:00:01"], "s"),
+        # millisecond fractions
+        (["0 days 00:00:01.500", "1 days 00:00:00.001"], "ms"),
+        # microsecond fractions
+        (["0 days 00:00:00.000001", "0 days 00:00:01.123456"], "us"),
+        # nanosecond fractions
+        (["0 days 00:00:00.000000001", "0 days 00:00:00.123456789"], "ns"),
+        # nanoseconds that are exact microseconds (trailing zeros stripped)
+        (["0 days 00:00:00.000001000", "0 days 00:00:00.100000000"], "us"),
+        # mixed fractional and whole seconds
+        (["0 days 00:00:01.500000", "0 days 00:00:02"], "us"),
+        # mixed days-only and sub-day rows
+        (["3 days", "0 days 01:00:00"], "s"),
+    ],
+    ids=[
+        "days_only",
+        "whole_seconds",
+        "millis",
+        "micros",
+        "nanos",
+        "nanos_exact_micros",
+        "mixed_frac_and_whole",
+        "mixed_days_and_subday",
+    ],
+)
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+    ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Bug in older pandas versions",
+)
+def test_timedelta_astype_str_pandas_compat(data, min_unit, unit):
+    ptd = pd.to_timedelta(data).astype(unit)
+    psr = pd.Series(ptd)
+    gsr = cudf.Series(ptd)
+    expected = psr.astype("str")
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = gsr.astype("str")
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+    ],
+)
+def test_timedelta_astype_str_with_nulls_pandas_compat(unit):
+    ptd = pd.to_timedelta(
+        ["1 days 02:03:04", pd.NaT, "0 days 00:00:01"]
+    ).astype(unit)
+    psr = pd.Series(ptd)
+    gsr = cudf.Series(ptd)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = gsr.astype("str")
+    expected = psr.astype("str")
+    assert_eq(result, cudf.Series(expected))
+
+
 def test_typecast_from_datetime(numeric_types_as_str):
     data = pd.date_range(
         "2019-07-16 00:00:00",
@@ -462,7 +541,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
     gdf_sr = cudf.Series(pd_sr)
 
     expect = pd_sr.values.astype(datetime_types_as_str)
-    got = gdf_sr.astype(datetime_types_as_str).values_host
+    got = gdf_sr.astype(datetime_types_as_str).to_numpy()
 
     np.testing.assert_equal(expect, got)
 
@@ -823,20 +902,12 @@ def test_astype_naive_to_aware_raises():
         ser.to_pandas().astype("datetime64[ns, UTC]")
 
 
-@pytest.mark.parametrize(
-    "np_dtype,pd_dtype",
-    [
-        tuple(item)
-        for item in cudf.utils.dtypes.np_dtypes_to_pandas_dtypes.items()
-    ],
-)
 def test_series_astype_pandas_nullable(
-    all_supported_types_as_str, np_dtype, pd_dtype
+    all_supported_pandas_nullable_extension_dtypes,
 ):
-    source = cudf.Series([0, 1, None], dtype=all_supported_types_as_str)
-
-    expect = source.astype(np_dtype)
-    got = source.astype(pd_dtype)
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    got = cudf.Series([scalar, None]).astype(dtype)
+    expect = cudf.Series([scalar, None], dtype=dtype)
 
     assert_eq(expect, got)
 
@@ -1142,7 +1213,7 @@ def test_typecast_from_float_to_decimal(
     got = data.astype(float_types_as_str)
 
     pa_arr = got.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale)
+        pa.decimal64(to_dtype.precision, to_dtype.scale)
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1174,7 +1245,7 @@ def test_typecast_from_int_to_decimal(integer_types_as_str, precision, scale):
     pa_arr = (
         got.to_arrow()
         .cast("float64")
-        .cast(pa.decimal128(to_dtype.precision, to_dtype.scale))
+        .cast(pa.decimal64(to_dtype.precision, to_dtype.scale))
     )
     expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
@@ -1227,12 +1298,15 @@ def test_typecast_to_from_decimal(from_dtype, to_dtype):
         )
     s = data.astype(from_dtype)
 
-    pa_arr = s.to_arrow().cast(
-        pa.decimal128(to_dtype.precision, to_dtype.scale), safe=False
-    )
     if isinstance(to_dtype, cudf.Decimal32Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal32(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal32Column.from_arrow(pa_arr))
     elif isinstance(to_dtype, cudf.Decimal64Dtype):
+        pa_arr = s.to_arrow().cast(
+            pa.decimal64(to_dtype.precision, to_dtype.scale), safe=False
+        )
         expected = cudf.Series._from_column(Decimal64Column.from_arrow(pa_arr))
 
     with expect_warning_if(to_dtype.scale < s.dtype.scale, UserWarning):
@@ -1347,3 +1421,13 @@ def test_series_astype_no_copy(copy):
     result = gsr.astype("int64", copy=copy)
     assert_eq(result, gsr)
     assert (result is gsr) is (not copy)
+
+
+def test_astype_aware_to_naive_raises():
+    data = [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    with pytest.raises(TypeError):
+        cudf_ser.astype("datetime64[ns]")
+    with pytest.raises(TypeError):
+        pd_ser.astype("datetime64[ns]")

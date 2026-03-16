@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include "io/orc/reader_impl_helpers.hpp"
 #include "io/utilities/hostdevice_span.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -28,7 +29,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/utility>
-#include <thrust/copy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -52,6 +52,7 @@ namespace {
  * @param loaded_stripe_range Range of stripes that are already loaded in memory
  * @param stream_range Range of streams to be decoded
  * @param num_decode_stripes Number of stripes that the decoding streams belong to
+ * @param compinfo Compression information for each stripe
  * @param compinfo_map A map to lookup compression info of streams
  * @param decompressor Block decompressor
  * @param stripe_data List of source stripe column data
@@ -180,15 +181,14 @@ rmm::device_buffer decompress_stripe_data(
   any_block_failure[0] = false;
   any_block_failure.host_to_device_async(stream);
 
-  device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(), num_compressed_blocks};
-  device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
-  cudf::io::detail::decompress(decompressor.compression(),
-                               inflate_in_view,
-                               inflate_out_view,
-                               inflate_res,
-                               max_uncomp_block_size,
-                               total_decomp_size,
-                               stream);
+  cudf::io::detail::decompress(
+    decompressor.compression(),
+    device_span<device_span<uint8_t const>>{inflate_in.data(), num_compressed_blocks},
+    device_span<device_span<uint8_t>>{inflate_out.data(), num_compressed_blocks},
+    inflate_res,
+    max_uncomp_block_size,
+    total_decomp_size,
+    stream);
 
   // Check if any block has been failed to decompress.
   // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
@@ -203,11 +203,12 @@ rmm::device_buffer decompress_stripe_data(
                    });
 
   if (num_uncompressed_blocks > 0) {
-    device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
-                                                         num_uncompressed_blocks};
-    device_span<device_span<uint8_t>> copy_out_view{inflate_out.data() + num_compressed_blocks,
-                                                    num_uncompressed_blocks};
-    cudf::io::detail::gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
+    cudf::io::detail::gpu_copy_uncompressed_blocks(
+      device_span<device_span<uint8_t const>>{inflate_in.data() + num_compressed_blocks,
+                                              num_uncompressed_blocks},
+      device_span<device_span<uint8_t>>{inflate_out.data() + num_compressed_blocks,
+                                        num_uncompressed_blocks},
+      stream);
   }
 
   // Copy without stream sync, thus need to wait for stream sync below to access.
@@ -292,13 +293,14 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
       if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
-        thrust::copy_if(rmm::exec_policy_nosync(stream),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(0) + parent_mask_len,
-                        dst_idx.begin(),
-                        [parent_valid_map_base] __device__(auto idx) {
-                          return bit_is_set(parent_valid_map_base, idx);
-                        });
+        cudf::detail::copy_if_async(
+          thrust::counting_iterator<size_type>(0),
+          thrust::counting_iterator<size_type>(parent_mask_len),
+          dst_idx.begin(),
+          [parent_valid_map_base] __device__(auto idx) {
+            return bit_is_set(parent_valid_map_base, idx);
+          },
+          stream);
 
         auto merged_null_mask = cudf::detail::create_null_mask(
           parent_mask_len, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
@@ -345,7 +347,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
  * @param skip_rows Number of rows to offset from start
  * @param row_index_stride Distance between each row index
  * @param level Current nesting level being processed
- * @param tz_table Local time to UTC conversion table
+ * @param d_tz_table Local time to UTC conversion table
  * @param chunks Vector of list of column chunk descriptors
  * @param row_groups Vector of list of row index descriptors
  * @param out_buffers Output columns' device buffers

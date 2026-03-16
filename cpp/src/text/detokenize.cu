@@ -6,10 +6,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -102,11 +103,11 @@ rmm::device_uvector<cudf::size_type> create_token_row_offsets(
 
   auto tokens_offsets = rmm::device_uvector<cudf::size_type>(output_count + 1, stream);
 
-  cudf::detail::copy_if(thrust::counting_iterator<cudf::size_type>(0),
-                        thrust::counting_iterator<cudf::size_type>(tokens_counts),
-                        tokens_offsets.begin(),
-                        fn,
-                        stream);
+  cudf::detail::copy_if_async(thrust::counting_iterator<cudf::size_type>(0),
+                              thrust::counting_iterator<cudf::size_type>(tokens_counts),
+                              tokens_offsets.begin(),
+                              fn,
+                              stream);
 
   // set the last element to the total number of tokens
   tokens_offsets.set_element(output_count, tokens_counts, stream);

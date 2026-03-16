@@ -6,10 +6,10 @@
 #include "quantiles/tdigest/tdigest_util.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -23,12 +23,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -272,8 +270,8 @@ std::unique_ptr<column> make_tdigest_column(size_type num_rows,
     cudf::make_structs_column(centroids_size, std::move(inner_children), 0, {}, stream, mr);
 
   // grouped into lists
-  auto tdigest = cudf::make_lists_column(
-    num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {}, stream, mr);
+  auto tdigest =
+    cudf::make_lists_column(num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {});
 
   // create the final column
   std::vector<std::unique_ptr<column>> children;
@@ -354,7 +352,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                 detail::size_begin(input) + input.size(),
                                 [] __device__(auto const x) { return x == 0; },
                                 stream) == static_cast<std::size_t>(input.size());
-  auto row_size_iter = thrust::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
+  auto row_size_iter = cuda::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,
@@ -367,9 +365,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
       cudf::make_empty_column(type_id::FLOAT64),
       input.size(),
       cudf::detail::create_null_mask(
-        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr),
-      stream,
-      mr);
+        input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr));
   }
 
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
@@ -392,9 +388,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                  std::move(offsets),
                                  detail::compute_approx_percentiles(input, percentiles, stream, mr),
                                  null_count,
-                                 std::move(bitmask),
-                                 stream,
-                                 mr);
+                                 std::move(bitmask));
 }
 
 }  // namespace tdigest

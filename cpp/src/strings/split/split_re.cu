@@ -23,7 +23,6 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 
@@ -114,7 +113,7 @@ struct token_reader_fn {
  * @param d_strings Strings to split
  * @param d_prog Regex to evaluate against each string
  * @param direction Whether tokens are generated forwards or backwards.
- * @param max_tokens The maximum number of tokens for each split.
+ * @param maxsplit The maximum number of tokens for each split.
  * @param counts The number of tokens in each string
  * @param stream CUDA stream used for kernel launches.
  */
@@ -280,9 +279,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                           stream,
-                           mr);
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace

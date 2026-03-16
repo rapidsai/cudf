@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,6 @@
 
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
-#include <thrust/functional.h>
 #include <thrust/reduce.h>
 
 #include <optional>

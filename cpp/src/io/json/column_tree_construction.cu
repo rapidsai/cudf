@@ -5,8 +5,8 @@
 
 #include "nested_json.hpp"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -18,9 +18,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -86,6 +86,8 @@ struct parent_nodeids_to_colids {
  *
  * @param node_tree Node tree representation of JSON string
  * @param original_col_ids Column ids of nodes
+ * @param sorted_col_ids Sorted column IDs
+ * @param ordered_node_ids Ordered node IDs
  * @param row_offsets Row offsets of nodes
  * @param is_array_of_arrays Whether the tree is an array of arrays
  * @param row_array_parent_col_id Column id of row array, if is_array_of_arrays is true
@@ -194,7 +196,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     rmm::device_uvector<NodeIndexT> non_leaf_nodes_children(num_non_leaf_columns, stream);
     cudf::detail::reduce_by_key_async(parent_col_ids.begin() + 1,
                                       parent_col_ids.end(),
-                                      thrust::make_constant_iterator(1),
+                                      cuda::make_constant_iterator(1),
                                       non_leaf_nodes.begin(),
                                       non_leaf_nodes_children.begin(),
                                       cuda::std::plus<NodeIndexT>(),
@@ -239,7 +241,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                   parent_col_ids.begin() + 1,
                                   parent_col_ids.end(),
-                                  thrust::make_constant_iterator(1),
+                                  cuda::make_constant_iterator(1),
                                   map.begin());
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
                        thrust::make_counting_iterator(1),

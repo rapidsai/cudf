@@ -132,7 +132,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
                                           num_rows,
                                           std::move(row_indices),
-                                          rmm::device_buffer{},
+                                          rmm::device_buffer{0, stream, mr},
                                           0);
   }
 
@@ -187,7 +187,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
                                         num_rows,
                                         std::move(row_indices),
-                                        rmm::device_buffer{},
+                                        rmm::device_buffer{0, stream, mr},
                                         0);
 }
 
@@ -283,7 +283,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
     return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
                                           num_rows,
                                           std::move(row_mask),
-                                          rmm::device_buffer{},
+                                          rmm::device_buffer{0, stream, mr},
                                           0);
   }
 
@@ -325,8 +325,11 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
     stream.synchronize();
   }
 
-  return std::make_unique<cudf::column>(
-    cudf::data_type{cudf::type_id::BOOL8}, num_rows, std::move(row_mask), rmm::device_buffer{}, 0);
+  return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
+                                        num_rows,
+                                        std::move(row_mask),
+                                        rmm::device_buffer{0, stream, mr},
+                                        0);
 }
 
 /**
@@ -334,8 +337,8 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
  * vectors
  *
  * @param row_index_column View of the row index column
- * @param deletion_vector_refs Queue of roaring bitmap wrappers
- * @param deletion_vector_row_counts Queue of number of rows in eachdeletion vector
+ * @param deletion_vectors Queue of roaring bitmap wrappers
+ * @param deletion_vector_row_counts Queue of number of rows in each deletion vector
  * @param start_row Starting row index of the current table chunk
  * @param stream CUDA stream for kernel launches and data transfers
  * @param mr Device memory resource to allocate device memory for the row mask column

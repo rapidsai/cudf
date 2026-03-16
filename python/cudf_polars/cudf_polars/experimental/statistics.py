@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for tracking column statistics."""
@@ -45,12 +45,16 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.experimental.base import JoinInfo
     from cudf_polars.typing import Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions, StatsPlanningOptions
+    from cudf_polars.utils.config import (
+        ConfigOptions,
+        StatsPlanningOptions,
+        StreamingExecutor,
+    )
 
 
 def collect_statistics(
     root: IR,
-    config_options: ConfigOptions,
+    config_options: ConfigOptions[StreamingExecutor],
 ) -> StatsCollector:
     """
     Collect column statistics for a query.
@@ -66,9 +70,6 @@ def collect_statistics(
     -------
     A StatsCollector object with populated column statistics.
     """
-    assert config_options.executor.name == "streaming", (
-        "Only streaming executor is supported in collect_statistics"
-    )
     stats_planning = config_options.executor.stats_planning
     need_local_statistics = using_local_statistics(stats_planning)
     if need_local_statistics or stats_planning.use_io_partitioning:
@@ -107,7 +108,9 @@ def collect_statistics(
     return StatsCollector()
 
 
-def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollector:
+def collect_base_stats(
+    root: IR, config_options: ConfigOptions[StreamingExecutor]
+) -> StatsCollector:
     """
     Collect base datasource statistics.
 
@@ -129,9 +132,6 @@ def collect_base_stats(root: IR, config_options: ConfigOptions) -> StatsCollecto
     outline of the statistics that will be collected before any
     real data is sampled.
     """
-    assert config_options.executor.name == "streaming", (
-        "Only streaming executor is supported in collect_statistics"
-    )
     stats_planning = config_options.executor.stats_planning
     need_local_statistics = using_local_statistics(stats_planning)
     need_join_info = need_local_statistics and stats_planning.use_join_heuristics
@@ -539,9 +539,6 @@ def apply_predicate_selectivity(
     config_options
         GPUEngine configuration options.
     """
-    assert config_options.executor.name == "streaming", (
-        "Only streaming executor is supported in update_column_stats"
-    )
     # TODO: Use predicate to generate a better selectivity estimate. Default is 0.8
     selectivity = config_options.executor.stats_planning.default_selectivity
     if selectivity < 1.0 and (row_count := stats.row_count[ir].value) is not None:
@@ -578,7 +575,9 @@ def copy_child_unique_counts(column_stats_mapping: dict[str, ColumnStats]) -> No
 
 
 @update_column_stats.register(IR)
-def _(ir: IR, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: IR, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
+) -> None:
     # Default `update_column_stats` implementation.
     # Propagate largest child row-count estimate.
     stats.row_count[ir] = ColumnStat[int](
@@ -685,7 +684,9 @@ def _(
 
 
 @update_column_stats.register(Select)
-def _(ir: Select, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: Select, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
+) -> None:
     # Update statistics for a Select node.
 
     # Start by copying the child unique-count estimates.
@@ -759,7 +760,9 @@ def _(
 
 
 @update_column_stats.register(Join)
-def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: Join, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
+) -> None:
     # Apply basic join-cardinality estimation.
     child_row_counts = known_child_row_counts(ir, stats)
     if len(child_row_counts) == 2:
@@ -796,7 +799,9 @@ def _(ir: Join, stats: StatsCollector, config_options: ConfigOptions) -> None:
 
 
 @update_column_stats.register(Union)
-def _(ir: Union, stats: StatsCollector, config_options: ConfigOptions) -> None:
+def _(
+    ir: Union, stats: StatsCollector, config_options: ConfigOptions[StreamingExecutor]
+) -> None:
     # Add up child row-count estimates.
     row_counts = known_child_row_counts(ir, stats)
     stats.row_count[ir] = ColumnStat[int](sum(row_counts) or None)

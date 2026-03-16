@@ -13,7 +13,12 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle, _hash_partition_dataframe
-from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _dynamic_planning_on,
+    _fallback_inform,
+    _lower_ir_fallback,
+)
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -21,7 +26,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.parallel import LowerIRTransformer
-    from cudf_polars.utils.config import ShuffleMethod, ShufflerInsertionMethod
+    from cudf_polars.utils.config import ShuffleMethod
 
 
 def _maybe_shuffle_frame(
@@ -30,8 +35,6 @@ def _maybe_shuffle_frame(
     partition_info: MutableMapping[IR, PartitionInfo],
     shuffle_method: ShuffleMethod,
     output_count: int,
-    *,
-    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> IR:
     # Shuffle `frame` if it isn't already shuffled.
     if (
@@ -46,7 +49,6 @@ def _maybe_shuffle_frame(
             frame.schema,
             on,
             shuffle_method,
-            shuffler_insertion_method,
             frame,
         )
         partition_info[frame] = PartitionInfo(
@@ -63,8 +65,6 @@ def _make_hash_join(
     left: IR,
     right: IR,
     shuffle_method: ShuffleMethod,
-    *,
-    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Shuffle left and right dataframes (if necessary)
     left = _maybe_shuffle_frame(
@@ -73,7 +73,6 @@ def _make_hash_join(
         partition_info,
         shuffle_method,
         output_count,
-        shuffler_insertion_method=shuffler_insertion_method,
     )
     right = _maybe_shuffle_frame(
         right,
@@ -81,7 +80,6 @@ def _make_hash_join(
         partition_info,
         shuffle_method,
         output_count,
-        shuffler_insertion_method=shuffler_insertion_method,
     )
     # Always reconstruct in case children contain Cache nodes
     ir = ir.reconstruct([left, right])
@@ -151,7 +149,6 @@ def _make_bcast_join(
     shuffle_method: ShuffleMethod,
     *,
     streaming_runtime: str,
-    shuffler_insertion_method: ShufflerInsertionMethod,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if ir.options[0] != "Inner":
         left_count = partition_info[left].count
@@ -178,7 +175,6 @@ def _make_bcast_join(
                     partition_info,
                     shuffle_method,
                     right_count,
-                    shuffler_insertion_method=shuffler_insertion_method,
                 )
             else:
                 left = _maybe_shuffle_frame(
@@ -187,7 +183,6 @@ def _make_bcast_join(
                     partition_info,
                     shuffle_method,
                     left_count,
-                    shuffler_insertion_method=shuffler_insertion_method,
                 )
 
     new_node = ir.reconstruct([left, right])
@@ -206,6 +201,9 @@ def _(
             msg="Slice not supported in ConditionalJoin for multiple partitions.",
         )
 
+    config_options = rec.state["config_options"]
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     # Lower children
     left, right = ir.children
     left, pi_left = rec(left)
@@ -217,14 +215,14 @@ def _(
     output_count = max(left_count, right_count)
     fallback_msg = "ConditionalJoin not supported for multiple partitions."
     if left_count < right_count:
-        if left_count > 1:
+        if left_count > 1 or dynamic_planning:
             left = Repartition(left.schema, left)
             pi_left[left] = PartitionInfo(count=1)
-            _fallback_inform(fallback_msg, rec.state["config_options"])
-    elif right_count > 1:
-        right = Repartition(left.schema, right)
+            _fallback_inform(fallback_msg, config_options)
+    elif right_count > 1 or dynamic_planning:
+        right = Repartition(right.schema, right)
         pi_right[right] = PartitionInfo(count=1)
-        _fallback_inform(fallback_msg, rec.state["config_options"])
+        _fallback_inform(fallback_msg, config_options)
 
     # Reconstruct and return
     new_node = ir.reconstruct([left, right])
@@ -259,9 +257,13 @@ def _(
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
 
+    # Check for dynamic planning - may have more partitions at runtime
+    config_options = rec.state["config_options"]
+    dynamic_planning = _dynamic_planning_on(config_options)
+
     left, right = children
     output_count = max(partition_info[left].count, partition_info[right].count)
-    if output_count == 1:
+    if output_count == 1 and not dynamic_planning:
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=1)
         return new_node, partition_info
@@ -270,18 +272,19 @@ def _(
             ir, rec, msg="Cross join not support for multiple partitions."
         )
 
-    config_options = rec.state["config_options"]
-    assert config_options.executor.name == "streaming", (
-        "'in-memory' executor not supported in 'lower_join'"
-    )
-
     maintain_order = ir.options[5]
-    if maintain_order != "none" and output_count > 1:
+    if maintain_order != "none" and (output_count > 1 or dynamic_planning):
         return _lower_ir_fallback(
             ir,
             rec,
             msg=f"Join({maintain_order=}) not supported for multiple partitions.",
         )
+
+    # Check for dynamic planning - defer broadcast vs shuffle decision to runtime
+    if dynamic_planning:  # pragma: no cover; Requires rapidsmpf runtime
+        new_node = ir.reconstruct(children)
+        partition_info[new_node] = PartitionInfo(count=output_count)
+        return new_node, partition_info
 
     if _should_bcast_join(
         ir,
@@ -300,7 +303,6 @@ def _(
             right,
             config_options.executor.shuffle_method,
             streaming_runtime=config_options.executor.runtime,
-            shuffler_insertion_method=config_options.executor.shuffler_insertion_method,
         )
     else:
         # Create a hash join
@@ -311,7 +313,6 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
-            shuffler_insertion_method=config_options.executor.shuffler_insertion_method,
         )
 
 

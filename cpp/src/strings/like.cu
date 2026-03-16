@@ -22,9 +22,9 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -172,9 +172,8 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
  * It is only used for longer strings.
  *
  * @param d_strings The input strings column
- * @param d_pattern The pattern to match
+ * @param pattern_itr The pattern to match
  * @param d_escape The escape character
- * @param d_wcs The multi-wildcard indices
  * @param results The output of boolean values
  */
 template <typename PatternIterator>
@@ -362,7 +361,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
                std::invalid_argument);
 
   auto const d_pattern    = pattern.value(stream);
-  auto const patterns_itr = thrust::make_constant_iterator(d_pattern);
+  auto const patterns_itr = cuda::make_constant_iterator(d_pattern);
   return like(input, patterns_itr, d_escape, stream, mr);
 }
 

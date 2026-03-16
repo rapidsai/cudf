@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,7 +9,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <iterator>
@@ -96,14 +96,14 @@ template <typename Iter>
  *
  * @return auto Validity iterator which always yields `false`
  */
-[[maybe_unused]] static auto all_nulls() { return thrust::make_constant_iterator(false); }
+[[maybe_unused]] static auto all_nulls() { return cuda::make_constant_iterator(false); }
 
 /**
  * @brief Bool iterator for marking all elements are valid (non-null)
  *
  * @return auto Validity iterator which always yields `true`
  */
-[[maybe_unused]] static auto no_nulls() { return thrust::make_constant_iterator(true); }
+[[maybe_unused]] static auto no_nulls() { return cuda::make_constant_iterator(true); }
 
 /**
  * @brief Bool iterator for marking null elements from pointers of data

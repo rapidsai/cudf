@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
@@ -57,6 +58,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param literals Lists of literals, one per column with (in)equality predicate
    * @param operators Lists of operators, one per column with (in)equality predicate
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
+   * @param output_dtypes Output data types for the filtered columns
    * @param dictionary_col_schemas Schema indices of columns with (in)equality predicate
    * @param filter AST expression to filter row groups based on dictionary pages
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -138,11 +140,12 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @brief Filters and reduces down to the selection of payload columns
    *
    * @param payload_column_names List of paths of select payload column names, if any
-   * @param filter_columns_names List of paths of column names present only in filter, if any
+   * @param filter_column_names List of paths of column names present only in filter, if any
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param ignore_missing_columns Whether to ignore non-existent columns
    * @param timestamp_type_id Type conversion parameter
+   * @param decimal_type_id Type conversion parameter
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -154,7 +157,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            bool include_index,
                            bool strings_to_categorical,
                            bool ignore_missing_columns,
-                           type_id timestamp_type_id);
+                           type_id timestamp_type_id,
+                           type_id decimal_type_id);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
@@ -255,7 +259,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
   /**
    * @brief Filter the row groups using bloom filters based on predicate filter
    *
-   * @param bloom_filter_data Device buffers of bloom filters, one per input column chunk
+   * @param bloom_filter_data Device spans of bloom filters, one per input column chunk
    * @param row_group_indices Input row groups indices
    * @param output_dtypes Datatypes of output columns
    * @param output_column_schemas schema indices of output columns
@@ -265,7 +269,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @return Filtered row group indices, if any are filtered
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_bloom_filters(
-    cudf::host_span<rmm::device_buffer> bloom_filter_data,
+    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     cudf::host_span<data_type const> output_dtypes,
     cudf::host_span<cudf::size_type const> output_column_schemas,
@@ -360,32 +364,14 @@ class dictionary_literals_collector : public equality_literals_collector {
  */
 class named_to_reference_converter : public parquet::detail::named_to_reference_converter {
  public:
+  named_to_reference_converter() = default;
+
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
-                               std::vector<SchemaElement> const& schema_tree);
+                               std::vector<SchemaElement> const& schema_tree,
+                               cudf::io::parquet_reader_options const& options);
 
   using parquet::detail::named_to_reference_converter::visit;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
- private:
-  std::unordered_map<int32_t, std::string> _column_indices_to_names;
-};
-
-/**
- * @brief Collects column names from the expression ignoring the `skip_names`
- */
-class names_from_expression : public parquet::detail::names_from_expression {
- public:
-  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names,
-                        std::optional<std::vector<std::string>> selected_columns,
-                        std::vector<SchemaElement> const& schema_tree);
-
-  using parquet::detail::names_from_expression::visit;
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )

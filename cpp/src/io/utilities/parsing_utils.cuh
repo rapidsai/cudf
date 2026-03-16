@@ -26,7 +26,6 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
 
 using cudf::device_span;
@@ -115,7 +114,6 @@ CUDF_HOST_DEVICE constexpr bool is_infinity(char const* begin, char const* end)
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param opts The global parsing behavior options
- * @param error_result Value to return on parse error
  * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
@@ -252,7 +250,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
  * @brief Lexicographically compare digits in input against string
  * representing an integer
  *
- * @param raw_data The pointer to beginning of character string
+ * @param data The pointer to beginning of character string
  * @param golden The pointer to beginning of character string representing
  * the value to be compared against
  * @return bool True if integer represented by character string is less
@@ -274,8 +272,9 @@ __device__ __inline__ bool less_equal_than(char const* data, char const (&golden
  * @brief Determine which counter to increment when a sequence of digits
  * and a parity sign is encountered.
  *
- * @param raw_data The pointer to beginning of character string
- * @param digit_count Total number of digits
+ * @param data_begin The pointer to beginning of character string
+ * @param data_end The pointer to end of character string
+ * @param is_negative Whether the number is negative
  * @param stats Reference to structure with counters
  * @return Pointer to appropriate counter that belong to
  * the interpreted data type
@@ -370,8 +369,8 @@ __inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces
 
   auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   auto const trim_end   = thrust::find_if(thrust::seq,
-                                        thrust::make_reverse_iterator(end),
-                                        thrust::make_reverse_iterator(trim_begin),
+                                        cuda::std::make_reverse_iterator(end),
+                                        cuda::std::make_reverse_iterator(trim_begin),
                                         not_whitespace);
 
   return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
@@ -392,8 +391,8 @@ __inline__ __device__ cuda::std::pair<char const*, char const*> trim_whitespaces
 
   auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
   auto const trim_end   = thrust::find_if(thrust::seq,
-                                        thrust::make_reverse_iterator(end),
-                                        thrust::make_reverse_iterator(trim_begin),
+                                        cuda::std::make_reverse_iterator(end),
+                                        cuda::std::make_reverse_iterator(trim_begin),
                                         not_whitespace);
 
   return {trim_begin, trim_end.base()};

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -154,7 +154,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
  *
  * The caller must keep the return object alive for the life of the test runs.
  *
- * @param cmd_opts Command line options returned by parse_cudf_test_opts
+ * @param config Command line options returned by parse_cudf_test_opts
  * @return Memory resource adaptor
  */
 inline auto make_memory_resource_adaptor(cudf::test::config const& config)
@@ -172,7 +172,7 @@ inline auto make_memory_resource_adaptor(cudf::test::config const& config)
  *
  * The caller must keep the return object alive for the life of the test runs.
  *
- * @param cmd_opts Command line options returned by parse_cudf_test_opts
+ * @param config Command line options returned by parse_cudf_test_opts
  * @return Memory resource adaptor
  */
 inline auto make_stream_mode_adaptor(cudf::test::config const& config)
@@ -231,11 +231,11 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
       cudf::set_current_device_resource(&mr);                                                    \
       auto rc = RUN_ALL_TESTS();                                                                 \
       std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
-      cudf::deinitialize();                                                                      \
+      cudf::teardown();                                                                          \
       return rc;                                                                                 \
     } else {                                                                                     \
       auto rc = RUN_ALL_TESTS();                                                                 \
-      cudf::deinitialize();                                                                      \
+      cudf::teardown();                                                                          \
       return rc;                                                                                 \
     }                                                                                            \
   }

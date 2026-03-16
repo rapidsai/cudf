@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 
@@ -12,8 +12,12 @@ import pylibcudf as plc
 
 import cudf
 from cudf.core.column import column_empty
-from cudf.core.column.column import ColumnBase
-from cudf.core.column.utils import access_columns
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    pylibcudf_result_dtype_policy,
+    same_dtype_policy,
+)
 from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 from cudf.utils.dtypes import _get_nan_for_dtype
@@ -41,12 +45,12 @@ class NumericalBaseColumn(ColumnBase, Scannable):
     """
 
     _VALID_REDUCTIONS = {
-        "sum",
-        "product",
-        "sum_of_squares",
         "mean",
-        "var",
+        "product",
         "std",
+        "sum",
+        "sum_of_squares",
+        "var",
     }
 
     _VALID_SCANS = {
@@ -54,10 +58,29 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         "cumprod",
         "cummin",
         "cummax",
+        "ewma",
     }
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
         return not skipna and self.has_nulls()
+
+    def _reduce(
+        self,
+        op: str,
+        skipna: bool = True,
+        min_count: int = 0,
+        **kwargs: Any,
+    ) -> ScalarLike:
+        """Override to handle var/std NA conversion."""
+        result = super()._reduce(
+            op, skipna=skipna, min_count=min_count, **kwargs
+        )
+
+        # Convert NA to NaN for var/std operations
+        if op in {"var", "std"} and result is NA:
+            return _get_nan_for_dtype(self.dtype)
+
+        return result
 
     def kurtosis(self, skipna: bool = True) -> float:
         if not isinstance(skipna, bool):
@@ -139,20 +162,17 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 .slice(no_nans.null_count, len(no_nans))
                 .astype(np.dtype(np.int32))
             )
-            with access_columns(
-                no_nans, indices, mode="read", scope="internal"
-            ) as (no_nans, indices):
-                plc_column = plc.quantiles.quantile(
-                    no_nans.plc_column,
-                    q,
-                    plc.types.Interpolation[interpolation.upper()],
-                    indices.plc_column,
-                    exact,
-                )
-                result = cast(
-                    cudf.core.column.numerical_base.NumericalBaseColumn,
-                    type(self).from_pylibcudf(plc_column),
-                )
+            interpolation_type = plc.types.Interpolation[interpolation.upper()]
+
+            result = cast(
+                cudf.core.column.numerical_base.NumericalBaseColumn,
+                PylibcudfFunction(
+                    plc.quantiles.quantile,
+                    pylibcudf_result_dtype_policy,
+                ).execute_with_args(
+                    no_nans, q, interpolation_type, indices, exact
+                ),
+            )
         if return_scalar:
             scalar_result = result.element_indexing(0)
             if interpolation in {"lower", "higher", "nearest"}:
@@ -172,40 +192,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             )
         return result
 
-    def mean(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-    ) -> ScalarLike:
-        return self._reduce("mean", skipna=skipna, min_count=min_count)
-
-    def var(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-        ddof: int = 1,
-    ) -> ScalarLike:
-        result = self._reduce(
-            "var", skipna=skipna, min_count=min_count, ddof=ddof
-        )
-        if result is NA:
-            return _get_nan_for_dtype(self.dtype)
-        return result
-
-    def std(
-        self,
-        skipna: bool = True,
-        min_count: int = 0,
-        ddof: int = 1,
-    ) -> ScalarLike:
-        result = self._reduce(
-            "std", skipna=skipna, min_count=min_count, ddof=ddof
-        )
-        if result is NA:
-            return _get_nan_for_dtype(self.dtype)
-        return result
-
-    def median(self, skipna: bool = True) -> NumericalBaseColumn:
+    def median(
+        self, skipna: bool = True, min_count: int = 0, **kwargs: Any
+    ) -> NumericalBaseColumn:
         if not isinstance(skipna, bool):
             raise ValueError(
                 f"For argument 'skipna' expected type bool, got {type(skipna).__name__}."
@@ -258,28 +247,21 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if how not in {"half_even", "half_up"}:
             raise ValueError(f"{how=} must be either 'half_even' or 'half_up'")
         plc_how = plc.round.RoundingMethod[how.upper()]
-        with self.access(mode="read", scope="internal"):
-            return cast(
-                cudf.core.column.numerical_base.NumericalBaseColumn,
-                type(self).from_pylibcudf(
-                    plc.round.round(self.plc_column, decimals, plc_how)
-                ),
-            )
 
-    def _scan(self, op: str) -> ColumnBase:
-        return self.scan(op.replace("cum", ""), True)._with_type_metadata(
-            self.dtype
+        return cast(
+            cudf.core.column.numerical_base.NumericalBaseColumn,
+            PylibcudfFunction(
+                plc.round.round,
+                pylibcudf_result_dtype_policy,
+            ).execute_with_args(self, decimals, plc_how),
         )
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         unaryop_str = unaryop.upper()
         unaryop_str = _unaryop_map.get(unaryop_str, unaryop_str)
         unaryop_enum = plc.unary.UnaryOperator[unaryop_str]
-        with self.access(mode="read", scope="internal"):
-            return (
-                type(self)
-                .from_pylibcudf(
-                    plc.unary.unary_operation(self.plc_column, unaryop_enum)
-                )
-                ._with_type_metadata(self.dtype)
-            )
+
+        return PylibcudfFunction(
+            plc.unary.unary_operation,
+            same_dtype_policy,
+        ).execute_with_args(self, unaryop_enum)

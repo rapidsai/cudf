@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
+import warnings
 
 from libc.stdint cimport int64_t, uint8_t
 
@@ -42,7 +43,7 @@ from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     table_with_metadata,
 )
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
@@ -61,6 +62,14 @@ __all__ = [
     "read_parquet",
     "write_parquet",
 ]
+
+
+def _warn_deprecated(api_name, new_api):
+    warnings.warn(
+        f"{api_name} is deprecated and will be removed in a "
+        f"future version of cudf. Use {new_api} instead.",
+        FutureWarning
+    )
 
 
 cdef class ParquetReaderOptions:
@@ -152,6 +161,23 @@ cdef class ParquetReaderOptions:
 
     cpdef void set_columns(self, list col_names):
         """
+        Sets names of the columns to be read. Deprecated and will be
+        removed in a future version. Use set_column_names instead.
+
+        Parameters
+        ----------
+        col_names : list
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        _warn_deprecated("set_columns", "set_column_names")
+        self.set_column_names(col_names)
+
+    cpdef void set_column_names(self, list col_names):
+        """
         Sets names of the columns to be read.
 
         Parameters
@@ -166,7 +192,25 @@ cdef class ParquetReaderOptions:
         cdef vector[string] vec
         for name in col_names:
             vec.push_back(<string>str(name).encode())
-        self.c_obj.set_columns(vec)
+        self.c_obj.set_column_names(vec)
+
+    cpdef void set_column_indices(self, list col_indices):
+        """
+        Sets indices of the top-level columns to be read.
+
+        Parameters
+        ----------
+        col_names : list
+            List of top-level column indices
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[size_type] vec
+        for idx in col_indices:
+            vec.push_back(idx)
+        self.c_obj.set_column_indices(vec)
 
     cpdef void set_filter(self, Expression filter):
         """
@@ -305,6 +349,23 @@ cdef class ParquetReaderOptionsBuilder:
 
     cpdef ParquetReaderOptionsBuilder columns(self, list col_names):
         """
+        Sets names of the columns to be read. Deprecated and will be
+        removed in a future version. Use column_names instead.
+
+        Parameters
+        ----------
+        col_names : list[str]
+            List of column names
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        _warn_deprecated("columns", "column_names")
+        return self.column_names(col_names)
+
+    cpdef ParquetReaderOptionsBuilder column_names(self, list col_names):
+        """
         Sets names of the columns to be read.
 
         Parameters
@@ -319,7 +380,26 @@ cdef class ParquetReaderOptionsBuilder:
         cdef vector[string] vec
         for name in col_names:
             vec.push_back(<string>str(name).encode())
-        self.c_obj.columns(vec)
+        self.c_obj.column_names(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices):
+        """
+        Sets indices of the top-level columns to be read.
+
+        Parameters
+        ----------
+        col_names : list[int]
+            List of top-level column indices
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        cdef vector[size_type] vec
+        for idx in col_indices:
+            vec.push_back(idx)
+        self.c_obj.column_indices(vec)
         return self
 
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter):
@@ -336,6 +416,23 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.use_jit_filter(use_jit_filter)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width):
+        """
+        Sets the decimal width used to cast all decimal columns.
+
+        Parameters
+        ----------
+        width : TypeId
+            The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which
+            all decimal columns should be cast.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.decimal_width(width)
         return self
 
     cpdef build(self):

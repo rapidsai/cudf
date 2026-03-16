@@ -25,11 +25,11 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -196,7 +196,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
 {
   CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
-  if ((stop > 0) && (start > stop)) CUDF_FAIL("Parameter start must be less than stop.");
+  CUDF_EXPECTS(stop <= 0 or start <= stop, "Parameter start must be less than stop.");
 
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},
@@ -223,7 +223,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
   }
 
   // find-utility function fills in the results column
-  auto target_itr      = thrust::make_constant_iterator(d_target);
+  auto target_itr      = cuda::make_constant_iterator(d_target);
   using TargetIterator = decltype(target_itr);
   find_utility<TargetIterator, forward>(input, target_itr, *results, start, stop, stream);
   results->set_null_count(input.null_count());

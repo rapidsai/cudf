@@ -26,9 +26,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -108,7 +107,7 @@ auto scatter_to_gather_complement(MapIterator scatter_map_begin,
   thrust::sequence(rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), 0);
 
   auto const out_of_bounds_begin =
-    thrust::make_constant_iterator(std::numeric_limits<size_type>::lowest());
+    cuda::make_constant_iterator(std::numeric_limits<size_type>::lowest());
   auto const out_of_bounds_end =
     out_of_bounds_begin + cuda::std::distance(scatter_map_begin, scatter_map_end);
   thrust::scatter(rmm::exec_policy_nosync(stream),
@@ -356,8 +355,6 @@ struct column_scatterer_impl<struct_view> {
  * source columns to rows in the target columns
  * @param[in] target The set of columns into which values from the source_table
  * are to be scattered
- * @param[in] check_bounds Optionally perform bounds checking on the values of
- * `scatter_map` and throw an error if any of its values are out of bounds.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *

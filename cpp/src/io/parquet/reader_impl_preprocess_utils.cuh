@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -107,7 +107,7 @@ std::string encoding_to_string(Encoding encoding);
 /**
  * @brief Helper function to convert an encoding bitmask to a readable string
  *
- * @param bitmask Bitmask of found unsupported encodings
+ * @param encoding_bitmask Bitmask of found unsupported encodings
  * @returns Human readable string with unsupported encodings
  */
 [[nodiscard]] std::string encoding_bitmask_to_str(uint32_t encoding_bitmask);

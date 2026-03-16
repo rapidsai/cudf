@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -288,7 +288,7 @@ void validate_token_stream(device_span<char const> d_input,
                     predicate);
 
   using scan_type            = write_if::scan_type;
-  auto conditional_write     = write_if{tokens.begin(), num_tokens};
+  auto conditional_write     = write_if{tokens.data(), num_tokens};
   auto conditional_output_it = thrust::tabulate_output_iterator(conditional_write);
   auto binary_op             = cuda::proclaim_return_type<scan_type>(
     [] __device__(scan_type prev, scan_type curr) -> scan_type {

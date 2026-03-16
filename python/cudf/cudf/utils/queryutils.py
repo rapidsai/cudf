@@ -283,5 +283,9 @@ def query_execute(df, expr, callenv):
                 out_mask = binaryop.binaryop(
                     nullmask, out_mask, "__and__", out_mask.dtype
                 )
-        mask_buff = out_mask if out_mask is None else out_mask.as_mask()
-        return as_column(out).set_mask(mask_buff).fillna(False)
+        if out_mask is None:
+            mask_buff = None
+            null_count = 0
+        else:
+            mask_buff, null_count = out_mask.as_mask()
+        return as_column(out).set_mask(mask_buff, null_count).fillna(False)

@@ -22,10 +22,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -101,7 +101,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
  * @brief Breaks the ties among equal value groups using binary operator and
  * transform this tied value to final rank.
  *
- * @param dense_rank dense rank of sorted input column (acts as key for value
+ * @param dense_rank_sorted dense rank of sorted input column (acts as key for value
  * groups).
  * @param tie_iter  iterator of rank to break ties among equal value groups.
  * @param sorted_order_view sorted order indices of input column
@@ -131,7 +131,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
                         dense_rank_sorted.begin(),
                         dense_rank_sorted.end(),
                         tie_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         tie_sorted.begin(),
                         cuda::std::equal_to{},
                         tie_breaker);

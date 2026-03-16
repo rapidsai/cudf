@@ -325,10 +325,11 @@ intersphinx_mapping = {
     "dlpack": ("https://dmlc.github.io/dlpack/latest/", None),
     "nanoarrow": ("https://arrow.apache.org/nanoarrow/latest", None),
     "numpy": ("https://numpy.org/doc/stable", None),
-    "pandas": (
-        "https://pandas.pydata.org/pandas-docs/version/2.3.3/",
-        None,
-    ),
+    # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
+    # "pandas": (
+    #     "https://pandas.pydata.org/pandas-docs/version/2.3.3/",
+    #     None,
+    # ),
     "polars": ("https://docs.pola.rs/api/python/stable/", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "python": ("https://docs.python.org/3", None),
@@ -467,7 +468,7 @@ _intersphinx_cache = {}
 _intersphinx_extra_prefixes = ("rmm", "rmm::mr", "mr")
 
 _external_intersphinx_aliases = {
-    "pandas": "pd",
+    # "pandas": "pd",
     "pyarrow": "pa",
     "numpy": "np",
     "cupy": "cp",
@@ -613,6 +614,7 @@ def on_missing_reference(app, env, node, contnode):
 
 # The following are erroneously warned due to
 # https://github.com/sphinx-doc/sphinx/issues/11225
+# or https://github.com/sphinx-doc/sphinx/issues/10974
 nitpick_ignore = [
     ("py:class", "Dtype"),
     ("py:class", "pandas.core.indexes.frozen.FrozenList"),
@@ -622,6 +624,13 @@ nitpick_ignore = [
     ("py:class", "DtypeObj"),
     ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
+    ("py:class", "ExecutorType"),
+]
+# Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
+nitpick_ignore_regex = [
+    ("py:.*", "pandas.*"),
+    ("py:.*", "pd.*"),
+    ("ref.*", ".*pandas.*"),
 ]
 
 

@@ -1,18 +1,17 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
 from pylibcudf.libcudf.types cimport (
     nan_equality,
-    nan_policy,
     null_equality,
-    null_policy,
     size_type,
 )
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
+from .expressions cimport Expression
 from .table cimport Table
 
 
@@ -77,16 +76,10 @@ cpdef Table stable_distinct(
     DeviceMemoryResource mr = *,
 )
 
-cpdef size_type unique_count(
-    Column column,
-    null_policy null_handling,
-    nan_policy nan_handling,
-    Stream stream = *
-)
-
-cpdef size_type distinct_count(
-    Column column,
-    null_policy null_handling,
-    nan_policy nan_handling,
-    Stream stream = *
+cpdef Table filter(
+    Table predicate_table,
+    Expression predicate_expr,
+    Table filter_table,
+    Stream stream = *,
+    DeviceMemoryResource mr = *,
 )

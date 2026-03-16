@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
@@ -45,6 +46,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <future>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -319,9 +321,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                                                    skip_rows,
                                                                    stream);
 
-    cudf::detail::cuda_memcpy(host_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                              device_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
-                              stream);
+    cudf::detail::cuda_memcpy(
+      host_span<uint64_t>(row_ctx.host_ptr(), row_ctx.size(), true).subspan(0, num_blocks),
+      device_span<uint64_t const>(row_ctx.device_ptr(), row_ctx.size()).subspan(0, num_blocks),
+      stream);
 
     // Sum up the rows in each character block, selecting the row count that
     // corresponds to the current input context. Also stores the now known input
@@ -336,9 +339,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       // At least one row in range in this batch
       all_row_offsets.resize(total_rows - skip_rows, stream);
 
-      cudf::detail::cuda_memcpy_async(device_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                                      host_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
-                                      stream);
+      cudf::detail::cuda_memcpy_async(
+        device_span<uint64_t>(row_ctx.device_ptr(), row_ctx.size()).subspan(0, num_blocks),
+        host_span<uint64_t const>(row_ctx.host_ptr(), row_ctx.size(), true).subspan(0, num_blocks),
+        stream);
 
       // Pass 2: Output row offsets
       cudf::io::csv::gpu::gather_row_offsets(parse_opts.view(),
@@ -355,9 +359,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
       if (range_end < data_size) {
-        cudf::detail::cuda_memcpy(host_span<uint64_t>{row_ctx}.subspan(0, num_blocks),
-                                  device_span<uint64_t const>{row_ctx}.subspan(0, num_blocks),
-                                  stream);
+        cudf::detail::cuda_memcpy(
+          host_span<uint64_t>(row_ctx.host_ptr(), row_ctx.size(), true).subspan(0, num_blocks),
+          device_span<uint64_t const>(row_ctx.device_ptr(), row_ctx.size()).subspan(0, num_blocks),
+          stream);
 
         size_t rows_out_of_range = 0;
         for (uint32_t i = 0; i < num_blocks; i++) {
@@ -977,9 +982,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       auto streams               = cudf::detail::fork_streams(stream, num_tasks);
 
       auto process_string_column = [&](size_t str_col_idx, rmm::cuda_stream_view col_stream) {
-        auto const col_idx    = string_col_indices[str_col_idx];
-        auto const& is_quoted = device_span<bool>(is_quoted_flags[str_col_idx]);
-        auto* buffer          = &out_buffers[col_idx];
+        auto const col_idx   = string_col_indices[str_col_idx];
+        auto const is_quoted = device_span<bool>(is_quoted_flags[str_col_idx]);
+        auto* buffer         = &out_buffers[col_idx];
 
         // Count how many rows were quoted to determine the fast path
         auto const num_quoted = thrust::count(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -242,7 +242,7 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is then copied to device memory
   // and the pointer is set in the d_columns member.
-  auto h_buffer = cudf::detail::make_host_vector<int8_t>(padded_views_size_bytes, stream);
+  auto h_buffer = cudf::detail::make_pinned_vector_async<int8_t>(padded_views_size_bytes, stream);
   // Each ColumnDeviceView instance may have child objects which may
   // require setting some internal device pointers before being copied
   // from CPU to device.

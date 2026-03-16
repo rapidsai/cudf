@@ -28,15 +28,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/span>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/merge.h>
@@ -704,12 +701,13 @@ void compute_cluster_starts(cluster_info& cinfo, rmm::cuda_stream_view stream)
  *
  * Each input group gets an independent set of clusters generated.
  *
- * @param delta_             tdigest compression level
+ * @param delta              tdigest compression level
  * @param num_groups         The number of input groups
  * @param nearest_weight     A functor which returns the nearest weight in the input
  * stream that falls before our current cluster limit
  * @param group_info         A functor which returns the info for the specified group (total weight,
  * size and start offset)
+ * @param cumulative_weight  Cumulative weight column for computing cluster boundaries
  * @param has_nulls          Whether or not the input data contains nulls
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -977,13 +975,11 @@ struct compute_tdigests_keys_fn {
  * @param delta              tdigest compression level
  * @param centroids_begin    Beginning of the range of centroids.
  * @param centroids_end      End of the range of centroids.
- * @param cumulative_weight  Functor which returns cumulative weight and group information for
+ * @param group_cumulative_weight Functor which returns cumulative weight and group information for
  * an absolute input value index.
  * @param min_col            Column containing the minimum value per group.
  * @param max_col            Column containing the maximum value per group.
- * @param group_cluster_wl   Cluster weight limits for each group.
- * @param group_cluster_start R-value reference of start positions by group into the
- * @param total_clusters     Total number of clusters in all groups.
+ * @param cinfo              Clustering info per group.
  * @param has_nulls          Whether or not the input contains nulls
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -1044,16 +1040,16 @@ std::unique_ptr<column> compute_tdigests(int delta,
 
   // reduce the centroids into the clusters
   auto output = thrust::make_zip_iterator(cuda::std::make_tuple(
-    mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
+    mean_col.begin<double>(), weight_col.begin<double>(), cuda::make_discard_iterator()));
 
   auto const num_values = std::distance(centroids_begin, centroids_end);
   thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
                         keys,
-                        keys + num_values,                // keys
-                        centroids_begin,                  // values
-                        thrust::make_discard_iterator(),  // key output
-                        output,                           // output
-                        cuda::std::equal_to{},            // key equality check
+                        keys + num_values,              // keys
+                        centroids_begin,                // values
+                        cuda::make_discard_iterator(),  // key output
+                        output,                         // output
+                        cuda::std::equal_to{},          // key equality check
                         merge_centroids{});
 
   // generate offsets column. if we are running in the simple case, cinfo.cluster_start will not
@@ -1149,10 +1145,10 @@ struct typed_group_tdigest {
       return generate_group_cluster_info(
         delta,
         num_groups,
-        nearest_value_scalar_weights_grouped{group_offsets.begin()},
-        scalar_group_info_grouped{group_valid_counts.begin(), group_offsets.begin()},
+        nearest_value_scalar_weights_grouped{group_offsets.data()},
+        scalar_group_info_grouped{group_valid_counts.data(), group_offsets.data()},
         cumulative_scalar_weight_grouped{
-          cuda::std::span<size_type const>{group_offsets.begin(), group_offsets.size()}},
+          cuda::std::span<size_type const>{group_offsets.data(), group_offsets.size()}},
         col.null_count() > 0,
         stream,
         mr);
@@ -1173,7 +1169,7 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
                                                       max_col->mutable_view().begin<double>())),
-      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
+      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.data()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
@@ -1449,7 +1445,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         group_labels,
                         group_labels + num_group_labels,
                         min_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
                         cuda::minimum{});
@@ -1464,7 +1460,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                         group_labels,
                         group_labels + num_group_labels,
                         max_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
                         cuda::maximum{});
@@ -1647,7 +1643,7 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 
   auto group_offsets_ = group_offsets_fn{input.size()};
   auto group_offsets  = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_labels   = thrust::make_constant_iterator(0);
+  auto group_labels   = cuda::make_constant_iterator(0);
   return to_tdigest_scalar(
     merge_tdigests(tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream, mr),
     stream,

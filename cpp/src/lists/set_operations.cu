@@ -6,13 +6,13 @@
 #include "utilities.hpp"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/lists/detail/combine.hpp>
 #include <cudf/lists/detail/set_operations.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
@@ -26,7 +26,6 @@
 
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
-#include <thrust/functional.h>
 #include <thrust/scatter.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -170,9 +169,7 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
+                                  std::move(null_mask));
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
     return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
@@ -258,9 +255,7 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
+                                  std::move(null_mask));
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
     return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
