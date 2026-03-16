@@ -3599,8 +3599,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if axis is not None:
             raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
-            # TODO: Change to deep=False when copy-on-write is default
-            data=self._data.copy(deep=True),
+            data=self._data.copy(deep=False),
             index=prefix + self.index.astype(str),
             attrs=self.attrs,
         )
@@ -3610,8 +3609,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         if axis is not None:
             raise NotImplementedError("axis is currently not implemented.")
         return Series._from_data(
-            # TODO: Change to deep=False when copy-on-write is default
-            data=self._data.copy(deep=True),
+            data=self._data.copy(deep=False),
             index=self.index.astype(str) + suffix,
             attrs=self.attrs,
         )

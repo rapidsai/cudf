@@ -400,10 +400,7 @@ class ColumnAccessor(MutableMapping):
         """
         Make a copy of this ColumnAccessor.
         """
-        if deep or cudf.get_option("copy_on_write"):
-            data = {k: v.copy(deep=deep) for k, v in self._data.items()}
-        else:
-            data = self._data.copy()
+        data = {k: v.copy(deep=deep) for k, v in self._data.items()}
         return self.__class__(
             data=data,
             multiindex=self.multiindex,
@@ -533,8 +530,7 @@ class ColumnAccessor(MutableMapping):
             new_keys[n][i], new_keys[n][j] = row[j], row[i]  # type: ignore[call-overload, index]
             new_dict.update({row: tuple(new_keys[n])})
 
-        # TODO: Change to deep=False when copy-on-write is default
-        new_data = {new_dict[k]: v.copy(deep=True) for k, v in self.items()}
+        new_data = {new_dict[k]: v.copy(deep=False) for k, v in self.items()}
 
         # swap level_names for i and j
         new_names = list(self.level_names)
