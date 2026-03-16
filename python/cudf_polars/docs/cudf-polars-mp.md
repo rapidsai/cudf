@@ -13,20 +13,163 @@ The `cluster` option selects the execution model:
 | --------------- | ---------------------------------------------------- | ----------------- |
 | `"single"`      | Single-GPU, in-process execution                     | Stable (legacy)   |
 | `"distributed"` | Multi-GPU via [Dask Distributed][dask-distributed]   | Stable (legacy)   |
-| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki] launched with `rrun` | Preview (new API) |
 | `"ray"`         | Multi-GPU via [Ray][ray-docs] actors                 | Preview (new API) |
+| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki] launched with `rrun` | Preview (new API) |
 
 Two preview execution modes are available:
 
-* **SPMD mode** — each GPU runs the same script as an independent process,
-  launched with `rrun`.
 * **Ray mode** — a single-client model where a driver program coordinates GPU
   workers implemented as Ray actors.
+* **SPMD mode** — each GPU runs the same script as an independent process,
+  launched with `rrun`.
 
 This document describes these two execution modes.
 
-* [SPMD execution mode](#spmd-execution-mode)
 * [Ray execution mode](#ray-execution-mode)
+* [SPMD execution mode](#spmd-execution-mode)
+
+---
+
+## Ray execution mode
+
+Ray mode uses a single client process that drives execution across multiple ranks.
+Each rank corresponds to one GPU worker and participates in collective operations
+through a shared UCXX communicator.
+
+In the Ray implementation each rank is implemented as a [**Ray actor**][ray-actors],
+with one actor created per available GPU.
+
+Conceptually the system looks like this:
+
+```
+                 ┌──────────────────────────────┐
+                 │        User script           │
+                 │   (single client process)    │
+                 │  LazyFrame.collect(engine=…) │
+                 └──────────────┬───────────────┘
+                                │ IR dispatched to all actors
+               ┌────────────────|─────────────────┐
+               ↓                ↓                 ↓
+        ┌─────────────┐  ┌─────────────┐   ┌─────────────┐
+        │  RankActor  │  │  RankActor  │   │  RankActor  │
+        │   rank 0    │  │   rank 1    │   │  rank N-1   │
+        │   run IR    │  │   run IR    │   │   run IR    │
+        └──────┬──────┘  └──────┬──────┘   └──────┬──────┘
+               ↓                ↓                 ↓
+┌────────────────────────────────────────────────────────────────┐
+│                     RapidsMPF streaming engine                 │
+│   shuffle / all-gather · UCXX communicator · RMM GPU memory    │
+└────────────────────────────────────────────────────────────────┘
+               ↑                ↑                 ↑
+             GPU 0            GPU 1            GPU N-1
+```
+
+The client broadcasts the query plan to all ranks. The ranks execute the pipeline
+collectively through UCXX, and their outputs are streamed back and concatenated on
+the client process.
+
+The driver script runs as a normal Python program with no `rrun` launcher. Query
+symmetry is handled automatically: the client serializes the complete query plan and
+broadcasts it to all actors, so every rank always executes the same query.
+
+### Prerequisites
+
+* Ray (`ray`) installed
+* RapidsMPF and UCXX available on all GPU nodes
+
+### Running in Ray mode
+
+`ray_execution()` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. It:
+
+1. Calls `ray.init()` if Ray is not already running
+2. Creates one `RankActor` per GPU
+3. Bootstraps a UCXX communicator across the actors
+4. Yields a `pl.GPUEngine` and a `RayClient`
+
+Actors are shut down on exit. If the context started Ray, it also calls
+`ray.shutdown()`.
+
+```python
+import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+
+with ray_execution() as (ray_client, engine):
+    result = (
+        pl.scan_parquet("/data/dataset/*.parquet")
+        .filter(pl.col("amount") > 100)
+        .group_by("customer_id")
+        .agg(pl.col("amount").sum())
+        .collect(engine=engine)
+    )
+
+print(result)
+```
+
+The context manager yields:
+
+* `ray_client` — cluster diagnostics and utilities
+* `engine` — `pl.GPUEngine` configured for Ray execution
+
+### Ray lifecycle
+
+If Ray is already initialized, `ray_execution()` attaches to the existing cluster and
+does not call `ray.shutdown()` on exit.
+
+```python
+import ray
+import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+
+ray.init(address="auto")
+
+try:
+    with ray_execution() as (ray_client, engine):
+        result = pl.scan_parquet(...).collect(engine=engine)
+finally:
+    ray.shutdown()
+```
+
+`ray_execution()` raises `RuntimeError` if called inside an `rrun` cluster or if no
+GPUs are available.
+
+### Cluster diagnostics
+
+`RayClient.gather_cluster_info()` returns placement information for all rank actors:
+
+```python
+with ray_execution() as (ray_client, engine):
+    print(f"cluster has {ray_client.nranks} ranks")
+    for i, info in enumerate(ray_client.gather_cluster_info()):
+        print(
+            f"rank {i}: hostname={info['hostname']}, pid={info['pid']}, "
+            f"CUDA_VISIBLE_DEVICES={info['cuda_visible_devices']}"
+        )
+```
+
+Each entry includes `pid`, `hostname`, `cuda_visible_devices`, and `node_id`.
+
+### Passing options
+
+`executor_options`, `engine_options`, and `ray_init_options` accept pass-through
+dictionaries:
+
+```python
+with ray_execution(
+    executor_options={"max_rows_per_partition": 500_000},
+    engine_options={"raise_on_fail": True},
+    ray_init_options={"num_cpus": 4},
+) as (ray_client, engine):
+    ...
+```
+
+`executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
+argument; user-supplied keys are merged with reserved entries set by `ray_execution()`.
+Any additional keyword arguments to `ray_execution()` are also forwarded to `pl.GPUEngine`.
+
+Reserved keys:
+
+* `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
+* `engine_options`: `"memory_resource"`, `"executor"`
 
 ---
 
@@ -213,150 +356,6 @@ Any additional keyword arguments to `spmd_execution()` are also forwarded to `pl
 Reserved keys:
 
 * `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`
-* `engine_options`: `"memory_resource"`, `"executor"`
-
----
-
-## Ray execution mode
-
-Ray mode uses a single client process that drives execution across multiple ranks.
-Each rank corresponds to one GPU worker and participates in collective operations
-through a shared UCXX communicator.
-
-In the Ray implementation each rank is implemented as a [**Ray actor**][ray-actors],
-with one actor created per available GPU.
-
-Conceptually the system looks like this:
-
-```
-                 ┌──────────────────────────────┐
-                 │        User script           │
-                 │   (single client process)    │
-                 │  LazyFrame.collect(engine=…) │
-                 └──────────────┬───────────────┘
-                                │ IR dispatched to all actors
-               ┌────────────────|─────────────────┐
-               ↓                ↓                 ↓
-        ┌─────────────┐  ┌─────────────┐   ┌─────────────┐
-        │  RankActor  │  │  RankActor  │   │  RankActor  │
-        │   rank 0    │  │   rank 1    │   │  rank N-1   │
-        │   run IR    │  │   run IR    │   │   run IR    │
-        └──────┬──────┘  └──────┬──────┘   └──────┬──────┘
-               ↓                ↓                 ↓
-┌────────────────────────────────────────────────────────────────┐
-│                     RapidsMPF streaming engine                 │
-│   shuffle / all-gather · UCXX communicator · RMM GPU memory    │
-└────────────────────────────────────────────────────────────────┘
-               ↑                ↑                 ↑
-             GPU 0            GPU 1            GPU N-1
-```
-
-The client broadcasts the query plan to all ranks. The ranks execute the pipeline
-collectively through UCXX, and their outputs are streamed back and concatenated on
-the client process.
-
-Unlike SPMD mode, the driver script runs as a normal Python program with no
-`rrun` launcher. Query symmetry is handled automatically: the client serializes
-the complete query plan and broadcasts it to all actors, so every rank always
-executes the same query.
-
-### Prerequisites
-
-* Ray (`ray`) installed
-* RapidsMPF and UCXX available on all GPU nodes
-
-### Running in Ray mode
-
-`ray_execution()` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. It:
-
-1. Calls `ray.init()` if Ray is not already running
-2. Creates one `RankActor` per GPU
-3. Bootstraps a UCXX communicator across the actors
-4. Yields a `pl.GPUEngine` and a `RayClient`
-
-Actors are shut down on exit. If the context started Ray, it also calls
-`ray.shutdown()`.
-
-```python
-import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
-
-with ray_execution() as (ray_client, engine):
-    result = (
-        pl.scan_parquet("/data/dataset/*.parquet")
-        .filter(pl.col("amount") > 100)
-        .group_by("customer_id")
-        .agg(pl.col("amount").sum())
-        .collect(engine=engine)
-    )
-
-print(result)
-```
-
-The context manager yields:
-
-* `ray_client` — cluster diagnostics and utilities
-* `engine` — `pl.GPUEngine` configured for Ray execution
-
-### Ray lifecycle
-
-If Ray is already initialized, `ray_execution()` attaches to the existing cluster and
-does not call `ray.shutdown()` on exit.
-
-```python
-import ray
-import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
-
-ray.init(address="auto")
-
-try:
-    with ray_execution() as (ray_client, engine):
-        result = pl.scan_parquet(...).collect(engine=engine)
-finally:
-    ray.shutdown()
-```
-
-`ray_execution()` raises `RuntimeError` if called inside an `rrun` cluster or if no
-GPUs are available.
-
-### Cluster diagnostics
-
-`RayClient.gather_cluster_info()` returns placement information for all rank actors:
-
-```python
-with ray_execution() as (ray_client, engine):
-    print(f"cluster has {ray_client.nranks} ranks")
-    for i, info in enumerate(ray_client.gather_cluster_info()):
-        print(
-            f"rank {i}: hostname={info['hostname']}, pid={info['pid']}, "
-            f"CUDA_VISIBLE_DEVICES={info['cuda_visible_devices']}"
-        )
-```
-
-Each entry includes `pid`, `hostname`, `cuda_visible_devices`, and `node_id`.
-
-### Passing options
-
-`executor_options`, `engine_options`, and `ray_init_options` accept pass-through
-dictionaries:
-
-```python
-with ray_execution(
-    executor_options={"max_rows_per_partition": 500_000},
-    engine_options={"raise_on_fail": True},
-    ray_init_options={"num_cpus": 4},
-) as (ray_client, engine):
-    ...
-```
-
-`executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
-argument; user-supplied keys are merged with reserved entries set by `ray_execution()`.
-Any additional keyword arguments to `ray_execution()` are also forwarded to `pl.GPUEngine`.
-
-Reserved keys:
-
-* `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
 * `engine_options`: `"memory_resource"`, `"executor"`
 
 <!-- Reference links -->
