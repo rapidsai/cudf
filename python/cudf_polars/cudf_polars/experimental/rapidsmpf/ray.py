@@ -458,9 +458,10 @@ class RayClient:
         """
         exceptions: list[Exception] = []
         try:
-            for a in self.rank_actors:
+            refs = [a.shutdown.remote() for a in self.rank_actors]
+            for ref in refs:
                 try:
-                    ray.get(a.shutdown.remote())
+                    ray.get(ref)
                 except ray.exceptions.RayActorError:
                     pass  # expected: exit_actor() terminates the process immediately
                 except Exception as e:
@@ -486,8 +487,8 @@ def ray_execution(
     *,
     rapidsmpf_options: Options | None = None,
     executor_options: dict[str, object] | None = None,
-    engine_kwargs: dict[str, Any] | None = None,
-    ray_init_kwargs: dict[str, object] | None = None,
+    engine_options: dict[str, Any] | None = None,
+    ray_init_options: dict[str, object] | None = None,
 ) -> RayClient:
     """
     Create a RapidsMPF Ray cluster and return a :class:`RayClient`.
@@ -509,9 +510,9 @@ def ray_execution(
         ``Options(get_environment_variables())``.
     executor_options
         Additional key-value pairs forwarded to the Polars executor options.
-    engine_kwargs
+    engine_options
         Additional keyword arguments forwarded to :class:`polars.GPUEngine`.
-    ray_init_kwargs
+    ray_init_options
         Keyword arguments forwarded to :func:`ray.init` when Ray is not
         already initialized.
 
@@ -529,10 +530,10 @@ def ray_execution(
         If not all GPUs in the Ray cluster are free at startup.
     RuntimeError
         If no GPUs are available in the Ray cluster.
-    ValueError
+    TypeError
         If ``executor_options`` contains a reserved key.
-    ValueError
-        If ``engine_kwargs`` contains a reserved key.
+    TypeError
+        If ``engine_options`` contains a reserved key.
 
     Examples
     --------
@@ -548,8 +549,8 @@ def ray_execution(
     >>> client.shutdown()
     """
     executor_options = executor_options or {}
-    engine_kwargs = engine_kwargs or {}
-    ray_init_kwargs = ray_init_kwargs or {}
+    engine_options = engine_options or {}
+    ray_init_options = ray_init_options or {}
 
     if bootstrap.is_running_with_rrun():
         raise RuntimeError(
@@ -560,9 +561,9 @@ def ray_execution(
 
     # Check for reserved keys.
     if bad := {"runtime", "cluster", "spmd", "ray_context"} & executor_options.keys():
-        raise ValueError(f"executor_options may not contain reserved keys: {bad}")
-    if bad := {"memory_resource", "executor"} & engine_kwargs.keys():
-        raise ValueError(f"engine_kwargs may not contain reserved keys: {bad}")
+        raise TypeError(f"executor_options may not contain reserved keys: {bad}")
+    if bad := {"memory_resource", "executor"} & engine_options.keys():
+        raise TypeError(f"engine_options may not contain reserved keys: {bad}")
 
     rapidsmpf_options = (
         rapidsmpf_options
@@ -575,9 +576,10 @@ def ray_execution(
     ray_was_initialized: bool = ray.is_initialized()
     if not ray_was_initialized:
         # Prevent Ray from overriding CUDA_VISIBLE_DEVICES to "" when a worker
-        # process starts with zero visible GPUs (e.g. the driver process itself).
+        # process starts with zero visible GPUs (e.g., the driver process itself).
+        # In the future, this behavior will become the default in Ray.
         os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
-        ray.init(**ray_init_kwargs)
+        ray.init(**ray_init_options)
 
     total_gpus = int(ray.cluster_resources().get("GPU", 0.0))
     # Note: available_resources() is a snapshot and inherently racy. This is a
@@ -618,6 +620,6 @@ def ray_execution(
             "cluster": "ray",
             "ray_context": RayContext(rank_actors),
         },
-        **engine_kwargs,
+        **engine_options,
     )
     return RayClient(engine, owns_ray=not ray_was_initialized)

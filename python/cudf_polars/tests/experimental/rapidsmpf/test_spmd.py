@@ -37,7 +37,7 @@ def test_spmd_execution_reserved_keys() -> None:
     """executor_options rejects reserved keys."""
     for key in ("runtime", "cluster", "spmd"):
         with (
-            pytest.raises(ValueError, match="reserved"),
+            pytest.raises(TypeError, match="reserved"),
             spmd_execution(executor_options={key: "anything"}),
         ):
             pass
@@ -48,7 +48,7 @@ def test_spmd_execution_engine_kwargs_reserved_keys() -> None:
     for key in ("memory_resource", "executor"):
         kwargs: dict[str, Any] = {key: "anything"}
         with (
-            pytest.raises(ValueError, match="reserved"),
+            pytest.raises(TypeError, match="reserved"),
             spmd_execution(**kwargs),
         ):
             pass

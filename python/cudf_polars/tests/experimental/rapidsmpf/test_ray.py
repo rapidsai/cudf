@@ -32,7 +32,7 @@ def _ray_env() -> Iterator[tuple[RayClient, pl.GPUEngine]]:
             # Use a small partition size so tests exercise the multi-partition
             # code path deterministically, regardless of input size.
             executor_options={"max_rows_per_partition": 10},
-            ray_init_kwargs={"include_dashboard": False},
+            ray_init_options={"include_dashboard": False},
         ) as (
             ray_client,
             engine,
@@ -69,16 +69,16 @@ pytestmark = [
 def test_ray_execution_reserved_executor_keys() -> None:
     """executor_options rejects reserved keys."""
     for key in ("runtime", "cluster", "spmd", "ray_context"):
-        with pytest.raises(ValueError, match="reserved"):
+        with pytest.raises(TypeError, match="reserved"):
             ray_execution(executor_options={key: "anything"})
 
 
-def test_ray_execution_reserved_engine_kwargs_keys() -> None:
-    """engine_kwargs rejects keys that are set explicitly by ray_execution."""
+def test_ray_execution_reserved_engine_options_keys() -> None:
+    """engine_options rejects keys that are set explicitly by ray_execution."""
     for key in ("memory_resource", "executor"):
         kwargs: dict[str, Any] = {key: "anything"}
-        with pytest.raises(ValueError, match="reserved"):
-            ray_execution(engine_kwargs=kwargs)
+        with pytest.raises(TypeError, match="reserved"):
+            ray_execution(engine_options=kwargs)
 
 
 def test_ray_client_shutdown_idempotent() -> None:

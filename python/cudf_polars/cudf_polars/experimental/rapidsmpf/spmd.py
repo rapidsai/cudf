@@ -311,10 +311,10 @@ def spmd_execution(
     RuntimeError
         If not running under the ``rrun`` launcher (i.e.
         :func:`rapidsmpf.bootstrap.is_running_with_rrun` returns ``False``).
-    ValueError
+    TypeError
         If ``executor_options`` contains any of the reserved keys
         ``"runtime"``, ``"cluster"``, or ``"spmd"``.
-    ValueError
+    TypeError
         If ``engine_kwargs`` contains any of the reserved keys
         ``"raise_on_fail"``, ``"memory_resource"``, or ``"executor"``.
 
@@ -340,9 +340,9 @@ def spmd_execution(
 
     # Check for reserved keys.
     if bad := {"runtime", "cluster", "spmd"} & executor_options.keys():
-        raise ValueError(f"executor_options may not contain reserved keys: {bad}")
+        raise TypeError(f"executor_options may not contain reserved keys: {bad}")
     if bad := {"memory_resource", "executor"} & engine_kwargs.keys():
-        raise ValueError(f"engine_kwargs may not contain reserved keys: {bad}")
+        raise TypeError(f"engine_kwargs may not contain reserved keys: {bad}")
 
     rapidsmpf_options = (
         rapidsmpf_options

@@ -329,14 +329,14 @@ Each entry includes `pid`, `hostname`, `cuda_visible_devices`, and `node_id`.
 
 ### Passing options
 
-`executor_options`, `engine_kwargs`, and `ray_init_kwargs` accept pass-through
+`executor_options`, `engine_options`, and `ray_init_options` accept pass-through
 dictionaries:
 
 ```python
 with ray_execution(
     executor_options={"max_rows_per_partition": 500_000},
-    engine_kwargs={"raise_on_fail": True},
-    ray_init_kwargs={"num_cpus": 4},
+    engine_options={"raise_on_fail": True},
+    ray_init_options={"num_cpus": 4},
 ) as (ray_client, engine):
     ...
 ```
