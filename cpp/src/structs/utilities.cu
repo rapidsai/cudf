@@ -293,8 +293,8 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
  *  2. Applying the nulls in a segmented batch operation
  *  3. Then updating all the columns with their new null masks
  *
- * @param null_mask Vector of null masks to be applied to the input column
- * @param input Vector of input column to apply the null mask to
+ * @param null_masks Vector of null masks to be applied to the input column
+ * @param inputs Vector of input column to apply the null mask to
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate new device memory
  * @return A new column with potentially new null mask

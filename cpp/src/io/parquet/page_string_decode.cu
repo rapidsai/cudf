@@ -40,7 +40,6 @@ constexpr int delta_length_block_size  = 32;
  * @param num_rows Maximum number of rows to read
  * @param is_bounds_pg True if this page is clipped
  * @param has_repetition True if the schema is nested
- * @param decoders Definition and repetition level decoders
  * @return pair containing start and end value indexes
  * @tparam level_t Type used to store decoded repetition and definition levels
  */

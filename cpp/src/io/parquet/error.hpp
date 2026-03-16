@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -38,7 +38,7 @@ class kernel_error {
    * @throws `rmm::bad_alloc` if allocating the device memory for `initial_value` fails.
    * @throws `rmm::cuda_error` if copying `initial_value` to device memory fails.
    *
-   * @param CUDA stream to use
+   * @param stream CUDA stream to use
    */
   kernel_error(rmm::cuda_stream_view stream) : _error_code(1, stream)
   {

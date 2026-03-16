@@ -98,7 +98,7 @@ class bitwise_partitioner {
    Records the size of each partition for each thread block as well as the
  global size of each partition across all thread blocks.
  *
- * @param[in] the_table The table whose rows will be partitioned
+ * @param[in] the_hasher The hasher whose rows will be partitioned
  * @param[in] num_rows The number of rows in the table
  * @param[in] num_partitions The number of partitions to divide the rows into
  * @param[in] the_partitioner The functor that maps a rows hash value to a
@@ -237,7 +237,7 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
 /**
  * @brief Move one column from the input table to the hashed table.
  *
- * @param[in] input_buf Data buffer of the column in the input table
+ * @param[in] input_iter Iterator over the input column data
  * @param[out] output_buf Preallocated data buffer of the column in the output
  * table
  * @param[in] num_rows The number of rows in each column
