@@ -566,8 +566,8 @@ def _(
         shuffle_method != config_options.executor.shuffle_method
     ):  # pragma: no cover; Requires rapidsmpf
         _fallback_inform(
-            f"shuffle_method={shuffle_method} does not support maintain_order=True. "
-            "Falling back to shuffle_method='tasks'.",
+            f"shuffle_method={config_options.executor.shuffle_method} does not support maintain_order=True. "
+            f"Falling back to shuffle_method={shuffle_method}.",
             config_options,
         )
 
