@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -86,7 +86,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 85."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -113,126 +113,132 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
-    return (
-        web_sales.join(
-            web_returns,
-            left_on=["ws_item_sk", "ws_order_number"],
-            right_on=["wr_item_sk", "wr_order_number"],
-            how="inner",
-        )
-        .join(
-            web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk", how="inner"
-        )
-        .join(
-            date_dim.filter(pl.col("d_year") == year),
-            left_on="ws_sold_date_sk",
-            right_on="d_date_sk",
-            how="inner",
-        )
-        .join(
-            customer_demographics.select(
+    sort_by = {
+        "substr(r_reason_desc, 1, 20)": False,
+        "avg(ws_quantity)": False,
+        "avg(wr_refunded_cash)": False,
+        "avg(wr_fee)": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            web_sales.join(
+                web_returns,
+                left_on=["ws_item_sk", "ws_order_number"],
+                right_on=["wr_item_sk", "wr_order_number"],
+                how="inner",
+            )
+            .join(
+                web_page,
+                left_on="ws_web_page_sk",
+                right_on="wp_web_page_sk",
+                how="inner",
+            )
+            .join(
+                date_dim.filter(pl.col("d_year") == year),
+                left_on="ws_sold_date_sk",
+                right_on="d_date_sk",
+                how="inner",
+            )
+            .join(
+                customer_demographics.select(
+                    [
+                        pl.col("cd_demo_sk").alias("cd1_demo_sk"),
+                        pl.col("cd_marital_status").alias("cd1_marital_status"),
+                        pl.col("cd_education_status").alias("cd1_education_status"),
+                    ]
+                ),
+                left_on="wr_refunded_cdemo_sk",
+                right_on="cd1_demo_sk",
+                how="inner",
+            )
+            .join(
+                customer_demographics.select(
+                    [
+                        pl.col("cd_demo_sk").alias("cd2_demo_sk"),
+                        pl.col("cd_marital_status").alias("cd2_marital_status"),
+                        pl.col("cd_education_status").alias("cd2_education_status"),
+                    ]
+                ),
+                left_on="wr_returning_cdemo_sk",
+                right_on="cd2_demo_sk",
+                how="inner",
+            )
+            .join(
+                customer_address,
+                left_on="wr_refunded_addr_sk",
+                right_on="ca_address_sk",
+                how="inner",
+            )
+            .join(reason, left_on="wr_reason_sk", right_on="r_reason_sk", how="inner")
+            .filter(
+                (
+                    (pl.col("cd1_marital_status") == ms[0])
+                    & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
+                    & (pl.col("cd1_education_status") == es[0])
+                    & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
+                    & (
+                        pl.col("ws_sales_price").is_between(
+                            price_ranges[0][0], price_ranges[0][1]
+                        )
+                    )
+                )
+                | (
+                    (pl.col("cd1_marital_status") == ms[1])
+                    & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
+                    & (pl.col("cd1_education_status") == es[1])
+                    & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
+                    & (
+                        pl.col("ws_sales_price").is_between(
+                            price_ranges[1][0], price_ranges[1][1]
+                        )
+                    )
+                )
+                | (
+                    (pl.col("cd1_marital_status") == ms[2])
+                    & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
+                    & (pl.col("cd1_education_status") == es[2])
+                    & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
+                    & (
+                        pl.col("ws_sales_price").is_between(
+                            price_ranges[2][0], price_ranges[2][1]
+                        )
+                    )
+                )
+            )
+            .filter(
+                (
+                    (pl.col("ca_country") == "United States")
+                    & (pl.col("ca_state").is_in(states[0:3]))
+                    & (pl.col("ws_net_profit").is_between(np_min, np_max))
+                )
+                | (
+                    (pl.col("ca_country") == "United States")
+                    & (pl.col("ca_state").is_in(states[3:6]))
+                    & (pl.col("ws_net_profit").is_between(np_min, np_max))
+                )
+            )
+            .group_by("r_reason_desc")
+            .agg(
                 [
-                    pl.col("cd_demo_sk").alias("cd1_demo_sk"),
-                    pl.col("cd_marital_status").alias("cd1_marital_status"),
-                    pl.col("cd_education_status").alias("cd1_education_status"),
+                    pl.col("ws_quantity").mean().alias("avg(ws_quantity)"),
+                    pl.col("wr_refunded_cash").mean().alias("avg(wr_refunded_cash)"),
+                    pl.col("wr_fee").mean().alias("avg(wr_fee)"),
                 ]
-            ),
-            left_on="wr_refunded_cdemo_sk",
-            right_on="cd1_demo_sk",
-            how="inner",
-        )
-        .join(
-            customer_demographics.select(
+            )
+            .select(
                 [
-                    pl.col("cd_demo_sk").alias("cd2_demo_sk"),
-                    pl.col("cd_marital_status").alias("cd2_marital_status"),
-                    pl.col("cd_education_status").alias("cd2_education_status"),
+                    pl.col("r_reason_desc")
+                    .str.slice(0, 20)
+                    .alias("substr(r_reason_desc, 1, 20)"),
+                    "avg(ws_quantity)",
+                    "avg(wr_refunded_cash)",
+                    "avg(wr_fee)",
                 ]
-            ),
-            left_on="wr_returning_cdemo_sk",
-            right_on="cd2_demo_sk",
-            how="inner",
-        )
-        .join(
-            customer_address,
-            left_on="wr_refunded_addr_sk",
-            right_on="ca_address_sk",
-            how="inner",
-        )
-        .join(reason, left_on="wr_reason_sk", right_on="r_reason_sk", how="inner")
-        .filter(
-            (
-                (pl.col("cd1_marital_status") == ms[0])
-                & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
-                & (pl.col("cd1_education_status") == es[0])
-                & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
-                & (
-                    pl.col("ws_sales_price").is_between(
-                        price_ranges[0][0], price_ranges[0][1]
-                    )
-                )
             )
-            | (
-                (pl.col("cd1_marital_status") == ms[1])
-                & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
-                & (pl.col("cd1_education_status") == es[1])
-                & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
-                & (
-                    pl.col("ws_sales_price").is_between(
-                        price_ranges[1][0], price_ranges[1][1]
-                    )
-                )
-            )
-            | (
-                (pl.col("cd1_marital_status") == ms[2])
-                & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
-                & (pl.col("cd1_education_status") == es[2])
-                & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
-                & (
-                    pl.col("ws_sales_price").is_between(
-                        price_ranges[2][0], price_ranges[2][1]
-                    )
-                )
-            )
-        )
-        .filter(
-            (
-                (pl.col("ca_country") == "United States")
-                & (pl.col("ca_state").is_in(states[0:3]))
-                & (pl.col("ws_net_profit").is_between(np_min, np_max))
-            )
-            | (
-                (pl.col("ca_country") == "United States")
-                & (pl.col("ca_state").is_in(states[3:6]))
-                & (pl.col("ws_net_profit").is_between(np_min, np_max))
-            )
-        )
-        .group_by("r_reason_desc")
-        .agg(
-            [
-                pl.col("ws_quantity").mean().alias("avg(ws_quantity)"),
-                pl.col("wr_refunded_cash").mean().alias("avg(wr_refunded_cash)"),
-                pl.col("wr_fee").mean().alias("avg(wr_fee)"),
-            ]
-        )
-        .select(
-            [
-                pl.col("r_reason_desc")
-                .str.slice(0, 20)
-                .alias("substr(r_reason_desc, 1, 20)"),
-                "avg(ws_quantity)",
-                "avg(wr_refunded_cash)",
-                "avg(wr_fee)",
-            ]
-        )
-        .sort(
-            [
-                "substr(r_reason_desc, 1, 20)",
-                "avg(ws_quantity)",
-                "avg(wr_refunded_cash)",
-                "avg(wr_fee)",
-            ],
-            nulls_last=True,
-        )
-        .limit(100)
+            .sort(list(sort_by.keys()), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
     )

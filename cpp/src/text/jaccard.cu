@@ -48,7 +48,7 @@ constexpr cudf::thread_index_type bytes_per_thread = 4;
  *
  * @param values Flat vector of all values
  * @param offsets Offsets identifying rows within values
- * @param idx Row index to retrieve
+ * @param row_idx Row index to retrieve
  * @return A device-span of the row values
  */
 __device__ auto get_row(uint32_t const* values, int64_t const* offsets, cudf::size_type row_idx)
@@ -166,10 +166,10 @@ CUDF_KERNEL void sorted_intersect_fn(uint32_t const* d_values1,
 /**
  * @brief Count the number of common values within each row of the 2 input columns
  *
- * @param d_values1 Sorted hash values to check against d_values2
- * @param d_offsets1 Offsets to each set of row elements in d_values1
- * @param d_values2 Sorted hash values to check against d_values1
- * @param d_offsets2 Offsets to each set of row elements in d_values2
+ * @param values1 Sorted hash values to check against values2
+ * @param offsets1 Offsets to each set of row elements in values1
+ * @param values2 Sorted hash values to check against values1
+ * @param offsets2 Offsets to each set of row elements in values2
  * @param rows Number of rows in the output
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Number of common values

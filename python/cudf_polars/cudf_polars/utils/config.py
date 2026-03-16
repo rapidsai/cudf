@@ -54,7 +54,6 @@ __all__ = [
     "SPMDContext",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
-    "ShufflerInsertionMethod",
     "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -209,20 +208,6 @@ class ShuffleMethod(enum.StrEnum):
     TASKS = "tasks"
     RAPIDSMPF = "rapidsmpf"
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
-
-
-class ShufflerInsertionMethod(enum.StrEnum):
-    """
-    The method to use for inserting chunks into the rapidsmpf shuffler.
-
-    * ``ShufflerInsertionMethod.INSERT_CHUNKS`` : Use insert_chunks for inserting data.
-    * ``ShufflerInsertionMethod.CONCAT_INSERT`` : Use concat_insert for inserting data.
-
-    Only applicable with the "rapidsmpf" shuffle method and the "tasks" runtime.
-    """
-
-    INSERT_CHUNKS = "insert_chunks"
-    CONCAT_INSERT = "concat_insert"
 
 
 T = TypeVar("T")
@@ -736,11 +721,6 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
-    shuffler_insertion_method
-        The method to use for inserting chunks with the rapidsmpf shuffler.
-        Can be 'insert_chunks' (default) or 'concat_insert'.
-
-        Only applicable with ``shuffle_method="rapidsmpf"`` and ``runtime="tasks"``.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -841,13 +821,6 @@ class StreamingExecutor:
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
             default=ShuffleMethod.TASKS,
-        )
-    )
-    shuffler_insertion_method: ShufflerInsertionMethod = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SHUFFLER_INSERTION_METHOD",
-            ShufflerInsertionMethod.__call__,
-            default=ShufflerInsertionMethod.INSERT_CHUNKS,
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(
@@ -970,11 +943,6 @@ class StreamingExecutor:
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
-        object.__setattr__(
-            self,
-            "shuffler_insertion_method",
-            ShufflerInsertionMethod(self.shuffler_insertion_method),
-        )
 
         # Make sure stats_planning is a dataclass
         if isinstance(self.stats_planning, dict):

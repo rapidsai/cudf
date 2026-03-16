@@ -42,6 +42,7 @@ using unused_state_buf = page_state_buffers_s<0, 0, 0>;
  * @param rep Repetition level buffer
  * @param def Definition level buffer
  * @param bounds_set Boolean indicating whether min/max row bounds have been set
+ * @param block The cooperative thread block
  */
 template <typename level_t>
 __device__ void update_page_sizes(page_state_s* s,
