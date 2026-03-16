@@ -49,9 +49,6 @@ rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bit
 
   // Need to set to sentinel value for rows that are null (if any).
   // The sentinel value will then be used to identify null rows instead of using the bitmask.
-  // thrust::tabulate(rmm::exec_policy_nosync(stream),
-  //                  key_indices.begin(),
-  //                  key_indices.end(),
   thrust::transform(rmm::exec_policy_nosync(stream),
                     cuda::counting_iterator<size_type>(0),
                     cuda::counting_iterator<size_type>(num_rows),
