@@ -198,14 +198,14 @@ struct operator_functor<ast_operator::POW, false> {
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
     requires(cuda::std::is_integral_v<CommonType>)
   {
-    CommonType base = static_cast<CommonType>(lhs);
-    CommonType exp  = static_cast<CommonType>(rhs);
+    auto base = static_cast<CommonType>(lhs);
+    auto exp  = static_cast<CommonType>(rhs);
     if constexpr (cuda::std::is_signed_v<CommonType>) {
       if (exp < 0) { return CommonType{0}; }
     }
-    if (exp == 0) { return 1; }
-    if (base == 0) { return 0; }
-    CommonType result = 1;
+    if (exp == 0) { return CommonType{1}; }
+    if (base == 0) { return CommonType{0}; }
+    auto result = CommonType{1};
     while (exp > 0) {
       if (exp & 1) { result *= base; }
       base *= base;
