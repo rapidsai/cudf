@@ -3289,7 +3289,7 @@ def as_column(
             arbitrary = arbitrary._column
         if dtype is not None:
             return arbitrary.astype(dtype)
-        return arbitrary
+        return arbitrary.copy(deep=False)
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         column = ColumnBase.from_cuda_array_interface(arbitrary)
         if nan_as_null is not False:
