@@ -126,7 +126,7 @@ def evaluate_logical_plan(
                     collect_metadata=collect_metadata,
                 )
             case "spmd":
-                from cudf_polars.experimental.rapidsmpf.spmd import (
+                from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
                     evaluate_pipeline_spmd_mode,
                 )
 
@@ -139,7 +139,7 @@ def evaluate_logical_plan(
                     collect_metadata=collect_metadata,
                 )
             case "ray":
-                from cudf_polars.experimental.rapidsmpf.ray import (
+                from cudf_polars.experimental.rapidsmpf.frontend.ray import (
                     evaluate_pipeline_ray_mode,
                 )
 

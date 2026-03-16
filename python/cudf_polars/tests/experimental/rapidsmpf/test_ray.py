@@ -15,7 +15,7 @@ from cudf_polars.utils.config import RayContext
 
 ray = pytest.importorskip("ray")
 
-from cudf_polars.experimental.rapidsmpf.ray import (  # noqa: E402
+from cudf_polars.experimental.rapidsmpf.frontend.ray import (  # noqa: E402
     RayClient,
     ray_execution,
 )

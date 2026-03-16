@@ -14,7 +14,7 @@ import polars as pl
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
-from cudf_polars.experimental.rapidsmpf.spmd import (
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     allgather_polars_dataframe,
     spmd_execution,
 )

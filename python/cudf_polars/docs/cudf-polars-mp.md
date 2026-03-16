@@ -11,7 +11,7 @@ The `cluster` option selects the execution model:
 
 | `cluster`       | Description                                          | Status            |
 | --------------- | ---------------------------------------------------- | ----------------- |
-| `"single"`      | Single-GPU, in-process execution                     | Stable            |
+| `"single"`      | Single-GPU, in-process execution                     | Stable (legacy)   |
 | `"distributed"` | Multi-GPU via [Dask Distributed][dask-distributed]   | Stable (legacy)   |
 | `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki] launched with `rrun` | Preview (new API) |
 | `"ray"`         | Multi-GPU via [Ray][ray-docs] actors                 | Preview (new API) |
@@ -82,7 +82,7 @@ every rank, call `allgather_polars_dataframe()`.
 ### Running in SPMD mode
 
 `spmd_execution()` is the primary entry point for SPMD execution. It is a context
-manager imported from `cudf_polars.experimental.rapidsmpf.spmd`. On entry it:
+manager imported from `cudf_polars.experimental.rapidsmpf.frontend.spmd`. On entry it:
 
 1. Bootstraps a UCXX communicator connecting all ranks.
 2. Creates a RapidsMPF streaming `Context` that owns GPU memory and a CUDA stream pool.
@@ -96,7 +96,7 @@ if `rapidsmpf.bootstrap.is_running_with_rrun()` returns `False`.
 ```python
 # launch with: rrun -n 4 python my_script.py
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.spmd import (
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     allgather_polars_dataframe,
     reserve_op_id,
     spmd_execution,
@@ -267,7 +267,7 @@ executes the same query.
 
 ### Running in Ray mode
 
-`ray_execution()` is imported from `cudf_polars.experimental.rapidsmpf.ray`. It:
+`ray_execution()` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. It:
 
 1. Calls `ray.init()` if Ray is not already running
 2. Creates one `RankActor` per GPU
@@ -279,7 +279,7 @@ Actors are shut down on exit. If the context started Ray, it also calls
 
 ```python
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.ray import ray_execution
+from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
 
 with ray_execution() as (ray_client, engine):
     result = (
@@ -306,7 +306,7 @@ does not call `ray.shutdown()` on exit.
 ```python
 import ray
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.ray import ray_execution
+from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
 
 ray.init(address="auto")
 
