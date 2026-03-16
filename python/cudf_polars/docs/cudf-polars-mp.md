@@ -181,7 +181,8 @@ full = allgather_polars_dataframe(
 `op_id` is a unique integer that identifies this collective operation across ranks.
 All ranks must call the same collective with the same `op_id`.
 
-The result is a `pl.DataFrame` containing rows from all ranks, ordered by rank.
+The result is guaranteed to be a `pl.DataFrame` containing rows from all ranks in rank order
+(rank 0 first, then rank 1, …, rank N-1).
 
 ### Passing options
 

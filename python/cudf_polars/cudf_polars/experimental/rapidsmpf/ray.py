@@ -118,6 +118,8 @@ def evaluate_pipeline_ray_mode(
     # identical to the nodes in the deserialized IR tree. Actors fetch the bundle
     # by reference instead of receiving N copies.
     query_bundle = ray.put((ir, partition_info, stats, collective_id_map))
+    # ray.get() returns results in the same order as the input list of object refs,
+    # guaranteeing that result[i] corresponds to rank_actors[i] (rank order).
     result = ray.get(
         [
             rank.evaluate_polars_ir.remote(
