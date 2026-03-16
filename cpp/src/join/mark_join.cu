@@ -228,6 +228,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
       }
     }
   }
+  block.sync();
 
   // Drain the partially filled warp-local buffer left after the final scan iteration.
   if (build_buffer_offset > 0) {
