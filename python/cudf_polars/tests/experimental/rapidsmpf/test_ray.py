@@ -66,14 +66,14 @@ pytestmark = [
 # ---------------------------------------------------------------------------
 
 
-def test_ray_execution_reserved_executor_keys() -> None:
+def test_reserved_executor_keys() -> None:
     """executor_options rejects reserved keys."""
     for key in ("runtime", "cluster", "spmd", "ray_context"):
         with pytest.raises(TypeError, match="reserved"):
             ray_execution(executor_options={key: "anything"})
 
 
-def test_ray_execution_reserved_engine_options_keys() -> None:
+def test_reserved_engine_options_keys() -> None:
     """engine_options rejects keys that are set explicitly by ray_execution."""
     for key in ("memory_resource", "executor"):
         kwargs: dict[str, Any] = {key: "anything"}
@@ -104,7 +104,7 @@ def test_ray_client_post_shutdown_state() -> None:
         _ = client.engine
 
 
-def test_ray_execution_raises_inside_rrun() -> None:
+def test_raises_inside_rrun() -> None:
     """ray_execution() must not be called from within an rrun cluster."""
     with (
         patch(
@@ -121,7 +121,7 @@ def test_ray_execution_raises_inside_rrun() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_ray_execution_yields_client_and_engine(
+def test_yields_client_and_engine(
     ray_client: RayClient,
     engine: pl.GPUEngine,
 ) -> None:
@@ -131,7 +131,7 @@ def test_ray_execution_yields_client_and_engine(
     assert ray_client.nranks >= 1
 
 
-def test_ray_execution_executor_options_forwarded(
+def test_executor_options_forwarded(
     ray_client: RayClient,
     engine: pl.GPUEngine,
 ) -> None:
@@ -158,7 +158,7 @@ def test_gather_cluster_info(ray_client: RayClient) -> None:
     assert len({info["pid"] for info in infos}) == ray_client.nranks
 
 
-def test_ray_execution_scan(engine: pl.GPUEngine) -> None:
+def test_scan(engine: pl.GPUEngine) -> None:
     """Input rows are partitioned across actors; total output equals input."""
     lf = pl.LazyFrame({"a": [1, 2, 3]})
     result = lf.collect(engine=engine)
@@ -166,7 +166,7 @@ def test_ray_execution_scan(engine: pl.GPUEngine) -> None:
     assert sorted(result["a"].to_list()) == [1, 2, 3]
 
 
-def test_ray_execution_filter(engine: pl.GPUEngine) -> None:
+def test_filter(engine: pl.GPUEngine) -> None:
     """Filter is applied correctly across all actors."""
     lf = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
     result = lf.filter(pl.col("a") > 3).collect(engine=engine)
@@ -174,7 +174,7 @@ def test_ray_execution_filter(engine: pl.GPUEngine) -> None:
     assert sorted(result["a"].to_list()) == [4, 5]
 
 
-def test_ray_execution_group_by(ray_client: RayClient, engine: pl.GPUEngine) -> None:
+def test_group_by(ray_client: RayClient, engine: pl.GPUEngine) -> None:
     """Group-by produces the correct aggregation across all ranks."""
     # max_rows_per_partition=10 (set on the session fixture) gives each rank
     # exactly 5 partitions, so the multi-partition path is always exercised.
@@ -197,7 +197,7 @@ def test_ray_execution_group_by(ray_client: RayClient, engine: pl.GPUEngine) -> 
     assert result["val"].to_list() == expected["val"].to_list()
 
 
-def test_ray_execution_join(ray_client: RayClient, engine: pl.GPUEngine) -> None:
+def test_join(ray_client: RayClient, engine: pl.GPUEngine) -> None:
     """Hash join between two tables produces the correct result across all ranks."""
     # max_rows_per_partition=10 (set on the session fixture) gives each rank
     # exactly 5 partitions, so the multi-partition path is always exercised.
@@ -212,7 +212,7 @@ def test_ray_execution_join(ray_client: RayClient, engine: pl.GPUEngine) -> None
     assert result["val_right"].to_list() == [x * 2 for x in range(n)]
 
 
-def test_ray_execution_empty_dataframe(engine: pl.GPUEngine) -> None:
+def test_empty_dataframe(engine: pl.GPUEngine) -> None:
     """An empty LazyFrame produces an empty result with the correct schema."""
     lf = pl.LazyFrame(
         {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
