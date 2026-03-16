@@ -93,9 +93,33 @@ template <>
 struct operator_functor<ast_operator::FLOOR_DIV, false> {
   static constexpr auto arity{2};
 
-  template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
-    -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs / rhs)
+    requires(cuda::std::is_integral_v<CommonType> && cuda::std::is_signed_v<CommonType>)
+  {
+    auto const quotient          = lhs / rhs;
+    auto const nonzero_remainder = (lhs % rhs) != 0;
+    auto const mixed_sign        = (lhs ^ rhs) < 0;
+    return quotient - mixed_sign * nonzero_remainder;
+  }
+
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs / rhs)
+    requires(cuda::std::is_integral_v<CommonType> && !cuda::std::is_signed_v<CommonType>)
+  {
+    return lhs / rhs;
+  }
+
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> float
+    requires(cuda::std::is_same_v<CommonType, float>)
+  {
+    return floorf(static_cast<float>(lhs) / static_cast<float>(rhs));
+  }
+
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> double
+    requires(cuda::std::is_same_v<CommonType, double>)
   {
     return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
   }
@@ -176,8 +200,30 @@ struct operator_functor<ast_operator::POW, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> LHS
+    requires(cuda::std::is_integral_v<LHS> && cuda::std::is_integral_v<RHS>)
+  {
+    if constexpr (cuda::std::is_signed_v<RHS>) {
+      if (rhs < 0) { return 0; }
+    }
+    if (rhs == 0) { return 1; }
+    if (lhs == 0) { return 0; }
+    LHS extra = 1;
+    while (rhs > 1) {
+      if (rhs & 1) {
+        extra *= lhs;
+        rhs -= 1;
+      }
+      rhs /= 2;
+      lhs *= lhs;
+    }
+    return lhs * extra;
+  }
+
+  template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(cuda::std::pow(lhs, rhs))
+    requires(!cuda::std::is_integral_v<LHS> || !cuda::std::is_integral_v<RHS>)
   {
     return cuda::std::pow(lhs, rhs);
   }

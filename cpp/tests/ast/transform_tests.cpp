@@ -1047,4 +1047,65 @@ TYPED_TEST(DecimalComparisonTest, DecimalComparison)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(ComputeColumnTest, FloorDivIntegerEqualComparison)
+{
+  auto col   = column_wrapper<int64_t>{300964, 300972, 500'000, 26};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref       = cudf::ast::column_reference(0);
+  auto divisor_value = cudf::numeric_scalar<int64_t>(100'000);
+  auto divisor       = cudf::ast::literal(divisor_value);
+  auto floor_div     = cudf::ast::operation(cudf::ast::ast_operator::FLOOR_DIV, col_ref, divisor);
+
+  auto zero_value = cudf::numeric_scalar<int64_t>(0);
+  auto zero       = cudf::ast::literal(zero_value);
+  auto eq_expr    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, floor_div, zero);
+
+  auto result   = cudf::compute_column(table, eq_expr);
+  auto expected = column_wrapper<bool>{false, false, false, true};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, TrueDivIntegerEqualComparison)
+{
+  // TRUE_DIV(int64, int64) should return double, and EQUAL(double, double) should work.
+  // 10 / 4 = 2.5, 8 / 4 = 2.0, 7 / 4 = 1.75
+  auto col   = column_wrapper<int64_t>{10, 8, 7, 4};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref       = cudf::ast::column_reference(0);
+  auto divisor_value = cudf::numeric_scalar<int64_t>(4);
+  auto divisor       = cudf::ast::literal(divisor_value);
+  auto true_div      = cudf::ast::operation(cudf::ast::ast_operator::TRUE_DIV, col_ref, divisor);
+
+  auto two_value = cudf::numeric_scalar<double>(2.0);
+  auto two       = cudf::ast::literal(two_value);
+  auto eq_expr   = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, true_div, two);
+
+  auto result   = cudf::compute_column(table, eq_expr);
+  auto expected = column_wrapper<bool>{false, true, false, false};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, PowIntegerEqualComparison)
+{
+  // POW(int64, int64) should return int64 for integer inputs, and EQUAL(int64, int64) should work.
+  // 2^3=8, 3^2=9, 4^2=16, 2^0=1
+  auto col   = column_wrapper<int64_t>{2, 3, 4, 2};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref    = cudf::ast::column_reference(0);
+  auto exp_value  = cudf::numeric_scalar<int64_t>(2);
+  auto exp_scalar = cudf::ast::literal(exp_value);
+  auto pow_expr   = cudf::ast::operation(cudf::ast::ast_operator::POW, col_ref, exp_scalar);
+
+  auto sixteen_value = cudf::numeric_scalar<int64_t>(16);
+  auto sixteen       = cudf::ast::literal(sixteen_value);
+  auto eq_expr       = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, pow_expr, sixteen);
+
+  auto result   = cudf::compute_column(table, eq_expr);
+  auto expected = column_wrapper<bool>{false, false, true, false};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
