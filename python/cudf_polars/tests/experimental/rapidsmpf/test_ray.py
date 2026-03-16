@@ -91,13 +91,15 @@ def test_ray_client_shutdown_idempotent() -> None:
 
 
 def test_ray_client_post_shutdown_state() -> None:
-    """After shutdown, rank_actors is empty, nranks is 0, and engine raises."""
+    """After shutdown, rank_actors, nranks, and engine all raise RuntimeError."""
     mock_engine = MagicMock(spec=pl.GPUEngine)
     mock_engine.config = {"executor_options": {"ray_context": RayContext([])}}
     client = RayClient(mock_engine, owns_ray=False)
     client.shutdown()
-    assert client.rank_actors == []
-    assert client.nranks == 0
+    with pytest.raises(RuntimeError, match="shutdown"):
+        _ = client.rank_actors
+    with pytest.raises(RuntimeError, match="shutdown"):
+        _ = client.nranks
     with pytest.raises(RuntimeError, match="shutdown"):
         _ = client.engine
 
