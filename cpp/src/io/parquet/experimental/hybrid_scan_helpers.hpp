@@ -58,6 +58,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param literals Lists of literals, one per column with (in)equality predicate
    * @param operators Lists of operators, one per column with (in)equality predicate
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
+   * @param output_dtypes Output data types for the filtered columns
    * @param dictionary_col_schemas Schema indices of columns with (in)equality predicate
    * @param filter AST expression to filter row groups based on dictionary pages
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -139,7 +140,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @brief Filters and reduces down to the selection of payload columns
    *
    * @param payload_column_names List of paths of select payload column names, if any
-   * @param filter_columns_names List of paths of column names present only in filter, if any
+   * @param filter_column_names List of paths of column names present only in filter, if any
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param ignore_missing_columns Whether to ignore non-existent columns

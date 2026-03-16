@@ -322,6 +322,8 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  *
  * @param expr The optional expression object to get the column names from
  * @param skip_names The names of column names to skip in returned column names
+ * @param options Reader options
+ * @param schema_tree The schema tree describing the file structure
  * @return The column names present in expression object except the skip_names
  */
 [[nodiscard]] std::vector<std::string> get_column_names_in_expression(
@@ -334,7 +336,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  * @brief Filter table using the provided (StatsAST or BloomfilterAST) expression and
  * collect filtered row group indices
  *
- * @param table Table of stats or bloom filter membership columns
+ * @param ast_table Table of stats or bloom filter membership columns
  * @param ast_expr StatsAST or BloomfilterAST expression to filter with
  * @param input_row_group_indices Lists of input row groups to read, one per source
  * @param stream CUDA stream used for device memory operations and kernel launches

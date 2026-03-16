@@ -241,8 +241,8 @@ class aggregate_reader_metadata {
    *
    * @param sources Dataset sources
    * @param row_group_indices Lists of row groups to read bloom filters from, one per source
-   * @param[out] bloom_filter_data List of bloom filter data device buffers
    * @param column_schemas Schema indices of columns whose bloom filters will be read
+   * @param num_row_groups Number of row groups in the file
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
    *
@@ -272,6 +272,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters the row groups using row bounds (`skip_rows` and `num_rows`)
    *
+   * @param input_row_group_indices Input row group indices to filter
    * @param rows_to_skip Number of rows to skip
    * @param rows_to_read Number of rows to read
    *
