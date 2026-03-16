@@ -113,7 +113,7 @@ struct token_reader_fn {
  * @param d_strings Strings to split
  * @param d_prog Regex to evaluate against each string
  * @param direction Whether tokens are generated forwards or backwards.
- * @param max_tokens The maximum number of tokens for each split.
+ * @param maxsplit The maximum number of tokens for each split.
  * @param counts The number of tokens in each string
  * @param stream CUDA stream used for kernel launches.
  */

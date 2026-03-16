@@ -1007,6 +1007,8 @@ struct dictionary_caster {
    * @brief Build BOOL8 columns from dictionary membership results device buffers
    *
    * @param results_buffers Vector of dictionary membership results device buffers
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned device memory
    *
    * @return A vector of BOOL8 columns
    */
