@@ -17,7 +17,6 @@
 
 #include <cuda/iterator>
 #include <thrust/scan.h>
-#include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -68,9 +67,6 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   auto mutable_ranks = ranks->mutable_view();
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    // thrust::tabulate(rmm::exec_policy_nosync(stream),
-    //                  mutable_ranks.begin<size_type>(),
-    //                  mutable_ranks.end<size_type>(),
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(order_by.size()),

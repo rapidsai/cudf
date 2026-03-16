@@ -19,7 +19,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
-#include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
 namespace cudf::binops::compiled::detail {
@@ -79,10 +78,6 @@ void apply_struct_binary_op(mutable_column_view& out,
   auto const comparator_nulls = nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)};
 
   auto tabulate_device_operator = [&](auto device_comparator) {
-    // thrust::tabulate(
-    //   rmm::exec_policy_nosync(stream),
-    //   out.begin<bool>(),
-    //   out.end<bool>(),
     thrust::transform(
       rmm::exec_policy_nosync(stream),
       cuda::counting_iterator<size_type>(0),
@@ -158,9 +153,6 @@ void apply_struct_equality_op(mutable_column_view& out,
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    // thrust::tabulate(rmm::exec_policy_nosync(stream),
-    //                  out.begin<bool>(),
-    //                  out.end<bool>(),
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(out.size()),
