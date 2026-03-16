@@ -150,21 +150,36 @@ Each entry includes `pid`, `hostname`, `cuda_visible_devices`, and `node_id`.
 
 ### Passing options
 
-`executor_options`, `engine_options`, and `ray_init_options` accept pass-through
-dictionaries:
+`rapidsmpf_options`, `executor_options`, `engine_options`, and `ray_init_options` accept
+pass-through dictionaries:
 
 ```python
+from rapidsmpf.integrations.cudf_polars import Options
+
 with ray_execution(
-    executor_options={"max_rows_per_partition": 500_000},
+    rapidsmpf_options=Options(num_streaming_threads=8),
+    executor_options={
+        "max_rows_per_partition": 500_000,
+        "rapidsmpf_py_executor_max_workers": 2,
+    },
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
 ) as (ray_client, engine):
     ...
 ```
 
+`rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context` on each
+worker. If not provided, `ray_execution()` constructs a default `Options` with
+`num_streaming_threads=4`.
+
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
 argument; user-supplied keys are merged with reserved entries set by `ray_execution()`.
 Any additional keyword arguments to `ray_execution()` are also forwarded to `pl.GPUEngine`.
+
+Notable `executor_options` keys:
+
+* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
+  `ThreadPoolExecutor` that drives the RapidsMPF actor network on each worker.
 
 Reserved keys:
 
@@ -239,9 +254,9 @@ if `rapidsmpf.bootstrap.is_running_with_rrun()` returns `False`.
 ```python
 # launch with: rrun -n 4 python my_script.py
 import polars as pl
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     allgather_polars_dataframe,
-    reserve_op_id,
     spmd_execution,
 )
 
@@ -315,6 +330,12 @@ with spmd_execution() as (comm, ctx, engine):
 `allgather_polars_dataframe()` to gather all fragments:
 
 ```python
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+    allgather_polars_dataframe,
+    spmd_execution,
+)
+
 with spmd_execution() as (comm, ctx, engine):
     with reserve_op_id() as op_id:
         full = allgather_polars_dataframe(
@@ -326,8 +347,7 @@ with spmd_execution() as (comm, ctx, engine):
 ```
 
 `op_id` identifies this collective across ranks — all ranks must pass the same value.
-Use `reserve_op_id()` (imported from `cudf_polars.experimental.rapidsmpf.collectives.common`)
-to obtain a safe ID. It draws from the same pool that cudf-polars uses internally for shuffle
+Use `reserve_op_id()` to obtain a safe ID. It draws from the same pool that cudf-polars uses internally for shuffle
 and join collectives, so there is no risk of collision. Do not pass hardcoded integers: they
 may silently collide with an ID already reserved by an active collective inside `collect()`.
 
@@ -336,22 +356,40 @@ The result is guaranteed to be a `pl.DataFrame` containing rows from all ranks i
 
 ### Passing options
 
-`executor_options` and `engine_kwargs` accept pass-through dictionaries:
+`mr`, `rapidsmpf_options`, `executor_options`, and `engine_kwargs` accept pass-through
+arguments:
 
 ```python
+import rmm
+from rapidsmpf.integrations.cudf_polars import Options
+
 with spmd_execution(
+    mr=rmm.mr.PoolMemoryResource(rmm.mr.CudaMemoryResource()),
+    rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
         "rapidsmpf_spill": True,
+        "rapidsmpf_py_executor_max_workers": 2,
     },
     parquet_options={"use_rapidsmpf_native": True},
 ) as (comm, ctx, engine):
     ...
 ```
 
+`mr` is an `rmm.mr.DeviceMemoryResource` used as the GPU memory resource for the
+RapidsMPF `Context`. Defaults to `None` (uses the current device resource).
+
+`rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context`. Defaults
+to `None` (uses RapidsMPF defaults).
+
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
 argument; user-supplied keys are merged with reserved entries set by `spmd_execution()`.
 Any additional keyword arguments to `spmd_execution()` are also forwarded to `pl.GPUEngine`.
+
+Notable `executor_options` keys:
+
+* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
+  `ThreadPoolExecutor` that drives the RapidsMPF actor network.
 
 Reserved keys:
 
