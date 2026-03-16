@@ -112,7 +112,7 @@ class ShuffleManager:
         """Insert finished into the ShuffleManager."""
         await self.shuffler.insert_finished(self.context)
 
-    async def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
+    def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
         """
         Extract a chunk from the ShuffleManager.
 
@@ -132,11 +132,7 @@ class ShuffleManager:
         KeyError
             If the requested sequence number has already been extracted.
         """
-        partition_chunks = await self.shuffler.extract_async(
-            self.context, sequence_number
-        )
-        if partition_chunks is None:
-            raise KeyError(f"Partition {sequence_number} has already been extracted")
+        partition_chunks = self.shuffler.extract(sequence_number)
         return py_unpack_and_concat(
             partitions=partition_chunks,
             stream=stream,
@@ -269,13 +265,12 @@ async def _global_shuffle(
         msg = Message(
             partition_id,
             TableChunk.from_pylibcudf_table(
-                table=await shuffle.extract_chunk(partition_id, stream),
+                table=shuffle.extract_chunk(partition_id, stream),
                 stream=stream,
                 exclusive_view=True,
             ),
         )
         t1 = time.monotonic_ns()
-
         await ch_out.send(context, msg)
         t2 = time.monotonic_ns()
         cd = msg.get_content_description()
