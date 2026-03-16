@@ -273,11 +273,11 @@ def evaluate_pipeline(
         )
 
         # Run the network
-        executor = ThreadPoolExecutor(
+        with ThreadPoolExecutor(
             max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
             thread_name_prefix="cpse",
-        )
-        run_actor_network(actors=nodes, py_executor=executor)
+        ) as executor:
+            run_actor_network(actors=nodes, py_executor=executor)
 
         # Extract/return the concatenated result.
         # Keep chunks alive until after concatenation to prevent
