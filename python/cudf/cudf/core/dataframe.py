@@ -3311,8 +3311,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
 
-        # TODO: Change to deep=False when copy-on-write is default
-        df = self if inplace else self.copy(deep=True)
+        df = self if inplace else self.copy(deep=False)
 
         if verify_integrity and not idx.is_unique:
             raise ValueError(f"Values in Index are not unique: {idx}")
@@ -4024,8 +4023,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def add_prefix(self, prefix, axis=None):
         if axis is not None:
             raise NotImplementedError("axis is currently not implemented.")
-        # TODO: Change to deep=False when copy-on-write is default
-        out = self.copy(deep=True)
+        out = self.copy(deep=False)
         out.columns = [prefix + col_name for col_name in self._column_names]
         return out
 
@@ -4033,8 +4031,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def add_suffix(self, suffix, axis=None):
         if axis is not None:
             raise NotImplementedError("axis is currently not implemented.")
-        # TODO: Change to deep=False when copy-on-write is default
-        out = self.copy(deep=True)
+        out = self.copy(deep=False)
         out.columns = [col_name + suffix for col_name in self._column_names]
         return out
 
@@ -4359,8 +4356,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                            weight    1.0    0.8
                            length    0.3    0.2
         """
-        # TODO: Change to deep=False when copy-on-write is default
-        result = self.copy(deep=True)
+        result = self.copy(deep=False)
 
         # To get axis number
         axis = self._get_axis_from_axis_arg(axis)
