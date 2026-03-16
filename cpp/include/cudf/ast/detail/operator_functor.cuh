@@ -94,34 +94,29 @@ struct operator_functor<ast_operator::FLOOR_DIV, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs / rhs)
-    requires(cuda::std::is_integral_v<CommonType> && cuda::std::is_signed_v<CommonType>)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
+    requires(cuda::std::is_integral_v<CommonType>)
   {
-    auto const quotient          = lhs / rhs;
-    auto const nonzero_remainder = (lhs % rhs) != 0;
-    auto const mixed_sign        = (lhs ^ rhs) < 0;
-    return quotient - mixed_sign * nonzero_remainder;
+    if constexpr (cuda::std::is_signed_v<CommonType>) {
+      auto const lhs_op            = static_cast<CommonType>(lhs);
+      auto const rhs_op            = static_cast<CommonType>(rhs);
+      auto const quotient          = lhs_op / rhs_op;
+      auto const nonzero_remainder = (lhs_op % rhs_op) != 0;
+      auto const mixed_sign        = (lhs_op ^ rhs_op) < 0;
+      return quotient - mixed_sign * nonzero_remainder;
+    } else {
+      return static_cast<CommonType>(lhs) / static_cast<CommonType>(rhs);
+    }
   }
 
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs / rhs)
-    requires(cuda::std::is_integral_v<CommonType> && !cuda::std::is_signed_v<CommonType>)
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
+    requires(cuda::std::is_floating_point_v<CommonType>)
   {
-    return lhs / rhs;
-  }
-
-  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> float
-    requires(cuda::std::is_same_v<CommonType, float>)
-  {
-    return floorf(static_cast<float>(lhs) / static_cast<float>(rhs));
-  }
-
-  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> double
-    requires(cuda::std::is_same_v<CommonType, double>)
-  {
-    return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
+    if constexpr (cuda::std::is_same_v<CommonType, float>) {
+      return cuda::std::floorf(static_cast<CommonType>(lhs) / static_cast<CommonType>(rhs));
+    }
+    return cuda::std::floor(static_cast<CommonType>(lhs) / static_cast<CommonType>(rhs));
   }
 };
 
@@ -199,31 +194,30 @@ template <>
 struct operator_functor<ast_operator::POW, false> {
   static constexpr auto arity{2};
 
-  template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> LHS
-    requires(cuda::std::is_integral_v<LHS> && cuda::std::is_integral_v<RHS>)
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
+    requires(cuda::std::is_integral_v<CommonType>)
   {
-    if constexpr (cuda::std::is_signed_v<RHS>) {
-      if (rhs < 0) { return 0; }
+    CommonType base = static_cast<CommonType>(lhs);
+    CommonType exp  = static_cast<CommonType>(rhs);
+    if constexpr (cuda::std::is_signed_v<CommonType>) {
+      if (exp < 0) { return CommonType{0}; }
     }
-    if (rhs == 0) { return 1; }
-    if (lhs == 0) { return 0; }
-    LHS extra = 1;
-    while (rhs > 1) {
-      if (rhs & 1) {
-        extra *= lhs;
-        rhs -= 1;
-      }
-      rhs /= 2;
-      lhs *= lhs;
+    if (exp == 0) { return 1; }
+    if (base == 0) { return 0; }
+    CommonType result = 1;
+    while (exp > 0) {
+      if (exp & 1) { result *= base; }
+      base *= base;
+      exp /= 2;
     }
-    return lhs * extra;
+    return result;
   }
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(cuda::std::pow(lhs, rhs))
-    requires(!cuda::std::is_integral_v<LHS> || !cuda::std::is_integral_v<RHS>)
+    requires(not(cuda::std::is_integral_v<LHS> and cuda::std::is_integral_v<RHS>))
   {
     return cuda::std::pow(lhs, rhs);
   }
