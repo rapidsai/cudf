@@ -730,6 +730,7 @@ async def groupby_actor(
         )
 
         skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
+        # TODO: Ensure this emits a "dynamic planning" decision of "tree_local" or "shuffle_local" or "tree_allgather" or "shuffle"
         output_count = await _choose_strategy(
             context,
             comm,

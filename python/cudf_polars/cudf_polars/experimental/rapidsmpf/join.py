@@ -677,6 +677,8 @@ async def _choose_strategy_from_samples(
     if chunkwise:
         if tracer is not None:
             tracer.decision = "chunkwise"
+        # TODO: Ensure this emits a "dynamic planning" decision of "chunkwise"
+        # Or push it up a level to the caller?
         return _make_shuffle_strategy(
             ir,
             left_partitioning.inter_rank_modulus,
