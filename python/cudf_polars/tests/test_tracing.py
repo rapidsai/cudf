@@ -17,9 +17,6 @@ import cudf_polars.testing.asserts
 
 structlog = pytest.importorskip("structlog")
 
-# import structlog.contextvars
-# import structlog.testing
-
 
 @pytest.fixture(name="log_output")
 def fixture_log_output():
