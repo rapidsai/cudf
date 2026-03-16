@@ -2534,9 +2534,9 @@ TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
   }
   {
     cudf::io::csv_reader_options header_opts =
-      cudf::io::csv_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
-                                              reinterpret_cast<std::byte const*>(csv_in.c_str()),
-                                              csv_in.size()}})
+      cudf::io::csv_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
         .compression(cudf::io::compression_type::NONE);
     // Getting column names/count from header
     auto result = cudf::io::read_csv(header_opts);
@@ -2568,9 +2568,9 @@ TEST_F(CsvReaderTest, UTF8BOM)
 {
   std::string buffer = "\xEF\xBB\xBFMonth,Day,Year\nJune,6,2023\nAugust,25,1990\nMay,1,2000\n";
   cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
-                                            reinterpret_cast<std::byte const*>(buffer.c_str()),
-                                            buffer.size()}})
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
       .compression(cudf::io::compression_type::NONE);
   auto const result      = cudf::io::read_csv(in_opts);
   auto const result_view = result.tbl->view();
