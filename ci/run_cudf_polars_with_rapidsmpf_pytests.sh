@@ -12,6 +12,12 @@ set -euo pipefail
 # Support invoking run_cudf_polars_with_rapidsmpf_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
+# TODO: why do we need this?
+ucxx_lib64="$(python -c 'import ucxx._lib.libucxx as m, pathlib; print(pathlib.Path(m.__file__).resolve().parent.parent / "lib64")')"
+if [ -d "$ucxx_lib64" ]; then
+    export LD_LIBRARY_PATH="$ucxx_lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
 # Run experimental tests with the "single" cluster mode and the "rapidsmpf" runtime
 rapids-logger "Running experimental tests with the 'rapidsmpf' runtime and a 'single' cluster"
 timeout 10m python -m pytest --cache-clear "$@" "tests/experimental" \
