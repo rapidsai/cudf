@@ -106,7 +106,7 @@ def test_ray_execution_raises_inside_rrun() -> None:
     """ray_execution() must not be called from within an rrun cluster."""
     with (
         patch(
-            "cudf_polars.experimental.rapidsmpf.ray.bootstrap.is_running_with_rrun",
+            "rapidsmpf.bootstrap.is_running_with_rrun",
             return_value=True,
         ),
         pytest.raises(RuntimeError, match="rrun"),
