@@ -89,9 +89,6 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        --cache-clear \
        -m "" \
        --durations=50 \
-       --setup-show \
-       --ignore=py-polars/tests/unit/streaming/ \
-       --ignore=py-polars/tests/unit/io/ \
        -p cudf_polars.testing.plugin \
        -n 8 \
        --dist=worksteal \
