@@ -97,8 +97,9 @@ if `rapidsmpf.bootstrap.is_running_with_rrun()` returns `False`.
 # launch with: rrun -n 4 python my_script.py
 import polars as pl
 from cudf_polars.experimental.rapidsmpf.spmd import (
-    spmd_execution,
     allgather_polars_dataframe,
+    reserve_op_id,
+    spmd_execution,
 )
 
 with spmd_execution() as (comm, ctx, engine):
@@ -110,12 +111,13 @@ with spmd_execution() as (comm, ctx, engine):
         .collect(engine=engine)
     )
 
-    full = allgather_polars_dataframe(
-        comm=comm,
-        ctx=ctx,
-        local_df=result,
-        op_id=0,
-    )
+    with reserve_op_id() as op_id:
+        full = allgather_polars_dataframe(
+            comm=comm,
+            ctx=ctx,
+            local_df=result,
+            op_id=op_id,
+        )
 ```
 
 The context manager yields:
@@ -170,16 +172,21 @@ with spmd_execution() as (comm, ctx, engine):
 `allgather_polars_dataframe()` to gather all fragments:
 
 ```python
-full = allgather_polars_dataframe(
-    comm=comm,
-    ctx=ctx,
-    local_df=result,
-    op_id=0,
-)
+with spmd_execution() as (comm, ctx, engine):
+    with reserve_op_id() as op_id:
+        full = allgather_polars_dataframe(
+            comm=comm,
+            ctx=ctx,
+            local_df=result,
+            op_id=op_id,
+        )
 ```
 
-`op_id` is a unique integer that identifies this collective operation across ranks.
-All ranks must call the same collective with the same `op_id`.
+`op_id` identifies this collective across ranks — all ranks must pass the same value.
+Use `reserve_op_id()` (imported from `cudf_polars.experimental.rapidsmpf.collectives.common`)
+to obtain a safe ID. It draws from the same pool that cudf-polars uses internally for shuffle
+and join collectives, so there is no risk of collision. Do not pass hardcoded integers: they
+may silently collide with an ID already reserved by an active collective inside `collect()`.
 
 The result is guaranteed to be a `pl.DataFrame` containing rows from all ranks in rank order
 (rank 0 first, then rank 1, …, rank N-1).
