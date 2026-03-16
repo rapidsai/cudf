@@ -5,18 +5,16 @@
 
 import numpy as np
 import pytest
-from config import cudf
+from config import NUM_ROWS, cudf
 
 
 @pytest.fixture(
     params=[
-        (1_000_000, 100),
-        (1_000_000, 500),
-        (1_000_000, 1000),
-        (10_000_000, 500),
-        (10_000_000, 2000),
+        (nr, card)
+        for nr in NUM_ROWS
+        for card in [max(2, nr // 100), max(2, nr // 10)]
     ],
-    ids=lambda x: f"{x[0] // 1_000_000}M_card{x[1]}",
+    ids=lambda x: f"{x[0]}rows_card{x[1]}",
 )
 def data_size(request):
     return request.param
