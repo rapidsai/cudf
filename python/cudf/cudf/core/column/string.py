@@ -85,6 +85,14 @@ def plc_flags_from_re_flags(
     return plc_flags
 
 
+def _infer_timedelta_format(col: StringColumn) -> str:
+    """Infer strptime format from the first non-null timedelta string."""
+    nonnull = col.dropna()
+    if len(nonnull) == 0 or ":" in nonnull.element_indexing(0):
+        return "%D days %H:%M:%S"
+    return "%D days"
+
+
 class StringColumn(ColumnBase, Scannable):
     """Implements operations for Columns of String type"""
 
@@ -294,7 +302,8 @@ class StringColumn(ColumnBase, Scannable):
             add_back_nat = is_nat.any()
         elif dtype.kind == "m":
             casting_func = plc.strings.convert.convert_durations.to_durations
-            add_back_nat = False
+            is_nat = self == "NaT"
+            add_back_nat = is_nat.any()
 
         with self.access(mode="read", scope="internal"):
             plc_dtype = dtype_to_pylibcudf_type(dtype)
@@ -323,7 +332,8 @@ class StringColumn(ColumnBase, Scannable):
         return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
-        return self.strptime(dtype, "%D days %H:%M:%S")  # type: ignore[return-value]
+        format = _infer_timedelta_format(self)
+        return self.strptime(dtype, format)  # type: ignore[return-value]
 
     def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
         with self.access(mode="read", scope="internal"):
@@ -340,7 +350,7 @@ class StringColumn(ColumnBase, Scannable):
 
     def as_string_column(self, dtype: DtypeObj) -> Self:
         if isinstance(dtype, np.dtype) and dtype.kind == "U":
-            dtype = np.dtype("O")
+            dtype = np.dtype("object")
         if dtype != self.dtype:
             return cast(Self, ColumnBase.create(self.plc_column, dtype))
         return self
