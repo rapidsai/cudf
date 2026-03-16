@@ -663,6 +663,7 @@ def test_empty_column(binary_op, data, scalar):
         lambda: cudf.Series([5, 6, 7, 8]),
         lambda: cudf.Series([5.6, 6.7, 7.8, 8.9]),
         lambda: np.array([5, 6, 7, 8]),
+        # rapids-pre-commit-hooks: disable-next-line
         lambda: [25.5, 26.6, 27.7, 28.8],
     ],
 )

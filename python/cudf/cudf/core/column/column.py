@@ -2293,7 +2293,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         elif isinstance(dtype, CategoricalDtype):
             result = self.as_categorical_column(dtype)
         elif len(self) == 0:
-            result = column_empty(0, dtype=dtype)
+            if isinstance(dtype, np.dtype) and dtype.kind == "U":
+                dtype = np.dtype("object")
+            result = (
+                self if self.dtype == dtype else column_empty(0, dtype=dtype)
+            )
         else:
             if is_dtype_obj_interval(dtype):
                 result = self.as_interval_column(dtype)  # type: ignore[arg-type]
