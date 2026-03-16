@@ -208,6 +208,7 @@ class output_builder {
    *
    * @param max_write_size the maximum number of elements that will be written into a
    *                       split_device_span returned from `next_output`.
+   * @param max_growth Maximum growth factor for the internal buffer
    * @param stream the stream used to allocate the first chunk of memory.
    * @param mr optional, the memory resource to use for allocation.
    */

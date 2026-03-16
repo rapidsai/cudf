@@ -233,6 +233,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  *
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] in_out mutable_column_view representing input data. data is processed in-place
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out, rmm::cuda_stream_view stream)
 {

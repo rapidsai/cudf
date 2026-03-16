@@ -102,7 +102,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
  * @brief Breaks the ties among equal value groups using binary operator and
  * transform this tied value to final rank.
  *
- * @param dense_rank dense rank of sorted input column (acts as key for value
+ * @param dense_rank_sorted dense rank of sorted input column (acts as key for value
  * groups).
  * @param tie_iter  iterator of rank to break ties among equal value groups.
  * @param sorted_order_view sorted order indices of input column

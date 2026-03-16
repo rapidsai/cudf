@@ -231,6 +231,7 @@ __device__ inline int calc_threads_per_string_log2(int avg_string_length)  // re
  * @param start The value index to start copying strings for
  * @param end One past the end value index to stop copying strings for
  * @param t The current thread's index
+ * @param str_offsets String offset values
  * @param string_output_offset Starting offset into the output column data for writing
  */
 template <int block_size,
