@@ -404,9 +404,9 @@ class RayClient:
 
     @property
     def rank_actors(self) -> list[ActorHandle[RankActor]]:
-        """List of Ray rank actor handles, or ``[]`` after :meth:`shutdown`."""
+        """List of Ray rank actor handles."""
         if self._engine is None:
-            return []
+            raise RuntimeError("rank_actors is not available after shutdown")
         return self._engine.config["executor_options"]["ray_context"].rank_actors
 
     @property
@@ -456,6 +456,8 @@ class RayClient:
         ExceptionGroup
             If one or more actors raise an unexpected exception during shutdown.
         """
+        if self._engine is None:
+            return  # already shut down; idempotent
         exceptions: list[Exception] = []
         try:
             refs = [a.shutdown.remote() for a in self.rank_actors]
@@ -469,6 +471,9 @@ class RayClient:
             if exceptions:
                 raise ExceptionGroup("Actor shutdown failed", exceptions)
         finally:
+            # Setting _engine to None serves two purposes: it marks this client as
+            # shut down (so engine/rank_actors/nranks raise) and releases the
+            # reference to RayContext, allowing its now-dead actor handles to be GC'd.
             self._engine = None
             if self._owns_ray:
                 self._owns_ray = False
@@ -582,9 +587,10 @@ def ray_execution(
         ray.init(**ray_init_options)
 
     total_gpus = int(ray.cluster_resources().get("GPU", 0.0))
-    # Note: available_resources() is a snapshot and inherently racy. This is a
-    # best-effort guard; another process could claim GPUs between this check and
-    # actor creation.
+    # Note: available_resources() returns a snapshot and is inherently racy.
+    # This is only a best-effort guard, another process could claim GPUs between
+    # this check and actor creation. That is fine here, because the snapshot
+    # simply determines the number of ranks used for this cluster instance.
     free_gpus = int(ray.available_resources().get("GPU", 0.0))
     if total_gpus != free_gpus:
         raise RuntimeError(

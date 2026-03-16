@@ -124,7 +124,7 @@ The context manager yields:
 * `ctx` — [`rapidsmpf.streaming.core.context.Context`][rapidsmpf-context]
 * `engine` — {class}`~polars.lazyframe.engine_config.GPUEngine`
 
-Pass `engine` to every `LazyFrame.collect()` inside the context block.
+Pass `engine` to every `LazyFrame.collect()` or `sink*()` call inside the context block.
 
 ### Query symmetry requirement
 
@@ -134,7 +134,7 @@ that another rank does not, the program will deadlock.
 
 In practice:
 
-* Avoid rank-conditional `collect()` calls
+* Avoid rank-conditional `collect()` or `sink*()` calls
 * Avoid branches that change the query graph
 * Keep the driver script deterministic
 
@@ -198,13 +198,14 @@ with spmd_execution(
     ...
 ```
 
-`executor_options` keys map to `StreamingExecutor` fields. Additional keyword
-arguments to `spmd_execution()` are forwarded directly to `pl.GPUEngine`.
+`executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
+argument; user-supplied keys are merged with reserved entries set by `spmd_execution()`.
+Any additional keyword arguments to `spmd_execution()` are also forwarded to `pl.GPUEngine`.
 
 Reserved keys:
 
 * `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`
-* `engine_kwargs`: `"memory_resource"`, `"executor"`
+* `engine_options`: `"memory_resource"`, `"executor"`
 
 ---
 
@@ -341,10 +342,14 @@ with ray_execution(
     ...
 ```
 
+`executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
+argument; user-supplied keys are merged with reserved entries set by `ray_execution()`.
+Any additional keyword arguments to `ray_execution()` are also forwarded to `pl.GPUEngine`.
+
 Reserved keys:
 
 * `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
-* `engine_kwargs`: `"memory_resource"`, `"executor"`
+* `engine_options`: `"memory_resource"`, `"executor"`
 
 <!-- Reference links -->
 [dask-distributed]: https://distributed.dask.org/
