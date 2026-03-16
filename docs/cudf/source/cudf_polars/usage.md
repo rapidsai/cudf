@@ -115,15 +115,18 @@ The different scopes have different schemas. Fields in **bold** are required / a
 | Field Name | Type  | Description |
 | ---------- | ----- | ----------- |
 | **scope**  | Literal["plan"] | The string literal `"plan"`. Useful for distinguishing from other types of traces. |
+| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
 | **plan**   | `PlanObject` | A serialized representation of the query plan. See #TODO below |
 | **event**  | String | A message lik,e "Query Plan" |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
 
 #### scope=actor
+
+`actor`-scoped traces will only appear with the rapidsmpf runtime.
 
 | Field Name | Type  | Description |
 | ---------- | ----- | ----------- |
 | **scope**      | Literal["actor"] | The string literal `"actor"`. Useful for distinguishing from other types of traces. |
+| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
 | **start**      | int   | A nanosecond-resolution counter indicating when the actor started. Note: actors generally start early in the query and suspend waiting for data. |
 | **stop**      | int   | A nanosecond-resolution counter indicating when the actor completed. |
 | **event**      | String | A message like "Streaming Actor". |
@@ -135,9 +138,12 @@ The different scopes have different schemas. Fields in **bold** are required / a
 
 #### scope=table_chunk
 
+`table_chunk`-scoped traces will only appear with the rapidsmpf runtime.
+
 | Field Name | Type  | Description |
 | ---------- | ----- | ----------- |
 | **scope** | `Literal["table_chunk"]` | The string literal `"actor"`. Useful for distinguishing from other types of traces. |
+| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
 | chunk_counter | int | An integer counter giving the number of table chunks processed at the time of logging. |
 | sequence_number | int | The sequence counter of the rapidsmpf message. |
 | content_sizes | dict[str, int] | The sizes from the rapidsmpf message's content description. |
@@ -152,6 +158,7 @@ The different scopes have different schemas. Fields in **bold** are required / a
 | Field Name | Type  | Description |
 | ---------- | ----- | ----------- |
 | **scope** | `Literal["evaluate_ir_node"]` | The string literal `"evaluate_ir_node"`. Useful for distinguishing from other types of traces. |
+| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
 | **type**       | string | The name of the IR node |
 | **start**      | int    | A nanosecond-precision counter indicating when this node started executing |
 | **stop**       | int    | A nanosecond-precision counter indicating when this node finished executing |
@@ -166,6 +173,7 @@ The different scopes have different schemas. Fields in **bold** are required / a
 | `rmm_total_bytes_{phase}` | int | The total number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
 | `rmm_total_count_{phase}` | int | The total number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
 | `nvml_current_bytes_{phase}` | int | The device memory usage of this process, as reported by NVML, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
+| actor_ir_id   | int    | A unique identifier for the parent actor (rapidsmpf runtime only). |
 
 Setting `CUDF_POLARS_LOG_TRACES=1` enables all the metrics. Depending on the query, the overhead
 from collecting the memory or dataframe metrics can be measurable. You can disable some metrics

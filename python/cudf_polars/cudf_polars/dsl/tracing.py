@@ -146,7 +146,6 @@ def make_snapshot(
 
 
 P = ParamSpec("P")
-CALLBACK: Callable[[dict[str, Any]], None] | None = None
 
 
 def log_do_evaluate(
@@ -215,9 +214,6 @@ def log_do_evaluate(
                     + (after_end - after_start),
                 }
             )
-            if CALLBACK is not None:
-                CALLBACK(record)
-
             log.info("Execute IR", **record)
 
             return result

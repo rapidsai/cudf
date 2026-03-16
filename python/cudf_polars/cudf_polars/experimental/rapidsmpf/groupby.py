@@ -626,16 +626,23 @@ async def _choose_strategy(
 
     output_count_limit = local_count if skip_global_comm else total_chunk_count
     output_count = min(ideal_count, output_count_limit)
+    decision = (
+        "tree_local"
+        if skip_global_comm and use_tree
+        else "shuffle_local"
+        if skip_global_comm
+        else "tree_allgather"
+        if use_tree
+        else "shuffle"
+    )
+
+    # cudf_polars.dsl.tracing.log(
+    #     "Dynamic planning decision",
+    #     scope=cudf_polars.dsl.tracing.Scope.ACTOR.value,
+    #     decision=tracer.decision,
+    # )
     if tracer is not None:
-        tracer.decision = (
-            "tree_local"
-            if skip_global_comm and use_tree
-            else "shuffle_local"
-            if skip_global_comm
-            else "tree_allgather"
-            if use_tree
-            else "shuffle"
-        )
+        tracer.decision = decision
 
     return output_count
 
@@ -706,6 +713,11 @@ async def groupby_actor(
         if fully_partitioned or fallback_case:
             if tracer is not None:
                 tracer.decision = "chunkwise"
+            # cudf_polars.dsl.tracing.log(
+            #     "Dynamic planning decision",
+            #     scope=cudf_polars.dsl.tracing.Scope.ACTOR.value,
+            #     decision="chunkwise",
+            # )
             await chunkwise_evaluate(
                 context,
                 ir,
