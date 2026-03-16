@@ -202,7 +202,6 @@ def evaluate_pipeline(
     The output DataFrame and metadata collector.
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
-    assert query_id is not None
 
     _initial_mr: Any = None
     use_stream_pool = False
