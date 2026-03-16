@@ -27,9 +27,6 @@ from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.experimental.rapidsmpf.collectives.common import (
-    reserve_op_id as reserve_op_id,  # noqa: PLC0414 (explicit re-export)
-)
 from cudf_polars.experimental.rapidsmpf.core import generate_network
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.utils import _concat
@@ -176,8 +173,9 @@ def allgather_polars_dataframe(
         Rank-local DataFrame to contribute.
     op_id
         Operation ID for this AllGather collective. Must be identical on every
-        rank. Use :func:`reserve_op_id` to obtain a collision-free ID from the
-        same pool used internally by cudf-polars. Do not pass hardcoded integers.
+        rank. For example, use :func:`reserve_op_id` to obtain a collision-free
+        ID from the same pool used internally by cudf-polars. Avoid passing
+        hardcoded integers.
 
     Returns
     -------
