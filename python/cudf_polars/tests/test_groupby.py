@@ -129,6 +129,8 @@ def maintain_order(request):
 def test_groupby(
     df: pl.LazyFrame, maintain_order, keys, exprs, using_rapidsmpf, request
 ):
+    if using_rapidsmpf:
+        pytest.skip("Can segault on 12.9 builds with rapidsmpf runtime.")
     failing_rapidsmpf_nodeids = {
         'test_groupby[maintain_order-col("key1")-col("int32").mean()]',
         'test_groupby[maintain_order-col("key1")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
