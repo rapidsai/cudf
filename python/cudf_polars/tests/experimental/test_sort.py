@@ -133,6 +133,13 @@ def test_sort_slice(df, engine, offset):
         assert_gpu_result_equal(q, engine=engine)
 
 
+def test_sort_concat_filtered_to_empty(engine):
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    # Create two filters, both of which will give empty results
+    q = pl.concat([df.filter(pl.col("a") == 0), df.filter(pl.col("a") == 4)]).sort("a")
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_sort_after_sparse_join():
     engine = pl.GPUEngine(
         raise_on_fail=True,
