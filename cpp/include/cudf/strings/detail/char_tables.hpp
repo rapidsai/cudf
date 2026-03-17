@@ -45,7 +45,7 @@ CUDF_HOST_DEVICE constexpr uint8_t IS_UPPER_OR_LOWER(uint8_t x)
 {
   return ((x) & ((1 << 5) | (1 << 6)));
 }
-CUDF_HOST_DEVICE constexpr uint8_t ALL_FLAGS = 0xFF;
+__device__ constexpr uint8_t ALL_FLAGS = 0xFF;
 
 // Type for the character cases table.
 using character_cases_table_type = uint16_t;
