@@ -360,9 +360,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .agg(
             [
                 pl.len().alias("cnt"),
-                pl.col("ss_wholesale_cost").sum().alias("s1"),
-                pl.col("ss_list_price").sum().alias("s2"),
-                pl.col("ss_coupon_amt").sum().alias("s3"),
+                # Polars sum() returns 0 for all-null groups; SQL returns NULL.
+                # See https://github.com/rapidsai/cudf/issues/19560.
+                pl.when(pl.col("ss_wholesale_cost").is_not_null().any())
+                .then(pl.col("ss_wholesale_cost").sum())
+                .otherwise(None)
+                .alias("s1"),
+                pl.when(pl.col("ss_list_price").is_not_null().any())
+                .then(pl.col("ss_list_price").sum())
+                .otherwise(None)
+                .alias("s2"),
+                pl.when(pl.col("ss_coupon_amt").is_not_null().any())
+                .then(pl.col("ss_coupon_amt").sum())
+                .otherwise(None)
+                .alias("s3"),
             ]
         )
         .select(
