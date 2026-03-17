@@ -204,6 +204,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - cuda_version
       - test_python_common
       - test_python_cudf_common
       - test_python_cudf
@@ -352,6 +353,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - cuda_version
       - depends_on_dask_cuda
       - numpy_run
       - test_python_common
@@ -390,6 +392,7 @@ files:
       table: project.optional-dependencies
       key: test
     includes:
+      - cuda_version
       - depends_on_dask_cuda
       - test_python_common
       - test_python_cudf_common
