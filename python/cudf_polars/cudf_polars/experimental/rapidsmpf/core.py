@@ -141,9 +141,9 @@ def evaluate_logical_plan(
                 )
             case "single":
                 # Single-process execution: use worker context from setup_worker
-            from cudf_polars.experimental.rapidsmpf.single import (
-                evaluate_pipeline_single,
-            )
+                from cudf_polars.experimental.rapidsmpf.single import (
+                    evaluate_pipeline_single,
+                )
 
                 result, metadata_collector = evaluate_pipeline_single(
                 evaluate_pipeline,
