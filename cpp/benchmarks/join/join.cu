@@ -61,7 +61,7 @@ void nvbench_full_join(nvbench::state& state,
 }
 
 template <cudf::null_equality NullEquality, data_type DataType>
-void nvbench_hash_join_inner_join_selectivity(
+void nvbench_inner_join_selectivity(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<NullEquality>, nvbench::enum_type<DataType>>)
 {
@@ -113,7 +113,7 @@ NVBENCH_BENCH_TYPES(nvbench_full_join,
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE);
 
-NVBENCH_BENCH_TYPES(nvbench_hash_join_inner_join_selectivity,
+NVBENCH_BENCH_TYPES(nvbench_inner_join_selectivity,
                     NVBENCH_TYPE_AXES(DEFAULT_JOIN_NULL_EQUALITY, SELECTIVITY_JOIN_DATATYPES))
   .set_name("inner_join_selectivity")
   .set_type_axes_names({"NullEquality", "DataType"})
