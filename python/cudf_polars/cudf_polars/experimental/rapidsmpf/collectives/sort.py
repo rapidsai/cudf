@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from typing import TYPE_CHECKING
 
 from rapidsmpf.shuffler import PartitionAssignment
@@ -43,14 +44,32 @@ from cudf_polars.experimental.sort import (
 from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.typing import Schema
+
+
+class ChunkStore:
+    """Ordered spillable buffer for TableChunk messages."""
+
+    def __init__(self, ctx: Context) -> None:
+        self._mids: deque[int] = deque()
+        self._store = ctx.spillable_messages()
+
+    def insert(self, msg: Message) -> None:
+        """Insert a message into the store."""
+        self._mids.append(self._store.insert(msg))
+
+    def __iter__(self) -> Generator[Message, None, None]:
+        """Yield messages in insertion order, draining the store."""
+        while self._mids:
+            yield self._store.extract(mid=self._mids.popleft())
 
 
 def _boundary_schema(by: list[str], by_dtypes: list[DataType]) -> Schema:
@@ -131,14 +150,13 @@ async def _compute_sort_boundaries(
 async def _receive_and_buffer_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
-    chunks_buffer: SpillableMessages,
+    chunk_store: ChunkStore,
     sort_ir: Sort,
     by: list[str],
     num_partitions: int,
     comm: Communicator,
-) -> tuple[list[int], list[TableChunk]]:
+) -> list[TableChunk]:
     """Receive input chunks, collect local split candidates, and buffer chunks for later insert."""
-    message_ids: list[int] = []
     local_candidates_list: list[TableChunk] = []
     local_row_offset = 0
 
@@ -180,12 +198,15 @@ async def _receive_and_buffer_chunks(
             tbl = plc.Table([*df.table.columns(), seq_id_col])
         else:
             tbl = df.table
-        chunk = TableChunk.from_pylibcudf_table(tbl, df.stream, exclusive_view=True)
-        mid = chunks_buffer.insert(Message(seq_num, chunk))
-        message_ids.append(mid)
+        chunk_store.insert(
+            Message(
+                seq_num,
+                TableChunk.from_pylibcudf_table(tbl, df.stream, exclusive_view=True),
+            )
+        )
         del df
 
-    return message_ids, local_candidates_list
+    return local_candidates_list
 
 
 async def _insert_chunks_into_shuffle(
@@ -194,8 +215,7 @@ async def _insert_chunks_into_shuffle(
     num_partitions: int,
     collective_ids: list[int],
     metadata_in: ChannelMetadata,
-    message_ids: list[int],
-    chunks_buffer: SpillableMessages,
+    chunk_store: ChunkStore,
     sort_boundaries_df: DataFrame,
     ir: ShuffleSorted,
     ir_context: IRExecutionContext,
@@ -214,11 +234,10 @@ async def _insert_chunks_into_shuffle(
         partition_assignment=PartitionAssignment.CONTIGUOUS,
     )
     skip_insert = metadata_in.duplicated and comm.rank != 0
-    sort_ir = ir.children[0]
-    assert isinstance(sort_ir, Sort), "ShuffleSorted must have a Sort child."
+    local_sort_ir = ir.children[0]
+    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
 
-    for mid in message_ids:
-        msg = chunks_buffer.extract(mid=mid)
+    for msg in chunk_store:
         if skip_insert:
             continue
         seq_num = msg.sequence_number
@@ -246,61 +265,59 @@ async def _insert_chunks_into_shuffle(
 
     await shuffle.insert_finished()
 
-    if sort_ir.stable:
+    post_sort_ir = local_sort_ir
+    if local_sort_ir.stable:
+        assert local_sort_ir.zlice is None
         seq_id_name = next(unique_names(ir.schema.keys()))
-        sort_ir = Sort(
-            sort_ir.schema | {seq_id_name: DataType(pl.UInt64())},
+        post_sort_ir = Sort(
+            local_sort_ir.schema | {seq_id_name: DataType(pl.UInt64())},
             (
-                *sort_ir.by,
+                *local_sort_ir.by,
                 NamedExpr(seq_id_name, Col(DataType(pl.UInt64()), seq_id_name)),
             ),
-            (*sort_ir.order, plc.types.Order.ASCENDING),
-            (*sort_ir.null_order, plc.types.NullOrder.AFTER),
-            sort_ir.stable,
-            sort_ir.zlice,
-            sort_ir.children[0],
+            (*local_sort_ir.order, plc.types.Order.ASCENDING),
+            (*local_sort_ir.null_order, plc.types.NullOrder.AFTER),
+            local_sort_ir.stable,
+            None,
+            local_sort_ir.children[0],
         )
 
-    return shuffle, sort_ir
+    return shuffle, post_sort_ir
 
 
 async def _extract_partitions_and_send(
     context: Context,
     ch_out: Channel[TableChunk],
     shuffle: ShuffleManager,
-    sort_ir: Sort,
+    post_sort_ir: Sort,
     ir_context: IRExecutionContext,
+    output_schema: Schema,
 ) -> None:
     """Extract each local partition from the shuffle, sort if needed, and send."""
+    ncols_out = len(output_schema)
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
-        out_table = shuffle.extract_chunk(partition_id, stream)
-        df = DataFrame.from_table(
-            out_table,
-            list(sort_ir.schema.keys()),
-            list(sort_ir.schema.values()),
-            stream,
-        )
-        if out_table.num_rows() > 0:
-            df = sort_ir.do_evaluate(
-                *sort_ir._non_child_args,
-                df,
+        table = shuffle.extract_chunk(partition_id, stream)
+        if table.num_rows() > 0:
+            table = post_sort_ir.do_evaluate(
+                *post_sort_ir._non_child_args,
+                DataFrame.from_table(
+                    table,
+                    list(post_sort_ir.schema.keys()),
+                    list(post_sort_ir.schema.values()),
+                    stream,
+                ),
                 context=ir_context,
-            )
-            out_table = df.table
-        if sort_ir.stable:
-            # Drop the stable-sort seq_id column
-            out_table = plc.Table(out_table.columns()[:-1])
+            ).table
+        if table.num_columns() > ncols_out:
+            table = plc.Table(table.columns()[:ncols_out])
         await ch_out.send(
             context,
             Message(
                 partition_id,
-                TableChunk.from_pylibcudf_table(
-                    out_table, df.stream, exclusive_view=True
-                ),
+                TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True),
             ),
         )
-        del df
 
     await ch_out.drain(context)
 
@@ -326,12 +343,12 @@ async def sort_actor(
         )
         await send_metadata(ch_out, context, output_metadata)
 
-        sort_ir = ir.children[0]
-        assert isinstance(sort_ir, Sort), "ShuffleSorted must have a Sort child."
+        local_sort_ir = ir.children[0]
+        assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
 
-        chunks_buffer = context.spillable_messages()
-        message_ids, local_candidates_list = await _receive_and_buffer_chunks(
-            context, ch_in, chunks_buffer, sort_ir, by, num_partitions, comm
+        chunk_store = ChunkStore(context)
+        local_candidates_list = await _receive_and_buffer_chunks(
+            context, ch_in, chunk_store, local_sort_ir, by, num_partitions, comm
         )
 
         need_allgather = comm.nranks > 1 and not metadata_in.duplicated
@@ -346,14 +363,13 @@ async def sort_actor(
             collective_ids.pop() if need_allgather else None,
         )
 
-        shuffle, sort_ir = await _insert_chunks_into_shuffle(
+        shuffle, post_sort_ir = await _insert_chunks_into_shuffle(
             context,
             comm,
             num_partitions,
             collective_ids,
             metadata_in,
-            message_ids,
-            chunks_buffer,
+            chunk_store,
             sort_boundaries_df,
             ir,
             ir_context,
@@ -361,7 +377,7 @@ async def sort_actor(
         )
 
         await _extract_partitions_and_send(
-            context, ch_out, shuffle, sort_ir, ir_context
+            context, ch_out, shuffle, post_sort_ir, ir_context, ir.schema
         )
 
 
