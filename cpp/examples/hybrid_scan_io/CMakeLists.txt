@@ -32,6 +32,10 @@ add_library(
 target_compile_features(hybrid_scan_utils PRIVATE cxx_std_20)
 target_link_libraries(hybrid_scan_utils PRIVATE cudf::cudf)
 
+# Creates a hybrid scan example executable and installs it.
+#
+# Arguments: target_name  - Name of the CMake target and resulting executable source_file  - Source
+# file to compile for the example
 function(add_hybrid_scan_example target_name source_file)
   add_executable(${target_name} ${source_file})
   target_link_libraries(

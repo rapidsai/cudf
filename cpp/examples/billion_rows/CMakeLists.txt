@@ -32,6 +32,10 @@ add_library(groupby_results OBJECT groupby_results.cpp)
 target_link_libraries(groupby_results PRIVATE cudf::cudf)
 target_compile_features(groupby_results PRIVATE cxx_std_20)
 
+# Creates a billion rows example executable and installs it.
+#
+# Arguments: target_name  - Name of the CMake target and resulting executable source_file  - Source
+# file to compile for the example
 function(add_billion_rows_example target_name source_file)
   add_executable(${target_name} ${source_file})
   target_link_libraries(

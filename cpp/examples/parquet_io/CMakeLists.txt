@@ -30,6 +30,10 @@ add_library(parquet_io_utils OBJECT common_utils.cpp io_source.cpp)
 target_compile_features(parquet_io_utils PRIVATE cxx_std_20)
 target_link_libraries(parquet_io_utils PRIVATE cudf::cudf)
 
+# Creates a parquet I/O example executable and installs it.
+#
+# Arguments: target_name  - Name of the CMake target and resulting executable source_file  - Source
+# file to compile for the example
 function(add_parquet_io_example target_name source_file)
   add_executable(${target_name} ${source_file})
   target_link_libraries(

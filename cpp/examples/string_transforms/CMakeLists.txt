@@ -28,6 +28,10 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
+# Creates a string transforms example executable and installs it.
+#
+# Arguments: target_name  - Name of the CMake target and resulting executable source_file  - Source
+# file to compile for the example
 function(add_string_transforms_example target_name source_file)
   add_executable(${target_name} ${source_file})
   target_compile_features(${target_name} PRIVATE cxx_std_20)
