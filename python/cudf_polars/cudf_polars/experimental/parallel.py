@@ -458,10 +458,12 @@ def _(
 def _(
     ir: HStack, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if not all(
-        expr.is_pointwise for expr in traversal([e.value for e in ir.columns])
-    ):  # pragma: no cover
-        # TODO: Avoid fallback if/when possible
+    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.columns])):
+        # We expect non-pointwise HStack operations to be wrapped in Select
+        # or Projection nodes. The lowering logic for those nodes must
+        # handle non-pointwise HStack children. We should only reach this
+        # block if the parent node already failed to decompose this HStack,
+        # and we need to fall back to single-partition evaluation.
         return _lower_ir_fallback(
             ir, rec, msg="This HStack not supported for multiple partitions."
         )
