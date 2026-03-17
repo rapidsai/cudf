@@ -76,8 +76,14 @@ def test_booleanfunction_all_any_kleene(expr, ignore_nulls):
 )
 @pytest.mark.parametrize("has_nans", [False, True], ids=["no_nans", "nans"])
 def test_boolean_function_unary(
-    expr: Callable[[pl.Expr], pl.Expr], *, has_nans: bool, has_nulls: bool
+    expr: Callable[[pl.Expr], pl.Expr],
+    *,
+    has_nans: bool,
+    has_nulls: bool,
+    using_rapidsmpf: bool,
 ) -> None:
+    if using_rapidsmpf:
+        pytest.skip("Can segault on 12.9 builds with rapidsmpf runtime.")
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
