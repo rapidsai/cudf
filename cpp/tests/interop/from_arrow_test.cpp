@@ -340,8 +340,8 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   std::vector<std::unique_ptr<cudf::column>> columns;
   auto keys_cw     = cudf::test::fixed_width_column_wrapper<int64_t>(keys);
   auto indices1_cw = cudf::test::fixed_width_column_wrapper<int8_t>(indices1, bvalids);
-  auto indices2_cw = cudf::test::fixed_width_column_wrapper<int8_t>(indices2, bvalids);
-  auto indices3_cw = cudf::test::fixed_width_column_wrapper<int8_t>(indices3, bvalids);
+  auto indices2_cw = cudf::test::fixed_width_column_wrapper<int16_t>(indices2, bvalids);
+  auto indices3_cw = cudf::test::fixed_width_column_wrapper<int64_t>(indices3, bvalids);
   columns.emplace_back(cudf::make_dictionary_column(keys_cw, indices1_cw));
   columns.emplace_back(cudf::make_dictionary_column(keys_cw, indices2_cw));
   columns.emplace_back(cudf::make_dictionary_column(keys_cw, indices3_cw));
