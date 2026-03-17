@@ -33,7 +33,7 @@ import polars.testing
 
 import rmm.statistics
 
-from cudf_polars.experimental.rapidsmpf.spmd import spmd_execution
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
 
 # The dtype for count() aggregations depends on the presence
 # of the polars-runtime-64 package (`polars[rt64]`).
@@ -1883,7 +1883,9 @@ def run_polars_spmd(
         cuda_stream_policy=run_config.stream_policy,
     ) as (comm, ctx, engine):
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
-        from cudf_polars.experimental.rapidsmpf.spmd import allgather_polars_dataframe
+        from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+            allgather_polars_dataframe,
+        )
 
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
