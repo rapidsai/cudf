@@ -315,9 +315,6 @@ def evaluate_pipeline(
         # Keep chunks alive until after concatenation to prevent
         # use-after-free with stream-ordered allocations
         messages = output.release()
-        # Sort by sequence_number so partition-ordered output (e.g. sort with
-        # contiguous assignment) is concatenated in correct global order.
-        messages.sort(key=lambda m: int(m.sequence_number))
         chunks = [
             TableChunk.from_message(msg).make_available_and_spill(
                 br, allow_overbooking=True
