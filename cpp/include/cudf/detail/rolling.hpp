@@ -79,6 +79,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  * being sorted, must be sorted consistently with the @p order and @p null_order
  * parameters.
  * @param grouping Optional preprocessed grouping information.
+ * @param direction The window direction (preceding or following)
  * @param order The sort order of the @p orderby column.
  * @param null_order The sort order of nulls in the @p orderby column.
  * @param window Descriptor specifying the window type.
