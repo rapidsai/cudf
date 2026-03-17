@@ -710,12 +710,13 @@ def print_query_plan(
     return logical_plan, plan
 
 
-def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
+def initialize_single_or_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
     """
-    Initialize a Dask distributed cluster.
+    Initialize single-worker RapidsMPF or a Dask distributed cluster.
 
-    This function either creates a new LocalCUDACluster or connects to an
-    existing Dask cluster depending on the provided arguments.
+    For single cluster with rapidsmpf runtime, calls rapidsmpf's setup_worker
+    with "single_" options. For distributed cluster, creates or connects to
+    a Dask cluster and optionally bootstraps rapidsmpf with "dask_" options.
 
     Parameters
     ----------
@@ -732,6 +733,31 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
         A Dask distributed Client, or None if not using distributed mode.
     """
     if run_config.cluster != "distributed":
+        if run_config.executor == "streaming" and run_config.runtime == "rapidsmpf":
+            try:
+                from rapidsmpf.config import Options
+                from rapidsmpf.integrations.single import setup_worker
+
+                setup_worker(
+                    Options(
+                        {
+                            "single_spill_device": str(run_config.spill_device),
+                            "single_spill_to_pinned_memory": str(
+                                run_config.spill_to_pinned_memory
+                            ),
+                            "single_statistics": str(args.rapidsmpf_dask_statistics),
+                            "single_print_statistics": str(
+                                args.rapidsmpf_print_statistics
+                            ),
+                            "single_oom_protection": str(args.rapidsmpf_oom_protection),
+                        }
+                    ),
+                )
+            except ImportError as err:
+                raise ImportError(
+                    "rapidsmpf is required for single-cluster rapidsmpf runtime "
+                    "but is not installed."
+                ) from err
         return None
 
     from distributed import Client
@@ -1457,13 +1483,17 @@ def run_polars_query_iteration(
         result = prepare_validation_result(result)
 
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
-        from rapidsmpf.integrations.dask.shuffler import (
-            clear_shuffle_statistics,
-            gather_shuffle_statistics,
-        )
+        if run_config.cluster == "distributed":
+            from rapidsmpf.integrations.dask.shuffler import (
+                clear_shuffle_statistics,
+                gather_shuffle_statistics,
+            )
 
-        shuffle_stats = gather_shuffle_statistics(client)
-        clear_shuffle_statistics(client)
+            shuffle_stats = gather_shuffle_statistics(client)
+            clear_shuffle_statistics(client)
+        else:  # spmd or single
+            # TODO: Implement shuffle statistics gathering for spmd and single
+            pass
     else:
         shuffle_stats = None
 
@@ -1783,7 +1813,7 @@ def run_polars_single_or_dask(
     validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Dask or single-process execution."""
-    client = initialize_dask_cluster(run_config, args)
+    client = initialize_single_or_dask_cluster(run_config, args)
     if client is not None:
         run_config = dataclasses.replace(
             run_config, n_workers=client.scheduler_info()["n_workers"]
