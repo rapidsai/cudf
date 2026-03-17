@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
+    from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
@@ -124,18 +125,13 @@ async def _compute_sort_boundaries(
             num_partitions,
         )
     else:
-        return DataFrame.from_table(
-            local_boundaries_df.table,
-            list(boundary_ir.schema.keys()),
-            list(boundary_ir.schema.values()),
-            stream=local_boundaries_df.stream,
-        )
+        return local_boundaries_df
 
 
 async def _receive_and_buffer_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
-    chunks_buffer: Any,
+    chunks_buffer: SpillableMessages,
     sort_ir: Sort,
     by: list[str],
     num_partitions: int,
@@ -199,7 +195,7 @@ async def _insert_chunks_into_shuffle(
     collective_ids: list[int],
     metadata_in: ChannelMetadata,
     message_ids: list[int],
-    chunks_buffer: Any,
+    chunks_buffer: SpillableMessages,
     sort_boundaries_df: DataFrame,
     ir: ShuffleSorted,
     ir_context: IRExecutionContext,
@@ -225,7 +221,7 @@ async def _insert_chunks_into_shuffle(
         msg = chunks_buffer.extract(mid=mid)
         if skip_insert:
             continue
-        seq_num = int(msg.sequence_number)
+        seq_num = msg.sequence_number
         available_chunk = TableChunk.from_message(msg).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
