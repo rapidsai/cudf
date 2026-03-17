@@ -42,6 +42,9 @@ namespace detail {
  * the corresponding index from left table is present in output
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
+ * @param[in] config Kernel launch configuration
+ * @param[in] shmem_size_per_block Shared memory size per block
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void launch_mixed_join_semi(bool has_nulls,
                             table_device_view left_table,

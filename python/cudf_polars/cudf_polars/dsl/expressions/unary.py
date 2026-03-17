@@ -522,9 +522,7 @@ class UnaryFunction(Expr):
                 offset = n_expr.value
             else:
                 n_col = n_expr.evaluate(df, context=context)
-                offset_py = plc.copying.get_element(
-                    n_col.obj, 0, stream=df.stream
-                ).to_py()
+                offset_py = n_col.obj_scalar(stream=df.stream).to_py(stream=df.stream)
                 assert isinstance(offset_py, int)
                 offset = offset_py
             if self.name == "shift":

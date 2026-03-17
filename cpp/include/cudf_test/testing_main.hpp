@@ -154,7 +154,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
  *
  * The caller must keep the return object alive for the life of the test runs.
  *
- * @param cmd_opts Command line options returned by parse_cudf_test_opts
+ * @param config Command line options returned by parse_cudf_test_opts
  * @return Memory resource adaptor
  */
 inline auto make_memory_resource_adaptor(cudf::test::config const& config)
@@ -172,7 +172,7 @@ inline auto make_memory_resource_adaptor(cudf::test::config const& config)
  *
  * The caller must keep the return object alive for the life of the test runs.
  *
- * @param cmd_opts Command line options returned by parse_cudf_test_opts
+ * @param config Command line options returned by parse_cudf_test_opts
  * @return Memory resource adaptor
  */
 inline auto make_stream_mode_adaptor(cudf::test::config const& config)
