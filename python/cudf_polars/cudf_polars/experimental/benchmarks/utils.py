@@ -1506,9 +1506,23 @@ def run_polars_query_iteration(
 
             shuffle_stats = gather_shuffle_statistics(client)
             clear_shuffle_statistics(client)
+        elif run_config.cluster == "spmd":
+            from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+                spmd_clear_statistics,
+                spmd_gather_statistics,
+            )
+
+            assert engine is not None
+            shuffle_stats = spmd_gather_statistics(engine)
+            spmd_clear_statistics(engine)
         elif run_config.cluster == "single":
-            from cudf_polars.experimental.rapidsmpf.single import gather_shuffle_statistics
-            shuffle_stats = gather_shuffle_statistics()
+            from cudf_polars.experimental.rapidsmpf.single import (
+                clear_statistics,
+                gather_statistics,
+            )
+
+            shuffle_stats = gather_statistics()
+            clear_statistics()
         else:  # spmd
             # TODO: Implement shuffle statistics gathering for spmd and single
             pass

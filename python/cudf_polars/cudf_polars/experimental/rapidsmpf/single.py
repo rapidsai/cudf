@@ -12,6 +12,7 @@ from rapidsmpf.streaming.core.context import Context
 if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
 
+    from rapidsmpf.integrations.core import WorkerContext
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     import polars as pl
@@ -78,14 +79,21 @@ def evaluate_pipeline_single(
         )
 
 
-def gather_shuffle_statistics() -> dict[str, dict[str, int | float]]:
-    """Gather shuffle statistics from the single-worker context."""
-    worker_ctx = get_worker_context()
+def gather_statistics() -> dict[str, dict[str, int | float]]:
+    """Gather statistics from the single-worker context."""
+    worker_ctx: WorkerContext = get_worker_context()
     assert worker_ctx.comm is not None
 
-    stat_map: dict[str, dict[str, int | float]] = worker_ctx.comm.get_statistics()
+    stat_map: dict[str, dict[str, int | float]] = worker_ctx.get_statistics()
     allowed = {"count", "value"}
     return {
         k: {kk: vv for kk, vv in v.items() if kk in allowed}
         for k, v in stat_map.items()
     }
+
+
+def clear_statistics() -> None:
+    """Clear statistics from the single-worker context."""
+    worker_ctx: WorkerContext = get_worker_context()
+    assert worker_ctx.comm is not None
+    worker_ctx.statistics.clear()
