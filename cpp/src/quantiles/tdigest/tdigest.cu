@@ -123,7 +123,7 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
     double const diff = weighted_q + c.weight / 2 - cumulative_weight[centroid_index];
 
     // if we're completely within a centroid of weight 1, just return that.
-    if (c.weight == 1 && std::abs(diff) <= 0.5) { return c.mean; }
+    if (c.weight == 1 && cuda::std::abs(diff) <= 0.5) { return c.mean; }
 
     // otherwise, interpolate between two centroids.
 

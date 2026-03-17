@@ -7,6 +7,8 @@
 
 #include <cudf/strings/string_view.cuh>
 
+#include <cuda/std/limits>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -21,7 +23,7 @@ __device__ constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
  * @return Number of tokens delimited by whitespace
  */
 __device__ inline size_type count_tokens_whitespace(
-  string_view d_str, size_type const max_tokens = std::numeric_limits<size_type>::max())
+  string_view d_str, size_type const max_tokens = cuda::std::numeric_limits<size_type>::max())
 {
   auto token_count = size_type{0};
   auto spaces      = true;

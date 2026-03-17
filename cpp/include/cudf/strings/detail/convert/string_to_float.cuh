@@ -106,7 +106,7 @@ __device__ inline double stod(string_view const& d_str)
   exp_ten *= exp_sign;
   exp_ten += exp_off;
   exp_ten += num_digits - 1;
-  if (exp_ten > std::numeric_limits<double>::max_exponent10) {
+  if (exp_ten > cuda::std::numeric_limits<double>::max_exponent10) {
     return sign > 0 ? infinity : -infinity;
   }
 
@@ -115,7 +115,7 @@ __device__ inline double stod(string_view const& d_str)
   exp_ten += 1 - num_digits;
   // If 10^exp_ten would result in a subnormal value, the base and
   // exponent should be adjusted so that 10^exp_ten is a normal value
-  auto const subnormal_shift = std::numeric_limits<double>::min_exponent10 - exp_ten;
+  auto const subnormal_shift = cuda::std::numeric_limits<double>::min_exponent10 - exp_ten;
   if (subnormal_shift > 0) {
     // Handle subnormal values. Ensure that both base and exponent are
     // normal values before computing their product.
