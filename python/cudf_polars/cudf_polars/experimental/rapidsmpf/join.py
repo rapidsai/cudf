@@ -398,7 +398,7 @@ def _get_key_indices(
     n_keys = (
         n_partitioned_keys if n_partitioned_keys is not None else len(left_key_indices)
     )
-    if ir.options == "Right":
+    if ir.options[0] == "Right":
         join_keys_for_output = ir.right_on
     else:
         join_keys_for_output = ir.left_on
@@ -971,6 +971,35 @@ async def _replay_with_metadata(
         await ch_out.drain(context)
 
 
+async def _relay_chunks_raw(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    buffered_chunks: dict[int, TableChunk],
+    ch_in: Channel[TableChunk],
+) -> None:
+    """Relay buffered chunks then remaining channel to ch_out, without metadata."""
+    async with shutdown_on_error(context, ch_out, ch_in):
+        for seq, chunk in sorted(buffered_chunks.items()):
+            await ch_out.send(context, Message(seq, chunk))
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
+
+
+async def _forward_with_metadata(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    metadata: ChannelMetadata,
+    ch_in: Channel[TableChunk],
+) -> None:
+    """Send metadata to ch_out then forward all messages from ch_in."""
+    async with shutdown_on_error(context, ch_out, ch_in):
+        await send_metadata(ch_out, context, metadata)
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
+
+
 async def _bloom_shuffle_join(
     context: Context,
     comm: Communicator,
@@ -1009,13 +1038,12 @@ async def _bloom_shuffle_join(
         )
         small_is_left = False
 
-    # Drain both sides concurrently
-    all_small_chunks, all_large_chunks = await asyncio.gather(
-        _drain_remaining(context, ch_small, small_chunks_init),
-        _drain_remaining(context, ch_large, large_chunks_init),
-    )
+    # Phase 1: Drain small side and build bloom filter.
+    # The small side must be fully buffered to build a correct collective filter.
+    # The large side is NOT drained here — it will be streamed in Phase 2.
+    all_small_chunks = await _drain_remaining(context, ch_small, small_chunks_init)
 
-    # Extract key-only chunks from small side for bloom filter build.
+    # Extract key-only chunks from small side for bloom build.
     # Use plc.copying.gather to create owned copies (chunks may be spilled during run_actor_network).
     small_key_msgs: list[Message] = []
     for seq, stale_chunk in sorted(all_small_chunks.items()):
@@ -1044,12 +1072,6 @@ async def _bloom_shuffle_join(
             )
         )
 
-    # Build large-side messages for bloom filter probe
-    large_msgs = [
-        Message(seq, chunk) for seq, chunk in sorted(all_large_chunks.items())
-    ]
-
-    # Run bloom filter pipeline as CppActors (blocking, releases GIL)
     bloom = BloomFilter(
         context,
         comm,
@@ -1057,24 +1079,26 @@ async def _bloom_shuffle_join(
         num_filter_blocks=BloomFilter.fitting_num_blocks(_BLOOM_L2_SIZE),
     )
     bloom_tag = collective_ids.pop(-1)
-    ch_bloom_in = context.create_channel()
-    ch_bloom_out = context.create_channel()
-    ch_large_probe = context.create_channel()
-    ch_large_filtered = context.create_channel()
-    pull_actor, deferred = pull_from_channel(context, ch_large_filtered)
-    actors = [
-        push_to_channel(context, ch_bloom_in, small_key_msgs),
-        bloom.build(ch_bloom_in, ch_bloom_out, tag=bloom_tag),
-        push_to_channel(context, ch_large_probe, large_msgs),
-        bloom.apply(
-            ch_bloom_out, ch_large_probe, ch_large_filtered, keys=large_key_indices
-        ),
-        pull_actor,
-    ]
-    await asyncio.to_thread(run_actor_network, actors=actors)
-    filtered_large_msgs = deferred.release()
+    ch_build_in = context.create_channel()
+    ch_filter = context.create_channel()
+    pull_filter_actor, deferred_filter = pull_from_channel(context, ch_filter)
+    await asyncio.to_thread(
+        run_actor_network,
+        actors=[
+            push_to_channel(context, ch_build_in, small_key_msgs),
+            bloom.build(ch_build_in, ch_filter, tag=bloom_tag),
+            pull_filter_actor,
+        ],
+    )
+    (filter_message,) = deferred_filter.release()
 
-    # Replay small (unfiltered) and filtered large through new channels to _shuffle_join
+    # Phase 2: Stream the large side through bloom.apply without buffering it.
+    # cpp_set_py_future uses asyncio.run_coroutine_threadsafe, so the Python
+    # coroutines on the event loop and bloom.apply in the thread pool share
+    # channels safely.
+    ch_filter_for_apply = context.create_channel()
+    ch_large_raw = context.create_channel()
+    ch_large_filtered = context.create_channel()
     ch_small_replay = context.create_channel()
     ch_large_replay = context.create_channel()
     ch_left_new = ch_small_replay if small_is_left else ch_large_replay
@@ -1087,8 +1111,21 @@ async def _bloom_shuffle_join(
             small_metadata,
             [Message(seq, chunk) for seq, chunk in sorted(all_small_chunks.items())],
         ),
-        _replay_with_metadata(
-            context, ch_large_replay, large_metadata, filtered_large_msgs
+        _relay_chunks_raw(context, ch_large_raw, large_chunks_init, ch_large),
+        asyncio.to_thread(
+            run_actor_network,
+            actors=[
+                push_to_channel(context, ch_filter_for_apply, [filter_message]),
+                bloom.apply(
+                    ch_filter_for_apply,
+                    ch_large_raw,
+                    ch_large_filtered,
+                    keys=large_key_indices,
+                ),
+            ],
+        ),
+        _forward_with_metadata(
+            context, ch_large_replay, large_metadata, ch_large_filtered
         ),
         _shuffle_join(
             context,
