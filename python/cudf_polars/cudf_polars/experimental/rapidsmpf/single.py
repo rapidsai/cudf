@@ -76,3 +76,16 @@ def evaluate_pipeline_single(
             rmpf_context=rmpf_context,
             collect_metadata=collect_metadata,
         )
+
+
+def gather_shuffle_statistics() -> dict[str, dict[str, int | float]]:
+    """Gather shuffle statistics from the single-worker context."""
+    worker_ctx = get_worker_context()
+    assert worker_ctx.comm is not None
+
+    stat_map: dict[str, dict[str, int | float]] = worker_ctx.comm.get_statistics()
+    allowed = {"count", "value"}
+    return {
+        k: {kk: vv for kk, vv in v.items() if kk in allowed}
+        for k, v in stat_map.items()
+    }
