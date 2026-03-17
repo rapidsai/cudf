@@ -40,7 +40,6 @@ dependencies:
 - ipython
 - jupyter_client
 - libcufile-dev
-- libcurand-dev
 - libkvikio==26.6.*,>=0.0.0a0
 - libnvcomp-dev==5.1.0.21
 - libnvjitlink-dev

@@ -17,6 +17,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/random>
 #include <thrust/random.h>
 #include <thrust/shuffle.h>
 

@@ -599,7 +599,6 @@ dependencies:
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - libcufile-dev
-          - libcurand-dev
           - libnvjitlink-dev
     specific:
       - output_types: [requirements, pyproject]
