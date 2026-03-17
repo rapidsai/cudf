@@ -1,10 +1,35 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import os
 
 import pytest
+
+
+@pytest.fixture(autouse=True, scope="session")
+def rapidsmpf_single_worker(pytestconfig):
+    """
+    Set up rapidsmpf single-worker context when --cluster single and --runtime rapidsmpf.
+
+    With pytest-xdist, session scope runs once per worker process, so each worker
+    gets setup_worker() called in its own process before tests run.
+    """
+    if (
+        pytestconfig.getoption("--cluster") == "single"
+        and pytestconfig.getoption("--executor") == "streaming"
+        and pytestconfig.getoption("--runtime") == "rapidsmpf"
+    ):
+        from rapidsmpf.config import Options
+        from rapidsmpf.integrations.single import destroy_worker, setup_worker
+
+        setup_worker(Options())
+        try:
+            yield
+        finally:
+            destroy_worker()
+    else:
+        yield
 
 
 # scope="session" is important to not cause singificant slowdowns in CI

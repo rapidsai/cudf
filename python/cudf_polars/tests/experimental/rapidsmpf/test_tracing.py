@@ -24,20 +24,25 @@ def test_structlog_streaming_node_events():
     code = textwrap.dedent("""\
     import polars as pl
     import rmm
+    from rapidsmpf.integrations.single import destroy_worker, setup_worker
 
-    df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
-    q = df.lazy().filter(pl.col("x") > 50).group_by("y").agg(pl.col("x").sum())
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": "single",
-            "runtime": "rapidsmpf",
-            "max_rows_per_partition": 10,
-        },
-        memory_resource=rmm.mr.ManagedMemoryResource(),
-    )
-    q.collect(engine=engine)
+    try:
+        setup_worker()
+        df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
+        q = df.lazy().filter(pl.col("x") > 50).group_by("y").agg(pl.col("x").sum())
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor="streaming",
+            executor_options={
+                "cluster": "single",
+                "runtime": "rapidsmpf",
+                "max_rows_per_partition": 10,
+            },
+            memory_resource=rmm.mr.ManagedMemoryResource(),
+        )
+        q.collect(engine=engine)
+    finally:
+        destroy_worker()
     """)
 
     # Build environment with tracing enabled
@@ -66,20 +71,25 @@ def test_structlog_contains_expected_ir_types():
     code = textwrap.dedent("""\
     import polars as pl
     import rmm
+    from rapidsmpf.integrations.single import destroy_worker, setup_worker
 
-    df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
-    q = df.lazy().filter(pl.col("x") > 50).group_by("y").agg(pl.col("x").sum())
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": "single",
-            "runtime": "rapidsmpf",
-            "max_rows_per_partition": 10,
-        },
-        memory_resource=rmm.mr.ManagedMemoryResource(),
-    )
-    q.collect(engine=engine)
+    try:
+        setup_worker()
+        df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
+        q = df.lazy().filter(pl.col("x") > 50).group_by("y").agg(pl.col("x").sum())
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor="streaming",
+            executor_options={
+                "cluster": "single",
+                "runtime": "rapidsmpf",
+                "max_rows_per_partition": 10,
+            },
+            memory_resource=rmm.mr.ManagedMemoryResource(),
+        )
+        q.collect(engine=engine)
+    finally:
+        destroy_worker()
     """)
 
     env = os.environ.copy()
@@ -105,20 +115,25 @@ def test_structlog_disabled_by_default():
     code = textwrap.dedent("""\
     import polars as pl
     import rmm
+    from rapidsmpf.integrations.single import destroy_worker, setup_worker
 
-    df = pl.DataFrame({"x": range(10), "y": ["a", "b"] * 5})
-    q = df.lazy().filter(pl.col("x") > 5)
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": "single",
-            "runtime": "rapidsmpf",
-            "max_rows_per_partition": 5,
-        },
-        memory_resource=rmm.mr.ManagedMemoryResource(),
-    )
-    q.collect(engine=engine)
+    try:
+        setup_worker()
+        df = pl.DataFrame({"x": range(10), "y": ["a", "b"] * 5})
+        q = df.lazy().filter(pl.col("x") > 5)
+        engine = pl.GPUEngine(
+            raise_on_fail=True,
+            executor="streaming",
+            executor_options={
+                "cluster": "single",
+                "runtime": "rapidsmpf",
+                "max_rows_per_partition": 5,
+            },
+            memory_resource=rmm.mr.ManagedMemoryResource(),
+        )
+        q.collect(engine=engine)
+    finally:
+        destroy_worker()
     """)
 
     # Environment WITHOUT CUDF_POLARS_LOG_TRACES
