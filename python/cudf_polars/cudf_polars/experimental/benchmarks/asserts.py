@@ -46,6 +46,7 @@ def assert_tpch_result_equal(
     abs_tol: float = 1e-08,
     categorical_as_str: bool = False,
     sort_by: list[tuple[str, bool]],
+    nulls_last: bool = True,
     limit: int | None = None,
 ) -> None:
     """
@@ -62,6 +63,13 @@ def assert_tpch_result_equal(
     sort_by : list[tuple[str, bool]]
         The columns to sort by, and the sort order. This *must* be the same
         as the ``sort_by`` and ``descending`` required by the query
+    nulls_last : bool, optional
+        Whether NULLs should be placed last when checking sortedness.
+        Must match the NULL placement used by the query's ``ORDER BY``.
+        DuckDB defaults to NULLS LAST for ``ASC`` and NULLS FIRST for
+        ``DESC``; some TPC-DS queries override this with explicit
+        ``NULLS FIRST`` on all columns, which requires ``nulls_last=False``.
+        Defaults to ``True`` (NULLS LAST), matching DuckDB's ``ASC`` default.
     limit : int | None, optional
         The limit (passed to ``.head``) used in the query, if any. This is
         used to break ties in the ``sort_by`` columns. See notes below.
@@ -206,7 +214,10 @@ def assert_tpch_result_equal(
                 polars.testing.assert_frame_equal(
                     df.select(by),
                     df.select(by).sort(
-                        by=by, descending=descending, maintain_order=True
+                        by=by,
+                        descending=descending,
+                        maintain_order=True,
+                        nulls_last=nulls_last,
                     ),
                 )
             except AssertionError as e:
