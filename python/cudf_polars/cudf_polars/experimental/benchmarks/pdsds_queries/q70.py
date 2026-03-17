@@ -13,8 +13,6 @@ from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from cudf_polars.experimental.benchmarks.utils import RunConfig
 
 
@@ -71,43 +69,6 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def _rollup_level(
-    base: pl.LazyFrame,
-    group_cols: Iterable[str],
-    lochierarchy: int,
-    *,
-    null_state: bool = False,
-    null_county: bool = False,
-) -> pl.LazyFrame:
-    group_cols = list(group_cols)
-    if group_cols:
-        out = base.group_by(group_cols).agg(
-            pl.col("ss_net_profit").sum().alias("total_sum")
-        )
-    else:
-        out = base.select(pl.col("ss_net_profit").sum().alias("total_sum"))
-
-    s_state_expr = (
-        pl.lit(None).cast(pl.String)
-        if null_state or "s_state" not in group_cols
-        else pl.col("s_state")
-    )
-    s_county_expr = (
-        pl.lit(None).cast(pl.String)
-        if null_county or "s_county" not in group_cols
-        else pl.col("s_county")
-    )
-
-    return out.select(
-        [
-            pl.col("total_sum"),
-            s_state_expr.alias("s_state"),
-            s_county_expr.alias("s_county"),
-            pl.lit(lochierarchy, dtype=pl.Int64).alias("lochierarchy"),
-        ]
-    )
-
-
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 70."""
     params = load_parameters(
@@ -122,44 +83,67 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
-    base = (
-        store_sales.join(
-            date_dim.select("d_date_sk", "d_month_seq"),
-            left_on="ss_sold_date_sk",
-            right_on="d_date_sk",
-        )
+    top_states = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
-        .join(
-            store.select("s_store_sk", "s_state", "s_county"),
-            left_on="ss_store_sk",
-            right_on="s_store_sk",
+        .select("s_state")
+        .unique()
+    )
+
+    base = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        .join(top_states, on="s_state", how="semi")
+    )
+
+    detail = (
+        base.group_by(["s_state", "s_county"])
+        .agg(pl.col("ss_net_profit").sum().alias("total_sum"))
+        .with_columns(pl.lit(0, dtype=pl.Int64).alias("lochierarchy"))
+    )
+
+    by_state = (
+        detail.group_by("s_state")
+        .agg(pl.col("total_sum").sum())
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("s_county"),
+                pl.lit(1, dtype=pl.Int64).alias("lochierarchy"),
+            ]
         )
+        .select(["s_state", "s_county", "total_sum", "lochierarchy"])
     )
 
-    lvl0 = _rollup_level(base, ["s_state", "s_county"], lochierarchy=0)
-    lvl1 = _rollup_level(base, ["s_state"], lochierarchy=1, null_county=True)
-    lvl2 = _rollup_level(base, [], lochierarchy=2, null_state=True, null_county=True)
-
-    combined = pl.concat([lvl0, lvl1, lvl2])
-
-    partition_key = (
-        pl.when(pl.col("lochierarchy") == 0)
-        .then(pl.concat_str([pl.lit("0|"), pl.col("s_state")], separator=""))
-        .when(pl.col("lochierarchy") == 1)
-        .then(pl.lit("1"))
-        .otherwise(pl.lit("2"))
-    )
-
-    ranked = combined.with_columns(
-        pl.col("total_sum")
-        .rank(method="dense", descending=True)
-        .over(partition_key)
-        .alias("rank_within_parent")
+    total = (
+        detail.select(pl.col("total_sum").sum())
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("s_state"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_county"),
+                pl.lit(2, dtype=pl.Int64).alias("lochierarchy"),
+            ]
+        )
+        .select(["s_state", "s_county", "total_sum", "lochierarchy"])
     )
 
     return QueryResult(
         frame=(
-            ranked.select(
+            pl.concat([detail, by_state, total])
+            .with_columns(
+                pl.when(pl.col("lochierarchy") == 0)
+                .then(pl.col("s_state"))
+                .otherwise(None)
+                .alias("partition_key")
+            )
+            .with_columns(
+                pl.col("total_sum")
+                .rank(method="min", descending=True)
+                .over(["lochierarchy", "partition_key"])
+                .alias("rank_within_parent")
+            )
+            .select(
                 [
                     "total_sum",
                     "s_state",
