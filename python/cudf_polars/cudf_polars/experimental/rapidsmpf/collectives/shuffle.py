@@ -59,8 +59,6 @@ class ShuffleManager:
         The communicator.
     num_partitions: int
         The number of partitions to shuffle into.
-    columns_to_hash: tuple[int, ...]
-        The columns to hash.
     collective_id: int
         The collective ID.
     partition_assignment: PartitionAssignment, optional
@@ -74,14 +72,12 @@ class ShuffleManager:
         context: Context,
         comm: Communicator,
         num_partitions: int,
-        columns_to_hash: tuple[int, ...],
         collective_id: int,
         *,
         partition_assignment: PartitionAssignment = PartitionAssignment.ROUND_ROBIN,
     ):
         self.context = context
         self.num_partitions = num_partitions
-        self.columns_to_hash = columns_to_hash
         self.shuffler = ShufflerAsync(
             context,
             comm,
@@ -94,39 +90,28 @@ class ShuffleManager:
         """Get the local partition IDs for this rank."""
         return self.shuffler.local_partitions()
 
-    def insert_chunk(
-        self,
-        chunk: TableChunk,
-        *,
-        splits: list[int] | None = None,
-    ) -> None:
-        """
-        Insert a chunk into the ShuffleContext.
+    def insert_hash(self, chunk: TableChunk, columns_to_hash: tuple[int, ...]) -> None:
+        """Partition chunk by hash and insert into the shuffler."""
+        self.shuffler.insert(
+            py_partition_and_pack(
+                table=chunk.table_view(),
+                columns_to_hash=columns_to_hash,
+                num_partitions=self.num_partitions,
+                stream=chunk.stream,
+                br=self.context.br(),
+            )
+        )
 
-        Parameters
-        ----------
-        chunk : TableChunk
-            The table chunk to insert.
-        splits : list[int], optional
-            If provided, split the chunk at these indices and pack (for
-            sort/ordered data). If not provided, partition by hash.
-        """
-        if splits is not None:
-            partitioned_chunks = py_split_and_pack(
+    def insert_split(self, chunk: TableChunk, splits: list[int]) -> None:
+        """Split chunk at the given indices and insert into the shuffler."""
+        self.shuffler.insert(
+            py_split_and_pack(
                 table=chunk.table_view(),
                 splits=splits,
                 stream=chunk.stream,
                 br=self.context.br(),
             )
-        else:
-            partitioned_chunks = py_partition_and_pack(
-                table=chunk.table_view(),
-                columns_to_hash=self.columns_to_hash,
-                num_partitions=self.num_partitions,
-                stream=chunk.stream,
-                br=self.context.br(),
-            )
-        self.shuffler.insert(partitioned_chunks)
+        )
 
     async def insert_finished(self) -> None:
         """Insert finished into the ShuffleManager."""
@@ -238,19 +223,18 @@ async def _global_shuffle(
     await send_metadata(ch_out, context, output_metadata)
 
     # Create ShuffleManager instance
-    shuffle = ShuffleManager(
-        context, comm, num_partitions, columns_to_hash, collective_id
-    )
+    shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
     # When input is duplicated, only rank 0 should contribute data.
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
     while (msg := await ch_in.recv(context)) is not None:
         if not skip_insert:
-            shuffle.insert_chunk(
+            shuffle.insert_hash(
                 TableChunk.from_message(msg).make_available_and_spill(
                     context.br(), allow_overbooking=True
-                )
+                ),
+                columns_to_hash,
             )
 
     await shuffle.insert_finished()

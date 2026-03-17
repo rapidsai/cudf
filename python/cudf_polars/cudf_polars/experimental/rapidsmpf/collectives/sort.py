@@ -214,7 +214,6 @@ async def _insert_chunks_into_shuffle(
         context,
         comm,
         num_partitions,
-        (),
         collective_ids.pop(),
         partition_assignment=PartitionAssignment.CONTIGUOUS,
     )
@@ -247,7 +246,7 @@ async def _insert_chunks_into_shuffle(
             stream=stream,
             chunk_relative=True,
         )
-        shuffle.insert_chunk(available_chunk, splits=splits)
+        shuffle.insert_split(available_chunk, splits)
 
     await shuffle.insert_finished()
 
@@ -279,7 +278,7 @@ async def _extract_partitions_and_send(
     """Extract each local partition from the shuffle, sort if needed, and send."""
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
-        out_table = await shuffle.extract_chunk(partition_id, stream)
+        out_table = shuffle.extract_chunk(partition_id, stream)
         df = DataFrame.from_table(
             out_table,
             list(sort_ir.schema.keys()),
