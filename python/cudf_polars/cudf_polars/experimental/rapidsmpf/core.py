@@ -9,6 +9,12 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.streaming.core.actor import (
+    run_actor_network,
+)
+from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
+from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
 import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
@@ -34,14 +40,10 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.core.actor import (
-        run_actor_network,
-    )
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.core.leaf_actor import DeferredMessages, pull_from_channel
+    from rapidsmpf.streaming.core.leaf_actor import DeferredMessages
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-    from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
     import polars as pl
 

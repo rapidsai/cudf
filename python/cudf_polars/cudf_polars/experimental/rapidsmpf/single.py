@@ -10,7 +10,7 @@ from rapidsmpf.integrations.single import get_worker_context
 from rapidsmpf.streaming.core.context import Context
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
@@ -20,9 +20,11 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
 
+    PipelineCallback = Callable[..., tuple[pl.DataFrame, list[ChannelMetadata] | None]]
+
 
 def evaluate_pipeline_single(
-    callback,
+    callback: PipelineCallback,
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
