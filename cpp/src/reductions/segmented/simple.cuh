@@ -205,6 +205,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
  * @param null_handling How null entries are processed within each segment
+ * @param init Optional initial value for the reduction
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory

@@ -245,6 +245,7 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  * @param end End of the input iterator
  * @param result Output iterator for scan result
  * @param initial_offset Initial offset to add to scan
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The last element of the scan
  */
 template <typename SizesIterator, typename OffsetsIterator>
