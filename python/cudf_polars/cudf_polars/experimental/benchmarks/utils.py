@@ -710,13 +710,54 @@ def print_query_plan(
     return logical_plan, plan
 
 
-def initialize_single_or_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
+def initialize_single_cluster(run_config: RunConfig, args: argparse.Namespace) -> None:
     """
-    Initialize single-worker RapidsMPF or a Dask distributed cluster.
+    Initialize single-worker RapidsMPF when using streaming executor with rapidsmpf runtime.
 
-    For single cluster with rapidsmpf runtime, calls rapidsmpf's setup_worker
-    with "single_" options. For distributed cluster, creates or connects to
-    a Dask cluster and optionally bootstraps rapidsmpf with "dask_" options.
+    Calls rapidsmpf's setup_worker with "single_" options. No-op if not using
+    streaming executor or rapidsmpf runtime.
+
+    Parameters
+    ----------
+    run_config : RunConfig
+        The run configuration.
+    args : argparse.Namespace
+        Parsed command line arguments (rapidsmpf_dask_statistics,
+        rapidsmpf_print_statistics, rapidsmpf_oom_protection).
+    """
+    assert run_config.executor == "streaming"
+    assert run_config.runtime == "rapidsmpf"
+
+    try:
+        from rapidsmpf.config import Options
+        from rapidsmpf.integrations.single import setup_worker
+    except ImportError as err:
+        raise ImportError(
+            "rapidsmpf is required for single-cluster rapidsmpf runtime "
+            "but is not installed."
+        ) from err
+
+    setup_worker(
+        Options(
+            {
+                "single_spill_device": str(run_config.spill_device),
+                "single_spill_to_pinned_memory": str(run_config.spill_to_pinned_memory),
+                # TODO: fix with https://github.com/rapidsai/cudf/issues/21803
+                "single_statistics": str(args.rapidsmpf_dask_statistics),
+                "single_print_statistics": str(args.rapidsmpf_print_statistics),
+                "single_oom_protection": str(args.rapidsmpf_oom_protection),
+            }
+        ),
+    )
+
+
+def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
+    """
+    Initialize a Dask distributed cluster.
+
+    Creates or connects to a Dask cluster and optionally bootstraps rapidsmpf
+    with "dask_" options. Use :func:`initialize_single_cluster` for
+    single-worker (non-distributed) runs.
 
     Parameters
     ----------
@@ -729,38 +770,9 @@ def initialize_single_or_dask_cluster(run_config: RunConfig, args: argparse.Name
 
     Returns
     -------
-    Client or None
-        A Dask distributed Client, or None if not using distributed mode.
+    distributed.Client
+        A Dask distributed Client.
     """
-    if run_config.cluster != "distributed":
-        if run_config.executor == "streaming" and run_config.runtime == "rapidsmpf":
-            try:
-                from rapidsmpf.config import Options
-                from rapidsmpf.integrations.single import setup_worker
-            except ImportError as err:
-                raise ImportError(
-                    "rapidsmpf is required for single-cluster rapidsmpf runtime "
-                    "but is not installed."
-                ) from err
-            else:
-                setup_worker(
-                    Options(
-                        {
-                            "single_spill_device": str(run_config.spill_device),
-                            "single_spill_to_pinned_memory": str(
-                                run_config.spill_to_pinned_memory
-                            ),
-                            # TODO: fix with https://github.com/rapidsai/cudf/issues/21803
-                            "single_statistics": str(args.rapidsmpf_dask_statistics),
-                            "single_print_statistics": str(
-                                args.rapidsmpf_print_statistics
-                            ),
-                            "single_oom_protection": str(args.rapidsmpf_oom_protection),
-                        }
-                    ),
-                )
-        return None
-
     from distributed import Client
 
     # Check if we should connect to an existing cluster
@@ -1815,8 +1827,12 @@ def run_polars_single_or_dask(
     validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Dask or single-process execution."""
-    client = initialize_single_or_dask_cluster(run_config, args)
-    if client is not None:
+    if run_config.cluster != "distributed":
+        initialize_single_cluster(run_config, args)
+        client = None
+    else:
+        client = initialize_dask_cluster(run_config, args)
+
         run_config = dataclasses.replace(
             run_config, n_workers=client.scheduler_info()["n_workers"]
         )

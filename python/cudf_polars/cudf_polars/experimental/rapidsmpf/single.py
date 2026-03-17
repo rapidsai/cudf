@@ -37,7 +37,7 @@ def evaluate_pipeline_single(
     Evaluate a RapidsMPF streaming pipeline using the single-worker context.
 
     Uses the worker context from :func:`rapidsmpf.integrations.single.setup_worker`
-    (must be called beforehand, e.g. via :func:`initialize_single_or_dask_cluster`).
+    (must be called beforehand, e.g. via :func:`initialize_single_cluster`).
 
     Parameters
     ----------
