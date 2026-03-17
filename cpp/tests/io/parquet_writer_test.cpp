@@ -495,7 +495,7 @@ TEST_F(ParquetWriterTest, DecimalWrite)
     expected_metadata.column_metadata[0].set_decimal_precision(7);
     expected_metadata.column_metadata[1].set_decimal_precision(1);
     args.set_metadata(expected_metadata);
-    EXPECT_CUDF_LOG_WARN(EXPECT_THROW(cudf::io::write_parquet(args), cudf::logic_error));
+    EXPECT_THROW(cudf::io::write_parquet(args), cudf::logic_error);
 
     // verify success if equal precision is given
     expected_metadata.column_metadata[0].set_decimal_precision(7);
