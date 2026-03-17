@@ -205,6 +205,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
  * @param null_handling How null entries are processed within each segment
+ * @param init Optional initial value for the reduction
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -348,7 +349,7 @@ struct same_column_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not supported for strings"); }
+    CUDF_EXPECTS(!init.has_value(), "Initial value not supported for strings");
 
     return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
   }

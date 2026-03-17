@@ -156,6 +156,10 @@ void teardown()
   });
 }
 
+void enable_jit_cache(bool enable) { get_context().program_cache().enable(enable); }
+
+void clear_jit_cache() { get_context().program_cache().clear(); }
+
 context& get_context()
 {
   cudf::initialize();

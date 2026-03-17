@@ -660,9 +660,9 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
   int max_stack_depth = 1;
   do {
     op = p_state.get_next_operator();
-    if (op.type == path_operator_type::ERROR) {
-      CUDF_FAIL("Encountered invalid JSONPath input string", std::invalid_argument);
-    }
+    CUDF_EXPECTS(op.type != path_operator_type::ERROR,
+                 "Encountered invalid JSONPath input string",
+                 std::invalid_argument);
     if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer
     if (op.name.size_bytes() > 0) {

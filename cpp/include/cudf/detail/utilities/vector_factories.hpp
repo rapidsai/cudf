@@ -154,11 +154,8 @@ rmm::device_uvector<std::remove_cv_t<T>> make_device_uvector_async(
 {
   using value_type = std::remove_cv_t<T>;
   rmm::device_uvector<value_type> ret(source_data.size(), stream, mr);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                                source_data.data(),
-                                source_data.size() * sizeof(value_type),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+    ret.data(), source_data.data(), source_data.size() * sizeof(value_type), stream));
   return ret;
 }
 
@@ -339,7 +336,7 @@ std::vector<typename Container::value_type> make_std_vector_async(Container cons
  * @note This function does a synchronize on `stream` after the copy.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param v The device data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */
@@ -413,7 +410,7 @@ host_vector<T> make_empty_host_vector(size_t capacity, rmm::cuda_stream_view str
  * using a pinned memory resource.
  *
  * @tparam T The type of the data to copy
- * @param source_data The device data to copy
+ * @param v The device data to copy
  * @param stream The stream on which to perform the copy
  * @return The data copied to the host
  */

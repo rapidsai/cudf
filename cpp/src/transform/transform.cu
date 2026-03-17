@@ -146,6 +146,7 @@ auto to_device_input_arg(InputsView inputs,
                          rmm::device_async_resource_ref mr)
 {
   std::vector<column_view> columns;
+
   for (auto const& input : inputs) {
     columns.emplace_back(std::visit([](auto const& col) { return to_column_view(col); }, input));
   }

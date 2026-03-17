@@ -442,6 +442,7 @@ namespace {
  * @param columns List of columns
  * @param rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
  * @param max_stripe_size Maximum size of each stripe, both in bytes and in rows
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return List of stripe descriptors
  */
 file_segmentation calculate_segmentation(host_span<orc_column_view const> columns,
@@ -536,6 +537,9 @@ size_t rle_stream_size(TypeKind kind, size_t count)
  * @param[in,out] columns List of columns
  * @param[in] segmentation stripe and rowgroup ranges
  * @param[in] decimal_column_sizes Sizes of encoded decimal columns
+ * @param[in] enable_dictionary Whether dictionary encoding is enabled
+ * @param[in] compression Compression type to use
+ * @param[in] write_mode The write mode (single or chunked)
  * @return List of stream descriptors
  */
 orc_streams create_streams(host_span<orc_column_view> columns,
@@ -701,11 +705,10 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
   auto aligned_rgs = hostdevice_2dvector<rowgroup_rows>(
     segmentation.num_rowgroups(), orc_table.num_columns(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(aligned_rgs.base_device_ptr(),
-                                segmentation.rowgroups.base_device_ptr(),
-                                aligned_rgs.count() * sizeof(rowgroup_rows),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(aligned_rgs.base_device_ptr(),
+                                           segmentation.rowgroups.base_device_ptr(),
+                                           aligned_rgs.count() * sizeof(rowgroup_rows),
+                                           stream));
   auto const d_stripes = cudf::detail::make_device_uvector_async(
     segmentation.stripes, stream, cudf::get_current_device_resource_ref());
 
@@ -1203,7 +1206,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
 /**
  * @brief Returns column statistics in an intermediate format.
  *
- * @param statistics_freq Frequency of statistics to be included in the output file
+ * @param stats_freq Frequency of statistics to be included in the output file
  * @param orc_table Table information to be written
  * @param segmentation stripe and rowgroup ranges
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -1327,8 +1330,8 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
 /**
  * @brief Returns column statistics encoded in ORC protobuf format stored in the footer.
  *
- * @param num_stripes number of stripes in the data
- * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
+ * @param footer ORC footer containing stripe and type information
+ * @param per_chunk_stats Persisted per-chunk statistics from `gather_statistic_blobs`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded statistic blobs
  */
