@@ -461,7 +461,7 @@ async def _shuffle_reduce(
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
         partition_chunk = TableChunk.from_pylibcudf_table(
-            await shuffle.extract_chunk(partition_id, stream),
+            shuffle.extract_chunk(partition_id, stream),
             stream,
             exclusive_view=True,
         )
@@ -521,7 +521,7 @@ def _key_indices(ir: GroupBy | Distinct, schema: Schema) -> tuple[int, ...]:
         return tuple(schema_keys[k] for k in groupby_key_names)
     else:
         subset = ir.subset or frozenset(ir.schema)
-        return tuple(schema_keys[k] for k in subset)
+        return tuple(schema_keys[k] for k in schema if k in subset)
 
 
 def _require_tree(ir: GroupBy | Distinct) -> bool:

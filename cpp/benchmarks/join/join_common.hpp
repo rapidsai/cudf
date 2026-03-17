@@ -65,13 +65,14 @@ template <bool Nullable,
 void BM_join(state_type& state,
              std::vector<cudf::type_id>& key_types,
              Join JoinFunc,
-             int multiplicity   = 1,
-             double selectivity = 0.3)
+             int multiplicity          = 1,
+             double selectivity        = 0.3,
+             bool skip_large_right_tbl = true)
 {
   auto const right_size = static_cast<size_t>(state.get_int64("right_size"));
   auto const left_size  = static_cast<size_t>(state.get_int64("left_size"));
 
-  if (right_size > left_size) {
+  if (skip_large_right_tbl && right_size > left_size) {
     state.skip("Skip large right table");
     return;
   }

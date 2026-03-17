@@ -698,6 +698,10 @@ class NormalizedPartitioning:
             # Use the latter representation for consistency.
             inter_rank_modulus = local_modulus
             local_modulus = None
+        elif local_modulus is None and not strict_inter_rank_modulus:
+            # Don't allow local partitioning to "inherit"
+            # when there is not proper inter-rank partitioning
+            local_modulus = 0
 
         return inter_rank_modulus, local_modulus
 

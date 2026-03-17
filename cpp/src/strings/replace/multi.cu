@@ -30,6 +30,7 @@
 #include <cuda/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
+#include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -126,6 +127,7 @@ struct replace_multi_parallel_fn {
    *
    * @param idx Index of the row in d_strings to be processed
    * @param d_positions Positions of the targets found in the chars column
+   * @param d_indices Indices into the targets array
    * @param d_targets_offsets Offsets identify which target positions go with the current string
    * @return Number of substrings resulting from the replace operations on this row
    */
@@ -178,6 +180,7 @@ struct replace_multi_parallel_fn {
    * @param idx Index of the row in d_strings
    * @param d_offsets Offsets to identify where to store the results of the replace for this string
    * @param d_positions The target positions found in the chars column
+   * @param d_indices Indices into the targets array
    * @param d_targets_offsets The offsets to identify which target positions go with this string
    * @param d_all_strings The output of all the produced string segments
    * @return The size in bytes of the output string for this row
