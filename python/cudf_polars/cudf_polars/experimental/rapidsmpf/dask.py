@@ -38,7 +38,7 @@ class EvaluatePipelineCallback(Protocol):
         stats: StatsCollector,
         collective_id_map: dict[IR, list[int]],
         comm: Communicator,
-        rmpf_context: Context | None = None,
+        rmpf_context: Context,
         *,
         collect_metadata: bool = False,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:

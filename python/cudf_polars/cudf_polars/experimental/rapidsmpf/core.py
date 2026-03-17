@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import contextlib
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -146,13 +145,13 @@ def evaluate_logical_plan(
                 )
 
                 result, metadata_collector = evaluate_pipeline_single(
-                evaluate_pipeline,
+                    evaluate_pipeline,
                     ir,
                     partition_info,
                     config_options,
                     stats,
                     collective_id_map,
-                        collect_metadata=collect_metadata,
+                    collect_metadata=collect_metadata,
                 )
             case other:
                 raise ValueError(f"Unknown cluster mode: {other}")
@@ -204,14 +203,10 @@ def evaluate_pipeline(
     br = rmpf_context.br()
 
     # Create the IR execution context
-    ir_context = IRExecutionContext(
-        get_cuda_stream=rmpf_context.get_stream_from_pool
-    )
+    ir_context = IRExecutionContext(get_cuda_stream=rmpf_context.get_stream_from_pool)
 
     # Generate network nodes
-    metadata_collector: list[ChannelMetadata] | None = (
-        [] if collect_metadata else None
-    )
+    metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
     nodes, output = generate_network(
         rmpf_context,
         comm,
