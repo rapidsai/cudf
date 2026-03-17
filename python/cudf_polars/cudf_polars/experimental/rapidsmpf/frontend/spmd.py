@@ -160,6 +160,9 @@ def allgather_polars_dataframe(
     equivalent of a distributed ``collect``: after the call, every rank holds
     the same complete dataset.
 
+    Must be called inside a :func:`spmd_execution` context block while ``comm``
+    and ``ctx`` are still alive.
+
     Parameters
     ----------
     comm
@@ -170,7 +173,9 @@ def allgather_polars_dataframe(
         Rank-local DataFrame to contribute.
     op_id
         Operation ID for this AllGather collective. Must be identical on every
-        rank.
+        rank. For example, use :func:`reserve_op_id` to obtain a collision-free
+        ID from the same pool used internally by cudf-polars. Avoid passing
+        hardcoded integers.
 
     Returns
     -------
@@ -286,7 +291,7 @@ def spmd_execution(
         when ``None``.
     executor_options
         Extra keyword arguments forwarded to the ``executor_options`` dict of
-        :class:`~polars.lazyframe.engine_config.GPUEngine`.  The keys
+        :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
         ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
         be overridden.
     **engine_kwargs
@@ -311,10 +316,10 @@ def spmd_execution(
     RuntimeError
         If not running under the ``rrun`` launcher (i.e.
         :func:`rapidsmpf.bootstrap.is_running_with_rrun` returns ``False``).
-    ValueError
+    TypeError
         If ``executor_options`` contains any of the reserved keys
         ``"runtime"``, ``"cluster"``, or ``"spmd"``.
-    ValueError
+    TypeError
         If ``engine_kwargs`` contains any of the reserved keys
         ``"raise_on_fail"``, ``"memory_resource"``, or ``"executor"``.
 
@@ -340,9 +345,9 @@ def spmd_execution(
 
     # Check for reserved keys.
     if bad := {"runtime", "cluster", "spmd"} & executor_options.keys():
-        raise ValueError(f"executor_options may not contain reserved keys: {bad}")
+        raise TypeError(f"executor_options may not contain reserved keys: {bad}")
     if bad := {"memory_resource", "executor"} & engine_kwargs.keys():
-        raise ValueError(f"engine_kwargs may not contain reserved keys: {bad}")
+        raise TypeError(f"engine_kwargs may not contain reserved keys: {bad}")
 
     rapidsmpf_options = (
         rapidsmpf_options
