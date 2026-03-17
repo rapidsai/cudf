@@ -203,22 +203,16 @@ def assert_tpch_result_equal(
         # And we don't really need to worry about floating-point columns here.
         for side, df in [("left", left), ("right", right)]:
             try:
-                selected = df.select(by)
-                sorted_selected = df.select(by).sort(
-                    by=by, descending=descending, maintain_order=True
-                )
                 polars.testing.assert_frame_equal(
-                    selected,
-                    sorted_selected,
+                    df.select(by),
+                    df.select(by).sort(
+                        by=by, descending=descending, maintain_order=True
+                    ),
                 )
             except AssertionError as e:
                 raise ValidationError(
                     message=f"{side} dataframe is not sorted by sort_by columns",
-                    details={
-                        "error": str(e),
-                        f"{side}_selected": str(selected),
-                        f"{side}_sorted": str(sorted_selected),
-                    },
+                    details={"error": str(e)},
                 ) from e
 
         # We know that each dataframe is sorted on `sort_by` according to itself.
@@ -242,12 +236,7 @@ def assert_tpch_result_equal(
                 )
             except AssertionError as e:
                 raise ValidationError(
-                    message="Result mismatch",
-                    details={
-                        "error": str(e),
-                        "left_sorted": str(left_sorted),
-                        "right_sorted": str(right_sorted),
-                    },
+                    message="Result mismatch", details={"error": str(e)}
                 ) from e
 
         else:
@@ -297,21 +286,15 @@ def assert_tpch_result_equal(
             expected_ties = right.filter(~expr)
 
             try:
-                result_first_sorted = result_first.sort(by=non_float_columns)
-                expected_first_sorted = expected_first.sort(by=non_float_columns)
                 polars.testing.assert_frame_equal(
-                    result_first_sorted,
-                    expected_first_sorted,
+                    result_first.sort(by=non_float_columns),
+                    expected_first.sort(by=non_float_columns),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
                 raise ValidationError(
                     message="Result mismatch in non-ties part",
-                    details={
-                        "error": str(e),
-                        "result_first_sorted": str(result_first_sorted),
-                        "expected_first_sorted": str(expected_first_sorted),
-                    },
+                    details={"error": str(e)},
                 ) from e
 
             # We already know that the lengths match (we've validated that the
@@ -322,21 +305,15 @@ def assert_tpch_result_equal(
             # a floating point value, we'll use approximate comparison.
 
             try:
-                result_ties_sorted = result_ties.sort(non_float_columns).select(by)
-                expected_ties_sorted = expected_ties.sort(non_float_columns).select(by)
                 polars.testing.assert_frame_equal(
-                    result_ties_sorted,
-                    expected_ties_sorted,
+                    result_ties.sort(non_float_columns).select(by),
+                    expected_ties.sort(non_float_columns).select(by),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
                 raise ValidationError(
                     message="Result mismatch in ties part",
-                    details={
-                        "error": str(e),
-                        "result_ties_sorted": str(result_ties_sorted),
-                        "expected_ties_sorted": str(expected_ties_sorted),
-                    },
+                    details={"error": str(e)},
                 ) from e
 
     else:
@@ -349,11 +326,6 @@ def assert_tpch_result_equal(
             )
         except AssertionError as e:
             raise ValidationError(
-                message="Result mismatch",
-                details={
-                    "error": str(e),
-                    "left": str(left),
-                    "right": str(right),
-                },
+                message="Result mismatch", details={"error": str(e)}
             ) from e
     return None
