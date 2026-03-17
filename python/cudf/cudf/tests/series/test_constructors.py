@@ -1130,11 +1130,11 @@ def test_series_arrow_list_types_roundtrip():
         assert_eq(pdf, gdf)
 
 
-def test_series_error_nan_mixed_types():
+def test_series_nan_with_string_types():
     ps = pd.Series([np.nan, "ab", "cd"])
     with cudf.option_context("mode.pandas_compatible", True):
-        with pytest.raises(MixedTypeError):
-            cudf.from_pandas(ps)
+        result = cudf.from_pandas(ps)
+    assert_eq(result, ps)
 
 
 @pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])
