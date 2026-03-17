@@ -12,7 +12,7 @@ from config import NUM_ROWS, cudf
     params=[
         (nr, card)
         for nr in NUM_ROWS
-        for card in [max(2, nr // 100), max(2, nr // 10)]
+        for card in [max(4, nr // 100), max(4, nr // 10)]
     ],
     ids=lambda x: f"{x[0]}rows_card{x[1]}",
 )
