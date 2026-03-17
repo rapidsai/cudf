@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "io/json/write_json.hpp"
+#include "write_json.hpp"
 
 #include "io/comp/compression.hpp"
 #include "io/csv/durations.hpp"
