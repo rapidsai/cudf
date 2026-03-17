@@ -422,15 +422,17 @@ def spmd_gather_statistics(
     assert ctx is not None
     assert comm is not None
     stats: Statistics = ctx.br().statistics
+    assert stats.enabled
     # create a polars dataframe from the stats map
     stat_name = []
     count = []
     value = []
     for k in stats.list_stat_names():
-        for vv in stats.get_stat(k):
-            stat_name.append(k)
-            count.append(vv["count"])
-            value.append(vv["value"])
+        s = stats.get_stat(k)
+        stat_name.append(k)
+        count.append(s["count"])
+        value.append(s["value"])
+    assert len(stat_name) > 0
     stats_df = pl.DataFrame({"stat_name": stat_name, "count": count, "value": value})
 
     # convert stats map to polars dataframe and allgather it
@@ -449,8 +451,8 @@ def spmd_gather_statistics(
             d = grouped.to_dict()
             return {
                 stat_name: {"count": count, "value": value}
-                for stat_name, count, value in zip[tuple[str, int, float]](
-                    d["stat_name"], d["count"], d["value"]
+                for stat_name, count, value in zip(
+                    d["stat_name"], d["count"], d["value"], strict=True
                 )
             }
         else:
