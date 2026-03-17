@@ -29,15 +29,6 @@ def engine():
 
 
 @pytest.fixture(scope="module")
-def engine_fallback():
-    return pl.GPUEngine(
-        raise_on_fail=False,
-        executor="streaming",
-        executor_options={"max_rows_per_partition": 3, "cluster": DEFAULT_CLUSTER},
-    )
-
-
-@pytest.fixture(scope="module")
 def df():
     return pl.LazyFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [2, 3, 4, 5, 6, 7, 8]})
 
@@ -63,7 +54,7 @@ def test_cse_agg_select(df, engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_hstack_non_scalar_cse_fallback(df, engine_fallback):
+def test_hstack_non_scalar_cse_fallback(df, engine):
     # Non-scalar CSE (head(5)) skips the CSE transform, falling through to the
     # non-pointwise HStack fallback in lower_ir_node.register(HStack).
     q = df.with_columns(
@@ -71,4 +62,4 @@ def test_hstack_non_scalar_cse_fallback(df, engine_fallback):
         pl.col("a").head(5).max().alias("max_5"),
     )
     with pytest.warns(UserWarning, match="not supported for multiple partitions"):
-        assert_gpu_result_equal(q, engine=engine_fallback)
+        assert_gpu_result_equal(q, engine=engine)
