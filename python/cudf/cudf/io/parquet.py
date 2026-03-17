@@ -1111,7 +1111,7 @@ def read_parquet(
         **kwargs,
     )
     # Build a lookup from (possibly lowered) name -> actual DataFrame column name
-    _key = str.lower if not case_sensitive_names else lambda n: n
+    _key = str.lower if not case_sensitive_names else str
     col_names = {_key(name): name for name in df._column_names}
 
     # Apply filters row-wise (if any are defined), and return
