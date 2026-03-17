@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -34,4 +34,10 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
         mean=pl.col("a").mean(),
         median=pl.col("a").median(),
     )
+    assert_gpu_result_equal(q)
+
+
+def test_mean_all_null():
+    lf = pl.LazyFrame({"a": [None, None]}, schema={"a": pl.Float64})
+    q = lf.select(pl.col("a").mean())
     assert_gpu_result_equal(q)
