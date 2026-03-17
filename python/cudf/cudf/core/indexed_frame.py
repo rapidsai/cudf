@@ -590,8 +590,9 @@ class IndexedFrame(Frame):
         original object (see notes below).
         When ``deep=False``, a new object will be created without copying
         the calling object's data or index (only references to the data
-        and index are copied). Any changes to the data of the original
-        will be reflected in the shallow copy (and vice versa).
+        and index are copied). Data is shared via copy-on-write, so
+        modifications to either object will trigger a physical copy and
+        will not be reflected in the other.
 
         Parameters
         ----------
@@ -623,17 +624,18 @@ class IndexedFrame(Frame):
         >>> deep = s.copy()
         >>> shallow = s.copy(deep=False)
 
-        Updates to the data shared by shallow copy and original is reflected
-        in both; deep copy remains unchanged.
+        Shallow copy shares data via copy-on-write. Modifications to
+        either the original or the shallow copy trigger a physical copy,
+        so changes are not reflected in the other.
 
         >>> s['a'] = 3
         >>> shallow['b'] = 4
         >>> s
         a    3
-        b    4
+        b    2
         dtype: int64
         >>> shallow
-        a    3
+        a    1
         b    4
         dtype: int64
         >>> deep

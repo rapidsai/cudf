@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,7 @@ namespace io::detail::csv {
 /**
  * @brief Reads the entire dataset.
  *
- * @param sources Input `datasource` object to read the dataset from
+ * @param source Input `datasource` object to read the dataset from
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation

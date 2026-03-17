@@ -4,7 +4,6 @@ import contextlib
 import doctest
 import inspect
 import io
-import os
 
 import numpy as np
 import pytest
@@ -128,13 +127,6 @@ class TestDoctests:
         reason="Doctests not expected to pass on older versions of pandas",
     )
     def test_docstring(self, docstring, monkeypatch, tmp_path):
-        if (
-            docstring.name == "copy"
-            and os.environ.get("CUDF_TEST_COPY_ON_WRITE") == "1"
-        ):
-            pytest.skip(
-                "copy doctest not compatible with CUDF_TEST_COPY_ON_WRITE=1"
-            )
         if docstring.name in _SKIP_DOCTESTS:
             pytest.skip(f"{docstring.name} doctest is not runnable")
         # We ignore differences in whitespace in the doctest output, and enable

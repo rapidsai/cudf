@@ -555,8 +555,7 @@ __device__ size_type initialize_string_descriptors(page_state_s* s,
  * @brief Store a validity mask containing value_count bits into the output validity buffer of the
  * page.
  *
- * @param[in,out] nesting_info The page/nesting information to store the mask in. The validity map
- * offset is also updated
+ * @param[in] valid_map_offset The offset into the validity map at which to store bits
  * @param[in,out] valid_map Pointer to bitmask to store validity information to
  * @param[in] valid_mask The validity mask to be stored
  * @param[in] value_count # of bits in the validity mask

@@ -1630,14 +1630,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         deep : bool, default True
             If True, a true physical copy of the column
             is made.
-            If False and `copy_on_write` is False, the same
-            memory is shared between the buffers of the Column
-            and changes made to one Column will propagate to
-            its copy and vice-versa.
-            If False and `copy_on_write` is True, the same
-            memory is shared between the buffers of the Column
-            until there is a write operation being performed on
-            them.
+            If False, the same memory is shared between the
+            buffers of the Column via copy-on-write. A physical
+            copy is made when a write operation is performed.
         """
         plc_col = self.plc_column
         if deep:

@@ -108,8 +108,7 @@ def test_series_setitem_index():
 def test_setitem_dataframe_series_inplace(index):
     gdf = cudf.DataFrame({"a": [1, 2, 3]}, index=index)
     expected = gdf.copy()
-    with cudf.option_context("copy_on_write", True):
-        gdf["a"].replace(1, 500, inplace=True)
+    gdf["a"].replace(1, 500, inplace=True)
 
     assert_eq(expected, gdf)
 
@@ -191,33 +190,28 @@ def test_string_set_scalar(scalar):
 
 
 def test_dataframe_cow_slice_setitem():
-    with cudf.option_context("copy_on_write", True):
-        df = cudf.DataFrame(
-            {"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}
-        )
-        slice_df = df[1:4]
+    df = cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]})
+    slice_df = df[1:4]
 
-        assert_eq(
-            slice_df,
-            cudf.DataFrame(
-                {"a": [11, 12, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
-            ),
-        )
+    assert_eq(
+        slice_df,
+        cudf.DataFrame(
+            {"a": [11, 12, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
+        ),
+    )
 
-        slice_df["a"][2] = 1111
+    slice_df["a"][2] = 1111
 
-        assert_eq(
-            slice_df,
-            cudf.DataFrame(
-                {"a": [11, 1111, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
-            ),
-        )
-        assert_eq(
-            df,
-            cudf.DataFrame(
-                {"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}
-            ),
-        )
+    assert_eq(
+        slice_df,
+        cudf.DataFrame(
+            {"a": [11, 1111, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
+        ),
+    )
+    assert_eq(
+        df,
+        cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}),
+    )
 
 
 def test_multiindex_row_shape():
