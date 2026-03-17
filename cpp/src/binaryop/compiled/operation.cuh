@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cudf/detail/integer_math.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <cmath>
@@ -84,21 +85,9 @@ struct TrueDiv {
 struct FloorDiv {
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
-    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
-             std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)
+    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
-    auto const quotient          = x / y;
-    auto const nonzero_remainder = (x % y) != 0;
-    auto const mixed_sign        = (x ^ y) < 0;
-    return quotient - mixed_sign * nonzero_remainder;
-  }
-
-  template <typename TypeLhs, typename TypeRhs>
-  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
-    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>> and
-             !std::is_signed_v<std::common_type_t<TypeLhs, TypeRhs>>)
-  {
-    return x / y;
+    return cudf::detail::int_floor_div(x, y);
   }
 
   template <typename TypeLhs, typename TypeRhs>
@@ -225,26 +214,7 @@ struct IntPow {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
     requires(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)
   {
-    if constexpr (std::is_signed_v<TypeRhs>) {
-      if (y < 0) {
-        // Integer exponentiation with negative exponent is not possible.
-        return 0;
-      }
-    }
-    if (y == 0) { return 1; }
-    if (x == 0) { return 0; }
-    TypeLhs extra = 1;
-    while (y > 1) {
-      if (y & 1) {
-        // The exponent is odd, so multiply by one factor of x.
-        extra *= x;
-        y -= 1;
-      }
-      // The exponent is even, so square x and divide the exponent y by 2.
-      y /= 2;
-      x *= x;
-    }
-    return x * extra;
+    return cudf::detail::int_pow(x, y);
   }
 };
 

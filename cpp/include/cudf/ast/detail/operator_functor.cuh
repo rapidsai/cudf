@@ -6,6 +6,7 @@
 
 #include <cudf/ast/ast_operator.hpp>
 #include <cudf/ast/detail/possibly_null.cuh>
+#include <cudf/detail/integer_math.cuh>
 #include <cudf/fixed_point/conv.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -97,16 +98,7 @@ struct operator_functor<ast_operator::FLOOR_DIV, false> {
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
     requires(cuda::std::is_integral_v<CommonType>)
   {
-    if constexpr (cuda::std::is_signed_v<CommonType>) {
-      auto const lhs_op            = static_cast<CommonType>(lhs);
-      auto const rhs_op            = static_cast<CommonType>(rhs);
-      auto const quotient          = lhs_op / rhs_op;
-      auto const nonzero_remainder = (lhs_op % rhs_op) != 0;
-      auto const mixed_sign        = (lhs_op ^ rhs_op) < 0;
-      return quotient - mixed_sign * nonzero_remainder;
-    } else {
-      return static_cast<CommonType>(lhs) / static_cast<CommonType>(rhs);
-    }
+    return cudf::detail::int_floor_div(lhs, rhs);
   }
 
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
@@ -194,24 +186,11 @@ template <>
 struct operator_functor<ast_operator::POW, false> {
   static constexpr auto arity{2};
 
-  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
-    requires(cuda::std::is_integral_v<CommonType>)
+  template <typename LHS, typename RHS>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> LHS
+    requires(cuda::std::is_integral_v<LHS> and cuda::std::is_integral_v<RHS>)
   {
-    auto base = static_cast<CommonType>(lhs);
-    auto exp  = static_cast<CommonType>(rhs);
-    if constexpr (cuda::std::is_signed_v<CommonType>) {
-      if (exp < 0) { return CommonType{0}; }
-    }
-    if (exp == 0) { return CommonType{1}; }
-    if (base == 0) { return CommonType{0}; }
-    auto result = CommonType{1};
-    while (exp > 0) {
-      if (exp & 1) { result *= base; }
-      base *= base;
-      exp /= 2;
-    }
-    return result;
+    return cudf::detail::int_pow(lhs, rhs);
   }
 
   template <typename LHS, typename RHS>
