@@ -11,6 +11,7 @@ import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col, Len
+from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.ir import Empty, HConcat, HStack, Projection, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
@@ -32,6 +33,16 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.statistics import StatsCollector
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
+
+
+def _cse_map_is_scalar(cse_map: dict[str, expr.Expr]) -> bool:
+    """Return True if every non-pointwise node in cse_map is a global reduction (Agg/Len)."""
+    return all(
+        isinstance(node, (Agg, Len))
+        for v in cse_map.values()
+        for node in traversal([v])
+        if not node.is_pointwise
+    )
 
 
 def _collect_hstack_cse_chain(
@@ -79,7 +90,7 @@ def _(
         has_agg = any(
             not all(e.is_pointwise for e in traversal([v])) for v in cse_map.values()
         )
-        if has_agg:
+        if has_agg and _cse_map_is_scalar(cse_map):
             has_data_col = any(name in base_input.schema for name in ir.schema)
 
             # inner_select computes all CSE entries (agg and pointwise) so that
@@ -410,7 +421,7 @@ def _(
         has_agg = any(
             not all(e.is_pointwise for e in traversal([v])) for v in cse_map.values()
         )
-        if has_agg:
+        if has_agg and _cse_map_is_scalar(cse_map):
             has_data_col = any(name in base_input.schema for name in ir.schema)
 
             # Non-pointwise ir.exprs not in cse_map (non-CSE'd agg expressions like
@@ -462,8 +473,13 @@ def _(
                 )
                 outer_select = Select(outer_schema, outer_exprs, True, inner_select)  # noqa: FBT003
                 new_ir = ir.reconstruct([outer_select])
-            else:
-                # Replace extra_agg_expr entries with Col refs; other exprs pass through.
+            elif not any(
+                isinstance(node, Col) and node.name in cse_map
+                for v in extra_agg_exprs.values()
+                for node in traversal([v])
+            ):
+                # No extra_agg_exprs reference CSE placeholders, so they can be
+                # safely computed in inner_select against base_input.
                 new_exprs = tuple(
                     expr.NamedExpr(ne.name, Col(ne.value.dtype, ne.name))
                     if ne.name in extra_agg_exprs
@@ -471,8 +487,14 @@ def _(
                     for ne in ir.exprs
                 )
                 new_ir = Select(ir.schema, new_exprs, ir.should_broadcast, inner_select)
+            else:
+                # extra_agg_exprs reference CSE placeholders that don't exist in
+                # base_input; skip the transformation and let the HStack fallback
+                # handle single-partition execution correctly.
+                new_ir = None
 
-            return lower_ir_node(new_ir, rec)
+            if new_ir is not None:
+                return lower_ir_node(new_ir, rec)
 
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
