@@ -613,6 +613,7 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.2.*
+              - nvidia-nvjitlink==12.2.*
           - matrix:
               cuda: "12.5"
               use_cuda_wheels: "true"
@@ -628,16 +629,19 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==12.9.*
+              - nvidia-nvjitlink==12.9.*
           - matrix:
               cuda: "13.0"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==13.0.*
+              - nvidia-nvjitlink==13.0.*
           - matrix:
               cuda: "13.1"
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==13.1.*
+              - nvidia-nvjitlink==13.1.*
   cuda:
     common:
       - output_types: [conda]
@@ -666,20 +670,10 @@ dependencies:
             packages:
               - nvidia-nvjitlink-cu12>=12.9,<13
           - matrix:
-              cuda: "13.0"
-              use_cuda_wheels: "true"
-            packages:
-              - nvidia-nvjitlink>=13.0,<14
-          - matrix:
-              cuda: "13.1"
-              use_cuda_wheels: "true"
-            packages:
-              - &nvjitlink_cu13 nvidia-nvjitlink>=13.1,<14
-          - matrix:
               cuda: "13.*"
               use_cuda_wheels: "true"
             packages:
-              - *nvjitlink_cu13
+              - nvidia-nvjitlink>=13.0,<14
           # if no matching matrix selectors passed, list the unsuffixed packages
           # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
