@@ -1838,13 +1838,6 @@ class Index(SingleColumnFrame):
         lines.append(f"{prior_to_dtype} {joined_keywords})")
         return "\n".join(lines)
 
-    # def _pandas_repr_compatible(self) -> Self:
-    #     """Return Self but with columns prepared for a pandas-like repr."""
-    #     columns = (col._prep_pandas_compat_repr(nan_repr="NaN") for col in self._columns)
-    #     return self._from_data_like_self(
-    #         self._data._from_columns_like_self(columns, verify=False)
-    #     )
-
     @_performance_tracking
     def __getitem__(self, index):
         res = self._get_elements_from_column(index)

@@ -344,17 +344,10 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
         return plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
 
     if type_id == plc.TypeId.EMPTY:
-        # if col.size() == 0:
-        #     return plc.column_factories.make_empty_column(plc_dtype)
         return plc.Column.from_scalar(
             plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
             col.size(),
         )
-        # plc_dtype = plc.DataType(plc.Typed.INT8)
-
-        # return plc.column_factories.make_numeric_column(
-        #     plc_dtype, col.size(), plc.types.MaskState.ALL_NULL
-        # )
 
     normalized_children = [
         _normalize_types_column(child) for child in col.children()

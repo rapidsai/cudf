@@ -214,6 +214,8 @@ class MultiIndex(Index):
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
+            # TODO: Pandas-3.0: Investigate with pandas test suite and remove
+            # the following checks if they are obsolete now.
             # if (
             #     cudf.get_option("mode.pandas_compatible")
             #     and nan_as_null is False
@@ -246,13 +248,6 @@ class MultiIndex(Index):
     @_performance_tracking
     def names(self):
         return self._names
-
-    # def _pandas_repr_compatible(self) -> Self:
-    #     """Return Self but with columns prepared for a pandas-like repr."""
-    #     columns = (col._prep_pandas_compat_repr(nan_repr="NaN") for col in self._columns)
-    #     return self._from_data_like_self(
-    #         self._data._from_columns_like_self(columns, verify=False)
-    #     )
 
     @names.setter
     @_performance_tracking

@@ -102,10 +102,8 @@ class NumericalColumn(NumericalBaseColumn):
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Float columns return np.nan as NA value in pandas compatibility mode."""
-        if (
-            # cudf.get_option("mode.pandas_compatible")
-            self.dtype.kind == "f"
-            and not is_pandas_nullable_extension_dtype(self.dtype)
+        if self.dtype.kind == "f" and not is_pandas_nullable_extension_dtype(
+            self.dtype
         ):
             return np.nan
         return super()._PANDAS_NA_VALUE
