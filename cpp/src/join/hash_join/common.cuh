@@ -122,4 +122,10 @@ std::size_t get_full_join_size(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+std::size_t compute_left_join_complement_size(
+  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
+  size_type left_table_row_count,
+  size_type right_table_row_count,
+  rmm::cuda_stream_view stream);
+
 }  // namespace cudf::detail

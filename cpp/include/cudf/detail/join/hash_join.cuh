@@ -133,8 +133,8 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::inner_join
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
@@ -143,8 +143,8 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::left_join
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
@@ -153,8 +153,8 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::full_join
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
@@ -175,9 +175,9 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::full_join_size
    */
-  std::size_t full_join_size(cudf::table_view const& probe,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr) const;
+  [[nodiscard]] std::size_t full_join_size(cudf::table_view const& probe,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::inner_join_match_context
@@ -204,10 +204,28 @@ struct hash_join {
     rmm::device_async_resource_ref mr) const;
 
  private:
-  template <typename OutputIterator>
-  void compute_match_counts(cudf::table_view const& probe,
-                            OutputIterator output_iter,
-                            rmm::cuda_stream_view stream) const;
+  template <join_kind Join>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  join_retrieve(cudf::table_view const& probe,
+                std::optional<std::size_t> output_size,
+                rmm::cuda_stream_view stream,
+                rmm::device_async_resource_ref mr) const;
+
+  template <join_kind Join>
+  [[nodiscard]] std::size_t join_size(cudf::table_view const& probe,
+                                      rmm::cuda_stream_view stream) const;
+
+  template <join_kind Join>
+  [[nodiscard]] std::size_t join_size(cudf::table_view const& probe,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr) const;
+
+  template <join_kind Join>
+  [[nodiscard]] cudf::join_match_context join_match_context_impl(
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf

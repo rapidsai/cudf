@@ -587,11 +587,11 @@ add_library(
   src/join/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
-  src/join/hash_join/api.cu
   src/join/hash_join/build.cu
   src/join/hash_join/full_join_match_context.cu
   src/join/hash_join/full_join_retrieve.cu
   src/join/hash_join/full_join_size.cu
+  src/join/hash_join/full_join_size_complement.cu
   src/join/hash_join/inner_join_match_context.cu
   src/join/hash_join/inner_join_retrieve.cu
   src/join/hash_join/inner_join_size.cu
