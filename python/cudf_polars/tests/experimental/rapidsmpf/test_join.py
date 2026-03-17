@@ -67,6 +67,29 @@ def test_dynamic_join_how(left, right, how, max_rows_per_partition):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.parametrize("how", ["inner", "semi"])
+def test_bloom_filter_join(how):
+    """Bloom filter path: small dimension table joined to large fact table."""
+    # Small dimension (10 rows) vs large fact (200 rows) → ratio 0.05 < threshold 0.5
+    # broadcast_join_limit=0 forces shuffle (no broadcast), triggering bloom filter
+    dim = pl.LazyFrame({"key": range(10), "val": range(10)})
+    fact = pl.LazyFrame({"key": list(range(5)) * 40, "data": range(200)})
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 20,
+            "broadcast_join_limit": 0,
+            "shuffle_method": "rapidsmpf",
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+            "dynamic_planning": {},
+        },
+    )
+    q = fact.join(dim, on="key", how=how)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize("how", ["right", "full"])
 def test_dynamic_join_right_full_reverse(left, right, how):
     """Dynamic join path: Right/Full with reversed left/right (stress ordering)."""

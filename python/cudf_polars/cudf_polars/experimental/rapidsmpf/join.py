@@ -8,13 +8,16 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
+import numpy as np
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
-from rapidsmpf.streaming.core.actor import define_actor
+from rapidsmpf.streaming.core.actor import define_actor, run_actor_network
+from rapidsmpf.streaming.core.leaf_actor import pull_from_channel, push_to_channel
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.bloom_filter import BloomFilter
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -24,6 +27,8 @@ from rapidsmpf.streaming.cudf.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+
+import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
@@ -63,6 +68,9 @@ if TYPE_CHECKING:
 # cuDF column/concatenate row limit (int32)
 CUDF_ROW_LIMIT = 2**31 - 1
 MAX_BROADCAST_ROWS = CUDF_ROW_LIMIT // 2
+
+# Bloom filter L2 cache size for sizing the filter (32 MB)
+_BLOOM_L2_SIZE = 32 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -918,6 +926,185 @@ async def _choose_strategy(
     return left_sample, right_sample, strategy
 
 
+def _should_use_bloom_filter(
+    ir: Join,
+    strategy: JoinStrategy,
+    left_sample: JoinSideStats,
+    right_sample: JoinSideStats,
+    threshold: float,
+) -> bool:
+    """Return True if bloom filter pre-filtering should be applied."""
+    if threshold == 0.0 or strategy.shuffle_modulus == 0:
+        return False
+    if ir.options[0] not in ("Inner", "Semi"):
+        return False
+    large_rows = max(left_sample.total_rows, right_sample.total_rows)
+    small_rows = min(left_sample.total_rows, right_sample.total_rows)
+    return large_rows > 0 and small_rows / large_rows < threshold
+
+
+async def _drain_remaining(
+    context: Context,
+    ch: Channel[TableChunk],
+    initial: dict[int, TableChunk],
+) -> dict[int, TableChunk]:
+    """Drain remaining channel messages into a dict, merging with initial chunks."""
+    result = dict(initial)
+    while (msg := await ch.recv(context)) is not None:
+        result[msg.sequence_number] = TableChunk.from_message(
+            msg
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
+    return result
+
+
+async def _replay_with_metadata(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    metadata: ChannelMetadata,
+    messages: list[Message],
+) -> None:
+    """Send metadata then all messages to ch_out, then drain."""
+    async with shutdown_on_error(context, ch_out):
+        await send_metadata(ch_out, context, metadata)
+        for msg in messages:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
+
+
+async def _bloom_shuffle_join(
+    context: Context,
+    comm: Communicator,
+    ir: Join,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_left: Channel[TableChunk],
+    ch_right: Channel[TableChunk],
+    left_sample: JoinSideStats,
+    right_sample: JoinSideStats,
+    left_metadata: ChannelMetadata,
+    right_metadata: ChannelMetadata,
+    strategy: JoinStrategy,
+    collective_ids: list[int],
+    *,
+    tracer: ActorTracer | None,
+) -> None:
+    """Shuffle join with bloom filter pre-filtering on the large side."""
+    # Determine small/large sides by row count
+    if left_sample.total_rows <= right_sample.total_rows:
+        small_chunks_init, large_chunks_init = left_sample.chunks, right_sample.chunks
+        small_metadata, large_metadata = left_metadata, right_metadata
+        ch_small, ch_large = ch_left, ch_right
+        small_key_indices, large_key_indices = (
+            strategy.left_indices,
+            strategy.right_indices,
+        )
+        small_is_left = True
+    else:
+        small_chunks_init, large_chunks_init = right_sample.chunks, left_sample.chunks
+        small_metadata, large_metadata = right_metadata, left_metadata
+        ch_small, ch_large = ch_right, ch_left
+        small_key_indices, large_key_indices = (
+            strategy.right_indices,
+            strategy.left_indices,
+        )
+        small_is_left = False
+
+    # Drain both sides concurrently
+    all_small_chunks, all_large_chunks = await asyncio.gather(
+        _drain_remaining(context, ch_small, small_chunks_init),
+        _drain_remaining(context, ch_large, large_chunks_init),
+    )
+
+    # Extract key-only chunks from small side for bloom filter build.
+    # Use plc.copying.gather to create owned copies (chunks may be spilled during run_actor_network).
+    small_key_msgs: list[Message] = []
+    for seq, stale_chunk in sorted(all_small_chunks.items()):
+        chunk = stale_chunk.make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        all_small_chunks[seq] = chunk
+        tv = chunk.table_view()
+        nrows = tv.num_rows()
+        gather_map = plc.Column.from_array(
+            np.arange(nrows, dtype=np.int32), stream=chunk.stream
+        )
+        key_view = plc.Table([tv.columns()[i] for i in small_key_indices])
+        key_table = plc.copying.gather(
+            key_view,
+            gather_map,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+            stream=chunk.stream,
+        )
+        small_key_msgs.append(
+            Message(
+                seq,
+                TableChunk.from_pylibcudf_table(
+                    key_table, chunk.stream, exclusive_view=True
+                ),
+            )
+        )
+
+    # Build large-side messages for bloom filter probe
+    large_msgs = [
+        Message(seq, chunk) for seq, chunk in sorted(all_large_chunks.items())
+    ]
+
+    # Run bloom filter pipeline as CppActors (blocking, releases GIL)
+    bloom = BloomFilter(
+        context,
+        comm,
+        seed=0,
+        num_filter_blocks=BloomFilter.fitting_num_blocks(_BLOOM_L2_SIZE),
+    )
+    bloom_tag = collective_ids.pop(-1)
+    ch_bloom_in = context.create_channel()
+    ch_bloom_out = context.create_channel()
+    ch_large_probe = context.create_channel()
+    ch_large_filtered = context.create_channel()
+    pull_actor, deferred = pull_from_channel(context, ch_large_filtered)
+    actors = [
+        push_to_channel(context, ch_bloom_in, small_key_msgs),
+        bloom.build(ch_bloom_in, ch_bloom_out, tag=bloom_tag),
+        push_to_channel(context, ch_large_probe, large_msgs),
+        bloom.apply(
+            ch_bloom_out, ch_large_probe, ch_large_filtered, keys=large_key_indices
+        ),
+        pull_actor,
+    ]
+    await asyncio.to_thread(run_actor_network, actors=actors)
+    filtered_large_msgs = deferred.release()
+
+    # Replay small (unfiltered) and filtered large through new channels to _shuffle_join
+    ch_small_replay = context.create_channel()
+    ch_large_replay = context.create_channel()
+    ch_left_new = ch_small_replay if small_is_left else ch_large_replay
+    ch_right_new = ch_large_replay if small_is_left else ch_small_replay
+
+    await asyncio.gather(
+        _replay_with_metadata(
+            context,
+            ch_small_replay,
+            small_metadata,
+            [Message(seq, chunk) for seq, chunk in sorted(all_small_chunks.items())],
+        ),
+        _replay_with_metadata(
+            context, ch_large_replay, large_metadata, filtered_large_msgs
+        ),
+        _shuffle_join(
+            context,
+            comm,
+            ir,
+            ir_context,
+            ch_out,
+            ch_left_new,
+            ch_right_new,
+            strategy,
+            collective_ids,
+            tracer=tracer,
+        ),
+    )
+
+
 @define_actor()
 async def join_actor(
     context: Context,
@@ -978,6 +1165,34 @@ async def join_actor(
             collective_ids,
             tracer=tracer,
         )
+
+        bloom_threshold = (
+            executor.dynamic_planning.bloom_filter_threshold
+            if executor.dynamic_planning is not None
+            else 0.0
+        )
+        if strategy.broadcast_side is None and _should_use_bloom_filter(
+            ir, strategy, left_sample, right_sample, bloom_threshold
+        ):
+            if tracer is not None:
+                tracer.decision = f"{tracer.decision}_filtered"
+            await _bloom_shuffle_join(
+                context,
+                comm,
+                ir,
+                ir_context,
+                ch_out,
+                ch_left,
+                ch_right,
+                left_sample,
+                right_sample,
+                left_metadata,
+                right_metadata,
+                strategy,
+                collective_ids,
+                tracer=tracer,
+            )
+            return
 
         ch_left_replay = context.create_channel()
         ch_right_replay = context.create_channel()
@@ -1092,11 +1307,11 @@ def _(
         # Dynamic join - decide strategy at runtime
         assert executor.dynamic_planning is not None  # Checked in use_dynamic
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
-        # Join uses up to 3 collective IDs: 1 allgather + up to 2 (left/right shuffle)
-        if len(collective_ids) < 3:
+        # Join uses up to 4 collective IDs: left shuffle, right shuffle, bloom filter, allgather
+        if len(collective_ids) < 4:
             raise ValueError(
-                "Dynamic join requires 3 reserved collective IDs "
-                "(allgather + left shuffle + right shuffle); got "
+                "Dynamic join requires 4 reserved collective IDs "
+                "(left shuffle + right shuffle + bloom filter + allgather); got "
                 f"{len(collective_ids)} for this Join. "
                 "Ensure ReserveOpIDs is run with dynamic_planning enabled."
             )
