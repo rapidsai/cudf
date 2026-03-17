@@ -166,7 +166,9 @@ def test_boolean_isbetween(closed, bounds):
     "expr", [pl.any_horizontal("*"), pl.all_horizontal("*")], ids=["any", "all"]
 )
 @pytest.mark.parametrize("wide", [False, True], ids=["narrow", "wide"])
-def test_boolean_horizontal(expr, has_nulls, wide):
+def test_boolean_horizontal(expr, has_nulls, wide, using_rapidsmpf):
+    if using_rapidsmpf:
+        pytest.skip("Can segault on 12.9 builds with rapidsmpf runtime.")
     ldf = pl.LazyFrame(
         {
             "a": [False, False, False, False, False, True],
