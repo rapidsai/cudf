@@ -1130,9 +1130,9 @@ def read_parquet(
         # Elements of `projected_columns` may now be in the index.
         # We must filter these names from our projection
         projected_columns = [
-            col_names[_key(col)]
+            col_names[k]
             for col in projected_columns
-            if _key(col) in col_names
+            if (k := _key(col)) in col_names
         ]
         return df[projected_columns]
     return df
