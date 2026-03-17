@@ -17,8 +17,6 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_132,
-    POLARS_VERSION_LT_133,
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_1321,
 )
@@ -153,28 +151,6 @@ def test_groupby(
             reason="https://github.com/rapidsai/cudf/issues/21642 and probably mean calculation referenced in https://github.com/rapidsai/cudf/issues/21721",
         )
     )
-    failing_rapidsmpf_nodeids_lt_1_36 = {
-        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (dyn int: 1.strict_cast(Int64))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]'
-    }
-    request.applymarker(
-        pytest.mark.xfail(
-            using_rapidsmpf
-            and POLARS_VERSION_LT_136
-            and request.node.name in failing_rapidsmpf_nodeids_lt_1_36,
-            reason="Type mismatch in columns to concatenate.",
-        )
-    )
-    segfaulting_rapidsmpf_nodeids = {
-        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (dyn int: 1.strict_cast(Int64))]-col("int32").mean()]'
-    }
-    if (
-        using_rapidsmpf
-        and POLARS_VERSION_LT_136
-        and request.node.name in segfaulting_rapidsmpf_nodeids
-    ):
-        pytest.skip(
-            "Usually raises 'Type mismatch in columns to concatenate' but can also segfault."
-        )
     q = df.group_by(*keys, maintain_order=maintain_order).agg(*exprs)
 
     if not maintain_order:
@@ -437,21 +413,12 @@ def test_groupby_sum_all_null_group_returns_null():
     ids=["sum", "mean", "median", "quantile-0.5"],
 )
 def test_groupby_aggs_keep_unsupported_as_null(
-    request, df: pl.LazyFrame, agg_expr, using_rapidsmpf
+    request, df: pl.LazyFrame, agg_expr
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
             condition="sum" in str(agg_expr) and not POLARS_VERSION_LT_136,
             reason="polars raises now",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=using_rapidsmpf
-            and "quantile" in str(agg_expr)
-            and POLARS_VERSION_LT_134
-            and not POLARS_VERSION_LT_133,
-            reason="decimal precision is 38 instead of 9",
         )
     )
     lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
