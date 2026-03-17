@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from rapidsmpf.integrations.single import get_worker_context
 from rapidsmpf.streaming.core.context import Context
 
-
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 

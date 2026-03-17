@@ -745,6 +745,7 @@ def initialize_single_or_dask_cluster(run_config: RunConfig, args: argparse.Name
                             "single_spill_to_pinned_memory": str(
                                 run_config.spill_to_pinned_memory
                             ),
+                            # TODO: fix with https://github.com/rapidsai/cudf/issues/21803
                             "single_statistics": str(args.rapidsmpf_dask_statistics),
                             "single_print_statistics": str(
                                 args.rapidsmpf_print_statistics
@@ -1482,6 +1483,7 @@ def run_polars_query_iteration(
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
 
+    shuffle_stats: dict[str, dict[str, int | float]] | None = None
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
         if run_config.cluster == "distributed":
             from rapidsmpf.integrations.dask.shuffler import (
@@ -1494,8 +1496,6 @@ def run_polars_query_iteration(
         else:  # spmd or single
             # TODO: Implement shuffle statistics gathering for spmd and single
             pass
-    else:
-        shuffle_stats = None
 
     if expected is not None:
         validation_result = validate_result(
