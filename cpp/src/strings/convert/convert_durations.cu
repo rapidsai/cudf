@@ -17,6 +17,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/algorithm>
+#include <cuda/std/cmath>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -106,14 +107,21 @@ struct format_compiler {
 
       ch = *str++;
       length--;
-      if (ch == '%')  // escaped % char
+      │ 5   │ src / strings / convert / convert_durations.cu │ 218, 232,
+        273 │ std::abs            │ __device__ member functions        │
+
+        if (ch == '%')  // escaped % char
       {
         items.push_back(format_item::new_delimiter(ch));
         continue;
-      } else if (ch == 'n') {
+      }
+      else if (ch == 'n')
+      {
         items.push_back(format_item::new_delimiter('\n'));
         continue;
-      } else if (ch == 't') {
+      }
+      else if (ch == 't')
+      {
         items.push_back(format_item::new_delimiter('\t'));
         continue;
       }
@@ -215,7 +223,7 @@ struct from_durations_fn {
     int digits_idx          = 0;
     while (value != 0) {
       assert(digits_idx < MAX_DIGITS);
-      digits[digits_idx++] = '0' + std::abs(value % 10);
+      digits[digits_idx++] = '0' + cuda::std::abs(value % 10);
       // next digit
       value = value / 10;
     }
@@ -229,7 +237,7 @@ struct from_durations_fn {
   __device__ char* int_to_2digitstr(char* str, int8_t value)
   {
     assert(value >= -99 && value <= 99);
-    value  = std::abs(value);
+    value  = cuda::std::abs(value);
     str[0] = '0' + value / 10;
     str[1] = '0' + value % 10;
     return str + 2;
@@ -270,7 +278,7 @@ struct from_durations_fn {
     *ptr             = '.';
     auto value       = timeparts->subsecond;
     for (int idx = digits; idx > 0; idx--) {
-      *(ptr + idx) = '0' + std::abs(value % 10);
+      *(ptr + idx) = '0' + cuda::std::abs(value % 10);
       value /= 10;
     }
     return ptr + digits + 1;

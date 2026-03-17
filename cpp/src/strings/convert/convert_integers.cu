@@ -23,6 +23,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/limits>
+#include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -45,7 +46,7 @@ struct string_to_integer_check_fn {
     if (!p.second || p.first.empty()) { return false; }
 
     auto const d_str = p.first.data();
-    if (d_str[0] == '-' && std::is_unsigned_v<IntegerType>) { return false; }
+    if (d_str[0] == '-' && cuda::std::is_unsigned_v<IntegerType>) { return false; }
 
     auto iter           = d_str + static_cast<int>((d_str[0] == '-' || d_str[0] == '+'));
     auto const iter_end = d_str + p.first.size_bytes();
