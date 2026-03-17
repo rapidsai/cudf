@@ -9,8 +9,7 @@
 #include <cudf/join/mark_join.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-auto const num_keys                       = 1;
-auto constexpr selectivity_num_operations = cudf::size_type{4};
+auto const num_keys = 1;
 
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_left_anti_join(nvbench::state& state,
@@ -106,15 +105,16 @@ void nvbench_filtered_left_anti_join_selectivity(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<NullEquality>, nvbench::enum_type<DataType>>)
 {
-  auto const selectivity = state.get_float64("selectivity");
+  auto const num_operations = static_cast<cudf::size_type>(state.get_int64("num_operations"));
+  auto const selectivity    = state.get_float64("selectivity");
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& left,
-                 cudf::table_view const& right,
-                 cudf::null_equality compare_nulls) {
+  auto join = [num_operations](cudf::table_view const& left,
+                               cudf::table_view const& right,
+                               cudf::null_equality compare_nulls) {
     cudf::filtered_join obj(
       right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
-    for (auto i = 0; i < selectivity_num_operations - 1; i++) {
+    for (auto i = 0; i < num_operations - 1; i++) {
       [[maybe_unused]] auto result = obj.anti_join(left);
     }
     return obj.anti_join(left);
@@ -128,15 +128,16 @@ void nvbench_filtered_left_semi_join_selectivity(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<NullEquality>, nvbench::enum_type<DataType>>)
 {
-  auto const selectivity = state.get_float64("selectivity");
+  auto const num_operations = static_cast<cudf::size_type>(state.get_int64("num_operations"));
+  auto const selectivity    = state.get_float64("selectivity");
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& left,
-                 cudf::table_view const& right,
-                 cudf::null_equality compare_nulls) {
+  auto join = [num_operations](cudf::table_view const& left,
+                               cudf::table_view const& right,
+                               cudf::null_equality compare_nulls) {
     cudf::filtered_join obj(
       right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
-    for (auto i = 0; i < selectivity_num_operations - 1; i++) {
+    for (auto i = 0; i < num_operations - 1; i++) {
       [[maybe_unused]] auto result = obj.semi_join(left);
     }
     return obj.semi_join(left);
@@ -150,14 +151,15 @@ void nvbench_mark_left_semi_join_selectivity(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<NullEquality>, nvbench::enum_type<DataType>>)
 {
-  auto const selectivity = state.get_float64("selectivity");
+  auto const num_operations = static_cast<cudf::size_type>(state.get_int64("num_operations"));
+  auto const selectivity    = state.get_float64("selectivity");
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [](cudf::table_view const& left,
-                 cudf::table_view const& right,
-                 cudf::null_equality compare_nulls) {
+  auto join = [num_operations](cudf::table_view const& left,
+                               cudf::table_view const& right,
+                               cudf::null_equality compare_nulls) {
     cudf::mark_join obj(left, compare_nulls, cudf::get_default_stream());
-    for (auto i = 0; i < selectivity_num_operations - 1; i++) {
+    for (auto i = 0; i < num_operations - 1; i++) {
       [[maybe_unused]] auto result = obj.semi_join(right);
     }
     return obj.semi_join(right);
@@ -196,6 +198,7 @@ NVBENCH_BENCH_TYPES(nvbench_filtered_left_anti_join_selectivity,
   .set_type_axes_names({"NullEquality", "DataType"})
   .add_int64_axis("left_size", {100'000'000})
   .add_int64_axis("right_size", {100'000})
+  .add_int64_axis("num_operations", {4})
   .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_filtered_left_semi_join_selectivity,
@@ -204,6 +207,7 @@ NVBENCH_BENCH_TYPES(nvbench_filtered_left_semi_join_selectivity,
   .set_type_axes_names({"NullEquality", "DataType"})
   .add_int64_axis("left_size", {100'000'000})
   .add_int64_axis("right_size", {100'000})
+  .add_int64_axis("num_operations", {4})
   .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE);
 
 NVBENCH_BENCH_TYPES(nvbench_mark_left_semi_join_selectivity,
@@ -212,4 +216,5 @@ NVBENCH_BENCH_TYPES(nvbench_mark_left_semi_join_selectivity,
   .set_type_axes_names({"NullEquality", "DataType"})
   .add_int64_axis("left_size", {100'000})
   .add_int64_axis("right_size", {100'000'000})
+  .add_int64_axis("num_operations", {4})
   .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE);
