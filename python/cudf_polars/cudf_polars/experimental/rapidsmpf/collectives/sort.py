@@ -392,7 +392,7 @@ def _shuffle_sorted_network(
         raise NotImplementedError("Sorting columns must be column names.")
     num_partitions = rec.state["partition_info"][ir].count
     collective_ids = list(rec.state["collective_id_map"][ir])
-    assert len(collective_ids) == 2
+    assert len(collective_ids) == 2, "Sort must have 2 collective IDs."
 
     channels[ir] = ChannelManager(rec.state["context"])
     nodes[ir] = [
