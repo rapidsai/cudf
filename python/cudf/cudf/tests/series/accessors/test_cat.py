@@ -351,10 +351,10 @@ def test_add_categories_mixed_error():
 def test_categorical_allow_nan():
     gs = cudf.Series([1, 2, np.nan, 10, np.nan, None], nan_as_null=False)
     gs = gs.astype("category")
-    expected_codes = cudf.Series([0, 1, 3, 2, 3, None], dtype="uint8")
+    expected_codes = cudf.Series([0, 1, None, 2, None, None], dtype="uint8")
     assert_eq(expected_codes, gs.cat.codes)
 
-    expected_categories = cudf.Index([1.0, 2.0, 10.0, np.nan], dtype="float64")
+    expected_categories = cudf.Index([1.0, 2.0, 10.0], dtype="float64")
     assert_eq(expected_categories, gs.cat.categories)
 
     actual_ps = gs.to_pandas()

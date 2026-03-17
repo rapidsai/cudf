@@ -71,6 +71,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
+    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
@@ -1791,7 +1792,11 @@ class Index(SingleColumnFrame):
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._column.nullable:
             if is_dtype_obj_string(self.dtype):
-                output = repr(self.to_pandas(nullable=True))
+                output = repr(
+                    self.to_pandas(
+                        nullable=is_pandas_nullable_extension_dtype(self.dtype)
+                    )
+                )
             else:
                 output = repr(self._pandas_repr_compatible().to_pandas())
                 # We should remove all the single quotes
@@ -1832,6 +1837,13 @@ class Index(SingleColumnFrame):
         joined_keywords = ", ".join(keywords)
         lines.append(f"{prior_to_dtype} {joined_keywords})")
         return "\n".join(lines)
+
+    # def _pandas_repr_compatible(self) -> Self:
+    #     """Return Self but with columns prepared for a pandas-like repr."""
+    #     columns = (col._prep_pandas_compat_repr(nan_repr="NaN") for col in self._columns)
+    #     return self._from_data_like_self(
+    #         self._data._from_columns_like_self(columns, verify=False)
+    #     )
 
     @_performance_tracking
     def __getitem__(self, index):
@@ -2332,7 +2344,7 @@ class RangeIndex(Index):
     def hasnans(self) -> bool:
         return False
 
-    def _pandas_repr_compatible(self) -> Self:
+    def _pandas_repr_compatible(self, nan_repr=None) -> Self:
         return self
 
     @_performance_tracking
@@ -5148,7 +5160,7 @@ class IntervalIndex(Index):
     def _is_interval(self) -> bool:
         return True
 
-    def _pandas_repr_compatible(self) -> Self:
+    def _pandas_repr_compatible(self, nan_repr=None) -> Self:
         return self
 
     @property

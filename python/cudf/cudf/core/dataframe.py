@@ -939,7 +939,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     ... ])
     >>> df
        0     1     2     3             4
-    0  5  cats  jump  <NA>           NaN
+    0  5  cats  jump   NaN           NaN
     1  2  dogs   dig   7.5           NaN
     2  3  cows   moo  -2.1  occasionally
 
@@ -955,11 +955,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     3  3  0.3
     >>> df = cudf.from_pandas(pdf)
     >>> df
-       a     b
-    0  0   0.1
-    1  1   0.2
-    2  2  <NA>
-    3  3   0.3
+       a    b
+    0  0  0.1
+    1  1  0.2
+    2  2  NaN
+    3  3  0.3
     """
 
     _PROTECTED_KEYS = frozenset(
@@ -3062,8 +3062,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> df.reindex(new_index)
                     http_status response_time
         Safari                404          0.07
-        Iceweasel            <NA>          <NA>
-        Comodo Dragon        <NA>          <NA>
+        Iceweasel            <NA>           NaN
+        Comodo Dragon        <NA>           NaN
         IE10                  404          0.08
         Chrome                200          0.02
 
@@ -3090,21 +3090,21 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
-        Firefox            200       <NA>
-        Chrome             200       <NA>
-        Safari             404       <NA>
-        IE10               404       <NA>
-        Konqueror          301       <NA>
+        Firefox            200        NaN
+        Chrome             200        NaN
+        Safari             404        NaN
+        IE10               404        NaN
+        Konqueror          301        NaN
 
         Or we can use "axis-style" keyword arguments
 
         >>> df.reindex(columns=['http_status', 'user_agent'])
                 http_status user_agent
-        Firefox            200       <NA>
-        Chrome             200       <NA>
-        Safari             404       <NA>
-        IE10               404       <NA>
-        Konqueror          301       <NA>
+        Firefox            200        NaN
+        Chrome             200        NaN
+        Safari             404        NaN
+        IE10               404        NaN
+        Konqueror          301        NaN
         """
 
         if labels is None and index is None and columns is None:
@@ -3486,19 +3486,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         falcon    bird     389.0
         parrot    bird      24.0
         lion    mammal      80.5
-        monkey  mammal      <NA>
+        monkey  mammal       NaN
         >>> df.reset_index()
             index   class max_speed
         0  falcon    bird     389.0
         1  parrot    bird      24.0
         2    lion  mammal      80.5
-        3  monkey  mammal      <NA>
+        3  monkey  mammal       NaN
         >>> df.reset_index(drop=True)
             class max_speed
         0    bird     389.0
         1    bird      24.0
         2  mammal      80.5
-        3  mammal      <NA>
+        3  mammal       NaN
 
         You can also use ``reset_index`` with MultiIndex.
 
@@ -3519,14 +3519,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         bird   falcon  389.0   fly
                parrot   24.0   fly
         mammal lion     80.5   run
-               monkey   <NA>  jump
+               monkey    NaN  jump
         >>> df.reset_index(level='class')
                  class  speed  type
         name
         falcon    bird  389.0   fly
         parrot    bird   24.0   fly
         lion    mammal   80.5   run
-        monkey  mammal   <NA>  jump
+        monkey  mammal    NaN  jump
         """,
         )
     )
@@ -4988,7 +4988,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ... })
         >>> df.apply(f, axis=1)
         0     1.5
-        1    <NA>
+        1     NaN
         2    6.14
         dtype: float64
 
@@ -5027,9 +5027,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         ...     'e': [7, 1, 6]
         ... })
         >>> df.apply(f, axis=1)
-        0    <NA>
-        1     4.8
-        2     5.0
+        0    NaN
+        1    4.8
+        2    5.0
         dtype: float64
 
         UDFs manipulating string data are allowed, as long as
@@ -6622,7 +6622,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 result_dtype = common_dtype if op in {"max", "min"} else None
                 res = as_column(
                     axis_0_results,
-                    nan_as_null=not cudf.get_option("mode.pandas_compatible"),
+                    nan_as_null=False,
                     dtype=result_dtype,
                 )
 
@@ -6741,9 +6741,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> df
              species  legs wings
         0       bird     2   2.0
-        1     mammal     4  <NA>
+        1     mammal     4   NaN
         2  arthropod     8   0.0
-        3       bird     2  <NA>
+        3       bird     2   NaN
 
         By default, missing values are not considered, and the mode of wings
         are both 0 and 2. The second row of species and legs contains ``NA``,
@@ -6759,7 +6759,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         >>> df.mode(dropna=False)
           species  legs wings
-        0    bird     2  <NA>
+        0    bird     2   NaN
 
         Setting ``numeric_only=True``, only the mode of numeric columns is
         computed, and columns of other types are ignored.
@@ -7372,10 +7372,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         dog    3.0    4.0
         >>> df_multi_level_cols2.stack()
                weight height
-        cat kg    1.0   <NA>
-            m    <NA>    2.0
-        dog kg    3.0   <NA>
-            m    <NA>    4.0
+        cat kg    1.0    NaN
+            m     NaN    2.0
+        dog kg    3.0    NaN
+            m     NaN    4.0
 
         **Prescribing the level(s) to be stacked**
 
@@ -7383,10 +7383,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         >>> df_multi_level_cols2.stack(0)
                     kg     m
-        cat weight   1.0  <NA>
-            height  <NA>   2.0
-        dog weight   3.0  <NA>
-            height  <NA>   4.0
+        cat weight   1.0   NaN
+            height   NaN   2.0
+        dog weight   3.0   NaN
+            height   NaN   4.0
 
         >>> df_multi_level_cols2.stack([0, 1])
         cat  weight  kg    1.0

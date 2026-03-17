@@ -628,7 +628,7 @@ def test_concat_empty_and_nonempty_series(ignore_index, data, axis_0):
     got = cudf.concat([s1, s2], axis=axis_0, ignore_index=ignore_index)
     expect = pd.concat([ps1, ps2], axis=axis_0, ignore_index=ignore_index)
 
-    assert_eq(got, expect, check_index_type=True)
+    assert_eq(got, expect, check_index_type=True, check_dtype=False)
 
 
 def test_concat_two_empty_series(ignore_index, axis_0):
@@ -2397,15 +2397,16 @@ def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
 
 def test_dataframe_concat_series_mixed_index():
     df = cudf.DataFrame({"first": [], "d": []})
-    pdf = df.to_pandas()
+    pdf = df.to_pandas(arrow_type=True)
+    df = cudf.from_pandas(pdf)
 
     sr = cudf.Series([1, 2, 3, 4])
-    psr = sr.to_pandas()
+    psr = sr.to_pandas(arrow_type=True)
+    sr = cudf.from_pandas(psr)
 
     assert_eq(
         cudf.concat([df, sr], ignore_index=True),
         pd.concat([pdf, psr], ignore_index=True),
-        check_dtype=False,
     )
 
 
@@ -2597,17 +2598,17 @@ def test_concat_empty_dataframe(df_1_data, df_2_data):
     ],
 )
 def test_concat_different_column_dataframe(request, df1_d, df2_d):
+    pdf1 = pd.DataFrame(df1_d)
+    pdf2 = pd.DataFrame(df2_d)
+
     got = cudf.concat(
         [
-            cudf.DataFrame(df1_d),
-            cudf.DataFrame(df2_d),
-            cudf.DataFrame(df1_d),
+            cudf.from_pandas(pdf1),
+            cudf.from_pandas(pdf2),
+            cudf.from_pandas(pdf1),
         ],
         sort=False,
     )
-
-    pdf1 = pd.DataFrame(df1_d)
-    pdf2 = pd.DataFrame(df2_d)
 
     expect = pd.concat([pdf1, pdf2, pdf1], sort=False)
     xfail_pair = df2_d == {

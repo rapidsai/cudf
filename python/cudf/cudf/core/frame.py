@@ -1134,9 +1134,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
             inplace=inplace,
         )
 
-    def _pandas_repr_compatible(self) -> Self:
+    def _pandas_repr_compatible(self, nan_repr=None) -> Self:
         """Return Self but with columns prepared for a pandas-like repr."""
-        columns = (col._prep_pandas_compat_repr() for col in self._columns)
+        columns = (
+            col._prep_pandas_compat_repr(nan_repr) for col in self._columns
+        )
         return self._from_data_like_self(
             self._data._from_columns_like_self(columns, verify=False)
         )
@@ -1260,7 +1262,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> ser
         0     5.0
         1     6.0
-        2    <NA>
+        2     NaN
         3     Inf
         4    -Inf
         dtype: float64
@@ -1276,7 +1278,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         >>> idx = cudf.Index([1, 2, None, np.nan, 0.32, np.inf])
         >>> idx
-        Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        Index([1.0, 2.0, NaN, NaN, 0.32, Inf], dtype='float64')
         >>> idx.isna()
         array([False, False,  True,  True, False, False])
         """
@@ -1341,7 +1343,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> ser
         0     5.0
         1     6.0
-        2    <NA>
+        2     NaN
         3     Inf
         4    -Inf
         dtype: float64
@@ -1357,7 +1359,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         >>> idx = cudf.Index([1, 2, None, np.nan, 0.32, np.inf])
         >>> idx
-        Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        Index([1.0, 2.0, NaN, NaN, 0.32, Inf], dtype='float64')
         >>> idx.notna()
         array([ True,  True, False, False,  True,  True])
         """

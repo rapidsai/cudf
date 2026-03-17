@@ -83,7 +83,7 @@ def factorize(
     >>> codes
     array([0, 1, 0, 2])
     >>> uniques
-    Index([1.0, 2.0, <NA>], dtype='float64')
+    Index([1.0, 2.0, NaN], dtype='float64')
     """
     return_cupy_array = isinstance(values, cp.ndarray)
 

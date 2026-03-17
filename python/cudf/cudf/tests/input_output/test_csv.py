@@ -1787,7 +1787,7 @@ def test_csv_writer_empty_dataframe(tmp_path):
     gdf.to_csv(df_fname, index=False)
 
     result = cudf.read_csv(df_fname)
-    expect = cudf.DataFrame({"float_point": [], "integer": []})
+    expect = cudf.DataFrame({"float_point": [], "integer": []}, dtype="str")
     assert_eq(expect, result)
 
 

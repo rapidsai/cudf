@@ -99,11 +99,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Rolling sum with window size 2.
 
     >>> print(a.rolling(2).sum())
-    0    <NA>
+    0     NaN
     1     3.0
     2     5.0
-    3    <NA>
-    4    <NA>
+    3     NaN
+    4     NaN
     dtype: float64
 
     Rolling sum with window size 2 and min_periods 1.
@@ -119,8 +119,8 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     Rolling count with window size 3.
 
     >>> print(a.rolling(3).count())
-    0    <NA>
-    1    <NA>
+    0     NaN
+    1     NaN
     2     3.0
     3     2.0
     4     2.0
@@ -130,11 +130,11 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     center of the window.
 
     >>> print(a.rolling(3, center=True).count())
-    0    <NA>
+    0     NaN
     1     3.0
     2     2.0
     3     2.0
-    4    <NA>
+    4     NaN
     dtype: float64
 
     Rolling max with variable window size specified by an offset;

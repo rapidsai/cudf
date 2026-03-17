@@ -520,6 +520,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
+            if dtype is None and index is not None:
+                dtype = np.dtype("float64")
         if dtype is not None:
             dtype = cudf.dtype(dtype)
         attrs = None
@@ -2586,7 +2588,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         ...     return x + 1.5
         >>> sr.apply(f)
         0     2.5
-        1    <NA>
+        1     NaN
         2     4.5
         dtype: float64
 
@@ -3128,7 +3130,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3     3.0
         4     3.0
         5     3.0
-        6    <NA>
+        6     NaN
         dtype: float64
         >>> sr.value_counts()
         3.0    3
@@ -3161,16 +3163,16 @@ class Series(SingleColumnFrame, IndexedFrame):
         1     2.0
         2     2.0
         3     3.0
-        4    <NA>
+        4     NaN
         5     3.0
         6     3.0
-        7    <NA>
+        7     NaN
         dtype: float64
         >>> sr.value_counts(dropna=False).sort_index()
         1.0     1
         2.0     2
         3.0     3
-        <NA>    2
+        NaN     2
         Name: count, dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])

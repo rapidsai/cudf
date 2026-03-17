@@ -157,7 +157,10 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
             assert np.isnan(idx[nan_idx])
 
     if NA_idx is not None:
-        assert idx[NA_idx] is cudf.NA
+        if idx.dtype.kind == "f":
+            assert np.isnan(idx[NA_idx])
+        else:
+            assert idx[NA_idx] is cudf.NA
 
 
 def test_index_constructor_integer(default_integer_bitwidth):
@@ -234,10 +237,7 @@ def test_index_empty_from_pandas(all_supported_types_as_str):
 def test_empty_index_init():
     pidx = pd.Index([])
     gidx = cudf.Index([])
-    assert pidx.dtype != gidx.dtype
-    assert gidx.dtype == pd.StringDtype(na_value=np.nan)
-
-    assert_eq(pidx.astype(gidx.dtype), gidx)
+    assert_eq(pidx, gidx)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], range(0, 10)])

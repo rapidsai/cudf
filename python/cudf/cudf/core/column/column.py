@@ -344,12 +344,17 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
         return plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
 
     if type_id == plc.TypeId.EMPTY:
-        plc_dtype = plc.DataType(plc.TypeId.INT8)
-        if col.size() == 0:
-            return plc.column_factories.make_empty_column(plc_dtype)
-        return plc.column_factories.make_numeric_column(
-            plc_dtype, col.size(), plc.types.MaskState.ALL_NULL
+        # if col.size() == 0:
+        #     return plc.column_factories.make_empty_column(plc_dtype)
+        return plc.Column.from_scalar(
+            plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+            col.size(),
         )
+        # plc_dtype = plc.DataType(plc.Typed.INT8)
+
+        # return plc.column_factories.make_numeric_column(
+        #     plc_dtype, col.size(), plc.types.MaskState.ALL_NULL
+        # )
 
     normalized_children = [
         _normalize_types_column(child) for child in col.children()
@@ -427,6 +432,16 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"got {child.type().id()}."
                 )
             children = [_rebuild_column(child, [], wrap_buffers=True)]
+    elif isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+        dtype.pyarrow_dtype
+    ):
+        return _wrap_and_validate(
+            plc.Column.from_scalar(
+                plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+                col.size(),
+            ),
+            np.dtype("object"),
+        )
     elif is_dtype_obj_decimal(dtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
@@ -1009,6 +1024,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         if is_dtype_obj_numeric(dtype, include_decimal=False):
             return cudf.core.column.NumericalColumn
 
+        if isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+            dtype.pyarrow_dtype
+        ):
+            return cudf.core.column.StringColumn
+
         raise TypeError(f"Unrecognized dtype: {dtype}")
 
     @staticmethod
@@ -1111,18 +1131,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             f"dtype: {self.dtype}"
         )
 
-    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+    def _prep_pandas_compat_repr(
+        self, nan_repr: str | None = None
+    ) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
 
         * null (datetime/timedelta) = str(pd.NaT)
         * null (other types)= str(pd.NA)
         """
+        if nan_repr is None:
+            nan_repr = "NaN"
         if self.has_nulls():
             return cast(
                 "cudf.core.column.StringColumn",
-                self.astype(np.dtype("object")).fillna(
-                    "NaN"
+                self.astype(np.dtype("str")).fillna(
+                    nan_repr
                     if self._PANDAS_NA_VALUE is np.nan
                     else str(self._PANDAS_NA_VALUE)
                 ),
@@ -2288,7 +2312,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         ).execute_with_args(self, cast_dtype)
 
     def astype(self, dtype: DtypeObj, copy: bool | None = False) -> ColumnBase:
-        # import pdb;pdb.set_trace()
         if self.dtype == dtype:
             result = self
         elif isinstance(dtype, CategoricalDtype):
@@ -2345,7 +2368,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             codes = self._label_encoding(cats=dtype._categories)
         else:
             # Compute categories from self
-            # import pdb;pdb.set_trace()
             cats = self.unique().sort_values()
             # Only dropna if cats actually has nulls (self having nulls doesn't mean cats does)
             if cats.has_nulls():
@@ -3305,6 +3327,8 @@ def as_column(
             column = column.astype(dtype)
         return column
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        if isinstance(arbitrary, pa.NullArray) and dtype is None:
+            dtype = np.dtype("object")
         column = ColumnBase.from_arrow(arbitrary)
         if nan_as_null is not False:
             column = column.nans_to_nulls()
@@ -3475,10 +3499,11 @@ def as_column(
                     pa.types.is_list(pyarrow_array.type)
                     or pa.types.is_struct(pyarrow_array.type)
                     or pa.types.is_string(pyarrow_array.type)
+                    or pa.types.is_null(pyarrow_array.type)
                 )
             ):
                 raise MixedTypeError("Cannot create column with mixed types")
-            if inferred_dtype == "string" and dtype is None:
+            if inferred_dtype in {"string", "empty"} and dtype is None:
                 dtype = arbitrary.dtype
             return as_column(
                 pyarrow_array,

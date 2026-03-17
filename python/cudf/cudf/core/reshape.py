@@ -767,7 +767,7 @@ def get_dummies(
     0   1.0
     1   2.0
     2   NaN
-    3  <NA>
+    3   NaN
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
        a_1.0  a_2.0  a_nan  a_<NA>

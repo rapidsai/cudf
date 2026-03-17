@@ -103,8 +103,8 @@ class NumericalColumn(NumericalBaseColumn):
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Float columns return np.nan as NA value in pandas compatibility mode."""
         if (
-            cudf.get_option("mode.pandas_compatible")
-            and self.dtype.kind == "f"
+            # cudf.get_option("mode.pandas_compatible")
+            self.dtype.kind == "f"
             and not is_pandas_nullable_extension_dtype(self.dtype)
         ):
             return np.nan
@@ -138,9 +138,10 @@ class NumericalColumn(NumericalBaseColumn):
                 plc_result = plc.stream_compaction.drop_nulls(
                     plc_table, [0], 1
                 )
-                plc_result = plc.stream_compaction.drop_nans(
-                    plc_result, [0], 1
-                )
+                if self.dtype.kind == "f":
+                    plc_result = plc.stream_compaction.drop_nans(
+                        plc_result, [0], 1
+                    )
             return cast(
                 "Self",
                 ColumnBase.create(plc_result.columns()[0], dtype=self.dtype),

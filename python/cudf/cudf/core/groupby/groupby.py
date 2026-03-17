@@ -2307,13 +2307,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         2   24.0     90
         3   26.0     80
         >>> gdf.groupby('Score').describe()
-             Speed
-             count   mean   std    min    25%    50%    75%     max
+              Speed
+              count   mean  std    min    25%    50%    75%    max
         Score
-        30        1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
-        50        1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
-        80        1   26.0  <NA>   26.0   26.0   26.0   26.0   26.0
-        90        1   24.0  <NA>   24.0   24.0   24.0   24.0   24.0
+        30        1  370.0  NaN  370.0  370.0  370.0  370.0  370.0
+        50        1  380.0  NaN  380.0  380.0  380.0  380.0  380.0
+        80        1   26.0  NaN   26.0   26.0   26.0   26.0   26.0
+        90        1   24.0  NaN   24.0   24.0   24.0   24.0   24.0
 
         """
         if percentiles is not None:

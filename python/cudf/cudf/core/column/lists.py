@@ -50,7 +50,9 @@ class ListColumn(ColumnBase):
         sliced_plc_col = self.plc_column.list_view().get_sliced_child()
         return ColumnBase.create(sliced_plc_col, self.element_type)
 
-    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+    def _prep_pandas_compat_repr(
+        self, nan_repr: str | None = None
+    ) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
 

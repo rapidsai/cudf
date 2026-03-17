@@ -260,9 +260,9 @@ doc_describe = docfmt_partial(
         >>> df.describe(include='all')
                categorical numeric string
         count            3     3.0      3
-        unique           3    <NA>      3
-        top              d    <NA>      a
-        freq             1    <NA>      1
+        unique           3     NaN      3
+        top              d     NaN      a
+        freq             1     NaN      1
         mean           NaN     2.0    NaN
         std            NaN     1.0    NaN
         min            NaN     1.0    NaN
@@ -330,9 +330,9 @@ doc_describe = docfmt_partial(
         >>> df.describe(exclude=[str])
                categorical numeric
         count            3     3.0
-        unique           3    <NA>
-        top              d    <NA>
-        freq             1    <NA>
+        unique           3     NaN
+        top              d     NaN
+        freq             1     NaN
         mean           NaN     2.0
         std            NaN     1.0
         min            NaN     1.0

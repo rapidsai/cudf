@@ -158,7 +158,7 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
         return np.dtype("datetime64[s]")
     elif pa.types.is_null(typ):
         # Similar to PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY]
-        return np.dtype(np.int8)
+        return np.dtype("object")
     elif isinstance(typ, ArrowIntervalType):
         return cudf.IntervalDtype.from_arrow(typ)
     else:
@@ -256,11 +256,11 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
-        rhs.dtype == "object" and lhs.dtype != "object"
-    )
-    if res:
-        return res
+    # res = (lhs.dtype == "object" and rhs.dtype != "object") or (
+    #     rhs.dtype == "object" and lhs.dtype != "object"
+    # )
+    # if res:
+    #     return res
     return (
         cudf.api.types.is_string_dtype(lhs.dtype)
         and not cudf.api.types.is_string_dtype(rhs.dtype)
@@ -625,7 +625,8 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
 # There's no equivalent to EMPTY in cudf.  We translate EMPTY
 # columns from libcudf to ``int8`` columns of all nulls in Python.
 # ``int8`` is chosen because it uses the least amount of memory.
-PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("int8")
+# PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("int8")
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("object")
 # TIMESTAMP_DAYS is converted to TIMESTAMP_SECONDS to match the default resolution
 # choice used by pandas for datetime.date objects.
 PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.TIMESTAMP_DAYS] = np.dtype(

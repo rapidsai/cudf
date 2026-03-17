@@ -35,7 +35,7 @@ def test_null_series(nrows, all_supported_types_as_str, request):
 
     with pd.option_context("display.max_rows", int(nrows)):
         psrepr = repr(ps)
-        if all_supported_types_as_str != "str":
+        if "category" in psrepr:
             psrepr = psrepr.replace("NaN", "<NA>")
         if "UInt" in psrepr:
             psrepr = psrepr.replace("UInt", "uint")
@@ -78,7 +78,7 @@ def test_float_series(x):
 
 
 @pytest.mark.parametrize(
-    "sr",
+    "psr",
     [
         pd.Series([1, 2, 3], index=[10, 20, None]),
         pd.Series([1, None, 3], name="a", index=[None, "a", "b"]),
@@ -116,15 +116,11 @@ def test_float_series(x):
         ).set_index(["a", "v"])["p"],
     ],
 )
-def test_series_null_index_repr(sr):
-    psr = sr
+def test_series_null_index_repr(psr):
     gsr = cudf.from_pandas(psr)
 
-    expected_repr = repr(psr).replace("NaN", "<NA>")
+    expected_repr = repr(psr)
     actual_repr = repr(gsr)
-    import pdb
-
-    pdb.set_trace()
     assert expected_repr.split() == actual_repr.split()
 
 
@@ -454,8 +450,9 @@ def test_timedelta_series_ns_ms_repr(ser, expected_repr):
 
 
 def test_categorical_series_with_nan_repr():
-    series = cudf.Series([1, 2, np.nan, 10, np.nan, None], nan_as_null=False)
-    series = series.astype("category")
+    series = cudf.Series(
+        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
+    ).astype("category")
 
     expected_repr = textwrap.dedent(
         """
@@ -469,7 +466,6 @@ def test_categorical_series_with_nan_repr():
     Categories (3, float64): [1.0, 2.0, 10.0]
     """
     )
-    # import pdb;pdb.set_trace()
     assert repr(series).split() == expected_repr.split()
 
     sliced_expected_repr = textwrap.dedent(

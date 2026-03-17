@@ -90,7 +90,7 @@ def to_numeric(
     dtype: int16
     >>> s = cudf.Series(['apple', '1.0', '3e3'])
     >>> cudf.to_numeric(s, errors='coerce')
-    0      <NA>
+    0       NaN
     1       1.0
     2    3000.0
     dtype: float64
