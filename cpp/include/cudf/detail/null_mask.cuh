@@ -349,6 +349,7 @@ size_type inplace_bitmask_binop(Binop op,
  * This function performs bitwise operations on segments of bitmasks defined by segment_offsets,
  * writing the results directly to the specified destination masks.
  *
+ * @param[in] op The binary operation to apply
  * @param[out] dest_masks Device span of pointers to destination bitmasks where results will be
  * written
  * @param[in] dest_mask_size The size of each destination mask in bitmask words

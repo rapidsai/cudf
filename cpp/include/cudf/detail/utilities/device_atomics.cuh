@@ -150,7 +150,7 @@ struct typesAtomicCASImpl {
  * int8_t, int16_t, int32_t, int64_t, float, double
  *
  * @param address The address of old value in global or shared memory
- * @param val The value to be computed
+ * @param update_value The value to be computed
  * @param op  The binary operator used for compute
  *
  * @returns The old value at `address`
