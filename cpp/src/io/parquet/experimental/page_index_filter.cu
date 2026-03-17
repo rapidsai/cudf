@@ -62,7 +62,7 @@ struct page_stats_caster : public stats_caster_base {
    * @brief Transforms a page-level stats column to a row-level stats column for non-string types
    *
    * @tparam T The data type of the column - must be non-compound
-   * @param column Mutable view of input page-level device column
+   * @param input_column Mutable view of input page-level device column
    * @param page_nullmask Host nullmask of the input page-level column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
@@ -164,7 +164,7 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @param host_strings Host span of cudf::string_view values in the input page-level host column
    * @param host_chars Host span of string data of the input page-level host column
-   * @param host_nullmask Nullmask of the input page-level host column
+   * @param host_page_nullmask Nullmask of the input page-level host column
    * @param host_null_count Number of nulls in the input page-level host column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page

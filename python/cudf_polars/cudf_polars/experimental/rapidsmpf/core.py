@@ -114,49 +114,66 @@ def evaluate_logical_plan(
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
-        if (
-            config_options.executor.cluster == "distributed"
-        ):  # pragma: no cover; block depends on executor type and Distributed cluster
-            # Distributed execution: Use client.run
+        match config_options.executor.cluster:
+            case "distributed":  # pragma: no cover; block depends on executor type and Distributed cluster
+                # Distributed execution: Use client.run
+                # NOTE: Distributed execution requires Dask for now
+                from cudf_polars.experimental.rapidsmpf.dask import (
+                    evaluate_pipeline_dask,
+                )
 
-            # NOTE: Distributed execution requires Dask for now
-            from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
+                result, metadata_collector = evaluate_pipeline_dask(
+                    evaluate_pipeline,
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case "spmd":
+                from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+                    evaluate_pipeline_spmd_mode,
+                )
 
-            result, metadata_collector = evaluate_pipeline_dask(
-                evaluate_pipeline,
-                ir,
-                partition_info,
-                config_options,
-                stats,
-                collective_id_map,
-                collect_metadata=collect_metadata,
-                query_id=query_id,
-            )
-        elif config_options.executor.cluster == "spmd":
-            from cudf_polars.experimental.rapidsmpf.spmd import (
-                evaluate_pipeline_spmd_mode,
-            )
+                result, metadata_collector = evaluate_pipeline_spmd_mode(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case "ray":
+                from cudf_polars.experimental.rapidsmpf.frontend.ray import (
+                    evaluate_pipeline_ray_mode,
+                )
 
-            result, metadata_collector = evaluate_pipeline_spmd_mode(
-                ir,
-                partition_info,
-                config_options,
-                stats,
-                collective_id_map,
-                collect_metadata=collect_metadata,
-            )
-        else:
-            # Single-process execution: Run locally
-            result, metadata_collector = evaluate_pipeline(
-                ir,
-                partition_info,
-                config_options,
-                stats,
-                collective_id_map,
-                single_process_communicator(Options(), ProgressThread()),
-                collect_metadata=collect_metadata,
-                query_id=query_id,
-            )
+                result, metadata_collector = evaluate_pipeline_ray_mode(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case "single":
+                # Single-process execution: Run locally
+                result, metadata_collector = evaluate_pipeline(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    single_process_communicator(Options(), ProgressThread()),
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case other:
+                raise ValueError(f"Unknown cluster mode: {other}")
 
     return result, metadata_collector
 

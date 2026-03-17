@@ -104,7 +104,7 @@ class RMPFIntegration:  # pragma: no cover
 
         context = get_worker_context()
 
-        shuffler.wait_on(partition_id)
+        shuffler.wait()
         column_names = options["column_names"]
         dtypes = options["dtypes"]
         return DataFrame.from_table(

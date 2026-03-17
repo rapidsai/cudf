@@ -415,7 +415,6 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::string_view word,
  *
  * @param d_edges The offset to the beginning of each word
  * @param d_chars Pointer to the characters of the input column
- * @param offset Maybe non-zero if the input column has been sliced
  * @param d_map Lookup table for the wp_tokenize_fn utility
  * @param d_sub_map 2nd lookup table for the wp_tokenize_fn utility
  * @param unk_id Unknown token id when a token cannot be resolved
@@ -493,7 +492,7 @@ rmm::device_uvector<cudf::size_type> count_tokens(cudf::size_type const* d_token
  *
  * @param input Input strings column
  * @param first_offset Offset to first row in chars for `input`
- * @param last_offset Offset just past the last row in chars for `input`
+ * @param chars_size Size of the character data for `input`
  * @param vocabulary Vocabulary data needed by the tokenizer
  * @param stream Stream used for device allocations and kernel launches
  * @return The tokens (and non-tokens) for the input
@@ -742,7 +741,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::device_span<int64_t const> d_starts,
  *
  * @param input Input strings column
  * @param first_offset Offset to first row in chars for `input`
- * @param last_offset Offset just past the last row in chars for `input`
+ * @param chars_size Size of the character data for `input`
  * @param max_words_per_row Maximum number of words to tokenize in each row
  * @param vocabulary Vocabulary data needed by the tokenizer
  * @param stream Stream used for device allocations and kernel launches
