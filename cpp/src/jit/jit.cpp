@@ -26,18 +26,6 @@
 #include <format>
 #include <future>
 
-#define CUDFRTC_CHECK_CUDART(msg, ...)                                              \
-  do {                                                                              \
-    ::cudaError_t __result = (__VA_ARGS__);                                         \
-    if (__result != ::cudaSuccess) {                                                \
-      auto __errstr = ::std::format("(cudart) Call {} failed, with error ({}): {}", \
-                                    #__VA_ARGS__,                                   \
-                                    static_cast<::int64_t>(__result),               \
-                                    ::cudaGetErrorString(__result));                \
-      CUDF_FAIL(+std::format("{}. {}", msg, __errstr), ::std::runtime_error);       \
-    }                                                                               \
-  } while (0)
-
 namespace CUDF_EXPORT cudf {
 
 namespace {
@@ -46,6 +34,15 @@ rtcx::sha256 hash_string(std::span<char const> input)
 {
   rtcx::sha256_context ctx;
   ctx.update(std::span{reinterpret_cast<uint8_t const*>(input.data()), input.size()});
+  return ctx.finalize();
+}
+
+rtcx::sha256 hash_strings(std::span<char const* const> inputs)
+{
+  rtcx::sha256_context ctx;
+  for (auto const* input : inputs) {
+    ctx.update(std::span{reinterpret_cast<uint8_t const*>(input), std::strlen(input)});
+  }
   return ctx.finalize();
 }
 
@@ -156,7 +153,7 @@ void install_cudf_jit_files(char const* target_dir)
       "mkdtemp");
   }
 
-  install_file_set(target_dir,
+  install_file_set(tmp_dir,
                    rtcx_embed::cudf_jit_embed_files,
                    rtcx_embed::cudf_jit_embed_files_uncompressed_size,
                    rtcx_embed::cudf_jit_embed_file_ranges,
@@ -232,27 +229,24 @@ namespace {
 int32_t get_driver_version()
 {
   int32_t driver_version;
-  CUDFRTC_CHECK_CUDART("Failed to get CUDA driver version", cudaDriverGetVersion(&driver_version));
-
+  CUDF_CUDA_TRY(cudaDriverGetVersion(&driver_version));
   return driver_version;
 }
 
 int32_t get_runtime_version()
 {
   int32_t runtime_version;
-  CUDFRTC_CHECK_CUDART("Failed to get CUDA runtime version",
-                       cudaRuntimeGetVersion(&runtime_version));
-
+  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
   return runtime_version;
 }
 
 int32_t get_current_device_physical_model()
 {
   int32_t device;
-  CUDFRTC_CHECK_CUDART("Failed to get current CUDA device", cudaGetDevice(&device));
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
 
   cudaDeviceProp props;
-  CUDFRTC_CHECK_CUDART("Failed to get device properties", cudaGetDeviceProperties(&props, device));
+  CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, device));
 
   return props.major * 10 + props.minor;
 }
@@ -293,6 +287,10 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   options.emplace_back("-DCUDF_RUNTIME_JIT");
   options.emplace_back("--diag-suppress=47");
   options.emplace_back("--device-int128");
+  options.emplace_back("-std=c++20");
+  options.emplace_back("-default-device");
+  options.emplace_back("--device-debug");
+  options.emplace_back("--generate-line-info");
 
   if (use_pch) {
     options.emplace_back("--pch");
@@ -327,7 +325,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
     name,
     std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
 
-  auto library = rtcx::load_library(cubin, rtcx::binary_type::CUBIN);
+  auto library = rtcx::load_library(cubin);
 
   auto blob = rtcx::blob_t::from_vector(std::move(cubin));
 
@@ -349,11 +347,10 @@ static rtcx::kernel_ref get_kernel(rtcx::library const& lib)
 kernel::kernel(rtcx::library lib) : _library(std::move(lib)), _kernel(get_kernel(_library)) {}
 
 kernel get_kernel(std::string const& name,
-                  std::string const& key,
-                  std::string const& cuda_udf,
+                  std::string const& source_file,
                   std::span<char const* const> header_include_names,
                   std::span<char const* const> headers,
-                  char const* name_expression,
+                  std::string const& name_expression,
                   bool use_cache,
                   bool use_pch,
                   bool log_pch)
@@ -363,29 +360,55 @@ kernel get_kernel(std::string const& name,
   auto& cache  = cudf::get_context().rtc_cache();
   auto& bundle = cudf::get_context().jit_bundle();
 
-  auto runtime     = get_runtime_version();
-  auto driver      = get_driver_version();
-  auto sm          = get_current_device_physical_model();
-  auto bundle_hash = bundle.get_hash();
+  auto runtime                   = get_runtime_version();
+  auto driver                    = get_driver_version();
+  auto sm                        = get_current_device_physical_model();
+  auto header_include_names_hash = hash_strings(header_include_names).to_hex_string();
+  auto headers_hash              = hash_strings(headers).to_hex_string();
+  auto bundle_hash               = bundle.get_hash();
 
-  auto cache_key = std::format(R"***(binary_type=CUBIN
-key={}
+  auto cache_key = std::format(R"***(cuLibrary
+binary_type=CUBIN
 cuda_runtime={}
 cuda_driver={}
 arch={}
-bundle={})***",
-                               key,
+bundle={}
+source_file={}
+header_include_names={}
+headers={}
+name_expression={}
+)***",
                                runtime,
                                driver,
                                sm,
-                               bundle_hash);
+                               bundle_hash,
+                               source_file,
+                               header_include_names_hash.view(),
+                               headers_hash.view(),
+                               name_expression);
 
   auto cache_key_sha256 = hash_string(cache_key);
 
   auto compile = [&] {
-    char const* name_exprs[] = {name_expression};
-    return compile_library_uncached(
-      name.c_str(), cuda_udf.c_str(), header_include_names, headers, name_exprs, use_pch, log_pch);
+    auto bundle_dir       = cudf::get_context().jit_bundle().get_directory();
+    auto source_file_path = std::format("{}/cudf/{}", bundle_dir, source_file);
+    auto source           = rtcx::blob_t::from_file(source_file_path.c_str());
+    CUDF_EXPECTS(
+      source.has_value(),
+      +std::format(
+        "Failed to load UDF CUDA source file: `{}` for compilation, source file does not exist",
+        source_file_path),
+      std::runtime_error);
+    std::string source_str{source->view().begin(), source->view().end()};
+
+    char const* name_exprs[] = {name_expression.c_str()};
+    return compile_library_uncached(name.c_str(),
+                                    source_str.c_str(),
+                                    header_include_names,
+                                    headers,
+                                    name_exprs,
+                                    use_pch,
+                                    log_pch);
   };
 
   if (!use_cache) {
@@ -393,8 +416,8 @@ bundle={})***",
     return lib;
   }
 
-  auto fut = cache.get_or_add_library(
-    cache_key_sha256, rtcx::binary_type::CUBIN, rtcx::library_compile_func::from_functor(compile));
+  auto fut =
+    cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
 
   return fut.get();
 }

@@ -50,34 +50,21 @@ struct [[nodiscard]] kernel {
     return _kernel.max_occupancy_config(dynamic_shared_memory_bytes, block_size_limit);
   }
 
-  void launch(uint32_t grid_dim_x,
-              uint32_t grid_dim_y,
-              uint32_t grid_dim_z,
-              uint32_t block_dim_x,
-              uint32_t block_dim_y,
-              uint32_t block_dim_z,
+  void launch(rtcx::cuda_dim3 grid_dim,
+              rtcx::cuda_dim3 block_dim,
               uint32_t shared_mem_bytes,
               rmm::cuda_stream_view stream,
-              std::span<void*> kernel_params) const
+              void** kernel_params) const
   {
-    return _kernel.launch(grid_dim_x,
-                          grid_dim_y,
-                          grid_dim_z,
-                          block_dim_x,
-                          block_dim_y,
-                          block_dim_z,
-                          shared_mem_bytes,
-                          stream.value(),
-                          kernel_params.data());
+    return _kernel.launch(grid_dim, block_dim, shared_mem_bytes, stream.value(), kernel_params);
   }
 };
 
 kernel get_kernel(std::string const& name,
-                  std::string const& key,
-                  std::string const& cuda_udf,
+                  std::string const& source_file,
                   std::span<char const* const> header_include_names,
                   std::span<char const* const> headers,
-                  char const* name_expression,
+                  std::string const& name_expression,
                   bool use_cache = true,
                   bool use_pch   = true,
                   bool log_pch   = false);

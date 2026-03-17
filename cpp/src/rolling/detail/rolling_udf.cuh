@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include "jit/cache.hpp"
 #include "jit/helpers.hpp"
+#include "jit/jit.hpp"
 #include "jit/parser.hpp"
 #include "jit/util.hpp"
 #include "rolling.hpp"
@@ -20,8 +20,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
 #include <memory>
 
@@ -74,13 +72,13 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto output_view = output->mutable_view();
   cudf::detail::device_scalar<size_type> device_valid_count{0, stream};
 
-  std::string kernel_reflection =
-    jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
-      .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
-                   cudf::type_to_name(output->type()),
-                   udf_agg._operator_name,
-                   preceding_window_str.c_str(),
-                   following_window_str.c_str());
+  auto kernel_reflection =
+    rtcx::reflect_template("cudf::rolling::jit::gpu_rolling_new",
+                           cudf::type_to_name(input.type()),  // list of template arguments
+                           cudf::type_to_name(output->type()),
+                           udf_agg._operator_name,
+                           preceding_window_str,
+                           following_window_str);
 
   cudf::size_type nrows_arg               = input.size();
   auto incol_arg                          = cudf::jit::get_data_ptr(input);
@@ -105,7 +103,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto kernel = cudf::jit::get_udf_kernel(
     "src/rolling/jit/kernel.cu", "src/rolling/jit/kernel.cu", kernel_reflection, cuda_source);
   auto cfg = kernel.max_occupancy_config(0, 0);
-  kernel.launch(cfg.min_grid_size, 1, 1, cfg.block_size, 1, 1, 0, stream, args);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));
 

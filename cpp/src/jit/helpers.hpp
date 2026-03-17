@@ -11,10 +11,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <jit/cache.hpp>
 #include <jit/jit.hpp>
 #include <jit/span.cuh>
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 #include <algorithm>
 #include <span>

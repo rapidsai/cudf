@@ -10,7 +10,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <format>
 #include <future>
 #include <memory>
 #include <optional>
@@ -37,20 +36,7 @@ typedef struct CUstream_st* CUstream;
 
 namespace RTCX_EXPORT rtcx {
 
-using u8    = std::uint8_t;
-using u16   = std::uint16_t;
-using u32   = std::uint32_t;
-using u64   = std::uint64_t;
-using usize = std::size_t;
-using i8    = std::int8_t;
-using i16   = std::int16_t;
-using i32   = std::int32_t;
-using i64   = std::int64_t;
-using isize = std::ptrdiff_t;
-using f32   = float;
-using f64   = double;
-
-inline constexpr usize CACHELINE_ALIGNMENT =
+inline constexpr std::size_t CACHELINE_ALIGNMENT =
   64;  // = std::hardware_destructive_interference_size */
 
 /**
@@ -131,13 +117,13 @@ struct [[nodiscard]] sha256_hex_string {
 
   [[nodiscard]] char const* c_str() const { return data_; }
 
-  static constexpr usize size() { return 64; }
+  static constexpr std::size_t size() { return 64; }
 
-  static sha256_hex_string make(std::span<u8 const, 32> input)
+  static sha256_hex_string make(std::span<std::uint8_t const, 32> input)
   {
     constexpr char const HEX_CHARS[] = "0123456789abcdef";
     sha256_hex_string hex;
-    for (usize i = 0; i < 32; ++i) {
+    for (std::size_t i = 0; i < 32; ++i) {
       hex.data_[i * 2]     = HEX_CHARS[(input[i] >> 4) & 0x0F];
       hex.data_[i * 2 + 1] = HEX_CHARS[input[i] & 0x0F];
     }
@@ -147,23 +133,20 @@ struct [[nodiscard]] sha256_hex_string {
 };
 
 struct [[nodiscard]] sha256 {
-  alignas(16) u8 data_[32];
+  alignas(16) std::uint8_t data_[32];
 
-  constexpr bool operator==(sha256 const& hash) const
-  {
-    return std::equal(std::begin(data_), std::end(data_), std::begin(hash.data_));
-  }
-
-  constexpr bool operator!=(sha256 const& hash) const { return !(*this == hash); }
+  constexpr bool operator==(sha256 const&) const = default;
 
   sha256_hex_string to_hex_string() const { return sha256_hex_string::make(data_); }
+
+  static sha256 parse(std::string_view hex);
 };
 
 struct [[nodiscard]] sha256_hasher {
-  constexpr u64 operator()(sha256 const& obj) const
+  constexpr std::uint64_t operator()(sha256 const& obj) const
   {
     struct u64x4 {
-      alignas(16) u64 v[4];
+      alignas(16) std::uint64_t v[4];
     };
 
     auto value    = std::bit_cast<u64x4>(obj);
@@ -172,7 +155,7 @@ struct [[nodiscard]] sha256_hasher {
     auto const h2 = value.v[2];
     auto const h3 = value.v[3];
 
-    auto mix = [](u64 seed, u64 v) {
+    auto mix = [](std::uint64_t seed, std::uint64_t v) {
       seed ^= v + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
       return seed;
     };
@@ -201,12 +184,12 @@ struct [[nodiscard]] sha256_context {
 
   ~sha256_context();
 
-  void update(std::span<u8 const> data);
+  void update(std::span<std::uint8_t const> data);
 
   sha256 finalize();
 };
 
-enum class binary_type : i8 { LTO_IR = 0, CUBIN = 2, FATBIN = 3, PTX = 4 };
+enum class binary_type : std::int8_t { LTO_IR = 0, CUBIN = 2, FATBIN = 3, PTX = 4 };
 
 /**
  * @brief Represents a binary blob
@@ -216,15 +199,15 @@ enum class binary_type : i8 { LTO_IR = 0, CUBIN = 2, FATBIN = 3, PTX = 4 };
  */
 struct [[nodiscard]] blob_t {
  private:
-  using deallocator = func<void(u8 const*, usize)>;
+  using deallocator = func<void(std::uint8_t const*, std::size_t)>;
 
-  static void noop_deallocator(u8 const*, usize) {}
+  static void noop_deallocator(std::uint8_t const*, std::size_t) {}
 
-  u8 const* data_;
-  usize size_;
+  std::uint8_t const* data_;
+  std::size_t size_;
   deallocator deallocator_;
 
-  blob_t(u8 const* data, usize size, deallocator deallocator)
+  blob_t(std::uint8_t const* data, std::size_t size, deallocator deallocator)
     : data_(data), size_(size), deallocator_(deallocator)
   {
   }
@@ -253,25 +236,43 @@ struct [[nodiscard]] blob_t {
 
   ~blob_t() { deallocator_(data_, size_); }
 
-  [[nodiscard]] std::span<u8 const> view() const { return {data_, size_}; }
+  [[nodiscard]] std::span<std::uint8_t const> view() const { return {data_, size_}; }
 
-  static blob_t from_parts(u8 const* data, usize size, deallocator deallocator)
+  static blob_t from_parts(std::uint8_t const* data, std::size_t size, deallocator deallocator)
   {
     return blob_t{data, size, deallocator};
   }
 
-  static blob_t from_vector(std::vector<u8>&& data);
+  static blob_t from_vector(std::vector<std::uint8_t>&& data);
 
-  static blob_t from_static_data(std::span<u8 const> data);
+  static blob_t from_static_data(std::span<std::uint8_t const> data);
 
   static std::optional<blob_t> from_file(char const* path);
 };
 
 using blob = std::shared_ptr<blob_t>;
 
+/**
+ * @brief Represents the occupancy configuration for a kernel, including the minimum grid size and
+ * the block size required to achieve that occupancy. This information can be used to optimize
+ * kernel launches for maximum performance on the GPU.
+ */
 struct [[nodiscard]] kernel_occupancy_config {
-  i32 min_grid_size = 0;
-  i32 block_size    = 0;
+  std::uint32_t min_grid_size = 0;  //< Minimum grid size to achieve the maximum occupancy
+  std::uint32_t block_size =
+    0;  //< Number of threads per block to achieve the min_grid_size occupancy
+};
+
+/**
+ * @brief Represents the dimensions of a CUDA grid or block, with x, y, and z components. This
+ * struct is used to specify the configuration of kernel launches on the GPU.
+ */
+struct cuda_dim3 {
+  std::uint32_t x = 1;  //< Value for the x dimension
+  std::uint32_t y = 1;  //< Value for the y dimension
+  std::uint32_t z = 1;  //< Value for the z dimension
+
+  [[nodiscard]] constexpr bool is_valid() const { return x > 0 && y > 0 && z > 0; }
 };
 
 /**
@@ -289,35 +290,51 @@ struct [[nodiscard]] kernel_ref {
    * shared memory usage and block size limit. This function queries the CUDA driver for the optimal
    * block size and minimum grid size to achieve maximum occupancy of the kernel on the GPU.
    */
-  kernel_occupancy_config max_occupancy_config(usize dynamic_shared_memory_bytes,
-                                               i32 block_size_limit) const;
+  kernel_occupancy_config max_occupancy_config(std::size_t dynamic_shared_memory_bytes,
+                                               std::int32_t block_size_limit) const;
 
   /**
    * @brief Launches the kernel on the GPU with the specified grid and block dimensions,
    * dynamic shared memory size, stream, and kernel parameters. This function wraps the CUDA driver
    * kernel launch API, providing a convenient interface for executing the kernel with the desired
    * configuration.
-   * @param grid_dim_x The number of blocks in the x-dimension of the grid
-   * @param grid_dim_y The number of blocks in the y-dimension of the grid
-   * @param grid_dim_z The number of blocks in the z-dimension of the grid
-   * @param block_dim_x The number of threads in the x-dimension of each block
-   * @param block_dim_y The number of threads in the y-dimension of each block
-   * @param block_dim_z The number of threads in the z-dimension of each block
+   * @param grid_dim The dimensions of the grid
+   * @param block_dim The dimensions of the block
    * @param shared_mem_bytes The amount of dynamic shared memory (in bytes) to allocate for the
    * kernel
    * @param stream The CUDA stream on which to launch the kernel
    * @param kernel_params A pointer to an array of pointers representing the kernel parameters to be
    * passed to the kernel at launch time
    */
-  void launch(u32 grid_dim_x,
-              u32 grid_dim_y,
-              u32 grid_dim_z,
-              u32 block_dim_x,
-              u32 block_dim_y,
-              u32 block_dim_z,
-              u32 shared_mem_bytes,
+  void launch(cuda_dim3 grid_dim,
+              cuda_dim3 block_dim,
+              std::uint32_t shared_mem_bytes,
               CUstream stream,
               void** kernel_params) const;
+
+  /**
+   * @brief Launches the kernel on the GPU in cooperative mode with the specified grid and block
+   * dimensions, dynamic shared memory size, stream, and kernel parameters. This function wraps the
+   * CUDA driver cooperative kernel launch API, providing a convenient interface for executing the
+   * kernel with the desired configuration.
+   * @param grid_dim The dimensions of the grid
+   * @param block_dim The dimensions of the block
+   * @param shared_mem_bytes The amount of dynamic shared memory (in bytes) to allocate for the
+   * kernel
+   * @param stream The CUDA stream on which to launch the kernel
+   * @param kernel_params A pointer to an array of pointers representing the kernel parameters to be
+   * passed to the kernel at launch time
+   */
+  void launch_cooperative(cuda_dim3 grid_dim,
+                          cuda_dim3 block_dim,
+                          std::uint32_t shared_mem_bytes,
+                          CUstream stream,
+                          void** kernel_params) const;
+
+  /**
+   * @brief Retrieves the underlying CUDA kernel handle
+   */
+  [[nodiscard]] CUkernel get() const { return handle_; }
 
   /**
    * @brief Retrieves the name of the kernel
@@ -339,6 +356,11 @@ struct [[nodiscard]] library_t {
   library_t& operator=(library_t const&) = delete;
   library_t& operator=(library_t&&)      = delete;
   ~library_t();
+
+  /**
+   * @brief Retrieves the underlying CUDA library handle
+   */
+  [[nodiscard]] CUlibrary get() const { return handle_; }
 
   /**
    * @brief Retrieve a kernel from the library by name
@@ -394,27 +416,29 @@ struct [[nodiscard]] compile_params {
 };
 
 struct [[nodiscard]] link_params {
-  char const* name                                   = nullptr;
-  binary_type output_type                            = binary_type::CUBIN;
-  std::span<std::span<u8 const> const> fragments     = {};
-  std::span<binary_type const> fragment_binary_types = {};
-  std::span<char const* const> fragment_names        = {};
-  std::span<char const* const> link_options          = {};
+  char const* name                                         = nullptr;
+  binary_type output_type                                  = binary_type::CUBIN;
+  std::span<std::span<std::uint8_t const> const> fragments = {};
+  std::span<binary_type const> fragment_binary_types       = {};
+  std::span<char const* const> fragment_names              = {};
+  std::span<char const* const> link_options                = {};
 };
+
+namespace detail {
 
 template <typename T>
 struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
   struct entry {
-    u64 last_touched_tick = 0;
+    std::uint64_t last_touched_tick = 0;
     T value;
 
-    void hit(u64 tick) { last_touched_tick = tick; }
+    void hit(std::uint64_t tick) { last_touched_tick = tick; }
   };
 
   std::unordered_map<sha256, entry, sha256_hasher> entries_;
-  usize limit_;
+  std::size_t limit_;
 
-  explicit lru_memory_cache(usize limit) : entries_{}, limit_{limit}
+  explicit lru_memory_cache(std::size_t limit) : entries_{}, limit_{limit}
   {
     // reserve space to avoid rehashing
     entries_.reserve(limit * 2);
@@ -426,7 +450,7 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
 
     auto num_to_purge = (entries_.size() + 1) / 2;
 
-    std::vector<std::pair<sha256, u64>> rankings;
+    std::vector<std::pair<sha256, std::uint64_t>> rankings;
     rankings.reserve(entries_.size());
 
     for (auto const& [key, entry] : entries_) {
@@ -445,7 +469,7 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
     }
   }
 
-  void insert(sha256 const& sha, T&& value, u64 tick)
+  void insert(sha256 const& sha, T&& value, std::uint64_t tick)
   {
     if (limit_ == 0) { return; }
 
@@ -455,26 +479,9 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
   }
 };
 
-struct [[nodiscard]] cache_stats {
-  u64 blob_mem_hits       = 0;
-  u64 blob_mem_misses     = 0;
-  u64 blob_disk_hits      = 0;
-  u64 blob_disk_misses    = 0;
-  u64 library_mem_hits    = 0;
-  u64 library_mem_misses  = 0;
-  u64 library_disk_hits   = 0;
-  u64 library_disk_misses = 0;
-};
-
-struct [[nodiscard]] cache_limits {
-  u32 num_mem_blobs     = 16'384;
-  u32 num_mem_libraries = 16'384;
-  u32 num_disk_entries  = 131'072;
-};
-
 struct cache_stats_counter {
-  struct alignas(CACHELINE_ALIGNMENT) counter {
-    u64 value_ = 0;
+  struct alignas(CACHELINE_ALIGNMENT) entry {
+    std::uint64_t value_ = 0;
 
     void incr()
     {
@@ -482,7 +489,7 @@ struct cache_stats_counter {
       c.fetch_add(1, std::memory_order_relaxed);
     }
 
-    [[nodiscard]] u64 get() const
+    [[nodiscard]] std::uint64_t get() const
     {
       std::atomic_ref c{value_};
       return c.load(std::memory_order_relaxed);
@@ -495,14 +502,33 @@ struct cache_stats_counter {
     }
   };
 
-  counter blob_mem_hits;
-  counter blob_mem_misses;
-  counter blob_disk_hits;
-  counter blob_disk_misses;
-  counter library_mem_hits;
-  counter library_mem_misses;
-  counter library_disk_hits;
-  counter library_disk_misses;
+  entry blob_mem_hits;
+  entry blob_mem_misses;
+  entry blob_disk_hits;
+  entry blob_disk_misses;
+  entry library_mem_hits;
+  entry library_mem_misses;
+  entry library_disk_hits;
+  entry library_disk_misses;
+};
+
+};  // namespace detail
+
+struct [[nodiscard]] cache_stats {
+  std::uint64_t blob_mem_hits       = 0;
+  std::uint64_t blob_mem_misses     = 0;
+  std::uint64_t blob_disk_hits      = 0;
+  std::uint64_t blob_disk_misses    = 0;
+  std::uint64_t library_mem_hits    = 0;
+  std::uint64_t library_mem_misses  = 0;
+  std::uint64_t library_disk_hits   = 0;
+  std::uint64_t library_disk_misses = 0;
+};
+
+struct [[nodiscard]] cache_limits {
+  std::uint32_t num_mem_blobs     = 16'384;
+  std::uint32_t num_mem_libraries = 16'384;
+  std::uint32_t num_disk_entries  = 131'072;
 };
 
 using blob_compile_func    = func<blob()>;
@@ -523,22 +549,36 @@ using library_compile_func = func<std::tuple<library, blob>()>;
  */
 struct cache_t {
  private:
+  bool enabled_;
+
   std::string cache_dir_;
 
   cache_limits limits_;
 
   std::mutex lock_;
 
-  lru_memory_cache<std::shared_future<blob>> blobs_cache_;
+  detail::lru_memory_cache<std::shared_future<blob>> blobs_cache_;
 
-  lru_memory_cache<std::shared_future<library>> libraries_cache_;
+  detail::lru_memory_cache<std::shared_future<library>> libraries_cache_;
 
-  cache_stats_counter counter_;
+  detail::cache_stats_counter counter_;
 
-  alignas(CACHELINE_ALIGNMENT) u64 tick_;
+  alignas(CACHELINE_ALIGNMENT) std::uint64_t tick_;
 
  public:
-  cache_t(std::string cache_dir, cache_limits const& limits);
+  /**
+   * @brief Construct a new cache_t object with the specified cache directory, limits, and options
+   * for preloading and enabling the cache.
+   * @param cache_dir The directory path to be used for on-disk caching of compiled blobs and
+   * libraries
+   * @param limits A cache_limits struct specifying the maximum number of blobs and libraries to
+   * store in the cache before eviction occurs
+   * @param preload A boolean flag indicating whether to preload the cache from disk during
+   * initialization, allowing for faster retrieval of previously compiled kernels at runtime
+   * @param disable A boolean flag indicating whether to disable the cache entirely, preventing any
+   * caching of compiled blobs and libraries in memory
+   */
+  cache_t(std::string cache_dir, cache_limits const& limits, bool preload, bool disable);
   cache_t(cache_t const&)            = delete;
   cache_t& operator=(cache_t const&) = delete;
   cache_t(cache_t&&)                 = delete;
@@ -569,7 +609,6 @@ struct cache_t {
    * @return A shared future that will hold the compiled library once it's available
    */
   [[nodiscard]] std::shared_future<library> get_or_add_library(sha256 const& sha,
-                                                               binary_type type,
                                                                library_compile_func compile);
 
   /**
@@ -599,14 +638,14 @@ struct cache_t {
    *
    * @return The number of blobs currently stored in the in-memory cache
    */
-  [[nodiscard]] usize get_blob_count();
+  [[nodiscard]] std::size_t get_blob_count();
 
   /**
    * @brief Get the current number of libraries stored in the in-memory cache
    *
    * @return The number of libraries currently stored in the in-memory cache
    */
-  [[nodiscard]] usize get_library_count();
+  [[nodiscard]] std::size_t get_library_count();
 
   /**
    * @brief Clear all entries from the in-memory cache, removing all cached blobs and libraries
@@ -625,6 +664,25 @@ struct cache_t {
    * items in the future.
    */
   void clear_disk_store();
+
+  /***
+   * @brief Pre-load the JIT program cache from disk into memory during initialization, allowing for
+   * faster retrieval of previously compiled kernels at runtime.
+   */
+  void preload_from_disk();
+
+  /***
+   * @brief Enable the cache, allowing it to store and retrieve compiled blobs and libraries in
+   * memory.
+   * @param enabled A boolean flag indicating whether to enable (true) or disable (false) the cache.
+   */
+  void enable(bool enabled);
+
+  /**
+   * @brief Get whether the cache is currently enabled or disabled.
+   * @return A boolean value indicating whether the cache is currently enabled (true) or disabled
+   */
+  [[nodiscard]] bool is_enabled();
 };
 
 /**
@@ -634,7 +692,7 @@ struct cache_t {
  * type
  * @return A vector of bytes containing the compiled binary blob
  */
-[[nodiscard]] std::vector<u8> compile(compile_params const& params);
+[[nodiscard]] std::vector<std::uint8_t> compile(compile_params const& params);
 
 /**
  * @brief Load a compiled library from binary data
@@ -643,7 +701,7 @@ struct cache_t {
  * @param type Binary type of the library (e.g., CUBIN, PTX)
  * @return A library object representing the loaded library with launchable kernels
  */
-[[nodiscard]] library load_library(std::span<u8 const> binary, binary_type type);
+[[nodiscard]] library load_library(std::span<std::uint8_t const> binary);
 
 /**
  * @brief Link multiple compiled binary fragments into a single binary blob containing the linked
@@ -653,7 +711,7 @@ struct cache_t {
  * binary type
  * @return A vector of bytes containing the linked library binary
  */
-[[nodiscard]] std::vector<u8> link_library(link_params const& params);
+[[nodiscard]] std::vector<std::uint8_t> link_library(link_params const& params);
 
 /**
  * @brief Demangle a CUDA symbol name into a human-readable form
@@ -688,267 +746,159 @@ void initialize();
  */
 void teardown();
 
-namespace reflection {
+/**
+ * @brief Reflect a boolean value into its CUDA string representation ("true" or "false")
+ * @param value The boolean value to be reflected
+ * @return A string containing the CUDA representation of the boolean value ("true" or "false")
+ */
+std::string reflect_bool(bool value);
 
-template <typename T, T VALUE>
-struct NonType {};
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::uint8_t value);
 
-// Forward declaration.
-template <typename T>
-inline std::string reflect(const T& value);
-template <typename T>
-inline std::string reflect();
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::uint16_t value);
 
-namespace detail {
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::uint32_t value);
 
-template <typename T, typename Enable = void>
-struct ValueStringImpl {
-  static std::string value(const T& x) { return std::to_string(x); }
-};
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::uint64_t value);
 
-template <typename T>
-struct ValueStringImpl<T, typename std::enable_if<std::is_same<T, bool>::value>::type> {
-  static std::string value(const T& x) { return x ? "true" : "false"; }
-};
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::int8_t value);
 
-template <typename T>
-struct ValueStringImpl<T, typename std::enable_if<std::is_enum<T>::value>::type> {
-  static std::string value(const T& x)
-  {
-    using UnderlyingT = typename std::underlying_type<T>::type;
-    return ValueStringImpl<UnderlyingT>::value(static_cast<UnderlyingT>(x));
-  }
-};
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::int16_t value);
 
-template <typename T>
-inline std::string value_string(const T& x)
-{
-  return ValueStringImpl<T>::value(x);
-}
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::int32_t value);
 
-// Returns the demangled name corresponding to the given typeinfo structure.
-inline std::string get_type_name(const std::type_info& typeinfo)
-{
-  const char* mangled_name = typeinfo.name();
-  size_t bufsize           = 0;
-  char* buf                = nullptr;
-  int status;
-  auto demangled_ptr = std::unique_ptr<char, void (*)(void*)>(
-    abi::__cxa_demangle(mangled_name, buf, &bufsize, &status), std::free);
-  // clang-format off
-  switch (status) {
-  case 0: return demangled_ptr.get();  // Demangled successfully
-  case -2: return mangled_name;        // Interpret as plain unmangled name
-  case -1: // fall-through             // Memory allocation failure
-  case -3: // fall-through             // Invalid argument
-  default: return {};
-  }
-  // clang-format on
-}
+/**
+ * @brief Reflect an integer value into its CUDA string representation
+ * @tparam T An integral type (e.g., std::uint8_t, std::int32_t, etc.)
+ * @param value The integer value to be reflected
+ * @return A string containing the CUDA representation of the integer value
+ */
+std::string reflect_int(std::int64_t value);
 
-template <typename>
-class JitifyTypeNameWrapper_ {};
+/**
+ * @brief Reflect a floating-point value into its CUDA string representation
+ * @tparam T A floating-point type (e.g., float, double)
+ * @param value The floating-point value to be reflected
+ * @return A string containing the CUDA representation of the floating-point value
+ */
+std::string reflect_float(float value);
 
-// Returns the demangled name of the given type.
-template <typename T>
-inline std::string get_type_name()
-{
-  // WAR for typeid discarding cv qualifiers on value-types.
-  // Wraps type in dummy template class to preserve cv-qualifiers, then strips
-  // off the wrapper from the resulting string.
-  std::string wrapped_name = get_type_name(typeid(JitifyTypeNameWrapper_<T>));
-  // Note: The reflected name of this class also has namespace prefixes.
-  const std::string wrapper_class_name = "JitifyTypeNameWrapper_<";
-  size_t start                         = wrapped_name.find(wrapper_class_name);
-  if (start == std::string::npos) return {};  // Unexpected error
-  start += wrapper_class_name.size();
-  return wrapped_name.substr(start, wrapped_name.size() - (start + 1));
-}
+/**
+ * @brief Reflect a floating-point value into its CUDA string representation
+ * @tparam T A floating-point type (e.g., float, double)
+ * @param value The floating-point value to be reflected
+ * @return A string containing the CUDA representation of the floating-point value
+ */
+std::string reflect_float(double value);
 
-template <typename T>
-struct ReflectType {
-  const std::string& operator()() const
-  {
-    // Storing this statically means it is cached after the first call.
-    static const std::string type_name = get_type_name<T>();
-    return type_name;
-  }
-};
+/**
+ * @brief Reflect a value of any type into its CUDA string representation, given the type name as a
+ * string
+ * @param type The name of the type to be reflected (e.g., "int", "float", "MyStruct", etc.)
+ * @param value The string representation of the value to be reflected, which will be used in the
+ * resulting CUDA code
+ * @return A string containing the CUDA representation of the value with the specified type
+ */
+std::string reflect_cast(std::string_view type, std::string_view value);
 
-template <typename T, T VALUE>
-struct ReflectType<NonType<T, VALUE>> {
-  std::string operator()() const { return reflect(VALUE); }
-};
-
-}  // namespace detail
-
-/*! A wrapper used for representing types as values. */
-template <typename T>
-struct Type {};
-
-/*! Create an Instance object that contains a const reference to the
- *  value.  We use this to wrap abstract objects from which we want to extract
- *  their type at runtime (e.g., derived type).  This is used to facilitate
- *  templating on derived type when all we know at compile time is abstract
- * type.
+/**
+ * @brief Reflect an enumeration value into its CUDA string representation, given the type name as a
+ * string
+ * @tparam T An enumeration type
+ * @param type The name of the enumeration type to be reflected (e.g., "MyEnum")
+ * @param value The enumeration value to be reflected, which will be cast to its underlying integer
+ * type and represented as a string in the resulting CUDA code
+ * @return A string containing the CUDA representation of the enumeration value with the specified
+ * type
  */
 template <typename T>
-struct Instance {
-  const T& value;
-  Instance(const T& value_arg) : value(value_arg) {}
-};
+  requires(std::is_enum_v<T>)
+std::string reflect_enum(std::string_view type, T value)
+{
+  return reflect_cast(type, reflect_int(static_cast<std::underlying_type_t<T>>(value)));
+}
 
-/*! Create an Instance object from which we can extract the value's run-time
- * type.
- *  \param value The const value to be captured.
+/**
+ * @brief Reflect a template instantiation into its CUDA string representation, given the template
+ * name and its template arguments as strings
+ * @param template_name The name of the template to be reflected (e.g., "MyTemplate")
+ * @param template_args A span of strings representing the template arguments to be reflected, which
+ * will be used in the resulting CUDA code
+ * @return A string containing the CUDA representation of the template instantiation with the
+ * specified template name and arguments
  */
-template <typename T>
-inline Instance<T const> instance_of(T const& value)
-{
-  return Instance<T const>(value);
-}
+std::string reflect_template(std::string_view template_name,
+                             std::span<std::string_view const> template_args);
 
-/*! Generate a code-string for a type.
- *  \code{.cpp}reflect<float>() --> "float"\endcode
+/**
+ * @brief Reflect a template instantiation into its CUDA string representation, given the template
+ * name and its template arguments as strings
+ * @param template_name The name of the template to be reflected (e.g., "MyTemplate")
+ * @param template_args A span of strings representing the template arguments to be reflected, which
+ * will be used in the resulting CUDA code
+ * @return A string containing the CUDA representation of the template instantiation with the
+ * specified template name and arguments
  */
-template <typename T>
-inline std::string reflect()
-{
-  return detail::ReflectType<T>()();
-}
+std::string reflect_template(std::string_view template_name,
+                             std::span<std::string const> template_args);
 
-/*! Generate a code-string for a value.
- *  \code{.cpp}reflect(3.14f) --> "(float)3.14"\endcode
+/**
+ * @brief Reflect a template instantiation into its CUDA string representation, given the template
+ * name and its template arguments as strings
+ * @param template_name The name of the template to be reflected (e.g., "MyTemplate")
+ * @param template_args A span of strings representing the template arguments to be reflected, which
+ * will be used in the resulting CUDA code
+ * @return A string containing the CUDA representation of the template instantiation with the
+ * specified template name and arguments
  */
-template <typename T>
-inline std::string reflect(const T& value)
+template <typename... TemplateArgs>
+  requires((true && ... && std::is_constructible_v<std::string_view, TemplateArgs&>))
+std::string reflect_template(std::string_view template_name, TemplateArgs&&... template_args)
 {
-  return "(" + reflect<T>() + ")" + detail::value_string(value);
+  std::string_view const tparams[sizeof...(TemplateArgs)] = {std::string_view{template_args}...};
+  return reflect_template(template_name, tparams);
 }
-
-/*! Generate a code-string for an integer non-type template argument
- *  (via implicit conversion to int64_t).
- *  \code{.cpp}reflect<7>() --> "(int64_t)7"\endcode
- */
-template <int64_t N>
-inline std::string reflect()
-{
-  return reflect<NonType<int64_t, N>>();
-}
-
-/*! Generate a code-string for a generic non-type template argument.
- *  \code{.cpp} reflect<int,7>() --> "(int)7" \endcode
- */
-template <typename T, T N>
-inline std::string reflect()
-{
-  return reflect<NonType<T, N>>();
-}
-
-/*! Generate a code-string for a type wrapped as a Type instance.
- *  \code{.cpp}reflect(Type<float>()) --> "float"\endcode
- */
-template <typename T>
-inline std::string reflect(Type<T>)
-{
-  return reflect<T>();
-}
-
-/*! Generate a code-string for a type wrapped as an Instance instance.
- *  \code{.cpp}reflect(Instance<float>(3.1f)) --> "float"\endcode
- *  or more simply when passed to a instance_of helper
- *  \code{.cpp}reflect(instance_of(3.1f)) --> "float"\endcodei
- *  This is specifically for the case where we want to extract the run-time
- *    type, i.e., derived type, of an object pointer.
- */
-template <typename T>
-inline std::string reflect(const Instance<T>& value)
-{
-  return detail::get_type_name(typeid(value.value));
-}
-
-// TODO: Would there ever be a need to reflect a string literal?
-/*! Use an existing code string as-is. */
-inline std::string reflect(const std::string& s) { return s; }
-/*! Use an existing code string as-is. */
-inline const char* reflect(const char* s) { return s; }
-#if JITIFY_CPLUSPLUS >= 201703L
-/*! Use an existing code string as-is. */
-inline std::string_view reflect(std::string_view s) { return s; }
-#endif
-
-/*! Create a Type object representing a value's type.
- *  \code{.cpp}type_of(3.14f) -> Type<float>()\endcode
- *  \param [unnamed] The value whose type is to be captured.
- */
-template <typename T>
-inline Type<T> type_of(T&)
-{
-  return Type<T>();
-}
-
-/*! Create a Type object representing a value's type.
- *  \param [unnamed] The const value whose type is to be captured.
- */
-template <typename T>
-inline Type<T const> type_of(const T&)
-{
-  return Type<T const>();
-}
-
-/*! Generate a code-string for a template instantiation. */
-inline std::string reflect_template(const StringVec& args)
-{
-  // Note: The space in " >" is a WAR to avoid '>>' appearing
-  return jitify2::detail::string_join(args, ",", "<", " >");
-}
-
-/*! Generate a code-string for a template instantiation. */
-template <typename... Ts>
-inline std::string reflect_template()
-{
-  return reflect_template({reflect<Ts>()...});
-}
-
-/*! Generate a code-string for a template instantiation. */
-template <typename... Args>
-inline std::string reflect_template(const Args&... args)
-{
-  return reflect_template({reflect(args)...});
-}
-
-/*! Convenience class for generating code-strings for template instantiations.
- */
-class Template {
-  std::string name_;
-
- public:
-  /*! Construct the class.
-   *  \param name The name of the template.
-   */
-  Template(StringRef name) : name_(name) {}
-
-  /*! Generate a code-string for an instantiation of the template. */
-  std::string instantiate(const StringVec& template_args = {}) const
-  {
-    return name_ + reflect_template(template_args);
-  }
-
-  /*! Generate a code-string for an instantiation of the template. */
-  template <typename... TemplateArgs>
-  std::string instantiate() const
-  {
-    return name_ + reflect_template<TemplateArgs...>();
-  }
-
-  /*! Generate a code-string for an instantiation of the template. */
-  template <typename... TemplateArgs>
-  std::string instantiate(const TemplateArgs&... targs) const
-  {
-    return name_ + reflect_template(targs...);
-  }
-};
-
-}  // namespace reflection
 
 }  // namespace RTCX_EXPORT rtcx

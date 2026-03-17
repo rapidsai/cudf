@@ -264,9 +264,6 @@ include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
 rapids_cpm_rapids_logger(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 create_logger_macros(CUDF "cudf::default_logger()" include/cudf)
 
-# find jitify
-include(cmake/thirdparty/get_jitify.cmake)
-
 # find NVTX
 include(cmake/thirdparty/get_nvtx.cmake)
 
@@ -606,7 +603,6 @@ add_library(
   src/io/utilities/row_selection.cpp
   src/io/utilities/type_inference.cu
   src/io/utilities/trie.cu
-  src/jit/cache.cpp
   src/jit/helpers.cpp
   src/jit/jit.cpp
   src/jit/parser.cpp
@@ -1023,12 +1019,8 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 # https://github.com/NVIDIA/cccl/pull/2844
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
-# Compile stringified JIT sources first
-add_dependencies(cudf jitify_preprocess_run)
-
 # Specify the target module library dependencies
 
-# TODO: use runtime nvrtc and nvjitlink and driver
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>

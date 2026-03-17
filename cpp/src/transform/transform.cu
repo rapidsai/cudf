@@ -17,8 +17,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <jit/cache.hpp>
 #include <jit/helpers.hpp>
+#include <jit/jit.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
@@ -44,24 +44,24 @@ auto build_jit_template_params(null_aware is_null_aware,
                                std::span<cudf::jit::input_reflection const> inputs)
 {
   std::vector<std::string> tparams;
-  tparams.emplace_back(rtcx::reflect::value("cudf::null_aware", is_null_aware));
-  tparams.emplace_back(rtcx::reflect::value(may_evaluate_null));
-  tparams.emplace_back(rtcx::reflect::value(has_user_data));
+  tparams.emplace_back(rtcx::reflect_enum("cudf::null_aware", is_null_aware));
+  tparams.emplace_back(rtcx::reflect_bool(may_evaluate_null));
+  tparams.emplace_back(rtcx::reflect_bool(has_user_data));
 
   std::transform(thrust::counting_iterator<size_t>(0),
                  thrust::counting_iterator(span_outputs.size()),
                  std::back_inserter(tparams),
                  [&](auto i) {
-                   return rtcx::reflect::templated("cudf::jit::span_accessor",
-                                                   {span_outputs[i], std::to_string(i)});
+                   return rtcx::reflect_template(
+                     "cudf::jit::span_accessor", span_outputs[i], std::to_string(i));
                  });
 
   std::transform(thrust::counting_iterator<size_t>(0),
                  thrust::counting_iterator(column_outputs.size()),
                  std::back_inserter(tparams),
                  [&](auto i) {
-                   return rtcx::reflect::templated("cudf::jit::column_accessor",
-                                                   {column_outputs[i], std::to_string(i)});
+                   return rtcx::reflect_template(
+                     "cudf::jit::column_accessor", column_outputs[i], std::to_string(i));
                  });
 
   std::transform(thrust::counting_iterator<size_t>(0),
@@ -95,7 +95,7 @@ kernel build_transform_kernel(std::string_view kernel_name,
           cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
       : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto kernel_reflection = rtcx::reflect::templated(
+  auto kernel_reflection = rtcx::reflect_template(
     kernel_name,
     build_jit_template_params(
       is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_reflections));
@@ -128,7 +128,7 @@ kernel build_span_kernel(std::string_view kernel_name,
           cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
       : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto kernel_reflection = rtcx::reflect::templated(
+  auto kernel_reflection = rtcx::reflect_template(
     kernel_name,
     build_jit_template_params(
       is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, input_reflections));
@@ -180,7 +180,7 @@ void launch_column_output_kernel(kernel const& kernel,
   void* args[] = {&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
 
   auto cfg = kernel.max_occupancy_config(0, 0);
-  kernel.launch(cfg.min_grid_size, 1, 1, cfg.block_size, 1, 1, 0, stream, args);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 template <typename T>
@@ -205,7 +205,7 @@ void launch_span_kernel(kernel const& kernel,
 
   auto kernel_ref = kernel.get();
   auto cfg        = kernel_ref.max_occupancy_config(0, 0);
-  kernel_ref.launch(cfg.min_grid_size, 1, 1, cfg.block_size, 1, 1, 0, stream, args);
+  kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 std::tuple<rmm::device_buffer, size_type> and_null_mask(size_type row_size,

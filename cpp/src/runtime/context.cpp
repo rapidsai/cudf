@@ -34,11 +34,16 @@ void context::ensure_jit_cache_initialized()
     std::filesystem::create_directories(_config.jit_bundle_dir);
     std::filesystem::create_directories(_config.jit_pch_dir);
 
-    _rtc_cache = std::make_unique<rtcx::cache_t>(
-      _config.rtc_cache_dir,
-      rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
-                         .num_mem_libraries = _config.kernel_cache_limit_process,
-                         .num_disk_entries  = _config.kernel_cache_limit_disk});
+    rtcx::initialize();
+
+    auto limits = rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
+                                     .num_mem_libraries = _config.kernel_cache_limit_process,
+                                     .num_disk_entries  = _config.kernel_cache_limit_disk};
+
+    _rtc_cache = std::make_unique<rtcx::cache_t>(_config.rtc_cache_dir,
+                                                 limits,
+                                                 bool{_config.preload_jit_cache},
+                                                 bool{_config.disable_jit_cache});
     // note that jit_bundle depends on rtc_cache, so we ensure rtc_cache is initialized first.
     _jit_bundle = std::make_unique<jit_bundle_t>(_config.jit_bundle_dir, *_rtc_cache);
   });
@@ -66,10 +71,7 @@ std::string const& context::get_jit_pch_dir() const { return _config.jit_pch_dir
 
 void context::initialize_components(init_flags flags)
 {
-  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) {
-    rtcx::initialize();
-    ensure_jit_cache_initialized();
-  }
+  if (has_flag(flags, init_flags::INIT_JIT_CACHE)) { ensure_jit_cache_initialized(); }
 
   if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
 }
@@ -113,8 +115,11 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    bool dump_codegen               = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
-    bool use_jit                    = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool dump_codegen      = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit           = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool preload_jit_cache = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
+    bool disable_jit_cache = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
+
     auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16384U);
     auto kernel_cache_limit_disk    = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 131'072U);
 
@@ -126,6 +131,8 @@ void initialize(init_flags flags)
 
     context_config cfg{.dump_codegen               = dump_codegen,
                        .use_jit                    = use_jit,
+                       .preload_jit_cache          = preload_jit_cache,
+                       .disable_jit_cache          = disable_jit_cache,
                        .rtc_cache_dir              = rtc_cache_dir,
                        .jit_bundle_dir             = jit_bundle_dir,
                        .jit_pch_dir                = jit_pch_dir,

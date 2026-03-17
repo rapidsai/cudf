@@ -20,7 +20,8 @@ enum class init_flags : std::uint32_t {
   LOAD_NVCOMP = 1 << 0,
   /// @brief Initialize the JIT program cache during initialization
   INIT_JIT_CACHE = 1 << 1,
-  DEFAULT        = INIT_JIT_CACHE,
+  /// @brief Pre-load the JIT program cache from disk during initialization
+  DEFAULT = INIT_JIT_CACHE,
   /// @brief All initialization steps
   ALL = LOAD_NVCOMP | INIT_JIT_CACHE
 };

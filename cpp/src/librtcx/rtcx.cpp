@@ -20,7 +20,9 @@
 #include <syscall.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <cerrno>
+#include <charconv>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -60,7 +62,7 @@ extern "C" {
                    std::runtime_error);                                                   \
       auto __errstr = ::std::format("(cuda) expression `{}` failed, with error ({}): {}", \
                                     #__VA_ARGS__,                                         \
-                                    static_cast<::rtcx::i64>(__result),                   \
+                                    static_cast<::std::int64_t>(__result),                \
                                     __enum_str);                                          \
       RTCX_FAIL(__errstr, ::std::runtime_error);                                          \
     }                                                                                     \
@@ -74,34 +76,32 @@ extern "C" {
       char const* __enum_msg  = ::cudaGetErrorString(__result);                                 \
       auto __errstr = ::std::format("(cudart) expression `{}` failed, with error ({}: {}): {}", \
                                     #__VA_ARGS__,                                               \
-                                    static_cast<::rtcx::i64>(__result),                         \
+                                    static_cast<::std::int64_t>(__result),                      \
                                     __enum_name,                                                \
                                     __enum_msg);                                                \
       RTCX_FAIL(__errstr, ::std::runtime_error);                                                \
     }                                                                                           \
   } while (0)
 
-#define RTCX_CHECK_NVRTC(params, program, ...)                                             \
+#define RTCX_CHECK_NVRTC(...)                                                              \
   do {                                                                                     \
     ::nvrtcResult __result = (__VA_ARGS__);                                                \
-    ::rtcx::log_nvrtc_result(params, program, __result);                                   \
     if (__result != ::NVRTC_SUCCESS) {                                                     \
       auto __errstr = ::std::format("(nvrtc) expression `{}` failed, with error ({}): {}", \
                                     #__VA_ARGS__,                                          \
-                                    static_cast<::rtcx::i64>(__result),                    \
+                                    static_cast<::std::int64_t>(__result),                 \
                                     ::rtcx::nvrtc->GetErrorString(__result));              \
       RTCX_FAIL(__errstr, ::std::runtime_error);                                           \
     }                                                                                      \
   } while (0)
 
-#define RTCX_CHECK_NVJITLINK(params, handle, ...)                                              \
+#define RTCX_CHECK_NVJITLINK(...)                                                              \
   do {                                                                                         \
     ::nvJitLinkResult __result = (__VA_ARGS__);                                                \
-    ::rtcx::log_nvJitLink_result(params, handle, __result);                                    \
     if (__result != ::NVJITLINK_SUCCESS) {                                                     \
       auto __errstr = ::std::format("(nvJitLink) expression `{}` failed, with error ({}): {}", \
                                     #__VA_ARGS__,                                              \
-                                    static_cast<::rtcx::i64>(__result),                        \
+                                    static_cast<::std::int64_t>(__result),                     \
                                     ::rtcx::get_nvJitLinkResultString(__result));              \
       RTCX_FAIL(__errstr, ::std::runtime_error);                                               \
     }                                                                                          \
@@ -109,14 +109,70 @@ extern "C" {
 
 namespace RTCX_EXPORT rtcx {
 
+namespace {
+
+template <typename StringType>
+std::string join_strings(std::span<StringType> strings, std::string_view separator)
+{
+  if (strings.empty()) { return {}; }
+
+  if (strings.size() == 1) { return std::string{strings[0].begin(), strings[0].end()}; }
+
+  auto total_size = std::transform_reduce(
+    strings.begin(),
+    strings.end(),
+    size_t{0},
+    [](size_t total, size_t str_size) { return total + str_size; },
+    [](auto const& str) { return str.size(); });
+
+  auto separator_size = separator.size() * (strings.size() - 1);
+
+  std::string result;
+  result.reserve(total_size + separator_size);
+
+  for (size_t i = 0; i < strings.size(); ++i) {
+    result.append(strings[i].begin(), strings[i].end());
+    if (i != (strings.size() - 1)) { result.append(separator); }
+  }
+
+  return result;
+}
+
+}  // namespace
+
 void log_warning(std::string_view message)
 {
-  std::fprintf(stdout, "RTCX WARNING: %.*s\n", static_cast<i32>(message.size()), message.data());
+  std::fprintf(
+    stdout, "[RTCX WARNING] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
 }
 
 void log_error(std::string_view message)
 {
-  std::fprintf(stderr, "RTCX ERROR: %.*s\n", static_cast<i32>(message.size()), message.data());
+  std::fprintf(
+    stderr, "[RTCX ERROR] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
+}
+
+void log_trace(std::string_view message)
+{
+  std::fprintf(
+    stdout, "[RTCX TRACE] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
+}
+
+sha256 sha256::parse(std::string_view hex)
+{
+  RTCX_EXPECTS(
+    hex.size() == 64,
+    std::format(
+      "Invalid SHA256 hex string length, expected 64 got {} (sha: `{}`)", hex.size(), hex),
+    std::invalid_argument);
+  sha256 hash;
+  for (std::size_t i = 0; i < 32; ++i) {
+    auto hex_byte  = hex.substr(i * 2, 2);
+    auto [ptr, ec] = std::from_chars(hex_byte.begin(), hex_byte.end(), hash.data_[i], 16);
+    RTCX_EXPECTS(
+      ec == std::errc(), "Invalid hex character in SHA256 string", std::invalid_argument);
+  }
+  return hash;
 }
 
 sha256_context::sha256_context() : ectx_(nullptr)
@@ -133,7 +189,7 @@ sha256_context::~sha256_context()
   if (ectx_ != nullptr) { EVP_MD_CTX_free(ectx_); }
 }
 
-void sha256_context::update(std::span<u8 const> data)
+void sha256_context::update(std::span<std::uint8_t const> data)
 {
   RTCX_EXPECTS(EVP_DigestUpdate(ectx_, data.data(), data.size()) == 1,
                "EVP_DigestUpdate failed",
@@ -143,7 +199,7 @@ void sha256_context::update(std::span<u8 const> data)
 sha256 sha256_context::finalize()
 {
   sha256 hash;
-  u32 length = 0;
+  std::uint32_t length = 0;
   RTCX_EXPECTS(EVP_DigestFinal_ex(ectx_, hash.data_, &length) == 1,
                "EVP_DigestFinal_ex failed",
                std::runtime_error);
@@ -164,6 +220,7 @@ sha256 sha256_context::finalize()
   DO_IT(OccupancyMaxPotentialBlockSize) \
   DO_IT(LaunchKernel)                   \
   DO_IT(LaunchKernelEx)                 \
+  DO_IT(LaunchCooperativeKernel)        \
   DO_IT(KernelGetName)                  \
   DO_IT(LibraryLoadData)                \
   DO_IT(LibraryGetKernel)               \
@@ -216,15 +273,10 @@ void* load_dll(std::string_view base_name, std::span<std::string const> names)
     if (handle != nullptr) { return handle; }
   }
 
-  std::string tried_names = std::accumulate(
-    names.begin(), names.end(), std::string{}, [&](std::string acc, std::string const& name) {
-      if (!acc.empty()) { acc += ", "; }
-      acc += name;
-      return acc;
-    });
-
-  RTCX_FAIL(std::format("Failed to load dynamic library `{}` (tried: {})", base_name, tried_names),
-            std::runtime_error);
+  RTCX_FAIL(
+    std::format(
+      "Failed to load dynamic library `{}` (tried: {})", base_name, join_strings(names, ", ")),
+    std::runtime_error);
 }
 
 void* get_symbol(char const* lib_name, void* handle, char const* sym_name)
@@ -238,9 +290,9 @@ void* get_symbol(char const* lib_name, void* handle, char const* sym_name)
   return sym;
 }
 
-inline constexpr i32 major_version(i32 version) { return version / 1000; }
+inline constexpr std::int32_t major_version(std::int32_t version) { return version / 1000; }
 
-inline constexpr i32 minor_version(i32 version) { return (version % 1000) / 10; }
+inline constexpr std::int32_t minor_version(std::int32_t version) { return (version % 1000) / 10; }
 
 struct LibCuda {
   void* _handle = nullptr;
@@ -288,11 +340,10 @@ struct LibNVRTC {
 
   static void* _load()
   {
-    i32 cuda_version;
+    std::int32_t cuda_version;
     RTCX_CHECK_CUDART(cudaRuntimeGetVersion(&cuda_version));
-
-    i32 major = major_version(cuda_version);
-    i32 minor = minor_version(cuda_version);
+    std::int32_t major = major_version(cuda_version);
+    std::int32_t minor = minor_version(cuda_version);
 
     std::string lib_names[] = {std::format("libnvrtc.so.{}.{}", major, minor),
                                std::format("libnvrtc.so.{}", major),
@@ -328,11 +379,10 @@ struct LibNVJitLink {
 
   static void* _load()
   {
-    i32 cuda_version;
+    std::int32_t cuda_version;
     RTCX_CHECK_CUDART(cudaRuntimeGetVersion(&cuda_version));
-
-    i32 major = major_version(cuda_version);
-    i32 minor = minor_version(cuda_version);
+    std::int32_t major = major_version(cuda_version);
+    std::int32_t minor = minor_version(cuda_version);
 
     std::string lib_names[] = {std::format("libnvJitLink.so.{}.{}", major, minor),
                                std::format("libnvJitLink.so.{}", major),
@@ -364,6 +414,8 @@ void initialize()
 {
   std::call_once(*init_libraries_flag, [] {
     cuda.emplace(LibCuda::_load());
+    RTCX_EXPECTS(
+      cuda->Init(0) == CUDA_SUCCESS, "Failed to initialize CUDA driver API", std::runtime_error);
     nvrtc.emplace(LibNVRTC::_load());
     nvjitlink.emplace(LibNVJitLink::_load());
   });
@@ -407,8 +459,9 @@ char const* get_nvJitLinkResultString(nvJitLinkResult result)
     case NVJITLINK_ERROR_LTO_NOT_ENABLED: return "NVJITLINK_ERROR_LTO_NOT_ENABLED";
 #endif
     default:
-      RTCX_FAIL(std::format("Unrecognized nvJitLinkResult type: ({})", static_cast<i64>(result)),
-                std::runtime_error);
+      RTCX_FAIL(
+        std::format("Unrecognized nvJitLinkResult type: ({})", static_cast<std::int64_t>(result)),
+        std::runtime_error);
   }
 }
 
@@ -420,7 +473,7 @@ char const* binary_type_string(binary_type type)
     case binary_type::FATBIN: return "FATBIN";
     case binary_type::PTX: return "PTX";
     default:
-      RTCX_FAIL(std::format("Unrecognized binary_type: ({})", static_cast<i64>(type)),
+      RTCX_FAIL(std::format("Unrecognized binary_type: ({})", static_cast<std::int64_t>(type)),
                 std::runtime_error);
   }
 }
@@ -433,9 +486,9 @@ nvJitLinkInputType to_nvjitlink_input_type(binary_type bin_type)
     case binary_type::FATBIN: return NVJITLINK_INPUT_FATBIN;
     case binary_type::PTX: return NVJITLINK_INPUT_PTX;
     default:
-      RTCX_FAIL(
-        std::format("Unrecognized binary type for linking: ({}) ", static_cast<i64>(bin_type)),
-        std::logic_error);
+      RTCX_FAIL(std::format("Unrecognized binary type for linking: ({}) ",
+                            static_cast<std::int64_t>(bin_type)),
+                std::logic_error);
   }
 }
 
@@ -443,12 +496,12 @@ void log_nvrtc_result(compile_params const& params,
                       nvrtcProgram program,
                       nvrtcResult compile_result)
 {
-  if (program == nullptr) { return; }
+  if (program == nullptr || compile_result == NVRTC_SUCCESS) { return; }
 
-  usize log_size;
+  std::size_t log_size;
   if (auto errc = nvrtc->GetProgramLogSize(program, &log_size); errc != NVRTC_SUCCESS) {
     RTCX_FAIL(std::format("Failed to get NVRTC program log size with error ({}): {}",
-                          static_cast<i64>(errc),
+                          static_cast<std::int64_t>(errc),
                           nvrtc->GetErrorString(errc)),
               std::runtime_error);
   }
@@ -460,7 +513,7 @@ void log_nvrtc_result(compile_params const& params,
 
   if (auto errc = nvrtc->GetProgramLog(program, log.data()); errc != NVRTC_SUCCESS) {
     RTCX_FAIL(std::format("Failed to get NVRTC program log with error ({}): {}",
-                          static_cast<i64>(errc),
+                          static_cast<std::int64_t>(errc),
                           nvrtc->GetErrorString(errc)),
               std::runtime_error);
   }
@@ -484,7 +537,7 @@ void log_nvrtc_result(compile_params const& params,
     "NVRTC Compilation for `{}` {} ({}): {}.\nHeaders:\n{}\n\nOptions:\n{}\n\nLog:\n\t{}",
     params.name == nullptr ? "<unnamed>" : params.name,
     status_str,
-    static_cast<i64>(compile_result),
+    static_cast<std::int64_t>(compile_result),
     nvrtc->GetErrorString(compile_result),
     headers_str,
     options_str,
@@ -501,12 +554,12 @@ void log_nvJitLink_result(link_params const& params,
                           nvJitLinkHandle handle,
                           nvJitLinkResult link_result)
 {
-  if (handle == nullptr) { return; }
+  if (handle == nullptr || link_result == NVJITLINK_SUCCESS) { return; }
 
-  usize info_log_size;
+  std::size_t info_log_size;
   if (auto errc = nvjitlink->GetInfoLogSize(handle, &info_log_size); errc != NVJITLINK_SUCCESS) {
     RTCX_FAIL(std::format("Failed to get nvJitLink info log size with error ({}): {}",
-                          static_cast<i64>(errc),
+                          static_cast<std::int64_t>(errc),
                           get_nvJitLinkResultString(errc)),
               std::runtime_error);
   }
@@ -516,17 +569,17 @@ void log_nvJitLink_result(link_params const& params,
     info_log.resize(info_log_size);
     if (auto errc = nvjitlink->GetInfoLog(handle, info_log.data()); errc != NVJITLINK_SUCCESS) {
       RTCX_FAIL(std::format("Failed to get nvJitLink info log with error ({}): {}",
-                            static_cast<i64>(errc),
+                            static_cast<std::int64_t>(errc),
                             get_nvJitLinkResultString(errc)),
                 std::runtime_error);
     }
   }
   info_log.resize(info_log_size == 0 ? 0 : (info_log_size - 1));
 
-  usize error_log_size;
+  std::size_t error_log_size;
   if (auto errc = nvjitlink->GetErrorLogSize(handle, &error_log_size); errc != NVJITLINK_SUCCESS) {
     RTCX_FAIL(std::format("Failed to get nvJitLink error log size with error ({}): {}",
-                          static_cast<i64>(errc),
+                          static_cast<std::int64_t>(errc),
                           get_nvJitLinkResultString(errc)),
               std::runtime_error);
   }
@@ -537,7 +590,7 @@ void log_nvJitLink_result(link_params const& params,
     error_log.resize(error_log_size);
     if (auto errc = nvjitlink->GetErrorLog(handle, error_log.data()); errc != NVJITLINK_SUCCESS) {
       RTCX_FAIL(std::format("Failed to get nvJitLink error log with error ({}): {}",
-                            static_cast<i64>(errc),
+                            static_cast<std::int64_t>(errc),
                             get_nvJitLinkResultString(errc)),
                 std::runtime_error);
     }
@@ -566,7 +619,7 @@ void log_nvJitLink_result(link_params const& params,
     params.name == nullptr ? "<unnamed>" : params.name,
     binary_type_str,
     status_str,
-    static_cast<i64>(link_result),
+    static_cast<std::int64_t>(link_result),
     get_nvJitLinkResultString(link_result),
     fragments_str,
     link_options_str,
@@ -582,17 +635,18 @@ void log_nvJitLink_result(link_params const& params,
 
 }  // namespace
 
-blob_t blob_t::from_vector(std::vector<u8>&& data)
+blob_t blob_t::from_vector(std::vector<std::uint8_t>&& data)
 {
-  auto ptr = new std::vector<u8>(std::move(data));
+  auto ptr = new std::vector<std::uint8_t>(std::move(data));
   return blob_t::from_parts(
-    ptr->data(), ptr->size(), blob_t::deallocator{ptr, [](void* user_data, u8 const*, usize) {
-                                                    delete reinterpret_cast<std::vector<u8>*>(
-                                                      user_data);
-                                                  }});
+    ptr->data(),
+    ptr->size(),
+    blob_t::deallocator{ptr, [](void* user_data, std::uint8_t const*, std::size_t) {
+                          delete reinterpret_cast<std::vector<std::uint8_t>*>(user_data);
+                        }});
 }
 
-blob_t blob_t::from_static_data(std::span<u8 const> data)
+blob_t blob_t::from_static_data(std::span<std::uint8_t const> data)
 {
   return blob_t::from_parts(data.data(), data.size(), blob_t::noop_deallocator);
 }
@@ -603,63 +657,61 @@ std::vector<unsigned char> compile(compile_params const& params)
   RTCX_EXPECTS(params.source != nullptr, "Fragment source must not be null", std::logic_error);
 
   nvrtcProgram program = nullptr;
-
-  RTCX_CHECK_NVRTC(params,
-                   program,
-                   nvrtc->CreateProgram(&program,
+  RTCX_CHECK_NVRTC(nvrtc->CreateProgram(&program,
                                         params.source,
                                         params.name,
-                                        static_cast<i32>(params.headers.size()),
+                                        static_cast<std::int32_t>(params.headers.size()),
                                         params.headers.data(),
                                         params.header_include_names.data()));
 
   RTCX_DEFER([&] { nvrtc->DestroyProgram(&program); });
 
   for (auto* name_expr : params.name_expressions) {
-    RTCX_CHECK_NVRTC(params, program, nvrtc->AddNameExpression(program, name_expr));
+    RTCX_CHECK_NVRTC(nvrtc->AddNameExpression(program, name_expr));
   }
 
-  // TODO: log is printed twice when warnings are raised
-  RTCX_CHECK_NVRTC(
-    params,
-    program,
-    nvrtc->CompileProgram(program, static_cast<i32>(params.options.size()), params.options.data()));
+  auto compile_result = nvrtc->CompileProgram(
+    program, static_cast<std::int32_t>(params.options.size()), params.options.data());
+  log_nvrtc_result(params, program, compile_result);
+  RTCX_CHECK_NVRTC(compile_result);
 
   switch (params.target_type) {
-    case binary_type::LTO_IR: {
-      usize lto_ir_size;
-      RTCX_CHECK_NVRTC(params, program, nvrtc->GetLTOIRSize(program, &lto_ir_size));
-
-      std::vector<unsigned char> lto_ir;
-      lto_ir.resize(lto_ir_size);
-
-      RTCX_CHECK_NVRTC(
-        params, program, nvrtc->GetLTOIR(program, reinterpret_cast<char*>(lto_ir.data())));
-
-      return lto_ir;
-
-    } break;
     case binary_type::CUBIN: {
-      usize cubin_size;
-      RTCX_CHECK_NVRTC(params, program, nvrtc->GetCUBINSize(program, &cubin_size));
-
+      std::size_t cubin_size;
+      RTCX_CHECK_NVRTC(nvrtc->GetCUBINSize(program, &cubin_size));
       std::vector<unsigned char> cubin;
       cubin.resize(cubin_size);
-      RTCX_CHECK_NVRTC(
-        params, program, nvrtc->GetCUBIN(program, reinterpret_cast<char*>(cubin.data())));
-
+      RTCX_CHECK_NVRTC(nvrtc->GetCUBIN(program, reinterpret_cast<char*>(cubin.data())));
       return cubin;
-
     } break;
-    default: RTCX_FAIL("Unsupported binary type for compiling fragment", std::logic_error);
+    case binary_type::LTO_IR: {
+      std::size_t lto_ir_size;
+      RTCX_CHECK_NVRTC(nvrtc->GetLTOIRSize(program, &lto_ir_size));
+      std::vector<unsigned char> lto_ir;
+      lto_ir.resize(lto_ir_size);
+      RTCX_CHECK_NVRTC(nvrtc->GetLTOIR(program, reinterpret_cast<char*>(lto_ir.data())));
+      return lto_ir;
+    } break;
+    case binary_type::PTX: {
+      std::size_t ptx_size;
+      RTCX_CHECK_NVRTC(nvrtc->GetPTXSize(program, &ptx_size));
+      std::vector<unsigned char> ptx;
+      ptx.resize(ptx_size);
+      RTCX_CHECK_NVRTC(nvrtc->GetPTX(program, reinterpret_cast<char*>(ptx.data())));
+      return ptx;
+    } break;
+    default:
+      RTCX_FAIL(std::format("Unsupported binary type for compiling fragment: {}",
+                            binary_type_string(params.target_type)),
+                std::logic_error);
   }
 }
 
-kernel_occupancy_config kernel_ref::max_occupancy_config(usize dynamic_shared_memory_bytes,
-                                                         i32 block_size_limit) const
+kernel_occupancy_config kernel_ref::max_occupancy_config(std::size_t dynamic_shared_memory_bytes,
+                                                         std::int32_t block_size_limit) const
 {
-  i32 min_grid_size;
-  i32 block_size;
+  std::int32_t min_grid_size;
+  std::int32_t block_size;
   RTCX_CHECK_CUDA(cuda->OccupancyMaxPotentialBlockSize(&min_grid_size,
                                                        &block_size,
                                                        reinterpret_cast<CUfunction>(handle_),
@@ -667,34 +719,28 @@ kernel_occupancy_config kernel_ref::max_occupancy_config(usize dynamic_shared_me
                                                        dynamic_shared_memory_bytes,
                                                        block_size_limit));
 
-  return kernel_occupancy_config{.min_grid_size = min_grid_size, .block_size = block_size};
+  return kernel_occupancy_config{.min_grid_size = static_cast<std::uint32_t>(min_grid_size),
+                                 .block_size    = static_cast<std::uint32_t>(block_size)};
 }
 
-void kernel_ref::launch(u32 grid_dim_x,
-                        u32 grid_dim_y,
-                        u32 grid_dim_z,
-                        u32 block_dim_x,
-                        u32 block_dim_y,
-                        u32 block_dim_z,
-                        u32 shared_mem_bytes,
+void kernel_ref::launch(cuda_dim3 grid_dim,
+                        cuda_dim3 block_dim,
+                        std::uint32_t shared_mem_bytes,
                         CUstream stream,
                         void** kernel_params) const
 {
-  RTCX_EXPECTS(grid_dim_x > 0 && grid_dim_y > 0 && grid_dim_z > 0,
-               "Grid dimensions must be greater than zero",
-               std::logic_error);
-  RTCX_EXPECTS(block_dim_x > 0 && block_dim_y > 0 && block_dim_z > 0,
-               "Block dimensions must be greater than zero",
-               std::logic_error);
+  RTCX_EXPECTS(grid_dim.is_valid(), "Grid dimensions must be greater than zero", std::logic_error);
+  RTCX_EXPECTS(
+    block_dim.is_valid(), "Block dimensions must be greater than zero", std::logic_error);
   RTCX_EXPECTS(
     kernel_params != nullptr, "Kernel parameters pointer must not be null", std::logic_error);
 
-  CUlaunchConfig cfg{.gridDimX       = grid_dim_x,
-                     .gridDimY       = grid_dim_y,
-                     .gridDimZ       = grid_dim_z,
-                     .blockDimX      = block_dim_x,
-                     .blockDimY      = block_dim_y,
-                     .blockDimZ      = block_dim_z,
+  CUlaunchConfig cfg{.gridDimX       = grid_dim.x,
+                     .gridDimY       = grid_dim.y,
+                     .gridDimZ       = grid_dim.z,
+                     .blockDimX      = block_dim.x,
+                     .blockDimY      = block_dim.y,
+                     .blockDimZ      = block_dim.z,
                      .sharedMemBytes = shared_mem_bytes,
                      .hStream        = stream,
                      .attrs          = nullptr,
@@ -702,6 +748,30 @@ void kernel_ref::launch(u32 grid_dim_x,
 
   RTCX_CHECK_CUDA(
     cuda->LaunchKernelEx(&cfg, reinterpret_cast<CUfunction>(handle_), kernel_params, nullptr));
+}
+
+void kernel_ref::launch_cooperative(cuda_dim3 grid_dim,
+                                    cuda_dim3 block_dim,
+                                    std::uint32_t shared_mem_bytes,
+                                    CUstream stream,
+                                    void** kernel_params) const
+{
+  RTCX_EXPECTS(grid_dim.is_valid(), "Grid dimensions must be greater than zero", std::logic_error);
+  RTCX_EXPECTS(
+    block_dim.is_valid(), "Block dimensions must be greater than zero", std::logic_error);
+  RTCX_EXPECTS(
+    kernel_params != nullptr, "Kernel parameters pointer must not be null", std::logic_error);
+
+  RTCX_CHECK_CUDA(cuda->LaunchCooperativeKernel(reinterpret_cast<CUfunction>(handle_),
+                                                grid_dim.x,
+                                                grid_dim.y,
+                                                grid_dim.z,
+                                                block_dim.x,
+                                                block_dim.y,
+                                                block_dim.z,
+                                                shared_mem_bytes,
+                                                stream,
+                                                kernel_params));
 }
 
 std::string_view kernel_ref::get_name() const
@@ -718,7 +788,7 @@ library_t::~library_t()
   }
 }
 
-library load_library(std::span<u8 const> binary, binary_type type)
+library load_library(std::span<std::uint8_t const> binary)
 {
   CUlibrary handle;
 
@@ -736,7 +806,7 @@ library load_library(std::span<u8 const> binary, binary_type type)
   return library;
 }
 
-std::vector<u8> link_library(link_params const& params)
+std::vector<std::uint8_t> link_library(link_params const& params)
 {
   RTCX_EXPECTS(params.name != nullptr, "Link output name must not be null", std::logic_error);
   RTCX_EXPECTS(params.output_type == binary_type::CUBIN || params.output_type == binary_type::PTX,
@@ -755,55 +825,44 @@ std::vector<u8> link_library(link_params const& params)
   }
 
   nvJitLinkHandle handle = nullptr;
-
-  RTCX_CHECK_NVJITLINK(params,
-                       handle,
-                       nvjitlink->Create(&handle,
-                                         static_cast<u32>(params.link_options.size()),
+  RTCX_CHECK_NVJITLINK(nvjitlink->Create(&handle,
+                                         static_cast<std::uint32_t>(params.link_options.size()),
                                          const_cast<char const**>(params.link_options.data())));
 
   RTCX_DEFER([&] { nvjitlink->Destroy(&handle); });
 
-  for (usize i = 0; i < params.fragments.size(); i++) {
-    auto name                  = params.fragment_names[i];
-    auto fragment              = params.fragments[i];
-    auto bin_type              = params.fragment_binary_types[i];
-    nvJitLinkInputType nv_type = to_nvjitlink_input_type(bin_type);
-
+  for (std::size_t i = 0; i < params.fragments.size(); i++) {
+    auto name     = params.fragment_names[i];
+    auto fragment = params.fragments[i];
+    auto bin_type = to_nvjitlink_input_type(params.fragment_binary_types[i]);
     RTCX_CHECK_NVJITLINK(
-      params,
-      handle,
-      nvjitlink->AddData(handle, nv_type, fragment.data(), fragment.size_bytes(), name));
+      nvjitlink->AddData(handle, bin_type, fragment.data(), fragment.size_bytes(), name));
   }
 
-  RTCX_CHECK_NVJITLINK(params, handle, nvjitlink->Complete(handle));
+  auto link_result = nvjitlink->Complete(handle);
+  log_nvJitLink_result(params, handle, link_result);
+  RTCX_CHECK_NVJITLINK(link_result);
 
   switch (params.output_type) {
     case binary_type::CUBIN: {
-      usize cubin_size;
-      RTCX_CHECK_NVJITLINK(params, handle, nvjitlink->GetLinkedCubinSize(handle, &cubin_size));
-      std::vector<unsigned char> cubin;
+      std::size_t cubin_size;
+      RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedCubinSize(handle, &cubin_size));
+      std::vector<uint8_t> cubin;
       cubin.resize(cubin_size);
-      RTCX_CHECK_NVJITLINK(params, handle, nvjitlink->GetLinkedCubin(handle, cubin.data()));
+      RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedCubin(handle, cubin.data()));
       return cubin;
     } break;
-
     case binary_type::PTX: {
-      usize ptx_size;
-
-      RTCX_CHECK_NVJITLINK(params, handle, nvjitlink->GetLinkedPtxSize(handle, &ptx_size));
-      std::vector<unsigned char> ptx;
+      std::size_t ptx_size;
+      RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedPtxSize(handle, &ptx_size));
+      std::vector<uint8_t> ptx;
       ptx.resize(ptx_size);
-
-      RTCX_CHECK_NVJITLINK(
-        params, handle, nvjitlink->GetLinkedPtx(handle, reinterpret_cast<char*>(ptx.data())));
-
+      RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedPtx(handle, reinterpret_cast<char*>(ptx.data())));
       return ptx;
     } break;
-
     default:
       RTCX_FAIL(std::format("Unsupported output binary type for linking CUDA libraries: ({})",
-                            static_cast<i64>(params.output_type)),
+                            binary_type_string(params.output_type)),
                 std::runtime_error);
   }
 }
@@ -817,7 +876,7 @@ kernel_ref library_t::get_kernel(char const* name) const
 
 std::vector<kernel_ref> library_t::enumerate_kernels() const
 {
-  u32 num_kernels;
+  std::uint32_t num_kernels;
   RTCX_CHECK_CUDA(cuda->LibraryGetKernelCount(&num_kernels, handle_));
 
   std::vector<CUkernel> kernels;
@@ -835,9 +894,8 @@ std::vector<kernel_ref> library_t::enumerate_kernels() const
 
 std::string demangle_cuda_symbol(char const* mangled_name)
 {
-  i32 status;
-  usize length;
-
+  std::int32_t status;
+  std::size_t length;
   char* demangled_name = abi::__cxa_demangle(mangled_name, nullptr, &length, &status);
 
   RTCX_EXPECTS(status == 0, "Demangling CUDA symbol name failed", std::runtime_error);
@@ -864,20 +922,23 @@ namespace {
 
 }  // namespace
 
-cache_t::cache_t(std::string cache_dir, cache_limits const& limits)
-  : cache_dir_{std::move(cache_dir)},
+cache_t::cache_t(std::string cache_dir, cache_limits const& limits, bool preload, bool disable)
+  : enabled_{!disable},
+    cache_dir_{std::move(cache_dir)},
     limits_{limits},
+    lock_{},
     blobs_cache_{limits.num_mem_blobs},
     libraries_cache_{limits.num_mem_libraries},
     tick_{0}
 {
+  if (preload) { preload_from_disk(); }
 }
 
 std::string const& cache_t::get_cache_dir() { return cache_dir_; }
 
 std::optional<blob_t> blob_t::from_file(char const* path)
 {
-  i32 fd = open(path, O_RDONLY);
+  std::int32_t fd = open(path, O_RDONLY);
 
   if (fd == -1) {
     if (errno == ENOENT) {
@@ -898,20 +959,20 @@ std::optional<blob_t> blob_t::from_file(char const* path)
     throw_posix("Failed to close RTCX cache file after memory-mapping", "close");
   }
 
-  auto deleter = +[](u8 const* buffer, usize size) {
-    if (munmap(static_cast<void*>(const_cast<u8*>(buffer)), size) == -1) {
+  auto deleter = +[](std::uint8_t const* buffer, std::size_t size) {
+    if (munmap(static_cast<void*>(const_cast<std::uint8_t*>(buffer)), size) == -1) {
       throw_posix("Failed to unmap RTCX cache file from memory", "munmap");
     }
   };
 
-  return blob_t::from_parts(static_cast<u8 const*>(map), file_size, deleter);
+  return blob_t::from_parts(static_cast<std::uint8_t const*>(map), file_size, deleter);
 }
 
 namespace {
 
 /// @brief retrieves a blob from disk based on the given sha256 hash and object type (e.g. "blob",
-/// "fragment", "library"). Returns nullopt if the file doesn't exist on disk, and throws if any
-/// other error occurs.
+/// "cuLibrary"). Returns nullopt if the file doesn't exist on disk, and throws if any other error
+/// occurs.
 std::optional<blob> get_disk_blob(std::string const& cache_dir,
                                   std::string const& object_type,
                                   sha256 const& sha)
@@ -922,14 +983,13 @@ std::optional<blob> get_disk_blob(std::string const& cache_dir,
   auto blob = blob_t::from_file(path.c_str());
 
   if (!blob.has_value()) { return std::nullopt; }
-  {
-    return std::make_shared<blob_t>(std::move(*blob));
-  }
+  return std::make_shared<blob_t>(std::move(*blob));
 }
 
-void evict_disk_entries(std::string const& cache_dir, u32 limit)
+std::pair<std::vector<std::string>, std::vector<std::chrono::nanoseconds>> get_disk_entries(
+  std::string const& cache_dir)
 {
-  i32 dir = open(cache_dir.c_str(), O_RDONLY | O_DIRECTORY);
+  std::int32_t dir = open(cache_dir.c_str(), O_RDONLY | O_DIRECTORY);
 
   if (dir == -1) { throw_posix("Failed to open RTCX cache directory for evicting", "open"); }
 
@@ -941,10 +1001,10 @@ void evict_disk_entries(std::string const& cache_dir, u32 limit)
   std::vector<std::string> paths;
   std::vector<std::chrono::nanoseconds> access_times;
 
-  isize num_read = 0;
+  std::ptrdiff_t num_read = 0;
 
   while ((num_read = syscall(SYS_getdents64, dir, buffer.data(), buffer.size())) > 0) {
-    isize byte_pos = 0;
+    std::ptrdiff_t byte_pos = 0;
 
     while (byte_pos < num_read) {
       auto* ent = reinterpret_cast<struct dirent64 const*>(buffer.data() + byte_pos);
@@ -977,14 +1037,21 @@ void evict_disk_entries(std::string const& cache_dir, u32 limit)
     throw_posix("Failed to read RTCX cache directory for clearing", "getdents64");
   }
 
+  return {std::move(paths), std::move(access_times)};
+}
+
+void evict_disk_entries(std::string const& cache_dir, std::uint32_t limit)
+{
+  auto [paths, access_times] = get_disk_entries(cache_dir);
+
   if (paths.size() < limit) { return; }
 
-  std::vector<u32> ranking_indices;
+  std::vector<std::uint32_t> ranking_indices;
   ranking_indices.resize(paths.size());
 
   std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
 
-  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](i32 a, i32 b) {
+  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](std::int32_t a, std::int32_t b) {
     return access_times[a] < access_times[b];
   });
 
@@ -1003,14 +1070,14 @@ void evict_disk_entries(std::string const& cache_dir, u32 limit)
 void cache_blob_to_disk(std::string const& cache_dir,
                         std::string const& object_type,
                         sha256 const& sha,
-                        std::span<u8 const> binary,
-                        u32 limit)
+                        std::span<std::uint8_t const> binary,
+                        std::uint32_t limit)
 {
   if (limit > 0) {
     char temp_path[] = "/tmp/rtcx-bin-XXXXXX";
 
     {
-      i32 fd = mkstemp(temp_path);
+      std::int32_t fd = mkstemp(temp_path);
       if (fd == -1) { throw_posix("Failed to create temporary file for RTCX cache", "mkstemp"); }
 
       RTCX_DEFER([&] {
@@ -1061,7 +1128,8 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
   });
 
   // check memory cache
-  if (auto it = blobs_cache_.entries_.find(sha); it != blobs_cache_.entries_.end()) {
+  if (auto it = enabled_ ? blobs_cache_.entries_.find(sha) : blobs_cache_.entries_.end();
+      it != blobs_cache_.entries_.end()) {
     counter_.blob_mem_hits.incr();
 
     // update LRU tick
@@ -1073,7 +1141,8 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
     counter_.blob_mem_misses.incr();
 
     // check disk cache
-    auto disk_blob = get_disk_blob(cache_dir_, "blob", sha);
+    std::optional<blob> disk_blob = std::nullopt;
+    if (enabled_) { disk_blob = get_disk_blob(cache_dir_, "blob", sha); }
 
     std::promise<blob> promise;
     auto fut       = promise.get_future().share();
@@ -1112,7 +1181,6 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
 }
 
 std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
-                                                        binary_type type,
                                                         library_compile_func compile)
 {
   std::atomic_ref tick{tick_};
@@ -1126,7 +1194,8 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
   });
 
   // check memory cache
-  if (auto it = libraries_cache_.entries_.find(sha); it != libraries_cache_.entries_.end()) {
+  if (auto it = enabled_ ? libraries_cache_.entries_.find(sha) : libraries_cache_.entries_.end();
+      it != libraries_cache_.entries_.end()) {
     counter_.library_mem_hits.incr();
 
     // update LRU tick
@@ -1138,7 +1207,8 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
     counter_.library_mem_misses.incr();
 
     // check disk cache
-    auto disk_blob = get_disk_blob(cache_dir_, "library", sha);
+    std::optional<blob> disk_blob = std::nullopt;
+    if (enabled_) { disk_blob = get_disk_blob(cache_dir_, "cuLibrary", sha); }
 
     std::promise<library> promise;
     auto fut       = promise.get_future().share();
@@ -1155,7 +1225,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       lock_.unlock();
       unlocked = true;
 
-      auto lib = load_library((*disk_blob)->view(), type);
+      auto lib = load_library((*disk_blob)->view());
       promise.set_value(std::move(lib));
 
       return ret_fut;
@@ -1174,7 +1244,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       promise.set_value(library);
 
       // store result to disk
-      cache_blob_to_disk(cache_dir_, "library", sha, blob->view(), limits_.num_disk_entries);
+      cache_blob_to_disk(cache_dir_, "cuLibrary", sha, blob->view(), limits_.num_disk_entries);
 
       return ret_fut;
     }
@@ -1207,13 +1277,13 @@ void cache_t::clear_stats()
 
 cache_limits cache_t::get_limits() { return limits_; }
 
-usize cache_t::get_blob_count()
+std::size_t cache_t::get_blob_count()
 {
   std::lock_guard guard{lock_};
   return blobs_cache_.entries_.size();
 }
 
-usize cache_t::get_library_count()
+std::size_t cache_t::get_library_count()
 {
   std::lock_guard guard{lock_};
   return libraries_cache_.entries_.size();
@@ -1227,48 +1297,103 @@ void cache_t::clear_memory_store()
   libraries_cache_.entries_.clear();
 }
 
-void cache_t::clear_disk_store()
+void cache_t::clear_disk_store() { evict_disk_entries(cache_dir_, 0); }
+
+void cache_t::preload_from_disk()
 {
-  i32 dir = open(cache_dir_.c_str(), O_RDONLY | O_DIRECTORY);
+  auto [paths, _] = get_disk_entries(cache_dir_);
 
-  if (dir == -1) { throw_posix("Failed to open RTCX cache directory for clearing", "opendir"); }
+  // TODO(lamarrr): we have promises that may not be fulfilled if errors occur, they need to be handled?
+  // i.e. if the exceptions is caught
 
-  RTCX_DEFER([&] { close(dir); });
+  {
+    std::lock_guard guard{lock_};
+    tick_++;
 
-  std::vector<char> buffer;
-  buffer.resize(8192);
-  std::vector<char> entry_path;
-  entry_path.resize(4096);
+    for (auto& path : paths) {
+      try {
+        auto file_name   = std::filesystem::path{path}.filename().string();
+        auto sha_str_end = file_name.find('.');
+        auto sha_str     = file_name.substr(0, sha_str_end);
+        auto data        = blob_t::from_file(path.c_str());
+        if (!data.has_value()) { continue; }
 
-  isize num_read = 0;
-
-  while ((num_read = syscall(SYS_getdents64, dir, buffer.data(), buffer.size())) > 0) {
-    isize byte_pos = 0;
-
-    while (byte_pos < num_read) {
-      auto* ent = reinterpret_cast<struct dirent64 const*>(buffer.data() + byte_pos);
-
-      if (memcmp(ent->d_name, ".", 2) != 0 && memcmp(ent->d_name, "..", 3) != 0) {
-        RTCX_EXPECTS(ent->d_type != DT_UNKNOWN,
-                     "Found unknown directory entry type in RTCX cache dir",
-                     std::runtime_error);
-
-        if (ent->d_type == DT_REG) {
-          snprintf(entry_path.data(), entry_path.size(), "%s/%s", cache_dir_.c_str(), ent->d_name);
-
-          if (unlink(entry_path.data()) == -1 && errno != ENOENT) {
-            throw_posix("Failed to unlink RTCX cache file during clearing", "unlink");
-          }
+        if (path.ends_with(".blob.bin")) {
+          std::promise<blob> promise;
+          auto fut = promise.get_future().share();
+          promise.set_value(std::make_shared<blob_t>(std::move(*data)));
+          blobs_cache_.insert(sha256::parse(sha_str), std::move(fut), tick_);
+        } else if (path.ends_with(".cuLibrary.bin")) {
+          std::promise<library> promise;
+          auto fut = promise.get_future().share();
+          promise.set_value(load_library(data->view()));
+          libraries_cache_.insert(sha256::parse(sha_str), std::move(fut), tick_);
         }
+      } catch (std::exception const& e) {
+        // ignore any errors during preload
+        log_trace(e.what());
+      } catch (...) {
+        log_trace("Unknown error during preload");
       }
-
-      byte_pos += ent->d_reclen;
     }
   }
+}
 
-  if (num_read == -1) {
-    throw_posix("Failed to read RTCX cache directory for clearing", "getdents64");
-  }
+void cache_t::enable(bool enable)
+{
+  std::lock_guard guard{lock_};
+  enabled_ = enable;
+}
+
+bool cache_t::is_enabled()
+{
+  std::lock_guard guard{lock_};
+  return enabled_;
+}
+
+std::string reflect_bool(bool value) { return std::format("(bool){}", value); }
+
+std::string reflect_int(std::uint8_t value) { return std::format("(unsigned char){}U", value); }
+
+std::string reflect_int(std::uint16_t value) { return std::format("(unsigned short){}U", value); }
+
+std::string reflect_int(std::uint32_t value) { return std::format("(unsigned int){}U", value); }
+
+std::string reflect_int(std::uint64_t value)
+{
+  return std::format("(unsigned long long int){}ULL", value);
+}
+
+std::string reflect_int(std::int8_t value) { return std::format("(signed char){}", value); }
+
+std::string reflect_int(std::int16_t value) { return std::format("(signed short){}", value); }
+
+std::string reflect_int(std::int32_t value) { return std::format("(signed int){}", value); }
+
+std::string reflect_int(std::int64_t value)
+{
+  return std::format("(signed long long int){}LL", value);
+}
+
+std::string reflect_float(float value) { return std::format("(float){}F", value); }
+
+std::string reflect_float(double value) { return std::format("(double){}", value); }
+
+std::string reflect_cast(std::string_view type, std::string_view value)
+{
+  return std::format("(({})({}))", type, value);
+}
+
+std::string reflect_template(std::string_view template_name,
+                             std::span<std::string_view const> template_args)
+{
+  return std::format("{}<{}>", template_name, join_strings(template_args, ", "));
+}
+
+std::string reflect_template(std::string_view template_name,
+                             std::span<std::string const> template_args)
+{
+  return std::format("{}<{}>", template_name, join_strings(template_args, ", "));
 }
 
 }  // namespace RTCX_EXPORT rtcx

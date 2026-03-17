@@ -8,6 +8,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <jit/jit.hpp>
+#include <librtcx/rtcx.hpp>
+#include <runtime/context.hpp>
 
 namespace cudf {
 namespace jit {
@@ -55,10 +57,9 @@ size_type get_projection_size(std::span<std::variant<column_view, scalar_column_
 std::string input_reflection::accessor(int32_t index) const
 {
   auto column_accessor =
-    jitify2::reflection::Template("cudf::jit::column_accessor").instantiate(type_name, index);
+    rtcx::reflect_template("cudf::jit::column_accessor", type_name, rtcx::reflect_int(index));
 
-  return is_scalar ? jitify2::reflection::Template("cudf::jit::scalar_accessor")
-                       .instantiate(column_accessor)
+  return is_scalar ? rtcx::reflect_template("cudf::jit::scalar_accessor", column_accessor)
                    : column_accessor;
 }
 
@@ -71,7 +72,7 @@ std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> ou
 
   if (has_user_data) {
     params.emplace(index++, "void *");
-    params.emplace(index++, jitify2::reflection::reflect<cudf::size_type>());
+    params.emplace(index++, "cudf::size_type");
   }
 
   for (auto& name : output_typenames) {
@@ -139,24 +140,23 @@ kernel get_udf_kernel(std::string const& name,
 {
   CUDF_FUNC_RANGE();
 
-  char const* include_names[] = {"cudf/detail/operation-udf.hpp"};
-
-  char const* sources[] = {udf_cuda_source.c_str()};
+  char const* include_names[]   = {"cudf/detail/operation-udf.hpp"};
+  char const* include_headers[] = {udf_cuda_source.c_str()};
 
   int constexpr min_pch_runtime_version = 12800;  // CUDA 12.8
 
   int runtime_version;
   CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
 
-  return get_kernel(name.c_str(),
-                    "",  // TODO: key
-                    std::format("#include <{}>\n", source_file),
+  return get_kernel(name,
+                    source_file,
                     include_names,
-                    sources,
-                    kernel_name.c_str(),
-                    /*use_cache=*/true,  // TODO: use context config
-                    /*use_pch=*/runtime_version >= min_pch_runtime_version,
-                    true);
+                    include_headers,
+                    kernel_name,
+                    true,  // TODO: use context config
+                    runtime_version >= min_pch_runtime_version,
+                    false  // TODO: use context config
+  );
 }
 
 }  // namespace jit

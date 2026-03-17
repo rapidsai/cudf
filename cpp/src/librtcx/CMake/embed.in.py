@@ -1,7 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-import hashlib,os, lz4.block, zstd
+import hashlib
+import os
 from typing import NamedTuple
+
+import lz4.block
+import zstd
+
 
 def merge_bytes_with_null_terminators(
     bytes_lists: list[bytes],
@@ -15,6 +20,7 @@ def merge_bytes_with_null_terminators(
 
     return merged, ranges
 
+
 class EmbedOutput(NamedTuple):
     cxx_header: str | None
     cxx_source: str | None
@@ -23,9 +29,11 @@ class EmbedOutput(NamedTuple):
     bin_file_data: bytes | None
     hash: bytes
 
+
 def load_file_bytes(file_path: str) -> bytes:
     with open(file_path, "rb") as f:
         return f.read()
+
 
 def compress_bytes(data: bytes, compression: str) -> bytes:
     assert compression in ("none", "lz4", "zstd"), "Invalid compression type"
@@ -38,6 +46,7 @@ def compress_bytes(data: bytes, compression: str) -> bytes:
         )
     elif compression == "zstd":
         return zstd.compress(data, 22)
+
 
 def generate_cxx_source_files_data(
     id: str,
@@ -58,21 +67,23 @@ def generate_cxx_source_files_data(
         else None
     )
 
-    binary_size = len(compressed_files_bytes) if compress else len(uncompressed_files_bytes)
+    binary_size = (
+        len(compressed_files_bytes)
+        if compress
+        else len(uncompressed_files_bytes)
+    )
 
     if compress:
         print(
-            f"-- Compressed {id}'s binary from {len(uncompressed_files_bytes)} bytes to {len(compressed_files_bytes)} bytes (compression ratio: {len(compressed_files_bytes)/len(uncompressed_files_bytes):.2f})"
+            f"-- Compressed {id}'s binary from {len(uncompressed_files_bytes)} bytes to {len(compressed_files_bytes)} bytes (compression ratio: {len(compressed_files_bytes) / len(uncompressed_files_bytes):.2f})"
         )
 
-    merged_dests_bytes, _ = (
-        merge_bytes_with_null_terminators([d.encode("utf-8") for d in dests])
+    merged_dests_bytes, _ = merge_bytes_with_null_terminators(
+        [d.encode("utf-8") for d in dests]
     )
 
-    merged_include_directories_bytes, _ = (
-        merge_bytes_with_null_terminators(
-            [d.encode("utf-8") for d in include_directories]
-        )
+    merged_include_directories_bytes, _ = merge_bytes_with_null_terminators(
+        [d.encode("utf-8") for d in include_directories]
     )
 
     # compute combined sha256 hash of all files
@@ -112,7 +123,7 @@ constexpr char const * {id}_file_destinations[{len(dests)}] =
 
 constexpr range {id}_file_ranges[{len(files_ranges)}] =
 {{
-{",\n".join([f'{{{offset}, {size}}}' for offset, size in files_ranges])}
+{",\n".join([f"{{{offset}, {size}}}" for offset, size in files_ranges])}
 }};
 
 
@@ -130,7 +141,7 @@ rtcx_embed_{id}_files_begin,
 
 constexpr std::uint8_t {id}_hash[{len(hash)}] =
 {{
-{", ".join([f'0x{b:02x}' for b in hash])}
+{", ".join([f"0x{b:02x}" for b in hash])}
 }};
 
 }}
@@ -156,15 +167,18 @@ rtcx_embed_{id}_files_begin:
         hash=hash,
     )
 
+
 def generate_embed(
     id: str,
     file_paths: list[str],
     file_dests: list[str],
     include_directories: list[str],
     compression: str,
-    output_dir: str
+    output_dir: str,
 ):
-    output = generate_cxx_source_files_data( id, file_paths, file_dests, include_directories, compression)
+    output = generate_cxx_source_files_data(
+        id, file_paths, file_dests, include_directories, compression
+    )
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -178,19 +192,27 @@ def generate_embed(
         with open(f"{output_dir}/{output.bin_file_name}", "wb") as f:
             f.write(output.bin_file_data)
 
+
 def main():
-    id : str = "@RTCX_EMBED_PY_ARG__ID@"
-    file_paths_str :str = "@RTCX_EMBED_PY_ARG__FILE_PATHS@"
-    file_dests_str : str = "@RTCX_EMBED_PY_ARG__FILE_DESTS@"
-    include_directories_str : str = "@RTCX_EMBED_PY_ARG__INCLUDE_DIRS@"
-    compression : str = "@RTCX_EMBED_PY_ARG__COMPRESSION@"
-    output_dir : str = "@RTCX_EMBED_PY_ARG__OUTPUT_DIR@"
+    id: str = "@RTCX_EMBED_PY_ARG__ID@"
+    file_paths_str: str = "@RTCX_EMBED_PY_ARG__FILE_PATHS@"
+    file_dests_str: str = "@RTCX_EMBED_PY_ARG__FILE_DESTS@"
+    include_directories_str: str = "@RTCX_EMBED_PY_ARG__INCLUDE_DIRS@"
+    compression: str = "@RTCX_EMBED_PY_ARG__COMPRESSION@"
+    output_dir: str = "@RTCX_EMBED_PY_ARG__OUTPUT_DIR@"
 
-    file_paths = file_paths_str.split(";") if file_paths_str else []
-    file_dests = file_dests_str.split(";") if file_dests_str else []
-    include_directories = include_directories_str.split(";") if include_directories_str else []
+    file_paths = file_paths_str.split(";")
+    file_dests = file_dests_str.split(";")
+    include_directories = include_directories_str.split(";")
 
-    generate_embed(id, file_paths, file_dests, include_directories, compression, output_dir)
+    generate_embed(
+        id,
+        file_paths,
+        file_dests,
+        include_directories,
+        compression,
+        output_dir,
+    )
 
 
 if __name__ == "__main__":

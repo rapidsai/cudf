@@ -33,12 +33,11 @@
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 
-#include <jit/cache.hpp>
 #include <jit/helpers.hpp>
+#include <jit/jit.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
-#include <jit_preprocessed_files/join/jit/filter_join_kernel.cu.jit.hpp>
 
 #include <memory>
 #include <utility>
@@ -49,32 +48,35 @@ namespace detail {
 namespace {
 
 // Build template parameters for JIT kernel
-jitify2::StringVec build_join_filter_template_params(std::vector<column_view> const& left_columns,
-                                                     std::vector<column_view> const& right_columns,
-                                                     bool has_user_data,
-                                                     null_aware is_null_aware)
+std::vector<std::string> build_join_filter_template_params(
+  std::vector<column_view> const& left_columns,
+  std::vector<column_view> const& right_columns,
+  bool has_user_data,
+  null_aware is_null_aware)
 {
-  jitify2::StringVec template_params;
+  std::vector<std::string> template_params;
 
-  template_params.emplace_back(jitify2::reflection::reflect(has_user_data));
-  template_params.emplace_back(jitify2::reflection::reflect(is_null_aware));
+  template_params.emplace_back(rtcx::reflect_bool(has_user_data));
+  template_params.emplace_back(rtcx::reflect_enum("cudf::is_null_aware", is_null_aware));
 
   // Add left column accessors
   for (size_t i = 0; i < left_columns.size(); ++i) {
     auto const& col       = left_columns[i];
     std::string type_name = cudf::type_to_name(col.type());
-    template_params.emplace_back(
-      jitify2::reflection::Template("cudf::jit::join_column_accessor")
-        .instantiate(type_name, std::to_string(i), "cudf::jit::join_side::LEFT"));
+    template_params.emplace_back(rtcx::reflect_template("cudf::jit::join_column_accessor",
+                                                        type_name,
+                                                        std::to_string(i),
+                                                        "cudf::jit::join_side::LEFT"));
   }
 
   // Add right column accessors
   for (size_t i = 0; i < right_columns.size(); ++i) {
     auto const& col       = right_columns[i];
     std::string type_name = cudf::type_to_name(col.type());
-    template_params.emplace_back(
-      jitify2::reflection::Template("cudf::jit::join_column_accessor")
-        .instantiate(type_name, std::to_string(i), "cudf::jit::join_side::RIGHT"));
+    template_params.emplace_back(rtcx::reflect_template("cudf::jit::join_column_accessor",
+                                                        type_name,
+                                                        std::to_string(i),
+                                                        "cudf::jit::join_side::RIGHT"));
   }
 
   return template_params;
@@ -110,8 +112,7 @@ kernel build_join_filter_kernel(std::string const& predicate_code,
   // Build template parameters and kernel name
   auto template_args =
     build_join_filter_template_params(left_columns, right_columns, has_user_data, is_null_aware);
-  auto kernel_name =
-    jitify2::reflection::Template("cudf::join::jit::filter_join_kernel").instantiate(template_args);
+  auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
 
   // Get compiled kernel
   return cudf::jit::get_udf_kernel("src/join/jit/filter_join_kernel.cu",  // TODO: use actual name
@@ -160,7 +161,7 @@ void launch_join_filter_kernel(kernel const& kernel,
                   &user_data_ptr};
 
   auto cfg = kernel.max_occupancy_config(0, 0);
-  kernel.launch(cfg.min_grid_size, 1, 1, cfg.block_size, 1, 1, stream, args);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 // Same join semantics handling as the AST version
@@ -350,15 +351,15 @@ apply_join_semantics(cudf::table_view const& left,
 }
 
 // Build template parameters from AST input specs (preserves expression input order)
-jitify2::StringVec build_join_filter_template_params_from_specs(
+std::vector<std::string> build_join_filter_template_params_from_specs(
   std::vector<row_ir::ast_input_spec> const& input_specs,
   cudf::table_view const& left,
   cudf::table_view const& right,
   null_aware is_null_aware)
 {
-  jitify2::StringVec template_params;
-  template_params.emplace_back(jitify2::reflection::reflect(false));  // has_user_data = false
-  template_params.emplace_back(jitify2::reflection::reflect(is_null_aware));
+  std::vector<std::string> template_params;
+  template_params.emplace_back(rtcx::reflect_bool(false));  // has_user_data = false
+  template_params.emplace_back(rtcx::reflect_enum("cudf::is_null_aware", is_null_aware));
 
   // Scalar columns are appended to the left table's device views,
   // starting at index left.num_columns().
@@ -372,14 +373,13 @@ jitify2::StringVec build_join_filter_template_params_from_specs(
                                ? "cudf::jit::join_side::LEFT"
                                : "cudf::jit::join_side::RIGHT";
       auto type_name       = cudf::type_to_name(table.column(col_spec.column).type());
-      template_params.emplace_back(
-        jitify2::reflection::Template("cudf::jit::join_column_accessor")
-          .instantiate(type_name, std::to_string(col_spec.column), side_str));
+      template_params.emplace_back(rtcx::reflect_template(
+        "cudf::jit::join_column_accessor", type_name, std::to_string(col_spec.column), side_str));
     } else if (std::holds_alternative<row_ir::ast_scalar_input_spec>(spec)) {
       auto const& scalar_spec = std::get<row_ir::ast_scalar_input_spec>(spec);
       auto type_name          = cudf::type_to_name(scalar_spec.ref.get().type());
-      template_params.emplace_back(jitify2::reflection::Template("cudf::jit::join_scalar_accessor")
-                                     .instantiate(type_name, std::to_string(scalar_index++)));
+      template_params.emplace_back(rtcx::reflect_template(
+        "cudf::jit::join_scalar_accessor", type_name, std::to_string(scalar_index++)));
     }
   }
 
@@ -508,8 +508,7 @@ filter_join_indices_jit(cudf::table_view const& left,
   auto const cuda_source =
     cudf::jit::parse_single_function_cuda(filter_result.udf, "GENERIC_JOIN_FILTER_OP");
 
-  auto kernel_name =
-    jitify2::reflection::Template("cudf::join::jit::filter_join_kernel").instantiate(template_args);
+  auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
   auto kernel =
     cudf::jit::get_udf_kernel("src/join/jit/filter_join_kernel.cu",  // TODO: use actual name
                               "src/join/jit/filter_join_kernel.cu",

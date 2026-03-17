@@ -7,6 +7,9 @@
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
+# This function registers a directory of include files to be embedded for JIT compilation. It
+# gathers the specified files, their destinations, and include directories, and stores them in
+# target-specific variables for later use when generating the embed.
 function(jit_add_include_directory)
   set(TARGET ${ARGV0})
   set(OPTIONS "")
@@ -139,8 +142,9 @@ function(jit_embed)
   )
 
   add_custom_target(
-    ${TARGET} ALL DEPENDS ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s
-                          ${OUTPUT_DIR}/${TARGET}.bin
+    ${TARGET} ALL
+    DEPENDS ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
+    COMMENT "Custom target for JIT embed of ${TARGET}"
   )
 
   message(
