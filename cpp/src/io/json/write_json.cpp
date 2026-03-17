@@ -14,6 +14,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -333,6 +334,7 @@ void write_chunked(data_sink* out_sink,
                    json_writer_options const&,
                    rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   auto const total_num_bytes = str_column_view.chars_size(stream) - skip_last_chars;
@@ -354,6 +356,7 @@ void write_json_uncompressed(data_sink* out_sink,
                              json_writer_options const& options,
                              rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
   std::vector<column_name_info> user_column_names = [&]() {
     auto const& metadata = options.get_metadata();
     if (metadata.has_value() and not metadata->schema_info.empty()) {
