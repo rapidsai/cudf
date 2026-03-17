@@ -65,16 +65,16 @@ void nvbench_inner_join_selectivity(
   nvbench::state& state,
   nvbench::type_list<nvbench::enum_type<NullEquality>, nvbench::enum_type<DataType>>)
 {
-  auto constexpr num_keys   = 1;
-  auto const num_operations = static_cast<cudf::size_type>(state.get_int64("num_operations"));
-  auto const selectivity    = state.get_float64("selectivity");
+  auto constexpr num_keys = 1;
+  auto const num_probes   = static_cast<cudf::size_type>(state.get_int64("num_probes"));
+  auto const selectivity  = state.get_float64("selectivity");
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [num_operations](cudf::table_view const& left_input,
-                               cudf::table_view const& right_input,
-                               cudf::null_equality compare_nulls) {
+  auto join = [num_probes](cudf::table_view const& left_input,
+                           cudf::table_view const& right_input,
+                           cudf::null_equality compare_nulls) {
     auto hash_join = cudf::hash_join(right_input, compare_nulls);
-    for (auto i = 0; i < num_operations - 1; i++) {
+    for (auto i = 0; i < num_probes - 1; i++) {
       [[maybe_unused]] auto result = hash_join.inner_join(left_input);
     }
     return hash_join.inner_join(left_input);
@@ -119,5 +119,5 @@ NVBENCH_BENCH_TYPES(nvbench_inner_join_selectivity,
   .set_type_axes_names({"NullEquality", "DataType"})
   .add_int64_axis("left_size", {100'000'000})
   .add_int64_axis("right_size", {100'000})
-  .add_int64_axis("num_operations", {4})
+  .add_int64_axis("num_probes", {4})
   .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE);
