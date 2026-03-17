@@ -355,8 +355,6 @@ struct column_scatterer_impl<struct_view> {
  * source columns to rows in the target columns
  * @param[in] target The set of columns into which values from the source_table
  * are to be scattered
- * @param[in] check_bounds Optionally perform bounds checking on the values of
- * `scatter_map` and throw an error if any of its values are out of bounds.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *

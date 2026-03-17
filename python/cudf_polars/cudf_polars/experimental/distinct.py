@@ -123,7 +123,6 @@ def lower_distinct(
             new_node.schema,
             distinct_keys,
             config_options.executor.shuffle_method,
-            config_options.executor.shuffler_insertion_method,
             new_node,
         )
         partition_info[new_node] = PartitionInfo(count=output_count)
@@ -175,7 +174,6 @@ def _(
                 child.schema,
                 distinct_keys,
                 config_options.executor.shuffle_method,
-                config_options.executor.shuffler_insertion_method,
                 child,
             )
             partition_info[child] = PartitionInfo(

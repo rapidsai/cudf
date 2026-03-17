@@ -379,7 +379,7 @@ class RMPFIntegrationSortedShuffle:  # pragma: no cover
 
         context = get_worker_context()
 
-        shuffler.wait_on(partition_id)
+        shuffler.wait()
         column_names = options["column_names"]
         column_dtypes = options["column_dtypes"]
 
