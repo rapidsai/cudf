@@ -129,7 +129,7 @@ struct mut_strings_column {
 
   static auto make(size_type size,
                    rmm::device_buffer chars,
-                   std::unique_ptr<cudf::column> offsets,
+                   std::unique_ptr<column> offsets,
                    rmm::device_buffer null_mask,
                    size_type null_count)
   {
