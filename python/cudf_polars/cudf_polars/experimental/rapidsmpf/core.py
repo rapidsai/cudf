@@ -152,7 +152,7 @@ def evaluate_pipeline(
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     comm: Communicator,
-    rmpf_context: Context | None = None,
+    rmpf_context: Context,
     *,
     collect_metadata: bool = False,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
@@ -183,91 +183,79 @@ def evaluate_pipeline(
     The output DataFrame and metadata collector.
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
-
-    if rmpf_context is None:
-        raise RuntimeError(
-            "rmpf_context must be provided (e.g. use evaluate_pipeline_single "
-            "for single-cluster mode)."
-        )
+    assert rmpf_context is not None, "RapidsMPF context must be defined."
 
     # Context is provided by the caller (single or distributed).
     br = rmpf_context.br()
-    use_stream_pool = True
-    rmpf_context_manager = contextlib.nullcontext(rmpf_context)
 
-    with rmpf_context_manager as rmpf_context:
-        # Create the IR execution context
-        if use_stream_pool:
-            ir_context = IRExecutionContext(
-                get_cuda_stream=rmpf_context.get_stream_from_pool
-            )
-        else:
-            ir_context = IRExecutionContext.from_config_options(config_options)
+    # Create the IR execution context
+    ir_context = IRExecutionContext(
+        get_cuda_stream=rmpf_context.get_stream_from_pool
+    )
 
-        # Generate network nodes
-        assert rmpf_context is not None, "RapidsMPF context must defined."
-        metadata_collector: list[ChannelMetadata] | None = (
-            [] if collect_metadata else None
+    # Generate network nodes
+    metadata_collector: list[ChannelMetadata] | None = (
+        [] if collect_metadata else None
+    )
+    nodes, output = generate_network(
+        rmpf_context,
+        comm,
+        ir,
+        partition_info,
+        config_options,
+        stats,
+        ir_context=ir_context,
+        collective_id_map=collective_id_map,
+        metadata_collector=metadata_collector,
+    )
+
+    # Run the network
+    with ThreadPoolExecutor(
+        max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
+        thread_name_prefix="cpse",
+    ) as executor:
+        run_actor_network(actors=nodes, py_executor=executor)
+
+    # Extract/return the concatenated result.
+    # Keep chunks alive until after concatenation to prevent
+    # use-after-free with stream-ordered allocations
+    messages = output.release()
+    chunks = [
+        TableChunk.from_message(msg).make_available_and_spill(
+            br, allow_overbooking=True
         )
-        nodes, output = generate_network(
-            rmpf_context,
-            comm,
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            ir_context=ir_context,
-            collective_id_map=collective_id_map,
-            metadata_collector=metadata_collector,
-        )
-
-        # Run the network
-        with ThreadPoolExecutor(
-            max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
-            thread_name_prefix="cpse",
-        ) as executor:
-            run_actor_network(actors=nodes, py_executor=executor)
-
-        # Extract/return the concatenated result.
-        # Keep chunks alive until after concatenation to prevent
-        # use-after-free with stream-ordered allocations
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg).make_available_and_spill(
-                br, allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        dfs: list[DataFrame] = []
-        if chunks:
-            dfs = [
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
-                )
-                for chunk in chunks
-            ]
-            df = _concat(*dfs, context=ir_context)
-        else:
-            # No chunks received - create an empty DataFrame with correct schema
-            stream = ir_context.get_cuda_stream()
-            chunk = empty_table_chunk(ir, rmpf_context, stream)
-            df = DataFrame.from_table(
+        for msg in messages
+    ]
+    dfs: list[DataFrame] = []
+    if chunks:
+        dfs = [
+            DataFrame.from_table(
                 chunk.table_view(),
                 list(ir.schema.keys()),
                 list(ir.schema.values()),
-                stream,
+                chunk.stream,
             )
+            for chunk in chunks
+        ]
+        df = _concat(*dfs, context=ir_context)
+    else:
+        # No chunks received - create an empty DataFrame with correct schema
+        stream = ir_context.get_cuda_stream()
+        chunk = empty_table_chunk(ir, rmpf_context, stream)
+        df = DataFrame.from_table(
+            chunk.table_view(),
+            list(ir.schema.keys()),
+            list(ir.schema.values()),
+            stream,
+        )
 
-        result = df.to_polars()
+    result = df.to_polars()
 
-        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-        # before the Context, which ultimately contains the rmm MR, goes out of scope.
-        del nodes, output, messages, chunks, dfs, df
+    # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+    # before the Context, which ultimately contains the rmm MR, goes out of scope.
+    del nodes, output, messages, chunks, dfs, df
 
-        return result, metadata_collector
+    return result, metadata_collector
 
 
 def lower_ir_graph(

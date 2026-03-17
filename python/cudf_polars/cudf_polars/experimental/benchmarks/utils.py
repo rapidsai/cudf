@@ -737,7 +737,12 @@ def initialize_single_or_dask_cluster(run_config: RunConfig, args: argparse.Name
             try:
                 from rapidsmpf.config import Options
                 from rapidsmpf.integrations.single import setup_worker
-
+            except ImportError as err:
+                raise ImportError(
+                    "rapidsmpf is required for single-cluster rapidsmpf runtime "
+                    "but is not installed."
+                ) from err
+            else:
                 setup_worker(
                     Options(
                         {
@@ -754,11 +759,6 @@ def initialize_single_or_dask_cluster(run_config: RunConfig, args: argparse.Name
                         }
                     ),
                 )
-            except ImportError as err:
-                raise ImportError(
-                    "rapidsmpf is required for single-cluster rapidsmpf runtime "
-                    "but is not installed."
-                ) from err
         return None
 
     from distributed import Client
