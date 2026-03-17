@@ -411,8 +411,14 @@ def spmd_gather_statistics(
     On rank 0: mapping of stat name to ``{"count": <sum>, "value": <sum>}``.
     On other ranks: ``None``.
     """
-    ctx: Context = engine.config["spmd"].context
-    comm: Communicator = engine.config["spmd"].comm
+    spmd_ctx = engine.config["executor_options"]["spmd"]
+    if spmd_ctx is None:
+        raise KeyError(
+            "engine.config['executor_options']['spmd'] not set; "
+            "spmd_gather_statistics must be called with an engine from spmd_execution()."
+        )
+    ctx: Context = spmd_ctx.context
+    comm: Communicator = spmd_ctx.comm
     assert ctx is not None
     assert comm is not None
     stats: Statistics = ctx.br().statistics
@@ -460,8 +466,12 @@ def spmd_clear_statistics(engine: pl.GPUEngine) -> None:
     engine
         Polars GPU engine with SPMD context and communicator in config.
     """
-    ctx: Context = engine.config["spmd"].context
-    comm: Communicator = engine.config["spmd"].comm
+    spmd_cfg = engine.config.get("executor_options", {}).get("spmd")
+    if spmd_cfg is None:
+        raise KeyError(
+            "engine.config['executor_options']['spmd'] not set; "
+            "spmd_clear_statistics must be called with an engine from spmd_execution()."
+        )
+    ctx: Context = spmd_cfg.context
     assert ctx is not None
-    assert comm is not None
     ctx.br().statistics.clear()
