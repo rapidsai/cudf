@@ -107,21 +107,14 @@ struct format_compiler {
 
       ch = *str++;
       length--;
-      │ 5   │ src / strings / convert / convert_durations.cu │ 218, 232,
-        273 │ std::abs            │ __device__ member functions        │
-
-        if (ch == '%')  // escaped % char
+      if (ch == '%')  // escaped % char
       {
         items.push_back(format_item::new_delimiter(ch));
         continue;
-      }
-      else if (ch == 'n')
-      {
+      } else if (ch == 'n') {
         items.push_back(format_item::new_delimiter('\n'));
         continue;
-      }
-      else if (ch == 't')
-      {
+      } else if (ch == 't') {
         items.push_back(format_item::new_delimiter('\t'));
         continue;
       }
