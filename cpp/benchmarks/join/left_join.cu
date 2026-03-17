@@ -145,6 +145,27 @@ void nvbench_filtered_left_semi_join_selectivity(
   BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
 }
 
+template <cudf::null_equality NullEquality, data_type DataType>
+void nvbench_mark_left_semi_join_selectivity(
+  nvbench::state& state,
+  nvbench::type_list<nvbench::enum_type<NullEquality>, nvbench::enum_type<DataType>>)
+{
+  auto const selectivity = state.get_float64("selectivity");
+  auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
+
+  auto join = [](cudf::table_view const& left,
+                 cudf::table_view const& right,
+                 cudf::null_equality compare_nulls) {
+    cudf::mark_join obj(left, compare_nulls, cudf::get_default_stream());
+    for (auto i = 0; i < selectivity_num_operations - 1; i++) {
+      [[maybe_unused]] auto result = obj.semi_join(right);
+    }
+    return obj.semi_join(right);
+  };
+
+  BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity, false);
+}
+
 NVBENCH_BENCH_TYPES(nvbench_left_anti_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
                                       DEFAULT_JOIN_NULL_EQUALITY,
@@ -183,4 +204,12 @@ NVBENCH_BENCH_TYPES(nvbench_filtered_left_semi_join_selectivity,
   .set_type_axes_names({"NullEquality", "DataType"})
   .add_int64_axis("left_size", {100'000'000})
   .add_int64_axis("right_size", {100'000})
+  .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE);
+
+NVBENCH_BENCH_TYPES(nvbench_mark_left_semi_join_selectivity,
+                    NVBENCH_TYPE_AXES(DEFAULT_JOIN_NULL_EQUALITY, SELECTIVITY_JOIN_DATATYPES))
+  .set_name("mark_left_semi_join_selectivity")
+  .set_type_axes_names({"NullEquality", "DataType"})
+  .add_int64_axis("left_size", {100'000})
+  .add_int64_axis("right_size", {100'000'000})
   .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE);
