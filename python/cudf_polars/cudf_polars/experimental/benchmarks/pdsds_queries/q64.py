@@ -362,15 +362,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 pl.len().alias("cnt"),
                 # Polars sum() returns 0 for all-null groups; SQL returns NULL.
                 # See https://github.com/rapidsai/cudf/issues/19560.
-                pl.when(pl.col("ss_wholesale_cost").is_not_null().any())
+                pl.when(pl.col("ss_wholesale_cost").count() > 0)
                 .then(pl.col("ss_wholesale_cost").sum())
                 .otherwise(None)
                 .alias("s1"),
-                pl.when(pl.col("ss_list_price").is_not_null().any())
+                pl.when(pl.col("ss_list_price").count() > 0)
                 .then(pl.col("ss_list_price").sum())
                 .otherwise(None)
                 .alias("s2"),
-                pl.when(pl.col("ss_coupon_amt").is_not_null().any())
+                pl.when(pl.col("ss_coupon_amt").count() > 0)
                 .then(pl.col("ss_coupon_amt").sum())
                 .otherwise(None)
                 .alias("s3"),
