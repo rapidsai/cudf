@@ -6,9 +6,6 @@ set -euo pipefail
 
 source rapids-init-pip
 
-# TODO(jameslamb): revert before merging
-source ci/use_wheels_from_prs.sh
-
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
 # Download the cudf, libcudf, and pylibcudf built in the previous step
