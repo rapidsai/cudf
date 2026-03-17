@@ -1574,7 +1574,7 @@ def test_series_constructor_numpy_dtype_str(pandas_compatible):
     expected = pd.Series(data, dtype=dtype)
     result = cudf.Series(data, dtype=dtype)
     assert result.dtype == np.dtype(object)
-    assert_eq(result, expected)
+    assert_eq(result, expected, check_dtype=False)
 
 
 def test_series_constructor_dtype_is_pandas_nullable_extension_type(

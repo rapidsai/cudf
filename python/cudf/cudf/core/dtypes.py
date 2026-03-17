@@ -84,9 +84,9 @@ def dtype(arbitrary: Any) -> DtypeObj:
         pass
     else:
         if np_dtype.kind == "U":
-            if cudf.get_option("mode.pandas_compatible"):
-                # Like pandas, allow users to pass this object to signal "string"
-                # but the dtype metadata should result in np.dtype(object)
+            if isinstance(arbitrary, np.dtype):
+                # np.dtype(str) is a legacy numpy unicode dtype (kind='U').
+                # Like pandas, treat it as object dtype.
                 return np_dtype
             return DEFAULT_STRING_DTYPE
         elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
