@@ -193,4 +193,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+        sort_keys=[
+            (pl.col("lochierarchy"), True),
+            (
+                pl.when(pl.col("lochierarchy") == 0)
+                .then(pl.col("i_category"))
+                .otherwise(None),
+                False,
+            ),
+            (pl.col("rank_within_parent"), False),
+        ],
     )
