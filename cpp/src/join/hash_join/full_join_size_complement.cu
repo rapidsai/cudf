@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../join_common_utils.cuh"
 #include "common.cuh"
+#include "join/join_common_utils.cuh"
 
 #include <cudf/detail/algorithms/reduce.cuh>
 

@@ -4,7 +4,6 @@
  */
 #pragma once
 
-#include "../join_common_utils.cuh"
 #include "common.cuh"
 
 #include <cudf/detail/iterator.cuh>

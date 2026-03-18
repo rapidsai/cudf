@@ -17,7 +17,6 @@
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
-#include <optional>
 #include <utility>
 
 namespace cudf::detail {

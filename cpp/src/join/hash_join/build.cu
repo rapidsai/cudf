@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../join_common_utils.cuh"
 #include "common.cuh"
+#include "join/join_common_utils.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -18,6 +18,8 @@
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/mr/polymorphic_allocator.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <limits>
 #include <memory>

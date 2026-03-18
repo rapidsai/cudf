@@ -4,11 +4,15 @@
  */
 #pragma once
 
-#include "../join_common_utils.hpp"
+#include "common.cuh"
+#include "join/join_common_utils.cuh"
+#include "join/join_common_utils.hpp"
 #include "size_impl.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/prefetch.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/iterator/transform_output_iterator.h>
 

@@ -4,7 +4,11 @@
  */
 #pragma once
 
+#include "common.cuh"
 #include "dispatch.cuh"
+#include "join/join_common_utils.cuh"
+
+#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf::detail {
 
