@@ -191,8 +191,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("cov_2").alias("cov"),
                 ]
             )
-            .sort(sort_by.keys(), nulls_last=True)
+            .sort(sort_by.keys(), nulls_last=False)
         ),
         sort_by=list(sort_by.items()),
         limit=None,
+        nulls_last=False,
     )
