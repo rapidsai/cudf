@@ -728,6 +728,15 @@ class ParquetSourceInfo(DataSourceInfo):
         Maximum number of file footers to sample metadata from.
     max_row_group_samples
         Maximum number of row-groups to sample data from.
+
+    Notes
+    -----
+    Instances are shared across all ``Scan`` nodes reading the same
+    files (via ``_sample_pq_stats`` cache). ``_real_rg_size`` is
+    mutated lazily on the first call to ``column_storage_size`` that
+    triggers row-group sampling. This is safe for single-threaded
+    planning; if metadata collection is ever parallelised across ranks,
+    access to ``_real_rg_size`` will need synchronisation.
     """
 
     def __init__(

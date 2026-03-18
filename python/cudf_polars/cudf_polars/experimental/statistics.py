@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cudf_polars.dsl.ir import DataFrameScan, Scan
-from cudf_polars.dsl.traversal import post_traversal
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import StatsCollector
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ def collect_base_stats(
     from cudf_polars.experimental.io import _make_datasource_info
 
     stats = StatsCollector()
-    for node in post_traversal([root]):
+    for node in traversal([root]):
         if isinstance(node, (Scan, DataFrameScan)):
             source = _make_datasource_info(node, config_options)
             if source is not None:

@@ -389,79 +389,33 @@ def rename(e: Expr, mapping: Mapping[str, str]) -> Expr:
     return mapper(e)
 ```
 
-# Estimated column statistics
+# IO partition statistics
 
 :::{note}
-Column-statistics estimation is experimental and the details are
+IO partition statistics are experimental and the details are
 likely to change in the future.
 :::
 
-The `cudf-polars` streaming executor (enabled by default) may use
-estimated column statistics to help transform translated logical-plan
-IR nodes into the final "physical-plan" IR nodes. This will only
-happen for queries that read from in-memory or Parquet data, and
-only when statistics planning is enabled (see the following
-section for more details).
-
-## Configuration
-
-The statistics-based query planning behavior can be controlled through
-the `StatsPlanningOptions` configuration class. These options can be
-configured either through the `stats_planning` parameter of the
-streaming executor, or via environment variables with the prefix
-`CUDF_POLARS__EXECUTOR__STATS_PLANNING__`.
+The streaming executor samples Parquet footer metadata to estimate
+per-column storage sizes, then uses those estimates to split or fuse
+file-level partitions so that each input partition is close to
+`target_partition_size` bytes. This is controlled by the
+`use_io_partitioning` option (default: `True`), settable via the
+`stats_planning` executor parameter or the environment variable
+`CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING`.
 
 ```python
-import polars as pl
-
-# Configure via GPUEngine
 engine = pl.GPUEngine(
     executor="streaming",
-    executor_options={
-        "stats_planning": {
-            "use_io_partitioning": True,
-        }
-    }
+    executor_options={"stats_planning": {"use_io_partitioning": False}},
 )
-
-result = query.collect(engine=engine)
 ```
 
-The available configuration options are:
-
-- **`use_io_partitioning`** (default: `True`): Whether to use estimated file-size
-  statistics to calculate the ideal input-partition count for IO operations.
-  This option currently applies to Parquet data only. This option can also be set via the
-  `CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING` environment variable.
-
-## How it works: Storing statistics
-
-- `DataSourceInfo`: This abstract base class stores per-table source statistics
-  (e.g. row count and per-column storage size) for a single datasource such as
-  a Parquet dataset or in-memory `DataFrame`. Sub-classes include
-  `ParquetSourceInfo` and `DataFrameSourceInfo`.
-  - Since sampling metadata can be expensive, `ParquetSourceInfo` uses
-    caching to avoid redundant file-system access across multiple `Scan`
-    nodes that read the same files.
-- `StatsCollector`: Collects and stores `DataSourceInfo` for each leaf
-  `Scan` / `DataFrameScan` node in the logical plan.
-  - `StatsCollector.scan_stats`: Maps each leaf IR node to its `DataSourceInfo`.
-
-## How it works: Collecting statistics
-
-The top-level API for collecting statistics is
-`cudf_polars.experimental.statistics.collect_statistics`. When
-`use_io_partitioning` is enabled (the default), this walks the IR graph
-and constructs a `DataSourceInfo` for each `Scan` and `DataFrameScan`
-leaf node, storing the result in `StatsCollector.scan_stats`.
-
-## How it works: Using statistics
-
-`DataSourceInfo` objects are used to calculate the input-partition count
-when a Parquet-based `Scan` node is lowered by the streaming executor.
-The per-column storage sizes from `DataSourceInfo.column_storage_size()`
-are used to estimate total data size and split or fuse file-level
-partitions accordingly.
+Internally, `collect_statistics` walks the IR graph and constructs a
+`DataSourceInfo` for each leaf `Scan` / `DataFrameScan` node, storing
+the results in `StatsCollector.scan_stats`. `ParquetSourceInfo` caches
+its metadata sample so that multiple `Scan` nodes reading the same files
+share one read.
 
 # Containers
 
