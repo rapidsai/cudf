@@ -90,7 +90,7 @@ cudf-polars can optionally trace execution of each node in the query plan.
 To enable tracing, set the environment variable ``CUDF_POLARS_LOG_TRACES`` to a
 true value ("1", "true", "y", "yes") before starting your process.
 
-cudf-polars logs traces at four scopes (levels):
+cudf-polars logs traces at three scopes (levels):
 
 1. `plan`: These generally happen once per query. This will include things
    like the (serialized) query plan.
@@ -98,12 +98,10 @@ cudf-polars logs traces at four scopes (levels):
    trace per node in the logical plan.
 3. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan.
    Note that one logical node might expand to more than one physical nodes.
-4. `table_chunk`: Logs the processing of a *table chunk*, when using the rapidsmpf
-   runtime.
 
 Each trace includes a `scope` key indicating which level that trace belongs to.
 `actor`-scoped nodes will be nested under a `plan`-scoped node. When using the
-rapidsmpf runtime, both `evaluate_ir_node`- and `table_chunk`-scoped nodes will
+rapidsmpf runtime, `evaluate_ir_node`-scoped nodes will
 be nested under an `actor`-scoped node.
 
 ### Schemas
@@ -135,23 +133,6 @@ The different scopes have different schemas. Fields in **bold** are required / a
 | chunk_count | int | A counter for how many table chunks have been processed by this actor at the time of logging. |
 | duplicated | bool | Whether the output rows are duplicated across ranks (e.g. after an allgather). |
 | row_count       | int  | Total row count produced by this node during execution. |
-
-#### scope=table_chunk
-
-`table_chunk`-scoped traces will only appear with the rapidsmpf runtime.
-
-| Field Name | Type  | Description |
-| ---------- | ----- | ----------- |
-| **scope** | `Literal["table_chunk"]` | The string literal `"actor"`. Useful for distinguishing from other types of traces. |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
-| chunk_counter | int | An integer counter giving the number of table chunks processed at the time of logging. |
-| sequence_number | int | The sequence counter of the rapidsmpf message. |
-| content_sizes | dict[str, int] | The sizes from the rapidsmpf message's content description. |
-| spillable | bool | Whether the rapidsmpf message is spillable. |
-| start | int | A nanosecond-resolution counter indicating when the processing of that table chunk started. This can include time waiting to send or receive a message. |
-| stop | int | A nanosecond-resolution counter indicating when the processing of that table chunk stopped. This can include time waiting to send or receive a message. |
-| actor_ir_type | String | The type of the parent actor, like `"Scan"`. |
-| actor_ir_id   | int    | A unique identifier for the parent actor. |
 
 #### scope=evaluate_ir_node
 

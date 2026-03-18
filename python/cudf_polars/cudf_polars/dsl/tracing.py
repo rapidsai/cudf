@@ -57,7 +57,6 @@ class Scope(str, enum.Enum):
     PLAN = "plan"
     ACTOR = "actor"
     EVALUATE_IR_NODE = "evaluate_ir_node"
-    TABLE_CHUNK = "table_chunk"
 
 
 @functools.cache

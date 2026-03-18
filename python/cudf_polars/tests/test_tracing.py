@@ -169,9 +169,6 @@ def test_sets_cudf_polars_query_id():
                     "start",
                     "stop",
                 }
-            case "table_chunk":
-                # not reached
-                assert "table_chunk" in log
             case "evaluate_ir_node":
                 keys = set(log.keys())
                 assert keys >= {

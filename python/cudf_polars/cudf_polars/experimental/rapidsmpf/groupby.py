@@ -22,7 +22,6 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
-import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
@@ -216,56 +215,35 @@ async def _local_aggregation(
             break
 
         chunks_received += 1
-        cd = msg.get_content_description()
-        with cudf_polars.dsl.tracing.bound_contextvars(
-            content_sizes=cd.content_sizes,
-            spillable=cd.spillable,
-            sequence_number=msg.sequence_number,
-            chunks_received=chunks_received,
-        ):
-            chunk = await evaluate_chunk(
-                context,
-                TableChunk.from_message(msg),
-                decomposed.piecewise_ir,
-                ir_context=ir_context,
-            )
+        chunk = await evaluate_chunk(
+            context,
+            TableChunk.from_message(msg),
+            decomposed.piecewise_ir,
+            ir_context=ir_context,
+        )
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
-            # TODO: Some kind of operation type here.
-            with cudf_polars.dsl.tracing.bound_contextvars(
-                sequence_number=msg.sequence_number,
-                total_size=total_size,
-                chunks_received=chunks_received,
-                chunks_evaluated=len(evaluated_chunks),
-                target_partition_size=target_partition_size,
-            ):
-                evaluated_chunks = [
-                    await evaluate_batch(
-                        evaluated_chunks,
-                        context,
-                        decomposed.reduction_ir,
-                        ir_context=ir_context,
-                    )
-                ]
+            evaluated_chunks = [
+                await evaluate_batch(
+                    evaluated_chunks,
+                    context,
+                    decomposed.reduction_ir,
+                    ir_context=ir_context,
+                )
+            ]
             total_size = evaluated_chunks[0].data_alloc_size(MemoryType.DEVICE)
         if total_size > target_partition_size and allow_early_exit:
             break
 
     aggregated: TableChunk
     if len(evaluated_chunks) > 1:
-        with cudf_polars.dsl.tracing.bound_contextvars(
-            total_size=total_size,
-            chunks_received=chunks_received,
-            chunks_evaluated=len(evaluated_chunks),
-            target_partition_size=target_partition_size,
-        ):
-            aggregated = await evaluate_batch(
-                evaluated_chunks,
-                context,
-                decomposed.reduction_ir,
-                ir_context=ir_context,
-            )
+        aggregated = await evaluate_batch(
+            evaluated_chunks,
+            context,
+            decomposed.reduction_ir,
+            ir_context=ir_context,
+        )
     elif evaluated_chunks:
         aggregated = evaluated_chunks[0]
     else:
@@ -626,23 +604,16 @@ async def _choose_strategy(
 
     output_count_limit = local_count if skip_global_comm else total_chunk_count
     output_count = min(ideal_count, output_count_limit)
-    decision = (
-        "tree_local"
-        if skip_global_comm and use_tree
-        else "shuffle_local"
-        if skip_global_comm
-        else "tree_allgather"
-        if use_tree
-        else "shuffle"
-    )
-
-    # cudf_polars.dsl.tracing.log(
-    #     "Dynamic planning decision",
-    #     scope=cudf_polars.dsl.tracing.Scope.ACTOR.value,
-    #     decision=tracer.decision,
-    # )
     if tracer is not None:
-        tracer.decision = decision
+        tracer.decision = (
+            "tree_local"
+            if skip_global_comm and use_tree
+            else "shuffle_local"
+            if skip_global_comm
+            else "tree_allgather"
+            if use_tree
+            else "shuffle"
+        )
 
     return output_count
 
@@ -713,11 +684,6 @@ async def groupby_actor(
         if fully_partitioned or fallback_case:
             if tracer is not None:
                 tracer.decision = "chunkwise"
-            # cudf_polars.dsl.tracing.log(
-            #     "Dynamic planning decision",
-            #     scope=cudf_polars.dsl.tracing.Scope.ACTOR.value,
-            #     decision="chunkwise",
-            # )
             await chunkwise_evaluate(
                 context,
                 ir,
@@ -742,7 +708,6 @@ async def groupby_actor(
         )
 
         skip_global_comm = metadata_in.duplicated or partitioned_inter_rank
-        # TODO: Ensure this emits a "dynamic planning" decision of "tree_local" or "shuffle_local" or "tree_allgather" or "shuffle"
         output_count = await _choose_strategy(
             context,
             comm,
