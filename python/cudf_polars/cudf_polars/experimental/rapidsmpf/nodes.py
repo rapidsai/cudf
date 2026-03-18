@@ -477,6 +477,12 @@ async def fanout_node_unbounded(
                                 break
 
         finally:
+            # Cancel any outstanding tasks
+            if recv_task is not None and not recv_task.done():
+                recv_task.cancel()
+            for task in active_tasks.values():
+                if not task.done():
+                    task.cancel()
             # Clean up spill function registration
             context.br().spill_manager.remove_spill_function(spill_func_id)
 
