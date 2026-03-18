@@ -125,7 +125,7 @@ __device__ inline double stod(string_view const& d_str)
     return base * exponent;
   }
 
-  double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
+  double const exponent = exp10(static_cast<double>(cuda::std::abs(exp_ten)));
   return exp_ten < 0 ? base / exponent : base * exponent;
 }
 
