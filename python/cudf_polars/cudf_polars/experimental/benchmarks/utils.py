@@ -1853,19 +1853,23 @@ def run_polars_spmd(
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     if run_config.collect_traces:
         raise NotImplementedError(
-            "--collect-traces is not yet supported with --cluster spmd."
+            "--collect-traces is not yet supported with --cluster spmd"
         )
+    if run_config.rmm_async:
+        raise NotImplementedError("--rmm-async is not supported with --cluster spmd")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime" and "cluster" are reserved — spmd_execution sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
+    rmm.mr.set_current_device_resource(
+        rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
+    )
     with spmd_execution(
-        mr=rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
-        if run_config.rmm_async
-        else None,
         executor_options=executor_options,
-        parquet_options=parquet_options,
-        cuda_stream_policy=run_config.stream_policy,
+        engine_options={
+            "parquet_options": parquet_options,
+            "cuda_stream_policy": run_config.stream_policy,
+        },
     ) as (comm, ctx, engine):
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
