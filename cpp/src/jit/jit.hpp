@@ -58,6 +58,17 @@ struct [[nodiscard]] kernel {
   {
     return _kernel.launch(grid_dim, block_dim, shared_mem_bytes, stream.value(), kernel_params);
   }
+
+  template <typename... Args>
+  void launch_with(rtcx::cuda_dim3 grid_dim,
+                   rtcx::cuda_dim3 block_dim,
+                   uint32_t shared_mem_bytes,
+                   rmm::cuda_stream_view stream,
+                   Args&&... args)
+  {
+    void const* params[] = {&args...};
+    launch(grid_dim, block_dim, shared_mem_bytes, stream, const_cast<void**>(params));
+  }
 };
 
 kernel get_kernel(std::string const& name,
