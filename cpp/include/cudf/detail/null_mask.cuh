@@ -784,13 +784,15 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
 
   auto const num_segments =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
+  auto const has_valid_initial_value = valid_initial_value.has_value();
+  auto const valid_initial           = valid_initial_value.value_or(false);
 
   if (bitmask == nullptr) {
     return cudf::detail::valid_if(
       segment_length_iterator,
       segment_length_iterator + num_segments,
-      [valid_initial_value] __device__(auto const& length) {
-        return valid_initial_value.value_or(length > 0);
+      [has_valid_initial_value, valid_initial] __device__(auto const& length) {
+        return has_valid_initial_value ? valid_initial : length > 0;
       },
       stream,
       mr);
@@ -809,12 +811,13 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   return cudf::detail::valid_if(
     length_and_valid_count,
     length_and_valid_count + num_segments,
-    [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
+    [null_handling, has_valid_initial_value, valid_initial] __device__(
+      auto const& length_and_valid_count) {
       auto const length      = cuda::std::get<0>(length_and_valid_count);
       auto const valid_count = cuda::std::get<1>(length_and_valid_count);
       return (null_handling == null_policy::EXCLUDE)
-               ? (valid_initial_value.value_or(false) || valid_count > 0)
-               : (valid_initial_value.value_or(length > 0) && valid_count == length);
+               ? (valid_initial || valid_count > 0)
+               : ((has_valid_initial_value ? valid_initial : length > 0) && valid_count == length);
     },
     stream,
     mr);

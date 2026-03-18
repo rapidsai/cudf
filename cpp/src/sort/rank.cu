@@ -23,6 +23,7 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
@@ -239,7 +240,7 @@ void rank_average(cudf::device_span<size_type const> group_keys,
     sorted_order_view,
     rank_mutable_view.begin<double>(),
     cuda::proclaim_return_type<MinCount>([] __device__(auto rank_count1, auto rank_count2) {
-      return MinCount{std::min(rank_count1.first, rank_count2.first),
+      return MinCount{cuda::std::min(rank_count1.first, rank_count2.first),
                       rank_count1.second + rank_count2.second};
     }),
     cuda::proclaim_return_type<double>([] __device__(MinCount minrank_count) {  // min+(count-1)/2
