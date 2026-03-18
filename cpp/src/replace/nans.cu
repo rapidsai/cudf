@@ -19,6 +19,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
@@ -128,7 +129,7 @@ struct normalize_nans_and_zeros_lambda {
   T __device__ operator()(cudf::size_type i)
   {
     auto e = in.element<T>(i);
-    if (isnan(e)) { return std::numeric_limits<T>::quiet_NaN(); }
+    if (isnan(e)) { return cuda::std::numeric_limits<T>::quiet_NaN(); }
     if (T{0.0} == e) { return T{0.0}; }
     return e;
   }
