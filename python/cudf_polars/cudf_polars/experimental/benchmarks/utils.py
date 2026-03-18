@@ -423,6 +423,10 @@ class RunConfig:
         if stream_policy == "auto":
             stream_policy = None
 
+        # --ray-cluster-file implies cluster="ray"
+        if getattr(args, "ray_cluster_file", None) is not None:
+            cluster = "ray"
+
         # Deal with deprecated scheduler argument
         # and non-streaming executors
         if executor == "in-memory" or executor == "cpu":
@@ -448,6 +452,8 @@ class RunConfig:
                 case "distributed":
                     scheduler = "distributed"
                 case "spmd":  # launched via rrun, not Dask
+                    scheduler = None
+                case "ray":
                     scheduler = None
         else:
             cluster = "single"
@@ -805,6 +811,59 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
     return client
 
 
+def initialize_ray_cluster(
+    run_config: RunConfig, args: argparse.Namespace, **ray_execution_kwargs: Any
+):  # type: ignore[no-untyped-def]
+    """
+    Connect to an existing Ray cluster and return a ``ray_execution`` context manager.
+
+    Parameters
+    ----------
+    run_config : RunConfig
+        The run configuration.
+    args : argparse.Namespace
+        Parsed command line arguments. If ``args.ray_cluster_file`` is
+        provided, connects to the Ray cluster described by the YAML file.
+        Otherwise connects to a local/default Ray instance.
+
+    Returns
+    -------
+    context manager or None
+        The ``ray_execution()`` context manager (not yet entered), or None
+        if not using Ray cluster.
+    """
+    if run_config.cluster != "ray":
+        return None
+
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+
+    ray_cluster_file = getattr(args, "ray_cluster_file", None)
+
+    if ray_cluster_file is not None:
+        import yaml
+
+        with open(ray_cluster_file) as f:
+            cluster_config = yaml.safe_load(f)
+
+        address = cluster_config.get("gcs_address") or cluster_config.get(
+            "client_address"
+        )
+        if address is None:
+            raise ValueError(
+                f"Ray cluster file {ray_cluster_file!r} must contain "
+                "'gcs_address' or 'client_address'."
+            )
+        ray_init_options: dict = {"address": address}
+        print(
+            f"Connecting to Ray cluster from {ray_cluster_file!r} at {address}",
+            flush=True,
+        )
+    else:
+        ray_init_options = {}
+
+    return ray_execution(ray_init_options=ray_init_options, **ray_execution_kwargs)
+
+
 def drop_file_page_cache_recursively(path: os.PathLike | str) -> None:
     """Drop the Linux page cache for all files under `path`."""
     try:
@@ -1027,6 +1086,16 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             If provided, a cluster is not created and worker
             configuration options (--n-workers, --rmm-pool-size, etc.)
             are ignored since the workers are assumed to be started separately."""),
+    )
+    external_cluster_group.add_argument(
+        "--ray-cluster-file",
+        default=None,
+        type=str,
+        help=textwrap.dedent("""\
+            Path to a Ray cluster YAML file for connecting to an existing Ray cluster.
+            If provided, --cluster is forced to "ray" and a new cluster is not created.
+            Expected YAML keys: cluster_name, head_node_ip, gcs_address,
+            client_address (ray://...), dashboard_url."""),
     )
     parser.add_argument(
         "--blocksize",
@@ -1763,6 +1832,16 @@ def run_polars(
                 date_type,
                 validation_files,
             )
+        case "ray":
+            run_polars_ray(
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
         case "single" | "distributed":
             run_polars_single_or_dask(
                 benchmark,
@@ -1836,6 +1915,70 @@ def run_polars_single_or_dask(
             print("✅ All validated queries passed.")
 
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
+    args.output.write("\n")
+
+    sys.exit(1 if (query_failures or validation_failures) else 0)
+
+
+def run_polars_ray(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    parquet_options: dict[str, Any],
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using Ray cluster execution."""
+    executor_options = get_executor_options(run_config, benchmark=benchmark)
+    # "runtime" and "cluster" are reserved — ray_execution sets them
+    executor_options.pop("runtime", None)
+    executor_options.pop("cluster", None)
+
+    engine_options: dict[str, Any] = {
+        "raise_on_fail": True,
+        "cuda_stream_policy": run_config.stream_policy,
+    }
+    if parquet_options:
+        engine_options["parquet_options"] = parquet_options
+
+    ray_ctx = initialize_ray_cluster(
+        run_config,
+        args,
+        executor_options=executor_options,
+        engine_options=engine_options,
+    )
+
+    with ray_ctx as (ray_client, engine):
+        run_config = dataclasses.replace(run_config, n_workers=ray_client.nranks)
+        records, plans, validation_failures, query_failures = _run_query_loop(
+            benchmark,
+            args,
+            run_config,
+            engine,
+            None,
+            numeric_type,
+            date_type,
+            validation_files,
+        )
+
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+
+    if args.summarize:
+        run_config.summarize()
+
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
+            )
+        else:
+            print("✅ All validated queries passed.")
+
+    # engine holds Ray actor handles which are not JSON-serializable
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
 
     sys.exit(1 if (query_failures or validation_failures) else 0)
