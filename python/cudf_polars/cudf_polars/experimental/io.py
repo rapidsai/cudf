@@ -716,108 +716,112 @@ class ParquetMetadata:
         self.row_count = row_count
 
 
-class ParquetSourceInfo(DataSourceInfo):
-    """
-    Parquet datasource information.
+def _sample_rg_sizes(
+    metadata: ParquetMetadata,
+    target_cols: list[str],
+    max_row_group_samples: int,
+) -> dict[str, int]:
+    """Return mean uncompressed bytes per row-group for each column in target_cols."""
+    sample_paths = metadata.sample_paths
+    num_row_groups_per_file = metadata.num_row_groups_per_file
+    if not sample_paths or len(num_row_groups_per_file) != len(sample_paths):
+        return {}  # pragma: no cover
 
-    Parameters
-    ----------
-    paths
-        Parquet-dataset paths.
-    max_footer_samples
-        Maximum number of file footers to sample metadata from.
-    max_row_group_samples
-        Maximum number of row-groups to sample data from.
-
-    Notes
-    -----
-    Instances are shared across all ``Scan`` nodes reading the same
-    files (via ``_sample_pq_stats`` cache). ``_real_rg_size`` is
-    mutated lazily on the first call to ``column_storage_size`` that
-    triggers row-group sampling. This is safe for single-threaded
-    planning; if metadata collection is ever parallelised across ranks,
-    access to ``_real_rg_size`` will need synchronisation.
-    """
-
-    def __init__(
-        self,
-        paths: tuple[str, ...],
-        max_footer_samples: int,
-        max_row_group_samples: int,
-    ):
-        self.paths = paths
-        self.max_footer_samples = max_footer_samples
-        self.max_row_group_samples = max_row_group_samples
-        self._real_rg_size: dict[str, int] = {}
-
-    @functools.cached_property
-    def metadata(self) -> ParquetMetadata:
-        """Return Parquet metadata."""
-        return ParquetMetadata(self.paths, self.max_footer_samples)
-
-    @property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self.metadata.row_count
-
-    def _sample_storage_sizes(self) -> None:
-        """Sample actual row-group sizes for storage-size estimation."""
-        if self.max_row_group_samples < 1 or not (
-            sample_paths := self.metadata.sample_paths
-        ):
-            return
-
-        num_row_groups_per_file = self.metadata.num_row_groups_per_file
-        if self.row_count is None or len(num_row_groups_per_file) != len(sample_paths):
-            raise ValueError("Parquet metadata sampling failed.")  # pragma: no cover
-
-        n_sampled = 0
-        samples: defaultdict[str, list[int]] = defaultdict(list)
-        for path, num_rgs in zip(sample_paths, num_row_groups_per_file, strict=True):
-            for rg_id in range(num_rgs):
-                n_sampled += 1
-                samples[path].append(rg_id)
-                if n_sampled == self.max_row_group_samples:
-                    break
-            if n_sampled == self.max_row_group_samples:
+    n_sampled = 0
+    samples: defaultdict[str, list[int]] = defaultdict(list)
+    for path, num_rgs in zip(sample_paths, num_row_groups_per_file, strict=True):
+        for rg_id in range(num_rgs):
+            n_sampled += 1
+            samples[path].append(rg_id)
+            if n_sampled == max_row_group_samples:
                 break
+        if n_sampled == max_row_group_samples:
+            break
 
-        options = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo(list(samples))
-        ).build()
-        options.set_column_names(list(self.metadata.column_names))
-        options.set_row_groups(list(samples.values()))
-        stream = get_cuda_stream()
-        tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
+    if not n_sampled:
+        return {}  # pragma: no cover
+
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo(list(samples))
+    ).build()
+    options.set_column_names(target_cols)
+    options.set_row_groups(list(samples.values()))
+    stream = get_cuda_stream()
+    tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
+    result = {
+        name: column.device_buffer_size() // n_sampled
         for name, column in zip(
             tbl_w_meta.column_names(include_children=False),
             tbl_w_meta.columns,
             strict=True,
-        ):
-            self._real_rg_size[name] = column.device_buffer_size() // n_sampled
-        stream.synchronize()
+        )
+    }
+    stream.synchronize()
+    return result
+
+
+class ParquetSourceInfo(DataSourceInfo):
+    """Parquet datasource information, fully computed at construction time."""
+
+    __slots__ = ("_per_file_means", "_row_count")
+
+    def __init__(
+        self,
+        paths: tuple[str, ...],
+        needed_cols: frozenset[str],
+        max_footer_samples: int,
+        max_row_group_samples: int,
+    ) -> None:
+        metadata = ParquetMetadata(paths, max_footer_samples)
+        self._row_count = metadata.row_count
+
+        file_count = len(paths)
+        row_count = metadata.row_count
+        self._per_file_means: dict[str, int] = {}
+
+        if not (file_count and row_count and needed_cols):
+            return
+
+        # Floor on size: dictionary encoding can make in-memory size much larger
+        # than what the compressed footer metadata reports.
+        min_floor = max(1, row_count // file_count)
+        suspicious: list[str] = []
+
+        for col in needed_cols:
+            footer_mean = metadata.mean_size_per_file.get(col)
+            if footer_mean is None:
+                continue
+            if footer_mean < min_floor:
+                suspicious.append(col)
+            else:
+                self._per_file_means[col] = footer_mean
+
+        if suspicious and max_row_group_samples > 0:
+            rg_sizes = _sample_rg_sizes(metadata, suspicious, max_row_group_samples)
+            mean_rg_count = (
+                statistics.mean(metadata.num_row_groups_per_file)
+                if metadata.num_row_groups_per_file
+                else 1
+            )
+            for col in suspicious:
+                rg_size = rg_sizes.get(col)
+                self._per_file_means[col] = (
+                    max(min_floor, int(rg_size * mean_rg_count))
+                    if rg_size
+                    else min_floor
+                )
+        else:
+            for col in suspicious:
+                self._per_file_means[col] = min_floor
+
+    @property
+    def row_count(self) -> int | None:
+        """Data source row-count estimate."""
+        return self._row_count
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
-        file_count = len(self.paths)
-        row_count = self.row_count
-        partial_mean_size = self.metadata.mean_size_per_file.get(column)
-        if file_count and row_count and partial_mean_size:
-            # NOTE: We set a lower bound on the estimated size using
-            # the row count, because dictionary encoding can make the
-            # in-memory size much larger.
-            min_value = max(1, row_count // file_count)
-            if partial_mean_size < min_value and column not in self._real_rg_size:
-                # If the metadata is suspiciously small,
-                # sample "real" data to get a better estimate.
-                self._sample_storage_sizes()
-            if column in self._real_rg_size:
-                partial_mean_size = int(
-                    self._real_rg_size[column]
-                    * statistics.mean(self.metadata.num_row_groups_per_file)
-                )
-            return max(min_value, partial_mean_size)
-        return None
+        return self._per_file_means.get(column)
 
 
 class DataFrameSourceInfo(DataSourceInfo):
@@ -840,29 +844,20 @@ class DataFrameSourceInfo(DataSourceInfo):
 
 
 @functools.cache
-def _sample_pq_stats(
+def _build_parquet_source(
     paths: tuple[str, ...],
+    needed_cols: frozenset[str],
     max_footer_samples: int,
     max_row_group_samples: int,
 ) -> ParquetSourceInfo:
-    """Return Parquet datasource information."""
-    return ParquetSourceInfo(paths, max_footer_samples, max_row_group_samples)
+    """Return cached, fully-computed Parquet datasource information."""
+    return ParquetSourceInfo(
+        paths, needed_cols, max_footer_samples, max_row_group_samples
+    )
 
 
-def _make_datasource_info(
-    ir: Scan | DataFrameScan,
-    config_options: ConfigOptions[StreamingExecutor],
-) -> DataSourceInfo | None:
-    """Construct DataSourceInfo for a leaf Scan or DataFrameScan node."""
-    if isinstance(ir, Scan):
-        if ir.typ == "parquet":
-            return _sample_pq_stats(
-                tuple(ir.paths),
-                config_options.parquet_options.max_footer_samples,
-                config_options.parquet_options.max_row_group_samples,
-            )
-        return None
-    assert isinstance(ir, DataFrameScan)
+def _build_dataframe_source(ir: DataFrameScan) -> DataSourceInfo:
+    """Return DataSourceInfo for a DataFrameScan node."""
     return DataFrameSourceInfo(pl.DataFrame._from_pydf(ir.df))
 
 
@@ -870,6 +865,4 @@ def _clear_source_info_cache() -> None:
     """Clear DataSourceInfo caches."""
     # TODO: Avoid clearing the cache if we can
     # check that the underlying data hasn't changed.
-
-    # Clear ParquetSourceInfo cache
-    _sample_pq_stats.cache_clear()
+    _build_parquet_source.cache_clear()
