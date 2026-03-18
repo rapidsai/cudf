@@ -1943,9 +1943,7 @@ def run_polars_ray(
             "--collect-traces is not yet supported with --cluster ray."
         )
     if run_config.rmm_async:
-        raise NotImplementedError(
-            "--rmm-async is not supported with --cluster ray."
-        )
+        raise NotImplementedError("--rmm-async is not supported with --cluster ray.")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — ray_execution sets them
     executor_options.pop("runtime", None)
