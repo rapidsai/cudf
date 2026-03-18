@@ -68,7 +68,8 @@
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda13.1-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent",
-    "source=/raid/mhaseeb/data/sf-100-test,target=/home/coder/data,type=bind,readonly"
+    "source=/raid/mhaseeb/data/sf-100-test,target=/home/coder/data,type=bind,readonly",
+    "source=/datasets/knataraj/datasets/tpch/velox-100,target=/home/coder/velox-100,type=bind,readonly"
   ],
   "containerEnv": {
     "KVIKIO_COMPAT_MODE": "OFF",
