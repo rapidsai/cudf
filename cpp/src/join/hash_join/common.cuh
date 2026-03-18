@@ -127,4 +127,16 @@ std::size_t compute_left_join_complement_size(
   size_type right_table_row_count,
   rmm::cuda_stream_view stream);
 
+std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
+  table_view const& build,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
+  cudf::detail::hash_table_t const& hash_table,
+  bool is_empty,
+  bool has_nulls,
+  null_equality compare_nulls,
+  join_kind join,
+  table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
 }  // namespace cudf::detail

@@ -220,12 +220,6 @@ struct hash_join {
   [[nodiscard]] std::size_t join_size(cudf::table_view const& probe,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr) const;
-
-  template <join_kind Join>
-  [[nodiscard]] cudf::join_match_context join_match_context_impl(
-    cudf::table_view const& probe,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
 }  // namespace CUDF_EXPORT cudf
