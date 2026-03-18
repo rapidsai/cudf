@@ -1944,7 +1944,7 @@ def run_polars_ray(
         )
     if run_config.rmm_async:
         raise NotImplementedError(
-            "--rmm-async is not yet supported with --cluster ray."
+            "--rmm-async is not supported with --cluster ray."
         )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — ray_execution sets them
