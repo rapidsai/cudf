@@ -67,12 +67,12 @@ def test_rolling_series_basic(
             expect = getattr(
                 psr.rolling(window_size, min_periods, center),
                 supported_rolling_reductions,
-            )().fillna(-1)
+            )()
             got = getattr(
                 gsr.rolling(window_size, min_periods, center),
                 supported_rolling_reductions,
-            )().fillna(-1)
-            assert_eq(expect, got, check_dtype=False, check_freq=False)
+            )()
+            assert_eq(expect, got, check_freq=False)
 
 
 @pytest.mark.parametrize(
@@ -113,12 +113,12 @@ def test_rolling_dataframe_basic(
             expect = getattr(
                 pdf.rolling(window_size, min_periods, center),
                 supported_rolling_reductions,
-            )().fillna(-1)
+            )()
             got = getattr(
                 gdf.rolling(window_size, min_periods, center),
                 supported_rolling_reductions,
-            )().fillna(-1)
-            assert_eq(expect, got, check_dtype=False)
+            )()
+            assert_eq(expect, got)
 
 
 def test_rolling_with_offset(supported_rolling_reductions):
@@ -135,9 +135,8 @@ def test_rolling_with_offset(supported_rolling_reductions):
     )
     gsr = cudf.from_pandas(psr)
     assert_eq(
-        getattr(psr.rolling("2s"), supported_rolling_reductions)().fillna(-1),
-        getattr(gsr.rolling("2s"), supported_rolling_reductions)().fillna(-1),
-        check_dtype=False,
+        getattr(psr.rolling("2s"), supported_rolling_reductions)(),
+        getattr(gsr.rolling("2s"), supported_rolling_reductions)(),
     )
 
 
@@ -236,7 +235,7 @@ def test_rolling_count_with_offset():
     )
     gsr = cudf.from_pandas(psr)
     assert_eq(
-        getattr(gsr.rolling("2s"), "count")().fillna(-1),
+        getattr(gsr.rolling("2s"), "count")(),
         pd.Series(
             [1, 2, 2, 1, 0, 1],
             index=[
@@ -257,9 +256,8 @@ def test_rolling_getattr():
     gdf = cudf.from_pandas(pdf)
 
     assert_eq(
-        pdf.rolling(2).a.sum().fillna(-1),
-        gdf.rolling(2).a.sum().fillna(-1),
-        check_dtype=False,
+        pdf.rolling(2).a.sum(),
+        gdf.rolling(2).a.sum(),
     )
 
 
@@ -268,19 +266,16 @@ def test_rolling_getitem():
     gdf = cudf.from_pandas(pdf)
 
     assert_eq(
-        pdf.rolling(2)["a"].sum().fillna(-1),
-        gdf.rolling(2)["a"].sum().fillna(-1),
-        check_dtype=False,
+        pdf.rolling(2)["a"].sum(),
+        gdf.rolling(2)["a"].sum(),
     )
     assert_eq(
-        pdf.rolling(2)["a", "b"].sum().fillna(-1),
-        gdf.rolling(2)["a", "b"].sum().fillna(-1),
-        check_dtype=False,
+        pdf.rolling(2)["a", "b"].sum(),
+        gdf.rolling(2)["a", "b"].sum(),
     )
     assert_eq(
-        pdf.rolling(2)[["a", "b"]].sum().fillna(-1),
-        gdf.rolling(2)["a", "b"].sum().fillna(-1),
-        check_dtype=False,
+        pdf.rolling(2)[["a", "b"]].sum(),
+        gdf.rolling(2)[["a", "b"]].sum(),
     )
 
 
@@ -314,13 +309,8 @@ def test_rollling_series_numba_udf_basic(data, index, center):
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
             assert_eq(
-                psr.rolling(window_size, min_periods, center)
-                .apply(some_func)
-                .fillna(-1),
-                gsr.rolling(window_size, min_periods, center)
-                .apply(some_func)
-                .fillna(-1),
-                check_dtype=False,
+                psr.rolling(window_size, min_periods, center).apply(some_func),
+                gsr.rolling(window_size, min_periods, center).apply(some_func),
             )
 
 
@@ -349,13 +339,8 @@ def test_rolling_dataframe_numba_udf_basic(data, center):
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
             assert_eq(
-                pdf.rolling(window_size, min_periods, center)
-                .apply(some_func)
-                .fillna(-1),
-                gdf.rolling(window_size, min_periods, center)
-                .apply(some_func)
-                .fillna(-1),
-                check_dtype=False,
+                pdf.rolling(window_size, min_periods, center).apply(some_func),
+                gdf.rolling(window_size, min_periods, center).apply(some_func),
             )
 
 
@@ -380,9 +365,8 @@ def test_rolling_numba_udf_with_offset():
         return b / len(A)
 
     assert_eq(
-        psr.rolling("2s").apply(some_func).fillna(-1),
-        gsr.rolling("2s").apply(some_func).fillna(-1),
-        check_dtype=False,
+        psr.rolling("2s").apply(some_func),
+        gsr.rolling("2s").apply(some_func),
     )
 
 
@@ -398,11 +382,11 @@ def test_rolling_groupby_simple(supported_rolling_reductions):
     for window_size in range(1, len(pdf) + 1):
         expect = getattr(
             pdf.groupby("a").rolling(window_size), supported_rolling_reductions
-        )().fillna(-1)
+        )()
         got = getattr(
             gdf.groupby("a").rolling(window_size), supported_rolling_reductions
-        )().fillna(-1)
-        assert_eq(expect, got, check_dtype=False)
+        )()
+        assert_eq(expect, got)
 
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 2], "b": [1, 1, 2, 2, 3], "c": [1, 2, 3, 4, 5]}
@@ -412,11 +396,11 @@ def test_rolling_groupby_simple(supported_rolling_reductions):
     for window_size in range(1, len(pdf) + 1):
         expect = getattr(
             pdf.groupby("a").rolling(window_size), supported_rolling_reductions
-        )().fillna(-1)
+        )()
         got = getattr(
             gdf.groupby("a").rolling(window_size), supported_rolling_reductions
-        )().fillna(-1)
-        assert_eq(expect, got, check_dtype=False)
+        )()
+        assert_eq(expect, got)
 
 
 def test_rolling_groupby_multi(supported_rolling_reductions):
@@ -433,12 +417,12 @@ def test_rolling_groupby_multi(supported_rolling_reductions):
         expect = getattr(
             pdf.groupby(["a", "b"], sort=True).rolling(window_size),
             supported_rolling_reductions,
-        )().fillna(-1)
+        )()
         got = getattr(
             gdf.groupby(["a", "b"], sort=True).rolling(window_size),
             supported_rolling_reductions,
-        )().fillna(-1)
-        assert_eq(expect, got, check_dtype=False)
+        )()
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("window_size", ["1D", "3D", "6D", "7D"])
@@ -453,11 +437,11 @@ def test_rolling_groupby_offset(supported_rolling_reductions, window_size):
     gdf = cudf.from_pandas(pdf)
     expect = getattr(
         pdf.groupby("group").rolling(window_size), supported_rolling_reductions
-    )().fillna(-1)
+    )()
     got = getattr(
         gdf.groupby("group").rolling(window_size), supported_rolling_reductions
-    )().fillna(-1)
-    assert_eq(expect, got, check_dtype=False)
+    )()
+    assert_eq(expect, got)
 
 
 def test_rolling_custom_index_support():
@@ -487,7 +471,7 @@ def test_rolling_custom_index_support():
     expected = df.rolling(window=indexer).sum()
     actual = gdf.rolling(window=indexer).sum()
 
-    assert_eq(expected, actual, check_dtype=False)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
