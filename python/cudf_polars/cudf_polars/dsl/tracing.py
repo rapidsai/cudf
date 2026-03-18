@@ -223,7 +223,7 @@ def log_do_evaluate(
 @contextlib.contextmanager
 def bound_contextvars(**kwargs: Any) -> Generator[None, None, None]:
     """Wrapper around structlog.contextvars.bound_contextvars."""
-    if _HAS_STRUCTLOG:
+    if LOG_TRACES:
         with structlog.contextvars.bound_contextvars(**kwargs):
             yield
     else:
@@ -232,6 +232,6 @@ def bound_contextvars(**kwargs: Any) -> Generator[None, None, None]:
 
 def log(message: str, **kwargs: Any) -> None:
     """Wrapper around structlog.get_logger().info."""
-    if _HAS_STRUCTLOG:
+    if LOG_TRACES:
         log = structlog.get_logger()
         log.info(message, **kwargs)
