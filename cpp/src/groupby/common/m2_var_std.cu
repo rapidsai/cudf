@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/cmath>
+#include <cuda/std/functional>
 #include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail {
@@ -22,14 +24,14 @@ namespace cudf::groupby::detail {
 namespace {
 
 template <typename Source>
-__device__ constexpr bool is_m2_supported()
+constexpr bool is_m2_supported()
 {
   return is_numeric<Source>() && !is_fixed_point<Source>();
 }
 
 struct m2_functor {
   template <typename Source, typename... Args>
-  void operator()(Args...)  //
+  void operator()(Args&&...)  //
     requires(!is_m2_supported<Source>())
   {
     CUDF_FAIL("Invalid source type for M2 aggregation.");

@@ -53,7 +53,7 @@ CUDF_HOST_DEVICE constexpr bool is_marked(hash_value_type value) noexcept
 
 struct masked_hash_fn {
   template <typename T>
-  __device__ constexpr hash_value_type operator()(
+  CUDF_HOST_DEVICE constexpr hash_value_type operator()(
     cuco::pair<hash_value_type, T> const& key) const noexcept
   {
     return unset_mark(key.first);
