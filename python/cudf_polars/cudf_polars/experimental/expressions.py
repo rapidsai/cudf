@@ -461,16 +461,7 @@ def _decompose_expr_node(
             expr, input_ir, partition_info, config_options, names=names
         )
     elif isinstance(expr, UnaryFunction) and expr.name == "drop_nulls":
-        # drop_nulls can be applied partition-wise as a local row filter
-        # where each partition independently removes its null rows
-        columns, input_ir, partition_info = select(
-            [expr],
-            input_ir,
-            partition_info,
-            names=names,
-        )
-        (column,) = columns
-        return column, input_ir, partition_info
+        return expr, input_ir, partition_info
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
             expr,
