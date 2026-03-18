@@ -23,6 +23,7 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/iterator/counting_iterator.h>
@@ -101,7 +102,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
  * @brief Breaks the ties among equal value groups using binary operator and
  * transform this tied value to final rank.
  *
- * @param dense_rank dense rank of sorted input column (acts as key for value
+ * @param dense_rank_sorted dense rank of sorted input column (acts as key for value
  * groups).
  * @param tie_iter  iterator of rank to break ties among equal value groups.
  * @param sorted_order_view sorted order indices of input column
@@ -239,7 +240,7 @@ void rank_average(cudf::device_span<size_type const> group_keys,
     sorted_order_view,
     rank_mutable_view.begin<double>(),
     cuda::proclaim_return_type<MinCount>([] __device__(auto rank_count1, auto rank_count2) {
-      return MinCount{std::min(rank_count1.first, rank_count2.first),
+      return MinCount{cuda::std::min(rank_count1.first, rank_count2.first),
                       rank_count1.second + rank_count2.second};
     }),
     cuda::proclaim_return_type<double>([] __device__(MinCount minrank_count) {  // min+(count-1)/2

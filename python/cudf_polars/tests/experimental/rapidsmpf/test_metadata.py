@@ -227,6 +227,13 @@ def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) ->
             4,
             (0, 0),
         ),
+        # Resolves https://github.com/rapidsai/cudf/issues/21742
+        (
+            Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
+            (1,),
+            1,
+            (1, 0),
+        ),
     ],
 )
 def test_get_partitioning_moduli_allow_subset(
