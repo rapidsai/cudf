@@ -455,7 +455,6 @@ async def chunkwise_evaluate(
     tracer
         Optional tracer for runtime metrics.
     """
-    # TODO: Ensure this emits a "dynamic planning" decision of "chunkwise"
     await send_metadata(ch_out, context, metadata)
     if tracer is not None and metadata.duplicated:
         tracer.set_duplicated()

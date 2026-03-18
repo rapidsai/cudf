@@ -120,12 +120,12 @@ def test_log_query_plan() -> None:
     assert b"children_ir_ids" in result
 
 
-# TODO: skip if not rapidsmpf
 @pytest.mark.skipif(
     os.environ.get("CUDF_POLARS_LOG_TRACES") != "1",
     reason="Requires CUDF_POLARS_LOG_TRACES=1.",
 )
 def test_sets_cudf_polars_query_id():
+    pytest.importorskip("rapidsmpf")
     left = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     right = pl.LazyFrame({"a": [1, 2, 3], "c": [7, 8, 9]})
 
