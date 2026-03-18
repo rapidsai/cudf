@@ -79,8 +79,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
 {
   CUDF_FUNC_RANGE();
 
-  auto index_policy = is_unsigned(gather_map.type()) ? negative_index_policy::NOT_ALLOWED
-                                                     : negative_index_policy::ALLOWED;
+  auto const index_policy = is_unsigned(gather_map.type()) ? negative_index_policy::NOT_ALLOWED
+                                                           : negative_index_policy::ALLOWED;
 
   return detail::gather(source_table, gather_map, bounds_policy, index_policy, stream, mr);
 }
