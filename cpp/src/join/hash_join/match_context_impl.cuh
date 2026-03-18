@@ -17,6 +17,10 @@
 
 namespace cudf::detail {
 
+struct zero_count_to_one {
+  __device__ size_type operator()(size_type count) const { return count == 0 ? 1 : count; }
+};
+
 template <typename OutputIterator>
 void compute_match_counts(
   table_view const& build,
@@ -75,9 +79,8 @@ cudf::join_match_context hash_join<Hasher>::join_match_context_impl(
                                        match_counts->begin(),
                                        stream);
   } else {
-    auto transform = [] __device__(size_type count) { return count == 0 ? 1 : count; };
     auto transformed_output =
-      thrust::make_transform_output_iterator(match_counts->begin(), transform);
+      thrust::make_transform_output_iterator(match_counts->begin(), zero_count_to_one{});
     cudf::detail::compute_match_counts(_build,
                                        _preprocessed_build,
                                        _hash_table,
