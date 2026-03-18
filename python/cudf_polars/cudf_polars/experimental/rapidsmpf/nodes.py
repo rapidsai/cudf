@@ -654,6 +654,7 @@ async def metadata_feeder_node(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
+    ir_context: IRExecutionContext,
 ) -> None:
     """
     Forward data with new metadata.
@@ -670,16 +671,16 @@ async def metadata_feeder_node(
         The output channel to forward data to and add metadata to.
     metadata
         The metadata to add to the output channel.
+    ir_context
+        The execution context for the IR node.
     """
     # TODO: Use ir_context
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ):
         await send_metadata(ch_out, context, metadata)
-        if tracer is not None and metadata.duplicated:
-            tracer.set_duplicated()
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
-            if tracer is not None:
-                tracer.chunk_count += 1
         await ch_out.drain(context)
 
 

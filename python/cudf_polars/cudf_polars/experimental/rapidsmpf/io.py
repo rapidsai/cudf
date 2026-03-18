@@ -732,6 +732,7 @@ def _(
                 # Just estimate the local count as well.
                 local_count=math.ceil(partition_info.count / rec.state["comm"].nranks),
             ),
+            rec.state["ir_context"],
         )
         nodes[ir] = [native_node, metadata_node]
     else:
