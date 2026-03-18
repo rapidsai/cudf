@@ -215,7 +215,7 @@ The query plan is serialized with the following schema:
 | type       | `str` | The name of the IR node. |
 
 
-`PartitionInfo` objects have hte following schema:
+`PartitionInfo` objects have the following schema:
 
 | Field Name | Type | Description |
 | ---------- | ---- | ----------- |
