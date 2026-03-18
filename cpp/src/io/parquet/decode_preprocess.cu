@@ -15,6 +15,7 @@
 
 #include <cooperative_groups.h>
 #include <cuda/std/iterator>
+#include <cuda/std/limits>
 
 namespace cudf::io::parquet::detail {
 
@@ -42,6 +43,7 @@ using unused_state_buf = page_state_buffers_s<0, 0, 0>;
  * @param rep Repetition level buffer
  * @param def Definition level buffer
  * @param bounds_set Boolean indicating whether min/max row bounds have been set
+ * @param block The cooperative thread block
  */
 template <typename level_t>
 __device__ void update_page_sizes(page_state_s* s,
@@ -327,7 +329,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
     // everything
     if (is_base_pass) {
       s->first_row             = 0;
-      s->num_rows              = std::numeric_limits<int32_t>::max();
+      s->num_rows              = cuda::std::numeric_limits<int32_t>::max();
       s->row_index_lower_bound = -1;
     }
   }
@@ -412,7 +414,7 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // the level stream decoders. max_output_values is max to remove rolling buffer
   __shared__ rle_run def_runs[rle_run_buffer_size];
   __shared__ rle_run rep_runs[rle_run_buffer_size];
-  static constexpr int max_output_values = std::numeric_limits<int>::max();
+  static constexpr int max_output_values = cuda::std::numeric_limits<int>::max();
   rle_stream<level_t, level_decode_block_size, max_output_values>
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -39,7 +39,8 @@ namespace detail {
  * @tparam SourceIterator must produce string_view objects
  * @tparam MapIterator must produce index values within the target column.
  *
- * @param source The iterator of source strings to scatter into the output column.
+ * @param begin Begin iterator of source strings to scatter into the output column.
+ * @param end End iterator of source strings to scatter into the output column.
  * @param scatter_map Iterator of indices into the output column.
  * @param target The set of columns into which values from the source column
  *        are to be scattered.

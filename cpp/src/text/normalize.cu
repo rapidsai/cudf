@@ -270,6 +270,7 @@ namespace {
  * @param d_normalized The normalized set of UTF-8 characters; 3 uints per input byte
  * @param total_count Number of bytes represented by d_normalized; len(d_normalized)/3
  * @param special_tokens Tokens to check against
+ * @param do_lower_case Whether to convert text to lower case
  */
 CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
                                        int64_t total_count,

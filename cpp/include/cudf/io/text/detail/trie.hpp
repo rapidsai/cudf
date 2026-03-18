@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -165,7 +165,7 @@ struct trie {
   /**
    * @brief Create a trie which represents the given pattern.
    *
-   * @param pattern The patterns to store in the trie
+   * @param patterns The patterns to store in the trie
    * @param stream The stream to use for allocation and copy
    * @param mr Memory resource to use for the device memory allocation
    * @return The trie.

@@ -25,6 +25,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
+#include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
@@ -50,7 +51,7 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
  *
  * This value should be different from `NOT_FOUND_SENTINEL`.
  */
-auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
+auto constexpr __device__ NULL_SENTINEL = cuda::std::numeric_limits<size_type>::min();
 
 /**
  * @brief Check if the given type is a supported non-nested type in `cudf::lists::contains`.

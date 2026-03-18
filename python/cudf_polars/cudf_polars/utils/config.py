@@ -38,10 +38,13 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
+    from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
     import rmm.mr
+
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
 
 
 __all__ = [
@@ -50,6 +53,7 @@ __all__ = [
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
+    "RayContext",
     "Runtime",
     "SPMDContext",
     "Scheduler",  # Deprecated, kept for backward compatibility
@@ -172,6 +176,7 @@ class Cluster(enum.StrEnum):
     SINGLE = "single"
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
+    RAY = "ray"
 
 
 class Scheduler(enum.StrEnum):
@@ -602,7 +607,7 @@ class SPMDContext:
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
         ``SPMDContext`` locally inside
-        :func:`~cudf_polars.experimental.rapidsmpf.spmd.spmd_execution`, so
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.spmd_execution`, so
         pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 
@@ -619,6 +624,28 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+
+
+@dataclasses.dataclass(frozen=True)
+class RayContext:
+    """
+    Configuration for Ray cluster execution.
+
+    .. note::
+        This dataclass holds Ray actor handles, which are only valid within the
+        Ray session that created them. It is stripped from ``config_options``
+        before pickling for remote actor calls in
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`.
+        Do not persist or transfer this object across Ray sessions.
+
+    Parameters
+    ----------
+    rank_actors
+        List of :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RankActor`
+        handles, one per GPU in the cluster.
+    """
+
+    rank_actors: list[ActorHandle[RankActor]]
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -846,6 +873,7 @@ class StreamingExecutor:
         )
     )
     spmd: SPMDContext | None = None
+    ray_context: RayContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
