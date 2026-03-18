@@ -1034,10 +1034,10 @@ target_link_libraries(
           kvikio::kvikio
           nanoarrow::nanoarrow
           zstd
+          liblz4_static
           CUDA::nvJitLink
           CUDA::nvrtc
           CUDA::cuda_driver
-          lz4_objects
 )
 
 # Add Conda library, and include paths if specified
