@@ -129,7 +129,6 @@ outputs:
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
-        - ${{ pin_compatible("libnvjitlink", lower_bound="x.x.x", upper_bound="x") }}
         - if: linux and x86_64
           then:
             - libcufile
@@ -154,7 +153,6 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
-          - libnvjitlink
           - librdkafka
           - libzlib
           - librmm
