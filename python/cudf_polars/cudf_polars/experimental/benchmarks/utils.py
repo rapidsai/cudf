@@ -729,7 +729,7 @@ def initialize_single_cluster(run_config: RunConfig, args: argparse.Namespace) -
     assert run_config.runtime == "rapidsmpf"
 
     try:
-        from rapidsmpf.config import Options
+        from rapidsmpf.config import Options, get_environment_variables
         from rapidsmpf.integrations.single import setup_worker
     except ImportError as err:
         raise ImportError(
@@ -747,6 +747,7 @@ def initialize_single_cluster(run_config: RunConfig, args: argparse.Namespace) -
                 "single_print_statistics": str(args.rapidsmpf_print_statistics),
                 "single_oom_protection": str(args.rapidsmpf_oom_protection),
             }
+            | get_environment_variables()
         ),
     )
 
