@@ -30,9 +30,10 @@ void context::ensure_jit_cache_initialized()
 {
   std::call_once(_jit_cache_init_flag, [&]() {
     // make sure the required directories exist
-    std::filesystem::create_directories(_config.rtc_cache_dir);
+    std::filesystem::create_directories(_config.rtcx_cache_dir);
     std::filesystem::create_directories(_config.jit_bundle_dir);
     std::filesystem::create_directories(_config.jit_pch_dir);
+    std::filesystem::create_directories(_config.jit_tmp_dir);
 
     rtcx::initialize();
 
@@ -40,21 +41,29 @@ void context::ensure_jit_cache_initialized()
                                      .num_mem_libraries = _config.kernel_cache_limit_process,
                                      .num_disk_entries  = _config.kernel_cache_limit_disk};
 
-    _rtc_cache = std::make_unique<rtcx::cache_t>(_config.rtc_cache_dir,
-                                                 limits,
-                                                 bool{_config.preload_jit_cache},
-                                                 bool{_config.disable_jit_cache});
-    // note that jit_bundle depends on rtc_cache, so we ensure rtc_cache is initialized first.
-    _jit_bundle = std::make_unique<jit_bundle_t>(_config.jit_bundle_dir, *_rtc_cache);
+    _rtcx_cache = std::make_unique<rtcx::cache_t>(_config.rtcx_cache_dir,
+                                                  _config.jit_tmp_dir,
+                                                  limits,
+                                                  bool{_config.preload_jit_cache},
+                                                  bool{_config.disable_jit_cache},
+                                                  bool{_config.prematerialize_jit_cache});
+
+    if (_config.clear_jit_cache) {
+      _rtcx_cache->clear_memory_store();
+      _rtcx_cache->clear_disk_store();
+    }
+
+    // note that jit_bundle depends on rtcx_cache, so we ensure rtcx_cache is initialized first.
+    _jit_bundle = std::make_unique<jit_bundle_t>(_config.jit_bundle_dir, *_rtcx_cache);
   });
 }
 
 context::~context() { rtcx::teardown(); }
 
-rtcx::cache_t& context::rtc_cache()
+rtcx::cache_t& context::rtcx_cache()
 {
   ensure_jit_cache_initialized();
-  return *_rtc_cache;
+  return *_rtcx_cache;
 }
 
 jit_bundle_t& context::jit_bundle()
@@ -80,32 +89,21 @@ static std::optional<context> _context{std::nullopt};
 static std::optional<std::once_flag> _context_init_flag{std::in_place};
 static std::optional<std::once_flag> _context_deinit_flag{std::in_place};
 
-std::filesystem::path get_cudf_dir()
+std::filesystem::path get_cudf_root_dir()
 {
-  auto cudf_dir_env = std::getenv("LIBCUDF_DIR");
-  if (cudf_dir_env != nullptr) {
-    return std::filesystem::path(cudf_dir_env);
-  } else {
-    auto home_dir = std::getenv("HOME");
-    CUDF_EXPECTS(home_dir != nullptr, "HOME environment variable is not set", std::runtime_error);
-    auto cudf_dir = std::filesystem::path(home_dir) / ".cudf";
-    return cudf_dir;
+  if (auto cudf = getenv_optional<std::string>("LIBCUDF_ROOT_DIR"); cudf.has_value()) {
+    return std::filesystem::path(*cudf);
   }
-}
 
-std::filesystem::path get_jit_bundle_dir()
-{
-  return getenv_or("LIBCUDF_JIT_BUNDLE_DIR", get_cudf_dir() / "jit_bundle");
-}
+  if (auto home = getenv_optional<std::string>("HOME"); home.has_value()) {
+    return std::filesystem::path(*home) / ".libcudf";
+  }
 
-std::filesystem::path get_rtc_cache_dir()
-{
-  return getenv_or("LIBCUDF_RTC_CACHE_DIR", get_cudf_dir() / "rtc_cache");
-}
-
-std::filesystem::path get_jit_pch_dir()
-{
-  return getenv_or("LIBCUDF_JIT_PCH_DIR", get_cudf_dir() / "jit_pch");
+  CUDF_FAIL(
+    "Unable to determine the CUDF root directory. Please set the `LIBCUDF_ROOT_DIR`, "
+    "`HOME` or `LIBCUDF_ROOT_DIR` environment variables to allow automatic resolution of the root "
+    "directory.",
+    std::runtime_error);
 }
 
 }  // namespace cudf
@@ -115,27 +113,33 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    bool dump_codegen      = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
-    bool use_jit           = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
-    bool preload_jit_cache = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
-    bool disable_jit_cache = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
+    bool dump_codegen             = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit                  = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool preload_jit_cache        = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
+    bool prematerialize_jit_cache = get_bool_env_or("LIBCUDF_JIT_PREMATERIALIZE_CACHE", false);
+    bool disable_jit_cache        = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
+    bool clear_jit_cache          = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
 
-    auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16384U);
+    auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
     auto kernel_cache_limit_disk    = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 131'072U);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
-    auto jit_bundle_dir = get_jit_bundle_dir();
-    auto rtc_cache_dir  = get_rtc_cache_dir();
-    auto jit_pch_dir    = get_jit_pch_dir();
+    auto jit_bundle_dir = get_cudf_root_dir() / "jit" / "bundle";
+    auto rtcx_cache_dir = get_cudf_root_dir() / "jit" / "rtcx_cache";
+    auto jit_pch_dir    = get_cudf_root_dir() / "jit" / "pch";
+    auto jit_tmp_dir    = get_cudf_root_dir() / "jit" / "tmp";
 
     context_config cfg{.dump_codegen               = dump_codegen,
                        .use_jit                    = use_jit,
                        .preload_jit_cache          = preload_jit_cache,
+                       .prematerialize_jit_cache   = prematerialize_jit_cache,
                        .disable_jit_cache          = disable_jit_cache,
-                       .rtc_cache_dir              = rtc_cache_dir,
+                       .clear_jit_cache            = clear_jit_cache,
+                       .rtcx_cache_dir             = rtcx_cache_dir,
                        .jit_bundle_dir             = jit_bundle_dir,
                        .jit_pch_dir                = jit_pch_dir,
+                       .jit_tmp_dir                = jit_tmp_dir,
                        .kernel_cache_limit_process = kernel_cache_limit_process,
                        .kernel_cache_limit_disk    = kernel_cache_limit_disk};
 
@@ -156,9 +160,18 @@ void teardown()
   });
 }
 
-void enable_jit_cache(bool enable) { get_context().program_cache().enable(enable); }
+void enable_jit_cache(bool enabled)
+{
+  auto& cache = get_context().rtcx_cache();
+  cache.enable(enabled);
+}
 
-void clear_jit_cache() { get_context().program_cache().clear(); }
+void clear_jit_cache()
+{
+  auto& cache = get_context().rtcx_cache();
+  cache.clear_memory_store();
+  cache.clear_disk_store();
+}
 
 context& get_context()
 {

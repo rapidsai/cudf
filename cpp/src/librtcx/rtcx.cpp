@@ -222,6 +222,7 @@ sha256 sha256_context::finalize()
   DO_IT(LaunchKernelEx)                 \
   DO_IT(LaunchCooperativeKernel)        \
   DO_IT(KernelGetName)                  \
+  DO_IT(KernelGetFunction)              \
   DO_IT(LibraryLoadData)                \
   DO_IT(LibraryGetKernel)               \
   DO_IT(LibraryGetKernelCount)          \
@@ -635,15 +636,14 @@ void log_nvJitLink_result(link_params const& params,
 
 }  // namespace
 
-blob_t blob_t::from_vector(std::vector<std::uint8_t>&& data)
+blob_t blob_t::from_buffer(byte_buffer&& buffer)
 {
-  auto ptr = new std::vector<std::uint8_t>(std::move(data));
+  auto size = buffer.size();
+  auto data = buffer.release();
   return blob_t::from_parts(
-    ptr->data(),
-    ptr->size(),
-    blob_t::deallocator{ptr, [](void* user_data, std::uint8_t const*, std::size_t) {
-                          delete reinterpret_cast<std::vector<std::uint8_t>*>(user_data);
-                        }});
+    data, size, +[](std::uint8_t const* data, std::size_t) {
+      free(const_cast<std::uint8_t*>(data));
+    });
 }
 
 blob_t blob_t::from_static_data(std::span<std::uint8_t const> data)
@@ -651,7 +651,7 @@ blob_t blob_t::from_static_data(std::span<std::uint8_t const> data)
   return blob_t::from_parts(data.data(), data.size(), blob_t::noop_deallocator);
 }
 
-std::vector<unsigned char> compile(compile_params const& params)
+byte_buffer compile(compile_params const& params)
 {
   RTCX_EXPECTS(params.name != nullptr, "Fragment name must not be null", std::logic_error);
   RTCX_EXPECTS(params.source != nullptr, "Fragment source must not be null", std::logic_error);
@@ -679,24 +679,21 @@ std::vector<unsigned char> compile(compile_params const& params)
     case binary_type::CUBIN: {
       std::size_t cubin_size;
       RTCX_CHECK_NVRTC(nvrtc->GetCUBINSize(program, &cubin_size));
-      std::vector<unsigned char> cubin;
-      cubin.resize(cubin_size);
+      auto cubin = byte_buffer::make(cubin_size);
       RTCX_CHECK_NVRTC(nvrtc->GetCUBIN(program, reinterpret_cast<char*>(cubin.data())));
       return cubin;
     } break;
     case binary_type::LTO_IR: {
       std::size_t lto_ir_size;
       RTCX_CHECK_NVRTC(nvrtc->GetLTOIRSize(program, &lto_ir_size));
-      std::vector<unsigned char> lto_ir;
-      lto_ir.resize(lto_ir_size);
+      auto lto_ir = byte_buffer::make(lto_ir_size);
       RTCX_CHECK_NVRTC(nvrtc->GetLTOIR(program, reinterpret_cast<char*>(lto_ir.data())));
       return lto_ir;
     } break;
     case binary_type::PTX: {
       std::size_t ptx_size;
       RTCX_CHECK_NVRTC(nvrtc->GetPTXSize(program, &ptx_size));
-      std::vector<unsigned char> ptx;
-      ptx.resize(ptx_size);
+      auto ptx = byte_buffer::make(ptx_size);
       RTCX_CHECK_NVRTC(nvrtc->GetPTX(program, reinterpret_cast<char*>(ptx.data())));
       return ptx;
     } break;
@@ -806,7 +803,7 @@ library load_library(std::span<std::uint8_t const> binary)
   return library;
 }
 
-std::vector<std::uint8_t> link_library(link_params const& params)
+byte_buffer link_library(link_params const& params)
 {
   RTCX_EXPECTS(params.name != nullptr, "Link output name must not be null", std::logic_error);
   RTCX_EXPECTS(params.output_type == binary_type::CUBIN || params.output_type == binary_type::PTX,
@@ -847,16 +844,14 @@ std::vector<std::uint8_t> link_library(link_params const& params)
     case binary_type::CUBIN: {
       std::size_t cubin_size;
       RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedCubinSize(handle, &cubin_size));
-      std::vector<uint8_t> cubin;
-      cubin.resize(cubin_size);
+      auto cubin = byte_buffer::make(cubin_size);
       RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedCubin(handle, cubin.data()));
       return cubin;
     } break;
     case binary_type::PTX: {
       std::size_t ptx_size;
       RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedPtxSize(handle, &ptx_size));
-      std::vector<uint8_t> ptx;
-      ptx.resize(ptx_size);
+      auto ptx = byte_buffer::make(ptx_size);
       RTCX_CHECK_NVJITLINK(nvjitlink->GetLinkedPtx(handle, reinterpret_cast<char*>(ptx.data())));
       return ptx;
     } break;
@@ -922,19 +917,27 @@ namespace {
 
 }  // namespace
 
-cache_t::cache_t(std::string cache_dir, cache_limits const& limits, bool preload, bool disable)
+cache_t::cache_t(std::string cache_dir,
+                 std::string tmp_dir,
+                 cache_limits const& limits,
+                 bool preload,
+                 bool disable,
+                 bool materialize_all)
   : enabled_{!disable},
     cache_dir_{std::move(cache_dir)},
+    tmp_dir_{std::move(tmp_dir)},
     limits_{limits},
     lock_{},
     blobs_cache_{limits.num_mem_blobs},
     libraries_cache_{limits.num_mem_libraries},
     tick_{0}
 {
-  if (preload) { preload_from_disk(); }
+  if (preload) { preload_from_disk(materialize_all); }
 }
 
 std::string const& cache_t::get_cache_dir() { return cache_dir_; }
+
+std::string const& cache_t::get_tmp_dir() { return tmp_dir_; }
 
 std::optional<blob_t> blob_t::from_file(char const* path)
 {
@@ -1046,12 +1049,12 @@ void evict_disk_entries(std::string const& cache_dir, std::uint32_t limit)
 
   if (paths.size() < limit) { return; }
 
-  std::vector<std::uint32_t> ranking_indices;
+  std::vector<std::size_t> ranking_indices;
   ranking_indices.resize(paths.size());
 
   std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
 
-  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](std::int32_t a, std::int32_t b) {
+  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](auto a, auto b) {
     return access_times[a] < access_times[b];
   });
 
@@ -1068,16 +1071,18 @@ void evict_disk_entries(std::string const& cache_dir, std::uint32_t limit)
 /// @brief atomically writes a blob to disk by first writing to a temporary file and then renaming
 /// it to the final path.
 void cache_blob_to_disk(std::string const& cache_dir,
+                        std::string const& tmp_dir,
                         std::string const& object_type,
                         sha256 const& sha,
                         std::span<std::uint8_t const> binary,
                         std::uint32_t limit)
 {
   if (limit > 0) {
-    char temp_path[] = "/tmp/rtcx-bin-XXXXXX";
+    auto tmp_path = std::format("{}/rtcx-bin-XXXXXX", tmp_dir);
+    (void)tmp_path.c_str();  // to ensure null-termination for mkstemp
 
     {
-      std::int32_t fd = mkstemp(temp_path);
+      std::int32_t fd = mkstemp(tmp_path.data());
       if (fd == -1) { throw_posix("Failed to create temporary file for RTCX cache", "mkstemp"); }
 
       RTCX_DEFER([&] {
@@ -1095,10 +1100,10 @@ void cache_blob_to_disk(std::string const& cache_dir,
     std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
 
     // rename is atomic, even if another process is performing the same operation
-    if (rename(temp_path, final_path.c_str()) == -1) {
+    if (rename(tmp_path.c_str(), final_path.c_str()) == -1) {
       if (errno == EEXIST) {
         // another process has already created the file, so just remove our temp file
-        if (remove(temp_path) == -1) {
+        if (remove(tmp_path.c_str()) == -1) {
           throw_posix("Failed to remove temporary RTCX cache file", "remove");
         }
         return;
@@ -1173,7 +1178,8 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
       promise.set_value(result);
 
       // store result to disk
-      cache_blob_to_disk(cache_dir_, "blob", sha, result->view(), limits_.num_disk_entries);
+      cache_blob_to_disk(
+        cache_dir_, tmp_dir_, "blob", sha, result->view(), limits_.num_disk_entries);
 
       return ret_fut;
     }
@@ -1244,7 +1250,8 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       promise.set_value(library);
 
       // store result to disk
-      cache_blob_to_disk(cache_dir_, "cuLibrary", sha, blob->view(), limits_.num_disk_entries);
+      cache_blob_to_disk(
+        cache_dir_, tmp_dir_, "cuLibrary", sha, blob->view(), limits_.num_disk_entries);
 
       return ret_fut;
     }
@@ -1299,18 +1306,28 @@ void cache_t::clear_memory_store()
 
 void cache_t::clear_disk_store() { evict_disk_entries(cache_dir_, 0); }
 
-void cache_t::preload_from_disk()
+void cache_t::preload_from_disk(bool materialize_all)
 {
-  auto [paths, _] = get_disk_entries(cache_dir_);
+  auto [paths, access_times] = get_disk_entries(cache_dir_);
 
-  // TODO(lamarrr): we have promises that may not be fulfilled if errors occur, they need to be handled?
-  // i.e. if the exceptions is caught
+  std::vector<std::size_t> ranking_indices;
+  ranking_indices.resize(paths.size());
+  std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
+  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](auto a, auto b) {
+    return access_times[a] > access_times[b];
+  });
+
+  auto load_count = std::min<std::size_t>(ranking_indices.size(),
+                                          limits_.num_mem_blobs + limits_.num_mem_libraries);
+
+  ranking_indices.resize(load_count);
 
   {
     std::lock_guard guard{lock_};
     tick_++;
 
-    for (auto& path : paths) {
+    for (auto index : ranking_indices) {
+      auto path = paths[index];
       try {
         auto file_name   = std::filesystem::path{path}.filename().string();
         auto sha_str_end = file_name.find('.');
@@ -1319,21 +1336,24 @@ void cache_t::preload_from_disk()
         if (!data.has_value()) { continue; }
 
         if (path.ends_with(".blob.bin")) {
-          std::promise<blob> promise;
+          auto blob = std::make_shared<blob_t>(std::move(*data));
+          std::promise<rtcx::blob> promise;
           auto fut = promise.get_future().share();
-          promise.set_value(std::make_shared<blob_t>(std::move(*data)));
+          promise.set_value(std::move(blob));
           blobs_cache_.insert(sha256::parse(sha_str), std::move(fut), tick_);
         } else if (path.ends_with(".cuLibrary.bin")) {
+          auto lib = load_library(data->view());
+          if (materialize_all) { [[maybe_unused]] auto kernels = lib->enumerate_kernels(); }
           std::promise<library> promise;
           auto fut = promise.get_future().share();
-          promise.set_value(load_library(data->view()));
+          promise.set_value(std::move(lib));
           libraries_cache_.insert(sha256::parse(sha_str), std::move(fut), tick_);
         }
       } catch (std::exception const& e) {
         // ignore any errors during preload
-        log_trace(e.what());
+        log_error(e.what());
       } catch (...) {
-        log_trace("Unknown error during preload");
+        log_error("Unknown error during preload");
       }
     }
   }

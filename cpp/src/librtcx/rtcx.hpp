@@ -192,9 +192,129 @@ struct [[nodiscard]] sha256_context {
 enum class binary_type : std::int8_t { LTO_IR = 0, CUBIN = 2, FATBIN = 3, PTX = 4 };
 
 /**
- * @brief Represents a binary blob
+ * @brief An heap-allocated statically-sized buffer. Its contents are not guaranteed to be
+ * initialized.
+ */
+template <typename T>
+  requires(!std::is_const_v<T> && std::is_trivially_copyable_v<T> &&
+           std::is_trivially_destructible_v<T>)
+struct buffer {
+ private:
+  T* _data;
+  std::size_t _size;
+
+  buffer(T* data, std::size_t size) : _data(data), _size(size) {}
+
+ public:
+  /**
+   * @brief Creates a new buffer of the given size, with uninitialized contents.
+   */
+  static buffer make(std::size_t size)
+  {
+    T* data = static_cast<T*>(malloc(size * sizeof(T)));
+    if (data == nullptr) { throw std::bad_alloc(); }
+    return buffer{data, size};
+  }
+
+  buffer() : buffer{nullptr, 0} {}  //< Default constructor. Creates an empty buffer
+
+  buffer(buffer const&) = delete;
+
+  buffer& operator=(buffer const&) = delete;
+
+  /**
+   * @brief Move constructor. Transfers ownership of the buffer from the source to the new object.
+   * After the move, the source buffer is left in an empty state (data pointer is null and size is
+   * zero).
+   */
+  buffer(buffer&& other) noexcept : _data(other._data), _size(other._size)
+  {
+    other._data = nullptr;
+    other._size = 0;
+  }
+
+  /**
+   * @brief Move assignment operator. Transfers ownership of the buffer from the source to the
+   * current object.
+   */
+  buffer& operator=(buffer&& other) noexcept
+  {
+    if (this == &other) [[unlikely]] { return *this; }
+    this->~buffer();
+    new (this) buffer(std::move(other));
+    return *this;
+  }
+
+  ~buffer() noexcept { free(_data); }
+
+  /**
+   * @brief Returns a pointer to the buffer's data
+   * @return A pointer to the buffer's data
+   */
+  [[nodiscard]] T* data() const { return _data; }
+
+  /**
+   * @brief Returns the size of the buffer
+   * @return The size of the buffer in number of elements
+   */
+  [[nodiscard]] std::size_t size() const { return _size; }
+
+  /**
+   * @brief Returns an iterator to the beginning of the buffer
+   * @return An iterator to the beginning of the buffer
+   */
+  [[nodiscard]] T* begin() { return _data; }
+
+  /**
+   * @brief Returns an iterator to the end of the buffer
+   * @return An iterator to the end of the buffer
+   */
+  [[nodiscard]] T* end() { return _data + _size; }
+
+  /**
+   * @brief Returns a const iterator to the beginning of the buffer
+   * @return A const iterator to the beginning of the buffer
+   */
+  [[nodiscard]] T const* begin() const { return _data; }
+
+  /**
+   * @brief Returns a const iterator to the end of the buffer
+   * @return A const iterator to the end of the buffer
+   */
+  [[nodiscard]] T const* end() const { return _data + _size; }
+
+  /**
+   * @brief Returns a const iterator to the beginning of the buffer
+   * @return A const iterator to the beginning of the buffer
+   */
+  [[nodiscard]] T const* cbegin() const { return _data; }
+
+  /**
+   * @brief Returns a const iterator to the end of the buffer
+   * @return A const iterator to the end of the buffer
+   */
+  [[nodiscard]] T const* cend() const { return _data + _size; }
+
+  /**
+   * @brief Releases ownership of the buffer's data and returns a pointer to it. After calling this
+   * function, the buffer is left in an empty state (data pointer is null and size is zero).
+   * @return A pointer to the buffer's data
+   */
+  [[nodiscard]] T* release()
+  {
+    T* data = _data;
+    _data   = nullptr;
+    _size   = 0;
+    return data;
+  }
+};
+
+using byte_buffer = buffer<std::uint8_t>;
+
+/**
+ * @brief Represents an immutable blob view
  * @details Manages the lifetime of the binary data via a user-provided deallocator function. This
- * enables zero-copy usage of binary data stored in various forms (e.g., std::vector, mmap'd file,
+ * enables zero-copy view of binary data stored in various forms (e.g., std::vector, mmap'd file,
  * etc.).
  */
 struct [[nodiscard]] blob_t {
@@ -243,7 +363,7 @@ struct [[nodiscard]] blob_t {
     return blob_t{data, size, deallocator};
   }
 
-  static blob_t from_vector(std::vector<std::uint8_t>&& data);
+  static blob_t from_buffer(byte_buffer&& buffer);
 
   static blob_t from_static_data(std::span<std::uint8_t const> data);
 
@@ -253,9 +373,8 @@ struct [[nodiscard]] blob_t {
 using blob = std::shared_ptr<blob_t>;
 
 /**
- * @brief Represents the occupancy configuration for a kernel, including the minimum grid size and
- * the block size required to achieve that occupancy. This information can be used to optimize
- * kernel launches for maximum performance on the GPU.
+ * @brief Represents the occupancy configuration for a kernel. This information can be used to
+ * optimize kernel launches for maximum performance on the GPU.
  */
 struct [[nodiscard]] kernel_occupancy_config {
   std::uint32_t min_grid_size = 0;  //< Minimum grid size to achieve the maximum occupancy
@@ -376,52 +495,29 @@ struct [[nodiscard]] library_t {
 
 using library = std::shared_ptr<library_t>;
 
+/**
+ * @brief Parameters for compiling source code into a binary blob using NVRTC
+ */
 struct [[nodiscard]] compile_params {
-  /**
-   * @brief Name of the kernel or library being compiled
-   */
-  char const* name = nullptr;
-
-  /**
-   * @brief Source code to be compiled (e.g. PTX or LTO IR)
-   */
-  char const* source = nullptr;
-
-  /**
-   * @brief Include names of each header file provided in the `headers` field, used for resolving
-   * #include directives during compilation
-   */
-  std::span<char const* const> header_include_names = {};
-
-  /**
-   * @brief Contents of header files required for compilation
-   */
-  std::span<char const* const> headers = {};
-
-  /**
-   * @brief NVRTC compile options
-   */
-  std::span<char const* const> options = {};
-
-  /**
-   * @brief The name expressions of the kernel entry points to be compiled, used for retrieving
-   * kernel references after compilation.
-   */
-  std::span<char const* const> name_expressions = {};
-
-  /**
-   * @brief Desired output binary type (e.g. PTX, CUBIN, etc.)
-   */
-  binary_type target_type = binary_type::LTO_IR;
+  char const* name   = nullptr;                            //< Debug name for the compilation unit
+  char const* source = nullptr;                            //< Source code to be compiled
+  std::span<char const* const> header_include_names = {};  //< Header file names
+  std::span<char const* const> headers              = {};  //< Header file contents
+  std::span<char const* const> options              = {};  //< NVRTC compilation options
+  std::span<char const* const> name_expressions     = {};  //< Name expressions to be instantiated
+  binary_type target_type                           = binary_type::LTO_IR;  //<  Output binary type
 };
 
+/**
+ * @brief Parameters for linking multiple compiled fragments into a single library
+ */
 struct [[nodiscard]] link_params {
-  char const* name                                         = nullptr;
-  binary_type output_type                                  = binary_type::CUBIN;
-  std::span<std::span<std::uint8_t const> const> fragments = {};
-  std::span<binary_type const> fragment_binary_types       = {};
-  std::span<char const* const> fragment_names              = {};
-  std::span<char const* const> link_options                = {};
+  char const* name        = nullptr;             //< Debug name for the linked library
+  binary_type output_type = binary_type::CUBIN;  //< Output binary type
+  std::span<std::span<std::uint8_t const> const> fragments = {};  //< Binary data for each fragment
+  std::span<binary_type const> fragment_binary_types       = {};  //< Binary type for each fragment
+  std::span<char const* const> fragment_names              = {};  //< Debug name for each fragment
+  std::span<char const* const> link_options                = {};  //< NVJITLink options
 };
 
 namespace detail {
@@ -553,6 +649,8 @@ struct cache_t {
 
   std::string cache_dir_;
 
+  std::string tmp_dir_;
+
   cache_limits limits_;
 
   std::mutex lock_;
@@ -571,14 +669,24 @@ struct cache_t {
    * for preloading and enabling the cache.
    * @param cache_dir The directory path to be used for on-disk caching of compiled blobs and
    * libraries
+   * @param tmp_dir The directory path to be used for temporary files during atomic writes to the
+   * on-disk cache
    * @param limits A cache_limits struct specifying the maximum number of blobs and libraries to
    * store in the cache before eviction occurs
    * @param preload A boolean flag indicating whether to preload the cache from disk during
    * initialization, allowing for faster retrieval of previously compiled kernels at runtime
    * @param disable A boolean flag indicating whether to disable the cache entirely, preventing any
    * caching of compiled blobs and libraries in memory
+   * @param materialize_all A boolean flag indicating whether to make the compiled kernels fully
+   * materialized in memory during preloading to improve runtime stability at the cost of increased
+   * memory usage
    */
-  cache_t(std::string cache_dir, cache_limits const& limits, bool preload, bool disable);
+  cache_t(std::string cache_dir,
+          std::string tmp_dir,
+          cache_limits const& limits,
+          bool preload,
+          bool disable,
+          bool materialize_all);
   cache_t(cache_t const&)            = delete;
   cache_t& operator=(cache_t const&) = delete;
   cache_t(cache_t&&)                 = delete;
@@ -590,6 +698,13 @@ struct cache_t {
    * @return String reference to the cache directory path
    */
   [[nodiscard]] std::string const& get_cache_dir();
+
+  /**
+   * @brief Get the directory path used for temporary files during atomic writes to the on-disk
+   * cache
+   * @return String reference to the temporary directory path
+   */
+  [[nodiscard]] std::string const& get_tmp_dir();
 
   /**
    * @brief Query the cache for a compiled blob by its SHA-256 hash, or insert it if not present
@@ -667,9 +782,11 @@ struct cache_t {
 
   /***
    * @brief Pre-load the JIT program cache from disk into memory during initialization, allowing for
-   * faster retrieval of previously compiled kernels at runtime.
+   * faster retrieval and execution of previously compiled kernels at runtime.
+   * @param materialize_all Whether to make the compiled kernels fully materialized in memory to
+   * improve runtime stability.
    */
-  void preload_from_disk();
+  void preload_from_disk(bool materialize_all);
 
   /***
    * @brief Enable the cache, allowing it to store and retrieve compiled blobs and libraries in
@@ -690,9 +807,9 @@ struct cache_t {
  *
  * @param params Compilation parameters including source code, headers, options, and target binary
  * type
- * @return A vector of bytes containing the compiled binary blob
+ * @return A buffer of bytes containing the compiled binary blob
  */
-[[nodiscard]] std::vector<std::uint8_t> compile(compile_params const& params);
+[[nodiscard]] byte_buffer compile(compile_params const& params);
 
 /**
  * @brief Load a compiled library from binary data
@@ -709,9 +826,9 @@ struct cache_t {
  *
  * @param params Linking parameters including the binary fragments to be linked and the target
  * binary type
- * @return A vector of bytes containing the linked library binary
+ * @return A buffer of bytes containing the linked library binary
  */
-[[nodiscard]] std::vector<std::uint8_t> link_library(link_params const& params);
+[[nodiscard]] byte_buffer link_library(link_params const& params);
 
 /**
  * @brief Demangle a CUDA symbol name into a human-readable form

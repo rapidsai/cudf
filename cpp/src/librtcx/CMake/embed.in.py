@@ -98,7 +98,9 @@ def generate_cxx_source_files_data(
     binary_file_name = f"embed_{id}.bin"
 
     cxx_header = f"""
-    #pragma once
+// Auto-generated header for embedded files with ID: {id}
+#pragma once
+
 #include <cstdint>
 #include <cstddef>
 #include <span>

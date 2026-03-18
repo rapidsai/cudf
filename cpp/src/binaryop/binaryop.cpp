@@ -160,8 +160,10 @@ void binary_operation(mutable_column_view& out,
                                                   cudf::type_to_name(rhs.type()),
                                                   "cudf::binops::jit::UserDefinedOp");
 
-  auto kernel = cudf::jit::get_udf_kernel(
-    "src/binaryop/jit/kernel.cu", "src/binaryop/jit/kernel.cu", kernel_reflection, cuda_source);
+  auto kernel = cudf::jit::get_udf_kernel("cudf/cpp/src/binaryop/jit/kernel.cu",
+                                          "cudf/cpp/src/binaryop/jit/kernel.cu",
+                                          kernel_reflection,
+                                          cuda_source);
 
   auto size_arg = static_cast<size_type>(out.size());
   auto out_arg  = cudf::jit::get_data_ptr(out);

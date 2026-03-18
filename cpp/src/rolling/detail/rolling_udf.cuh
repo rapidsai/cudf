@@ -100,9 +100,11 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                   &following_window_arg,
                   &min_periods_arg};
 
-  auto kernel = cudf::jit::get_udf_kernel(
-    "src/rolling/jit/kernel.cu", "src/rolling/jit/kernel.cu", kernel_reflection, cuda_source);
-  auto cfg = kernel.max_occupancy_config(0, 0);
+  auto kernel = cudf::jit::get_udf_kernel("cudf/cpp/src/rolling/jit/kernel.cu",
+                                          "cudf/cpp/src/rolling/jit/kernel.cu",
+                                          kernel_reflection,
+                                          cuda_source);
+  auto cfg    = kernel.max_occupancy_config(0, 0);
   kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));

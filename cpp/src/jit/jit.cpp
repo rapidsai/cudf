@@ -54,7 +54,7 @@ rtcx::sha256 hash_strings(std::span<char const* const> inputs)
   CUDF_FAIL(+error_str, std::runtime_error);
 }
 
-void install_file(char const* dst_path, std::span<unsigned char const> contents)
+void install_file(char const* dst_path, std::span<std::uint8_t const> contents)
 {
   int dst_file = open(dst_path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   if (dst_file == -1) {
@@ -76,14 +76,50 @@ void install_file(char const* dst_path, std::span<unsigned char const> contents)
   }
 }
 
-std::vector<unsigned char> decompress_blob(std::span<uint8_t const> compressed_binary,
-                                           size_t uncompressed_size,
-                                           char const* compression)
+/**
+ * @brief Reads the contents of a file into a byte buffer and null-terminates it to allow for safe
+ * usage as a C-string.
+ */
+rtcx::byte_buffer read_blob_cstring(char const* path)
 {
-  std::vector<unsigned char> decompressed;
-  decompressed.resize(uncompressed_size);
+  int32_t fd = open(path, O_RDONLY);
+  if (fd == -1) { throw_posix(std::format("Failed to open file ({})", path), "open"); }
 
-  if (std::string_view{compression} == "lz4") {
+  RTCX_DEFER([&] {
+    if (close(fd) == -1) { throw_posix(std::format("Failed to close file ({})", path), "close"); }
+  });
+
+  auto file_size = lseek(fd, 0, SEEK_END);
+  if (file_size == -1) {
+    throw_posix(std::format("Failed to determine size of file ({})", path), "lseek");
+  }
+  // TODO: make all read/write syscalls call read/write in a loop
+
+  if (lseek(fd, 0, SEEK_SET) == -1) {
+    throw_posix(std::format("Failed to reset file offset for file ({})", path), "lseek");
+  }
+
+  auto contents = rtcx::byte_buffer::make(file_size + 1U);  // +1 for null terminator
+
+  if (read(fd, contents.data(), file_size) == -1) {
+    throw_posix(std::format("Failed to read file ({})", path), "read");
+  }
+
+  contents.data()[file_size] = '\0';  // null-terminate the buffer
+
+  return contents;
+}
+
+rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
+                                  size_t uncompressed_size,
+                                  std::string_view compression)
+{
+  CUDF_EXPECTS(compression == "none" || compression == "lz4" || compression == "zstd",
+               +std::format("Unsupported compression type specified: {}", compression),
+               std::runtime_error);
+  auto decompressed = rtcx::byte_buffer::make(uncompressed_size);
+
+  if (compression == "lz4") {
     int errc = LZ4_decompress_safe(reinterpret_cast<char const*>(compressed_binary.data()),
                                    reinterpret_cast<char*>(decompressed.data()),
                                    compressed_binary.size(),
@@ -94,8 +130,8 @@ std::vector<unsigned char> decompress_blob(std::span<uint8_t const> compressed_b
       +std::format("Failed to decompress embedded RTC source files with LZ4, error code {}", errc),
       std::runtime_error);
 
-  } else if (std::string_view{compression} == "zstd") {
-    size_t const errc = ZSTD_decompress(
+  } else if (compression == "zstd") {
+    size_t errc = ZSTD_decompress(
       decompressed.data(), uncompressed_size, compressed_binary.data(), compressed_binary.size());
 
     CUDF_EXPECTS(
@@ -114,19 +150,13 @@ std::vector<unsigned char> decompress_blob(std::span<uint8_t const> compressed_b
   return decompressed;
 }
 
-void install_file_set(char const* target_dir,
+void install_file_set(std::string_view target_dir,
                       std::span<uint8_t const> compressed_binary,
                       size_t uncompressed_size,
                       std::span<rtcx_embed::range const> file_ranges,
                       std::span<char const* const> destinations,
-                      char const* compression)
+                      std::string_view compression)
 {
-  CUDF_EXPECTS(compression != nullptr, "Compression type must be specified", std::runtime_error);
-  CUDF_EXPECTS(compression == std::string_view{"none"} || compression == std::string_view{"lz4"} ||
-                 compression == std::string_view{"zstd"},
-               +std::format("Unsupported compression type specified: {}", compression),
-               std::runtime_error);
-
   auto decompressed = decompress_blob(compressed_binary, uncompressed_size, compression);
   auto files_data   = decompressed.data();
 
@@ -134,26 +164,26 @@ void install_file_set(char const* target_dir,
     auto file_data_range = file_ranges[i];
     auto file_data       = std::span{files_data + file_data_range.offset, file_data_range.size};
     auto dst_path        = destinations[i];
-
-    auto target_path = std::format("{}/{}", target_dir, dst_path);
+    auto target_path     = std::format("{}/{}", target_dir, dst_path);
 
     std::filesystem::create_directories(std::filesystem::path{target_path}.parent_path());
     install_file(target_path.c_str(), file_data);
   }
 }
 
-void install_cudf_jit_files(char const* target_dir)
+void install_cudf_jit_files(std::string const& target_dir, std::string const& tmp_dir)
 {
   // directory does not exist, so create it
-  char tmp_dir_[] = "/tmp/cudf-jit-tmpdir_XXXXXX";
-  char* tmp_dir   = mkdtemp(tmp_dir_);
-  if (tmp_dir == nullptr) {
+  auto tmp_path_str = std::format("{}/cudf-jit-tmpdir_XXXXXX", tmp_dir);
+  (void)tmp_path_str.c_str();  // ensure null-terminated string for mkdtemp
+  char* tmp_path = mkdtemp(tmp_path_str.data());
+  if (tmp_path == nullptr) {
     throw_posix(
       std::format("Failed to create temporary JIT install directory for ({})", target_dir),
       "mkdtemp");
   }
 
-  install_file_set(tmp_dir,
+  install_file_set(tmp_path,
                    rtcx_embed::cudf_jit_embed_files,
                    rtcx_embed::cudf_jit_embed_files_uncompressed_size,
                    rtcx_embed::cudf_jit_embed_file_ranges,
@@ -161,7 +191,7 @@ void install_cudf_jit_files(char const* target_dir)
                    rtcx_embed::cudf_jit_embed_files_compression);
 
   // rename the temporary directory to the target install directory
-  if (rename(tmp_dir, target_dir) == -1) {
+  if (rename(tmp_path, target_dir.c_str()) == -1) {
     throw_posix(std::format("Failed to rename temporary JIT install directory to ({})", target_dir),
                 "rename");
   }
@@ -191,7 +221,7 @@ void jit_bundle_t::ensure_installed() const
       // ensure base install directory exists
       CUDF_LOG_INFO("Creating JIT install directory at ({})", expected_path);
       std::filesystem::create_directories(install_dir_);
-      install_cudf_jit_files(expected_path.c_str());
+      install_cudf_jit_files(expected_path.c_str(), cache_->get_tmp_dir());
     }
   } else {
     // directory exists, perform minor sanity check
@@ -280,17 +310,28 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   // --time=compile_trace.json
   // -time
   // --restrict
+  // --relocatable-device-code
+  // --extensible-whole-program
+  // --device-debug
+  // --use_fast_math
+  // --dlink-time-opt
+  // --gen-opt-lto
+  // --no-cache
+  // --create-pch
+  // --use-pch
+  // --pch-dir
 
   options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
   options.emplace_back("--minimal");
-  options.emplace_back("-D__CUDACC_RTC__");
-  options.emplace_back("-DCUDF_RUNTIME_JIT");
   options.emplace_back("--diag-suppress=47");
   options.emplace_back("--device-int128");
+
+  if (sm >= 100) { options.emplace_back("--device-float128"); }
+
   options.emplace_back("-std=c++20");
-  options.emplace_back("-default-device");
-  options.emplace_back("--device-debug");
+  options.emplace_back("--device-as-default-execution-space");
   options.emplace_back("--generate-line-info");
+  options.emplace_back("--dopt=on");
 
   if (use_pch) {
     options.emplace_back("--pch");
@@ -327,7 +368,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
 
   auto library = rtcx::load_library(cubin);
 
-  auto blob = rtcx::blob_t::from_vector(std::move(cubin));
+  auto blob = rtcx::blob_t::from_buffer(std::move(cubin));
 
   return std::make_tuple(library, std::make_shared<rtcx::blob_t>(std::move(blob)));
 }
@@ -357,7 +398,7 @@ kernel get_kernel(std::string const& name,
 {
   CUDF_FUNC_RANGE();
 
-  auto& cache  = cudf::get_context().rtc_cache();
+  auto& cache  = cudf::get_context().rtcx_cache();
   auto& bundle = cudf::get_context().jit_bundle();
 
   auto runtime                   = get_runtime_version();
@@ -390,20 +431,12 @@ name_expression={}
   auto cache_key_sha256 = hash_string(cache_key);
 
   auto compile = [&] {
-    auto bundle_dir       = cudf::get_context().jit_bundle().get_directory();
-    auto source_file_path = std::format("{}/cudf/{}", bundle_dir, source_file);
-    auto source           = rtcx::blob_t::from_file(source_file_path.c_str());
-    CUDF_EXPECTS(
-      source.has_value(),
-      +std::format(
-        "Failed to load UDF CUDA source file: `{}` for compilation, source file does not exist",
-        source_file_path),
-      std::runtime_error);
-    std::string source_str{source->view().begin(), source->view().end()};
-
+    auto bundle_dir          = cudf::get_context().jit_bundle().get_directory();
+    auto source_file_path    = std::format("{}/{}", bundle_dir, source_file);
+    auto source              = read_blob_cstring(source_file_path.c_str());
     char const* name_exprs[] = {name_expression.c_str()};
     return compile_library_uncached(name.c_str(),
-                                    source_str.c_str(),
+                                    reinterpret_cast<char const*>(source.data()),
                                     header_include_names,
                                     headers,
                                     name_exprs,

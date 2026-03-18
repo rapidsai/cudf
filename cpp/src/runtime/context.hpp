@@ -24,13 +24,16 @@ class program_cache;
 class jit_bundle_t;
 
 struct [[nodiscard]] context_config {
-  bool dump_codegen      : 1          = false;
-  bool use_jit           : 1          = false;
-  bool preload_jit_cache : 1          = false;
-  bool disable_jit_cache : 1          = false;
-  std::string rtc_cache_dir           = {};
+  bool dump_codegen             : 1   = false;
+  bool use_jit                  : 1   = false;
+  bool preload_jit_cache        : 1   = false;
+  bool prematerialize_jit_cache : 1   = false;
+  bool disable_jit_cache        : 1   = false;
+  bool clear_jit_cache          : 1   = false;
+  std::string rtcx_cache_dir          = {};
   std::string jit_bundle_dir          = {};
   std::string jit_pch_dir             = {};
+  std::string jit_tmp_dir             = {};
   uint32_t kernel_cache_limit_process = 0;
   uint32_t kernel_cache_limit_disk    = 0;
 };
@@ -42,7 +45,7 @@ class context {
  private:
   context_config _config;
   std::once_flag _jit_cache_init_flag;
-  std::unique_ptr<rtcx::cache_t> _rtc_cache;
+  std::unique_ptr<rtcx::cache_t> _rtcx_cache;
   std::unique_ptr<jit_bundle_t> _jit_bundle;
 
  private:
@@ -58,7 +61,7 @@ class context {
   context& operator=(context&&)      = delete;
   ~context();
 
-  rtcx::cache_t& rtc_cache();
+  rtcx::cache_t& rtcx_cache();
 
   jit_bundle_t& jit_bundle();
 

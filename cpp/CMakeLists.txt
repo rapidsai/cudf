@@ -332,18 +332,18 @@ set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DEST_DIRECTORY cudf/include
-  INCLUDE_DIRECTORIES cudf/include
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DEST_DIRECTORY cudf/cpp/include
+  INCLUDE_DIRECTORIES cudf/cpp/include
 )
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src DEST_DIRECTORY cudf/src
-  INCLUDE_DIRECTORIES cudf/src
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src DEST_DIRECTORY cudf/cpp/src
+  INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/system_includes
-  DEST_DIRECTORY system_includes INCLUDE_DIRECTORIES system_includes
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/libcxx DEST_DIRECTORY
+  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
 get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)

@@ -10,7 +10,7 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
-#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
+#if !defined(__CUDACC_RTC__)
 #include <algorithm>
 #include <string>
 #endif
@@ -18,7 +18,7 @@
 namespace CUDF_EXPORT numeric {
 namespace detail {
 
-#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
+#if !defined(__CUDACC_RTC__)
 template <typename T>
 auto to_string(T value) -> std::string
 {

@@ -6,3 +6,12 @@ RTCX (runtime-compiler extended) is a wrapper around NVRTC and NVJitLink designe
 - Zero-copy interfaces to manage JIT compilation and linking
 - CMake script to embed **compressed** headers directly into an executable without incurring overhead at runtime on every compilation request
 - Facilities to pre-load and teardown dynamic library dependencies (`libcuda`, `libnvrtc`, and `libnvJitlink`)
+
+## Platforms Supported
+- Linux
+
+## Build-Scripting Requirements
+- CMake
+- python 3
+- python-lz4
+- python-zstd

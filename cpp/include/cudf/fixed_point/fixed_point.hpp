@@ -9,16 +9,15 @@
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/types.hpp>
 
+#include <cuda/std/cassert>
+#include <cuda/std/cmath>
 #include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
+#if !defined(__CUDACC_RTC__)
 #include <algorithm>
-#include <cassert>
-#include <cmath>
-
-#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
 #include <string>
 #endif
 
@@ -573,7 +572,7 @@ class fixed_point {
     return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
   }
 
-#if (!defined(__CUDACC_RTC__)) && !defined(CUDF_RUNTIME_JIT)
+#if !defined(__CUDACC_RTC__)
 
   /**
    * @brief Returns a string representation of the fixed_point value.

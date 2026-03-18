@@ -57,7 +57,7 @@ std::vector<std::string> build_join_filter_template_params(
   std::vector<std::string> template_params;
 
   template_params.emplace_back(rtcx::reflect_bool(has_user_data));
-  template_params.emplace_back(rtcx::reflect_enum("cudf::is_null_aware", is_null_aware));
+  template_params.emplace_back(rtcx::reflect_enum("cudf::null_aware", is_null_aware));
 
   // Add left column accessors
   for (size_t i = 0; i < left_columns.size(); ++i) {
@@ -115,8 +115,8 @@ kernel build_join_filter_kernel(std::string const& predicate_code,
   auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
 
   // Get compiled kernel
-  return cudf::jit::get_udf_kernel("src/join/jit/filter_join_kernel.cu",  // TODO: use actual name
-                                   "src/join/jit/filter_join_kernel.cu",
+  return cudf::jit::get_udf_kernel("cudf/cpp/src/join/jit/filter_join_kernel.cu",
+                                   "cudf/cpp/src/join/jit/filter_join_kernel.cu",
                                    kernel_name,
                                    cuda_source);
 }
@@ -359,7 +359,7 @@ std::vector<std::string> build_join_filter_template_params_from_specs(
 {
   std::vector<std::string> template_params;
   template_params.emplace_back(rtcx::reflect_bool(false));  // has_user_data = false
-  template_params.emplace_back(rtcx::reflect_enum("cudf::is_null_aware", is_null_aware));
+  template_params.emplace_back(rtcx::reflect_enum("cudf::null_aware", is_null_aware));
 
   // Scalar columns are appended to the left table's device views,
   // starting at index left.num_columns().
@@ -509,11 +509,10 @@ filter_join_indices_jit(cudf::table_view const& left,
     cudf::jit::parse_single_function_cuda(filter_result.udf, "GENERIC_JOIN_FILTER_OP");
 
   auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
-  auto kernel =
-    cudf::jit::get_udf_kernel("src/join/jit/filter_join_kernel.cu",  // TODO: use actual name
-                              "src/join/jit/filter_join_kernel.cu",
-                              kernel_name,
-                              cuda_source);
+  auto kernel      = cudf::jit::get_udf_kernel("cudf/cpp/src/join/jit/filter_join_kernel.cu",
+                                          "cudf/cpp/src/join/jit/filter_join_kernel.cu",
+                                          kernel_name,
+                                          cuda_source);
 
   // Collect scalar columns to append to left device views so join_scalar_accessor
   // can read them at indices >= left.num_columns().
