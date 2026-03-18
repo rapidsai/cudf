@@ -74,29 +74,6 @@ class DataSourceInfo(abc.ABC):
         return None
 
 
-class _PrecomputedSourceInfo(DataSourceInfo):
-    """DataSourceInfo backed by pre-computed per-file means (no file I/O)."""
-
-    __slots__ = ("_per_file_means", "_row_count")
-
-    def __init__(
-        self,
-        row_count: int | None,
-        per_file_means: dict[str, int],
-    ) -> None:
-        self._row_count = row_count
-        self._per_file_means = per_file_means
-
-    @property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self._row_count
-
-    def column_storage_size(self, column: str) -> int | None:
-        """Return the average storage size for a single column in one file."""
-        return self._per_file_means.get(column)
-
-
 class StatsCollector:
     """Scan statistics collector."""
 
