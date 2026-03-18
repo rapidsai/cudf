@@ -83,7 +83,9 @@ def test_boolean_function_unary(
     using_rapidsmpf: bool,
 ) -> None:
     if using_rapidsmpf:
-        pytest.skip("Can segault on 12.9 builds with rapidsmpf runtime.")
+        pytest.skip(
+            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
+        )
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
@@ -168,7 +170,9 @@ def test_boolean_isbetween(closed, bounds):
 @pytest.mark.parametrize("wide", [False, True], ids=["narrow", "wide"])
 def test_boolean_horizontal(expr, has_nulls, wide, using_rapidsmpf):
     if using_rapidsmpf:
-        pytest.skip("Can segault on 12.9 builds with rapidsmpf runtime.")
+        pytest.skip(
+            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
+        )
     ldf = pl.LazyFrame(
         {
             "a": [False, False, False, False, False, True],
