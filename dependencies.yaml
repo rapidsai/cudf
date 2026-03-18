@@ -669,20 +669,10 @@ dependencies:
             packages:
               - nvidia-nvjitlink-cu12>=12.9,<13
           - matrix:
-              cuda: "13.0"
-              use_cuda_wheels: "true"
-            packages:
-              - nvidia-nvjitlink>=13.0,<14
-          - matrix:
-              cuda: "13.1"
-              use_cuda_wheels: "true"
-            packages:
-              - &nvjitlink_cu13 nvidia-nvjitlink>=13.1,<14
-          - matrix:
               cuda: "13.*"
               use_cuda_wheels: "true"
             packages:
-              - *nvjitlink_cu13
+              - nvidia-nvjitlink>=13.0,<14
           # if no matching matrix selectors passed, list the unsuffixed packages
           # (just as a source of documentation, as this populates pyproject.toml in source control)
           - matrix:
