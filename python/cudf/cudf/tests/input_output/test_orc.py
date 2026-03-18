@@ -607,7 +607,11 @@ def normalized_equals(value1, value2):
     if isinstance(value1, float) or isinstance(value2, float):
         return np.isclose(value1, value2)
 
-    return value1 == value2
+    try:
+        assert_eq(value1, value2)
+        return True
+    except AssertionError:
+        return False
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
@@ -1473,8 +1477,10 @@ def test_orc_writer_lists_empty_rg():
     df = cudf.read_orc(buffer)
     assert_eq(df, cudf_in)
 
-    pdf_out = pd.read_orc(buffer)
-    assert_eq(pdf_in, pdf_out)
+    # Compare via pyarrow since pd.read_orc converts nullable integer
+    # lists to float arrays ([None] -> [nan]), losing the original types.
+    pa_out = orc.ORCFile(buffer).read()
+    assert pa_out.equals(cudf_in.to_arrow())
 
 
 def test_statistics_sum_overflow():
@@ -1647,7 +1653,13 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    assert_eq(expected, got, check_index_type=True)
+    # When columns is an empty list, pandas uses dtype='object' for
+    # the empty column Index while cudf uses dtype='str'. Avoid
+    # checking the column index type in that case.
+    check_col_type = columns is None or len(columns) > 0
+    assert_eq(
+        expected, got, check_index_type=True, check_column_type=check_col_type
+    )
 
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
