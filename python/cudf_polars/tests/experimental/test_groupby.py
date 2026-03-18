@@ -248,7 +248,6 @@ def test_groupby_literal_with_stats_planning(df):
             "max_rows_per_partition": 4,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "stats_planning": {"use_reduction_planning": True},
         },
     )
 

@@ -861,16 +861,7 @@ def test_validate_cuda_stream_policy() -> None:
         ConfigOptions.from_polars_engine(pl.GPUEngine(cuda_stream_policy="foo"))
 
 
-@pytest.mark.parametrize(
-    "option",
-    [
-        "use_io_partitioning",
-        "use_reduction_planning",
-        "use_join_heuristics",
-        "use_sampling",
-        "default_selectivity",
-    ],
-)
+@pytest.mark.parametrize("option", ["use_io_partitioning"])
 def test_validate_stats_planning(option: str) -> None:
     with pytest.raises(TypeError, match=f"{option} must be"):
         ConfigOptions.from_polars_engine(

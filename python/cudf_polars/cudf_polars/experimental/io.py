@@ -27,15 +27,10 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.experimental.base import (
-    ColumnSourceInfo,
-    ColumnStat,
-    ColumnStats,
     DataSourceInfo,
-    DataSourcePair,
     IOPartitionFlavor,
     IOPartitionPlan,
     PartitionInfo,
-    UniqueStats,
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
@@ -54,7 +49,6 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import (
         ConfigOptions,
         ParquetOptions,
-        StatsPlanningOptions,
         StreamingExecutor,
     )
 
@@ -100,28 +94,26 @@ def scan_partition_plan(
 ) -> IOPartitionPlan:
     """Extract the partitioning plan of a Scan operation."""
     if ir.typ == "parquet":
-        # TODO: Use system info to set default blocksize
         blocksize: int = config_options.executor.target_partition_size
-        column_stats = stats.column_stats.get(ir, {})
-        column_sizes: list[int] = []
-        for cs in column_stats.values():
-            storage_size = cs.source_info.storage_size
-            if storage_size.value is not None:
-                column_sizes.append(storage_size.value)
-
-        if (file_size := sum(column_sizes)) > 0:
-            if file_size > blocksize:
-                # Split large files
-                return IOPartitionPlan(
-                    math.ceil(file_size / blocksize),
-                    IOPartitionFlavor.SPLIT_FILES,
-                )
-            else:
-                # Fuse small files
-                return IOPartitionPlan(
-                    max(blocksize // int(file_size), 1),
-                    IOPartitionFlavor.FUSED_FILES,
-                )
+        if source := stats.scan_stats.get(ir):
+            column_sizes = [
+                sz
+                for col in ir.schema
+                if (sz := source.column_storage_size(col)) is not None
+            ]
+            if (file_size := sum(column_sizes)) > 0:
+                if file_size > blocksize:
+                    # Split large files
+                    return IOPartitionPlan(
+                        math.ceil(file_size / blocksize),
+                        IOPartitionFlavor.SPLIT_FILES,
+                    )
+                else:
+                    # Fuse small files
+                    return IOPartitionPlan(
+                        max(blocksize // int(file_size), 1),
+                        IOPartitionFlavor.FUSED_FILES,
+                    )
 
     # TODO: Use file sizes for csv and json
     return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
@@ -661,11 +653,11 @@ class ParquetMetadata:
     """Parquet-dataset paths."""
     max_footer_samples: int
     """Maximum number of file footers to sample metadata from."""
-    row_count: ColumnStat[int]
+    row_count: int | None
     """Total row-count estimate."""
     num_row_groups_per_file: tuple[int, ...]
     """Number of row groups in each sampled file."""
-    mean_size_per_file: dict[str, ColumnStat[int]]
+    mean_size_per_file: dict[str, int]
     """Average column storage size in a single file."""
     column_names: tuple[str, ...]
     """All column names found it the dataset."""
@@ -675,7 +667,7 @@ class ParquetMetadata:
     def __init__(self, paths: tuple[str, ...], max_footer_samples: int):
         self.paths = paths
         self.max_footer_samples = max_footer_samples
-        self.row_count = ColumnStat[int]()
+        self.row_count = None
         self.num_row_groups_per_file = ()
         self.mean_size_per_file = {}
         self.column_names = ()
@@ -690,17 +682,13 @@ class ParquetMetadata:
 
         total_file_count = len(self.paths)
         sampled_file_count = len(self.sample_paths)
-        exact: bool = False
         sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
             plc.io.SourceInfo(list(self.sample_paths))
         )
 
         if total_file_count == sampled_file_count:
-            # We know the "exact" row_count from our sample
             row_count = sample_metadata.num_rows()
-            exact = True
         else:
-            # We must estimate/extrapolate the row_count from our sample
             num_rows_per_sampled_file = int(
                 sample_metadata.num_rows() / sampled_file_count
             )
@@ -721,12 +709,11 @@ class ParquetMetadata:
 
         self.column_names = tuple(column_sizes_per_file)
         self.mean_size_per_file = {
-            name: ColumnStat[int](value=int(statistics.mean(sizes)))
+            name: int(statistics.mean(sizes))
             for name, sizes in column_sizes_per_file.items()
         }
         self.num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
-        self.row_count.value = row_count
-        self.row_count.exact = exact
+        self.row_count = row_count
 
 
 class ParquetSourceInfo(DataSourceInfo):
@@ -741,8 +728,6 @@ class ParquetSourceInfo(DataSourceInfo):
         Maximum number of file footers to sample metadata from.
     max_row_group_samples
         Maximum number of row-groups to sample data from.
-    stats_planning
-        Statistics planning options.
     """
 
     def __init__(
@@ -750,18 +735,10 @@ class ParquetSourceInfo(DataSourceInfo):
         paths: tuple[str, ...],
         max_footer_samples: int,
         max_row_group_samples: int,
-        stats_planning: StatsPlanningOptions,
     ):
         self.paths = paths
         self.max_footer_samples = max_footer_samples
         self.max_row_group_samples = max_row_group_samples
-        self._stats_planning = stats_planning
-        self._unique_stats_columns = set()
-        # Helper attributes
-        # Used to fuse lazy row-group sampling
-        self._key_columns: set[str] = set()
-        self._unique_stats: dict[str, UniqueStats] = {}
-        self._read_columns: set[str] = set()
         self._real_rg_size: dict[str, int] = {}
 
     @functools.cached_property
@@ -770,35 +747,19 @@ class ParquetSourceInfo(DataSourceInfo):
         return ParquetMetadata(self.paths, self.max_footer_samples)
 
     @property
-    def row_count(self) -> ColumnStat[int]:
+    def row_count(self) -> int | None:
         """Data source row-count estimate."""
         return self.metadata.row_count
 
-    def _sample_row_groups(self) -> None:
-        """Estimate unique-value statistics from a row-group sample."""
-        if (
-            self.max_row_group_samples < 1
-            or not self._stats_planning.use_sampling
-            or not (sample_paths := self.metadata.sample_paths)
+    def _sample_storage_sizes(self) -> None:
+        """Sample actual row-group sizes for storage-size estimation."""
+        if self.max_row_group_samples < 1 or not (
+            sample_paths := self.metadata.sample_paths
         ):
-            # No sampling allowed or no row-groups to sample from
             return
 
-        column_names = self.metadata.column_names
-        key_columns = [key for key in self._key_columns if key in column_names]
-        read_columns = list(
-            self._read_columns.intersection(column_names).union(key_columns)
-        )
-        if not read_columns:  # pragma: no cover; should never get here
-            # No key columns or read columns found in the file
-            raise ValueError(f"None of {read_columns} in {column_names}")
-
-        sampled_file_count = len(sample_paths)
         num_row_groups_per_file = self.metadata.num_row_groups_per_file
-        if (
-            self.row_count.value is None
-            or len(num_row_groups_per_file) != sampled_file_count
-        ):
+        if self.row_count is None or len(num_row_groups_per_file) != len(sample_paths):
             raise ValueError("Parquet metadata sampling failed.")  # pragma: no cover
 
         n_sampled = 0
@@ -812,69 +773,26 @@ class ParquetSourceInfo(DataSourceInfo):
             if n_sampled == self.max_row_group_samples:
                 break
 
-        exact = sampled_file_count == len(
-            self.paths
-        ) and self.max_row_group_samples >= sum(num_row_groups_per_file)
-
         options = plc.io.parquet.ParquetReaderOptions.builder(
             plc.io.SourceInfo(list(samples))
         ).build()
-        options.set_column_names(read_columns)
+        options.set_column_names(list(self.metadata.column_names))
         options.set_row_groups(list(samples.values()))
         stream = get_cuda_stream()
         tbl_w_meta = plc.io.parquet.read_parquet(options, stream=stream)
-        row_group_num_rows = tbl_w_meta.tbl.num_rows()
         for name, column in zip(
             tbl_w_meta.column_names(include_children=False),
             tbl_w_meta.columns,
             strict=True,
         ):
             self._real_rg_size[name] = column.device_buffer_size() // n_sampled
-            if name in key_columns:
-                row_group_unique_count = plc.reduce.distinct_count(
-                    column,
-                    plc.types.NullPolicy.INCLUDE,
-                    plc.types.NanPolicy.NAN_IS_NULL,
-                    stream=stream,
-                )
-                fraction = row_group_unique_count / row_group_num_rows
-                # Assume that if every row is unique then this is a
-                # primary key otherwise it's a foreign key and we
-                # can't use the single row group count estimate.
-                # Example, consider a "foreign" key that has 100
-                # unique values. If we sample from a single row group,
-                # we likely obtain a unique count of 100. But we can't
-                # necessarily deduce that that means that the unique
-                # count is 100 / num_rows_in_group * num_rows_in_file
-                count: int | None = None
-                if exact:
-                    count = row_group_unique_count
-                elif row_group_unique_count == row_group_num_rows:
-                    count = self.row_count.value
-                self._unique_stats[name] = UniqueStats(
-                    ColumnStat[int](value=count, exact=exact),
-                    ColumnStat[float](value=fraction, exact=exact),
-                )
         stream.synchronize()
 
-    def _update_unique_stats(self, column: str) -> None:
-        if column not in self._unique_stats and column in self.metadata.column_names:
-            self.add_unique_stats_column(column)
-            self._sample_row_groups()
-            self._key_columns = set()
-
-    def unique_stats(self, column: str) -> UniqueStats:
-        """Return unique-value statistics for a column."""
-        self._update_unique_stats(column)
-        return self._unique_stats.get(column, UniqueStats())
-
-    def storage_size(self, column: str) -> ColumnStat[int]:
-        """Return the average column size for a single file."""
+    def column_storage_size(self, column: str) -> int | None:
+        """Return the average storage size for a single column in one file."""
         file_count = len(self.paths)
-        row_count = self.row_count.value
-        partial_mean_size = self.metadata.mean_size_per_file.get(
-            column, ColumnStat[int]()
-        ).value
+        row_count = self.row_count
+        partial_mean_size = self.metadata.mean_size_per_file.get(column)
         if file_count and row_count and partial_mean_size:
             # NOTE: We set a lower bound on the estimated size using
             # the row count, because dictionary encoding can make the
@@ -883,65 +801,14 @@ class ParquetSourceInfo(DataSourceInfo):
             if partial_mean_size < min_value and column not in self._real_rg_size:
                 # If the metadata is suspiciously small,
                 # sample "real" data to get a better estimate.
-                self._sample_row_groups()
+                self._sample_storage_sizes()
             if column in self._real_rg_size:
                 partial_mean_size = int(
                     self._real_rg_size[column]
                     * statistics.mean(self.metadata.num_row_groups_per_file)
                 )
-            return ColumnStat[int](max(min_value, partial_mean_size))
-        return ColumnStat[int]()
-
-    def add_unique_stats_column(self, column: str) -> None:
-        """Add a column needing unique-value information."""
-        self._unique_stats_columns.add(column)
-        if column not in self._key_columns and column not in self._unique_stats:
-            self._key_columns.add(column)
-
-
-@functools.cache
-def _sample_pq_stats(
-    paths: tuple[str, ...],
-    max_footer_samples: int,
-    max_row_group_samples: int,
-    stats_planning: StatsPlanningOptions,
-) -> ParquetSourceInfo:
-    """Return Parquet datasource information."""
-    return ParquetSourceInfo(
-        paths,
-        max_footer_samples,
-        max_row_group_samples,
-        stats_planning,
-    )
-
-
-def _extract_scan_stats(
-    ir: Scan,
-    config_options: ConfigOptions[StreamingExecutor],
-) -> dict[str, ColumnStats]:
-    """Extract base ColumnStats for a Scan node."""
-    if ir.typ == "parquet":
-        table_source_info = _sample_pq_stats(
-            tuple(ir.paths),
-            config_options.parquet_options.max_footer_samples,
-            config_options.parquet_options.max_row_group_samples,
-            config_options.executor.stats_planning,
-        )
-        cstats = {
-            name: ColumnStats(
-                name=name,
-                source_info=ColumnSourceInfo(DataSourcePair(table_source_info, name)),
-            )
-            for name in ir.schema
-        }
-        # Mark all columns that we are reading in case
-        # we need to sample real data later.
-        if config_options.executor.stats_planning.use_sampling:
-            for name, cs in cstats.items():
-                cs.source_info.add_read_column(name)
-        return cstats
-    else:
-        return {name: ColumnStats(name=name) for name in ir.schema}
+            return max(min_value, partial_mean_size)
+        return None
 
 
 class DataFrameSourceInfo(DataSourceInfo):
@@ -952,64 +819,42 @@ class DataFrameSourceInfo(DataSourceInfo):
     ----------
     df
         In-memory DataFrame source.
-    stats_planning
-        Statistics planning options.
     """
 
-    def __init__(
-        self,
-        df: pl.DataFrame,
-        stats_planning: StatsPlanningOptions,
-    ):
+    def __init__(self, df: pl.DataFrame):
         self._pdf = df
-        self._stats_planning = stats_planning
-        self._key_columns: set[str] = set()
-        self._unique_stats_columns = set()
-        self._unique_stats: dict[str, UniqueStats] = {}
 
     @functools.cached_property
-    def row_count(self) -> ColumnStat[int]:
+    def row_count(self) -> int | None:
         """Data source row-count estimate."""
-        return ColumnStat[int](value=self._pdf.height, exact=True)
+        return self._pdf.height
 
-    def _update_unique_stats(self, column: str) -> None:
-        if column not in self._unique_stats and self._stats_planning.use_sampling:
-            row_count = self.row_count.value
-            try:
-                unique_count = (
-                    self._pdf._df.get_column(column).approx_n_unique()
-                    if row_count
-                    else 0
-                )
-            except pl.exceptions.InvalidOperationError:  # pragma: no cover
-                unique_count = self._pdf._df.get_column(column).n_unique()
-            unique_fraction = min((unique_count / row_count), 1.0) if row_count else 1.0
-            self._unique_stats[column] = UniqueStats(
-                ColumnStat[int](value=unique_count),
-                ColumnStat[float](value=unique_fraction),
+
+@functools.cache
+def _sample_pq_stats(
+    paths: tuple[str, ...],
+    max_footer_samples: int,
+    max_row_group_samples: int,
+) -> ParquetSourceInfo:
+    """Return Parquet datasource information."""
+    return ParquetSourceInfo(paths, max_footer_samples, max_row_group_samples)
+
+
+def _make_datasource_info(
+    ir: Scan | DataFrameScan,
+    config_options: ConfigOptions[StreamingExecutor],
+) -> DataSourceInfo | None:
+    """Construct DataSourceInfo for a leaf Scan or DataFrameScan node."""
+    if isinstance(ir, Scan):
+        if ir.typ == "parquet":
+            return _sample_pq_stats(
+                tuple(ir.paths),
+                config_options.parquet_options.max_footer_samples,
+                config_options.parquet_options.max_row_group_samples,
             )
-
-    def unique_stats(self, column: str) -> UniqueStats:
-        """Return unique-value statistics for a column."""
-        self._update_unique_stats(column)
-        return self._unique_stats.get(column, UniqueStats())
-
-
-def _extract_dataframescan_stats(
-    ir: DataFrameScan, config_options: ConfigOptions[StreamingExecutor]
-) -> dict[str, ColumnStats]:
-    """Extract base ColumnStats for a DataFrameScan node."""
-    table_source_info = DataFrameSourceInfo(
-        pl.DataFrame._from_pydf(ir.df),
-        config_options.executor.stats_planning,
-    )
-    return {
-        name: ColumnStats(
-            name=name,
-            source_info=ColumnSourceInfo(DataSourcePair(table_source_info, name)),
-        )
-        for name in ir.schema
-    }
+        return None
+    assert isinstance(ir, DataFrameScan)
+    return DataFrameSourceInfo(pl.DataFrame._from_pydf(ir.df))
 
 
 def _clear_source_info_cache() -> None:
