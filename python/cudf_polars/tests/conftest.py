@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import TYPE_CHECKING, Any, Literal
+import os
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -15,6 +17,7 @@ from cudf_polars.utils.config import StreamingFallbackMode
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    import ray.runtime_context
     from rapidsmpf.communicator.communicator import Communicator
 
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
@@ -92,100 +95,154 @@ def spmd_comm() -> Communicator:
     return single_communicator(Options(get_environment_variables()), ProgressThread())
 
 
-@pytest.fixture
-def blocksize_mode(request: pytest.FixtureRequest) -> Literal["default", "small"]:
-    """Blocksize mode for the streaming executor.
+@pytest.fixture(scope="session")
+def ray_cluster() -> Generator[ray.runtime_context.RuntimeContext, None, None]:
+    """Create one Ray cluster shared across the test session."""
+    pytest.importorskip("ray")
+    import ray
 
-    Defaults to ``"default"``. Tests can override this via ``indirect``
-    parametrization with ``["default", "small"]`` to run under both the
-    standard and small-partition configurations. In addition, the
-    ``engine="spmd-small"`` variant of the ``engine`` fixture implicitly
-    selects ``"small"`` mode so that every streaming-engine test exercises
-    tiny-partition / fallback paths without per-test opt-in. Explicit
-    indirect parametrization always wins over the implicit engine-derived
-    value.
-    """
-    if hasattr(request, "param"):
-        return request.param
-    callspec = getattr(request.node, "callspec", None)
-    if callspec is not None and callspec.params.get("engine") == "spmd-small":
-        return "small"
-    return "default"
+    # Ray raises a FutureWarning about overriding CUDA_VISIBLE_DEVICES.
+    # Set `RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO` to silence it.
+    os.environ["RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO"] = "0"
+    ray_context = ray.init(include_dashboard=False)
+    with ray_context:
+        yield ray_context
 
 
-@pytest.fixture
-def streaming_engine(
+# Streaming engine variants. The `-small` suffix forces tiny partitions and
+# silent fallback so multi-partition code paths get exercised even on tests
+# with toy inputs.
+_STREAMING_ENGINE_LABELS: list[str] = []
+if importlib.util.find_spec("rapidsmpf") is not None:
+    _STREAMING_ENGINE_LABELS += ["spmd", "spmd-small"]
+    if importlib.util.find_spec("ray") is not None:
+        _STREAMING_ENGINE_LABELS += ["ray", "ray-small"]
+
+# All GPU engines.
+_ENGINE_LABELS: list[str] = ["in-memory", *_STREAMING_ENGINE_LABELS]
+
+
+@contextmanager
+def _build_engine(
+    label: str,
     request: pytest.FixtureRequest,
-    spmd_comm: Communicator,
-    blocksize_mode: Literal["default", "small"],
-) -> Generator[StreamingEngine, None, None]:
-    """Yield an :class:`SPMDEngine` configured for streaming-only tests.
+    options: dict[str, Any] | None = None,
+) -> Generator[pl.GPUEngine, None, None]:
+    """Construct a GPUEngine for the given backend label.
 
-    Options can be overridden via ``indirect`` parametrization by passing
-    a dict with any of the keys ``"executor_options"``,
-    ``"engine_options"``, or ``"rapidsmpf_options"``.
+    ``label`` is one of ``"in-memory"``, ``"spmd"``, ``"spmd-small"``,
+    ``"ray"``, ``"ray-small"``. The ``-small`` suffix forces tiny partitions
+    and silent fallback. ``options`` is an optional dict with any of
+    ``"executor_options"``, ``"engine_options"``, ``"rapidsmpf_options"`` —
+    the calling fixture is responsible for sourcing it (typically from
+    ``request.param`` when the fixture supports indirect parametrization).
     """
+    if label == "in-memory":
+        yield pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+        return
+
     from rapidsmpf.config import Options
 
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-    params: dict[str, Any] = getattr(request, "param", {}) or {}
+    params: dict[str, Any] = options or {}
     executor_options: dict[str, Any] = {
         "max_rows_per_partition": 50,
         "dynamic_planning": {},
         "target_partition_size": 1_000_000,
     }
-    if blocksize_mode == "small":
+    if label.endswith("-small"):
         executor_options.update(
             max_rows_per_partition=4,
             target_partition_size=10,
-            # We expect many tests to fall back, so silence the warnings
+            # We expect many tests to fall back, so silence the warnings.
             fallback_mode=StreamingFallbackMode.SILENT,
         )
     executor_options.update(params.get("executor_options", {}))
     rapidsmpf_options = (
-        Options(params.get("rapidsmpf_options"))
-        if "rapidsmpf_options" in params
-        else None
+        Options(params["rapidsmpf_options"]) if "rapidsmpf_options" in params else None
     )
-    engine_options: dict[str, Any] = {"raise_on_fail": True}
-    engine_options.update(params.get("engine_options", {}))
-    with SPMDEngine(
-        comm=spmd_comm,
-        rapidsmpf_options=rapidsmpf_options,
-        executor_options=executor_options,
-        engine_options=engine_options,
-    ) as engine:
+    engine_options: dict[str, Any] = {
+        "raise_on_fail": True,
+        **params.get("engine_options", {}),
+    }
+
+    if label in ("spmd", "spmd-small"):
+        from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+        with SPMDEngine(
+            comm=request.getfixturevalue("spmd_comm"),
+            rapidsmpf_options=rapidsmpf_options,
+            executor_options=executor_options,
+            engine_options=engine_options,
+        ) as engine:
+            yield engine
+    else:  # "ray" or "ray-small"
+        from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+        ray_cluster = request.getfixturevalue("ray_cluster")
+        # Use ``force_num_ranks`` so tests don't depend on the Ray cluster
+        # exposing GPUs (which the session-scoped ``ray_cluster`` fixture does
+        # not guarantee, and which would also conflict with the ``spmd``
+        # variant grabbing the same physical GPU). Requires
+        # ``allow_gpu_sharing=True``.
+        with RayEngine(
+            rapidsmpf_options=rapidsmpf_options,
+            executor_options=executor_options,
+            engine_options={"allow_gpu_sharing": True, **engine_options},
+            ray_init_options={"address": "auto"},
+            force_num_ranks=1,
+        ) as engine:
+            yield engine
+
+
+@pytest.fixture(params=_STREAMING_ENGINE_LABELS)
+def _streaming_engine_labels(request: pytest.FixtureRequest) -> str:
+    """Internal: iterate over available streaming backends."""
+    return request.param
+
+
+@pytest.fixture
+def streaming_engine(
+    request: pytest.FixtureRequest,
+    _streaming_engine_labels: str,
+) -> Generator[StreamingEngine, None, None]:
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+
+    options = getattr(request, "param", None) or {}
+    with _build_engine(_streaming_engine_labels, request, options) as engine:
+        assert isinstance(engine, StreamingEngine)
         yield engine
 
 
-_ENGINE_PARAMS = ["in-memory"]
-if importlib.util.find_spec("rapidsmpf") is not None:
-    _ENGINE_PARAMS.extend(["spmd", "spmd-small"])
+@pytest.fixture(params=["spmd", "spmd-small"])
+def spmd_engine(
+    request: pytest.FixtureRequest,
+) -> Generator[StreamingEngine, None, None]:
+    """Like :func:`streaming_engine`, but only over SPMD backends.
+
+    Use for tests that depend on SPMD-specific APIs (e.g. ``engine.comm`` /
+    ``engine.context``) which :class:`RayEngine` does not expose.
+    """
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    with _build_engine(request.param, request) as engine:
+        assert isinstance(engine, SPMDEngine)
+        yield engine
 
 
-@pytest.fixture(params=_ENGINE_PARAMS)
+@pytest.fixture(params=_ENGINE_LABELS)
+def _all_engine_labels(request: pytest.FixtureRequest) -> str:
+    """Internal: iterate over all available backends (streaming or non-streaming)."""
+    return request.param
+
+
+@pytest.fixture
 def engine(
     request: pytest.FixtureRequest,
+    _all_engine_labels: str,
 ) -> Generator[pl.GPUEngine, None, None]:
-    """Yield a :class:`polars.GPUEngine` for each engine variant under test.
-
-    Use this fixture for tests that support any ``GPUEngine``. The test runs
-    once per available variant: always with the in-memory executor, and, if
-    ``rapidsmpf`` is installed, a streaming :class:`SPMDEngine` at the
-    default blocksize (``"spmd"``) and a second streaming engine with
-    tiny-partition / silent-fallback settings (``"spmd-small"``). The
-    ``"spmd-small"`` variant forces ``blocksize_mode="small"`` via the
-    ``blocksize_mode`` fixture, so every test using ``engine`` exercises
-    multi-partition paths for free.
-
-    For tests that require a ``StreamingEngine``, use the ``streaming_engine``
-    fixture instead.
-    """
-    if request.param == "in-memory":
-        yield pl.GPUEngine(executor="in-memory", raise_on_fail=True)
-    else:
-        yield request.getfixturevalue("streaming_engine")
+    options = getattr(request, "param", None) or {}
+    with _build_engine(_all_engine_labels, request, options) as engine:
+        yield engine
 
 
 @pytest.fixture
@@ -267,7 +324,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(items):
-    """Apply ``skip_on_streaming_engine`` markers to parametrized ``engine`` items."""
+    """Apply ``skip_on_streaming_engine`` markers to streaming ``_all_engine_labels`` items."""
     for item in items:
         marker = item.get_closest_marker("skip_on_streaming_engine")
         if marker is None:
@@ -275,8 +332,8 @@ def pytest_collection_modifyitems(items):
         callspec = getattr(item, "callspec", None)
         if callspec is None:
             continue
-        engine_param = callspec.params.get("engine")
-        if engine_param is None or engine_param == "in-memory":
+        label = callspec.params.get("_all_engine_labels")
+        if label is None or label == "in-memory":
             continue
         reason = (
             marker.args[0]

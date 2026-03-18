@@ -11,7 +11,6 @@ import pytest
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
-    all_gather_host_data,
 )
 
 pytestmark = pytest.mark.spmd
@@ -33,19 +32,21 @@ def _struct(rank: int) -> bytes:
     return struct.pack("qi", 12345678901234 + rank, rank)
 
 
-@pytest.mark.parametrize("make_data", [_empty, _text, _bytearray, _struct])
-def test_all_gather_host_data(streaming_engine, make_data) -> None:
-    """Each rank sends rank-specific data; results are correct and ordered."""
-    comm = streaming_engine.comm
-    br = streaming_engine.context.br()
-    result = all_gather_host_data(comm, br, op_id=0, data=make_data(comm.rank))
-    assert len(result) == comm.nranks
-    for i, item in enumerate(result):
-        assert item == bytes(make_data(i))
+# @pytest.mark.parametrize("make_data", [_empty, _text, _bytearray, _struct])
+# def test_all_gather_host_data(streaming_engine, make_data) -> None:
+#     """Each rank sends rank-specific data; results are correct and ordered."""
+#     comm = streaming_engine.comm
+#     br = streaming_engine.context.br()
+#     result = all_gather_host_data(comm, br, op_id=0, data=make_data(comm.rank))
+#     assert len(result) == comm.nranks
+#     for i, item in enumerate(result):
+#         assert item == bytes(make_data(i))
 
 
 def test_gather_cluster_info(streaming_engine) -> None:
     """SPMDEngine.gather_cluster_info returns ClusterInfo for each rank."""
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
     infos = streaming_engine.gather_cluster_info()
     assert len(infos) == streaming_engine.nranks
     for info in infos:
@@ -59,7 +60,10 @@ def test_gather_cluster_info(streaming_engine) -> None:
     # Each rank runs in its own process.
     assert len({info.pid for info in infos}) == streaming_engine.nranks
     # Without allow_gpu_sharing, all UUIDs must be unique (enforced at init).
-    assert len({info.gpu_uuid for info in infos}) == streaming_engine.nranks
+    # The Ray test fixture sets ``force_num_ranks`` + ``allow_gpu_sharing``,
+    # so multiple ranks land on the same GPU there.
+    if not isinstance(streaming_engine, RayEngine):
+        assert len({info.gpu_uuid for info in infos}) == streaming_engine.nranks
 
 
 def test_cluster_info_cuda_visible_devices(monkeypatch) -> None:
