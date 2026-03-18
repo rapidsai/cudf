@@ -3636,6 +3636,8 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        if len(re.compile(pat).groupindex.keys()) > 0:
+            pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)  # type: ignore[arg-type]
         return self._return_or_inplace(
             self._column.findall(method, pat, flags)  # type: ignore[arg-type]
         )
