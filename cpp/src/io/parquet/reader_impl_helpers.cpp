@@ -95,10 +95,9 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
 std::string normalize_column_path(std::string_view col_path, bool case_sensitive_names)
 {
   if (case_sensitive_names) { return std::string{col_path}; }
-  auto normalized_path = std::string{};
-  normalized_path.reserve(col_path.size());
+  auto normalized_path = std::string{col_path.size(), '\0'};
   std::transform(
-    col_path.begin(), col_path.end(), std::back_inserter(normalized_path), [](unsigned char c) {
+    col_path.begin(), col_path.end(), normalized_path.begin(), [](unsigned char c) {
       return std::tolower(c);
     });
   return normalized_path;
