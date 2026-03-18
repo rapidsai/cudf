@@ -810,7 +810,7 @@ dependencies:
             packages:
               - numba==0.60.0
               - pandas==2.0.*
-              - numba-cuda==0.22.2
+              - numba-cuda==0.22.2,<0.29.0
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==2.3.3
@@ -975,7 +975,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.22.2
+        - &numba_cuda numba-cuda>=0.22.2,<0.29.0
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -983,12 +983,12 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu12]>=0.22.2
+              - numba-cuda[cu12]>=0.22.2,<0.29.0
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu13]>=0.22.2
+              - numba-cuda[cu13]>=0.22.2,<0.29.0
           # fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true
           - matrix:
             packages:

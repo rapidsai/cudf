@@ -34,6 +34,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -413,7 +414,7 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
     auto const approx_run_len = num_rows / avg_run_len + 1;
     auto run_lens             = avglen_dist(engine, approx_run_len);
     thrust::inclusive_scan(
-      thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), std::plus<int>{});
+      thrust::device, run_lens.begin(), run_lens.end(), run_lens.begin(), cuda::std::plus<int>{});
     auto const samples_indices = sample_dist(engine, approx_run_len + 1);
     // This is gather.
     auto avg_repeated_sample_indices_iterator = thrust::make_transform_iterator(
