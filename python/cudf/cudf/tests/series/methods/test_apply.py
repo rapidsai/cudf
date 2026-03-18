@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import operator
 
@@ -11,12 +11,14 @@ from cudf.core.udf.utils import precompiled
 from cudf.testing import assert_eq
 
 
-def run_masked_udf_series(func, data, args=(), **kwargs):
+def run_masked_udf_series(func, data, args=(), nullable=True, **kwargs):
     gsr = data
-    psr = data.to_pandas(nullable=True)
+    psr = data.to_pandas(nullable=nullable)
 
     expect = psr.apply(func, args=args)
-    obtain = gsr.apply(func, args=args)
+    obtain = gsr.apply(func, args=args).to_pandas(nullable=nullable)
+    if "check_dtype" in kwargs and not kwargs.get("check_dtype", True):
+        expect = expect.astype(obtain.dtype, errors="ignore")
     assert_eq(expect, obtain, **kwargs)
 
 
