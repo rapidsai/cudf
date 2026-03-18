@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
+from rapidsmpf.communicator.single import (
+    new_communicator as single_communicator,
+)
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
@@ -232,7 +235,10 @@ def spmd_execution(
 
     This context manager is the primary entry point for SPMD execution. It:
 
-    - Bootstraps a UCXX communicator connecting all ``N`` ranks.
+    - Bootstraps a communicator connecting all ranks. When launched with ``rrun``
+      this is a full UCXX communicator. When running as a normal single Python
+      process (no ``rrun``) it falls back to a lightweight single-rank communicator
+      that requires no external communication library (no UCXX, Ray, or Dask).
     - Creates a RapidsMPF :class:`~rapidsmpf.streaming.core.context.Context`
       that owns GPU memory and a CUDA-stream pool.
     - Returns a :class:`~polars.lazyframe.engine_config.GPUEngine` wired to that
@@ -301,9 +307,6 @@ def spmd_execution(
     ``collect`` calls, early exits, or any branching that would cause different
     ranks to execute different query graphs.
 
-    Must be invoked under the ``rrun`` launcher.  Use
-    :func:`rapidsmpf.bootstrap.is_running_with_rrun` to test this at runtime.
-
     Parameters
     ----------
     rapidsmpf_options
@@ -312,8 +315,8 @@ def spmd_execution(
     executor_options
         Extra keyword arguments forwarded to the ``executor_options`` dict of
         :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
-        ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
-        be overridden.
+        ``"runtime"``, ``"cluster"``, and ``"spmd_context"`` are reserved and
+        may not be overridden.
     engine_options
         Extra keyword arguments forwarded directly to
         :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
@@ -333,12 +336,9 @@ def spmd_execution(
 
     Raises
     ------
-    RuntimeError
-        If not running under the ``rrun`` launcher (i.e.
-        :func:`rapidsmpf.bootstrap.is_running_with_rrun` returns ``False``).
     TypeError
         If ``executor_options`` contains any of the reserved keys
-        ``"runtime"``, ``"cluster"``, or ``"spmd"``.
+        ``"runtime"``, ``"cluster"``, or ``"spmd_context"``.
     TypeError
         If ``engine_options`` contains any of the reserved keys
         ``"memory_resource"`` or ``"executor"``.
@@ -353,13 +353,6 @@ def spmd_execution(
     ...         comm=comm, ctx=ctx, local_df=result, op_id=0
     ...     )
     """
-    if not bootstrap.is_running_with_rrun():
-        raise RuntimeError(
-            "spmd_execution() requires the rrun launcher. "
-            "Launch your script with `rrun -n <nproc> python your_script.py` "
-            "to enable SPMD execution."
-        )
-
     executor_options = executor_options or {}
     engine_options = engine_options or {}
 
@@ -375,11 +368,18 @@ def spmd_execution(
         else Options(get_environment_variables())
     )
     mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-    comm = bootstrap.create_ucxx_comm(
-        progress_thread=ProgressThread(),
-        type=bootstrap.BackendType.AUTO,
-        options=rapidsmpf_options,
-    )
+    if bootstrap.is_running_with_rrun():
+        comm = bootstrap.create_ucxx_comm(
+            progress_thread=ProgressThread(),
+            type=bootstrap.BackendType.AUTO,
+            options=rapidsmpf_options,
+        )
+    else:
+        comm = single_communicator(
+            progress_thread=ProgressThread(),
+            options=rapidsmpf_options,
+        )
+
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
