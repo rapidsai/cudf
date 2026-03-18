@@ -207,7 +207,7 @@ def evaluate_pipeline(
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    _initial_mr: Any = None
+    _original_mr: Any = None
     use_stream_pool = False
     if rmpf_context is not None:
         # Using "distributed" mode.
@@ -338,9 +338,9 @@ def evaluate_pipeline(
             # an exception in run_actor_network
             del nodes, output
 
-        # Restore the initial RMM memory resource
-        if _initial_mr is not None:
-            rmm.mr.set_current_device_resource(_original_mr)
+            # Restore the initial RMM memory resource
+            if _original_mr is not None:
+                rmm.mr.set_current_device_resource(_original_mr)
 
         return result, metadata_collector
 
