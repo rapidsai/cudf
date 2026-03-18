@@ -221,7 +221,7 @@ aggregate_reader_metadata::select_payload_columns(
 
   using cudf::io::parquet::detail::normalize_column_path;
 
-  // Helper lambdato construct a set of normalized column names for O(1) lookup
+  // Helper lambda to construct a set of normalized column names for O(1) lookup
   auto construct_normalized_colnames_set = [](auto const& names, bool case_sensitive_names) {
     std::unordered_set<std::string> s;
     for (auto const& name : names) {
