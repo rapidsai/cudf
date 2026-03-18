@@ -144,6 +144,22 @@ def test_select_aggs(df, engine, aggs):
     assert_gpu_result_equal(query, engine=engine)
 
 
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        (pl.col("a").drop_nulls().n_unique(),),
+        (pl.col("a").drop_nulls().sum(),),
+        (pl.col("a").drop_nulls().min(),),
+        (pl.col("a").drop_nulls().max(),),
+        (pl.col("a").drop_nulls().mean(),),
+    ],
+)
+def test_select_drop_nulls_aggs(engine, aggs):
+    df = pl.LazyFrame({"a": [1, 2, None, 2, 3, None, 1, 4]})
+    query = df.select(*aggs)
+    assert_gpu_result_equal(query, engine=engine)
+
+
 def test_select_with_cse_no_agg(df, engine):
     expr = pl.col("a") + pl.col("a")
     query = df.select(expr, (expr * 2).alias("b"), ((expr * 2) + 10).alias("c"))
