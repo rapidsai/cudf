@@ -356,7 +356,7 @@ The result is guaranteed to be a `pl.DataFrame` containing rows from all ranks i
 
 ### Passing options
 
-`mr`, `rapidsmpf_options`, `executor_options`, and `engine_kwargs` accept pass-through
+`rapidsmpf_options`, `executor_options`, and `engine_options` accept pass-through
 arguments:
 
 ```python
@@ -364,27 +364,33 @@ import rmm
 from rapidsmpf.integrations.cudf_polars import Options
 
 with spmd_execution(
-    mr=rmm.mr.PoolMemoryResource(rmm.mr.CudaMemoryResource()),
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
         "rapidsmpf_spill": True,
         "rapidsmpf_py_executor_max_workers": 2,
     },
-    parquet_options={"use_rapidsmpf_native": True},
+    engine_options={"parquet_options": {"use_rapidsmpf_native": True}},
 ) as (comm, ctx, engine):
     ...
 ```
 
-`mr` is an `rmm.mr.DeviceMemoryResource` used as the GPU memory resource for the
-RapidsMPF `Context`. Defaults to `None` (uses the current device resource).
+**Memory resource:** `spmd_execution` captures `rmm.mr.get_current_device_resource()`
+at entry, wraps it in `RmmResourceAdaptor` (so libcudf temporary allocations and the
+RapidsMPF `Context` share the same resource), sets the wrapped resource as current, and
+restores the original resource on exit. To use a custom allocator, call
+`rmm.mr.set_current_device_resource(your_mr)` **before** entering `spmd_execution()`.
+Do not pre-wrap it in `RmmResourceAdaptor`.
 
 `rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context`. Defaults
 to `None` (uses RapidsMPF defaults).
 
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
 argument; user-supplied keys are merged with reserved entries set by `spmd_execution()`.
-Any additional keyword arguments to `spmd_execution()` are also forwarded to `pl.GPUEngine`.
+
+`engine_options` is forwarded as keyword arguments to `pl.GPUEngine`. For example,
+pass `engine_options={"parquet_options": {"use_rapidsmpf_native": True}}` to enable
+native Parquet reads.
 
 Notable `executor_options` keys:
 
