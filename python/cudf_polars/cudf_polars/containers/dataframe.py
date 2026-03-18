@@ -121,7 +121,7 @@ class DataFrame:
         if self._num_rows_override is not None and len(self.column_map) == 0:
             if POLARS_VERSION_LT_138:  # pragma: no cover
                 return pl.DataFrame()
-            return pl.DataFrame(height=self._num_rows_override)
+            return pl.DataFrame(height=self._num_rows_override)  # type: ignore[call-arg]
 
         # If the arrow table has empty names, from_arrow produces
         # column_$i. But here we know there is only one such column
