@@ -1389,6 +1389,7 @@ class QueryResult:
     frame: pl.LazyFrame
     sort_by: list[tuple[str, bool]]
     limit: int | None = None
+    nulls_last: bool = True
 
 
 def check_input_data_type(
@@ -1473,6 +1474,7 @@ def run_polars_query_iteration(
             expected,
             query_result.sort_by,
             limit=query_result.limit,
+            nulls_last=query_result.nulls_last,
             **get_validation_options(args),
         )
     else:
