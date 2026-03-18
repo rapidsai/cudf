@@ -221,17 +221,23 @@ aggregate_reader_metadata::select_payload_columns(
 
   using cudf::io::parquet::detail::normalize_column_path;
 
+  // Helper lambdato construct a set of normalized column names for O(1) lookup
+  auto construct_normalized_colnames_set = [](auto const& names, bool case_sensitive_names) {
+    std::unordered_set<std::string> s;
+    for (auto const& name : names) {
+      s.insert(normalize_column_path(name, case_sensitive_names));
+    }
+    return s;
+  };
+
   // If payload columns are specified, only select payload columns that do not appear in the filter
   // expression
   if (payload_column_names.has_value()) {
     valid_payload_columns = *payload_column_names;
     // Remove filter columns from the provided payload column names
     if (filter_column_names.has_value() and not filter_column_names->empty()) {
-      // Add filter column names to a hash set for faster lookup
-      std::unordered_set<std::string> filter_columns_set;
-      for (auto const& filter_column_name : *filter_column_names) {
-        filter_columns_set.insert(normalize_column_path(filter_column_name, case_sensitive_names));
-      }
+      auto const filter_columns_set =
+        construct_normalized_colnames_set(*filter_column_names, case_sensitive_names);
       // Remove a payload column name if it is also present in the hash set
       valid_payload_columns.erase(
         std::remove_if(valid_payload_columns.begin(),
@@ -255,10 +261,8 @@ aggregate_reader_metadata::select_payload_columns(
 
   // Else if only filter columns are specified, select all columns that do not appear in the
   // filter expression
-  std::unordered_set<std::string> filter_columns_set;
-  for (auto const& filter_column_name : *filter_column_names) {
-    filter_columns_set.insert(normalize_column_path(filter_column_name, case_sensitive_names));
-  }
+  auto const filter_columns_set =
+    construct_normalized_colnames_set(*filter_column_names, case_sensitive_names);
 
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
