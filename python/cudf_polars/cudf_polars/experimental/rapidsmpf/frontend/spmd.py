@@ -28,7 +28,10 @@ from pylibcudf.contiguous_split import pack
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.core import generate_network
-from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
+from cudf_polars.experimental.rapidsmpf.utils import (
+    empty_table_chunk,
+    set_memory_resource,
+)
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import SPMDContext
 
@@ -87,11 +90,11 @@ def evaluate_pipeline_spmd_mode(
     """
     if config_options.executor.runtime != "rapidsmpf":
         raise RuntimeError("Runtime must be rapidsmpf")
-    if config_options.executor.spmd is None:
-        raise RuntimeError("spmd must be set for SPMD mode")
-    comm = config_options.executor.spmd.comm
-    context = config_options.executor.spmd.context
-    py_executor = config_options.executor.spmd.py_executor
+    if config_options.executor.spmd_context is None:
+        raise RuntimeError("spmd_context must be set for SPMD mode")
+    comm = config_options.executor.spmd_context.comm
+    context = config_options.executor.spmd_context.context
+    py_executor = config_options.executor.spmd_context.py_executor
 
     ir_context = IRExecutionContext(get_cuda_stream=context.get_stream_from_pool)
 
@@ -210,10 +213,9 @@ def allgather_polars_dataframe(
 @contextmanager
 def spmd_execution(
     *,
-    mr: rmm.mr.DeviceMemoryResource | None = None,
     rapidsmpf_options: Options | None = None,
     executor_options: dict[str, object] | None = None,
-    **engine_kwargs: Any,
+    engine_options: dict[str, Any] | None = None,
 ) -> Iterator[tuple[Communicator, Context, pl.GPUEngine]]:
     """
     Context manager that bootstraps a RapidsMPF SPMD context and a matching GPUEngine.
@@ -238,6 +240,27 @@ def spmd_execution(
       RapidsMPF streaming executor.
 
     All resources (communicator, stream pool, thread-pool) are released on exit.
+
+    **Memory resource**
+
+    ``spmd_execution`` captures ``rmm.mr.get_current_device_resource()`` at entry,
+    wraps it in ``RmmResourceAdaptor`` (so libcudf temporary allocations and the
+    RapidsMPF ``Context`` share the same resource), sets the wrapped resource as
+    current, and restores the original on exit.
+
+    To use a custom allocator, call ``rmm.mr.set_current_device_resource(your_mr)``
+    before entering ``spmd_execution()``. Do not pre-wrap it in ``RmmResourceAdaptor``.
+
+    .. code-block:: python
+
+        import rmm
+
+        # Optional: install a pool allocator before entering spmd_execution.
+        # rmm.mr.set_current_device_resource(
+        #     rmm.mr.PoolMemoryResource(rmm.mr.CudaMemoryResource())
+        # )
+        with spmd_execution(...) as (comm, ctx, engine):
+            ...
 
     **DataFrame and LazyFrame semantics**
 
@@ -283,9 +306,6 @@ def spmd_execution(
 
     Parameters
     ----------
-    mr
-        RMM device memory resource to use. Defaults to
-        ``rmm.mr.CudaAsyncMemoryResource()`` when ``None``.
     rapidsmpf_options
         RapidsMPF options. Defaults to ``Options(get_environment_variables())``
         when ``None``.
@@ -294,20 +314,20 @@ def spmd_execution(
         :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
         ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
         be overridden.
-    **engine_kwargs
+    engine_options
         Extra keyword arguments forwarded directly to
         :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
-        pass ``parquet_options={"use_rapidsmpf_native": True}`` to enable
-        native Parquet reads. The keys ``"memory_resource"`` and
+        pass ``engine_options={"parquet_options": {"use_rapidsmpf_native": True}}``
+        to enable native Parquet reads. The keys ``"memory_resource"`` and
         ``"executor"`` are reserved and may not be overridden.
 
     Yields
     ------
-    comm : Communicator
+    comm
         The active RapidsMPF communicator.
-    ctx : Context
+    ctx
         The active RapidsMPF context.
-    engine : pl.GPUEngine
+    engine
         A Polars GPU engine wired to ``comm`` and ``ctx``. Pass it to
         ``LazyFrame.collect(engine=engine)`` on each rank.
 
@@ -320,8 +340,8 @@ def spmd_execution(
         If ``executor_options`` contains any of the reserved keys
         ``"runtime"``, ``"cluster"``, or ``"spmd"``.
     TypeError
-        If ``engine_kwargs`` contains any of the reserved keys
-        ``"raise_on_fail"``, ``"memory_resource"``, or ``"executor"``.
+        If ``engine_options`` contains any of the reserved keys
+        ``"memory_resource"`` or ``"executor"``.
 
     Examples
     --------
@@ -341,20 +361,20 @@ def spmd_execution(
         )
 
     executor_options = executor_options or {}
-    engine_kwargs = engine_kwargs or {}
+    engine_options = engine_options or {}
 
     # Check for reserved keys.
-    if bad := {"runtime", "cluster", "spmd"} & executor_options.keys():
+    if bad := {"runtime", "cluster", "spmd_context"} & executor_options.keys():
         raise TypeError(f"executor_options may not contain reserved keys: {bad}")
-    if bad := {"memory_resource", "executor"} & engine_kwargs.keys():
-        raise TypeError(f"engine_kwargs may not contain reserved keys: {bad}")
+    if bad := {"memory_resource", "executor"} & engine_options.keys():
+        raise TypeError(f"engine_options may not contain reserved keys: {bad}")
 
     rapidsmpf_options = (
         rapidsmpf_options
         if rapidsmpf_options is not None
         else Options(get_environment_variables())
     )
-    mr = RmmResourceAdaptor(mr if mr is not None else rmm.mr.CudaAsyncMemoryResource())
+    mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
     comm = bootstrap.create_ucxx_comm(
         progress_thread=ProgressThread(),
         type=bootstrap.BackendType.AUTO,
@@ -367,7 +387,10 @@ def spmd_execution(
         thread_name_prefix="spmd-executor",
     )
     try:
-        with Context.from_options(comm.logger, mr, rapidsmpf_options) as ctx:
+        with (
+            set_memory_resource(mr),
+            Context.from_options(comm.logger, mr, rapidsmpf_options) as ctx,
+        ):
             engine = pl.GPUEngine(
                 memory_resource=ctx.br().device_mr,
                 executor="streaming",
@@ -375,11 +398,11 @@ def spmd_execution(
                     **executor_options,
                     "runtime": "rapidsmpf",
                     "cluster": "spmd",
-                    "spmd": SPMDContext(
+                    "spmd_context": SPMDContext(
                         comm=comm, context=ctx, py_executor=py_executor
                     ),
                 },
-                **engine_kwargs,
+                **engine_options,
             )
             yield comm, ctx, engine
     finally:

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -806,7 +806,11 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
   cudf::test::dictionary_column_wrapper<TypeParam, int32_t> ef3{24};
   LCW ef4{LCW{10}};
 
-  cudf::table_view expect_data{{ef1, ef2, ef3, ef4}};
+  // keys need to match so dictionaries can be compared
+  auto def3 = cudf::dictionary::set_keys(cudf::dictionary_column_view(ef3),
+                                         cudf::dictionary_column_view(f3).keys());
+
+  cudf::table_view expect_data{{ef1, ef2, def3->view(), ef4}};
 
   EXPECT_TRUE(typed_s->is_valid());
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expect_data, typed_s->view());

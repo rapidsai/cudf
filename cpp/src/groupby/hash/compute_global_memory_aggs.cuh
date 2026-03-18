@@ -16,7 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
-#include <thrust/tabulate.h>
+#include <thrust/transform.h>
 
 #include <cstdint>
 #include <memory>
@@ -49,15 +49,16 @@ rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bit
 
   // Need to set to sentinel value for rows that are null (if any).
   // The sentinel value will then be used to identify null rows instead of using the bitmask.
-  thrust::tabulate(rmm::exec_policy_nosync(stream),
-                   key_indices.begin(),
-                   key_indices.end(),
-                   [set_ref, row_bitmask] __device__(size_type const idx) mutable {
-                     if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
-                       return *set_ref.insert_and_find(idx).first;
-                     }
-                     return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-                   });
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    cuda::counting_iterator<size_type>(0),
+                    cuda::counting_iterator<size_type>(num_rows),
+                    key_indices.begin(),
+                    [set_ref, row_bitmask] __device__(size_type const idx) mutable {
+                      if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+                        return *set_ref.insert_and_find(idx).first;
+                      }
+                      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+                    });
   return key_indices;
 }
 
