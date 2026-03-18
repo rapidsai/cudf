@@ -245,6 +245,7 @@ async def fanout_node_bounded(
     ch_in: Channel[TableChunk],
     *chs_out: Channel[TableChunk],
     trace_ir: IR,
+    ir_context: IRExecutionContext,
 ) -> None:
     """
     Bounded fanout node for rapidsmpf.
@@ -262,11 +263,15 @@ async def fanout_node_bounded(
         The output Channel[TableChunk]s.
     trace_ir
         The IR node to trace. Passed through to shutdown_on_error.
+    ir_context
+        The execution context for the IR node.
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
     # TODO: Use ir_context
-    async with shutdown_on_error(context, ch_in, *chs_out, trace_ir=trace_ir):
+    async with shutdown_on_error(
+        context, ch_in, *chs_out, trace_ir=trace_ir, ir_context=ir_context
+    ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
         await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
@@ -635,6 +640,7 @@ def generate_ir_sub_network_wrapper(
                 channels[ir].reserve_output_slot(),
                 *[manager.reserve_input_slot() for _ in range(count)],
                 trace_ir=ir,
+                ir_context=rec.state["ir_context"],
             )
         nodes[ir].append(fanout_node)
         channels[ir] = manager
