@@ -687,30 +687,52 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::device_async_resource_ref mr)
 {
   auto const num_columns = source_table.num_columns();
-  auto const max_streams = std::min(num_columns, 16);
+
+  auto const num_rows =
+    static_cast<size_type>(cuda::std::distance(gather_map_begin, gather_map_end));
 
   // The data gather for n columns will be executed over n streams. If there is
   // only a single column, the fork/join overhead should be avoided.
-  auto streams = std::vector<rmm::cuda_stream_view>{};
-  if (num_columns > 1) {
-    streams = cudf::detail::fork_streams(stream, max_streams);
-  } else {
-    streams.push_back(stream);
-  }
+  // auto streams = std::vector<rmm::cuda_stream_view>{};
+  // if (num_columns > 1) {
+  //   streams = cudf::detail::fork_streams(stream, num_streams);
+  // } else {
+  //   streams.push_back(stream);
+  // }
+
+  auto const max_elem_bytes = std::transform_reduce(
+    source_table.begin(),
+    source_table.end(),
+    std::size_t{1},
+    [](std::size_t l, std::size_t r) { return std::max(l, r); },
+    [](auto const& col) -> std::size_t {
+      return cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : std::size_t{8};
+    });
+  constexpr std::size_t min_bytes_for_stream_fork = 512 * 1'024;
+  constexpr size_type max_forked_streams          = 8;
+  constexpr std::size_t bytes_for_full_streams    = 8 * 1'024 * 1'024;
+  auto const bytes_per_col   = static_cast<std::size_t>(num_rows) * max_elem_bytes;
+  auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
+  auto const effective_cap   = bytes_per_col >= bytes_for_full_streams
+                                 ? max_forked_streams
+                                 : std::max(size_type{2}, max_forked_streams / 2);
+  auto const num_streams     = use_stream_pool ? std::min(num_columns, effective_cap) : 1;
+  auto const streams         = num_streams > 1 ? cudf::detail::fork_streams(stream, num_streams)
+                                               : std::vector<rmm::cuda_stream_view>({stream});
+  auto const use_fw_kernel =
+    source_table.num_rows() < (256 * 1024) && source_table.num_columns() > 10;
 
   auto result = std::vector<std::unique_ptr<column>>(num_columns);
-  auto const gather_map_size =
-    static_cast<size_type>(cuda::std::distance(gather_map_begin, gather_map_end));
 
   auto fw_columns = std::vector<fw_column_info>();
   auto vw_columns = std::vector<size_type>();
   for (size_type i = 0; i < num_columns; ++i) {
     auto const& source_col = source_table.column(i);
-    if (cudf::is_fixed_width(source_col.type())) {
+    if (use_fw_kernel && cudf::is_fixed_width(source_col.type())) {
       auto const width      = cudf::size_of(source_col.type());
       auto const input_data = source_col.head<width1_type>() + (source_col.offset() * width);
       auto out_col          = cudf::make_fixed_width_column(
-        source_col.type(), gather_map_size, mask_state::UNALLOCATED, stream, mr);
+        source_col.type(), num_rows, mask_state::UNALLOCATED, stream, mr);
       fw_columns.push_back({i, width, input_data, out_col->mutable_view().head()});
       result[i] = std::move(out_col);
     } else {
@@ -718,24 +740,25 @@ std::unique_ptr<table> gather(table_view const& source_table,
     }
   }
 
-  auto d_fw_columns =
-    make_device_uvector_async(fw_columns, stream, cudf::get_current_device_resource_ref());
-
-  auto const fw_columns_per_stream =
-    static_cast<size_type>(std::ceil(fw_columns.size() / static_cast<double>(max_streams)));
-  for (size_type i = 0; i < max_streams; ++i) {
-    auto const start = i * fw_columns_per_stream;
-    auto const end =
-      std::min(start + fw_columns_per_stream, static_cast<size_type>(fw_columns.size()));
-    auto span = cuda::std::span<const fw_column_info>(d_fw_columns.data() + start, end - start);
-    if (start < end && gather_map_size > 0) {
-      constexpr auto block_size = 256;
-      auto const grid           = cudf::detail::grid_1d{gather_map_size, block_size};
-      gather_fw_columns_kernel<<<grid.num_blocks,
-                                 grid.num_threads_per_block,
-                                 0,
-                                 streams[i % max_streams].value()>>>(
-        span, source_table.num_rows(), gather_map_begin, gather_map_end, bounds_policy);
+  if (!fw_columns.empty()) {
+    auto d_fw_columns =
+      make_device_uvector_async(fw_columns, stream, cudf::get_current_device_resource_ref());
+    auto const fw_columns_per_stream =
+      static_cast<size_type>(std::ceil(fw_columns.size() / static_cast<double>(num_streams)));
+    for (size_type i = 0; i < num_streams; ++i) {
+      auto const start = i * fw_columns_per_stream;
+      auto const end =
+        std::min(start + fw_columns_per_stream, static_cast<size_type>(fw_columns.size()));
+      auto span = cuda::std::span<const fw_column_info>(d_fw_columns.data() + start, end - start);
+      if (start < end && num_rows > 0) {
+        constexpr auto block_size = 256;
+        auto const grid           = cudf::detail::grid_1d{num_rows, block_size};
+        gather_fw_columns_kernel<<<grid.num_blocks,
+                                   grid.num_threads_per_block,
+                                   0,
+                                   streams[i % num_streams].value()>>>(
+          span, source_table.num_rows(), gather_map_begin, gather_map_end, bounds_policy);
+      }
     }
   }
 
@@ -748,24 +771,25 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                    gather_map_begin,
                                                    gather_map_end,
                                                    bounds_policy == out_of_bounds_policy::NULLIFY,
-                                                   streams[i % max_streams],
+                                                   streams[i % num_streams],
                                                    mr);
     result[vw_columns[i]] = std::move(out_col);
   }
 
-  // auto it = thrust::make_counting_iterator<size_type>(0);
-  // std::transform(it, it + num_columns, result.begin(), [&](size_type i) {
-  //   auto const& source_column = source_table.column(i);
-  //   return cudf::type_dispatcher<dispatch_storage_type>(
-  //     source_column.type(),
-  //     column_gatherer{},
-  //     source_column,
-  //     gather_map_begin,
-  //     gather_map_end,
-  //     bounds_policy == out_of_bounds_policy::NULLIFY,
-  //     streams[i % max_streams],
-  //     mr);
-  // });
+  //  auto result = std::vector<std::unique_ptr<column>>(num_columns);
+  //  auto it     = thrust::make_counting_iterator<size_type>(0);
+  //  std::transform(it, it + num_columns, result.begin(), [&](size_type i) {
+  //    auto const& source_column = source_table.column(i);
+  //    return cudf::type_dispatcher<dispatch_storage_type>(
+  //      source_column.type(),
+  //      column_gatherer{},
+  //      source_column,
+  //      gather_map_begin,
+  //      gather_map_end,
+  //      bounds_policy == out_of_bounds_policy::NULLIFY,
+  //      streams[i % num_streams],
+  //      mr);
+  //  });
 
   auto needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
                            cudf::has_nested_nullable_columns(source_table);
@@ -786,7 +810,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
   // Join streams as late as possible so that null mask computations can run on
   // the passed in stream while other streams are gathering. Skip joining if
   // only one column, since it used the passed in stream rather than forking.
-  if (num_columns > 1) { cudf::detail::join_streams(streams, stream); }
+  // if (num_columns > 1) { cudf::detail::join_streams(streams, stream); }
+  if (num_streams > 1) { cudf::detail::join_streams(streams, stream); }
 
   return std::make_unique<table>(std::move(result));
 }
