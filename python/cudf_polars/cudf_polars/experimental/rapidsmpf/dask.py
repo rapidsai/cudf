@@ -88,7 +88,7 @@ def evaluate_pipeline_dask(
     collect_metadata
         Whether to collect metadata.
     query_id
-        The query ID. If not provided, a new UUID will be generated.
+        A unique identifier for the query.
 
     Returns
     -------
@@ -159,7 +159,7 @@ def _evaluate_pipeline_dask(
     collect_metadata
         Whether to collect metadata.
     query_id
-        The query ID. If not provided, a new UUID will be generated.
+        A unique identifier for the query.
 
     Returns
     -------

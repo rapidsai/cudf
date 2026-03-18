@@ -212,7 +212,7 @@ def evaluate_pipeline(
     collect_metadata
         Whether to collect runtime metadata.
     query_id
-        The query ID. If not provided, a new UUID will be generated.
+        A unique identifier for the query.
 
     Returns
     -------
