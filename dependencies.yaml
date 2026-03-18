@@ -791,6 +791,11 @@ dependencies:
     specific:
       - output_types: [requirements, pyproject]
         matrices:
+          # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
+          # (e.g. for DLFW and pip devcontainers)
+          - matrix:
+              use_cuda_wheels: "false"
+            packages:
           - matrix:
               cuda: "12.*"
               cuda_suffixed: "true"
