@@ -90,11 +90,11 @@ def evaluate_pipeline_spmd_mode(
     """
     if config_options.executor.runtime != "rapidsmpf":
         raise RuntimeError("Runtime must be rapidsmpf")
-    if config_options.executor.spmd is None:
-        raise RuntimeError("spmd must be set for SPMD mode")
-    comm = config_options.executor.spmd.comm
-    context = config_options.executor.spmd.context
-    py_executor = config_options.executor.spmd.py_executor
+    if config_options.executor.spmd_context is None:
+        raise RuntimeError("spmd_context must be set for SPMD mode")
+    comm = config_options.executor.spmd_context.comm
+    context = config_options.executor.spmd_context.context
+    py_executor = config_options.executor.spmd_context.py_executor
 
     ir_context = IRExecutionContext(get_cuda_stream=context.get_stream_from_pool)
 
@@ -364,7 +364,7 @@ def spmd_execution(
     engine_options = engine_options or {}
 
     # Check for reserved keys.
-    if bad := {"runtime", "cluster", "spmd"} & executor_options.keys():
+    if bad := {"runtime", "cluster", "spmd_context"} & executor_options.keys():
         raise TypeError(f"executor_options may not contain reserved keys: {bad}")
     if bad := {"memory_resource", "executor"} & engine_options.keys():
         raise TypeError(f"engine_options may not contain reserved keys: {bad}")
@@ -398,7 +398,7 @@ def spmd_execution(
                     **executor_options,
                     "runtime": "rapidsmpf",
                     "cluster": "spmd",
-                    "spmd": SPMDContext(
+                    "spmd_context": SPMDContext(
                         comm=comm, context=ctx, py_executor=py_executor
                     ),
                 },

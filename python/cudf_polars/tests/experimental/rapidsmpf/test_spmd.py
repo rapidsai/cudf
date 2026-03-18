@@ -34,7 +34,7 @@ def test_yields_context_and_engine() -> None:
 
 def test_reserved_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd"):
+    for key in ("runtime", "cluster", "spmd_context"):
         with (
             pytest.raises(TypeError, match="reserved"),
             spmd_execution(executor_options={key: "anything"}),
