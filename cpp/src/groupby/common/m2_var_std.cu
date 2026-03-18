@@ -15,6 +15,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/cmath>
+#include <cuda/std/functional>
 #include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail {
