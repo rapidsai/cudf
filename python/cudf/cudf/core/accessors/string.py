@@ -791,6 +791,8 @@ class StringMethods(BaseAccessor):
 
         if is_scalar(pat):
             if regex:
+                if len(re.compile(pat).groupindex.keys()) > 0:  # type: ignore[type-var]
+                    pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)  # type: ignore[arg-type]
                 result_col = self._column.contains_re(pat, flags)  # type: ignore[arg-type]
             else:
                 if case is False:
@@ -3615,6 +3617,8 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        if len(re.compile(pat).groupindex.keys()) > 0:
+            pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)
         return self._return_or_inplace(self._column.count_re(pat, flags))
 
     def _findall(
@@ -4362,6 +4366,8 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        if len(re.compile(pat).groupindex.keys()) > 0:
+            pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)
         result = self._column.matches_re(pat, flags)
         if na is not no_default:
             result = result.fillna(na)
