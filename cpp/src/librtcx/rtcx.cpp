@@ -57,7 +57,7 @@ extern "C" {
     ::CUresult __result = (__VA_ARGS__);                                                  \
     if (__result != ::CUDA_SUCCESS) {                                                     \
       char const* __enum_str;                                                             \
-      RTCX_EXPECTS(::rtcx::cuda->GetErrorString(__result, &__enum_str) == ::CUDA_SUCCESS, \
+      RTCX_EXPECTS(::rtcx::cu->GetErrorString(__result, &__enum_str) == ::CUDA_SUCCESS,   \
                    "Unable to get CUDA error string",                                     \
                    std::runtime_error);                                                   \
       auto __errstr = ::std::format("(cuda) expression `{}` failed, with error ({}): {}", \
@@ -224,6 +224,7 @@ sha256 sha256_context::finalize()
   DO_IT(KernelGetName)                  \
   DO_IT(KernelGetFunction)              \
   DO_IT(LibraryLoadData)                \
+  DO_IT(LibraryLoadFromFile)            \
   DO_IT(LibraryGetKernel)               \
   DO_IT(LibraryGetKernelCount)          \
   DO_IT(LibraryEnumerateKernels)        \
@@ -403,7 +404,7 @@ struct LibNVJitLink {
   }
 };
 
-static std::optional<LibCuda> cuda;
+static std::optional<LibCuda> cu;
 static std::optional<LibNVRTC> nvrtc;
 static std::optional<LibNVJitLink> nvjitlink;
 static std::optional<std::once_flag> init_libraries_flag{std::in_place};
@@ -414,9 +415,9 @@ static std::optional<std::once_flag> teardown_libraries_flag{std::in_place};
 void initialize()
 {
   std::call_once(*init_libraries_flag, [] {
-    cuda.emplace(LibCuda::_load());
+    cu.emplace(LibCuda::_load());
     RTCX_EXPECTS(
-      cuda->Init(0) == CUDA_SUCCESS, "Failed to initialize CUDA driver API", std::runtime_error);
+      cu->Init(0) == CUDA_SUCCESS, "Failed to initialize CUDA driver API", std::runtime_error);
     nvrtc.emplace(LibNVRTC::_load());
     nvjitlink.emplace(LibNVJitLink::_load());
   });
@@ -425,7 +426,7 @@ void initialize()
 void teardown()
 {
   std::call_once(*teardown_libraries_flag, [] {
-    cuda.reset();
+    cu.reset();
     nvrtc.reset();
     nvjitlink.reset();
     init_libraries_flag.reset();
@@ -709,12 +710,12 @@ kernel_occupancy_config kernel_ref::max_occupancy_config(std::size_t dynamic_sha
 {
   std::int32_t min_grid_size;
   std::int32_t block_size;
-  RTCX_CHECK_CUDA(cuda->OccupancyMaxPotentialBlockSize(&min_grid_size,
-                                                       &block_size,
-                                                       reinterpret_cast<CUfunction>(handle_),
-                                                       nullptr,
-                                                       dynamic_shared_memory_bytes,
-                                                       block_size_limit));
+  RTCX_CHECK_CUDA(cu->OccupancyMaxPotentialBlockSize(&min_grid_size,
+                                                     &block_size,
+                                                     reinterpret_cast<CUfunction>(handle_),
+                                                     nullptr,
+                                                     dynamic_shared_memory_bytes,
+                                                     block_size_limit));
 
   return kernel_occupancy_config{.min_grid_size = static_cast<std::uint32_t>(min_grid_size),
                                  .block_size    = static_cast<std::uint32_t>(block_size)};
@@ -744,7 +745,7 @@ void kernel_ref::launch(cuda_dim3 grid_dim,
                      .numAttrs       = 0};
 
   RTCX_CHECK_CUDA(
-    cuda->LaunchKernelEx(&cfg, reinterpret_cast<CUfunction>(handle_), kernel_params, nullptr));
+    cu->LaunchKernelEx(&cfg, reinterpret_cast<CUfunction>(handle_), kernel_params, nullptr));
 }
 
 void kernel_ref::launch_cooperative(cuda_dim3 grid_dim,
@@ -759,29 +760,29 @@ void kernel_ref::launch_cooperative(cuda_dim3 grid_dim,
   RTCX_EXPECTS(
     kernel_params != nullptr, "Kernel parameters pointer must not be null", std::logic_error);
 
-  RTCX_CHECK_CUDA(cuda->LaunchCooperativeKernel(reinterpret_cast<CUfunction>(handle_),
-                                                grid_dim.x,
-                                                grid_dim.y,
-                                                grid_dim.z,
-                                                block_dim.x,
-                                                block_dim.y,
-                                                block_dim.z,
-                                                shared_mem_bytes,
-                                                stream,
-                                                kernel_params));
+  RTCX_CHECK_CUDA(cu->LaunchCooperativeKernel(reinterpret_cast<CUfunction>(handle_),
+                                              grid_dim.x,
+                                              grid_dim.y,
+                                              grid_dim.z,
+                                              block_dim.x,
+                                              block_dim.y,
+                                              block_dim.z,
+                                              shared_mem_bytes,
+                                              stream,
+                                              kernel_params));
 }
 
 std::string_view kernel_ref::get_name() const
 {
   char const* name;
-  RTCX_CHECK_CUDA(cuda->KernelGetName(&name, handle_));
+  RTCX_CHECK_CUDA(cu->KernelGetName(&name, handle_));
   return std::string_view{name == nullptr ? "" : name};
 }
 
 library_t::~library_t()
 {
   if (handle_ != nullptr) {
-    if (cuda->LibraryUnload(handle_) != CUDA_SUCCESS) { std::terminate(); }
+    if (cu->LibraryUnload(handle_) != CUDA_SUCCESS) { std::terminate(); }
   }
 }
 
@@ -790,10 +791,29 @@ library load_library(std::span<std::uint8_t const> binary)
   CUlibrary handle;
 
   RTCX_CHECK_CUDA(
-    cuda->LibraryLoadData(&handle, binary.data(), nullptr, nullptr, 0, nullptr, nullptr, 0));
+    cu->LibraryLoadData(&handle, binary.data(), nullptr, nullptr, 0, nullptr, nullptr, 0));
 
   RTCX_DEFER([&] {
-    if (handle != nullptr) { RTCX_CHECK_CUDA(cuda->LibraryUnload(handle)); }
+    if (handle != nullptr) { RTCX_CHECK_CUDA(cu->LibraryUnload(handle)); }
+  });
+
+  auto library = std::make_shared<library_t>(handle);
+
+  handle = nullptr;
+
+  return library;
+}
+
+library load_library_from_file(char const* path)
+{
+  RTCX_EXPECTS(path != nullptr, "Library path must not be null", std::logic_error);
+
+  CUlibrary handle;
+
+  RTCX_CHECK_CUDA(cu->LibraryLoadFromFile(&handle, path, nullptr, nullptr, 0, nullptr, nullptr, 0));
+
+  RTCX_DEFER([&] {
+    if (handle != nullptr) { RTCX_CHECK_CUDA(cu->LibraryUnload(handle)); }
   });
 
   auto library = std::make_shared<library_t>(handle);
@@ -865,19 +885,19 @@ byte_buffer link_library(link_params const& params)
 kernel_ref library_t::get_kernel(char const* name) const
 {
   CUkernel kernel;
-  RTCX_CHECK_CUDA(cuda->LibraryGetKernel(&kernel, handle_, name));
+  RTCX_CHECK_CUDA(cu->LibraryGetKernel(&kernel, handle_, name));
   return kernel_ref{kernel};
 }
 
 std::vector<kernel_ref> library_t::enumerate_kernels() const
 {
   std::uint32_t num_kernels;
-  RTCX_CHECK_CUDA(cuda->LibraryGetKernelCount(&num_kernels, handle_));
+  RTCX_CHECK_CUDA(cu->LibraryGetKernelCount(&num_kernels, handle_));
 
   std::vector<CUkernel> kernels;
   kernels.resize(num_kernels);
 
-  RTCX_CHECK_CUDA(cuda->LibraryEnumerateKernels(kernels.data(), num_kernels, handle_));
+  RTCX_CHECK_CUDA(cu->LibraryEnumerateKernels(kernels.data(), num_kernels, handle_));
 
   std::vector<kernel_ref> result;
   for (CUkernel k : kernels) {
@@ -921,8 +941,7 @@ cache_t::cache_t(std::string cache_dir,
                  std::string tmp_dir,
                  cache_limits const& limits,
                  bool preload,
-                 bool disable,
-                 bool materialize_all)
+                 bool disable)
   : enabled_{!disable},
     cache_dir_{std::move(cache_dir)},
     tmp_dir_{std::move(tmp_dir)},
@@ -932,7 +951,7 @@ cache_t::cache_t(std::string cache_dir,
     libraries_cache_{limits.num_mem_libraries},
     tick_{0}
 {
-  if (preload) { preload_from_disk(materialize_all); }
+  if (preload) { preload_from_disk(); }
 }
 
 std::string const& cache_t::get_cache_dir() { return cache_dir_; }
@@ -987,6 +1006,24 @@ std::optional<blob> get_disk_blob(std::string const& cache_dir,
 
   if (!blob.has_value()) { return std::nullopt; }
   return std::make_shared<blob_t>(std::move(*blob));
+}
+
+std::optional<library> get_disk_library(std::string const& cache_dir, sha256 const& sha)
+{
+  auto hex  = sha.to_hex_string();
+  auto path = std::format("{}/{}.cuLibrary.bin", cache_dir, hex.view());
+
+  CUlibrary handle;
+  auto errc =
+    cu->LibraryLoadFromFile(&handle, path.c_str(), nullptr, nullptr, 0, nullptr, nullptr, 0);
+
+  if (errc == CUDA_ERROR_FILE_NOT_FOUND) { return std::nullopt; }
+
+  RTCX_EXPECTS(errc == CUDA_SUCCESS,
+               std::format("Failed to load library `{}` from RTCX cache file", path),
+               std::runtime_error);
+
+  return std::make_shared<library_t>(handle);
 }
 
 std::pair<std::vector<std::string>, std::vector<std::chrono::nanoseconds>> get_disk_entries(
@@ -1213,15 +1250,15 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
     counter_.library_mem_misses.incr();
 
     // check disk cache
-    std::optional<blob> disk_blob = std::nullopt;
-    if (enabled_) { disk_blob = get_disk_blob(cache_dir_, "cuLibrary", sha); }
+    std::optional<library> disk_library = std::nullopt;
+    if (enabled_) { disk_library = get_disk_library(cache_dir_, sha); }
 
     std::promise<library> promise;
     auto fut       = promise.get_future().share();
     auto cache_fut = fut;
     auto ret_fut   = fut;
 
-    if (disk_blob.has_value()) {
+    if (disk_library.has_value()) {
       counter_.library_disk_hits.incr();
 
       libraries_cache_.insert(sha, std::move(cache_fut), current_tick);
@@ -1231,8 +1268,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       lock_.unlock();
       unlocked = true;
 
-      auto lib = load_library((*disk_blob)->view());
-      promise.set_value(std::move(lib));
+      promise.set_value(std::move(*disk_library));
 
       return ret_fut;
 
@@ -1306,7 +1342,7 @@ void cache_t::clear_memory_store()
 
 void cache_t::clear_disk_store() { evict_disk_entries(cache_dir_, 0); }
 
-void cache_t::preload_from_disk(bool materialize_all)
+void cache_t::preload_from_disk()
 {
   auto [paths, access_times] = get_disk_entries(cache_dir_);
 
@@ -1329,25 +1365,25 @@ void cache_t::preload_from_disk(bool materialize_all)
     for (auto index : ranking_indices) {
       auto path = paths[index];
       try {
-        auto file_name   = std::filesystem::path{path}.filename().string();
-        auto sha_str_end = file_name.find('.');
-        auto sha_str     = file_name.substr(0, sha_str_end);
-        auto data        = blob_t::from_file(path.c_str());
-        if (!data.has_value()) { continue; }
+        auto file_name = std::filesystem::path{path}.filename().string();
+        auto sha_str   = file_name.substr(0, file_name.find('.'));
+        auto sha       = sha256::parse(sha_str);
 
         if (path.ends_with(".blob.bin")) {
+          auto data = blob_t::from_file(path.c_str());
+          if (!data.has_value()) { continue; }
           auto blob = std::make_shared<blob_t>(std::move(*data));
           std::promise<rtcx::blob> promise;
           auto fut = promise.get_future().share();
           promise.set_value(std::move(blob));
-          blobs_cache_.insert(sha256::parse(sha_str), std::move(fut), tick_);
+          blobs_cache_.insert(sha, std::move(fut), tick_);
         } else if (path.ends_with(".cuLibrary.bin")) {
-          auto lib = load_library(data->view());
-          if (materialize_all) { [[maybe_unused]] auto kernels = lib->enumerate_kernels(); }
+          auto lib = get_disk_library(cache_dir_, sha);
+          if (!lib.has_value()) { continue; }
           std::promise<library> promise;
           auto fut = promise.get_future().share();
-          promise.set_value(std::move(lib));
-          libraries_cache_.insert(sha256::parse(sha_str), std::move(fut), tick_);
+          promise.set_value(std::move(*lib));
+          libraries_cache_.insert(sha, std::move(fut), tick_);
         }
       } catch (std::exception const& e) {
         // ignore any errors during preload

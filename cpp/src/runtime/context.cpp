@@ -45,8 +45,7 @@ void context::ensure_jit_cache_initialized()
                                                   _config.jit_tmp_dir,
                                                   limits,
                                                   bool{_config.preload_jit_cache},
-                                                  bool{_config.disable_jit_cache},
-                                                  bool{_config.prematerialize_jit_cache});
+                                                  bool{_config.disable_jit_cache});
 
     if (_config.clear_jit_cache) {
       _rtcx_cache->clear_memory_store();
@@ -113,12 +112,11 @@ namespace CUDF_EXPORT cudf {
 void initialize(init_flags flags)
 {
   std::call_once(*_context_init_flag, [&]() {
-    bool dump_codegen             = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
-    bool use_jit                  = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
-    bool preload_jit_cache        = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
-    bool prematerialize_jit_cache = get_bool_env_or("LIBCUDF_JIT_PREMATERIALIZE_CACHE", false);
-    bool disable_jit_cache        = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
-    bool clear_jit_cache          = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
+    bool dump_codegen      = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
+    bool use_jit           = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
+    bool preload_jit_cache = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
+    bool disable_jit_cache = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
+    bool clear_jit_cache   = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
 
     auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
     auto kernel_cache_limit_disk    = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 131'072U);
@@ -133,7 +131,6 @@ void initialize(init_flags flags)
     context_config cfg{.dump_codegen               = dump_codegen,
                        .use_jit                    = use_jit,
                        .preload_jit_cache          = preload_jit_cache,
-                       .prematerialize_jit_cache   = prematerialize_jit_cache,
                        .disable_jit_cache          = disable_jit_cache,
                        .clear_jit_cache            = clear_jit_cache,
                        .rtcx_cache_dir             = rtcx_cache_dir,

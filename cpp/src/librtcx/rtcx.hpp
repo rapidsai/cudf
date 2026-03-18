@@ -685,8 +685,7 @@ struct cache_t {
           std::string tmp_dir,
           cache_limits const& limits,
           bool preload,
-          bool disable,
-          bool materialize_all);
+          bool disable);
   cache_t(cache_t const&)            = delete;
   cache_t& operator=(cache_t const&) = delete;
   cache_t(cache_t&&)                 = delete;
@@ -783,10 +782,8 @@ struct cache_t {
   /***
    * @brief Pre-load the JIT program cache from disk into memory during initialization, allowing for
    * faster retrieval and execution of previously compiled kernels at runtime.
-   * @param materialize_all Whether to make the compiled kernels fully materialized in memory to
-   * improve runtime stability.
    */
-  void preload_from_disk(bool materialize_all);
+  void preload_from_disk();
 
   /***
    * @brief Enable the cache, allowing it to store and retrieve compiled blobs and libraries in
@@ -815,10 +812,17 @@ struct cache_t {
  * @brief Load a compiled library from binary data
  *
  * @param binary Span of bytes containing the compiled library binary data
- * @param type Binary type of the library (e.g., CUBIN, PTX)
  * @return A library object representing the loaded library with launchable kernels
  */
 [[nodiscard]] library load_library(std::span<std::uint8_t const> binary);
+
+/**
+ * @brief Load a compiled library from binary data
+ *
+ * @param path Path to the file containing the library binary data
+ * @return A library object representing the loaded library with launchable kernels
+ */
+[[nodiscard]] library load_library_from_file(char const* path);
 
 /**
  * @brief Link multiple compiled binary fragments into a single binary blob containing the linked
