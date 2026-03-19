@@ -27,6 +27,7 @@ from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.core import generate_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -386,6 +388,7 @@ def spmd_execution(
         ),
         thread_name_prefix="spmd-executor",
     )
+
     try:
         with (
             set_memory_resource(mr),
@@ -409,3 +412,91 @@ def spmd_execution(
         # The Context has already been exited above, so no work can be
         # pending in py_executor at this point; wait=False is safe.
         py_executor.shutdown(wait=False)
+
+
+def spmd_gather_statistics(
+    engine: pl.GPUEngine,
+) -> dict[str, dict[str, int | float]] | None:
+    """
+    Gather and aggregate statistics from all workers in the SPMD context.
+
+    Collects local statistics (count and value per stat name) from each worker,
+    allgathers them, then on rank 0 sums count and value per stat name and
+    returns the result. Other ranks return None.
+
+    Parameters
+    ----------
+    engine
+        Polars GPU engine with SPMD context and communicator in config.
+
+    Returns
+    -------
+    On rank 0: mapping of stat name to ``{"count": <sum>, "value": <sum>}``.
+    On other ranks: ``None``.
+    """
+    spmd_ctx = engine.config["executor_options"]["spmd"]
+    if spmd_ctx is None:
+        raise KeyError(
+            "engine.config['executor_options']['spmd'] not set; "
+            "spmd_gather_statistics must be called with an engine from spmd_execution()."
+        )
+    ctx: Context = spmd_ctx.context
+    comm: Communicator = spmd_ctx.comm
+    assert ctx is not None
+    assert comm is not None
+    stats: Statistics = ctx.br().statistics
+    assert stats.enabled
+    # create a polars dataframe from the stats map
+    stat_name = []
+    count = []
+    value = []
+    for k in stats.list_stat_names():
+        s = stats.get_stat(k)
+        stat_name.append(k)
+        count.append(s["count"])
+        value.append(s["value"])
+    assert len(stat_name) > 0
+    stats_df = pl.DataFrame({"stat_name": stat_name, "count": count, "value": value})
+
+    # convert stats map to polars dataframe and allgather it
+    with reserve_op_id() as op_id:
+        all_gathered = allgather_polars_dataframe(
+            comm=comm,
+            ctx=ctx,
+            local_df=stats_df,
+            op_id=op_id,
+        )
+
+        if comm.rank == 0:
+            grouped = all_gathered.group_by("stat_name").agg(
+                pl.col("count").sum(), pl.col("value").sum()
+            )
+            d = grouped.to_dict()
+            return {
+                stat_name: {"count": count, "value": value}
+                for stat_name, count, value in zip(
+                    d["stat_name"], d["count"], d["value"], strict=True
+                )
+            }
+        else:
+            return None
+
+
+def spmd_clear_statistics(engine: pl.GPUEngine) -> None:
+    """
+    Clear all statistics on the current worker in the SPMD context.
+
+    Parameters
+    ----------
+    engine
+        Polars GPU engine with SPMD context and communicator in config.
+    """
+    spmd_cfg = engine.config.get("executor_options", {}).get("spmd")
+    if spmd_cfg is None:
+        raise KeyError(
+            "engine.config['executor_options']['spmd'] not set; "
+            "spmd_clear_statistics must be called with an engine from spmd_execution()."
+        )
+    ctx: Context = spmd_cfg.context
+    assert ctx is not None
+    ctx.br().statistics.clear()

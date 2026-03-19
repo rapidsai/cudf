@@ -710,12 +710,55 @@ def print_query_plan(
     return logical_plan, plan
 
 
+def initialize_single_cluster(run_config: RunConfig, args: argparse.Namespace) -> None:
+    """
+    Initialize single-worker RapidsMPF when using streaming executor with rapidsmpf runtime.
+
+    Calls rapidsmpf's setup_worker with "single_" options. No-op if not using
+    streaming executor or rapidsmpf runtime.
+
+    Parameters
+    ----------
+    run_config : RunConfig
+        The run configuration.
+    args : argparse.Namespace
+        Parsed command line arguments (rapidsmpf_dask_statistics,
+        rapidsmpf_print_statistics, rapidsmpf_oom_protection).
+    """
+    assert run_config.executor == "streaming"
+    assert run_config.runtime == "rapidsmpf"
+
+    try:
+        from rapidsmpf.config import Options, get_environment_variables
+        from rapidsmpf.integrations.single import setup_worker
+    except ImportError as err:
+        raise ImportError(
+            "rapidsmpf is required for single-cluster rapidsmpf runtime "
+            "but is not installed."
+        ) from err
+
+    setup_worker(
+        Options(
+            {
+                "single_spill_device": str(run_config.spill_device),
+                "single_spill_to_pinned_memory": str(run_config.spill_to_pinned_memory),
+                # TODO: fix with https://github.com/rapidsai/cudf/issues/21803
+                "single_statistics": str(args.rapidsmpf_dask_statistics),
+                "single_print_statistics": str(args.rapidsmpf_print_statistics),
+                "single_oom_protection": str(args.rapidsmpf_oom_protection),
+            }
+            | get_environment_variables()
+        ),
+    )
+
+
 def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  # type: ignore[no-untyped-def]
     """
     Initialize a Dask distributed cluster.
 
-    This function either creates a new LocalCUDACluster or connects to an
-    existing Dask cluster depending on the provided arguments.
+    Creates or connects to a Dask cluster and optionally bootstraps rapidsmpf
+    with "dask_" options. Use :func:`initialize_single_cluster` for
+    single-worker (non-distributed) runs.
 
     Parameters
     ----------
@@ -728,12 +771,9 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     Returns
     -------
-    Client or None
-        A Dask distributed Client, or None if not using distributed mode.
+    distributed.Client
+        A Dask distributed Client.
     """
-    if run_config.cluster != "distributed":
-        return None
-
     from distributed import Client
 
     # Check if we should connect to an existing cluster
@@ -1458,16 +1498,36 @@ def run_polars_query_iteration(
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
 
+    shuffle_stats: dict[str, dict[str, int | float]] | None = None
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
-        from rapidsmpf.integrations.dask.shuffler import (
-            clear_shuffle_statistics,
-            gather_shuffle_statistics,
-        )
+        if run_config.cluster == "distributed":
+            from rapidsmpf.integrations.dask.shuffler import (
+                clear_shuffle_statistics,
+                gather_shuffle_statistics,
+            )
 
-        shuffle_stats = gather_shuffle_statistics(client)
-        clear_shuffle_statistics(client)
-    else:
-        shuffle_stats = None
+            shuffle_stats = gather_shuffle_statistics(client)
+            clear_shuffle_statistics(client)
+        elif run_config.cluster == "spmd":
+            from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+                spmd_clear_statistics,
+                spmd_gather_statistics,
+            )
+
+            assert engine is not None
+            shuffle_stats = spmd_gather_statistics(engine)
+            spmd_clear_statistics(engine)
+        elif run_config.cluster == "single":
+            from cudf_polars.experimental.rapidsmpf.single import (
+                clear_statistics,
+                gather_statistics,
+            )
+
+            shuffle_stats = gather_statistics()
+            clear_statistics()
+        else:  # spmd
+            # TODO: Implement shuffle statistics gathering for spmd and single
+            pass
 
     if expected is not None:
         validation_result = validate_result(
@@ -1796,8 +1856,12 @@ def run_polars_single_or_dask(
     validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Dask or single-process execution."""
-    client = initialize_dask_cluster(run_config, args)
-    if client is not None:
+    if run_config.cluster != "distributed":
+        initialize_single_cluster(run_config, args)
+        client = None
+    else:
+        client = initialize_dask_cluster(run_config, args)
+
         run_config = dataclasses.replace(
             run_config, n_workers=client.scheduler_info()["n_workers"]
         )
