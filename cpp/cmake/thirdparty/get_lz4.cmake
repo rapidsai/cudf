@@ -15,17 +15,25 @@ function(find_and_configure_lz4)
     CPM_ARGS
     GIT_REPOSITORY https://github.com/lz4/lz4.git
     GIT_TAG 5c4c1fb2354133e1f3b087a341576985f8114bd5
-    GIT_SHALLOW TRUE
+    GIT_SHALLOW FALSE SOURCE_SUBDIR build/cmake
   )
 
   if(lz4_ADDED)
     add_library(
-      lz4_objects OBJECT
+      liblz4_static OBJECT
       ${lz4_SOURCE_DIR}/lib/lz4.c ${lz4_SOURCE_DIR}/lib/lz4file.c ${lz4_SOURCE_DIR}/lib/lz4frame.c
       ${lz4_SOURCE_DIR}/lib/lz4hc.c ${lz4_SOURCE_DIR}/lib/xxhash.c
     )
-    target_include_directories(lz4_objects PUBLIC $<BUILD_INTERFACE:${lz4_SOURCE_DIR}/lib>)
+    target_include_directories(liblz4_static PUBLIC $<BUILD_INTERFACE:${lz4_SOURCE_DIR}/lib>)
   endif()
+
+  if(DEFINED lz4_SOURCE_DIR)
+    set(LZ4_INCLUDE_DIR
+        "${lz4_SOURCE_DIR}/lib"
+        PARENT_SCOPE
+    )
+  endif()
+  rapids_export_find_package_root(BUILD liblz4_static "${lz4_BINARY_DIR}" EXPORT_SET cudf-exports)
 
 endfunction()
 

@@ -97,6 +97,13 @@ def generate_cxx_source_files_data(
 
     binary_file_name = f"embed_{id}.bin"
 
+    include_dirs_list = ",\n".join([f'"{d}"' for d in include_directories])
+    dests_list = ",\n".join([f'"{d}"' for d in dests])
+    ranges_list = ",\n".join(
+        [f"{{{offset}, {size}}}" for offset, size in files_ranges]
+    )
+    hash_list = ", ".join([f"0x{b:02x}" for b in hash])
+
     cxx_header = f"""
 // Auto-generated header for embedded files with ID: {id}
 #pragma once
@@ -115,19 +122,18 @@ struct range {{
 
 constexpr char const * {id}_include_directories[{len(include_directories)}] =
 {{
-{",\n".join([f'"{d}"' for d in include_directories])}
+{include_dirs_list}
 }};
 
 constexpr char const * {id}_file_destinations[{len(dests)}] =
 {{
-{",\n".join([f'"{d}"' for d in dests])}
+{dests_list}
 }};
 
 constexpr range {id}_file_ranges[{len(files_ranges)}] =
 {{
-{",\n".join([f"{{{offset}, {size}}}" for offset, size in files_ranges])}
+{ranges_list}
 }};
-
 
 constexpr std::size_t {id}_files_uncompressed_size = {len(uncompressed_files_bytes)};
 
@@ -143,7 +149,7 @@ rtcx_embed_{id}_files_begin,
 
 constexpr std::uint8_t {id}_hash[{len(hash)}] =
 {{
-{", ".join([f"0x{b:02x}" for b in hash])}
+{hash_list}
 }};
 
 }}
@@ -197,15 +203,13 @@ def generate_embed(
 
 def main():
     id: str = "@RTCX_EMBED_PY_ARG__ID@"
-    file_paths_str: str = "@RTCX_EMBED_PY_ARG__FILE_PATHS@"
-    file_dests_str: str = "@RTCX_EMBED_PY_ARG__FILE_DESTS@"
-    include_directories_str: str = "@RTCX_EMBED_PY_ARG__INCLUDE_DIRS@"
+    file_paths: list[str] = "@RTCX_EMBED_PY_ARG__FILE_PATHS@".split(";")
+    file_dests: list[str] = "@RTCX_EMBED_PY_ARG__FILE_DESTS@".split(";")
+    include_directories: list[str] = "@RTCX_EMBED_PY_ARG__INCLUDE_DIRS@".split(
+        ";"
+    )
     compression: str = "@RTCX_EMBED_PY_ARG__COMPRESSION@"
     output_dir: str = "@RTCX_EMBED_PY_ARG__OUTPUT_DIR@"
-
-    file_paths = file_paths_str.split(";")
-    file_dests = file_dests_str.split(";")
-    include_directories = include_directories_str.split(";")
 
     generate_embed(
         id,
