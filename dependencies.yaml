@@ -346,6 +346,7 @@ files:
       key: rapidsmpf
     includes:
       - depends_on_rapidsmpf
+      - pyarrow_run
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
