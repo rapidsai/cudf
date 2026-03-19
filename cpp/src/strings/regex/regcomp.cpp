@@ -282,7 +282,7 @@ class regex_parser {
   {
     auto const cp     = utf8_to_codepoint(chr);
     auto const locale = std::setlocale(LC_ALL, nullptr);  // save current locale
-    std::setlocale(LC_ALL, "");
+    std::setlocale(LC_ALL, "C.UTF-8");
     auto result = codepoint_to_utf8(std::iswupper(cp) ? std::towlower(cp) : std::towupper(cp));
     std::setlocale(LC_ALL, locale);  // restore original locale
     return result;
