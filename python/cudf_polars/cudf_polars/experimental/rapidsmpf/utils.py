@@ -125,7 +125,9 @@ async def shutdown_on_error(
     try:
         yield tracer
     except BaseException:
-        await asyncio.gather(*(ch.shutdown(context) for ch in channels))
+        async with asyncio.TaskGroup() as tg:
+            for ch in channels:
+                tg.create_task(ch.shutdown(context))
         raise
     finally:
         if tracer is not None:

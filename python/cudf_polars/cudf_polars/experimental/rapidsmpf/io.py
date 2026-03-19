@@ -271,11 +271,13 @@ async def dataframescan_node(
                 )
             await ch_out.drain(context)
 
-        tasks = [lineariser.drain()]
-        tasks.extend(
-            _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
-        )
-        await asyncio.gather(*tasks)
+        async with (
+            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            asyncio.TaskGroup() as tg,
+        ):
+            tg.create_task(lineariser.drain())
+            for i, ch_in in enumerate(lineariser.input_channels):
+                tg.create_task(_producer(i, ch_in))
 
 
 @generate_ir_sub_network.register(DataFrameScan)
