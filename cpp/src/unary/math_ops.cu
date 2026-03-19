@@ -19,9 +19,8 @@
 
 #include <cuda/std/bit>
 #include <cuda/std/cmath>
+#include <cuda/std/type_traits>
 #include <thrust/transform.h>
-
-#include <type_traits>
 
 namespace cudf {
 namespace detail {
@@ -180,13 +179,13 @@ struct DeviceFloor {
 struct DeviceAbs {
   template <typename T>
   T __device__ operator()(T data)
-    requires(std::is_signed_v<T>)
+    requires(cuda::std::is_signed_v<T>)
   {
     return cuda::std::abs(data);
   }
   template <typename T>
   T __device__ operator()(T data)
-    requires(!std::is_signed_v<T>)
+    requires(!cuda::std::is_signed_v<T>)
   {
     return data;
   }

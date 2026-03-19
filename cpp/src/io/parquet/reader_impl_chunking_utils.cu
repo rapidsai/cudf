@@ -20,7 +20,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
+#include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/cmath>
+#include <cuda/std/functional>
+#include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
