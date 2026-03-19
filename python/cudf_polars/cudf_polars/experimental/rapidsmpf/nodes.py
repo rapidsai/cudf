@@ -446,7 +446,7 @@ async def fanout_node_unbounded(
                                 # Use host memory for buffering - much safer
                                 # Downstream consumers will make_available() when they need device memory
                                 memory_reservation, _ = context.br().reserve(
-                                    MemoryType.HOST,
+                                    MemoryType.PINNED_HOST,
                                     total_copy_cost,
                                     allow_overbooking=True,
                                 )
