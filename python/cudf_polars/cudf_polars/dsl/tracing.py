@@ -20,11 +20,11 @@ import rmm.statistics
 
 from cudf_polars.utils.config import _bool_converter, get_device_handle
 
-try:
+try:  # pragma: no cover; requires structlog
     import structlog
-except ImportError:
+except ImportError:  # pragma: no cover; requires no structlog
     _HAS_STRUCTLOG = False
-else:
+else:  # pragma: no cover; requires structlog
     _HAS_STRUCTLOG = True
 
 
