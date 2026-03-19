@@ -116,4 +116,4 @@ def test_log_query_plan() -> None:
     assert b"scope=plan" in result or b"'scope': 'plan'" in result
     assert b"ir_id" in result
     assert b"ir_type" in result
-    assert b"children_ir_ids" in result
+    assert b"Pipeline complete" in result
