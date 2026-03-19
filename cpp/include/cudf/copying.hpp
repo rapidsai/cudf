@@ -39,8 +39,8 @@ enum class out_of_bounds_policy : bool {
  * @brief Policy to recognize negative indices as relative to the end of the source
  */
 enum class negative_index_policy : bool {
-  ALLOWED,     ///< Negative indices are allowed and expected
-  NOT_ALLOWED  ///< Negative indices are not expected
+  ALLOWED,     ///< Negative indices are allowed and result in wrapping behavior
+  NOT_ALLOWED  ///< Negative indices are not allowed and result in undefined behavior
 };
 
 /**
@@ -86,28 +86,27 @@ std::unique_ptr<table> gather(
  *
  * @ingroup copy_gather
  *
- * Gathers the rows of the source columns according to `gather_map` such that row "i"
- * in the resulting table's columns will contain row "gather_map[i]" from the source columns.
+ * Gathers the rows of the source columns according to `gather_map` such that row `i`
+ * in the resulting table's columns will contain row `gather_map[i]` from the
+ * `source_table` columns.
+ *
  * The number of rows in the result table will be equal to the number of elements in
  * `gather_map`.
  *
- * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
- * `n` is the number of rows in the `source_table`.
+ * If `neg_indices == ALLOWED` then a negative value `i` in the `gather_map` is interpreted
+ * as `i+n`, where `n` is the number of rows in the `source_table`.
+ * For better performance, use `DONT_CHECK` when the `gather_map` is known to contain only
+ * valid indices.
  *
- * @throws cudf::logic_error if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
+ * The output of row `i` results in null if `bounds_policy == NULLIFY` and an index exists
+ * in `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in the
+ * `source table`.
  *
  * @param source_table The input columns whose rows will be gathered
  * @param gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param bounds_policy How to treat out-of-bounds indices. `NULLIFY` coerces rows that
- * correspond to out-of-bounds indices in the gather map to be null elements. For better
- * performance, use `DONT_CHECK` when the `gather_map` is known to contain only valid
- * indices. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices in `gather_map`,
- * the behavior is undefined.
- * @param neg_indices Interpret each negative index `i` in the
- * `gather_map` as the positive index `i+num_source_rows`.
+ * @param bounds_policy Interpretation of out-of-bounds indices
+ * @param neg_indices Interpretation of a negative index `i` in the `gather_map`
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of the gather
