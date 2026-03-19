@@ -221,7 +221,7 @@ bool is_index_type(data_type type);
  * @return true `T` is signed numeric
  */
 template <typename T>
-constexpr inline bool is_signed()
+CUDF_HOST_DEVICE constexpr inline bool is_signed()
 {
   return cuda::std::is_signed_v<T>;
 }
@@ -281,7 +281,7 @@ CUDF_HOST_DEVICE constexpr inline bool is_signed_iterator()
  * @return false  `T` is not integral
  */
 template <typename T>
-constexpr inline bool is_integral()
+CUDF_HOST_DEVICE constexpr inline bool is_integral()
 {
   return cuda::std::is_integral_v<T>;
 }
@@ -531,7 +531,7 @@ constexpr bool is_rep_layout_compatible()
  * @return false  `T` is not dictionary-type
  */
 template <typename T>
-constexpr inline bool is_dictionary()
+CUDF_HOST_DEVICE constexpr inline bool is_dictionary()
 {
   return cuda::std::is_same_v<dictionary32, T>;
 }
