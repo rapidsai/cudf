@@ -965,12 +965,13 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--cluster",
         default=None,
         type=str,
-        choices=["single", "distributed", "spmd"],
+        choices=["single", "distributed", "spmd", "ray"],
         help=textwrap.dedent("""\
             Cluster type to use with the 'streaming' executor.
                 - single      : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution
-                - spmd        : SPMD execution via rrun launcher"""),
+                - spmd        : SPMD execution via rrun launcher
+                - ray         : Ray actor-based multi-GPU execution"""),
     )
     parser.add_argument(
         "-s",
@@ -1763,6 +1764,16 @@ def run_polars(
                 date_type,
                 validation_files,
             )
+        case "ray":
+            run_polars_ray(
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
         case "single" | "distributed":
             run_polars_single_or_dask(
                 benchmark,
@@ -1853,19 +1864,23 @@ def run_polars_spmd(
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     if run_config.collect_traces:
         raise NotImplementedError(
-            "--collect-traces is not yet supported with --cluster spmd."
+            "--collect-traces is not yet supported with --cluster spmd"
         )
+    if run_config.rmm_async:
+        raise NotImplementedError("--rmm-async is not supported with --cluster spmd")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime" and "cluster" are reserved — spmd_execution sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
+    rmm.mr.set_current_device_resource(
+        rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
+    )
     with spmd_execution(
-        mr=rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
-        if run_config.rmm_async
-        else None,
         executor_options=executor_options,
-        parquet_options=parquet_options,
-        cuda_stream_policy=run_config.stream_policy,
+        engine_options={
+            "parquet_options": parquet_options,
+            "cuda_stream_policy": run_config.stream_policy,
+        },
     ) as (comm, ctx, engine):
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
@@ -1912,6 +1927,66 @@ def run_polars_spmd(
         # engine is not JSON-serializable (holds the SPMD Cython context)
         args.output.write(json.dumps(run_config.serialize(engine=None)))
         args.output.write("\n")
+    sys.exit(1 if (query_failures or validation_failures) else 0)
+
+
+def run_polars_ray(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    parquet_options: dict[str, Any],
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using Ray actor-based distributed execution."""
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+
+    if run_config.collect_traces:
+        raise NotImplementedError(
+            "--collect-traces is not yet supported with --cluster ray."
+        )
+    if run_config.rmm_async:
+        raise NotImplementedError("--rmm-async is not supported with --cluster ray.")
+    executor_options = get_executor_options(run_config, benchmark=benchmark)
+    # "runtime", "cluster" are reserved — ray_execution sets them
+    executor_options.pop("runtime", None)
+    executor_options.pop("cluster", None)
+    engine_options: dict[str, Any] = {
+        "cuda_stream_policy": run_config.stream_policy,
+        "parquet_options": parquet_options,
+    }
+    with ray_execution(
+        executor_options=executor_options,
+        engine_options=engine_options,
+    ) as (ray_client, engine):
+        run_config = dataclasses.replace(run_config, n_workers=ray_client.nranks)
+        records, plans, validation_failures, query_failures = _run_query_loop(
+            benchmark,
+            args,
+            run_config,
+            engine,
+            None,
+            numeric_type,
+            date_type,
+            validation_files,
+        )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    if args.summarize:
+        run_config.summarize()
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: "
+                f"{sorted(set(validation_failures))}"
+            )
+        else:
+            print("✅ All validated queries passed.")
+    # engine holds ray_client (not JSON-serializable); serialize without it
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
 
