@@ -281,10 +281,10 @@ class regex_parser {
   char32_t swap_case(char32_t chr)
   {
     auto const cp     = utf8_to_codepoint(chr);
-    auto const locale = std::setlocale(LC_ALL, nullptr);  // save current locale
+    auto const lc_all = std::string{std::setlocale(LC_ALL, nullptr)};  // save current locale
     std::setlocale(LC_ALL, "C.UTF-8");
     auto result = codepoint_to_utf8(std::iswupper(cp) ? std::towlower(cp) : std::towupper(cp));
-    std::setlocale(LC_ALL, locale);  // restore original locale
+    std::setlocale(LC_ALL, lc_all.c_str());  // restore original locale
     return result;
   }
 
