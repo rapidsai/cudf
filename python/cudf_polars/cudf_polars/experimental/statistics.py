@@ -20,29 +20,6 @@ def collect_statistics(
     root: IR,
     config_options: ConfigOptions[StreamingExecutor],
 ) -> StatsCollector:
-    """
-    Collect scan statistics for a query.
-
-    Parameters
-    ----------
-    root
-        Root IR node.
-    config_options
-        GPUEngine configuration options.
-
-    Returns
-    -------
-    A StatsCollector with scan_stats populated for leaf Scan/DataFrameScan nodes.
-    """
-    if config_options.executor.stats_planning.use_io_partitioning:
-        return collect_base_stats(root, config_options)
-    return StatsCollector()
-
-
-def collect_base_stats(
-    root: IR,
-    config_options: ConfigOptions[StreamingExecutor],
-) -> StatsCollector:
     """Collect DataSourceInfo for each leaf Scan/DataFrameScan node."""
     from cudf_polars.experimental.io import (
         _build_dataframe_source,

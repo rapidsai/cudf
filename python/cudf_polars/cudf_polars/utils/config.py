@@ -58,7 +58,6 @@ __all__ = [
     "SPMDContext",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
-    "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
@@ -385,36 +384,6 @@ def default_broadcast_join_limit(cluster: str, runtime: str) -> int:
 
 
 @dataclasses.dataclass(frozen=True)
-class StatsPlanningOptions:
-    """
-    Configuration for statistics-based query planning.
-
-    This option can be configured via the environment variable
-    ``CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING``.
-
-    Parameters
-    ----------
-    use_io_partitioning
-        Whether to use estimated file-size statistics to calculate
-        the ideal input-partition count for IO operations.
-        This option currently applies to Parquet data only.
-        Default is True.
-    """
-
-    _env_prefix = "CUDF_POLARS__EXECUTOR__STATS_PLANNING"
-
-    use_io_partitioning: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_IO_PARTITIONING", _bool_converter, default=True
-        )
-    )
-
-    def __post_init__(self) -> None:  # noqa: D105
-        if not isinstance(self.use_io_partitioning, bool):
-            raise TypeError("use_io_partitioning must be a bool")
-
-
-@dataclasses.dataclass(frozen=True)
 class DynamicPlanningOptions:
     """
     Configuration for dynamic shuffle planning.
@@ -696,9 +665,6 @@ class StreamingExecutor:
         rather than a single file. By default, this will be set to True for
         the 'distributed' cluster and False otherwise. The 'distributed'
         cluster does not currently support ``sink_to_directory=False``.
-    stats_planning
-        Options controlling statistics-based query planning. See
-        :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
@@ -800,9 +766,6 @@ class StreamingExecutor:
         default_factory=_make_default_factory(
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
         )
-    )
-    stats_planning: StatsPlanningOptions = dataclasses.field(
-        default_factory=StatsPlanningOptions
     )
     dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
         default_factory=DynamicPlanningOptions
@@ -908,14 +871,6 @@ class StreamingExecutor:
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
-        # Make sure stats_planning is a dataclass
-        if isinstance(self.stats_planning, dict):
-            object.__setattr__(
-                self,
-                "stats_planning",
-                StatsPlanningOptions(**self.stats_planning),
-            )
-
         # Handle dynamic_planning.
         # Can be None, dict, or DynamicPlanningOptions
         if isinstance(self.dynamic_planning, dict):
@@ -971,7 +926,6 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
-        d["stats_planning"] = json.dumps(d["stats_planning"])
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
         return hash(tuple(sorted(d.items())))
 
