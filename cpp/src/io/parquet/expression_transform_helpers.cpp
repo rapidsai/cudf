@@ -125,7 +125,9 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
   // check if column name is in metadata
   auto const col_name = normalize_column_path(expr.get_column_name(), _case_sensitive_names);
   auto col_index_it   = _column_name_to_index.find(col_name);
-  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(), "Column name not found in metadata");
+  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(),
+               "Column name in the filter expression not found in the "
+               "metadata of selected columns");
   auto col_index = col_index_it->second;
   _col_ref.emplace_back(col_index);
   _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
@@ -175,8 +177,10 @@ names_from_expression::names_from_expression(
 
   if (!expr.has_value()) { return; }
 
+  // Map original column names to indices
+  auto constexpr case_sensitive_names = true;
   _column_indices_to_names =
-    map_column_indices_to_names(options, schema_tree, _case_sensitive_names);
+    map_column_indices_to_names(options, schema_tree, case_sensitive_names);
 
   expr.value().get().accept(*this);
 }
@@ -193,9 +197,10 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
   auto const col_name_iter = _column_indices_to_names.find(expr.get_column_index());
   CUDF_EXPECTS(col_name_iter != _column_indices_to_names.end(),
                "Column index not found in column indices to names map");
-  auto const col_name = col_name_iter->second;
-  // If the column name is not in the skip_names, add it to the set
-  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
+  auto const col_name            = col_name_iter->second;
+  auto const normalized_col_name = normalize_column_path(col_name, _case_sensitive_names);
+  // If the normalized column name is not in the skip_names, add it
+  if (_skip_names.count(normalized_col_name) == 0) { _column_names.insert(col_name); }
   return expr;
 }
 
@@ -203,8 +208,10 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_name_reference const& expr)
 {
   // collect column names
-  auto const col_name = normalize_column_path(expr.get_column_name(), _case_sensitive_names);
-  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
+  auto const col_name            = expr.get_column_name();
+  auto const normalized_col_name = normalize_column_path(col_name, _case_sensitive_names);
+  // If the normalized column name is not in the skip_names, add it
+  if (_skip_names.count(normalized_col_name) == 0) { _column_names.insert(col_name); }
   return expr;
 }
 

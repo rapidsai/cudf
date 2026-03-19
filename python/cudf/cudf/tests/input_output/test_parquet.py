@@ -4862,9 +4862,24 @@ def test_parquet_decode_column_index_thrift_bool_list(datadir):
 
 
 def test_read_parquet_case_insensitive():
-    df = cudf.DataFrame({"A": [1, 2, 3, 4, 5], "B": [10, 20, 30, 40, 50]})
+    df = cudf.DataFrame(
+        {
+            "A": [1, 2, 3, 4, 5],
+            "B": [10, 20, 30, 40, 50],
+            "a": ["abc", "def", "ghi", "jkl", "mno"],
+        }
+    )
     buf = BytesIO()
     df.to_parquet(buf)
+
+    result = cudf.read_parquet(
+        buf,
+        filters=[("A", "<=", 3)],
+        columns=["a", "b"],
+        case_sensitive_names=False,
+    )
+    expected = cudf.DataFrame({"A": [1, 2, 3], "B": [10, 20, 30]})
+    assert_eq(result, expected)
 
     result = cudf.read_parquet(
         buf,
@@ -4893,6 +4908,35 @@ def test_read_parquet_case_insensitive():
     expected = cudf.DataFrame({"B": [10, 20, 30]})
     assert_eq(result, expected)
 
+    result = cudf.read_parquet(
+        buf,
+        filters=[("a", "<=", "ghi")],
+        columns=["B"],
+        case_sensitive_names=True,
+    )
+    expected = cudf.DataFrame({"B": [10, 20, 30]})
+    assert_eq(result, expected)
+
+
+def test_read_parquet_case_insensitive_error():
+    df = cudf.DataFrame(
+        {
+            "A": [1, 2, 3, 4, 5],
+            "B": [10, 20, 30, 40, 50],
+            "a": ["abc", "def", "ghi", "jkl", "mno"],
+        }
+    )
+    buf = BytesIO()
+    df.to_parquet(buf)
+
+    with pytest.raises(UserWarning):
+        cudf.read_parquet(
+            buf,
+            filters=[("a", "<=", "ghi")],
+            columns=["B"],
+            case_sensitive_names=False,
+        )
+
 
 def test_read_parquet_case_insensitive_structs():
     struct_data = [
@@ -4909,7 +4953,7 @@ def test_read_parquet_case_insensitive_structs():
 
     result = cudf.read_parquet(
         buf,
-        columns=["STRUCT.B.A_A"],
+        columns=["STRUCT.b.A_a"],
         case_sensitive_names=False,
     )
     expected = cudf.read_parquet(

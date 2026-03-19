@@ -222,12 +222,12 @@ aggregate_reader_metadata::select_payload_columns(
   using cudf::io::parquet::detail::normalize_column_path;
 
   // Helper lambda to construct a set of normalized column names for O(1) lookup
-  auto construct_normalized_colnames_set = [](auto const& names, bool case_sensitive_names) {
-    std::unordered_set<std::string> s;
+  auto construct_filter_columns_set = [](auto const& names, bool case_sensitive_names) {
+    std::unordered_set<std::string> filter_columns_set;
     for (auto const& name : names) {
-      s.insert(normalize_column_path(name, case_sensitive_names));
+      filter_columns_set.insert(normalize_column_path(name, case_sensitive_names));
     }
-    return s;
+    return filter_columns_set;
   };
 
   // If payload columns are specified, only select payload columns that do not appear in the filter
@@ -237,7 +237,7 @@ aggregate_reader_metadata::select_payload_columns(
     // Remove filter columns from the provided payload column names
     if (filter_column_names.has_value() and not filter_column_names->empty()) {
       auto const filter_columns_set =
-        construct_normalized_colnames_set(*filter_column_names, case_sensitive_names);
+        construct_filter_columns_set(*filter_column_names, case_sensitive_names);
       // Remove a payload column name if it is also present in the hash set
       valid_payload_columns.erase(
         std::remove_if(valid_payload_columns.begin(),
@@ -262,7 +262,7 @@ aggregate_reader_metadata::select_payload_columns(
   // Else if only filter columns are specified, select all columns that do not appear in the
   // filter expression
   auto const filter_columns_set =
-    construct_normalized_colnames_set(*filter_column_names, case_sensitive_names);
+    construct_filter_columns_set(*filter_column_names, case_sensitive_names);
 
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
@@ -275,7 +275,8 @@ aggregate_reader_metadata::select_payload_columns(
   };
 
   if (not filter_column_names->empty()) {
-    for (auto const& child_idx : get_schema(0).children_idx) {
+    auto const& root = get_schema(0);
+    for (auto const& child_idx : root.children_idx) {
       add_column_path("", child_idx);
     }
   }
@@ -631,12 +632,15 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
 {
   // Map the column index to its name
   auto const col_name_iter = _column_indices_to_names.find(expr.get_column_index());
-  CUDF_EXPECTS(col_name_iter != _column_indices_to_names.end(),
-               "Column index not found in column indices to names map");
+  CUDF_EXPECTS(
+    col_name_iter != _column_indices_to_names.end(),
+    "Column index in the filter expression not found in the column indices to names map");
   auto const col_name = col_name_iter->second;
   auto col_index_it   = _column_name_to_index.find(
     cudf::io::parquet::detail::normalize_column_path(col_name, _case_sensitive_names));
-  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(), "Column name not found in metadata");
+  CUDF_EXPECTS(col_index_it != _column_name_to_index.end(),
+               "Column name mapped from its index in the filter expression "
+               "not found in the metadata of selected columns");
   auto col_index = col_index_it->second;
   // Create a new column reference
   _col_ref.emplace_back(col_index);

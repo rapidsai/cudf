@@ -4352,3 +4352,57 @@ TEST_F(ParquetReaderTest, CaseInsensitiveColumnSelection)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), col1);
   }
 }
+
+TEST_F(ParquetReaderTest, DuplicateColumnSelection)
+{
+  auto col0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5};
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50};
+  auto col2 = cudf::test::strings_column_wrapper{"a", "b", "c", "d", "e"};
+  cudf::table_view tbl{{col0, col1, col2}};
+
+  cudf::io::table_input_metadata meta(tbl);
+  meta.column_metadata[0].set_name("a");
+  meta.column_metadata[1].set_name("b");
+  meta.column_metadata[2].set_name("A");
+
+  auto filepath = temp_env->get_temp_filepath("DuplicateColumnSelection.parquet");
+  cudf::io::parquet_writer_options write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .metadata(meta)
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  {
+    auto const col_ref = cudf::ast::column_name_reference("A");
+    auto scalar        = cudf::numeric_scalar<int32_t>(3, true);
+    auto literal       = cudf::ast::literal(scalar);
+    auto filter_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref, literal);
+    auto const predicate =
+      cudf::test::fixed_width_column_wrapper<bool>{true, true, true, false, false}.release();
+    auto const expected = cudf::apply_boolean_mask(tbl.select({0, 1}), predicate->view());
+
+    auto const read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .case_sensitive_names(false)
+        .column_names({"A", "b"})
+        .filter(filter_expr)
+        .build();
+    auto const read = cudf::io::read_parquet(read_opts).tbl;
+    CUDF_TEST_EXPECT_TABLES_EQUAL(read->view(), expected->view());
+  }
+
+  {
+    auto const col_ref = cudf::ast::column_name_reference("A");
+    auto scalar        = cudf::string_scalar("c", true);
+    auto literal       = cudf::ast::literal(scalar);
+    auto filter_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS_EQUAL, col_ref, literal);
+
+    auto const read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .case_sensitive_names(false)
+        .filter(filter_expr)
+        .column_names({"A", "b"})
+        .build();
+    EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+  }
+}
