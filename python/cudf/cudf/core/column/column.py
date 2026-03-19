@@ -376,6 +376,14 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             "Normalize to np.dtype('O') before calling "
             "ColumnBase.create."
         )
+    if isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+        dtype.pyarrow_dtype
+    ):
+        raise ValueError(
+            f"dtype {dtype} is a pandas nullable string dtype with all nulls. "
+            "Normalize to an empty string column with the same pandas StringDtype "
+            "before calling ColumnBase.create."
+        )
 
     dtype_kind = dtype.kind
     children: list[plc.Column] = []
@@ -425,16 +433,16 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"got {child.type().id()}."
                 )
             children = [_rebuild_column(child, [], wrap_buffers=True)]
-    elif isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
-        dtype.pyarrow_dtype
-    ):
-        return _wrap_and_validate(
-            plc.Column.from_scalar(
-                plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
-                col.size(),
-            ),
-            np.dtype("object"),
-        )
+    # elif isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+    #     dtype.pyarrow_dtype
+    # ):
+    #     return _wrap_and_validate(
+    #         plc.Column.from_scalar(
+    #             plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+    #             col.size(),
+    #         ),
+    #         np.dtype("object"),
+    #     )
     elif is_dtype_obj_decimal(dtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
@@ -957,11 +965,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         like copy-on-write. When validation is disabled, the caller is responsible for
         ensuring that col and its children are already normalized and wrapped.
         """
+        # For pandas nullable null types (ArrowDtype wrapping pa.null()),
+        # normalize the column data and dtype before construction.
+        if isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+            dtype.pyarrow_dtype
+        ):
+            col = _normalize_types_column(col)
+            old_dtype = dtype
+            dtype = np.dtype("object")
+        else:
+            old_dtype = None
+
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
         self = target_cls.__new__(target_cls)
         self.plc_column = _wrap_and_validate(col, dtype) if validate else col
-        self._dtype = dtype
+        self._dtype = dtype if old_dtype is None else old_dtype
         self._distinct_count = {}
         self._has_nulls = {}
         # The set of exposed buffers associated with this column. These buffers must be
@@ -1016,11 +1035,6 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         # Numerical types
         if is_dtype_obj_numeric(dtype, include_decimal=False):
             return cudf.core.column.NumericalColumn
-
-        if isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
-            dtype.pyarrow_dtype
-        ):
-            return cudf.core.column.StringColumn
 
         raise TypeError(f"Unrecognized dtype: {dtype}")
 
@@ -1125,7 +1139,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         )
 
     def _prep_pandas_compat_repr(
-        self, nan_repr: str | None = None
+        self, nan_rep: str | None = None
     ) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
@@ -1133,13 +1147,13 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         * null (datetime/timedelta) = str(pd.NaT)
         * null (other types)= str(pd.NA)
         """
-        if nan_repr is None:
-            nan_repr = "NaN"
+        if nan_rep is None:
+            nan_rep = "NaN"
         if self.has_nulls():
             return cast(
                 "cudf.core.column.StringColumn",
                 self.astype(np.dtype("str")).fillna(
-                    nan_repr
+                    nan_rep
                     if self._PANDAS_NA_VALUE is np.nan
                     else str(self._PANDAS_NA_VALUE)
                 ),

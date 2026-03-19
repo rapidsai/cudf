@@ -2337,7 +2337,7 @@ class RangeIndex(Index):
     def hasnans(self) -> bool:
         return False
 
-    def _pandas_repr_compatible(self, nan_repr=None) -> Self:
+    def _pandas_repr_compatible(self, nan_rep=None) -> Self:
         return self
 
     @_performance_tracking
@@ -5153,7 +5153,7 @@ class IntervalIndex(Index):
     def _is_interval(self) -> bool:
         return True
 
-    def _pandas_repr_compatible(self, nan_repr=None) -> Self:
+    def _pandas_repr_compatible(self, nan_rep=None) -> Self:
         return self
 
     @property

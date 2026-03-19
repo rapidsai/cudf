@@ -4432,12 +4432,12 @@ class IndexedFrame(Frame):
                 index_names=self.index.names if keep_index else None,
             )
 
-    def _pandas_repr_compatible(self, nan_repr=None) -> Self:
+    def _pandas_repr_compatible(self, nan_rep=None) -> Self:
         """Return Self but with columns prepared for a pandas-like repr."""
-        if self.size == 0 and nan_repr is None:
-            nan_repr = "nan"
-        result = super()._pandas_repr_compatible(nan_repr=nan_repr)
-        result.index = self.index._pandas_repr_compatible(nan_repr=nan_repr)
+        if self.size == 0 and nan_rep is None:
+            nan_rep = "nan"
+        result = super()._pandas_repr_compatible(nan_rep=nan_rep)
+        result.index = self.index._pandas_repr_compatible(nan_rep=nan_rep)
         return result
 
     def take(self, indices, axis=0):

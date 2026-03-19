@@ -87,7 +87,7 @@ class StructColumn(ColumnBase):
         return ColumnBase.create(sliced_plc_col, sub_type), field_label
 
     def _prep_pandas_compat_repr(
-        self, nan_repr: str | None = None
+        self, nan_rep: str | None = None
     ) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.

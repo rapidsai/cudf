@@ -51,7 +51,7 @@ class ListColumn(ColumnBase):
         return ColumnBase.create(sliced_plc_col, self.element_type)
 
     def _prep_pandas_compat_repr(
-        self, nan_repr: str | None = None
+        self, nan_rep: str | None = None
     ) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
