@@ -8,9 +8,8 @@
 #include <cudf/strings/detail/convert/is_float.cuh>
 #include <cudf/strings/string_view.cuh>
 
+#include <cuda/std/cmath>
 #include <cuda/std/limits>
-
-#include <cmath>
 
 namespace cudf {
 namespace strings {
