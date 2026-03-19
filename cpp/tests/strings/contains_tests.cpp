@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -796,6 +796,32 @@ TEST_F(StringsContainsTests, ASCII)
     results           = cudf::strings::contains_re(view, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
   }
+}
+
+TEST_F(StringsContainsTests, IgnoreCase)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc", "ABC", "aBc", "123áéſ", "ÁÉS123"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 0});
+  auto prog = cudf::strings::regex_program::create("abc", cudf::strings::regex_flags::IGNORECASE);
+  auto results = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 0});
+  prog     = cudf::strings::regex_program::create("[a-c]", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1});
+  prog     = cudf::strings::regex_program::create("áéſ", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1});
+  prog     = cudf::strings::regex_program::create("[á-é]", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsContainsTests, MediumRegex)
