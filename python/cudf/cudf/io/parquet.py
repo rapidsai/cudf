@@ -176,7 +176,7 @@ def _plc_write_parquet(
             user_data = [
                 {
                     "pandas": ioutils.generate_pandas_metadata(
-                        table.iloc[start_row : start_row + num_row].copy(
+                        table.iloc[start_row: start_row + num_row].copy(
                             deep=False
                         ),
                         index,
@@ -1112,14 +1112,24 @@ def read_parquet(
     )
     # Build a lookup from (possibly lowered) name -> actual DataFrame column name
     _key = str.lower if not case_sensitive_names else str
-    col_names = {_key(name): name for name in df._column_names}
+    col_names = {}
+    for name in df._column_names:
+        k = _key(name)
+        if k in col_names:
+            raise ValueError(
+                f"Parquet file contains columns whose names are ambiguous "
+                f"under case-insensitive matching: {col_names[k]!r} and {name!r} "
+                f"both map to {k!r}. Use case_sensitive_names=True to read "
+                f"such files."
+            )
+        col_names[k] = name
 
     # Apply filters row-wise (if any are defined), and return
     if ast_filter is None:
         if not case_sensitive_names and filters:
             filters = [
                 [
-                    (col_names.get(_key(col), col), op, val)
+                    (col_names[_key(col)], op, val)
                     for col, op, val in conjunction
                 ]
                 for conjunction in filters
@@ -1129,11 +1139,7 @@ def read_parquet(
     if projected_columns:
         # Elements of `projected_columns` may now be in the index.
         # We must filter these names from our projection
-        projected_columns = [
-            col_names[k]
-            for col in projected_columns
-            if (k := _key(col)) in col_names
-        ]
+        projected_columns = [col_names[_key(col)] for col in projected_columns]
         return df[projected_columns]
     return df
 
@@ -2546,7 +2552,8 @@ def _process_metadata(
                 else:
                     idx = Index._from_column(column_empty(0))
             else:
-                start = range_index_meta["start"] + skip_rows  # type: ignore[operator]
+                start = range_index_meta["start"] + \
+                    skip_rows  # type: ignore[operator]
                 stop = int(range_index_meta["stop"])  # type: ignore[arg-type]
                 if nrows > -1:
                     stop = start + nrows
