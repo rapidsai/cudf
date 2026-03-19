@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import operator
 import struct
 import time
@@ -28,6 +29,7 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 )
 
 import pylibcudf as plc
+import rmm.mr
 
 import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
@@ -37,7 +39,7 @@ from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncIterator, Callable, Iterator
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -50,6 +52,27 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import DataType, Schema
+
+
+@contextlib.contextmanager
+def set_memory_resource(mr: rmm.mr.DeviceMemoryResource) -> Iterator[None]:
+    """
+    Context manager that temporarily sets ``mr`` as the current device resource.
+
+    On entry, ``mr`` is installed via ``rmm.mr.set_current_device_resource(mr)``.
+    On exit, the previously active resource is restored unconditionally.
+
+    Parameters
+    ----------
+    mr
+        The memory resource to activate for the duration of the block.
+    """
+    old = rmm.mr.get_current_device_resource()
+    rmm.mr.set_current_device_resource(mr)
+    try:
+        yield
+    finally:
+        rmm.mr.set_current_device_resource(old)
 
 
 @asynccontextmanager
