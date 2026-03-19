@@ -16,6 +16,7 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
@@ -24,6 +25,7 @@ from cudf_polars.dsl.ir import (
     HStack,
     IRExecutionContext,
     MapFunction,
+    Select,
     Slice,
     Union,
 )
@@ -458,14 +460,17 @@ def _(
 def _(
     ir: HStack, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if not all(expr.is_pointwise for expr in traversal([e.value for e in ir.columns])):
-        # We expect non-pointwise HStack operations to be wrapped in Select
-        # or Projection nodes. The lowering logic for those nodes must
-        # handle non-pointwise HStack children. We should only reach this
-        # block if the parent node already failed to decompose this HStack,
-        # and we need to fall back to single-partition evaluation.
-        return _lower_ir_fallback(
-            ir, rec, msg="This HStack not supported for multiple partitions."
+    if not all(e.is_pointwise for e in traversal([ne.value for ne in ir.columns])):
+        # Redirect non-pointwise HStack to Select so the Select handler can
+        # attempt decomposition (or fall back gracefully via decompose_select).
+        col_map = {ne.name: ne for ne in ir.columns}
+        exprs = tuple(
+            col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+            for name, dtype in ir.schema.items()
+        )
+        return lower_ir_node(
+            Select(ir.schema, exprs, ir.should_broadcast, ir.children[0]),
+            rec,
         )
 
     child, partition_info = rec(ir.children[0])

@@ -11,7 +11,6 @@ import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col, Len
-from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.ir import Empty, HConcat, HStack, Projection, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
@@ -35,41 +34,33 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions
 
 
-def _cse_map_is_scalar(cse_map: dict[str, expr.Expr]) -> bool:
-    """Return True if every non-pointwise node in cse_map is a global reduction (Agg/Len)."""
-    return all(
-        isinstance(node, (Agg, Len))
-        for v in cse_map.values()
-        for node in traversal([v])
-        if not node.is_pointwise
-    )
-
-
-def _collect_hstack_cse_chain(
-    ir: HStack,
-) -> tuple[IR, dict[str, expr.Expr]]:
+def _hstack_chain_to_select(ir: Select) -> Select | None:
     """
-    Collect all columns from a contiguous HStack(should_broadcast=False) chain.
+    Inline a CSE HStack chain into a flat Select, or return None.
 
-    Returns (base_input, cse_map) where base_input is the first non-False-broadcast
-    node and cse_map covers all entries (agg and pointwise) so that Col references
-    to any CSE placeholder in the parent resolve against inner_select's output.
-    Caller should check for non-pointwise entries before applying the transformation.
+    Only fires when the chain has HStack(should_broadcast=False). Pure HStack(True)
+    chains are left for rec(child) — their col refs may live in non-traversable expr
+    internals (e.g. GroupedRollingWindow.named_aggs) that _sub_expr cannot reach.
     """
     hstack_chain: list[HStack] = []
-    current: IR = ir
-    while isinstance(current, HStack) and not current.should_broadcast:
+    current: IR = ir.children[0]
+    while isinstance(current, HStack):
         hstack_chain.append(current)
         current = current.children[0]
     base_input = current
 
-    # Innermost-first; no substitution so CSE Col refs are preserved.
-    cse_map: dict[str, expr.Expr] = {}
+    if not any(not h.should_broadcast for h in hstack_chain):
+        return None
+
+    col_defs: dict[str, expr.Expr] = {}
     for hstack in reversed(hstack_chain):
         for ne in hstack.columns:
-            cse_map[ne.name] = ne.value
+            col_defs[ne.name] = _sub_expr(ne.value, col_defs)
 
-    return base_input, cse_map
+    new_exprs = tuple(
+        expr.NamedExpr(ne.name, _sub_expr(ne.value, col_defs)) for ne in ir.exprs
+    )
+    return Select(ir.schema, new_exprs, ir.should_broadcast, base_input)
 
 
 @lower_ir_node.register(Projection)
@@ -345,101 +336,16 @@ def _fuse_simple_reductions(
     return list(decomposed_select_irs), pi
 
 
-def _decompose_select_hstack(ir: Select, child: HStack) -> Select | None:
-    """Decompose a Select(HStack) node into an IR graph that avoids mixed-length columns."""
-    outer_bcast_hstacks: list[HStack] = []
-    current: IR = child
-    while isinstance(current, HStack) and current.should_broadcast:
-        outer_bcast_hstacks.append(current)
-        current = current.children[0]
-
-    new_select: Select | None = None
-    if isinstance(current, HStack) and not current.should_broadcast:
-        base_input, cse_map = _collect_hstack_cse_chain(current)
-        # Only trigger when the chain contains non-pointwise (agg) entries.
-        has_agg = any(
-            not all(e.is_pointwise for e in traversal([v])) for v in cse_map.values()
-        )
-        if has_agg and _cse_map_is_scalar(cse_map):
-            has_data_col = any(name in base_input.schema for name in ir.schema)
-
-            # Non-pointwise ir.exprs not in cse_map (non-CSE'd agg expressions like
-            # Cast(Len(Col('b')))) also go into inner_select since they need base_input.
-            extra_agg_exprs: dict[str, expr.Expr] = {
-                ne.name: ne.value
-                for ne in ir.exprs
-                if ne.name not in cse_map
-                and not all(e.is_pointwise for e in traversal([ne.value]))
-            }
-
-            # inner_select computes all CSE entries plus extra non-pointwise exprs.
-            inner_exprs_map = {**cse_map, **extra_agg_exprs}
-            if has_data_col:
-                inner_schema = {
-                    **{name: e.dtype for name, e in inner_exprs_map.items()},
-                    **base_input.schema,
-                }
-                inner_exprs: tuple[expr.NamedExpr, ...] = (
-                    *(expr.NamedExpr(name, e) for name, e in inner_exprs_map.items()),
-                    *(
-                        expr.NamedExpr(name, Col(dtype, name))
-                        for name, dtype in base_input.schema.items()
-                    ),
-                )
-            else:
-                inner_schema = {name: e.dtype for name, e in inner_exprs_map.items()}
-                inner_exprs = tuple(
-                    expr.NamedExpr(name, e) for name, e in inner_exprs_map.items()
-                )
-            inner_select = Select(inner_schema, inner_exprs, has_data_col, base_input)
-
-            if outer_bcast_hstacks:
-                # Convert outer broadcast=True HStack chain to a Select.
-                new_col_exprs: dict[str, expr.Expr] = {}
-                for hstack in reversed(outer_bcast_hstacks):
-                    for ne in hstack.columns:
-                        new_col_exprs[ne.name] = ne.value
-                outer_schema = {
-                    **inner_schema,
-                    **{name: e.dtype for name, e in new_col_exprs.items()},
-                }
-                outer_exprs: tuple[expr.NamedExpr, ...] = (
-                    *(
-                        expr.NamedExpr(name, Col(dtype, name))
-                        for name, dtype in inner_schema.items()
-                    ),
-                    *(expr.NamedExpr(name, e) for name, e in new_col_exprs.items()),
-                )
-                outer_select = Select(outer_schema, outer_exprs, True, inner_select)  # noqa: FBT003
-                new_select = ir.reconstruct([outer_select])
-            elif not any(
-                isinstance(node, Col) and node.name in cse_map
-                for v in extra_agg_exprs.values()
-                for node in traversal([v])
-            ):
-                # No extra_agg_exprs reference CSE placeholders, so they can be
-                # safely computed in inner_select against base_input.
-                new_exprs = tuple(
-                    expr.NamedExpr(ne.name, Col(ne.value.dtype, ne.name))
-                    if ne.name in extra_agg_exprs
-                    else ne
-                    for ne in ir.exprs
-                )
-                new_select = Select(
-                    ir.schema, new_exprs, ir.should_broadcast, inner_select
-                )
-
-    return new_select
-
-
 @lower_ir_node.register(Select)
 def _(
     ir: Select, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     if isinstance(ir.children[0], HStack):
-        # Decompose HStack child
-        if (new_select := _decompose_select_hstack(ir, ir.children[0])) is not None:
-            return lower_ir_node(new_select, rec)
+        # When the child is a CSE placeholder chain (has HStack(False)), normalize to a
+        # flat Select over base_input so decompose_select always gets a chance to run.
+        # Pure HStack(True) chains fall through to rec(child) below.
+        if (normalized := _hstack_chain_to_select(ir)) is not None:
+            return lower_ir_node(normalized, rec)
     elif all(isinstance(e.value, Col) and e.name == e.value.name for e in ir.exprs):
         # Fast path: pure column selection (no renames) — equivalent to Projection.
         # We can only do this if the child is NOT HStack.
@@ -558,7 +464,9 @@ def _inline_hstack_false(ir: IR) -> IR:
     base_input = current
     if not cse_map or child is base_input:
         return ir
-    if isinstance(ir, HStack):
+    if isinstance(
+        ir, HStack
+    ):  # pragma: no cover; safety net - not reached in standard Polars IR
         new_cols = tuple(
             expr.NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.columns
         )
