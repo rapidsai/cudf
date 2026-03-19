@@ -533,3 +533,43 @@ def _(
     new_node = ir.reconstruct([child])
     partition_info[new_node] = pi
     return new_node, partition_info
+
+
+def _sub_expr(e: expr.Expr, subs: dict[str, expr.Expr]) -> expr.Expr:
+    if isinstance(e, Col) and e.name in subs:
+        return subs[e.name]
+    new_children = [_sub_expr(c, subs) for c in e.children]
+    if all(new is old for new, old in zip(new_children, e.children, strict=True)):
+        return e
+    return e.reconstruct(new_children)
+
+
+def _inline_hstack_false(ir: IR) -> IR:
+    """Inline any HStack(should_broadcast=False) CSE chain in ir's first child."""
+    if not ir.children:
+        return ir
+    child = ir.children[0]
+    cse_map: dict[str, expr.Expr] = {}
+    current = child
+    while isinstance(current, HStack) and not current.should_broadcast:
+        for ne in current.columns:
+            cse_map.setdefault(ne.name, ne.value)
+        current = current.children[0]
+    base_input = current
+    if not cse_map or child is base_input:
+        return ir
+    if isinstance(ir, HStack):
+        new_cols = tuple(
+            expr.NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.columns
+        )
+        new_schema = {
+            **base_input.schema,
+            **{ne.name: ne.value.dtype for ne in new_cols},
+        }
+        return HStack(new_schema, new_cols, ir.should_broadcast, base_input)
+    if isinstance(ir, Select):
+        new_exprs = tuple(
+            expr.NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.exprs
+        )
+        return Select(ir.schema, new_exprs, ir.should_broadcast, base_input)
+    return ir

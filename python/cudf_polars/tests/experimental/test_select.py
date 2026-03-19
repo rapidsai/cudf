@@ -10,6 +10,11 @@ import pytest
 
 import polars as pl
 
+from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.ir import HStack, Select
+from cudf_polars.experimental.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -210,3 +215,39 @@ def test_select_with_len(engine):
         UserWarning, match="Cross join not support for multiple partitions"
     ):
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_sub_expr_replaces_col():
+    dt = DataType(pl.Int64())
+    b = expr.Col(dt, "b")
+    assert _sub_expr(expr.Col(dt, "a"), {"a": b}) is b
+
+
+def test_inline_hstack_false_noop_scan():
+    ir = Translator(
+        pl.LazyFrame({"a": [1]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    assert _inline_hstack_false(ir) is ir
+
+
+def test_inline_hstack_false_inlines_hstack_false_chain():
+    base = Translator(
+        pl.LazyFrame({"a": [1, 2, 3]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    dt = base.schema["a"]
+    inner = HStack(
+        {**base.schema, "s": dt},
+        (expr.NamedExpr("s", expr.Col(dt, "a")),),
+        should_broadcast=False,
+        df=base,
+    )
+    ir = Select(
+        {"t": dt},
+        (expr.NamedExpr("t", expr.Col(dt, "s")),),
+        should_broadcast=True,
+        df=inner,
+    )
+    out = _inline_hstack_false(ir)
+    assert out.children[0] is base
+    assert isinstance(out.exprs[0].value, expr.Col)
+    assert out.exprs[0].value.name == "a"

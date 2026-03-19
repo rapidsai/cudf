@@ -67,17 +67,13 @@ def _lower_ir_fallback(
     # If any children contain multiple partitions,
     # those children will be collapsed with `Repartition`.
     from cudf_polars.experimental.repartition import Repartition
+    from cudf_polars.experimental.select import _inline_hstack_false
 
     config_options = rec.state["config_options"]
     rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
 
-    # In rapidsmpf mode, inline any HStack(False) CSE chain in ir's first child
-    # before lowering, so that HStack(False) never appears as a standalone node.
-    # Otherwise, we may have mixed-length columns in an intermediate TableChunk.
-    if rapidsmpf_engine:  # pragma: no cover; Requires rapidsmpf runtime
-        from cudf_polars.experimental.rapidsmpf.utils import _inline_hstack_false
-
-        ir = _inline_hstack_false(ir)
+    # Make sure we avoid mixed-length columns in intermediate TableChunks.
+    ir = _inline_hstack_false(ir)
 
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
