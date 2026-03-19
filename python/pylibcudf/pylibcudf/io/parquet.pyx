@@ -268,7 +268,7 @@ cdef class ParquetReaderOptions:
         Returns
         -------
         bool
-            Whether column names are case sensitive
+            Whether column names are matched case-sensitively
         """
         return self.c_obj.is_enabled_case_sensitive_names()
 

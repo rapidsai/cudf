@@ -103,7 +103,8 @@ class parquet_reader_options {
   type_id _decimal_width{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
-  // Whether column name matching is case sensitive
+  // Whether column name matching is case sensitive. In case of multiple
+  // case-insensitive matches, the first matched column is selected
   bool _case_sensitive_names = true;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
@@ -289,6 +290,9 @@ class parquet_reader_options {
 
   /**
    * @brief Returns whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
    *
    * @return `true` if column name matching is case sensitive (default)
    */
@@ -522,6 +526,9 @@ class parquet_reader_options {
 
   /**
    * @brief Sets whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
    *
    * @param val Boolean indicating whether to enable case-sensitive matching.
    */
@@ -776,6 +783,9 @@ class parquet_reader_options_builder {
 
   /**
    * @brief Sets whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
    *
    * @param val Boolean indicating whether to enable case-sensitive matching
    * @return this for chaining
