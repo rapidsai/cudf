@@ -46,7 +46,7 @@ dependencies:
 - libnvjitlink-dev
 - librdkafka>=2.8.0,<2.9.0
 - librmm==26.6.*,>=0.0.0a0
-- lz4
+- lz4>=4.4.5
 - make
 - mmh3
 - moto>=4.0.8

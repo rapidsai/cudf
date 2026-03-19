@@ -487,8 +487,6 @@ dependencies:
           - cxx-compiler
           - dlpack>=0.8,<1.0
           - zlib>=1.2.13
-          - python-zstd>=1.5.7.2
-          - lz4
     specific:
       - output_types: conda
         matrices:
@@ -508,6 +506,8 @@ dependencies:
         packages:
           - flatbuffers==24.3.25
           - librdkafka>=2.8.0,<2.9.0
+          - lz4>=4.4.5
+          - python-zstd>=1.5.7.2
   depends_on_libnvcomp:
     common:
       - output_types: conda
