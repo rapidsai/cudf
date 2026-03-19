@@ -76,75 +76,16 @@ def _collect_hstack_cse_chain(
 def _(
     ir: Projection, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Walk past outer broadcast=True HStack layers to find a broadcast=False chain.
-    outer_bcast_hstacks: list[HStack] = []
-    current: IR = ir.children[0]
-    while isinstance(current, HStack) and current.should_broadcast:
-        outer_bcast_hstacks.append(current)
-        current = current.children[0]
-
-    if isinstance(current, HStack) and not current.should_broadcast:
-        base_input, cse_map = _collect_hstack_cse_chain(current)
-        # Only trigger when the chain contains non-pointwise (agg) entries.
-        # Use traversal: Cast(Len(...)) has is_pointwise=True at the top level.
-        has_agg = any(
-            not all(e.is_pointwise for e in traversal([v])) for v in cse_map.values()
+    # Always convert Projection(HStack) to Select(HStack)
+    # so we can deal with HStack decomposition in one place.
+    if isinstance(ir.children[0], HStack):
+        expr_from_schema = tuple(
+            expr.NamedExpr(name, Col(dtype, name)) for name, dtype in ir.schema.items()
         )
-        if has_agg and _cse_map_is_scalar(cse_map):
-            has_data_col = any(name in base_input.schema for name in ir.schema)
-
-            # inner_select computes all CSE entries (agg and pointwise) so that
-            # Col refs to any placeholder resolve. Pass through base data cols
-            # when the output includes N-row columns (with_columns path).
-            if has_data_col:
-                inner_schema = {
-                    **{name: e.dtype for name, e in cse_map.items()},
-                    **base_input.schema,
-                }
-                inner_exprs: tuple[expr.NamedExpr, ...] = (
-                    *(expr.NamedExpr(name, e) for name, e in cse_map.items()),
-                    *(
-                        expr.NamedExpr(name, Col(dtype, name))
-                        for name, dtype in base_input.schema.items()
-                    ),
-                )
-            else:
-                inner_schema = {name: e.dtype for name, e in cse_map.items()}
-                inner_exprs = tuple(
-                    expr.NamedExpr(name, e) for name, e in cse_map.items()
-                )
-            inner_select = Select(inner_schema, inner_exprs, has_data_col, base_input)
-
-            if outer_bcast_hstacks:
-                # Convert the outer broadcast=True HStack chain to a Select so
-                # decompose_select handles remaining non-pointwise expressions
-                # (Col refs to CSE placeholders are now real columns in inner_select).
-                new_col_exprs: dict[str, expr.Expr] = {}
-                for hstack in reversed(outer_bcast_hstacks):
-                    for ne in hstack.columns:
-                        new_col_exprs[ne.name] = ne.value
-                outer_schema = {
-                    **inner_schema,
-                    **{name: e.dtype for name, e in new_col_exprs.items()},
-                }
-                outer_exprs: tuple[expr.NamedExpr, ...] = (
-                    *(
-                        expr.NamedExpr(name, Col(dtype, name))
-                        for name, dtype in inner_schema.items()
-                    ),
-                    *(expr.NamedExpr(name, e) for name, e in new_col_exprs.items()),
-                )
-                outer_select = Select(outer_schema, outer_exprs, True, inner_select)  # noqa: FBT003
-                new_ir: IR = ir.reconstruct([outer_select])
-            else:
-                # No outer broadcast=True HStack: Projection cols become Col refs.
-                new_exprs = tuple(
-                    expr.NamedExpr(name, Col(ir.schema[name], name))
-                    for name in ir.schema
-                )
-                new_ir = Select(ir.schema, new_exprs, has_data_col, inner_select)
-
-            return lower_ir_node(new_ir, rec)
+        return lower_ir_node(
+            Select(ir.schema, expr_from_schema, True, ir.children[0]),  # noqa: FBT003
+            rec,
+        )
 
     # Partition-wise default - Import here to avoid circular import
     from cudf_polars.experimental.parallel import _lower_ir_pwise
@@ -404,17 +345,15 @@ def _fuse_simple_reductions(
     return list(decomposed_select_irs), pi
 
 
-@lower_ir_node.register(Select)
-def _(
-    ir: Select, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    # Walk past outer broadcast=True HStack layers to find a broadcast=False chain.
+def _decompose_select_hstack(ir: Select, child: HStack) -> Select | None:
+    """Decompose a Select(HStack) node into an IR graph that avoids mixed-length columns."""
     outer_bcast_hstacks: list[HStack] = []
-    current: IR = ir.children[0]
+    current: IR = child
     while isinstance(current, HStack) and current.should_broadcast:
         outer_bcast_hstacks.append(current)
         current = current.children[0]
 
+    new_select: Select | None = None
     if isinstance(current, HStack) and not current.should_broadcast:
         base_input, cse_map = _collect_hstack_cse_chain(current)
         # Only trigger when the chain contains non-pointwise (agg) entries.
@@ -472,7 +411,7 @@ def _(
                     *(expr.NamedExpr(name, e) for name, e in new_col_exprs.items()),
                 )
                 outer_select = Select(outer_schema, outer_exprs, True, inner_select)  # noqa: FBT003
-                new_ir = ir.reconstruct([outer_select])
+                new_select = ir.reconstruct([outer_select])
             elif not any(
                 isinstance(node, Col) and node.name in cse_map
                 for v in extra_agg_exprs.values()
@@ -486,15 +425,28 @@ def _(
                     else ne
                     for ne in ir.exprs
                 )
-                new_ir = Select(ir.schema, new_exprs, ir.should_broadcast, inner_select)
-            else:
-                # extra_agg_exprs reference CSE placeholders that don't exist in
-                # base_input; skip the transformation and let the HStack fallback
-                # handle single-partition execution correctly.
-                new_ir = None
+                new_select = Select(
+                    ir.schema, new_exprs, ir.should_broadcast, inner_select
+                )
 
-            if new_ir is not None:
-                return lower_ir_node(new_ir, rec)
+    return new_select
+
+
+@lower_ir_node.register(Select)
+def _(
+    ir: Select, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if isinstance(ir.children[0], HStack):
+        # Decompose HStack child
+        if (new_select := _decompose_select_hstack(ir, ir.children[0])) is not None:
+            return lower_ir_node(new_select, rec)
+    elif all(isinstance(e.value, Col) and e.name == e.value.name for e in ir.exprs):
+        # Fast path: pure column selection (no renames) — equivalent to Projection.
+        # We can only do this if the child is NOT HStack.
+        return lower_ir_node(
+            Projection(ir.schema, ir.children[0]),
+            rec,
+        )
 
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]

@@ -10,14 +10,8 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import (
-    Col,
-    Expr,
-    GroupedRollingWindow,
-    NamedExpr,
-    UnaryFunction,
-)
-from cudf_polars.dsl.ir import HStack, Select, Union
+from cudf_polars.dsl.expr import Col, Expr, GroupedRollingWindow, UnaryFunction
+from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import ColumnStat, PartitionInfo
 
@@ -63,50 +57,6 @@ def _dynamic_planning_on(config_options: ConfigOptions[StreamingExecutor]) -> bo
     )
 
 
-def _sub_expr(e: Expr, subs: dict[str, Expr]) -> Expr:
-    if isinstance(e, Col) and e.name in subs:
-        return subs[e.name]
-    new_children = [_sub_expr(c, subs) for c in e.children]
-    if all(new is old for new, old in zip(new_children, e.children, strict=True)):
-        return e
-    return e.reconstruct(new_children)
-
-
-def _inline_hstack_false(ir: IR) -> IR:
-    # If ir's first child is a HStack(False) CSE chain, substitute the CSE
-    # placeholder Col refs into ir's column expressions and replace the child
-    # with the base input. This prevents HStack(False) from appearing as a
-    # standalone node in the rapidsmpf execution graph (which would produce
-    # mixed-length columns that cannot be wrapped in a TableChunk).
-    if not ir.children:
-        return ir
-    child = ir.children[0]
-    cse_map: dict[str, Expr] = {}
-    current = child
-    while isinstance(current, HStack) and not current.should_broadcast:
-        for ne in current.columns:
-            cse_map.setdefault(ne.name, ne.value)
-        current = current.children[0]
-    base_input = current
-    if not cse_map or child is base_input:
-        return ir
-    if isinstance(ir, HStack):
-        new_cols = tuple(
-            NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.columns
-        )
-        new_schema = {
-            **base_input.schema,
-            **{ne.name: ne.value.dtype for ne in new_cols},
-        }
-        return HStack(new_schema, new_cols, ir.should_broadcast, base_input)
-    if isinstance(ir, Select):
-        new_exprs = tuple(
-            NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.exprs
-        )
-        return Select(ir.schema, new_exprs, ir.should_broadcast, base_input)
-    return ir
-
-
 def _lower_ir_fallback(
     ir: IR,
     rec: LowerIRTransformer,
@@ -123,7 +73,10 @@ def _lower_ir_fallback(
 
     # In rapidsmpf mode, inline any HStack(False) CSE chain in ir's first child
     # before lowering, so that HStack(False) never appears as a standalone node.
-    if rapidsmpf_engine:
+    # Otherwise, we may have mixed-length columns in an intermediate TableChunk.
+    if rapidsmpf_engine:  # pragma: no cover; Requires rapidsmpf runtime
+        from cudf_polars.experimental.rapidsmpf.utils import _inline_hstack_false
+
         ir = _inline_hstack_false(ir)
 
     # Lower children
