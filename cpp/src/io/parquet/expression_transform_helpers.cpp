@@ -129,7 +129,8 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
                "Column name in the filter expression not found in the "
                "metadata of selected columns. Note that only top-level "
                "columns except structs and lists are supported in "
-               "Parquet filter expression(s)");
+               "Parquet filter expression",
+               std::invalid_argument);
   auto col_index = col_index_it->second;
   _col_ref.emplace_back(col_index);
   _converted_expr = std::reference_wrapper<ast::expression const>(_col_ref.back());
@@ -201,7 +202,8 @@ std::reference_wrapper<ast::expression const> names_from_expression::visit(
     col_name_iter != _column_indices_to_names.end(),
     "Column index in the filter expression not found in the column indices to names map. Note that "
     "only top-level columns except structs and lists are supported in "
-    "Parquet filter expression(s)");
+    "Parquet filter expression",
+    std::invalid_argument);
   auto const col_name            = col_name_iter->second;
   auto const normalized_col_name = normalize_column_path(col_name, _case_sensitive_names);
   // If the normalized column name is not in the skip_names, add it

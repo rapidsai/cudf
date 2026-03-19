@@ -864,3 +864,59 @@ TEST_F(HybridScanTest, DecimalTypeOption)
     EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
   }
 }
+
+TEST_F(HybridScanTest, StructChildFilterColumn)
+{
+  // struct<a:int32_t, b:int32_t> column
+  auto child_a    = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3, 4};
+  auto child_b    = cudf::test::fixed_width_column_wrapper<int32_t>{10, 11, 12, 13, 14};
+  auto struct_col = cudf::test::structs_column_wrapper{{child_a, child_b}}.release();
+
+  auto input = cudf::table_view({*struct_col});
+
+  cudf::io::table_input_metadata input_metadata(input);
+  input_metadata.column_metadata[0].set_name("struct");
+  input_metadata.column_metadata[0].child(0).set_name("a");
+  input_metadata.column_metadata[0].child(1).set_name("b");
+
+  auto const filepath = temp_env->get_temp_filepath("struct_col.parquet");
+  {
+    auto write_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input)
+        .metadata(std::move(input_metadata))
+        .build();
+    cudf::io::write_parquet(write_opts);
+  }
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const col_ref = cudf::ast::column_name_reference("struct.a");
+  auto scalar_val    = cudf::numeric_scalar<int32_t>(3);
+  auto literal       = cudf::ast::literal(scalar_val);
+  auto filter_expr   = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+
+  auto options = cudf::io::parquet_reader_options::builder().filter(filter_expr).build();
+
+  auto datasource          = cudf::io::datasource::create(filepath);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+  auto reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
+
+  auto row_groups = reader->all_row_groups(options);
+  auto row_mask   = reader->build_all_true_row_mask(row_groups, stream, mr);
+
+  // Error case: Materialize filter column (struct_col.a)
+  auto const filter_byte_ranges = reader->filter_column_chunks_byte_ranges(row_groups, options);
+  auto [filter_bufs, filter_data, filter_tasks] =
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      *datasource, filter_byte_ranges, stream, mr);
+  filter_tasks.get();
+
+  using cudf::io::parquet::experimental::use_data_page_mask;
+  auto row_mask_mutable = row_mask->mutable_view();
+  EXPECT_THROW(
+    std::ignore = reader->materialize_filter_columns(
+      row_groups, filter_data, row_mask_mutable, use_data_page_mask::NO, options, stream, mr),
+    std::invalid_argument);
+}
