@@ -288,11 +288,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                 # Convert the timedelta to the same resolution as
                 # the datetime index so that the range-based window
                 # comparison uses matching units.
-                index_dtype = self.obj.index._column.dtype
-                resolution = np.datetime_data(index_dtype)[0]
+                resolution = self.obj.index.unit
                 pre = int(
-                    np.timedelta64(self.window.value, "ns")
-                    / np.timedelta64(1, resolution)
+                    self.window.as_unit(resolution).to_numpy().view(np.int64)
                 )
                 fwd = 0
                 orderby_obj = self.obj.index._column.astype(np.dtype(np.int64))
