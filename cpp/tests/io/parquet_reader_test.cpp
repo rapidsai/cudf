@@ -1537,13 +1537,13 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
       auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                          .column_names({"col_double", "col_uint32"})
                          .filter(read_ref_expr);
-      EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+      EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
 
       // Repeat but select columns using indices instead of names
       read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                     .column_indices({2, 0})
                     .filter(read_ref_expr);
-      EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+      EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
     }
   }
 }

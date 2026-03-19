@@ -639,8 +639,7 @@ std::reference_wrapper<ast::expression const> named_to_reference_converter::visi
     "Parquet filter expression",
     std::invalid_argument);
   auto const col_name = col_name_iter->second;
-  auto col_index_it   = _column_name_to_index.find(
-    cudf::io::parquet::detail::normalize_column_path(col_name, _case_sensitive_names));
+  auto col_index_it   = _column_name_to_index.find(col_name);
   CUDF_EXPECTS(col_index_it != _column_name_to_index.end(),
                "Column name mapped from its index in the filter expression "
                "not found in the metadata of selected columns");
