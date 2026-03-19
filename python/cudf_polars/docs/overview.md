@@ -397,25 +397,25 @@ likely to change in the future.
 :::
 
 The streaming executor samples Parquet footer metadata to estimate
-per-column storage sizes, then uses those estimates to split or fuse
-file-level partitions so that each input partition is close to
-`target_partition_size` bytes. This is controlled by the
-`use_io_partitioning` option (default: `True`), settable via the
-`stats_planning` executor parameter or the environment variable
-`CUDF_POLARS__EXECUTOR__STATS_PLANNING__USE_IO_PARTITIONING`.
+per-column storage sizes, then uses those estimates together with
+`target_partition_size` (bytes) on the streaming executor to decide how
+to split or fuse file-level partitions so that each input partition is
+close to that target size. Tune `target_partition_size` via
+`executor_options` or `CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`.
 
 ```python
 engine = pl.GPUEngine(
     executor="streaming",
-    executor_options={"stats_planning": {"use_io_partitioning": False}},
+    executor_options={"target_partition_size": 2_000_000_000},
 )
 ```
 
-Internally, `collect_statistics` walks the IR graph and constructs a
-`DataSourceInfo` for each leaf `Scan` / `DataFrameScan` node, storing
-the results in `StatsCollector.scan_stats`. `ParquetSourceInfo` caches
-its metadata sample so that multiple `Scan` nodes reading the same files
-share one read.
+Internally, `collect_statistics` walks the IR graph, groups Parquet
+`Scan` nodes that share the same file paths (unioning projected columns
+for sampling), and builds one `DataSourceInfo` per path group. It then
+attaches that source to every `Scan` in the group. Leaf `DataFrameScan`
+nodes are handled separately. Results live in `StatsCollector.scan_stats`.
+Parquet metadata sampling is shared across scans that read the same files.
 
 # Containers
 
