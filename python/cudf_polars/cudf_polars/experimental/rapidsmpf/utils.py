@@ -128,6 +128,7 @@ async def shutdown_on_error(
         async with asyncio.TaskGroup() as tg:
             for ch in channels:
                 tg.create_task(ch.shutdown(context))
+                tg.create_task(ch.shutdown_metadata(context))
         raise
     finally:
         if tracer is not None:
