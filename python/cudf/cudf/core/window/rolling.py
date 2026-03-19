@@ -156,9 +156,9 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     2019-01-01 09:00:00    1.0
     2019-01-01 09:00:01    9.0
     2019-01-01 09:00:02    9.0
-    2019-01-01 09:00:04    9.0
-    2019-01-01 09:00:07    9.0
-    2019-01-01 09:00:08    9.0
+    2019-01-01 09:00:04    4.0
+    2019-01-01 09:00:07    NaN
+    2019-01-01 09:00:08    1.0
     dtype: float64
 
     Apply custom function on the window with the *apply* method
@@ -197,10 +197,10 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     >>> print(c.rolling('2s').apply(some_func))
     2019-01-01 09:00:00     4.0
     2019-01-01 09:00:01     9.0
-    2019-01-01 09:00:02    15.0
-    2019-01-01 09:00:04    22.0
-    2019-01-01 09:00:07    30.0
-    2019-01-01 09:00:08    39.0
+    2019-01-01 09:00:02    11.0
+    2019-01-01 09:00:04     7.0
+    2019-01-01 09:00:07     8.0
+    2019-01-01 09:00:08    17.0
     dtype: float64
     """
 
@@ -285,7 +285,13 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
                     raise NotImplementedError(
                         "center is not implemented for frequency-based windows"
                     )
-                pre = self.window.value
+                # Convert the timedelta to the same resolution as
+                # the datetime index so that the range-based window
+                # comparison uses matching units.
+                resolution = self.obj.index.unit
+                pre = int(
+                    self.window.as_unit(resolution).to_numpy().view(np.int64)
+                )
                 fwd = 0
                 orderby_obj = self.obj.index._column.astype(np.dtype(np.int64))
             else:
