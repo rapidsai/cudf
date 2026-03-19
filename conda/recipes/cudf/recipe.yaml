@@ -68,6 +68,7 @@ requirements:
     - ${{ compiler("cuda") }}
     - cuda-version =${{ cuda_version }}
     - ${{ stdlib("c") }}
+    - lz4
   host:
     - cython >=3.2.2
     - pip
