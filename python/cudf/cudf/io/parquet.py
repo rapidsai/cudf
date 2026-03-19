@@ -1112,17 +1112,7 @@ def read_parquet(
     )
     # Build a lookup from (possibly lowered) name -> actual DataFrame column name
     _key = str.lower if not case_sensitive_names else str
-    col_names = {}
-    for name in df._column_names:
-        k = _key(name)
-        if k in col_names:
-            raise ValueError(
-                f"Parquet file contains columns whose names are ambiguous "
-                f"under case-insensitive matching: {col_names[k]!r} and {name!r} "
-                f"both map to {k!r}. Use case_sensitive_names=True to read "
-                f"such files."
-            )
-        col_names[k] = name
+    col_names = {_key(name): name for name in df._column_names}
 
     # Apply filters row-wise (if any are defined), and return
     if ast_filter is None:
