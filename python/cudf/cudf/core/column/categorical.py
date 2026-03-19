@@ -335,11 +335,10 @@ class CategoricalColumn(ColumnBase):
             if self.size > 0
             else np.dtype(np.int8)
         )
-        assert self.ordered is not None
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            ordered=self.ordered,
+            ordered=bool(self.ordered) if self.ordered is not None else False,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:

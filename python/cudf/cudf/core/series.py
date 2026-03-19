@@ -1342,22 +1342,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             show_dimensions = pd.get_option("display.show_dimensions")
             preprocess = preprocess.copy(deep=False)
             preprocess.index = preprocess.index._pandas_repr_compatible()
-            if preprocess.dtype.categories.dtype.kind == "f":
-                pd_series = (
-                    preprocess.astype(DEFAULT_STRING_DTYPE)
-                    .to_pandas()
-                    .astype(
-                        dtype=pd.CategoricalDtype(
-                            categories=preprocess.dtype.categories.astype(
-                                DEFAULT_STRING_DTYPE
-                            ).to_pandas(),
-                            ordered=preprocess.dtype.ordered,
-                        )
-                    )
-                )
-            else:
-                pd_series = preprocess.to_pandas()
-            output = pd_series.to_string(
+            output = preprocess.to_pandas().to_string(
                 name=self.name,
                 dtype=self.dtype,
                 min_rows=min_rows,
@@ -1371,16 +1356,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         lines = output.split("\n")
         if isinstance(preprocess.dtype, CategoricalDtype):
             category_memory = lines[-1]
-            if preprocess.dtype.categories.dtype.kind == "f":
-                category_memory = category_memory.replace("'", "").split(": ")
-                cat_dtype_name = preprocess.dtype.categories.dtype.name
-                category_memory = (
-                    category_memory[0]
-                    .replace("object", cat_dtype_name)
-                    .replace("str", cat_dtype_name)
-                    + ": "
-                    + category_memory[1]
-                )
             lines = lines[:-1]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
