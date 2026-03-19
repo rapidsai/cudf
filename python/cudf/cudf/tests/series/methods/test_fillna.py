@@ -162,7 +162,7 @@ def test_timedelta_fillna(data, timedelta_types_as_str, fill_value):
         lambda: decimal.Decimal("-12.87"),
         lambda: cudf.Series(
             [None, -854, 9533, -274, -845, 7924], dtype="int32"
-        ),
+        ).astype(cudf.Decimal64Dtype(7, 2)),
         lambda: cudf.Series(
             ["-53.5", "13.4", "-64.3", None, "42.42", None]
         ).astype(cudf.Decimal64Dtype(7, 2)),
@@ -176,7 +176,7 @@ def test_fillna_decimal(gsr_data, dtype, fill_value, inplace):
     psr = gsr.to_pandas(arrow_type=True)
     fill_value = fill_value()
     if isinstance(fill_value, cudf.Series):
-        p_fill_value = fill_value.to_pandas()
+        p_fill_value = fill_value.to_pandas(arrow_type=True)
     else:
         p_fill_value = fill_value
 
