@@ -8,11 +8,19 @@ import pytest
 
 import polars as pl
 
+from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.expressions.base import ExecutionContext
+from cudf_polars.dsl.ir import Filter, HStack
+from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
+from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.fixture(scope="module")
@@ -63,3 +71,30 @@ def test_hstack_non_scalar_cse_fallback(df, engine):
     )
     with pytest.warns(UserWarning, match="not supported for multiple partitions"):
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(engine):
+    """Filter → rec(HStack) so standalone non-pointwise HStack hits redirect to Select."""
+    base = Translator(
+        pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})._ldf.visit(), engine
+    ).translate_ir()
+    dt_a = base.schema["a"]
+    sum_dtype = DataType(pl.Int64())
+    agg_sum = expr.Agg(
+        sum_dtype,
+        "sum",
+        None,
+        ExecutionContext.FRAME,
+        Col(dt_a, "a"),
+    )
+    hstack_schema = {**base.schema, "s": sum_dtype}
+    hstack = HStack(
+        hstack_schema,
+        (expr.NamedExpr("s", agg_sum),),
+        should_broadcast=True,
+        df=base,
+    )
+    mask = expr.NamedExpr("m", expr.Literal(DataType(pl.Boolean()), value=True))
+    root = Filter(hstack_schema, mask, hstack)
+    config_options = ConfigOptions.from_polars_engine(engine)
+    lower_ir_graph(root, config_options)
