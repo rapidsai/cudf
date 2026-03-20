@@ -36,6 +36,7 @@
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
+#include <cuda/functional>
 #include <cuda/std/climits>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
