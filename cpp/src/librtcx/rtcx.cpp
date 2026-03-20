@@ -123,7 +123,7 @@ std::string join_strings(std::span<StringType> strings, std::string_view separat
     strings.end(),
     size_t{0},
     [](size_t total, size_t str_size) { return total + str_size; },
-    [](auto const& str) { return str.size(); });
+    [](auto& str) { return str.size(); });
 
   auto separator_size = separator.size() * (strings.size() - 1);
 
@@ -270,7 +270,7 @@ namespace {
 
 void* load_dll(std::string_view base_name, std::span<std::string const> names)
 {
-  for (auto const& name : names) {
+  for (auto& name : names) {
     void* handle = ::dlopen(name.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (handle != nullptr) { return handle; }
   }
@@ -526,12 +526,12 @@ void log_nvrtc_result(compile_params const& params,
                                                                       : "failed with error";
 
   std::string headers_str;
-  for (auto const& header : params.header_include_names) {
+  for (auto& header : params.header_include_names) {
     headers_str = std::format("{}\t{}\n", headers_str, header);
   }
 
   std::string options_str;
-  for (auto const& option : params.options) {
+  for (auto& option : params.options) {
     options_str = std::format("{}\t{}\n", options_str, option);
   }
 
@@ -602,12 +602,16 @@ void log_nvJitLink_result(link_params const& params,
   if (info_log.empty() && error_log.empty()) { return; }
 
   std::string fragments_str;
-  for (auto const& fragment_name : params.fragment_names) {
-    fragments_str = std::format("{}\t{}\n", fragments_str, fragment_name);
+  for (auto& frag : params.file_fragments) {
+    fragments_str = std::format("{}\t{}\n", fragments_str, frag.path);
+  }
+
+  for (auto& frag : params.memory_fragments) {
+    fragments_str = std::format("{}\t{}\n", fragments_str, frag.name);
   }
 
   std::string link_options_str;
-  for (auto const& option : params.link_options) {
+  for (auto& option : params.link_options) {
     link_options_str = std::format("{}\t{}\n", link_options_str, option);
   }
 
@@ -829,16 +833,17 @@ byte_buffer link_library(link_params const& params)
   RTCX_EXPECTS(params.output_type == binary_type::CUBIN || params.output_type == binary_type::PTX,
                "Only CUBIN and PTX output types are supported for linking modules",
                std::logic_error);
-  RTCX_EXPECTS(params.fragments.size() == params.fragment_binary_types.size(),
-               "Mismatched number of fragments and fragment binary types",
+  RTCX_EXPECTS(params.file_fragments.size() != 0 || params.memory_fragments.size() != 0,
+               "At least one fragment must be provided for linking",
                std::logic_error);
-  RTCX_EXPECTS(params.fragments.size() == params.fragment_names.size(),
-               "Mismatched number of fragments and fragment names",
-               std::logic_error);
-  RTCX_EXPECTS(params.fragments.size() > 0, "No fragments provided for linking", std::logic_error);
 
-  for (auto& frag : params.fragments) {
-    RTCX_EXPECTS(frag.size_bytes() > 0, "Fragment binary data must be non-empty", std::logic_error);
+  for (auto& frag : params.file_fragments) {
+    RTCX_EXPECTS(frag.path != nullptr, "Fragment file path must not be empty", std::logic_error);
+  }
+
+  for (auto& frag : params.memory_fragments) {
+    RTCX_EXPECTS(
+      frag.data.size_bytes() > 0, "Fragment binary data must be non-empty", std::logic_error);
   }
 
   nvJitLinkHandle handle = nullptr;
@@ -848,12 +853,16 @@ byte_buffer link_library(link_params const& params)
 
   RTCX_DEFER([&] { nvjitlink->Destroy(&handle); });
 
-  for (std::size_t i = 0; i < params.fragments.size(); i++) {
-    auto name     = params.fragment_names[i];
-    auto fragment = params.fragments[i];
-    auto bin_type = to_nvjitlink_input_type(params.fragment_binary_types[i]);
-    RTCX_CHECK_NVJITLINK(
-      nvjitlink->AddData(handle, bin_type, fragment.data(), fragment.size_bytes(), name));
+  for (auto& frag : params.file_fragments) {
+    RTCX_CHECK_NVJITLINK(nvjitlink->AddFile(handle, to_nvjitlink_input_type(frag.type), frag.path));
+  }
+
+  for (auto& frag : params.memory_fragments) {
+    RTCX_CHECK_NVJITLINK(nvjitlink->AddData(handle,
+                                            to_nvjitlink_input_type(frag.type),
+                                            frag.data.data(),
+                                            frag.data.size_bytes(),
+                                            frag.name));
   }
 
   auto link_result = nvjitlink->Complete(handle);

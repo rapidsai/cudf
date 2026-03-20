@@ -509,15 +509,32 @@ struct [[nodiscard]] compile_params {
 };
 
 /**
+ * @brief Represents a binary fragment in memory to be linked into a library
+ */
+struct memory_fragment {
+  std::span<std::uint8_t const> data = {};                  //< Binary data for the fragment
+  binary_type type                   = binary_type::CUBIN;  //< Binary type of the fragment data
+  char const* name                   = nullptr;             //< Debug name for the fragment
+};
+
+/**
+ * @brief Represents a binary fragment to be linked into a library
+ */
+struct file_fragment {
+  char const* path = nullptr;             //< Path to the binary fragment file
+  binary_type type = binary_type::CUBIN;  //< Binary type of the fragment data
+};
+
+/**
  * @brief Parameters for linking multiple compiled fragments into a single library
  */
 struct [[nodiscard]] link_params {
-  char const* name        = nullptr;             //< Debug name for the linked library
-  binary_type output_type = binary_type::CUBIN;  //< Output binary type
-  std::span<std::span<std::uint8_t const> const> fragments = {};  //< Binary data for each fragment
-  std::span<binary_type const> fragment_binary_types       = {};  //< Binary type for each fragment
-  std::span<char const* const> fragment_names              = {};  //< Debug name for each fragment
-  std::span<char const* const> link_options                = {};  //< NVJITLink options
+  char const* name                              = nullptr;  //< Debug name for the linked library
+  binary_type output_type                       = binary_type::CUBIN;  //< Output binary type
+  std::span<file_fragment const> file_fragments = {};  //< Binary data for each fragment
+  std::span<memory_fragment const> memory_fragments =
+    {};                                            //< Memory-resident binary fragments to link
+  std::span<char const* const> link_options = {};  //< NVJITLink options
 };
 
 namespace detail {
