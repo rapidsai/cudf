@@ -39,6 +39,7 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Iterator, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
@@ -58,6 +59,7 @@ def evaluate_pipeline_spmd_mode(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline in SPMD mode.
@@ -85,6 +87,8 @@ def evaluate_pipeline_spmd_mode(
         IDs.
     collect_metadata
         Whether to collect runtime metadata.
+    query_id
+        A unique identifier for the query.
 
     Returns
     -------
