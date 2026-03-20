@@ -856,9 +856,23 @@ def _build_parquet_source(
     )
 
 
-def _build_dataframe_source(ir: DataFrameScan) -> DataSourceInfo:
-    """Return DataSourceInfo for a DataFrameScan node."""
-    return DataFrameSourceInfo(pl.DataFrame._from_pydf(ir.df))
+def _build_source_info(
+    ir: Scan | DataFrameScan,
+    config_options: ConfigOptions[StreamingExecutor],
+    *,
+    needed_cols: frozenset[str] | None = None,
+) -> DataSourceInfo:
+    """Return DataSourceInfo for a Scan or DataFrameScan node."""
+    if isinstance(ir, DataFrameScan):
+        return DataFrameSourceInfo(pl.DataFrame._from_pydf(ir.df))
+    elif isinstance(ir, Scan) and ir.typ == "parquet":
+        max_footer = config_options.parquet_options.max_footer_samples
+        max_rg = config_options.parquet_options.max_row_group_samples
+        needed_cols = frozenset(ir.schema) if needed_cols is None else needed_cols
+        paths = tuple(ir.paths)
+        return _build_parquet_source(paths, needed_cols, max_footer, max_rg)
+    else:  # pragma: no cover
+        raise ValueError(f"Unsupported Scan type: {ir.typ}")
 
 
 def _clear_source_info_cache() -> None:
