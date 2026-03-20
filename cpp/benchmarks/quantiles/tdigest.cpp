@@ -9,6 +9,7 @@
 #include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cuda/functional>
 #include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
