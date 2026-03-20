@@ -115,7 +115,7 @@ The different scopes have different schemas. Fields in **bold** are required / a
 | **scope**  | Literal["plan"] | The string literal `"plan"`. Useful for distinguishing from other types of traces. |
 | **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
 | **plan**   | `PlanObject` | A serialized representation of the query plan. See #TODO below |
-| **event**  | String | A message lik,e "Query Plan" |
+| **event**  | String | A message like "Query Plan" |
 
 #### scope=actor
 
