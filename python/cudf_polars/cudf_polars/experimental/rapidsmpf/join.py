@@ -554,6 +554,7 @@ async def _shuffle_join(
     # if the data is already partitioned correctly.
     ch_left_shuffle = context.create_channel()
     ch_right_shuffle = context.create_channel()
+    # note: this is an actor inside of an actor. How should we log that in our traces?
     async with (
         shutdown_on_error(
             context,
