@@ -9,7 +9,7 @@ if(CMAKE_COMPILER_IS_GNUCXX)
   list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
 endif()
 
-list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda)
+list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda -lineinfo)
 
 # set warnings as errors
 if(CUDA_WARNINGS_AS_ERRORS)

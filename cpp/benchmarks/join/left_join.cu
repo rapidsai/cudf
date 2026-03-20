@@ -35,7 +35,8 @@ void nvbench_left_anti_join(nvbench::state& state,
                                            cudf::table_view const& right,
                                            cudf::null_equality compare_nulls) {
     if (join_type == "mark_join") {
-      cudf::mark_join obj(left, compare_nulls, cudf::get_default_stream());
+      cudf::mark_join obj(
+        left, compare_nulls, cudf::join_prefilter::YES, cudf::get_default_stream());
       for (auto i = 0; i < num_operations - 1; i++) {
         [[maybe_unused]] auto result = obj.anti_join(right);
       }
@@ -78,7 +79,8 @@ void nvbench_left_semi_join(nvbench::state& state,
                                            cudf::table_view const& right,
                                            cudf::null_equality compare_nulls) {
     if (join_type == "mark_join") {
-      cudf::mark_join obj(left, compare_nulls, cudf::get_default_stream());
+      cudf::mark_join obj(
+        left, compare_nulls, cudf::join_prefilter::YES, cudf::get_default_stream());
       for (auto i = 0; i < num_operations - 1; i++) {
         [[maybe_unused]] auto result = obj.semi_join(right);
       }
