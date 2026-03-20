@@ -88,6 +88,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
+    maybe_normalize_arrow_null,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
     pyarrow_dtype_to_cudf_dtype,
@@ -433,16 +434,6 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"got {child.type().id()}."
                 )
             children = [_rebuild_column(child, [], wrap_buffers=True)]
-    # elif isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
-    #     dtype.pyarrow_dtype
-    # ):
-    #     return _wrap_and_validate(
-    #         plc.Column.from_scalar(
-    #             plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
-    #             col.size(),
-    #         ),
-    #         np.dtype("object"),
-    #     )
     elif is_dtype_obj_decimal(dtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
@@ -967,14 +958,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         """
         # For pandas nullable null types (ArrowDtype wrapping pa.null()),
         # normalize the column data and dtype before construction.
-        if isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
-            dtype.pyarrow_dtype
-        ):
-            col = _normalize_types_column(col)
-            old_dtype = dtype
-            dtype = np.dtype("object")
-        else:
-            old_dtype = None
+        col, dtype, old_dtype = maybe_normalize_arrow_null(col, dtype)
 
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
