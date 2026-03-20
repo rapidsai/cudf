@@ -1874,7 +1874,7 @@ class GroupBy(IR):
             target_length=df.num_rows,
             stream=df.stream,
         )
-        sorted = (
+        keys_are_sorted = (
             plc.types.Sorted.YES
             if all(k.is_sorted for k in keys)
             else plc.types.Sorted.NO
@@ -1882,7 +1882,7 @@ class GroupBy(IR):
         grouper = plc.groupby.GroupBy(
             plc.Table([k.obj for k in keys]),
             null_handling=plc.types.NullPolicy.INCLUDE,
-            keys_are_sorted=sorted,
+            keys_are_sorted=keys_are_sorted,
             column_order=[k.order for k in keys],
             null_precedence=[k.null_order for k in keys],
         )
@@ -1921,12 +1921,14 @@ class GroupBy(IR):
             )
         ]
         result_keys = [
-            Column(grouped_key, name=key.name, dtype=key.dtype)
+            Column(
+                grouped_key, name=key.name, dtype=key.dtype, is_sorted=keys_are_sorted
+            )
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
         broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
-        if maintain_order and not sorted:
+        if maintain_order and not keys_are_sorted:
             # The order we want
             want = plc.stream_compaction.stable_distinct(
                 plc.Table([k.obj for k in keys]),
