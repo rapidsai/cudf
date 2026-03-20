@@ -17,17 +17,17 @@ PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel
 rapids-logger "Install dask_cudf, cudf, pylibcudf, and test requirements"
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
-rapids-generate-pip-constraints py_test_dask_cudf ./constraints.txt
+rapids-generate-pip-constraints py_test_dask_cudf "${PIP_CONSTRAINT}"
 
 # notes:
 #
 #   * echo to expand wildcard before adding `[test]` requires for pip
-#   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
-#     ignored if any other --constraint are passed via the CLI
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
 #
 rapids-pip-retry install \
   -v \
-  --constraint ./constraints.txt \
+  --prefer-binary \
   --constraint "${PIP_CONSTRAINT}" \
   "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
   "$(echo "${DASK_CUDF_WHEELHOUSE}"/dask_cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \

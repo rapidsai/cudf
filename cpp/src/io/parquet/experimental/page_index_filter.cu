@@ -62,7 +62,7 @@ struct page_stats_caster : public stats_caster_base {
    * @brief Transforms a page-level stats column to a row-level stats column for non-string types
    *
    * @tparam T The data type of the column - must be non-compound
-   * @param column Mutable view of input page-level device column
+   * @param input_column Mutable view of input page-level device column
    * @param page_nullmask Host nullmask of the input page-level column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
@@ -164,7 +164,7 @@ struct page_stats_caster : public stats_caster_base {
    *
    * @param host_strings Host span of cudf::string_view values in the input page-level host column
    * @param host_chars Host span of string data of the input page-level host column
-   * @param host_nullmask Nullmask of the input page-level host column
+   * @param host_page_nullmask Nullmask of the input page-level host column
    * @param host_null_count Number of nulls in the input page-level host column
    * @param page_indices Device vector containing the page index for each row index
    * @param page_row_offsets Host vector row offsets of each page
@@ -721,7 +721,7 @@ struct search_fenwick_tree_functor {
     if constexpr (Boundary == boundary::START) {
       if (start == 0 or is_power_of_two(start)) {
         auto const block_size =
-          std::max<size_type>(start & -start, largest_power_of_two_in_range(start, end));
+          cuda::std::max<size_type>(start & -start, largest_power_of_two_in_range(start, end));
         auto const tree_level = cuda::std::countr_zero<uint32_t>(block_size);
         return cuda::std::pair{tree_level, block_size};
       } else {
@@ -731,10 +731,9 @@ struct search_fenwick_tree_functor {
     } else {
       auto block_size = end & -end;
       if (start > 0 and is_power_of_two(end)) {
-        auto const next_alignment =
-          std::max<size_type>(smallest_power_of_two_in_range(start, end),
-                              largest_power_of_two_in_range(0, end - start));
-        block_size = end - next_alignment;
+        auto const next_alignment = cuda::std::max(smallest_power_of_two_in_range(start, end),
+                                                   largest_power_of_two_in_range(0, end - start));
+        block_size                = end - next_alignment;
       }
       return cuda::std::pair{cuda::std::countr_zero<uint32_t>(block_size), block_size};
     }

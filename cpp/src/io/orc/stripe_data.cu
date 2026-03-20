@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -378,7 +378,6 @@ inline __device__ uint32_t bytestream_readu32(orc_bytestream_s* bs, int pos)
  *
  * @param[in] bs Byte stream input
  * @param[in] pos Position in byte stream
- * @param[in] numbits number of bits
  * @return bits
  */
 inline __device__ uint64_t bytestream_readu64(orc_bytestream_s* bs, int pos)
@@ -1165,10 +1164,12 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  * @brief ORC Decimal decoding (unbounded base-128 varints)
  *
  * @param[in] bs Input byte stream
+ * @param[in] scratch Scratch buffer for intermediate results
  * @param[in,out] vals on input: scale from secondary stream, on output: value
  * @param[in] val_scale Scale of each value
- * @param[in] col_scale Scale from schema to which value will be adjusted
  * @param[in] numvals Number of values to decode
+ * @param[in] dtype_id Data type identifier for the decimal column
+ * @param[in] col_scale Scale from schema to which value will be adjusted
  * @param[in] t thread id
  *
  * @return number of values decoded
@@ -1916,7 +1917,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
               cudf_assert(
-                (s->vals.u64[t + vals_skipped] <= std::numeric_limits<size_type>::max()) and
+                (s->vals.u64[t + vals_skipped] <= cuda::std::numeric_limits<size_type>::max()) and
                 "Number of elements is more than what size_type can handle");
               list_child_elements                   = s->vals.u64[t + vals_skipped];
               static_cast<uint32_t*>(data_out)[row] = list_child_elements;
@@ -2071,14 +2072,15 @@ void __host__ decode_nulls_and_string_dictionaries(column_desc* chunks,
  *
  * @param[in] chunks column_desc device array [stripe][column]
  * @param[in] global_dictionary Global dictionary device array
+ * @param[in] row_groups Optional row index data [row_group][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
- * @param[in] row_groups Optional row index data [row_group][column]
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] level nesting level being processed
+ * @param[in] error_count Pointer to error count output
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ decode_column_data(column_desc* chunks,
