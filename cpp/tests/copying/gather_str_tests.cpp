@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -78,7 +78,7 @@ TEST_F(GatherTestStr, Gather)
   auto results = cudf::detail::gather(source_table,
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
                                       cudf::get_current_device_resource_ref());
 
@@ -109,7 +109,7 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
   auto results = cudf::detail::gather(source_table,
                                       gather_map,
                                       cudf::out_of_bounds_policy::DONT_CHECK,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
                                       cudf::get_current_device_resource_ref());
 
@@ -128,7 +128,7 @@ TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column->view()}),
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
                                       cudf::get_current_device_resource_ref());
   cudf::test::expect_column_empty(results->get_column(0).view());
@@ -142,7 +142,7 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column->view()}),
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
-                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                      cudf::negative_index_policy::NOT_ALLOWED,
                                       cudf::get_default_stream(),
                                       cudf::get_current_device_resource_ref());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results->get_column(0).view());

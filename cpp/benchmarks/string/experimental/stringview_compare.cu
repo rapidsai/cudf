@@ -19,6 +19,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_merge_sort.cuh>
+#include <cuda/functional>
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
