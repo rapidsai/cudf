@@ -177,12 +177,6 @@ void write_cudftable(data_sink* sink,
 
   auto h_results = cudf::detail::make_host_vector(d_results, stream);
 
-  // Copy the padded compressed buffer to host for writing
-  auto h_compressed = cudf::detail::make_host_vector(
-    cudf::device_span<uint8_t const>(static_cast<uint8_t const*>(d_compressed.data()),
-                                     max_comp_block_size * num_blocks),
-    stream);
-
   std::vector<block_index_entry> block_index(num_blocks);
   uint64_t total_compressed = 0;
   for (uint64_t i = 0; i < num_blocks; ++i) {
@@ -194,17 +188,30 @@ void write_cudftable(data_sink* sink,
     total_compressed += h_results[i].bytes_written;
   }
 
+  // Compact compressed blocks into a contiguous device buffer, then use device_write
+  rmm::device_buffer d_compacted(total_compressed, stream, mr);
+  {
+    std::vector<void*> h_dsts(num_blocks);
+    std::vector<void const*> h_srcs(num_blocks);
+    std::vector<std::size_t> h_sizes(num_blocks);
+    uint64_t d_offset = 0;
+    for (uint64_t i = 0; i < num_blocks; ++i) {
+      h_srcs[i]  = static_cast<uint8_t const*>(d_compressed.data()) + i * max_comp_block_size;
+      h_dsts[i]  = static_cast<uint8_t*>(d_compacted.data()) + d_offset;
+      h_sizes[i] = block_index[i].compressed_size;
+      d_offset += block_index[i].compressed_size;
+    }
+
+    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+      h_dsts.data(), h_srcs.data(), h_sizes.data(), num_blocks, stream));
+  }
+
   auto const header = cudftable_header_v2{
     compression, block_size, packed.metadata->size(), data_size, num_blocks, total_compressed};
   sink->host_write(&header, sizeof(cudftable_header_v2));
-
   sink->host_write(packed.metadata->data(), header.metadata_length);
-
   sink->host_write(block_index.data(), num_blocks * sizeof(block_index_entry));
-
-  for (uint64_t i = 0; i < num_blocks; ++i) {
-    sink->host_write(h_compressed.data() + i * max_comp_block_size, block_index[i].compressed_size);
-  }
+  sink->device_write(d_compacted.data(), total_compressed, stream);
 
   sink->flush();
 }
@@ -294,10 +301,9 @@ packed_table read_cudftable(datasource* source,
                             static_cast<uint8_t*>(d_compressed.data()),
                             stream);
       } else {
-        std::vector<uint8_t> h_compressed(header.compressed_data_length);
-        source->host_read(blocks_offset, header.compressed_data_length, h_compressed.data());
+        auto host_buffer = source->host_read(blocks_offset, header.compressed_data_length);
         CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          d_compressed.data(), h_compressed.data(), header.compressed_data_length, stream));
+          d_compressed.data(), host_buffer->data(), header.compressed_data_length, stream));
       }
     }
 
