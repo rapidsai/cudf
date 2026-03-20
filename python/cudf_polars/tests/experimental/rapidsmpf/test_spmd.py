@@ -18,11 +18,6 @@ from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     spmd_execution,
 )
 
-pytestmark = pytest.mark.skipif(
-    not is_running_with_rrun(),
-    reason="use something like `rrun -n <nproc> python -m pytest ...` to run SPMD tests",
-)
-
 
 def test_yields_context_and_engine() -> None:
     """spmd_execution yields a (Communicator, Context, GPUEngine) triple."""
@@ -30,6 +25,15 @@ def test_yields_context_and_engine() -> None:
         assert comm is not None
         assert ctx is not None
         assert isinstance(engine, pl.GPUEngine)
+
+
+def test_single_communicator_outside_rrun() -> None:
+    """Outside rrun the communicator has exactly one rank."""
+    if is_running_with_rrun():
+        pytest.skip("single-rank check only applies outside rrun")
+    with spmd_execution() as (comm, ctx, engine):
+        assert comm.nranks == 1
+        assert comm.rank == 0
 
 
 def test_reserved_keys() -> None:
@@ -67,6 +71,14 @@ def test_scan() -> None:
     assert result.shape == (1, 2)
     assert result["a"].to_list() == [rank]
     assert result["b"].to_list() == [rank * 10]
+
+
+def test_basic_query() -> None:
+    """A simple in-memory LazyFrame can be collected."""
+    with spmd_execution() as (comm, ctx, engine):
+        result = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).collect(engine=engine)
+    assert result.shape == (3, 2)
+    assert result["a"].to_list() == [1, 2, 3]
 
 
 def test_collect_then_lazy_equivalent() -> None:
