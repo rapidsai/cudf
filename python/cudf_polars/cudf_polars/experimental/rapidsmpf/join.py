@@ -135,7 +135,12 @@ async def broadcast_join_actor(
         The target partition size in bytes.
     """
     async with shutdown_on_error(
-        context, ch_out, ch_left, ch_right, trace_ir=ir
+        context,
+        ch_out,
+        ch_left,
+        ch_right,
+        trace_ir=ir,
+        ir_context=ir_context,
     ) as tracer:
         await _broadcast_join(
             context,
@@ -550,7 +555,13 @@ async def _shuffle_join(
     ch_left_shuffle = context.create_channel()
     ch_right_shuffle = context.create_channel()
     async with (
-        shutdown_on_error(context, ch_left_shuffle, ch_right_shuffle, trace_ir=ir),
+        shutdown_on_error(
+            context,
+            ch_left_shuffle,
+            ch_right_shuffle,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ),
         asyncio.TaskGroup() as tg,
     ):
         tg.create_task(
@@ -680,6 +691,8 @@ async def _choose_strategy_from_samples(
     if chunkwise:
         if tracer is not None:
             tracer.decision = "chunkwise"
+        # TODO: Ensure this emits a "dynamic planning" decision of "chunkwise"
+        # Or push it up a level to the caller?
         return _make_shuffle_strategy(
             ir,
             left_partitioning.inter_rank_modulus,
@@ -973,7 +986,12 @@ async def join_actor(
         List of collective IDs for shuffle/broadcast; consumed as needed.
     """
     async with shutdown_on_error(
-        context, ch_out, ch_left, ch_right, trace_ir=ir
+        context,
+        ch_out,
+        ch_left,
+        ch_right,
+        trace_ir=ir,
+        ir_context=ir_context,
     ) as tracer:
         async with asyncio.TaskGroup() as tg:
             left_metadata_task = tg.create_task(recv_metadata(ch_left, context))
@@ -997,7 +1015,13 @@ async def join_actor(
         ch_left_replay = context.create_channel()
         ch_right_replay = context.create_channel()
         async with (
-            shutdown_on_error(context, ch_left_replay, ch_right_replay, trace_ir=ir),
+            shutdown_on_error(
+                context,
+                ch_left_replay,
+                ch_right_replay,
+                trace_ir=ir,
+                ir_context=ir_context,
+            ),
             asyncio.TaskGroup() as tg,
         ):
             tg.create_task(
@@ -1007,6 +1031,7 @@ async def join_actor(
                     ch_left,
                     left_sample.chunks,
                     left_metadata,
+                    trace_ir=ir,
                 )
             )
             tg.create_task(
@@ -1016,6 +1041,7 @@ async def join_actor(
                     ch_right,
                     right_sample.chunks,
                     right_metadata,
+                    trace_ir=ir,
                 )
             )
             ch_left = ch_left_replay

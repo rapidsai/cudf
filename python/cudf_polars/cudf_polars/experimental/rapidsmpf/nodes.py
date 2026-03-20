@@ -72,7 +72,9 @@ async def default_node_single(
     -----
     Chunks are processed in the order they are received.
     """
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         # Recv metadata and prepare output metadata
         metadata_in = await recv_metadata(ch_in, context)
         metadata_out = ChannelMetadata(
@@ -123,7 +125,9 @@ async def default_node_multi(
         Index of the input channel to preserve partitioning information for.
         If None, no partitioning information is preserved.
     """
-    async with shutdown_on_error(context, *chs_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, *chs_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         # Merge and forward basic metadata.
         local_count = 1
         duplicated = True
@@ -240,6 +244,8 @@ async def fanout_node_bounded(
     context: Context,
     ch_in: Channel[TableChunk],
     *chs_out: Channel[TableChunk],
+    trace_ir: IR,
+    ir_context: IRExecutionContext,
 ) -> None:
     """
     Bounded fanout node for rapidsmpf.
@@ -255,10 +261,17 @@ async def fanout_node_bounded(
         The input Channel[TableChunk].
     chs_out
         The output Channel[TableChunk]s.
+    trace_ir
+        The IR node to trace. Passed through to shutdown_on_error.
+    ir_context
+        The execution context for the IR node.
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(context, ch_in, *chs_out):
+    # TODO: Use ir_context
+    async with shutdown_on_error(
+        context, ch_in, *chs_out, trace_ir=trace_ir, ir_context=ir_context
+    ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
         async with asyncio.TaskGroup() as tg:
@@ -295,6 +308,8 @@ async def fanout_node_unbounded(
     context: Context,
     ch_in: Channel[TableChunk],
     *chs_out: Channel[TableChunk],
+    trace_ir: IR,
+    ir_context: IRExecutionContext,
 ) -> None:
     """
     Unbounded fanout node for rapidsmpf with spilling support.
@@ -318,10 +333,17 @@ async def fanout_node_unbounded(
         The input Channel[TableChunk].
     chs_out
         The output Channel[TableChunk]s.
+    trace_ir
+        The IR node to trace. Passed through to shutdown_on_error.
+    ir_context
+        The execution context for the IR node.
     """
     # TODO: Use rapidsmpf fanout node once available.
     # See: https://github.com/rapidsai/rapidsmpf/issues/560
-    async with shutdown_on_error(context, ch_in, *chs_out):
+    # TODO: Use ir_context
+    async with shutdown_on_error(
+        context, ch_in, *chs_out, trace_ir=trace_ir, ir_context=ir_context
+    ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
         async with asyncio.TaskGroup() as tg:
@@ -547,7 +569,7 @@ async def empty_node(
     ch_out
         The output Channel[TableChunk].
     """
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(context, ch_out, ir_context=ir_context, trace_ir=ir):
         # Send metadata indicating a single empty chunk
         await send_metadata(
             ch_out,
@@ -615,12 +637,16 @@ def generate_ir_sub_network_wrapper(
                 rec.state["context"],
                 channels[ir].reserve_output_slot(),
                 *[manager.reserve_input_slot() for _ in range(count)],
+                trace_ir=ir,
+                ir_context=rec.state["ir_context"],
             )
         else:  # "bounded"
             fanout_node = fanout_node_bounded(
                 rec.state["context"],
                 channels[ir].reserve_output_slot(),
                 *[manager.reserve_input_slot() for _ in range(count)],
+                trace_ir=ir,
+                ir_context=rec.state["ir_context"],
             )
         nodes[ir].append(fanout_node)
         channels[ir] = manager
@@ -634,6 +660,7 @@ async def metadata_feeder_node(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
+    ir_context: IRExecutionContext,
 ) -> None:
     """
     Forward data with new metadata.
@@ -650,15 +677,16 @@ async def metadata_feeder_node(
         The output channel to forward data to and add metadata to.
     metadata
         The metadata to add to the output channel.
+    ir_context
+        The execution context for the IR node.
     """
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    # TODO: Use ir_context
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ):
         await send_metadata(ch_out, context, metadata)
-        if tracer is not None and metadata.duplicated:
-            tracer.set_duplicated()
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
-            if tracer is not None:
-                tracer.chunk_count += 1
         await ch_out.drain(context)
 
 
@@ -694,7 +722,9 @@ async def metadata_drain_node(
         This list will be mutated when the network is executed.
         If None, metadata will not be collected.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(
+        context, ch_in, ch_out, ir_context=ir_context, trace_ir=ir
+    ):
         # Drain metadata channel (we don't need it after this point)
         metadata = await recv_metadata(ch_in, context)
         send_empty = metadata.duplicated and comm.rank != 0

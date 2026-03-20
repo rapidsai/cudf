@@ -14,14 +14,16 @@ The `cluster` option selects the execution model:
 | `"single"`      | Single-GPU, in-process execution                     | Stable (legacy)   |
 | `"distributed"` | Multi-GPU via [Dask Distributed][dask-distributed]   | Stable (legacy)   |
 | `"ray"`         | Multi-GPU via [Ray][ray-docs] actors                 | Preview (new API) |
-| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki] launched with `rrun` | Preview (new API) |
+| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki]                      | Preview (new API) |
 
 Two preview execution modes are available:
 
 * **Ray mode** — a single-client model where a driver program coordinates GPU
   workers implemented as Ray actors.
-* **SPMD mode** — each GPU runs the same script as an independent process,
-  launched with `rrun`.
+* **SPMD mode** — each GPU runs the same script as an independent process.
+  When launched with `rrun` a full UCXX communicator connects the ranks.
+  Without `rrun` it falls back to a single-rank communicator with no external
+  dependencies, which is useful for local development and testing.
 
 This document describes these two execution modes.
 
@@ -190,12 +192,19 @@ Reserved keys:
 
 ## SPMD execution mode
 
-In SPMD (Single Program, Multiple Data) execution, the same Python script is launched
-multiple times simultaneously, once per GPU, using the `rrun` launcher bundled with
-RapidsMPF. Each process is assigned a GPU and receives a **rank**. Ranks communicate
-through a UCXX-based communicator established at startup.
+In SPMD (Single Program, Multiple Data) execution, the same Python script runs once
+per GPU and each process owns its local data fragment. Collective operations
+(shuffles, all-gathers, joins) coordinate across processes to produce a globally
+consistent result.
 
-Each rank runs an independent Python process and owns its local data fragment.
+`spmd_execution()` selects the communicator automatically:
+
+* **With `rrun`** — the `rrun` launcher starts one process per GPU and
+  `spmd_execution()` bootstraps a UCXX communicator across all ranks.
+* **Without `rrun`** — `spmd_execution()` falls back to a single-rank
+  communicator that requires no external communication library (no UCXX,
+  Ray, or Dask). This mode is useful for local development, unit tests,
+  and single-GPU pipelines.
 
 File-based sources (`scan_parquet`, `scan_csv`, etc.) are automatically partitioned
 so that different ranks read different file or row-group ranges. In-memory
@@ -234,25 +243,25 @@ every rank, call `allgather_polars_dataframe()`.
 ### Prerequisites
 
 * RapidsMPF (`rapidsmpf`) installed
-* UCXX available (usually installed with RapidsMPF)
-* `rrun` launcher available (`rrun --help` should succeed)
+* UCXX available when using `rrun` for multi-GPU execution
+  (usually installed with RapidsMPF; not required for single-rank use)
+* `rrun` launcher available for multi-GPU use (`rrun --help` should succeed)
 
 ### Running in SPMD mode
 
 `spmd_execution()` is the primary entry point for SPMD execution. It is a context
 manager imported from `cudf_polars.experimental.rapidsmpf.frontend.spmd`. On entry it:
 
-1. Bootstraps a UCXX communicator connecting all ranks.
+1. Bootstraps a communicator: UCXX when running under `rrun`, otherwise a
+   single-rank communicator that requires no external library.
 2. Creates a RapidsMPF streaming `Context` that owns GPU memory and a CUDA stream pool.
 3. Constructs and yields a `pl.GPUEngine` bound to that context.
 
 All resources are released when the context exits.
 
-`spmd_execution()` must run inside an `rrun` cluster. It raises `RuntimeError`
-if `rapidsmpf.bootstrap.is_running_with_rrun()` returns `False`.
-
 ```python
-# launch with: rrun -n 4 python my_script.py
+# multi-GPU launch: rrun -n 4 python my_script.py
+# single-GPU (no rrun needed): python my_script.py
 import polars as pl
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
@@ -399,7 +408,7 @@ Notable `executor_options` keys:
 
 Reserved keys:
 
-* `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`
+* `executor_options`: `"runtime"`, `"cluster"`, `"spmd_context"`
 * `engine_options`: `"memory_resource"`, `"executor"`
 
 <!-- Reference links -->
