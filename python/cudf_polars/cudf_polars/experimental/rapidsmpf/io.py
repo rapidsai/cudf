@@ -190,7 +190,9 @@ async def dataframescan_node(
         scans its local DataFrame in full. This is normally used in
         ``Cluster.SPMD`` mode.
     """
-    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         # Find local partition count.
         nrows = ir.df.shape()[0]
         global_count = math.ceil(nrows / rows_per_partition) if nrows > 0 else 0
@@ -433,7 +435,9 @@ async def scan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    async with shutdown_on_error(context, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         # Build a list of local Scan operations
         scans: list[Scan | SplitScan] = []
         if plan.flavor == IOPartitionFlavor.SPLIT_FILES:
@@ -730,6 +734,7 @@ def _(
                 # Just estimate the local count as well.
                 local_count=math.ceil(partition_info.count / rec.state["comm"].nranks),
             ),
+            rec.state["ir_context"],
         )
         nodes[ir] = [native_node, metadata_node]
     else:
@@ -792,7 +797,9 @@ async def sink_node(
     # safety-net, if count is too low, we might get conflicts
     # with other files.
 
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(
+        context, ch_in, ch_out, ir_context=ir_context, trace_ir=ir
+    ):
         metadata = await recv_metadata(ch_in, context)
         await send_metadata(
             ch_out, context, ChannelMetadata(local_count=1, duplicated=True)
