@@ -335,9 +335,13 @@ class CategoricalColumn(ColumnBase):
             if self.size > 0
             else np.dtype(np.int8)
         )
+        categories = self.categories.to_arrow()
+        # Match pandas: empty categories become null type
+        if len(categories) == 0 and not pa.types.is_null(categories.type):
+            categories = pa.array([], type=pa.null())
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
-            self.categories.to_arrow(),
+            categories,
             ordered=bool(self.ordered) if self.ordered is not None else False,
         )
 

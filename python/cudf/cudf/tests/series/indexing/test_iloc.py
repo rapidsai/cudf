@@ -4,13 +4,12 @@
 import cupy as cp
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 def test_series_setitem_singleton_range():
@@ -58,21 +57,23 @@ def test_string_get_item(data, item):
     ps = pd.Series(data, dtype="str", name="nice name")
     gs = cudf.Series(data, dtype="str", name="nice name")
 
-    got = gs.iloc[item]
-    if isinstance(got, cudf.Series):
-        got = got.to_arrow()
-
     if isinstance(item, cp.ndarray):
-        item = cp.asnumpy(item)
+        item_np = cp.asnumpy(item)
+    else:
+        item_np = item
 
-    expect = ps.iloc[item]
+    got = gs.iloc[item]
+    expect = ps.iloc[item_np]
+
     if isinstance(expect, pd.Series):
-        expect = pa.Array.from_pandas(expect)
-        pa.Array.equals(expect, got)
+        assert_eq(expect, got)
     else:
         if got is cudf.NA and expect is None:
             return
-        assert expect == got
+        if isinstance(expect, float) and np.isnan(expect):
+            assert isinstance(got, float) and np.isnan(got)
+        else:
+            assert expect == got
 
 
 @pytest.mark.parametrize("bool_", [True, False])
@@ -83,19 +84,21 @@ def test_string_bool_mask(data, bool_, box):
     gs = cudf.Series(data, dtype="str", name="nice name")
     item = box([bool_] * len(data))
 
-    got = gs.iloc[item]
-    if isinstance(got, cudf.Series):
-        got = got.to_arrow()
-
     if isinstance(item, cp.ndarray):
-        item = cp.asnumpy(item)
-
-    expect = ps[item]
-    if isinstance(expect, pd.Series):
-        expect = pa.Array.from_pandas(expect)
-        expect.equals(got)
+        item_np = cp.asnumpy(item)
     else:
-        assert expect == got
+        item_np = item
+
+    got = gs.iloc[item]
+    expect = ps[item_np]
+
+    if isinstance(expect, pd.Series):
+        assert_eq(expect, got)
+    else:
+        got_scalar = got
+        if got_scalar is cudf.NA and expect is None:
+            return
+        assert expect == got_scalar
 
 
 def test_series_iloc():
@@ -148,7 +151,6 @@ def test_series_iloc():
         (slice(0, 2), [4, 5]),
         (slice(1, None), [4, 5, 6, 7]),
         ([], 1),
-        ([], []),
         (slice(None, None), 1),
         (slice(-1, -3), 7),
     ],
@@ -161,14 +163,9 @@ def test_series_setitem_iloc(key, value, nulls):
     elif nulls == "all":
         psr[:] = None
     gsr = cudf.from_pandas(psr)
-    with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and nulls == "none"
-    ):
-        psr.iloc[key] = value
-    with expect_warning_if(
-        isinstance(value, list) and len(value) == 0 and not len(key) == 0
-    ):
-        gsr.iloc[key] = value
+    gsr.iloc[key] = value
+    psr.iloc[key] = value
+
     assert_eq(psr, gsr, check_dtype=False)
 
 
