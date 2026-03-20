@@ -290,7 +290,9 @@ async def shuffle_actor(
     collective_id
         The collective ID.
     """
-    async with shutdown_on_error(context, ch_in, ch_out):
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ):
         await _global_shuffle(
             context,
             comm,
