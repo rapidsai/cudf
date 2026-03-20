@@ -114,7 +114,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     return cudf::detail::gather(keys,
                                 gather_map,
                                 out_of_bounds_policy::DONT_CHECK,
-                                cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                cudf::negative_index_policy::NOT_ALLOWED,
                                 stream,
                                 mr);
   };

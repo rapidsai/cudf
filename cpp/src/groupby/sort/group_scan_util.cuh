@@ -214,7 +214,7 @@ struct group_scan_functor<K,
         table_view(std::vector<column_view>{values.child_begin(), values.child_end()}),
         gather_map,
         cudf::out_of_bounds_policy::DONT_CHECK,
-        cudf::detail::negative_index_policy::NOT_ALLOWED,
+        cudf::negative_index_policy::NOT_ALLOWED,
         stream,
         mr)
         ->release();

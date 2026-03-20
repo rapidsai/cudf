@@ -56,7 +56,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
   auto scanned_children = cudf::detail::gather(table_view{input_children},
                                                gather_map,
                                                cudf::out_of_bounds_policy::DONT_CHECK,
-                                               cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                               cudf::negative_index_policy::NOT_ALLOWED,
                                                stream,
                                                mr)
                             ->release();
