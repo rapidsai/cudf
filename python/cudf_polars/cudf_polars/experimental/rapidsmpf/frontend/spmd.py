@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
+from rapidsmpf.communicator.single import (
+    new_communicator as single_communicator,
+)
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
@@ -28,11 +31,15 @@ from pylibcudf.contiguous_split import pack
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.core import generate_network
-from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
+from cudf_polars.experimental.rapidsmpf.utils import (
+    empty_table_chunk,
+    set_memory_resource,
+)
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Iterator, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
@@ -52,6 +59,7 @@ def evaluate_pipeline_spmd_mode(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline in SPMD mode.
@@ -79,6 +87,8 @@ def evaluate_pipeline_spmd_mode(
         IDs.
     collect_metadata
         Whether to collect runtime metadata.
+    query_id
+        A unique identifier for the query.
 
     Returns
     -------
@@ -87,11 +97,11 @@ def evaluate_pipeline_spmd_mode(
     """
     if config_options.executor.runtime != "rapidsmpf":
         raise RuntimeError("Runtime must be rapidsmpf")
-    if config_options.executor.spmd is None:
-        raise RuntimeError("spmd must be set for SPMD mode")
-    comm = config_options.executor.spmd.comm
-    context = config_options.executor.spmd.context
-    py_executor = config_options.executor.spmd.py_executor
+    if config_options.executor.spmd_context is None:
+        raise RuntimeError("spmd_context must be set for SPMD mode")
+    comm = config_options.executor.spmd_context.comm
+    context = config_options.executor.spmd_context.context
+    py_executor = config_options.executor.spmd_context.py_executor
 
     ir_context = IRExecutionContext(get_cuda_stream=context.get_stream_from_pool)
 
@@ -210,10 +220,9 @@ def allgather_polars_dataframe(
 @contextmanager
 def spmd_execution(
     *,
-    mr: rmm.mr.DeviceMemoryResource | None = None,
     rapidsmpf_options: Options | None = None,
     executor_options: dict[str, object] | None = None,
-    **engine_kwargs: Any,
+    engine_options: dict[str, Any] | None = None,
 ) -> Iterator[tuple[Communicator, Context, pl.GPUEngine]]:
     """
     Context manager that bootstraps a RapidsMPF SPMD context and a matching GPUEngine.
@@ -230,7 +239,10 @@ def spmd_execution(
 
     This context manager is the primary entry point for SPMD execution. It:
 
-    - Bootstraps a UCXX communicator connecting all ``N`` ranks.
+    - Bootstraps a communicator connecting all ranks. When launched with ``rrun``
+      this is a full UCXX communicator. When running as a normal single Python
+      process (no ``rrun``) it falls back to a lightweight single-rank communicator
+      that requires no external communication library (no UCXX, Ray, or Dask).
     - Creates a RapidsMPF :class:`~rapidsmpf.streaming.core.context.Context`
       that owns GPU memory and a CUDA-stream pool.
     - Returns a :class:`~polars.lazyframe.engine_config.GPUEngine` wired to that
@@ -238,6 +250,27 @@ def spmd_execution(
       RapidsMPF streaming executor.
 
     All resources (communicator, stream pool, thread-pool) are released on exit.
+
+    **Memory resource**
+
+    ``spmd_execution`` captures ``rmm.mr.get_current_device_resource()`` at entry,
+    wraps it in ``RmmResourceAdaptor`` (so libcudf temporary allocations and the
+    RapidsMPF ``Context`` share the same resource), sets the wrapped resource as
+    current, and restores the original on exit.
+
+    To use a custom allocator, call ``rmm.mr.set_current_device_resource(your_mr)``
+    before entering ``spmd_execution()``. Do not pre-wrap it in ``RmmResourceAdaptor``.
+
+    .. code-block:: python
+
+        import rmm
+
+        # Optional: install a pool allocator before entering spmd_execution.
+        # rmm.mr.set_current_device_resource(
+        #     rmm.mr.PoolMemoryResource(rmm.mr.CudaMemoryResource())
+        # )
+        with spmd_execution(...) as (comm, ctx, engine):
+            ...
 
     **DataFrame and LazyFrame semantics**
 
@@ -278,50 +311,41 @@ def spmd_execution(
     ``collect`` calls, early exits, or any branching that would cause different
     ranks to execute different query graphs.
 
-    Must be invoked under the ``rrun`` launcher.  Use
-    :func:`rapidsmpf.bootstrap.is_running_with_rrun` to test this at runtime.
-
     Parameters
     ----------
-    mr
-        RMM device memory resource to use. Defaults to
-        ``rmm.mr.CudaAsyncMemoryResource()`` when ``None``.
     rapidsmpf_options
         RapidsMPF options. Defaults to ``Options(get_environment_variables())``
         when ``None``.
     executor_options
         Extra keyword arguments forwarded to the ``executor_options`` dict of
         :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
-        ``"runtime"``, ``"cluster"``, and ``"spmd"`` are reserved and may not
-        be overridden.
-    **engine_kwargs
+        ``"runtime"``, ``"cluster"``, and ``"spmd_context"`` are reserved and
+        may not be overridden.
+    engine_options
         Extra keyword arguments forwarded directly to
         :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
-        pass ``parquet_options={"use_rapidsmpf_native": True}`` to enable
-        native Parquet reads. The keys ``"memory_resource"`` and
+        pass ``engine_options={"parquet_options": {"use_rapidsmpf_native": True}}``
+        to enable native Parquet reads. The keys ``"memory_resource"`` and
         ``"executor"`` are reserved and may not be overridden.
 
     Yields
     ------
-    comm : Communicator
+    comm
         The active RapidsMPF communicator.
-    ctx : Context
+    ctx
         The active RapidsMPF context.
-    engine : pl.GPUEngine
+    engine
         A Polars GPU engine wired to ``comm`` and ``ctx``. Pass it to
         ``LazyFrame.collect(engine=engine)`` on each rank.
 
     Raises
     ------
-    RuntimeError
-        If not running under the ``rrun`` launcher (i.e.
-        :func:`rapidsmpf.bootstrap.is_running_with_rrun` returns ``False``).
     TypeError
         If ``executor_options`` contains any of the reserved keys
-        ``"runtime"``, ``"cluster"``, or ``"spmd"``.
+        ``"runtime"``, ``"cluster"``, or ``"spmd_context"``.
     TypeError
-        If ``engine_kwargs`` contains any of the reserved keys
-        ``"raise_on_fail"``, ``"memory_resource"``, or ``"executor"``.
+        If ``engine_options`` contains any of the reserved keys
+        ``"memory_resource"`` or ``"executor"``.
 
     Examples
     --------
@@ -333,33 +357,33 @@ def spmd_execution(
     ...         comm=comm, ctx=ctx, local_df=result, op_id=0
     ...     )
     """
-    if not bootstrap.is_running_with_rrun():
-        raise RuntimeError(
-            "spmd_execution() requires the rrun launcher. "
-            "Launch your script with `rrun -n <nproc> python your_script.py` "
-            "to enable SPMD execution."
-        )
-
     executor_options = executor_options or {}
-    engine_kwargs = engine_kwargs or {}
+    engine_options = engine_options or {}
 
     # Check for reserved keys.
-    if bad := {"runtime", "cluster", "spmd"} & executor_options.keys():
+    if bad := {"runtime", "cluster", "spmd_context"} & executor_options.keys():
         raise TypeError(f"executor_options may not contain reserved keys: {bad}")
-    if bad := {"memory_resource", "executor"} & engine_kwargs.keys():
-        raise TypeError(f"engine_kwargs may not contain reserved keys: {bad}")
+    if bad := {"memory_resource", "executor"} & engine_options.keys():
+        raise TypeError(f"engine_options may not contain reserved keys: {bad}")
 
     rapidsmpf_options = (
         rapidsmpf_options
         if rapidsmpf_options is not None
         else Options(get_environment_variables())
     )
-    mr = RmmResourceAdaptor(mr if mr is not None else rmm.mr.CudaAsyncMemoryResource())
-    comm = bootstrap.create_ucxx_comm(
-        progress_thread=ProgressThread(),
-        type=bootstrap.BackendType.AUTO,
-        options=rapidsmpf_options,
-    )
+    mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+    if bootstrap.is_running_with_rrun():
+        comm = bootstrap.create_ucxx_comm(
+            progress_thread=ProgressThread(),
+            type=bootstrap.BackendType.AUTO,
+            options=rapidsmpf_options,
+        )
+    else:
+        comm = single_communicator(
+            progress_thread=ProgressThread(),
+            options=rapidsmpf_options,
+        )
+
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
@@ -367,7 +391,10 @@ def spmd_execution(
         thread_name_prefix="spmd-executor",
     )
     try:
-        with Context.from_options(comm.logger, mr, rapidsmpf_options) as ctx:
+        with (
+            set_memory_resource(mr),
+            Context.from_options(comm.logger, mr, rapidsmpf_options) as ctx,
+        ):
             engine = pl.GPUEngine(
                 memory_resource=ctx.br().device_mr,
                 executor="streaming",
@@ -375,11 +402,11 @@ def spmd_execution(
                     **executor_options,
                     "runtime": "rapidsmpf",
                     "cluster": "spmd",
-                    "spmd": SPMDContext(
+                    "spmd_context": SPMDContext(
                         comm=comm, context=ctx, py_executor=py_executor
                     ),
                 },
-                **engine_kwargs,
+                **engine_options,
             )
             yield comm, ctx, engine
     finally:
