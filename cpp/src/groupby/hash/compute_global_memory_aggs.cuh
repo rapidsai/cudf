@@ -15,6 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
 
@@ -151,7 +152,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   auto dense_results = cudf::detail::gather(agg_results->view(),
                                             unique_keys,
                                             out_of_bounds_policy::DONT_CHECK,
-                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            cudf::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr);
   return {std::move(dense_results), std::move(unique_keys)};
