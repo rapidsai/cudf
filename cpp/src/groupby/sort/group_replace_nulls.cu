@@ -64,7 +64,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),
                                      gather_map,
                                      cudf::out_of_bounds_policy::DONT_CHECK,
-                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                     cudf::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
 

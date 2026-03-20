@@ -253,30 +253,25 @@ class TimeDeltaColumn(TemporalBaseColumn):
             )
         if isinstance(dtype, np.dtype) and dtype.kind == "U":
             dtype = np.dtype("object")
-        if cudf.get_option("mode.pandas_compatible"):
-            components = self.components
-            has_hours = components["hours"].any()
-            has_minutes = components["minutes"].any()
-            has_seconds = components["seconds"].any()
-            has_millis = (
-                self.time_unit in {"ns", "us", "ms"}
-                and components["milliseconds"].any()
-            )
-            has_micros = (
-                self.time_unit in {"ns", "us"} and self.microseconds.any()
-            )
-            has_nanos = self.time_unit == "ns" and self.nanoseconds.any()
+        components = self.components
+        has_hours = components["hours"].any()
+        has_minutes = components["minutes"].any()
+        has_seconds = components["seconds"].any()
+        has_millis = (
+            self.time_unit in {"ns", "us", "ms"}
+            and components["milliseconds"].any()
+        )
+        has_micros = self.time_unit in {"ns", "us"} and self.microseconds.any()
+        has_nanos = self.time_unit == "ns" and self.nanoseconds.any()
 
-            has_subday = has_hours or has_minutes or has_seconds
-            has_fraction = has_millis or has_micros or has_nanos
-            return self._as_string_pandas_compat(
-                dtype,
-                has_subday=has_subday,
-                has_fraction=has_fraction,
-                has_nanos=has_nanos,
-            )
-
-        return self.strftime("%D days %H:%M:%S", dtype=dtype)
+        has_subday = has_hours or has_minutes or has_seconds
+        has_fraction = has_millis or has_micros or has_nanos
+        return self._as_string_pandas_compat(
+            dtype,
+            has_subday=has_subday,
+            has_fraction=has_fraction,
+            has_nanos=has_nanos,
+        )
 
     def _as_string_pandas_compat(
         self,
@@ -287,10 +282,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
         has_nanos: bool,
     ) -> StringColumn:
         """Convert to string using pandas-compatible formatting."""
-        nat_scalar = pa_scalar_to_plc_scalar(
-            pa.scalar("NaT", type=pa.string())
-        )
-
         if not (has_subday or has_fraction):
             fmt = "%D days"
         else:
@@ -346,9 +337,6 @@ class TimeDeltaColumn(TemporalBaseColumn):
                 ),
                 r"\1",
             )
-
-        # Fill nulls with "NaT".
-        plc_result = plc.replace.replace_nulls(plc_result, nat_scalar)
 
         return cast(
             cudf.core.column.string.StringColumn,
