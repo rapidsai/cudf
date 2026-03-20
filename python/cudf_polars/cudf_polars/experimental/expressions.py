@@ -460,6 +460,8 @@ def _decompose_expr_node(
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names
         )
+    elif isinstance(expr, UnaryFunction) and expr.name == "drop_nulls":
+        return expr, input_ir, partition_info
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
             expr,
