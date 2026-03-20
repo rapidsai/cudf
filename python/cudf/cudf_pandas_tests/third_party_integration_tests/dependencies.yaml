@@ -291,8 +291,6 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          # no python 3.14 wheels yet https://github.com/tensorflow/tensorflow/issues/102890
-          - python=3.13
           - pip
           - pip:
               - tensorflow[and-cuda]
