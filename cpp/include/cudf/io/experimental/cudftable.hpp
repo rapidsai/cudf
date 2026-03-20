@@ -38,7 +38,7 @@ class cudftable_writer_options {
   sink_info _sink;
   table_view _table;
   compression_type _compression = compression_type::NONE;
-  uint32_t _block_size          = 256 * 1024;
+  uint32_t _block_size          = 512 * 1024;
 
   friend cudftable_writer_options_builder;
 
