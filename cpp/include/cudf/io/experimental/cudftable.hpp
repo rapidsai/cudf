@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,6 +37,8 @@ class cudftable_writer_options_builder;
 class cudftable_writer_options {
   sink_info _sink;
   table_view _table;
+  compression_type _compression = compression_type::NONE;
+  uint32_t _block_size          = 256 * 1024;
 
   friend cudftable_writer_options_builder;
 
@@ -77,11 +79,45 @@ class cudftable_writer_options {
   [[nodiscard]] table_view const& get_table() const noexcept { return _table; }
 
   /**
+   * @brief Returns compression type used.
+   *
+   * When set to `compression_type::NONE`, the V1 (uncompressed) format is written.
+   * Any other value writes the V2 format with block-level compression.
+   *
+   * @return Compression type
+   */
+  [[nodiscard]] compression_type get_compression() const noexcept { return _compression; }
+
+  /**
+   * @brief Returns the uncompressed block size in bytes for V2 block compression.
+   *
+   * @return Block size in bytes
+   */
+  [[nodiscard]] uint32_t get_block_size() const noexcept { return _block_size; }
+
+  /**
    * @brief Sets sink info.
    *
    * @param sink The sink info.
    */
   void set_sink(sink_info sink) { _sink = std::move(sink); }
+
+  /**
+   * @brief Sets compression type.
+   *
+   * When set to `compression_type::NONE`, the V1 (uncompressed) format is written.
+   * Any other value writes the V2 format with block-level compression.
+   *
+   * @param compression The compression type to use
+   */
+  void set_compression(compression_type compression) { _compression = compression; }
+
+  /**
+   * @brief Sets the uncompressed block size in bytes for V2 block compression.
+   *
+   * @param block_size Block size in bytes
+   */
+  void set_block_size(uint32_t block_size) { _block_size = block_size; }
 };
 
 /**
@@ -98,6 +134,30 @@ class cudftable_writer_options_builder {
   explicit cudftable_writer_options_builder(sink_info const& sink, table_view const& table)
     : _options(sink, table)
   {
+  }
+
+  /**
+   * @brief Sets compression type.
+   *
+   * @param comp The compression type to use
+   * @return this for chaining
+   */
+  cudftable_writer_options_builder& compression(compression_type comp)
+  {
+    _options._compression = comp;
+    return *this;
+  }
+
+  /**
+   * @brief Sets the uncompressed block size in bytes for V2 block compression.
+   *
+   * @param size Block size in bytes
+   * @return this for chaining
+   */
+  cudftable_writer_options_builder& block_size(uint32_t size)
+  {
+    _options._block_size = size;
+    return *this;
   }
 
   /**
