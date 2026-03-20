@@ -110,7 +110,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
                                             cudf::out_of_bounds_policy::NULLIFY,
-                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            cudf::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr)
                          ->release();
