@@ -357,18 +357,19 @@ async def fanout_node_unbounded(
             make_spill_function(output_buffers, context), priority=0
         )
 
+        # Track active send/drain tasks for each output
+        active_tasks: dict[int, asyncio.Task] = {}
+
+        # Track which outputs need to be drained (set when no more input)
+        needs_drain: set[int] = set()
+
+        # Receive task
+        recv_task: asyncio.Task | None = asyncio.create_task(ch_in.recv(context))
+
+        # Flag to indicate we should start a new receive (for backpressure)
+        can_receive: bool = True
+
         try:
-            # Track active send/drain tasks for each output
-            active_tasks: dict[int, asyncio.Task] = {}
-
-            # Track which outputs need to be drained (set when no more input)
-            needs_drain: set[int] = set()
-
-            # Receive task
-            recv_task: asyncio.Task | None = asyncio.create_task(ch_in.recv(context))
-
-            # Flag to indicate we should start a new receive (for backpressure)
-            can_receive: bool = True
 
             async def send_one_from_buffer(idx: int) -> None:
                 """
