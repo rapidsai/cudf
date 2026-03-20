@@ -1013,13 +1013,8 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pip:
-              - pytest-env
-              - sqlframe
-              - ibis-framework[duckdb]
-              - duckdb<1.4.0
-              # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
-              - sqlglot!=28.7.*
+          # https://github.com/narwhals-dev/narwhals/blob/main/pyproject.toml#L67
+          - pytest-env
   depends_on_libcudf:
     common:
       - output_types: conda
