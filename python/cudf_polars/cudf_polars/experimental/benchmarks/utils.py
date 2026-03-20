@@ -1886,7 +1886,7 @@ def run_polars_spmd(
             "parquet_options": parquet_options,
             "cuda_stream_policy": run_config.stream_policy,
         },
-    ) as (comm, ctx, engine):
+    ) as engine:
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
             allgather_polars_dataframe,
@@ -1895,14 +1895,13 @@ def run_polars_spmd(
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
                 return allgather_polars_dataframe(
-                    comm=comm,
-                    ctx=ctx,
+                    engine=engine,
                     local_df=df,
                     op_id=op_id,
                 )
 
-        rank = comm.rank
-        run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
+        rank = engine.rank
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
