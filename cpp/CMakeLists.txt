@@ -508,6 +508,7 @@ add_library(
   src/io/json/read_json.cu
   src/io/json/parser_features.cpp
   src/io/json/process_tokens.cu
+  src/io/json/write_json.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -536,6 +537,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/expression_transform_helpers.cpp
   src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
@@ -586,6 +588,7 @@ add_library(
   src/join/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
+  src/join/mark_join.cu
   src/join/hash_join.cu
   src/join/filter_join_indices_jit.cu
   src/join/join.cu

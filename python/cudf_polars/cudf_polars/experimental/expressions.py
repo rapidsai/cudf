@@ -346,7 +346,6 @@ def _decompose_agg_node(
                 input_ir.schema,
                 shuffle_on,
                 config_options.executor.shuffle_method,
-                config_options.executor.shuffler_insertion_method,
                 input_ir,
             )
             partition_info[input_ir] = PartitionInfo(
@@ -461,6 +460,8 @@ def _decompose_expr_node(
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names
         )
+    elif isinstance(expr, UnaryFunction) and expr.name == "drop_nulls":
+        return expr, input_ir, partition_info
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
             expr,

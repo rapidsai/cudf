@@ -135,7 +135,7 @@ def decompose(
                 decompose(
                     f"{next(names)}__mean_count",
                     Agg(
-                        DataType(pl.Int32()),
+                        DataType(pl.Int64()),
                         "count",
                         False,  # noqa: FBT003
                         ExecutionContext.GROUPBY,
@@ -242,7 +242,6 @@ def _(
             child.schema,
             ir.keys,
             config_options.executor.shuffle_method,
-            config_options.executor.shuffler_insertion_method,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -306,7 +305,6 @@ def _(
             gb_pwise.schema,
             grouped_keys,
             config_options.executor.shuffle_method,
-            config_options.executor.shuffler_insertion_method,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)

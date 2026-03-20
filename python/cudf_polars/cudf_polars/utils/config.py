@@ -38,10 +38,13 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
+    from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
     import rmm.mr
+
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
 
 
 __all__ = [
@@ -50,11 +53,11 @@ __all__ = [
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
+    "RayContext",
     "Runtime",
     "SPMDContext",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
-    "ShufflerInsertionMethod",
     "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -173,6 +176,7 @@ class Cluster(enum.StrEnum):
     SINGLE = "single"
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
+    RAY = "ray"
 
 
 class Scheduler(enum.StrEnum):
@@ -209,20 +213,6 @@ class ShuffleMethod(enum.StrEnum):
     TASKS = "tasks"
     RAPIDSMPF = "rapidsmpf"
     _RAPIDSMPF_SINGLE = "rapidsmpf-single"
-
-
-class ShufflerInsertionMethod(enum.StrEnum):
-    """
-    The method to use for inserting chunks into the rapidsmpf shuffler.
-
-    * ``ShufflerInsertionMethod.INSERT_CHUNKS`` : Use insert_chunks for inserting data.
-    * ``ShufflerInsertionMethod.CONCAT_INSERT`` : Use concat_insert for inserting data.
-
-    Only applicable with the "rapidsmpf" shuffle method and the "tasks" runtime.
-    """
-
-    INSERT_CHUNKS = "insert_chunks"
-    CONCAT_INSERT = "concat_insert"
 
 
 T = TypeVar("T")
@@ -617,7 +607,7 @@ class SPMDContext:
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
         ``SPMDContext`` locally inside
-        :func:`~cudf_polars.experimental.rapidsmpf.spmd.spmd_execution`, so
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.spmd_execution`, so
         pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 
@@ -634,6 +624,28 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+
+
+@dataclasses.dataclass(frozen=True)
+class RayContext:
+    """
+    Configuration for Ray cluster execution.
+
+    .. note::
+        This dataclass holds Ray actor handles, which are only valid within the
+        Ray session that created them. It is stripped from ``config_options``
+        before pickling for remote actor calls in
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`.
+        Do not persist or transfer this object across Ray sessions.
+
+    Parameters
+    ----------
+    rank_actors
+        List of :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RankActor`
+        handles, one per GPU in the cluster.
+    """
+
+    rank_actors: list[ActorHandle[RankActor]]
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -722,11 +734,6 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
-    shuffler_insertion_method
-        The method to use for inserting chunks with the rapidsmpf shuffler.
-        Can be 'insert_chunks' (default) or 'concat_insert'.
-
-        Only applicable with ``shuffle_method="rapidsmpf"`` and ``runtime="tasks"``.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -829,13 +836,6 @@ class StreamingExecutor:
             default=ShuffleMethod.TASKS,
         )
     )
-    shuffler_insertion_method: ShufflerInsertionMethod = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SHUFFLER_INSERTION_METHOD",
-            ShufflerInsertionMethod.__call__,
-            default=ShufflerInsertionMethod.INSERT_CHUNKS,
-        )
-    )
     rapidsmpf_spill: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
@@ -872,7 +872,8 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
-    spmd: SPMDContext | None = None
+    spmd_context: SPMDContext | None = None
+    ray_context: RayContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -956,11 +957,6 @@ class StreamingExecutor:
             )
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
-        object.__setattr__(
-            self,
-            "shuffler_insertion_method",
-            ShufflerInsertionMethod(self.shuffler_insertion_method),
-        )
 
         # Make sure stats_planning is a dataclass
         if isinstance(self.stats_planning, dict):
