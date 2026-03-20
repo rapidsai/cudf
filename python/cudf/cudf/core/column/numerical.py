@@ -24,7 +24,6 @@ from cudf.core.column.column import (
     column_empty,
     fixed_dtype_policy,
     pylibcudf_result_dtype_policy,
-    same_dtype_policy,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
 from cudf.core.dtype.validators import (
@@ -185,6 +184,18 @@ class NumericalColumn(NumericalBaseColumn):
             return self.isnan().indices_of(True)
         else:
             return super().indices_of(value)
+
+    @property
+    def nullable(self) -> bool:
+        if isinstance(self.dtype, np.dtype) and self.dtype.kind == "f":
+            return self.nan_count > 0 or self.mask is not None
+        return super().nullable
+
+    @property
+    def null_count(self) -> int:
+        if isinstance(self.dtype, np.dtype) and self.dtype.kind == "f":
+            return self.nan_count + super().null_count
+        return super().null_count
 
     def has_nulls(self, include_nan: bool = False) -> bool:
         return bool(self.null_count != 0) or (
@@ -539,11 +550,23 @@ class NumericalColumn(NumericalBaseColumn):
     def nans_to_nulls(self: Self) -> Self:
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
-        result = PylibcudfFunction(
-            plc.transform.column_nans_to_nulls,
-            same_dtype_policy,
-        ).execute_with_args(self)
-        return cast(Self, result)
+        with self.access(mode="read", scope="internal") as accessed:
+            plc_result = plc.transform.column_nans_to_nulls(
+                accessed.plc_column
+            )
+        # Wrap the result manually to avoid _wrap_and_validate which
+        # would convert the masked nulls right back to NaN for numpy
+        # float dtypes.
+        from cudf.core.column.column import _rebuild_column
+
+        wrapped = _rebuild_column(plc_result, [], wrap_buffers=True)
+        result = self.__class__.__new__(self.__class__)
+        result.plc_column = wrapped
+        result._dtype = self._dtype
+        result._distinct_count = {}
+        result._has_nulls = {}
+        result._exposed_buffers = set()
+        return result
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):

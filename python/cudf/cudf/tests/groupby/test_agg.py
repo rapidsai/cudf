@@ -590,12 +590,14 @@ def test_groupby_list_strings(agg):
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 1, 2, 2],
-            "b": ["b", "a", None, "e", "d"],
+            "b": pd.Series(
+                ["b", "a", pd.NA, "e", "d"],
+                dtype=pd.StringDtype(storage="pyarrow"),
+            ),
             "c": [1, 2, 3, 4, 5],
         }
     )
     gdf = cudf.from_pandas(pdf)
-
     assert_groupby_results_equal(
         pdf.groupby("a").agg(agg),
         gdf.groupby("a").agg(agg),

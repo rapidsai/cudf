@@ -363,6 +363,34 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
     return _rebuild_column(col, normalized_children, wrap_buffers=False)
 
 
+def _normalize_float_nulls(col: plc.Column, dtype: DtypeObj) -> plc.Column:
+    """Normalize null/NaN representation for float columns.
+
+    * numpy float dtypes use NaN for missing values (no validity mask).
+    * nullable / Arrow float dtypes use masked nulls (no NaN).
+
+    This ensures consistent semantics regardless of how the column was
+    produced (e.g. by a libcudf aggregation that always uses a mask).
+    """
+    if dtype.kind != "f" or col.type().id() not in {
+        plc.TypeId.FLOAT32,
+        plc.TypeId.FLOAT64,
+    }:
+        return col
+
+    if isinstance(dtype, np.dtype):
+        # numpy float: convert masked nulls → NaN values
+        if col.null_count() > 0:
+            return plc.replace.replace_nulls(
+                col, plc.Scalar.from_py(float("nan"), col.type())
+            )
+    else:
+        # nullable / arrow float: convert NaN → masked nulls
+        return plc.transform.column_nans_to_nulls(col)
+
+    return col
+
+
 def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
     if dtype_to_pylibcudf_type(dtype) != col.type():
         raise ValueError(
@@ -500,6 +528,9 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             f"{valid_types}. If normalization is required, please run the "
             "column through _normalize_types_column first."
         )
+
+    col = _normalize_float_nulls(col, dtype)
+
     return _rebuild_column(col, children, wrap_buffers=True)
 
 
@@ -1540,6 +1571,12 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cls.create(normalized, dtype)
 
     def _get_mask_as_column(self) -> ColumnBase:
+        if self.mask is None:
+            if isinstance(self.dtype, np.dtype) and self.dtype.kind == "f":
+                # numpy float columns use NaN for missing values;
+                # synthesize a validity mask from ~isnan.
+                return self.isnan().unary_operator("not")
+            return as_column(True, length=len(self), dtype=np.dtype(np.bool_))
         with self.access(mode="read", scope="internal"):
             plc_column = plc.transform.mask_to_bools(
                 self.mask.ptr,  # type: ignore[union-attr]
@@ -1599,17 +1636,23 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 return self._mimic_inplace(result, inplace=True)
             return result
 
-        if not fill_value.is_valid(DEFAULT_STREAM) and not self.nullable:
-            # Create mask sized for base buffer to preserve view semantics
-            mask = as_buffer(
-                plc.null_mask.create_null_mask(
-                    self.size, plc.types.MaskState.ALL_VALID
+        if not fill_value.is_valid(DEFAULT_STREAM):
+            if isinstance(self.dtype, np.dtype) and self.dtype.kind == "f":
+                # For numpy float columns, use NaN instead of a masked null.
+                fill_value = plc.Scalar.from_py(
+                    float("nan"), fill_value.type()
                 )
-            )
-            self.plc_column = self.plc_column.with_mask(
-                mask, 0, validate=False
-            )
-            self._clear_cache()
+            elif not self.nullable:
+                # Create mask sized for base buffer to preserve view semantics
+                mask = as_buffer(
+                    plc.null_mask.create_null_mask(
+                        self.size, plc.types.MaskState.ALL_VALID
+                    )
+                )
+                self.plc_column = self.plc_column.with_mask(
+                    mask, 0, validate=False
+                )
+                self._clear_cache()
 
         with self.access(mode="read", scope="internal"):
             with self.access(mode="write"):
@@ -2479,12 +2522,11 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 ),
                 "version": 3,
             }
-        if self.nullable and self.has_nulls():
+        if self.nullable and self.has_nulls() and self.mask is not None:
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
             # some of the attributes from the numba device array
             mask = self.mask
-            assert mask is not None
             with mask.access(mode="read", scope="external"):
                 output["mask"] = mask
                 self._exposed_buffers.add(mask)
@@ -3323,7 +3365,9 @@ def as_column(
         return arbitrary
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         column = ColumnBase.from_cuda_array_interface(arbitrary)
-        if nan_as_null is not False:
+        if nan_as_null is not False and not (
+            isinstance(column.dtype, np.dtype) and column.dtype.kind == "f"
+        ):
             column = column.nans_to_nulls()
         if dtype is not None:
             column = column.astype(dtype)
@@ -3332,7 +3376,9 @@ def as_column(
         if isinstance(arbitrary, pa.NullArray) and dtype is None:
             dtype = np.dtype("object")
         column = ColumnBase.from_arrow(arbitrary)
-        if nan_as_null is not False:
+        if nan_as_null is not False and not (
+            isinstance(column.dtype, np.dtype) and column.dtype.kind == "f"
+        ):
             column = column.nans_to_nulls()
         if dtype is not None:
             column = column.astype(dtype)
@@ -3429,7 +3475,10 @@ def as_column(
             else:
                 arbitrary = cp.asarray(arbitrary)
                 column = ColumnBase.from_cuda_array_interface(arbitrary)
-                if nan_as_null is not False:
+                if nan_as_null is not False and not (
+                    isinstance(column.dtype, np.dtype)
+                    and column.dtype.kind == "f"
+                ):
                     column = column.nans_to_nulls()
                 if dtype is not None:
                     column = column.astype(dtype)
@@ -3616,7 +3665,10 @@ def as_column(
             result_column = ColumnBase.create(
                 plc.Column.from_array_interface(arbitrary), arbitrary.dtype
             )
-            if nan_as_null is not False:
+            if nan_as_null is not False and not (
+                isinstance(result_column.dtype, np.dtype)
+                and result_column.dtype.kind == "f"
+            ):
                 result_column = result_column.nans_to_nulls()
             if dtype is not None:
                 result_column = result_column.astype(dtype)
