@@ -15,6 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
 
