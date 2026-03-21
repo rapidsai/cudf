@@ -780,23 +780,31 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if run_config.shuffle != "tasks":
         try:
-            from rapidsmpf.config import Options
+            from rapidsmpf.config import Options, get_environment_variables
             from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
+            # get any RAPIDSMPF_ environment variables
+            options_map = get_environment_variables() | {
+                # following are dask specific options
+                "dask_print_statistics": str(args.rapidsmpf_print_statistics),
+                "dask_oom_protection": str(args.rapidsmpf_oom_protection),
+            }
+
+            # following options have a rapidsmpf equivalent. So, if run_config has set them, use them.
+            if run_config.spill_device > 0.0:
+                options_map["spill_device_limit"] = str(run_config.spill_device)
+            if run_config.spill_to_pinned_memory:
+                options_map["pinned_memory"] = str(run_config.spill_to_pinned_memory)
+            if args.rapidsmpf_dask_statistics:
+                options_map["statistics"] = str(args.rapidsmpf_dask_statistics)
+
+            # setting the stream pool is rather ambiguous. This will use br's default stream pool on each worker.
+            # number of streams is controlled by RAPIDSMPF_num_streams environment variable.
             bootstrap_dask_cluster(
                 client,
-                options=Options(
-                    {
-                        "dask_spill_device": str(run_config.spill_device),
-                        "dask_spill_to_pinned_memory": str(
-                            run_config.spill_to_pinned_memory
-                        ),
-                        "dask_statistics": str(args.rapidsmpf_dask_statistics),
-                        "dask_print_statistics": str(args.rapidsmpf_print_statistics),
-                        "dask_oom_protection": str(args.rapidsmpf_oom_protection),
-                    }
-                ),
+                options=Options(options_map),
             )
+
             # Setting this globally makes the peak statistics not meaningful
             # across queries / iterations. But doing it per query isn't worth
             # the effort right now.
@@ -1267,7 +1275,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=textwrap.dedent("""\
             Whether RapidsMPF should spill to pinned host memory when available,
             or use regular pageable host memory."""),
