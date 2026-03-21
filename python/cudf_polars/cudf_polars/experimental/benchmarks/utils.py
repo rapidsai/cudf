@@ -601,14 +601,19 @@ class RunConfig:
                 print(f"max time : {max(valid_durations):0.4f}")
                 print(f"mean time: {statistics.mean(valid_durations):0.4f}")
                 print("=======================================")
-        total_mean_time = sum(
-            statistics.mean(
-                record.duration for record in records if record.status == "success"
+        any_success = any(record.status == "success" for record in records)
+
+        if any_success:
+            total_mean_time = sum(
+                statistics.mean(
+                    record.duration for record in records if record.status == "success"
+                )
+                for records in self.records.values()
+                if records
             )
-            for records in self.records.values()
-            if records
-        )
-        print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+            print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+        else:
+            print("No successful queries")
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
