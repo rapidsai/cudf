@@ -112,6 +112,9 @@ class reprog {
   void set_groups_count(int32_t groups);
   [[nodiscard]] int32_t groups_count() const;
 
+  void set_has_lazy(bool v) { _has_lazy_quantifier = v; }
+  [[nodiscard]] bool has_lazy() const { return _has_lazy_quantifier; }
+
   [[nodiscard]] int32_t insts_count() const;
   [[nodiscard]] reinst& inst_at(int32_t id);
   [[nodiscard]] reinst const* insts_data() const;
@@ -139,6 +142,7 @@ class reprog {
   int32_t _startinst_id{};              // id of first instruction
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
   int32_t _num_capturing_groups{};
+  bool _has_lazy_quantifier{};
 
   reprog() = default;
   void collapse_nops();

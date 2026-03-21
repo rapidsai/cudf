@@ -19,8 +19,11 @@ static void bench_split(nvbench::state& state)
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const min_width = static_cast<cudf::size_type>(state.get_int64("min_width"));
   auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
+  auto const engine    = state.get_string("engine");
 
-  auto prog = cudf::strings::regex_program::create("\\d+");
+  auto flags = (engine == "glushkov") ? cudf::strings::regex_flags::GLUSHKOV
+                                      : cudf::strings::regex_flags::DEFAULT;
+  auto prog  = cudf::strings::regex_program::create("\\d+", flags);
 
   data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
@@ -42,4 +45,5 @@ NVBENCH_BENCH(bench_split)
   .set_name("split_re")
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152});
+  .add_int64_axis("num_rows", {32768, 262144, 2097152})
+  .add_string_axis("engine", {"thompson", "glushkov"});
