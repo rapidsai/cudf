@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -21,15 +21,17 @@ from cudf.testing import assert_eq
 @pytest.mark.parametrize("periods", (-5, -1, 0, 1, 5))
 def test_diff_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
-    pdf = gdf.to_pandas()
+    # Use arrow_type=True because that is the only case where we can guarantee that the
+    # same NaN/null representation will be used. Without it, pandas will fall back to
+    # object dtype for calling shift (called internally by diff) on boolean data.
+    pdf = gdf.to_pandas(arrow_type=True)
 
     actual = gdf.diff(periods=periods, axis=0)
     expected = pdf.diff(periods=periods, axis=0)
 
     assert_eq(
         expected,
-        actual,
-        check_dtype=False,
+        actual.to_pandas(arrow_type=True),
     )
 
 
