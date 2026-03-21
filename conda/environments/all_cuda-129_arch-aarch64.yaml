@@ -81,7 +81,6 @@ dependencies:
 - pytest-xdist
 - python-confluent-kafka
 - python-xxhash
-- python-zstd>=1.5.7.2
 - python>=3.11
 - pytorch>=2.4.0
 - rapids-build-backend>=0.4.0,<0.5.0
@@ -104,4 +103,5 @@ dependencies:
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - zstandard
+- zstandard>=0.25.0
 name: all_cuda-129_arch-aarch64

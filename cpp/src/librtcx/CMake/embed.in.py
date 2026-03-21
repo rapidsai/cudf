@@ -5,7 +5,7 @@ import os
 from typing import NamedTuple
 
 import lz4.block
-import zstd
+import zstandard
 
 
 def merge_bytes_with_null_terminators(
@@ -45,7 +45,7 @@ def compress_bytes(data: bytes, compression: str) -> bytes:
             data, mode="high_compression", compression=12, store_size=False
         )
     elif compression == "zstd":
-        return zstd.compress(data, 22)
+        return zstandard.compress(data, 22)
 
 
 def generate_cxx_source_files_data(
