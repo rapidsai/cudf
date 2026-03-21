@@ -192,8 +192,15 @@ void install_cudf_jit_files(std::string const& target_dir, std::string const& tm
 
   // rename the temporary directory to the target install directory
   if (rename(tmp_path, target_dir.c_str()) == -1) {
-    throw_posix(std::format("Failed to rename temporary JIT install directory to ({})", target_dir),
-                "rename");
+    auto errc = errno;
+    // another process created it
+    if (errc == ENOTEMPTY || errc == EEXIST) {
+      std::filesystem::remove_all(tmp_path);
+    } else {
+      throw_posix(
+        std::format("Failed to rename temporary JIT install directory to ({})", target_dir),
+        "rename");
+    }
   }
 }
 
@@ -308,15 +315,12 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   // TODO: experiment with:
   // --fdevice-time-trace=jit_comp_trace.json
   // --time=compile_trace.json
-  // -time
   // --restrict
   // --relocatable-device-code
   // --extensible-whole-program
-  // --device-debug
   // --use_fast_math
   // --dlink-time-opt
   // --gen-opt-lto
-  // --no-cache
   // --create-pch
   // --use-pch
   // --pch-dir
