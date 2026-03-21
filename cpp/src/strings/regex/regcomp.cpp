@@ -925,6 +925,7 @@ class regex_compiler {
           break;
         }
         case STAR_LAZY: {
+          _prog.set_has_lazy(true);
           auto const operand                        = pop_and();
           auto const id_inst1                       = _prog.add_inst(OR);
           auto const id_inst2                       = _prog.add_inst(NOP);
@@ -943,6 +944,7 @@ class regex_compiler {
           break;
         }
         case PLUS_LAZY: {
+          _prog.set_has_lazy(true);
           auto const operand                        = pop_and();
           auto const id_inst1                       = _prog.add_inst(OR);
           auto const id_inst2                       = _prog.add_inst(NOP);
@@ -963,6 +965,7 @@ class regex_compiler {
           break;
         }
         case QUEST_LAZY: {
+          _prog.set_has_lazy(true);
           auto const operand                        = pop_and();
           auto const id_inst1                       = _prog.add_inst(OR);
           auto const id_inst2                       = _prog.add_inst(NOP);
@@ -1071,6 +1074,7 @@ reprog reprog::create_from(std::string_view pattern,
   regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
+  // rtn.print(flags);
   return rtn;
 }
 

@@ -23,6 +23,10 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
+// Forward declaration so reprog_device::create() can reference the type without
+// pulling glushkov_regcomp.h (a host-only header) into device compilation units.
+struct glushkov_host_program;
+
 /**
  * @brief Template type used on `find` to specify desired position values in returned match_result
  */
@@ -56,6 +60,13 @@ struct alignas(16) reclass_device {
 
 class reprog;
 
+// Include Glushkov device program definitions here so that
+// glushkov_program_device is visible before reprog_device is declared.
+// This file is included inside the cudf::strings::detail namespace block,
+// so all declarations in glushkov.cuh land in that namespace.
+// NOTE: glushkov.cuh must NOT include regex.cuh (no circular dependency).
+#include "strings/regex/glushkov.cuh"
+
 /**
  * @brief Regex program of instructions/data for a specific regex pattern.
  *
@@ -68,7 +79,7 @@ class reprog;
  * Once the buffer is allocated, pass the device pointer to the `set_working_memory()`
  * member function.
  */
-class reprog_device {
+class alignas(16) reprog_device {
  public:
   reprog_device()                                = delete;
   ~reprog_device()                               = default;
@@ -86,6 +97,23 @@ class reprog_device {
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
     reprog const& prog, rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Create device program instance with an optional Glushkov NFA program.
+   *
+   * When @p h_glushkov is non-null the returned device program will dispatch
+   * find() to the bit-parallel Glushkov engine (zero working memory).
+   * extract() always uses the Thompson NFA engine.
+   *
+   * @param prog       The Thompson NFA regex program (always compiled)
+   * @param h_glushkov Optional Glushkov host program; pass nullptr to skip
+   * @param stream     CUDA stream used for device memory operations
+   * @return The program device object
+   */
+  static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
+    reprog const& prog,
+    glushkov_host_program const* h_glushkov,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().
@@ -261,7 +289,16 @@ class reprog_device {
   std::size_t _prog_size{};  // total size of this instance
   void* _buffer{};           // working memory buffer
   int32_t _thread_count{};   // threads available in working memory
+
+  // Optional Glushkov NFA program.  When non-null, find() dispatches to the
+  // Glushkov bit-parallel engine instead of the Thompson list-based engine.
+  // extract() always uses the Thompson engine (Glushkov does not track groups).
+  glushkov_program_device const* _glushkov{};
 };
+
+// Include Glushkov device functions after both reclass_device and
+// glushkov_program_device are fully defined.
+// (glushkov.inl opens and closes the cudf::strings::detail namespace itself.)
 
 /**
  * @brief Return the size in bytes needed for working memory to
@@ -301,4 +338,25 @@ __device__ __forceinline__ string_view string_from_match(match_pair const result
 }  // namespace strings
 }  // namespace cudf
 
+// is_newline is used by both glushkov.inl and regex.inl; define it once here
+// in the cudf::strings::detail namespace so both includes can reference it.
+namespace cudf {
+namespace strings {
+namespace detail {
+
+/**
+ * @brief Check for supported new-line characters
+ *
+ * '\n, \r, \u0085, \u2028, or \u2029'
+ */
+__host__ __device__ __forceinline__ constexpr bool is_newline(char32_t const ch)
+{
+  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
+}
+
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf
+
+#include "./glushkov.inl"
 #include "./regex.inl"

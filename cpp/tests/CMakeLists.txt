@@ -577,6 +577,7 @@ ConfigureTest(
   strings/combine/join_strings_tests.cpp
   strings/concatenate_tests.cpp
   strings/contains_tests.cpp
+  strings/glushkov_tests.cpp
   strings/datetime_tests.cpp
   strings/durations_tests.cpp
   strings/extract_tests.cpp
