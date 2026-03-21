@@ -4,7 +4,6 @@ import hashlib
 import os
 from typing import NamedTuple
 
-import lz4.block
 import zstandard
 
 
@@ -36,14 +35,12 @@ def load_file_bytes(file_path: str) -> bytes:
 
 
 def compress_bytes(data: bytes, compression: str) -> bytes:
-    assert compression in ("none", "lz4", "zstd"), "Invalid compression type"
+    assert compression in ("none", "zstd"), (
+        f"Invalid compression type: {compression}, expected 'none' or 'zstd'"
+    )
 
     if compression == "none":
         return data
-    elif compression == "lz4":
-        return lz4.block.compress(
-            data, mode="high_compression", compression=12, store_size=False
-        )
     elif compression == "zstd":
         return zstandard.compress(data, 22)
 

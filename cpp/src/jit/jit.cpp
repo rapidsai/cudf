@@ -14,7 +14,6 @@
 #include <fcntl.h>
 #include <jit/jit.hpp>
 #include <librtcx/rtcx.hpp>
-#include <lz4.h>
 #include <runtime/context.hpp>
 #include <sys/file.h>
 #include <sys/stat.h>
@@ -114,23 +113,12 @@ rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
                                   size_t uncompressed_size,
                                   std::string_view compression)
 {
-  CUDF_EXPECTS(compression == "none" || compression == "lz4" || compression == "zstd",
+  CUDF_EXPECTS(compression == "none" || compression == "zstd",
                +std::format("Unsupported compression type specified: {}", compression),
                std::runtime_error);
   auto decompressed = rtcx::byte_buffer::make(uncompressed_size);
 
-  if (compression == "lz4") {
-    int errc = LZ4_decompress_safe(reinterpret_cast<char const*>(compressed_binary.data()),
-                                   reinterpret_cast<char*>(decompressed.data()),
-                                   compressed_binary.size(),
-                                   uncompressed_size);
-
-    CUDF_EXPECTS(
-      errc == static_cast<int64_t>(uncompressed_size),
-      +std::format("Failed to decompress embedded RTC source files with LZ4, error code {}", errc),
-      std::runtime_error);
-
-  } else if (compression == "zstd") {
+  if (compression == "zstd") {
     size_t errc = ZSTD_decompress(
       decompressed.data(), uncompressed_size, compressed_binary.data(), compressed_binary.size());
 

@@ -308,9 +308,6 @@ include(src/librtcx/CMake/embed.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
-# find lz4
-include(cmake/thirdparty/get_lz4.cmake)
-
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
@@ -1027,17 +1024,8 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-          cuco::cuco
-          ZLIB::ZLIB
-          nvcomp::nvcomp
-          kvikio::kvikio
-          nanoarrow::nanoarrow
-          zstd
-          liblz4_static
-          CUDA::nvJitLink
-          CUDA::nvrtc
-          CUDA::cuda_driver
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+          kvikio::kvikio nanoarrow::nanoarrow zstd CUDA::nvJitLink CUDA::nvrtc CUDA::cuda_driver
 )
 
 # Add Conda library, and include paths if specified

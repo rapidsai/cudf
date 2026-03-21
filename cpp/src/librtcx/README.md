@@ -13,5 +13,4 @@ RTCX (runtime-compiler extended) is a wrapper around NVRTC and NVJitLink designe
 ## Build-Scripting Requirements
 - CMake
 - python 3
-- python-lz4
 - python-zstd

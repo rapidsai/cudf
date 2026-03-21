@@ -104,11 +104,8 @@ function(jit_embed)
     message(FATAL_ERROR "COMPRESSION argument is required")
   endif()
 
-  if(NOT ARG_COMPRESSION STREQUAL "none"
-     AND NOT ARG_COMPRESSION STREQUAL "lz4"
-     AND NOT ARG_COMPRESSION STREQUAL "zstd"
-  )
-    message(FATAL_ERROR "COMPRESSION argument must be either none, lz4, or, zstd")
+  if(NOT ARG_COMPRESSION STREQUAL "none" AND NOT ARG_COMPRESSION STREQUAL "zstd")
+    message(FATAL_ERROR "COMPRESSION argument must be either none or zstd")
   endif()
 
   if(NOT DEFINED jitembed_${TARGET}_incdir__source_files)
