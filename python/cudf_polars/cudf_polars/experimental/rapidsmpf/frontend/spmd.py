@@ -301,9 +301,9 @@ class SPMDEngine(StreamingEngine):
         """
         if self._exit_stack is None:
             return  # already shut down
+        assert self._py_executor is not None
         try:
-            # py_executor must stop before Context exits (no pending work after ctx exit)
-            self._py_executor.shutdown(wait=False)  # type: ignore[union-attr]
+            self._py_executor.shutdown(wait=False)
             self._exit_stack.close()  # exits Context and restores MR
         finally:
             self._comm = None
@@ -449,9 +449,7 @@ def spmd_execution(
     ...     result = (
     ...         df.lazy().group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
     ...     )
-    ...     full = allgather_polars_dataframe(
-    ...         comm=engine.comm, ctx=engine.context, local_df=result, op_id=0
-    ...     )
+    ...     full = allgather_polars_dataframe(engine=engine, local_df=result, op_id=0)
 
     Direct style (Jupyter / long-lived clusters):
 

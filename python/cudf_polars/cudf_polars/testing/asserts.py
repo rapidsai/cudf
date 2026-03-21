@@ -116,7 +116,7 @@ def assert_gpu_result_equal(
     got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
     # In multi-rank SPMD mode each rank holds only its local slice; gather the
     # full result on every rank so each rank can compare against the CPU result.
-    if getattr(engine, "nranks", 1) > 1:
+    if getattr(engine, "nranks", 1) > 1:  # pragma: no cover
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
             SPMDEngine,
             allgather_polars_dataframe,

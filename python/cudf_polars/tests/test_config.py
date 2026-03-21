@@ -30,10 +30,16 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.utils.config import (
     CUDAStreamPolicy,
     CUDAStreamPoolConfig,
+    Cluster,
     ConfigOptions,
     MemoryResourceConfig,
+    StreamingExecutor,
 )
-from cudf_polars.utils.cuda_stream import get_cuda_stream, get_new_cuda_stream
+from cudf_polars.utils.cuda_stream import (
+    get_cuda_stream,
+    get_dask_cuda_stream,
+    get_new_cuda_stream,
+)
 
 
 @pytest.fixture(params=[False, True], ids=["norapidsmpf.single", "rapidsmpf.single"])
@@ -1004,3 +1010,15 @@ def test_rapidsmpf_py_executor_max_workers_from_env(
         config = ConfigOptions.from_polars_engine(engine)
         assert config.executor.name == "streaming"
         assert config.executor.rapidsmpf_py_executor_max_workers == 8
+
+
+def test_distributed_sink_to_directory_false_raises() -> None:
+    with pytest.raises(
+        ValueError, match="The distributed cluster requires sink_to_directory=True"
+    ):
+        StreamingExecutor(cluster=Cluster.DISTRIBUTED, sink_to_directory=False)
+
+
+def test_get_dask_cuda_stream() -> None:
+    stream = get_dask_cuda_stream()
+    assert stream is not None
