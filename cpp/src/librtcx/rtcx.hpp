@@ -452,8 +452,15 @@ struct [[nodiscard]] kernel_ref {
 
   /**
    * @brief Retrieves the underlying CUDA kernel handle
+   * @return The CUDA kernel handle associated with this kernel reference
    */
   [[nodiscard]] CUkernel get() const { return handle_; }
+
+  /**
+   * @brief Retrieves the name of the kernel
+   * @return A string_view representing the name of the kernel
+   */
+  [[nodiscard]] std::string_view get_name() const;
 };
 
 /**

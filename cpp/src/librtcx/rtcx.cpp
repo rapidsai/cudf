@@ -222,6 +222,7 @@ sha256 sha256_context::finalize()
   DO_IT(LaunchKernelEx)                 \
   DO_IT(LaunchCooperativeKernel)        \
   DO_IT(KernelGetFunction)              \
+  DO_IT(KernelGetName)                  \
   DO_IT(LibraryLoadData)                \
   DO_IT(LibraryLoadFromFile)            \
   DO_IT(LibraryGetKernel)               \
@@ -775,6 +776,13 @@ void kernel_ref::launch_cooperative(cuda_dim3 grid_dim,
                                               kernel_params));
 }
 
+std::string_view kernel_ref::get_name() const
+{
+  char const* name;
+  RTCX_CHECK_CUDA(cu->KernelGetName(&name, handle_));
+  return std::string_view{name == nullptr ? "" : name};
+}
+
 library_t::~library_t()
 {
   if (handle_ != nullptr) {
@@ -1115,6 +1123,7 @@ void cache_blob_to_disk(std::string const& cache_dir,
                         std::span<std::uint8_t const> binary,
                         std::uint32_t limit)
 {
+  // TODO: add cuda driver and runtime version to log
   if (limit > 0) {
     auto tmp_path = std::format("{}/rtcx-bin-XXXXXX", tmp_dir);
     (void)tmp_path.c_str();  // to ensure null-termination for mkstemp
