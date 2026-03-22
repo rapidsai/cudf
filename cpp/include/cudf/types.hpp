@@ -361,7 +361,7 @@ class data_type {
  */
 constexpr bool operator==(data_type const& lhs, data_type const& rhs)
 {
-  // use std::tie in the future, breaks JITIFY currently
+  // use std::tie in the future, breaks NVRTC currently
   return lhs.id() == rhs.id() && lhs.scale() == rhs.scale();
 }
 

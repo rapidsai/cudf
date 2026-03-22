@@ -245,10 +245,6 @@ sha256 sha256_context::finalize()
   DO_IT(GetProgramLog)             \
   DO_IT(AddNameExpression)         \
   DO_IT(GetLoweredName)            \
-  DO_IT(GetPCHHeapSize)            \
-  DO_IT(SetPCHHeapSize)            \
-  DO_IT(GetPCHCreateStatus)        \
-  DO_IT(GetPCHHeapSizeRequired)    \
   DO_IT(SetFlowCallback)
 
 #define FOR_EACH_NVJITLINK_FUNC(DO_IT) \
