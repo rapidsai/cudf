@@ -233,9 +233,9 @@ class SPMDEngine(StreamingEngine):
         self._comm: Communicator | None = comm
         self._ctx: Context | None = ctx
         self._py_executor: ThreadPoolExecutor | None = py_executor
-        self._exit_stack: contextlib.ExitStack | None = exit_stack
         super().__init__(
             nranks=comm.nranks,
+            exit_stack=exit_stack,
             executor_options=executor_options,
             engine_options=engine_options,
         )
@@ -299,17 +299,14 @@ class SPMDEngine(StreamingEngine):
         Idempotent: safe to call more than once. Must be called on the same
         thread that created the engine.
         """
-        if self._exit_stack is None:
+        if self._ctx is None:
             return  # already shut down
-        assert self._py_executor is not None
         try:
-            self._py_executor.shutdown(wait=False)
-            self._exit_stack.close()  # exits Context and restores MR
+            self._py_executor.shutdown(wait=False)  # type: ignore[union-attr]
         finally:
             self._comm = None
             self._ctx = None
             self._py_executor = None
-            self._exit_stack = None
             super().shutdown()
 
 

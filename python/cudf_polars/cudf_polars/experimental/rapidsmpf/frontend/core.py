@@ -4,22 +4,51 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
 
+if TYPE_CHECKING:
+    import contextlib
+
 
 class StreamingEngine(pl.GPUEngine):
-    """Base class for multi-GPU Polars engines backed by a streaming executor."""
+    """
+    Base class for multi-GPU Polars engines backed by a streaming executor.
+
+    The engine manages the lifecycle of a streaming execution and can
+    be used as a context manager. On exit, :meth:`shutdown` is called.
+
+    Notes
+    -----
+    The engine must be created and shut down on the same thread. In particular,
+    destruction and context manager exit must occur on the thread that created
+    the instance.
+
+    Parameters
+    ----------
+    nranks
+        Number of ranks (workers or GPUs) in the cluster.
+    exit_stack
+        A :class:`contextlib.ExitStack` whose registered contexts are closed
+        when :meth:`shutdown` is called.
+    executor_options
+        Key/value options forwarded to the streaming executor.
+    engine_options
+        Additional keyword arguments forwarded to
+        :class:`~polars.lazyframe.engine_config.GPUEngine`.
+    """
 
     def __init__(
         self,
         *,
         nranks: int,
+        exit_stack: contextlib.ExitStack,
         executor_options: dict[str, object],
         engine_options: dict[str, Any],
     ):
         self._nranks = nranks
+        self._exit_stack: contextlib.ExitStack | None = exit_stack
         super().__init__(
             executor="streaming",
             executor_options=executor_options,
@@ -41,13 +70,20 @@ class StreamingEngine(pl.GPUEngine):
 
     def shutdown(self) -> None:
         """
-        Shut down engine.
+        Shut down engine and release all owned resources.
 
-        Must be called on the same thread that created the engine initially.
+        Idempotent: safe to call more than once. Must be called on the same
+        thread that created the engine.
         """
-        self.device = None
-        self.memory_resource = None
-        self.config = {}
+        if self._exit_stack is None:
+            return  # already shut down
+        try:
+            self._exit_stack.close()
+        finally:
+            self._exit_stack = None
+            self.device = None
+            self.memory_resource = None
+            self.config = {}
 
     def __enter__(self) -> Self:
         """Enter the context manager, returning ``self``."""
