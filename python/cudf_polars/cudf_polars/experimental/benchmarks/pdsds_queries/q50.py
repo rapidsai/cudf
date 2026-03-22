@@ -112,6 +112,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year = params["year"]
     month = params["month"]
 
+    # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
