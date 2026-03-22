@@ -13,8 +13,7 @@
 #include <cudf/utilities/error.hpp>
 #endif
 
-// This is defined when including this header in a https://github.com/NVIDIA/jitify
-// or jitify2 source file. The jitify cannot include thrust headers at this time.
+// This is defined when compiling with NVRTC. NVRTC cannot include thrust headers at this time.
 #if !defined(__CUDACC_RTC__)
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>

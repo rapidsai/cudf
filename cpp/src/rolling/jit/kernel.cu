@@ -112,7 +112,7 @@ CUDF_KERNEL void gpu_rolling_new(cudf::size_type nrows,
   }
 
   // TODO: likely faster to do a single_lane_block_reduce and a single
-  // atomic per block but that requires jitifying single_lane_block_reduce...
+  // atomic per block but that requires jit-compiling single_lane_block_reduce...
   if (0 == cudf::intra_word_index(threadIdx.x)) { atomicAdd(output_valid_count, warp_valid_count); }
 }
 
