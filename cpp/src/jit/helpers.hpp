@@ -11,9 +11,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <jit/cache.hpp>
+#include <jit/jit.hpp>
 #include <jit/span.cuh>
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 #include <algorithm>
 #include <span>
@@ -88,9 +87,10 @@ input_reflection reflect_input(std::variant<column_view, scalar_column_view> con
 std::vector<input_reflection> reflect_inputs(
   std::span<std::variant<column_view, scalar_column_view> const> inputs);
 
-jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
-                               std::string const& kernel_name,
-                               std::string const& cuda_source);
+kernel get_udf_kernel(std::string const& name,
+                      std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& udf_cuda_source);
 
 }  // namespace jit
 }  // namespace cudf

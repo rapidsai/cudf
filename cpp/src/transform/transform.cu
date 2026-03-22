@@ -17,13 +17,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <jit/cache.hpp>
 #include <jit/helpers.hpp>
+#include <jit/jit.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+#include <librtcx/rtcx.hpp>
 
 #include <span>
 #include <variant>
@@ -36,33 +36,32 @@ namespace transformation {
 namespace jit {
 namespace {
 
-jitify2::StringVec build_jit_template_params(null_aware is_null_aware,
-                                             bool may_evaluate_null,
-                                             bool has_user_data,
-                                             std::span<std::string const> span_outputs,
-                                             std::span<std::string const> column_outputs,
-                                             std::span<cudf::jit::input_reflection const> inputs)
+auto build_jit_template_params(null_aware is_null_aware,
+                               bool may_evaluate_null,
+                               bool has_user_data,
+                               std::span<std::string const> span_outputs,
+                               std::span<std::string const> column_outputs,
+                               std::span<cudf::jit::input_reflection const> inputs)
 {
-  jitify2::StringVec tparams;
-
-  tparams.emplace_back(jitify2::reflection::reflect(is_null_aware));
-  tparams.emplace_back(jitify2::reflection::reflect(may_evaluate_null));
-  tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
+  std::vector<std::string> tparams;
+  tparams.emplace_back(rtcx::reflect_enum("cudf::null_aware", is_null_aware));
+  tparams.emplace_back(rtcx::reflect_bool(may_evaluate_null));
+  tparams.emplace_back(rtcx::reflect_bool(has_user_data));
 
   std::transform(thrust::counting_iterator<size_t>(0),
                  thrust::counting_iterator(span_outputs.size()),
                  std::back_inserter(tparams),
                  [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::span_accessor")
-                     .instantiate(span_outputs[i], i);
+                   return rtcx::reflect_template(
+                     "cudf::jit::span_accessor", span_outputs[i], std::to_string(i));
                  });
 
   std::transform(thrust::counting_iterator<size_t>(0),
                  thrust::counting_iterator(column_outputs.size()),
                  std::back_inserter(tparams),
                  [&](auto i) {
-                   return jitify2::reflection::Template("cudf::jit::column_accessor")
-                     .instantiate(column_outputs[i], i);
+                   return rtcx::reflect_template(
+                     "cudf::jit::column_accessor", column_outputs[i], std::to_string(i));
                  });
 
   std::transform(thrust::counting_iterator<size_t>(0),
@@ -73,17 +72,16 @@ jitify2::StringVec build_jit_template_params(null_aware is_null_aware,
   return tparams;
 }
 
-jitify2::ConfiguredKernel build_transform_kernel(
-  std::string_view kernel_name,
-  std::span<mutable_column_view const> output_columns,
-  InputsView inputs,
-  null_aware is_null_aware,
-  bool may_evaluate_null,
-  bool has_user_data,
-  std::string const& udf,
-  cudf::udf_source_type source_type,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+kernel build_transform_kernel(std::string_view kernel_name,
+                              std::span<mutable_column_view const> output_columns,
+                              InputsView inputs,
+                              null_aware is_null_aware,
+                              bool may_evaluate_null,
+                              bool has_user_data,
+                              std::string const& udf,
+                              cudf::udf_source_type source_type,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr)
 {
   auto output_typenames  = cudf::jit::output_type_names(output_columns);
   auto input_typenames   = cudf::jit::input_type_names(inputs);
@@ -97,25 +95,27 @@ jitify2::ConfiguredKernel build_transform_kernel(
           cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
       : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto kernel_reflection =
-    jitify2::reflection::Template(kernel_name)
-      .instantiate(build_jit_template_params(
-        is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_reflections));
+  auto kernel_reflection = rtcx::reflect_template(
+    kernel_name,
+    build_jit_template_params(
+      is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_reflections));
 
-  return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
+  return cudf::jit::get_udf_kernel("cudf/cpp/src/transform/jit/kernel.cu",
+                                   "cudf/cpp/src/transform/jit/kernel.cu",
+                                   kernel_reflection,
+                                   cuda_source);
 }
 
-jitify2::ConfiguredKernel build_span_kernel(std::string_view kernel_name,
-                                            std::span<std::string const> span_outputs,
-                                            InputsView inputs,
-                                            null_aware is_null_aware,
-                                            bool may_evaluate_null,
-                                            bool has_user_data,
-                                            std::string const& udf,
-                                            cudf::udf_source_type source_type,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::device_async_resource_ref mr)
+kernel build_span_kernel(std::string_view kernel_name,
+                         std::span<std::string const> span_outputs,
+                         InputsView inputs,
+                         null_aware is_null_aware,
+                         bool may_evaluate_null,
+                         bool has_user_data,
+                         std::string const& udf,
+                         cudf::udf_source_type source_type,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   auto output_typenames  = span_outputs;
@@ -130,13 +130,15 @@ jitify2::ConfiguredKernel build_span_kernel(std::string_view kernel_name,
           cudf::jit::build_ptx_params(output_typenames, input_typenames, has_user_data))
       : cudf::jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto kernel_reflection =
-    jitify2::reflection::Template(kernel_name)
-      .instantiate(build_jit_template_params(
-        is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, input_reflections));
+  auto kernel_reflection = rtcx::reflect_template(
+    kernel_name,
+    build_jit_template_params(
+      is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, input_reflections));
 
-  return cudf::jit::get_udf_kernel(*transform_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value());
+  return cudf::jit::get_udf_kernel("cudf/cpp/src/transform/jit/kernel.cu",
+                                   "cudf/cpp/src/transform/jit/kernel.cu",
+                                   kernel_reflection,
+                                   cuda_source);
 }
 
 column_view to_column_view(column_view const& col) { return col; }
@@ -164,7 +166,7 @@ auto to_device_output_arg(std::span<mutable_column_view const> outputs,
     outputs, stream, mr);
 }
 
-void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
+void launch_column_output_kernel(kernel const& kernel,
                                  std::span<mutable_column_view const> output_columns,
                                  InputsView inputs,
                                  std::optional<bool*> intermediate_null_mask,
@@ -180,13 +182,14 @@ void launch_column_output_kernel(jitify2::ConfiguredKernel& kernel,
   bool* p_intermediate_null_mask              = intermediate_null_mask.value_or(nullptr);
   void* p_user_data                           = user_data.value_or(nullptr);
 
-  std::array<void*, 4> args{&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
+  void* args[] = {&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
 
-  kernel->launch_raw(args.data());
+  auto cfg = kernel.max_occupancy_config(0, 0);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 template <typename T>
-void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
+void launch_span_kernel(kernel const& kernel,
                         cudf::jit::device_optional_span<T> const& output,
                         InputsView inputs,
                         std::optional<bool*> intermediate_null_mask,
@@ -203,9 +206,11 @@ void launch_span_kernel(jitify2::ConfiguredKernel& kernel,
   bool* p_intermediate_null_mask                      = intermediate_null_mask.value_or(nullptr);
   void* p_user_data                                   = user_data.value_or(nullptr);
 
-  std::array<void*, 4> args{&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
+  void* args[] = {&p_outputs, &p_inputs, &p_intermediate_null_mask, &p_user_data};
 
-  kernel->launch_raw(args.data());
+  auto kernel_ref = kernel.get();
+  auto cfg        = kernel_ref.max_occupancy_config(0, 0);
+  kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 std::tuple<rmm::device_buffer, size_type> and_null_mask(size_type row_size,

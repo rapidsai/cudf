@@ -7,7 +7,9 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 
-#include <jit/cache.hpp>
+#include <jit/jit.hpp>
+#include <librtcx/rtcx.hpp>
+#include <runtime/context.hpp>
 
 namespace cudf {
 namespace jit {
@@ -55,10 +57,9 @@ size_type get_projection_size(std::span<std::variant<column_view, scalar_column_
 std::string input_reflection::accessor(int32_t index) const
 {
   auto column_accessor =
-    jitify2::reflection::Template("cudf::jit::column_accessor").instantiate(type_name, index);
+    rtcx::reflect_template("cudf::jit::column_accessor", type_name, rtcx::reflect_int(index));
 
-  return is_scalar ? jitify2::reflection::Template("cudf::jit::scalar_accessor")
-                       .instantiate(column_accessor)
+  return is_scalar ? rtcx::reflect_template("cudf::jit::scalar_accessor", column_accessor)
                    : column_accessor;
 }
 
@@ -71,7 +72,7 @@ std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> ou
 
   if (has_user_data) {
     params.emplace(index++, "void *");
-    params.emplace(index++, jitify2::reflection::reflect<cudf::size_type>());
+    params.emplace(index++, "cudf::size_type");
   }
 
   for (auto& name : output_typenames) {
@@ -132,23 +133,30 @@ std::vector<input_reflection> reflect_inputs(
   return reflections;
 }
 
-jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
-                               std::string const& kernel_name,
-                               std::string const& cuda_source)
+kernel get_udf_kernel(std::string const& name,
+                      std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& udf_cuda_source)
 {
   CUDF_FUNC_RANGE();
 
-  int runtime_version;
-  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
+  char const* include_names[]   = {"cudf/detail/operation-udf.hpp"};
+  char const* include_headers[] = {udf_cuda_source.c_str()};
+
   int constexpr min_pch_runtime_version = 12800;  // CUDA 12.8
 
-  std::vector<std::string> options;
-  options.emplace_back("-arch=sm_.");
+  int runtime_version;
+  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
 
-  if (runtime_version >= min_pch_runtime_version) { options.emplace_back("-pch"); }
-
-  return cudf::jit::get_program_cache(preprocessed_program_data)
-    .get_kernel(kernel_name, {}, {{"cudf/detail/operation-udf.hpp", cuda_source}}, options);
+  return get_kernel(name,
+                    source_file,
+                    include_names,
+                    include_headers,
+                    kernel_name,
+                    true,  // TODO: use context config
+                    runtime_version >= min_pch_runtime_version,
+                    false  // TODO: use context config
+  );
 }
 
 }  // namespace jit

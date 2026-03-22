@@ -46,6 +46,7 @@ dependencies:
 - libnvjitlink-dev
 - librdkafka>=2.8.0,<2.9.0
 - librmm==26.6.*,>=0.0.0a0
+- lz4>=4.4.5
 - make
 - mmh3
 - moto>=4.0.8
@@ -102,4 +103,5 @@ dependencies:
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - zstandard
+- zstandard>=0.25.0
 name: all_cuda-129_arch-aarch64
