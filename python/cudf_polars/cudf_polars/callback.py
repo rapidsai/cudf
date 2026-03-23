@@ -321,7 +321,7 @@ def _callback(
                 raise NotImplementedError(msg)
 
             return evaluate_streaming(ir, config_options)
-        assert_never(config_options.executor)  # pragma: no cover
+        assert_never(config_options.executor)
 
 
 def execute_with_cudf(

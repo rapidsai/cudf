@@ -956,7 +956,7 @@ def _(
             len(by_exprs),
             *children,
         )
-    assert_never(node.options)  # pragma: no cover
+    assert_never(node.options)
 
 
 @_translate_expr.register
