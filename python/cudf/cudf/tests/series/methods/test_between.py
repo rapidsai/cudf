@@ -61,4 +61,4 @@ def test_series_between_with_null(data, dtype, left, right, inclusive):
     expected = ps.between(left, right, inclusive=inclusive)
     actual = gs.between(left, right, inclusive=inclusive)
 
-    assert_eq(expected, actual.to_pandas())
+    assert_eq(expected, actual)
