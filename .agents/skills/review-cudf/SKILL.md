@@ -79,7 +79,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Use `cudf::detail::bitmask_and` to combine null masks.
 - Use `rmm::device_buffer{0, stream, mr}` (or `rmm::device_buffer{0, stream}` when no MR is available), not a null pointer, when constructing a non-nullable column.
 - Strings columns may use a two-phase approach via `make_strings_children`.
-- Use `cudf::strings::detail::make_offsets_child_column` for strings; use `cudf::detail::make_offsets_child_column` for non-strings lists.
+- Use `cudf::strings::detail::make_offsets_child_column` for strings; use `cudf::detail::make_offsets_child_column` for lists.
 - Use `cudf::detail::offsetalator_factory::make_input_iterator` for type-erased offset access supporting both INT32 and INT64 offsets.
 - Use `cudf::detail::make_counting_transform_iterator` instead of `thrust::make_transform_iterator(thrust::counting_iterator(0), fn)`.
 - For strings columns, pass `.parent()` to `column_device_view::create`.
