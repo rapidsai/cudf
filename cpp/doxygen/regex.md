@@ -136,6 +136,9 @@ The [cudf::strings::regex_flags::IGNORECASE](@ref cudf::strings::regex_flags) ca
 to a limited extent. Only those characters supported by the C++ STL [`std::tolower`](https://en.cppreference.com/w/cpp/locale/tolower.html)
 and [`std::toupper`](https://en.cppreference.com/w/cpp/locale/toupper.html)
 when used with [`std::locale`](https://en.cppreference.com/w/cpp/locale/locale.html) with locale name`C.UTF-8` are supported.
-Fo example, this feature does not include matching characters which have multiple character counterparts.
+For example, this feature does not include matching characters which have multiple character counterparts.
+
+Character classes (defined by `[]`) have the further restriction that any range of characters are expected to map appropriately between
+lower case and upper case ranges. For example the range `[a-z]` would also try to match characters in `[A-Z]` when the `IGNORECASE` is specified.
 
 The inline `(?i...)` ignore case format pattern is not supported.
