@@ -21,11 +21,15 @@ from cudf.pandas.fast_slow_proxy import (
 )
 
 
-# Ensure a type that one test registers does not propogate to other tests
-@pytest.fixture
-def temp_get_final_type_map(monkeypatch):
+@pytest.fixture(autouse=True)
+def ensure_temp_proxy_maps(monkeypatch):
+    # Ensure these tests do not pollute the global, cached final/intermediate type maps
     @cache
     def mock_get_final_type_map():
+        return {}
+
+    @cache
+    def mock_get_intermediate_type_map():
         return {}
 
     with monkeypatch.context() as m:
@@ -34,28 +38,18 @@ def temp_get_final_type_map(monkeypatch):
             "get_final_type_map",
             mock_get_final_type_map,
         )
-        yield
-    mock_get_final_type_map.cache_clear()
-
-
-@pytest.fixture
-def temp_get_intermediate_type_map(monkeypatch):
-    @cache
-    def mock_get_intermediate_type_map():
-        return {}
-
-    with monkeypatch.context() as m:
         m.setattr(
             cudf.pandas.fast_slow_proxy,
             "get_intermediate_type_map",
             mock_get_intermediate_type_map,
         )
         yield
+    mock_get_final_type_map.cache_clear()
     mock_get_intermediate_type_map.cache_clear()
 
 
 @pytest.fixture
-def final_proxy(temp_get_final_type_map):
+def final_proxy():
     class Fast:
         def __init__(self, x):
             self.x = x
@@ -110,7 +104,7 @@ def function_proxy():
     return fast_func, slow_func, _FunctionProxy(fast_func, slow_func)
 
 
-def test_repr_no_fast_object(temp_get_final_type_map):
+def test_repr_no_fast_object():
     # test that __repr__ falls back to slow object
     # when we don't have a corresponding fast object:
     class Slow:
@@ -267,7 +261,7 @@ def test_function_proxy_doc(function_proxy):
     assert pxy.__doc__ == slow.__doc__
 
 
-def test_special_methods(temp_get_final_type_map):
+def test_special_methods():
     class Fast:
         def __abs__(self):
             pass
@@ -351,8 +345,6 @@ def slow_and_intermediate_with_doc():
 def test_doc(
     fast_and_intermediate_with_doc,
     slow_and_intermediate_with_doc,
-    temp_get_final_type_map,
-    temp_get_intermediate_type_map,
 ):
     Fast, FastIntermediate = fast_and_intermediate_with_doc
     Slow, SlowIntermediate = slow_and_intermediate_with_doc
@@ -388,8 +380,6 @@ def test_doc(
 def test_dir(
     fast_and_intermediate_with_doc,
     slow_and_intermediate_with_doc,
-    temp_get_final_type_map,
-    temp_get_intermediate_type_map,
 ):
     Fast, FastIntermediate = fast_and_intermediate_with_doc
     Slow, SlowIntermediate = slow_and_intermediate_with_doc
@@ -429,8 +419,6 @@ def test_dir_bound_method(
     fast_and_intermediate_with_doc,
     slow_and_intermediate_with_doc,
     check,
-    temp_get_final_type_map,
-    temp_get_intermediate_type_map,
 ):
     """This test will fail because dir for bound methods is currently
     incorrect, but we have no way to fix it without materializing the slow
@@ -455,7 +443,7 @@ def test_dir_bound_method(
     assert check(Pxy, Slow)
 
 
-def test_proxy_binop(temp_get_final_type_map):
+def test_proxy_binop():
     class Foo:
         pass
 
@@ -490,7 +478,7 @@ def test_proxy_binop(temp_get_final_type_map):
     assert BarProxy() + FooProxy() == "sum"
 
 
-def test_slow_attr_still_proxy(temp_get_final_type_map):
+def test_slow_attr_still_proxy():
     class A:
         pass
 
