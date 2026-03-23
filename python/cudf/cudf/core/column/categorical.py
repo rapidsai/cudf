@@ -339,7 +339,10 @@ class CategoricalColumn(ColumnBase):
             "Categorical 'ordered' attribute must be set to convert to Arrow"
         )
         categories = self.categories.to_arrow()
-        # Match pandas: empty categories become null type
+        # Match pandas/pyarrow: pa.Array.from_pandas(pd.Categorical([]))
+        # produces dictionary<values=null, ...>, but cudf's empty categories
+        # column converts to arrow as string type. Use null type so that
+        # arrow-level equality (e.g. pa.Array.equals) matches pandas output.
         if len(categories) == 0 and not pa.types.is_null(categories.type):
             categories = pa.array([], type=pa.null())
 

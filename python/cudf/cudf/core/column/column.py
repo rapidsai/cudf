@@ -522,7 +522,7 @@ class MaskCAIWrapper:
         )
 
 
-def _handle_nulls(arrow_array: pa.Array, _nested: bool = False) -> pa.Array:
+def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
     # Recursively replace all-null nested arrays with arrow NullArrays and make all
     # types nullable in the schema even if the columns contain no nulls
     array_type = arrow_array.type
@@ -543,7 +543,7 @@ def _handle_nulls(arrow_array: pa.Array, _nested: bool = False) -> pa.Array:
     is_string_type = pa.types.is_string(
         array_type
     ) or pa.types.is_large_string(array_type)
-    if is_all_null and (is_nested_type or (_nested and is_string_type)):
+    if is_all_null and (is_nested_type or (nested and is_string_type)):
         return pa.NullArray.from_buffers(
             pa.null(), len(arrow_array), [pa.py_buffer(b"")]
         )
@@ -561,7 +561,7 @@ def _handle_nulls(arrow_array: pa.Array, _nested: bool = False) -> pa.Array:
                 or pa.types.is_string(field_type)
                 or pa.types.is_large_string(field_type)
             ):
-                new_field_array = _handle_nulls(field_array, _nested=True)
+                new_field_array = _handle_nulls(field_array, nested=True)
             new_fields.append(new_field_array)
             # Reconstruct if we replaced nulls in children or need nullability change
             requires_reconstruction = (
@@ -591,7 +591,7 @@ def _handle_nulls(arrow_array: pa.Array, _nested: bool = False) -> pa.Array:
         arrow_array = cast("pa.ListArray", arrow_array)
 
         values = arrow_array.values
-        new_values = _handle_nulls(values, _nested=True)
+        new_values = _handle_nulls(values, nested=True)
 
         value_field = array_type.value_field
         has_non_nullable_field = (
