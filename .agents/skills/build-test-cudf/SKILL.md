@@ -32,6 +32,26 @@ For incremental builds, you can also just navigate to `cpp/build/latest` and run
 ninja
 ```
 
+#### CMake options
+
+Both `build-cudf-cpp` and `configure-cudf-cpp` accept CMake `-D` options directly as arguments. Alternatively, CMake options can be passed via the `CMAKE_ARGS` environment variable. See `cpp/CMakeLists.txt` for a full list of available CMake options
+
+
+```bash
+# Default option
+build-cudf-cpp -j0 -DBUILD_BENCHMARKS=ON
+# Multiple options can be combined
+build-cudf-cpp -j0 -DBUILD_BENCHMARKS=ON -DBUILD_TESTS=OFF
+# Alternate option
+CMAKE_ARGS="-DBUILD_BENCHMARKS=ON" build-cudf-cpp -j0
+```
+
+Similarly, configure without building:
+
+```bash
+configure-cudf-cpp -DBUILD_BENCHMARKS=ON
+```
+
 ### Building python wheel wrapper
 
 ```bash
