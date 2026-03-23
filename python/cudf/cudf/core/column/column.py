@@ -434,16 +434,6 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
                     f"got {child.type().id()}."
                 )
             children = [_rebuild_column(child, [], wrap_buffers=True)]
-    # elif isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
-    #     dtype.pyarrow_dtype
-    # ):
-    #     return _wrap_and_validate(
-    #         plc.Column.from_scalar(
-    #             plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
-    #             col.size(),
-    #         ),
-    #         np.dtype("object"),
-    #     )
     elif is_dtype_obj_decimal(dtype):
         valid_types = {
             plc.TypeId.DECIMAL128,
