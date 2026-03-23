@@ -369,10 +369,16 @@ class StringColumn(ColumnBase, Scannable):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if isinstance(self.dtype, pd.StringDtype) and self.dtype.storage in [
-            "pyarrow",
-            "python",
-        ]:
+        if (
+            not nullable
+            and not arrow_type
+            and isinstance(self.dtype, pd.StringDtype)
+            and self.dtype.storage
+            in [
+                "pyarrow",
+                "python",
+            ]
+        ):
             if self.dtype.storage == "pyarrow":
                 pa_array = self.to_arrow()
                 pa_array = pa_array.cast(pa.large_string())
