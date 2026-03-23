@@ -176,7 +176,7 @@ void build_shift_masks(glushkov_host_program& gp)
   for (uint32_t p = 0; p < gp.num_states; ++p) {
     g_state_t follow = gp.follow_table[p];
     while (follow) {
-      uint32_t const q = static_cast<uint32_t>(__builtin_ctzll(static_cast<long long>(follow)));
+      uint32_t const q = static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(follow)));
       follow &= follow - 1;
 
       int32_t const span = static_cast<int32_t>(q) - static_cast<int32_t>(p);
@@ -214,7 +214,7 @@ void build_shift_masks(glushkov_host_program& gp)
     g_state_t src   = span_list[i].second;
     int32_t const s = span_list[i].first;
     while (src) {
-      uint32_t const p = static_cast<uint32_t>(__builtin_ctzll(static_cast<long long>(src)));
+      uint32_t const p = static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(src)));
       src &= src - 1;
       uint32_t const q = static_cast<uint32_t>(static_cast<int32_t>(p) + s);
       gp.exception_mask |= g_state_t(1) << p;

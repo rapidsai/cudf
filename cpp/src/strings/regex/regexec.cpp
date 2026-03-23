@@ -69,11 +69,6 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   uint32_t const num_shifts = h_gp.shift_count;
   int32_t const classes_cnt = static_cast<int32_t>(h_gp.classes.size());
 
-  // Helper: advance cumulative offset to the required alignment.
-  auto align_up = [](std::size_t off, std::size_t align) {
-    return (off + align - 1) & ~(align - 1);
-  };
-
   // ---- Compute cumulative section offsets from buffer start ---------------
   // This ensures each section's ABSOLUTE address (buf_base + offset) satisfies
   // its alignment requirement regardless of sizeof(glushkov_program_device).
@@ -84,17 +79,12 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   off += sizeof(glushkov_program_device);
 
   // _positions: 4-byte aligned (int32_t / char32_t fields)
-  off = align_up(off, alignof(glushkov_position));
+  off = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
   std::size_t const pos_off = off;
   off += num_states * sizeof(glushkov_position);
 
-  // _follow_table: 8-byte aligned (uint64_t)
-  off = align_up(off, alignof(g_state_t));
-  std::size_t const follow_off = off;
-  off += num_states * sizeof(g_state_t);
-
   // _shift_masks: 8-byte aligned
-  off = align_up(off, alignof(g_state_t));
+  off = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const smasks_off = off;
   off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t);
 
@@ -103,24 +93,24 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t);
 
   // _reach_ascii: 8-byte aligned (128 × g_state_t = 1 KB)
-  off = align_up(off, alignof(g_state_t));
+  off = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const reach_ascii_off = off;
   off += 128 * sizeof(g_state_t);
 
   // _exception_succs: 8-byte aligned
-  off = align_up(off, alignof(g_state_t));
+  off = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const exc_off = off;
   off += num_states * sizeof(g_state_t);
 
   // _classes: 16-byte aligned (reclass_device is alignas(16))
-  off = align_up(off, alignof(reclass_device));
+  off = cudf::util::round_up_unsafe(off, alignof(reclass_device));
   std::size_t const cls_off = off;
   std::size_t cls_size = static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
   for (auto const& cls : h_gp.classes) {
     cls_size += cls.literals.size() * sizeof(reclass_range);
   }
   off += cls_size;
-  off = align_up(off, sizeof(char32_t));
+  off = cudf::util::round_up_unsafe(off, sizeof(char32_t));
 
   std::size_t const total = off;
 
@@ -151,10 +141,6 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   for (uint32_t i = 0; i < num_states; ++i) {
     pos_arr[i] = {h_gp.pos_inst_type[i], h_gp.pos_ch[i], h_gp.pos_cls_idx[i]};
   }
-
-  // ---- _follow_table -------------------------------------------------------
-  h_gp_dev->_follow_table = reinterpret_cast<g_state_t const*>(d_base + follow_off);
-  std::memcpy(h_base + follow_off, h_gp.follow_table.data(), num_states * sizeof(g_state_t));
 
   // ---- _shift_masks --------------------------------------------------------
   h_gp_dev->_shift_masks = reinterpret_cast<g_state_t const*>(d_base + smasks_off);

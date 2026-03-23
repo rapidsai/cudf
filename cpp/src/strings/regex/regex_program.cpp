@@ -5,7 +5,6 @@
 
 #include "regex_program_impl.h"
 #include "glushkov_regcomp.h"
-#include "regex_program_impl.h"
 
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/regex/regex_program.hpp>
