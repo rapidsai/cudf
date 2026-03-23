@@ -240,7 +240,7 @@ def test_mean_partitioned(values: list[int | None]) -> None:
     )
 
 
-def test_groupby_literal_with_stats_planning(df):
+def test_groupby_literal_key(df):
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
@@ -248,7 +248,6 @@ def test_groupby_literal_with_stats_planning(df):
             "max_rows_per_partition": 4,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "stats_planning": {"use_reduction_planning": True},
         },
     )
 
