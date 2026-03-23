@@ -335,10 +335,14 @@ class CategoricalColumn(ColumnBase):
             if self.size > 0
             else np.dtype(np.int8)
         )
+        assert self.ordered is not None, (
+            "Categorical 'ordered' attribute must be set to convert to Arrow"
+        )
         categories = self.categories.to_arrow()
         # Match pandas: empty categories become null type
         if len(categories) == 0 and not pa.types.is_null(categories.type):
             categories = pa.array([], type=pa.null())
+
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             categories,
