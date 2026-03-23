@@ -1916,14 +1916,14 @@ class IndexedFrame(Frame):
         0     1.0
         1     2.0
         2     NaN
-        3    <NA>
+        3     NaN
         4    10.0
         dtype: float64
         >>> series.nans_to_nulls()
         0     1.0
         1     2.0
-        2    <NA>
-        3    <NA>
+        2     NaN
+        3     NaN
         4    10.0
         dtype: float64
 
@@ -1934,14 +1934,14 @@ class IndexedFrame(Frame):
         >>> df['b'] = cudf.Series([None, 3.14, np.nan], nan_as_null=False)
         >>> df
               a     b
-        0   1.0  <NA>
-        1  <NA>  3.14
-        2   NaN   NaN
+        0  1.0   NaN
+        1  NaN  3.14
+        2  NaN   NaN
         >>> df.nans_to_nulls()
               a     b
-        0   1.0  <NA>
-        1  <NA>  3.14
-        2  <NA>  <NA>
+        0  1.0   NaN
+        1  NaN  3.14
+        2  NaN   NaN
         """
         return super().nans_to_nulls()
 
@@ -4432,10 +4432,12 @@ class IndexedFrame(Frame):
                 index_names=self.index.names if keep_index else None,
             )
 
-    def _pandas_repr_compatible(self) -> Self:
+    def _pandas_repr_compatible(self, nan_rep=None) -> Self:
         """Return Self but with columns prepared for a pandas-like repr."""
-        result = super()._pandas_repr_compatible()
-        result.index = self.index._pandas_repr_compatible()
+        if self.size == 0 and nan_rep is None:
+            nan_rep = "nan"
+        result = super()._pandas_repr_compatible(nan_rep=nan_rep)
+        result.index = self.index._pandas_repr_compatible(nan_rep=nan_rep)
         return result
 
     def take(self, indices, axis=0):
@@ -5693,7 +5695,7 @@ class IndexedFrame(Frame):
                 b     NaN
                 c     NaN
                 d     0.0
-                e    <NA>
+                e     NaN
                 dtype: float64
                 """
             ),
@@ -5734,7 +5736,7 @@ class IndexedFrame(Frame):
                 b     0.0
                 c     0.0
                 d     NaN
-                e    <NA>
+                e     NaN
                 dtype: float64
                 """
             ),
@@ -5857,7 +5859,7 @@ class IndexedFrame(Frame):
                 b     Inf
                 c     Inf
                 d     0.0
-                e    <NA>
+                e     NaN
                 dtype: float64
                 """
             ),
@@ -5898,7 +5900,7 @@ class IndexedFrame(Frame):
                 b     0.0
                 c     0.0
                 d     Inf
-                e    <NA>
+                e     NaN
                 dtype: float64
                 """
             ),
@@ -5928,18 +5930,18 @@ class IndexedFrame(Frame):
             ser_op_example=textwrap.dedent(
                 """
                 >>> a.truediv(b)
-                a     1.0
-                b    <NA>
-                c    <NA>
-                d    <NA>
-                e    <NA>
+                a    1.0
+                b    NaN
+                c    NaN
+                d    NaN
+                e    NaN
                 dtype: float64
                 >>> a.truediv(b, fill_value=0)
-                a     1.0
-                b     Inf
-                c     Inf
-                d     0.0
-                e    <NA>
+                a    1.0
+                b    Inf
+                c    Inf
+                d    0.0
+                e    NaN
                 dtype: float64
                 """
             ),
@@ -5973,18 +5975,18 @@ class IndexedFrame(Frame):
             ser_op_example=textwrap.dedent(
                 """
                 >>> a.rtruediv(b)
-                a     1.0
-                b    <NA>
-                c    <NA>
-                d    <NA>
-                e    <NA>
+                a    1.0
+                b    NaN
+                c    NaN
+                d    NaN
+                e    NaN
                 dtype: float64
                 >>> a.rtruediv(b, fill_value=0)
-                a     1.0
-                b     0.0
-                c     0.0
-                d     Inf
-                e    <NA>
+                a    1.0
+                b    0.0
+                c    0.0
+                d    Inf
+                e    NaN
                 dtype: float64
                 """
             ),

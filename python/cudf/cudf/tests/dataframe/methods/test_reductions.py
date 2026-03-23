@@ -343,7 +343,7 @@ def test_dataframe_reductions(request, data, axis, func, skipna):
                 RuntimeWarning,
             ):
                 got = getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs)
-            assert_eq(got, expect, check_dtype=False)
+            assert_eq(got, expect)
 
 
 @pytest.mark.parametrize(

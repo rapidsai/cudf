@@ -350,9 +350,9 @@ def test_categorical_dataframe_with_nan_repr():
           a
     0   1.0
     1   2.0
-    2   NaN
+    2  <NA>
     3  10.0
-    4   NaN
+    4  <NA>
     5  <NA>
     """
     )

@@ -812,14 +812,15 @@ Examples
 ...     json_str = df.to_json(orient='records', lines=True)
 >>> json_str
 '{"a":"hello","b":"hello"}\n{"a":"rapids","b":"worlds"}\n'
->>> cudf.read_json(json_str,  engine="cudf", lines=True)
+>>> from io import StringIO
+>>> cudf.read_json(StringIO(json_str),  engine="cudf", lines=True)
         a       b
 0   hello   hello
 1  rapids  worlds
 
 To read the strings with additional set of quotes:
 
->>> cudf.read_json(json_str,  engine="cudf", lines=True,
+>>> cudf.read_json(StringIO(json_str),  engine="cudf", lines=True,
 ...                keep_quotes=True)
           a         b
 0   "hello"   "hello"
@@ -828,7 +829,7 @@ To read the strings with additional set of quotes:
 Reading JSON Lines data containing ordered lists and name/value pairs:
 
 >>> json_str = '{"a": [{"k1": "v1"}]}\n{"a": [{"k1":"v2"}]}'
->>> cudf.read_json(json_str, engine='cudf', lines=True)
+>>> cudf.read_json(StringIO(json_str), engine='cudf', lines=True)
                 a
 0  [{'k1': 'v1'}]
 1  [{'k1': 'v2'}]
@@ -836,7 +837,7 @@ Reading JSON Lines data containing ordered lists and name/value pairs:
 Using the `dtype` argument to specify type casting:
 
 >>> json_str = '{"k1": 1, "k2":[1.5]}'
->>> cudf.read_json(json_str, engine='cudf', lines=True, dtype={'k1':float, 'k2':cudf.ListDtype(int)})
+>>> cudf.read_json(StringIO(json_str), engine='cudf', lines=True, dtype={'k1':float, 'k2':cudf.ListDtype(int)})
     k1   k2
 0  1.0  [1]
 """

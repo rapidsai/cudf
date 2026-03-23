@@ -158,7 +158,7 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
         return np.dtype("datetime64[s]")
     elif pa.types.is_null(typ):
         # Similar to PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY]
-        return np.dtype(np.int8)
+        return np.dtype("object")
     elif isinstance(typ, ArrowIntervalType):
         return cudf.IntervalDtype.from_arrow(typ)
     else:
@@ -256,11 +256,6 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
-        rhs.dtype == "object" and lhs.dtype != "object"
-    )
-    if res:
-        return res
     return (
         cudf.api.types.is_string_dtype(lhs.dtype)
         and not cudf.api.types.is_string_dtype(rhs.dtype)
@@ -595,6 +590,36 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
         return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
 
 
+def is_arrow_null_dtype(dtype: DtypeObj) -> bool:
+    """Check if dtype is a pandas ArrowDtype wrapping pa.null()."""
+    return isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+        dtype.pyarrow_dtype
+    )
+
+
+def maybe_normalize_arrow_null(
+    col: plc.Column, dtype: DtypeObj
+) -> tuple[plc.Column, DtypeObj, DtypeObj | None]:
+    """Normalize ArrowDtype(pa.null()) columns for internal construction.
+
+    For pandas nullable null types (ArrowDtype wrapping pa.null()),
+    the column data is normalized and the dtype is replaced with
+    ``np.dtype("object")`` for internal dispatch. The original dtype
+    is returned as ``old_dtype`` so it can be stored on the column.
+
+    Returns
+    -------
+    tuple of (col, dtype, old_dtype)
+        ``old_dtype`` is the original dtype if normalization occurred,
+        otherwise ``None``.
+    """
+    from cudf.core.column.column import _normalize_types_column
+
+    if is_arrow_null_dtype(dtype):
+        return _normalize_types_column(col), np.dtype("object"), dtype
+    return col, dtype, None
+
+
 SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
     np.dtype("int8"): plc.types.TypeId.INT8,
     np.dtype("int16"): plc.types.TypeId.INT16,
@@ -623,9 +648,9 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     for np_type, plc_type in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES.items()
 }
 # There's no equivalent to EMPTY in cudf.  We translate EMPTY
-# columns from libcudf to ``int8`` columns of all nulls in Python.
-# ``int8`` is chosen because it uses the least amount of memory.
-PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("int8")
+# columns from libcudf to ``object`` columns of all nulls in Python.
+# ``object`` is chosen to match pandas behavior.
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("object")
 # TIMESTAMP_DAYS is converted to TIMESTAMP_SECONDS to match the default resolution
 # choice used by pandas for datetime.date objects.
 PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.TIMESTAMP_DAYS] = np.dtype(

@@ -25,7 +25,6 @@ from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column.utils import access_columns
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dtype.validators import (
-    is_dtype_obj_numeric,
     is_dtype_obj_string,
 )
 from cudf.core.frame import Frame
@@ -42,7 +41,6 @@ from cudf.utils.dtypes import (
     SIZE_TYPE_DTYPE,
     dtype_from_pylibcudf_column,
     is_column_like,
-    is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
@@ -216,24 +214,26 @@ class MultiIndex(Index):
                     # Now we can gather and insert null automatically
                     code[code == -1] = np.iinfo(SIZE_TYPE_DTYPE).min
             result_col = level._column.take(code, nullify=True)
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and nan_as_null is False
-                and not is_dtype_obj_numeric(result_col.dtype)
-                and not is_pandas_nullable_extension_dtype(level.dtype)
-                and result_col.has_nulls(include_nan=False)
-            ):
-                raise MixedTypeError(
-                    "MultiIndex levels cannot have mixed types when `mode.pandas_compatible` is True and `nan_as_null` is False."
-                )
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and not is_dtype_obj_numeric(result_col.dtype)
-                and result_col.has_nulls(include_nan=False)
-                and nan_as_null is False
-                and not is_pandas_nullable_extension_dtype(level.dtype)
-            ):
-                result_col = result_col.fillna(np.nan)
+            # TODO: Pandas-3.0: Investigate with pandas test suite and remove
+            # the following checks if they are obsolete now.
+            # if (
+            #     cudf.get_option("mode.pandas_compatible")
+            #     and nan_as_null is False
+            #     and not is_dtype_obj_numeric(result_col.dtype)
+            #     and not is_pandas_nullable_extension_dtype(level.dtype)
+            #     and result_col.has_nulls(include_nan=False)
+            # ):
+            #     raise MixedTypeError(
+            #         "MultiIndex levels cannot have mixed types when `mode.pandas_compatible` is True and `nan_as_null` is False."
+            #     )
+            # if (
+            #     cudf.get_option("mode.pandas_compatible")
+            #     and not is_dtype_obj_numeric(result_col.dtype)
+            #     and result_col.has_nulls(include_nan=False)
+            #     and nan_as_null is False
+            #     and not is_pandas_nullable_extension_dtype(level.dtype)
+            # ):
+            #     result_col = result_col.fillna(np.nan)
             source_data[i] = ColumnBase.create(
                 result_col.plc_column, level.dtype
             )

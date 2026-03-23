@@ -511,6 +511,7 @@ def test_dataframe_append_to_empty():
 
     gdf = cudf.DataFrame()
     gdf["a"] = []
+    gdf["a"] = gdf["a"].astype("str")
     gdf["b"] = [1, 2, 3]
 
     assert_eq(gdf, pdf)

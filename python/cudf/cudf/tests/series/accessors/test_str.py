@@ -204,8 +204,7 @@ def test_string_get_json_object_empty_json_strings(json_path):
     )
 
     got = gs.str.get_json_object(json_path)
-    expect = cudf.Series([None], dtype="object")
-
+    expect = cudf.Series([None], dtype="str")
     assert_eq(got, expect)
 
 
@@ -281,13 +280,13 @@ def test_string_get_json_object_allow_single_quotes():
         gs.str.get_json_object(
             "$.store.book[0].author", allow_single_quotes=False
         ),
-        cudf.Series([None]),
+        cudf.Series([None], dtype="str"),
     )
     assert_eq(
         gs.str.get_json_object(
             "$.store.book[*].title", allow_single_quotes=False
         ),
-        cudf.Series([None]),
+        cudf.Series([None], dtype="str"),
     )
 
 
@@ -381,7 +380,7 @@ def test_string_get_json_object_missing_fields_as_nulls():
         gs.str.get_json_object(
             "$.store.book[0].category", missing_fields_as_nulls=False
         ),
-        cudf.Series([None]),
+        cudf.Series([None], dtype="str"),
     )
     assert_eq(
         gs.str.get_json_object(

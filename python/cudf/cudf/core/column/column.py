@@ -88,6 +88,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
+    maybe_normalize_arrow_null,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
     pyarrow_dtype_to_cudf_dtype,
@@ -344,11 +345,9 @@ def _normalize_types_column(col: plc.Column) -> plc.Column:
         return plc.unary.cast(col, plc.DataType(plc.TypeId.TIMESTAMP_SECONDS))
 
     if type_id == plc.TypeId.EMPTY:
-        plc_dtype = plc.DataType(plc.TypeId.INT8)
-        if col.size() == 0:
-            return plc.column_factories.make_empty_column(plc_dtype)
-        return plc.column_factories.make_numeric_column(
-            plc_dtype, col.size(), plc.types.MaskState.ALL_NULL
+        return plc.Column.from_scalar(
+            plc.Scalar.from_py(None, plc.DataType(plc.TypeId.STRING)),
+            col.size(),
         )
 
     normalized_children = [
@@ -377,6 +376,14 @@ def _wrap_and_validate(col: plc.Column, dtype: DtypeObj) -> plc.Column:
             f"dtype {dtype} is a numpy Unicode dtype. "
             "Normalize to np.dtype('O') before calling "
             "ColumnBase.create."
+        )
+    if isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+        dtype.pyarrow_dtype
+    ):
+        raise ValueError(
+            f"dtype {dtype} is a pandas nullable string dtype with all nulls. "
+            "Normalize to an empty string column with the same pandas StringDtype "
+            "before calling ColumnBase.create."
         )
 
     dtype_kind = dtype.kind
@@ -949,11 +956,15 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         like copy-on-write. When validation is disabled, the caller is responsible for
         ensuring that col and its children are already normalized and wrapped.
         """
+        # For pandas nullable null types (ArrowDtype wrapping pa.null()),
+        # normalize the column data and dtype before construction.
+        col, dtype, old_dtype = maybe_normalize_arrow_null(col, dtype)
+
         # Dispatch to the appropriate subclass based on dtype
         target_cls = ColumnBase._dispatch_subclass_from_dtype(dtype)
         self = target_cls.__new__(target_cls)
         self.plc_column = _wrap_and_validate(col, dtype) if validate else col
-        self._dtype = dtype
+        self._dtype = dtype if old_dtype is None else old_dtype
         self._distinct_count = {}
         self._has_nulls = {}
         # The set of exposed buffers associated with this column. These buffers must be
@@ -1111,18 +1122,22 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             f"dtype: {self.dtype}"
         )
 
-    def _prep_pandas_compat_repr(self) -> StringColumn | Self:
+    def _prep_pandas_compat_repr(
+        self, nan_rep: str | None = None
+    ) -> StringColumn | Self:
         """
         Preprocess Column to be compatible with pandas repr, namely handling nulls.
 
         * null (datetime/timedelta) = str(pd.NaT)
         * null (other types)= str(pd.NA)
         """
+        if nan_rep is None:
+            nan_rep = "NaN"
         if self.has_nulls():
             return cast(
                 "cudf.core.column.StringColumn",
-                self.astype(np.dtype("object")).fillna(
-                    "NaN"
+                self.astype(np.dtype("str")).fillna(
+                    nan_rep
                     if self._PANDAS_NA_VALUE is np.nan
                     else str(self._PANDAS_NA_VALUE)
                 ),
@@ -2340,10 +2355,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             # Compute categories from self
             cats = self.unique().sort_values()
-            codes = self._label_encoding(cats=cats)
             # Only dropna if cats actually has nulls (self having nulls doesn't mean cats does)
             if cats.has_nulls():
                 cats = cats.dropna()
+            codes = self._label_encoding(cats=cats)
             dtype = CategoricalDtype(categories=cats, ordered=dtype.ordered)
         codes_with_mask = codes.set_mask(self.mask, self.null_count)
         codes_with_mask = codes_with_mask.copy_if_else(
@@ -3298,6 +3313,8 @@ def as_column(
             column = column.astype(dtype)
         return column
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        if isinstance(arbitrary, pa.NullArray) and dtype is None:
+            dtype = np.dtype("object")
         column = ColumnBase.from_arrow(arbitrary)
         if nan_as_null is not False:
             column = column.nans_to_nulls()
@@ -3468,10 +3485,11 @@ def as_column(
                     pa.types.is_list(pyarrow_array.type)
                     or pa.types.is_struct(pyarrow_array.type)
                     or pa.types.is_string(pyarrow_array.type)
+                    or pa.types.is_null(pyarrow_array.type)
                 )
             ):
                 raise MixedTypeError("Cannot create column with mixed types")
-            if inferred_dtype == "string" and dtype is None:
+            if inferred_dtype in {"string", "empty"} and dtype is None:
                 dtype = arbitrary.dtype
             return as_column(
                 pyarrow_array,

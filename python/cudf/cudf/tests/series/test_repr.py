@@ -34,7 +34,9 @@ def test_null_series(nrows, all_supported_types_as_str, request):
         ps = sr.to_pandas()
 
     with pd.option_context("display.max_rows", int(nrows)):
-        psrepr = repr(ps).replace("NaN", "<NA>")
+        psrepr = repr(ps)
+        if "category" in psrepr:
+            psrepr = psrepr.replace("NaN", "<NA>")
         if "UInt" in psrepr:
             psrepr = psrepr.replace("UInt", "uint")
         elif "Int" in psrepr:
@@ -263,25 +265,24 @@ def test_categorical_series_with_nan_repr():
         """
     0     1.0
     1     2.0
-    2     NaN
+    2    <NA>
     3    10.0
-    4     NaN
+    4    <NA>
     5    <NA>
     dtype: category
-    Categories (4, float64): [1.0, 2.0, 10.0, NaN]
+    Categories (3, float64): [1.0, 2.0, 10.0]
     """
     )
-
     assert repr(series).split() == expected_repr.split()
 
     sliced_expected_repr = textwrap.dedent(
         """
-        2     NaN
+        2    <NA>
         3    10.0
-        4     NaN
+        4    <NA>
         5    <NA>
         dtype: category
-        Categories (4, float64): [1.0, 2.0, 10.0, NaN]
+        Categories (3, float64): [1.0, 2.0, 10.0]
         """
     )
 

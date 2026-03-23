@@ -520,6 +520,8 @@ class Series(SingleColumnFrame, IndexedFrame):
         name_from_data = None
         if data is None:
             data = {}
+            if dtype is None and index is not None:
+                dtype = np.dtype("float64")
         if dtype is not None:
             dtype = cudf.dtype(dtype)
         attrs = None
@@ -1340,22 +1342,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             show_dimensions = pd.get_option("display.show_dimensions")
             preprocess = preprocess.copy(deep=False)
             preprocess.index = preprocess.index._pandas_repr_compatible()
-            if preprocess.dtype.categories.dtype.kind == "f":
-                pd_series = (
-                    preprocess.astype(DEFAULT_STRING_DTYPE)
-                    .to_pandas()
-                    .astype(
-                        dtype=pd.CategoricalDtype(
-                            categories=preprocess.dtype.categories.astype(
-                                DEFAULT_STRING_DTYPE
-                            ).to_pandas(),
-                            ordered=preprocess.dtype.ordered,
-                        )
-                    )
-                )
-            else:
-                pd_series = preprocess.to_pandas()
-            output = pd_series.to_string(
+            output = preprocess.to_pandas().to_string(
                 name=self.name,
                 dtype=self.dtype,
                 min_rows=min_rows,
@@ -1369,15 +1356,6 @@ class Series(SingleColumnFrame, IndexedFrame):
         lines = output.split("\n")
         if isinstance(preprocess.dtype, CategoricalDtype):
             category_memory = lines[-1]
-            if preprocess.dtype.categories.dtype.kind == "f":
-                category_memory = category_memory.replace("'", "").split(": ")
-                category_memory = (
-                    category_memory[0].replace(
-                        "object", preprocess.dtype.categories.dtype.name
-                    )
-                    + ": "
-                    + category_memory[1]
-                )
             lines = lines[:-1]
         if len(lines) > 1:
             if lines[-1].startswith("Name: "):
@@ -2585,7 +2563,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         ...     return x + 1.5
         >>> sr.apply(f)
         0     2.5
-        1    <NA>
+        1     NaN
         2     4.5
         dtype: float64
 
@@ -3127,7 +3105,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3     3.0
         4     3.0
         5     3.0
-        6    <NA>
+        6     NaN
         dtype: float64
         >>> sr.value_counts()
         3.0    3
@@ -3160,16 +3138,16 @@ class Series(SingleColumnFrame, IndexedFrame):
         1     2.0
         2     2.0
         3     3.0
-        4    <NA>
+        4     NaN
         5     3.0
         6     3.0
-        7    <NA>
+        7     NaN
         dtype: float64
         >>> sr.value_counts(dropna=False).sort_index()
         1.0     1
         2.0     2
         3.0     3
-        <NA>    2
+        NaN     2
         Name: count, dtype: int64
 
         >>> s = cudf.Series([3, 1, 2, 3, 4, np.nan])

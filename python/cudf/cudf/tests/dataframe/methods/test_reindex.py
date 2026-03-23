@@ -151,10 +151,10 @@ def test_reindex_multiindex_col_to_multiindex(names, klass):
     gdf = cudf.from_pandas(df)
     midx = klass.from_tuples([("A", "one"), ("A", "three")], names=names)
     result = gdf.reindex(columns=midx)
-    expected = cudf.DataFrame([[1, None]], columns=midx)
-    # (pandas2.0): check_dtype=False won't be needed
-    # as None col will return object instead of float
-    assert_eq(result, expected, check_dtype=False)
+    expected = gdf.to_pandas().reindex(
+        columns=midx.to_pandas() if isinstance(midx, cudf.MultiIndex) else midx
+    )
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("names", [None, ["a", "b"]])

@@ -604,6 +604,8 @@ class DatetimeColumn(TemporalBaseColumn):
                     format = format.split(" ")[0]
             elif not (has_seconds or has_minutes or has_hours):
                 format = format.split(" ")[0]
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         return self.strftime(format, dtype)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:

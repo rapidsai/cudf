@@ -512,12 +512,7 @@ def test_series_init_scalar_with_index(data, index):
     pandas_series = pd.Series(data, index=index)
     cudf_series = cudf.Series(data, index=index)
 
-    assert_eq(
-        pandas_series,
-        cudf_series,
-        check_index_type=data is not None or index is not None,
-        check_dtype=data is not None,
-    )
+    assert_eq(pandas_series, cudf_series)
 
 
 @pytest.mark.parametrize(
@@ -798,9 +793,8 @@ def test_series_all_valid_nan(num_elements):
 def test_series_empty_dtype():
     expected = pd.Series([])
     actual = cudf.Series([])
-    assert expected.dtype == object
-    assert actual.dtype == pd.StringDtype(na_value=np.nan)
-    assert_eq(expected, actual, check_dtype=False)
+    assert expected.dtype == actual.dtype
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("data", [None, {}, []])
@@ -1203,6 +1197,8 @@ def test_series_np_array_all_nan_object_raises():
 def test_roundtrip_series_plc_column(ps):
     expect = cudf.Series(ps)
     actual = cudf.Series.from_pylibcudf(*expect.to_pylibcudf())
+    if expect.dtype == "object":
+        actual = actual.astype("object")
     assert_eq(expect, actual)
 
 

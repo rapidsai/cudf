@@ -1565,7 +1565,10 @@ def test_delta_struct_list(tmp_path, delta_num_rows, add_nulls, str_encoding):
     )
     cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
     # string columns can result in StringDtype vs object with nulls
-    assert_eq(cdf2, cdf, check_dtype=not add_nulls)
+    if delta_num_rows == 1:
+        assert_eq(cdf2, cdf.to_pandas(arrow_type=True), check_dtype=False)
+    else:
+        assert_eq(cdf2, cdf, check_dtype=not add_nulls)
 
 
 @pytest.mark.parametrize(
