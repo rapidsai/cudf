@@ -55,7 +55,6 @@ from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
 )
-from cudf.core.frame import Frame
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
@@ -1481,7 +1480,7 @@ class Index(SingleColumnFrame):
             if ret._column.has_nulls():
                 ret = ret.fillna(op == "__ne__")
 
-            if not isinstance(other, Frame):
+            if isinstance(ret, Index):
                 return ret.values
         return ret
 
