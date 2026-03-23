@@ -70,13 +70,13 @@ class mark_join {
   /**
    * @brief Constructs a mark join object by building a hash table from the build table.
    *
-   * This preserved overload keeps the historical API and uses
-   * `cudf::join_prefilter::NO` by default.
+   * @deprecated Use the overload accepting `cudf::join_prefilter` instead.
    *
    * @param build The build table (typically the left table)
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
+  [[deprecated("Use the overload accepting cudf::join_prefilter instead")]]
   mark_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls = null_equality::EQUAL,
             rmm::cuda_stream_view stream      = cudf::get_default_stream());
@@ -97,14 +97,14 @@ class mark_join {
   /**
    * @brief Constructs a mark join object with a specified load factor.
    *
-   * This preserved overload keeps the historical API and uses
-   * `cudf::join_prefilter::NO` by default.
+   * @deprecated Use the overload accepting `cudf::join_prefilter` instead.
    *
    * @param build The build table (typically the left table)
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param load_factor Hash table load factor in range (0,1]
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
+  [[deprecated("Use the overload accepting cudf::join_prefilter instead")]]
   mark_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
             double load_factor,
