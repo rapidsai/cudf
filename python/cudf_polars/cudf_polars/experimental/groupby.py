@@ -186,7 +186,6 @@ def _(
         return rec(Slice(ir.schema, offset, length, new_join))
 
     # Extract child partitioning
-    original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
 
     config_options = rec.state["config_options"]
@@ -242,7 +241,6 @@ def _(
             child.schema,
             ir.keys,
             config_options.executor.shuffle_method,
-            config_options.executor.shuffler_insertion_method,
             child,
         )
         partition_info[child] = PartitionInfo(
@@ -265,8 +263,6 @@ def _(
     if unique_fraction_dict := _get_unique_fractions(
         groupby_key_columns,
         config_options.executor.unique_fraction,
-        row_count=rec.state["stats"].row_count.get(original_child),
-        column_stats=rec.state["stats"].column_stats.get(original_child),
     ):
         # Use unique_fraction to determine output partitioning
         unique_fraction = max(unique_fraction_dict.values())
@@ -306,7 +302,6 @@ def _(
             gb_pwise.schema,
             grouped_keys,
             config_options.executor.shuffle_method,
-            config_options.executor.shuffler_insertion_method,
             gb_pwise,
         )
         partition_info[gb_inter] = PartitionInfo(count=post_aggregation_count)
