@@ -16,7 +16,10 @@ from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import ColumnStat, PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
-from cudf_polars.experimental.expressions import decompose_expr_graph
+from cudf_polars.experimental.expressions import (
+    decompose_expr_graph,
+    make_expr_decomposer,
+)
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
@@ -133,16 +136,20 @@ def decompose_select(
     name_generator = unique_names(
         (*(ne.name for ne in select_ir.exprs), *input_ir.schema.keys())
     )
+    # Share one decomposer across all NamedExprs so structurally identical
+    # sub-expressions (e.g. CSE'd aggregations) are computed only once.
+    shared_mapper = make_expr_decomposer(
+        input_ir,
+        partition_info,
+        config_options,
+        stats.row_count.get(select_ir.children[0], ColumnStat[int](None)),
+        stats.column_stats.get(select_ir.children[0], {}),
+        name_generator,
+    )
     for ne in select_ir.exprs:
         # Decompose this partial expression
         new_ne, partial_input_ir, _partition_info = decompose_expr_graph(
-            ne,
-            input_ir,
-            partition_info,
-            config_options,
-            stats.row_count.get(select_ir.children[0], ColumnStat[int](None)),
-            stats.column_stats.get(select_ir.children[0], {}),
-            name_generator,
+            ne, mapper=shared_mapper
         )
         pi = _partition_info[partial_input_ir]
         partial_input_ir = Select(
@@ -253,24 +260,52 @@ def _fuse_simple_reductions(
             reduction_groups[select_c].append(select_c)
 
     new_decomposed_select_irs: list[IR] = []
+    # Schemas already projected to final output names (used for already_computed below).
+    already_projected: Schema = {}
     for root_ir, group in reduction_groups.items():
         if len(group) > 1:
-            # Fuse simple-aggregation group
+            # When all members share the same select_b (produced by a shared
+            # CachingVisitor), the reduction is already computed once. Just
+            # combine their select_c exprs into a single node referencing the
+            # shared select_b rather than building a new fused chain.
+            first_select_b = group[0].children[0]
+            if all(s.children[0] is first_select_b for s in group[1:]):
+                combined_schema: Schema = {}
+                combined_exprs: list[expr.NamedExpr] = []
+                for s in group:
+                    combined_schema |= s.schema
+                    combined_exprs.extend(s.exprs)
+                shared_select_c = Select(
+                    combined_schema,
+                    combined_exprs,
+                    True,  # noqa: FBT003
+                    first_select_b,
+                )
+                pi[shared_select_c] = pi[first_select_b]
+                new_decomposed_select_irs.append(shared_select_c)
+                already_projected |= combined_schema
+                continue
+
+            # Fuse simple-aggregation group (distinct select_b nodes)
             fused_select_b_exprs = []
             fused_select_a_exprs = []
             fused_select_b_schema: Schema = {}
             fused_select_a_schema: Schema = {}
+            seen_select_a_ids: set[int] = set()
             for select_c in group:
                 select_b = select_c.children[0]
                 assert isinstance(select_b, Select), (
                     f"Expected Select, got {type(select_b)}"
                 )
-                fused_select_b_exprs.extend(list(select_b.exprs))
-                fused_select_b_schema |= select_b.schema
                 select_a = select_b.children[0].children[0]
                 assert isinstance(select_a, Select), (
                     f"Expected Select, got {type(select_a)}"
                 )
+                if id(select_a) in seen_select_a_ids:
+                    continue  # shared by CachingVisitor — already contributed
+                seen_select_a_ids.add(id(select_a))
+                fused_select_b_exprs.extend(list(select_b.exprs))
+                fused_select_b_schema |= select_b.schema
                 fused_select_a_exprs.extend(list(select_a.exprs))
                 fused_select_a_schema |= select_a.schema
             fused_select_a = Select(
@@ -317,6 +352,8 @@ def _fuse_simple_reductions(
         for group in reduction_groups.values():
             if len(group) == 1:
                 already_computed |= group[0].schema
+        # Also include outputs from the "already shared" path above.
+        already_computed |= already_projected
 
         final_exprs = [
             expr.NamedExpr(ne.name, Col(already_computed[ne.name], ne.name))
