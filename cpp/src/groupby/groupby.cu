@@ -272,7 +272,7 @@ groupby::groups groupby::get_groups(table_view values,
     auto grouped_values = cudf::detail::gather(values,
                                                helper().key_sort_order(stream),
                                                cudf::out_of_bounds_policy::DONT_CHECK,
-                                               cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                               cudf::negative_index_policy::NOT_ALLOWED,
                                                stream,
                                                mr);
     return groupby::groups{
