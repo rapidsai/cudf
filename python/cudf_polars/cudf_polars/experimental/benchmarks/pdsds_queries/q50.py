@@ -145,8 +145,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            store_returns
-            .join(d2, left_on="sr_returned_date_sk", right_on="d_date_sk")
+            store_returns.join(d2, left_on="sr_returned_date_sk", right_on="d_date_sk")
             .join(
                 store_sales,
                 left_on=["sr_ticket_number", "sr_item_sk", "sr_customer_sk"],
