@@ -292,7 +292,7 @@ def build_channel_result(  # noqa: D103
     year: int,
     moy: int,
     dom: int,
-    average_sales: pl.LazyFrame,
+    average_sales_threshold: float,
 ) -> pl.LazyFrame:
     # DuckDB uses d_week_seq to filter, which includes all days in the target week.
     # Find the d_week_seq for the specific date, then join on that week.
@@ -317,8 +317,7 @@ def build_channel_result(  # noqa: D103
                 pl.len().alias("number_sales"),
             ]
         )
-        .join(average_sales, how="cross")
-        .filter(pl.col("sales") > pl.col("average_sales"))
+        .filter(pl.col("sales") > average_sales_threshold)
         .with_columns(pl.lit(channel_label).alias("channel"))
         .select(
             [
@@ -390,6 +389,43 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # Polars does not CSE cross_items or average_sales across 3 separate channel
+    # build_channel_result calls — each branch re-scans the source tables.  Fix:
+    # union all 3 channels to a common schema first so that cross_items and
+    # average_sales each appear exactly ONCE in the query plan.  Polars CACHE nodes
+    # then work correctly in both single-GPU and distributed (per-worker) modes.
+    all_sales = pl.concat(
+        [
+            store_sales.select(
+                [
+                    pl.lit("store").alias("channel"),
+                    pl.col("ss_item_sk").alias("item_sk"),
+                    pl.col("ss_quantity").alias("quantity"),
+                    pl.col("ss_list_price").alias("list_price"),
+                    pl.col("ss_sold_date_sk").alias("date_sk"),
+                ]
+            ),
+            catalog_sales.select(
+                [
+                    pl.lit("catalog").alias("channel"),
+                    pl.col("cs_item_sk").alias("item_sk"),
+                    pl.col("cs_quantity").alias("quantity"),
+                    pl.col("cs_list_price").alias("list_price"),
+                    pl.col("cs_sold_date_sk").alias("date_sk"),
+                ]
+            ),
+            web_sales.select(
+                [
+                    pl.lit("web").alias("channel"),
+                    pl.col("ws_item_sk").alias("item_sk"),
+                    pl.col("ws_quantity").alias("quantity"),
+                    pl.col("ws_list_price").alias("list_price"),
+                    pl.col("ws_sold_date_sk").alias("date_sk"),
+                ]
+            ),
+        ]
+    )
+
     cross_items = build_cross_items(
         store_sales, catalog_sales, web_sales, item, date_dim, year=year
     )
@@ -397,53 +433,39 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         store_sales, catalog_sales, web_sales, date_dim, year=year
     )
 
-    y_store = build_channel_result(
-        store_sales,
-        item,
-        date_dim,
-        cross_items,
-        item_key="ss_item_sk",
-        date_key="ss_sold_date_sk",
-        qty_col="ss_quantity",
-        price_col="ss_list_price",
-        channel_label="store",
-        year=year + 1,
-        moy=12,
-        dom=day,
-        average_sales=average_sales,
+    # d_week_seq target is the same for all 3 channels; compute it once.
+    target_week = (
+        date_dim.filter(
+            (pl.col("d_year") == year + 1)
+            & (pl.col("d_moy") == 12)
+            & (pl.col("d_dom") == day)
+        )
+        .select("d_week_seq")
+        .unique()
     )
-    y_catalog = build_channel_result(
-        catalog_sales,
-        item,
-        date_dim,
-        cross_items,
-        item_key="cs_item_sk",
-        date_key="cs_sold_date_sk",
-        qty_col="cs_quantity",
-        price_col="cs_list_price",
-        channel_label="catalog",
-        year=year + 1,
-        moy=12,
-        dom=day,
-        average_sales=average_sales,
-    )
-    y_web = build_channel_result(
-        web_sales,
-        item,
-        date_dim,
-        cross_items,
-        item_key="ws_item_sk",
-        date_key="ws_sold_date_sk",
-        qty_col="ws_quantity",
-        price_col="ws_list_price",
-        channel_label="web",
-        year=year + 1,
-        moy=12,
-        dom=day,
-        average_sales=average_sales,
-    )
+    week_dates = date_dim.join(target_week, on="d_week_seq").select("d_date_sk")
 
-    y = pl.concat([y_store, y_catalog, y_web])
+    # Build y: all 3 channels in a single pipeline.
+    # cross_items and average_sales each appear once — no CSE needed.
+    # After group_by the frame is tiny, so the cross join with the 1-row
+    # average_sales frame is negligible even if Polars fuses it into an IEJoin.
+    y = (
+        all_sales.join(cross_items, left_on="item_sk", right_on="ss_item_sk")
+        .join(item, left_on="item_sk", right_on="i_item_sk")
+        .join(week_dates, left_on="date_sk", right_on="d_date_sk")
+        .group_by(["channel", "i_brand_id", "i_class_id", "i_category_id"])
+        .agg(
+            [
+                (pl.col("quantity") * pl.col("list_price")).sum().alias("sales"),
+                pl.len().alias("number_sales"),
+            ]
+        )
+        .join(average_sales, how="cross")
+        .filter(pl.col("sales") > pl.col("average_sales"))
+        .select(
+            ["channel", "i_brand_id", "i_class_id", "i_category_id", "sales", "number_sales"]
+        )
+    )
 
     level1 = rollup_level(y, ["channel", "i_brand_id", "i_class_id", "i_category_id"])
     level2 = rollup_level(y, ["channel", "i_brand_id", "i_class_id"])
