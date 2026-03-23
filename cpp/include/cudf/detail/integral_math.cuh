@@ -10,7 +10,7 @@
 namespace cudf::detail {
 
 /**
- * @brief Integer exponentiation via binary exponentiation.
+ * @brief Integral exponentiation via binary exponentiation.
  *
  * Returns `base` raised to the power `exp`. Negative exponents yield zero
  * (integer truncation toward zero). The result type is always `Base`.
@@ -22,7 +22,7 @@ namespace cudf::detail {
  * @return Result of `base` to the power of `exp` of type `Base`
  */
 template <typename Base, typename Exp>
-__device__ inline constexpr auto int_pow(Base base, Exp exp) -> Base
+__device__ inline constexpr auto integral_pow(Base base, Exp exp) -> Base
   requires(cuda::std::is_integral_v<Base> and cuda::std::is_integral_v<Exp>)
 {
   if constexpr (cuda::std::is_signed_v<Exp>) {
@@ -48,7 +48,7 @@ __device__ inline constexpr auto int_pow(Base base, Exp exp) -> Base
 }
 
 /**
- * @brief Integer floor division.
+ * @brief Integral floor division.
  *
  * For signed types this is Euclidean-style: the quotient is rounded toward
  * negative infinity (matching Python's `//` semantics). For unsigned types
@@ -62,7 +62,7 @@ __device__ inline constexpr auto int_pow(Base base, Exp exp) -> Base
  * @return Result of integer floor division of `lhs` by `rhs` of type `Common`
  */
 template <typename LHS, typename RHS, typename Common = cuda::std::common_type_t<LHS, RHS>>
-__device__ inline constexpr auto int_floor_div(LHS lhs, RHS rhs) -> Common
+__device__ inline constexpr auto integral_floor_div(LHS lhs, RHS rhs) -> Common
   requires(cuda::std::is_integral_v<Common>)
 {
   if constexpr (cuda::std::is_signed_v<Common>) {

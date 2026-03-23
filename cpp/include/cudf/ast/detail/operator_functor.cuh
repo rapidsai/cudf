@@ -6,7 +6,7 @@
 
 #include <cudf/ast/ast_operator.hpp>
 #include <cudf/ast/detail/possibly_null.cuh>
-#include <cudf/detail/integer_math.cuh>
+#include <cudf/detail/integral_math.cuh>
 #include <cudf/fixed_point/conv.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -98,7 +98,7 @@ struct operator_functor<ast_operator::FLOOR_DIV, false> {
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
     requires(cuda::std::is_integral_v<CommonType>)
   {
-    return cudf::detail::int_floor_div(lhs, rhs);
+    return cudf::detail::integral_floor_div(lhs, rhs);
   }
 
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
@@ -190,7 +190,7 @@ struct operator_functor<ast_operator::POW, false> {
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> LHS
     requires(cuda::std::is_integral_v<LHS> and cuda::std::is_integral_v<RHS>)
   {
-    return cudf::detail::int_pow(lhs, rhs);
+    return cudf::detail::integral_pow(lhs, rhs);
   }
 
   template <typename LHS, typename RHS>

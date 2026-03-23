@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <cudf/detail/integer_math.cuh>
+#include <cudf/detail/integral_math.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <cmath>
@@ -87,7 +87,7 @@ struct FloorDiv {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
     requires(cuda::std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
-    return cudf::detail::int_floor_div(x, y);
+    return cudf::detail::integral_floor_div(x, y);
   }
 
   template <typename TypeLhs, typename TypeRhs>
@@ -214,7 +214,7 @@ struct IntPow {
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
     requires(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)
   {
-    return cudf::detail::int_pow(x, y);
+    return cudf::detail::integral_pow(x, y);
   }
 };
 
