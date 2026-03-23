@@ -172,9 +172,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .agg([pl.col("ss_ext_sales_price").sum().alias("revenue")])
     )
 
-    segments = my_revenue.with_columns(
-        (pl.col("revenue") / 50.0).alias("segment")
-    ).select("segment")
+    segments = my_revenue.select((pl.col("revenue") / 50).round(0).alias("segment"))
 
     sort_by = {"segment": False, "num_customers": False}
     limit = 100
@@ -182,7 +180,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         frame=(
             segments.group_by("segment")
             .agg([pl.len().alias("num_customers")])
-            .with_columns((pl.col("segment") * 50.0).alias("segment_base"))
+            .with_columns((pl.col("segment") * 50).alias("segment_base"))
             .select(
                 [
                     "segment",
