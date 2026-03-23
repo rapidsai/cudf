@@ -70,7 +70,6 @@ struct glushkov_program_device {
   uint8_t const* _codepoint_flags{};     ///< Character-type lookup table (shared with Thompson)
   reclass_device const* _classes{};      ///< Character class data (shared with Thompson)
   glushkov_position const* _positions{}; ///< [num_states] per-position descriptors
-  g_state_t const* _follow_table{};      ///< [num_states] follow bitmasks
   g_state_t const* _shift_masks{};       ///< [shift_count] shift-and source masks
   uint8_t const* _shift_amounts{};       ///< [shift_count] shift amounts
   g_state_t const* _reach_ascii{};       ///< [128] precomputed reach bitmasks for ASCII chars
