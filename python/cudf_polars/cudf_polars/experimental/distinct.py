@@ -140,7 +140,6 @@ def _(
     ir: Distinct, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
-    original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
     child_count = partition_info[child].count
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
@@ -207,8 +206,6 @@ def _(
     unique_fraction_dict = _get_unique_fractions(
         tuple(subset),
         config_options.executor.unique_fraction,
-        row_count=rec.state["stats"].row_count.get(original_child),
-        column_stats=rec.state["stats"].column_stats.get(original_child),
     )
     unique_fraction = (
         max(unique_fraction_dict.values()) if unique_fraction_dict else None
