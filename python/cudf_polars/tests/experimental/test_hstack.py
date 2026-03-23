@@ -14,7 +14,9 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import Filter, HStack
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -105,3 +107,19 @@ def test_with_columns_scalar_upstream_20981(engine):
     lf = pl.LazyFrame({"a": [1.0, 2.0, 3.0]})
     q = lf.with_columns(pl.col.a.mean())
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_cse_agg_shared_decomposition(engine):
+    # CSE: Check that col("a").sum() is only computed once.
+    df = pl.LazyFrame({"a": [1, 2, 3, 4, 5, 6]})
+    q = df.with_columns(
+        pl.col("a").sum().alias("s"),
+        (pl.col("a").sum() * 2).alias("s2"),
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    config_options = ConfigOptions.from_polars_engine(engine)
+    lowered, _, _ = lower_ir_graph(ir, config_options)
+
+    repartitions = [n for n in traversal([lowered]) if isinstance(n, Repartition)]
+    assert len(repartitions) == 1
+    assert len(repartitions[0].children[0].exprs) == 1
