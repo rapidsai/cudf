@@ -464,14 +464,19 @@ def _(
         # Redirect non-pointwise HStack to Select so the Select handler can
         # attempt decomposition (or fall back gracefully via decompose_select).
         col_map = {ne.name: ne for ne in ir.columns}
-        exprs = tuple(
-            col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
-            for name, dtype in ir.schema.items()
-        )
-        return lower_ir_node(
-            Select(ir.schema, exprs, ir.should_broadcast, ir.children[0]),
-            rec,
-        )
+        has_passthrough = any(name not in col_map for name in ir.schema)
+        if has_passthrough or not ir.should_broadcast:
+            exprs = tuple(
+                col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+                for name, dtype in ir.schema.items()
+            )
+            return lower_ir_node(
+                Select(ir.schema, exprs, ir.should_broadcast, ir.children[0]),
+                rec,
+            )
+        # All output columns are aggregations: no N-row passthrough to anchor
+        # broadcast. Fall back so HStack.do_evaluate uses target_length=child.num_rows.
+        return _lower_ir_fallback(ir, rec)
 
     child, partition_info = rec(ir.children[0])
     new_node = ir.reconstruct([child])
