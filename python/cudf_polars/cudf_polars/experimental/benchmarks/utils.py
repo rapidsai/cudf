@@ -389,7 +389,6 @@ class RunConfig:
     spill_device: float
     query_set: str
     collect_traces: bool = False
-    stats_planning: bool
     dynamic_planning: bool | None = None
     max_io_threads: int
     native_parquet: bool
@@ -542,7 +541,6 @@ class RunConfig:
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
             collect_traces=args.collect_traces,
-            stats_planning=args.stats_planning,
             dynamic_planning=args.dynamic_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
@@ -580,7 +578,6 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-                print(f"stats_planning: {self.stats_planning}")
                 if self.runtime == "rapidsmpf":
                     print(f"native_parquet: {self.native_parquet}")
                     print(f"dynamic_planning: {self.dynamic_planning}")
@@ -601,14 +598,19 @@ class RunConfig:
                 print(f"max time : {max(valid_durations):0.4f}")
                 print(f"mean time: {statistics.mean(valid_durations):0.4f}")
                 print("=======================================")
-        total_mean_time = sum(
-            statistics.mean(
-                record.duration for record in records if record.status == "success"
+        any_success = any(record.status == "success" for record in records)
+
+        if any_success:
+            total_mean_time = sum(
+                statistics.mean(
+                    record.duration for record in records if record.status == "success"
+                )
+                for records in self.records.values()
+                if records
             )
-            for records in self.records.values()
-            if records
-        )
-        print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+            print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+        else:
+            print("No successful queries")
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -639,13 +641,6 @@ def get_executor_options(
             executor_options["fallback_mode"] = run_config.fallback_mode
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
-        executor_options["stats_planning"] = {
-            "use_reduction_planning": run_config.stats_planning,
-            "use_sampling": (
-                # Always allow row-group sampling for rapidsmpf runtime
-                run_config.stats_planning or run_config.runtime == "rapidsmpf"
-            ),
-        }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
@@ -658,8 +653,6 @@ def get_executor_options(
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
-        # Only use the unique_fraction config if stats_planning is disabled
-        and not run_config.stats_planning
         and not run_config.dynamic_planning
     ):
         executor_options["unique_fraction"] = {
@@ -1207,12 +1200,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         help="Collect data tracing cudf-polars execution.",
     )
 
-    parser.add_argument(
-        "--stats-planning",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable statistics planning.",
-    )
     parser.add_argument(
         "--dynamic-planning",
         action=argparse.BooleanOptionalAction,

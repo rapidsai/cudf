@@ -101,7 +101,7 @@ std::unique_ptr<table> unique(table_view const& input,
   return detail::gather(input,
                         indices_view,
                         out_of_bounds_policy::DONT_CHECK,
-                        detail::negative_index_policy::NOT_ALLOWED,
+                        negative_index_policy::NOT_ALLOWED,
                         stream,
                         mr);
 }
