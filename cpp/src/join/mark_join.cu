@@ -713,14 +713,9 @@ mark_join::mark_join(cudf::table_view const& build,
     do_build_and_filter(d_build_hasher, d_build_comparator);
   }
 
-  if (cudf::has_nested_nulls(_build) && _nulls_equal == null_equality::UNEQUAL) {
-    auto const nullable_columns = get_nullable_columns(_build);
-    auto const row_bitmask =
-      cudf::detail::bitmask_and(
-        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref())
-        .first;
-    _num_build_inserted = cudf::detail::count_set_bits(
-      static_cast<bitmask_type const*>(row_bitmask.data()), 0, _build.num_rows(), stream);
+  if (has_null_build_keys) {
+    _num_build_inserted =
+      cudf::detail::count_set_bits(row_bitmask_ptr, 0, _build.num_rows(), stream);
   } else {
     _num_build_inserted = _build.num_rows();
   }

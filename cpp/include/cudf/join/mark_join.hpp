@@ -70,13 +70,17 @@ class mark_join {
   /**
    * @brief Constructs a mark join object by building a hash table from the build table.
    *
-   * @deprecated Use the overload accepting `cudf::join_prefilter` instead.
+   * @deprecated Deprecated in the current release. Use the overload accepting
+   *             `cudf::join_prefilter` instead. This overload will be removed in the next release.
    *
    * @param build The build table (typically the left table)
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  [[deprecated("Use the overload accepting cudf::join_prefilter instead")]]
+  // rapids-pre-commit-hooks: disable-next-line
+  [[deprecated(
+    "Use the overload accepting cudf::join_prefilter instead."
+    " This overload will be removed in the next release.")]]
   mark_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls = null_equality::EQUAL,
             rmm::cuda_stream_view stream      = cudf::get_default_stream());
@@ -97,14 +101,18 @@ class mark_join {
   /**
    * @brief Constructs a mark join object with a specified load factor.
    *
-   * @deprecated Use the overload accepting `cudf::join_prefilter` instead.
+   * @deprecated Deprecated in the current release. Use the overload accepting
+   *             `cudf::join_prefilter` instead. This overload will be removed in the next release.
    *
    * @param build The build table (typically the left table)
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param load_factor Hash table load factor in range (0,1]
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  [[deprecated("Use the overload accepting cudf::join_prefilter instead")]]
+  // rapids-pre-commit-hooks: disable-next-line
+  [[deprecated(
+    "Use the overload accepting cudf::join_prefilter instead."
+    " This overload will be removed in the next release.")]]
   mark_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
             double load_factor,
