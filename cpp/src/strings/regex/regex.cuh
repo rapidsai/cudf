@@ -184,6 +184,24 @@ class alignas(16) reprog_device {
   [[nodiscard]] int32_t compute_shared_memory_size() const;
 
   /**
+   * @brief Returns the Thompson-only portion of shared memory (excluding Glushkov cache).
+   */
+  [[nodiscard]] int32_t compute_shared_memory_size_thompson() const;
+
+  /**
+   * @brief Returns true if this program has a Glushkov engine.
+   */
+  [[nodiscard]] __host__ __device__ inline bool has_glushkov() const { return _glushkov != nullptr; }
+
+  /**
+   * @brief Returns the Glushkov device program pointer (may be nullptr).
+   */
+  [[nodiscard]] __device__ inline glushkov_program_device const* glushkov_prog() const
+  {
+    return _glushkov;
+  }
+
+  /**
    * @brief Returns the thread count passed on `set_working_memory`.
    */
   [[nodiscard]] __device__ inline int32_t thread_count() const { return _thread_count; }
@@ -294,6 +312,16 @@ class alignas(16) reprog_device {
   // Glushkov bit-parallel engine instead of the Thompson list-based engine.
   // extract() always uses the Thompson engine (Glushkov does not track groups).
   glushkov_program_device const* _glushkov{};
+
+  // Optional shared-memory cache of Glushkov program arrays.  Set at kernel
+  // entry after cooperative load; nullptr means fall back to global memory.
+  glushkov_shmem_cache const* _glushkov_cache{};
+
+ public:
+  __device__ inline void set_glushkov_cache(glushkov_shmem_cache const* c)
+  {
+    _glushkov_cache = c;
+  }
 };
 
 // Include Glushkov device functions after both reclass_device and

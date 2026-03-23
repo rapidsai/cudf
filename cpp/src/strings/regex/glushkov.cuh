@@ -78,3 +78,23 @@ struct glushkov_program_device {
 
   std::size_t _prog_size{};  ///< Total buffer size (for potential shmem loading)
 };
+
+// ---------------------------------------------------------------------------
+// Shared-memory cache for Glushkov program arrays
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Block-shared cache of read-only Glushkov program data.
+ *
+ * Loaded cooperatively by all threads in a block at kernel entry via
+ * @ref glushkov_load_shmem.  Subsequent calls to glushkov_find (with cache)
+ * read from shared memory (~20-cycle latency) instead of global/L2 (~100 cycles).
+ *
+ * Total size: ~1608 bytes — negligible impact on occupancy.
+ */
+struct glushkov_shmem_cache {
+  g_state_t reach_ascii[128];                          ///< [128] precomputed ASCII reach masks
+  g_state_t shift_masks[GLUSHKOV_MAX_SHIFTS_DEV];      ///< [shift_count] shift-and source masks
+  uint8_t shift_amounts[GLUSHKOV_MAX_SHIFTS_DEV];      ///< [shift_count] shift amounts
+  g_state_t exception_succs[GLUSHKOV_MAX_STATES_DEV];  ///< [num_states] exception successor masks
+};

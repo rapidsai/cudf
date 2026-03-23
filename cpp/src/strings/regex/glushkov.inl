@@ -253,6 +253,179 @@ __device__ __forceinline__ match_result glushkov_find(
   return {};  // No match
 }
 
+// ===========================================================================
+// Shared-memory-cached variants (CUDA device code only)
+// ===========================================================================
+#ifdef __CUDACC__
+
+/**
+ * @brief Cooperatively load Glushkov program arrays into shared memory.
+ *
+ * Must be called by ALL threads in the block.  After return (includes a
+ * __syncthreads), the @p cache is ready for use.
+ */
+__device__ __forceinline__ void glushkov_load_shmem(
+  glushkov_program_device const& prog,
+  glushkov_shmem_cache* cache)
+{
+  // Cooperative load: each thread handles a strided portion of each array.
+  for (uint32_t i = threadIdx.x; i < 128u; i += blockDim.x) {
+    cache->reach_ascii[i] = prog._reach_ascii[i];
+  }
+  for (uint32_t i = threadIdx.x; i < prog.shift_count; i += blockDim.x) {
+    cache->shift_masks[i]   = prog._shift_masks[i];
+    cache->shift_amounts[i] = prog._shift_amounts[i];
+  }
+  for (uint32_t i = threadIdx.x; i < prog.num_states; i += blockDim.x) {
+    cache->exception_succs[i] = prog._exception_succs[i];
+  }
+  __syncthreads();
+}
+
+// ---------------------------------------------------------------------------
+// Follow computation — shared-memory variant
+// ---------------------------------------------------------------------------
+
+__device__ __forceinline__ g_state_t glushkov_compute_follow(
+  g_state_t const state,
+  glushkov_program_device const& prog,
+  glushkov_shmem_cache const* cache)
+{
+  g_state_t follow = 0;
+
+  // Phase 1: shift-and transitions (from shared memory)
+  for (uint32_t k = 0; k < prog.shift_count; ++k) {
+    follow |= (state & cache->shift_masks[k]) << cache->shift_amounts[k];
+  }
+
+  // Phase 2: exception transitions (from shared memory)
+  g_state_t exc = state & prog.exception_mask;
+  while (exc) {
+#ifdef __CUDA_ARCH__
+    uint32_t const p = static_cast<uint32_t>(__ffsll(static_cast<long long>(exc))) - 1u;
+#else
+    uint32_t const p = static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(exc)));
+#endif
+    exc &= exc - 1;
+    follow |= cache->exception_succs[p];
+  }
+
+  return follow;
+}
+
+// ---------------------------------------------------------------------------
+// Reach computation — shared-memory variant
+// ---------------------------------------------------------------------------
+
+__device__ __forceinline__ g_state_t glushkov_compute_reach(
+  char32_t const c,
+  glushkov_program_device const& prog,
+  glushkov_shmem_cache const* cache)
+{
+  if (c < 128u) { return cache->reach_ascii[c]; }
+
+  // Non-ASCII fallback: must use prog._positions (global memory)
+  g_state_t reach = 0;
+  for (uint32_t p = 0; p < prog.num_states; ++p) {
+    if (glushkov_position_matches(prog._positions[p], c, prog._classes,
+                                  prog._codepoint_flags)) {
+      reach |= g_state_t(1) << p;
+    }
+  }
+  return reach;
+}
+
+// ---------------------------------------------------------------------------
+// Main find function — shared-memory variant
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Glushkov NFA find with shared-memory-cached program data.
+ *
+ * Identical semantics to the non-cached overload.  All read-only program
+ * arrays (reach_ascii, shift_masks, exception_succs) are served from
+ * shared memory instead of global/L2 cache.
+ */
+template <positional P = positional::BEGIN_END>
+__device__ __forceinline__ match_result glushkov_find(
+  glushkov_program_device const& prog,
+  string_view const d_str,
+  string_view::const_iterator begin,
+  cudf::size_type end,
+  glushkov_shmem_cache const* cache)
+{
+  auto const size_bytes = static_cast<int32_t>(d_str.size_bytes());
+  int32_t const start_pos = begin.position();
+
+  if (prog.nullable && begin.byte_offset() >= size_bytes) {
+    if constexpr (P == positional::BEGIN_END) {
+      return match_pair{start_pos, start_pos};
+    } else {
+      return match_pair{-1, start_pos};
+    }
+  }
+
+  auto outer_itr = begin;
+  for (int32_t start = start_pos; ; ++start, ++outer_itr) {
+    if (end >= 0 && start >= end) { break; }
+    if (outer_itr.byte_offset() >= size_bytes) { break; }
+
+    if (!prog.nullable) {
+      if (prog.has_startchar) {
+        while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar) {
+          ++outer_itr;
+          ++start;
+        }
+        if (outer_itr.byte_offset() >= size_bytes) { break; }
+        if (end >= 0 && start >= end) { break; }
+      } else {
+        char32_t const first_c = *outer_itr;
+        if ((glushkov_compute_reach(first_c, prog, cache) & prog.first_set) == 0) { continue; }
+      }
+    }
+
+    match_result cur_match{};
+
+    if (prog.nullable) {
+      if constexpr (P == positional::BEGIN_END) {
+        cur_match = match_pair{start, start};
+      } else {
+        cur_match = match_pair{-1, start};
+      }
+    }
+
+    g_state_t state = prog.first_set;
+    auto inner_itr  = outer_itr;
+
+    for (int32_t pos = start; inner_itr.byte_offset() < size_bytes; ++pos, ++inner_itr) {
+      char32_t const c = *inner_itr;
+
+      if (pos == start) {
+        state = state & glushkov_compute_reach(c, prog, cache);
+      } else {
+        state = glushkov_compute_follow(state, prog, cache) &
+                glushkov_compute_reach(c, prog, cache);
+      }
+
+      if (state == 0) { break; }
+
+      if (state & prog.accept_mask) {
+        if constexpr (P == positional::BEGIN_END) {
+          cur_match = match_pair{start, pos + 1};
+        } else {
+          cur_match = match_pair{-1, pos + 1};
+        }
+      }
+    }
+
+    if (cur_match) { return cur_match; }
+  }
+
+  return {};
+}
+
+#endif  // __CUDACC__
+
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
