@@ -463,7 +463,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .join(average_sales, how="cross")
         .filter(pl.col("sales") > pl.col("average_sales"))
         .select(
-            ["channel", "i_brand_id", "i_class_id", "i_category_id", "sales", "number_sales"]
+            [
+                "channel",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sales",
+                "number_sales",
+            ]
         )
     )
 
