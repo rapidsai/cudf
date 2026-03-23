@@ -43,7 +43,8 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Nested type columns (LIST, STRUCT) are sanitized. **(guide: "libcudf expects nested types to have sanitized null masks")**
 - Google Tests and/or Python tests cover all possible edge cases; no duplicated tests.
 - No off-by-one errors in index arithmetic or kernel launch bounds.
-- Correct use of `cudf::size_type` (signed 32-bit) for sizes, offsets, indices. **(guide: "cudf::size_type")**
+- Correct use of `cudf::size_type` (signed 32-bit) for sizes. **(guide: "cudf::size_type")**
+- Offset types should be either `cudf::size_type` or `int64_t` appropriately. Only `cudf::size_type` is supported for LIST types offsets.
 - Stream ordering preserved across the API flow. **(guide: "Streams")**
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
 
@@ -82,7 +83,6 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Use `cudf::strings::detail::make_offsets_child_column` for strings; use `cudf::detail::make_offsets_child_column` for lists.
 - Use `cudf::detail::offsetalator_factory::make_input_iterator` for type-erased offset access supporting both INT32 and INT64 offsets.
 - Use `cudf::detail::make_counting_transform_iterator` instead of `thrust::make_transform_iterator(thrust::counting_iterator(0), fn)`.
-- For strings columns, pass `.parent()` to `column_device_view::create`.
 
 ### Naming & Code Duplication
 
