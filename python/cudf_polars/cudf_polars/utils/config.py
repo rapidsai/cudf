@@ -38,10 +38,13 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
+    from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
     import rmm.mr
+
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RankActor
 
 
 __all__ = [
@@ -50,11 +53,11 @@ __all__ = [
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
+    "RayContext",
     "Runtime",
     "SPMDContext",
     "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
-    "StatsPlanningOptions",
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
@@ -172,6 +175,7 @@ class Cluster(enum.StrEnum):
     SINGLE = "single"
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
+    RAY = "ray"
 
 
 class Scheduler(enum.StrEnum):
@@ -380,86 +384,6 @@ def default_broadcast_join_limit(cluster: str, runtime: str) -> int:
 
 
 @dataclasses.dataclass(frozen=True)
-class StatsPlanningOptions:
-    """
-    Configuration for statistics-based query planning.
-
-    These options can be configured via environment variables
-    with the prefix ``CUDF_POLARS__EXECUTOR__STATS_PLANNING__``.
-
-    Parameters
-    ----------
-    use_io_partitioning
-        Whether to use estimated file-size statistics to calculate
-        the ideal input-partition count for IO operations.
-        This option currently applies to Parquet data only.
-        Default is True.
-    use_reduction_planning
-        Whether to use estimated column statistics to calculate
-        the output-partition count for reduction operations
-        like `Distinct`, `GroupBy`, and `Select(unique)`.
-        Default is False.
-    use_join_heuristics
-        Whether to use join heuristics to estimate row-count
-        and unique-count statistics. Default is True.
-        These statistics may only be collected when they are
-        actually needed for query planning and when row-count
-        statistics are available for the underlying datasource
-        (e.g. Parquet and in-memory LazyFrame data).
-    use_sampling
-        Whether to sample real data to estimate unique-value
-        statistics. Default is True.
-        These statistics may only be collected when they are
-        actually needed for query planning, and when the
-        underlying datasource supports sampling (e.g. Parquet
-        and in-memory LazyFrame data).
-    default_selectivity
-        The default selectivity of a predicate.
-        Default is 0.8.
-    """
-
-    _env_prefix = "CUDF_POLARS__EXECUTOR__STATS_PLANNING"
-
-    use_io_partitioning: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_IO_PARTITIONING", _bool_converter, default=True
-        )
-    )
-    use_reduction_planning: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_REDUCTION_PLANNING", _bool_converter, default=False
-        )
-    )
-    use_join_heuristics: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_JOIN_HEURISTICS", _bool_converter, default=True
-        )
-    )
-    use_sampling: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_SAMPLING", _bool_converter, default=True
-        )
-    )
-    default_selectivity: float = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__DEFAULT_SELECTIVITY", float, default=0.8
-        )
-    )
-
-    def __post_init__(self) -> None:  # noqa: D105
-        if not isinstance(self.use_io_partitioning, bool):
-            raise TypeError("use_io_partitioning must be a bool")
-        if not isinstance(self.use_reduction_planning, bool):
-            raise TypeError("use_reduction_planning must be a bool")
-        if not isinstance(self.use_join_heuristics, bool):
-            raise TypeError("use_join_heuristics must be a bool")
-        if not isinstance(self.use_sampling, bool):
-            raise TypeError("use_sampling must be a bool")
-        if not isinstance(self.default_selectivity, float):
-            raise TypeError("default_selectivity must be a float")
-
-
-@dataclasses.dataclass(frozen=True)
 class DynamicPlanningOptions:
     """
     Configuration for dynamic shuffle planning.
@@ -602,7 +526,7 @@ class SPMDContext:
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
         ``SPMDContext`` locally inside
-        :func:`~cudf_polars.experimental.rapidsmpf.spmd.spmd_execution`, so
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.spmd_execution`, so
         pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 
@@ -619,6 +543,28 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+
+
+@dataclasses.dataclass(frozen=True)
+class RayContext:
+    """
+    Configuration for Ray cluster execution.
+
+    .. note::
+        This dataclass holds Ray actor handles, which are only valid within the
+        Ray session that created them. It is stripped from ``config_options``
+        before pickling for remote actor calls in
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`.
+        Do not persist or transfer this object across Ray sessions.
+
+    Parameters
+    ----------
+    rank_actors
+        List of :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RankActor`
+        handles, one per GPU in the cluster.
+    """
+
+    rank_actors: list[ActorHandle[RankActor]]
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -719,9 +665,6 @@ class StreamingExecutor:
         rather than a single file. By default, this will be set to True for
         the 'distributed' cluster and False otherwise. The 'distributed'
         cluster does not currently support ``sink_to_directory=False``.
-    stats_planning
-        Options controlling statistics-based query planning. See
-        :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
@@ -824,9 +767,6 @@ class StreamingExecutor:
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
         )
     )
-    stats_planning: StatsPlanningOptions = dataclasses.field(
-        default_factory=StatsPlanningOptions
-    )
     dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
         default_factory=DynamicPlanningOptions
     )
@@ -845,7 +785,8 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
-    spmd: SPMDContext | None = None
+    spmd_context: SPMDContext | None = None
+    ray_context: RayContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
@@ -930,14 +871,6 @@ class StreamingExecutor:
         object.__setattr__(self, "cluster", Cluster(self.cluster))
         object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
 
-        # Make sure stats_planning is a dataclass
-        if isinstance(self.stats_planning, dict):
-            object.__setattr__(
-                self,
-                "stats_planning",
-                StatsPlanningOptions(**self.stats_planning),
-            )
-
         # Handle dynamic_planning.
         # Can be None, dict, or DynamicPlanningOptions
         if isinstance(self.dynamic_planning, dict):
@@ -993,7 +926,6 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["unique_fraction"] = json.dumps(d["unique_fraction"])
-        d["stats_planning"] = json.dumps(d["stats_planning"])
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
         return hash(tuple(sorted(d.items())))
 

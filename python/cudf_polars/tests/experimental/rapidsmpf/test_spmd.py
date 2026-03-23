@@ -4,28 +4,22 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from rapidsmpf.bootstrap import is_running_with_rrun
+from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
 import polars as pl
 
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
-from cudf_polars.experimental.rapidsmpf.spmd import (
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     allgather_polars_dataframe,
     spmd_execution,
 )
 
-pytestmark = pytest.mark.skipif(
-    not is_running_with_rrun(),
-    reason="use something like `rrun -n <nproc> python -m pytest ...` to run SPMD tests",
-)
 
-
-def test_spmd_execution_yields_context_and_engine() -> None:
+def test_yields_context_and_engine() -> None:
     """spmd_execution yields a (Communicator, Context, GPUEngine) triple."""
     with spmd_execution() as (comm, ctx, engine):
         assert comm is not None
@@ -33,42 +27,42 @@ def test_spmd_execution_yields_context_and_engine() -> None:
         assert isinstance(engine, pl.GPUEngine)
 
 
-def test_spmd_execution_reserved_keys() -> None:
+def test_single_communicator_outside_rrun() -> None:
+    """Outside rrun the communicator has exactly one rank."""
+    if is_running_with_rrun():
+        pytest.skip("single-rank check only applies outside rrun")
+    with spmd_execution() as (comm, ctx, engine):
+        assert comm.nranks == 1
+        assert comm.rank == 0
+
+
+def test_reserved_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd"):
+    for key in ("runtime", "cluster", "spmd_context"):
         with (
-            pytest.raises(ValueError, match="reserved"),
+            pytest.raises(TypeError, match="reserved"),
             spmd_execution(executor_options={key: "anything"}),
         ):
             pass
 
 
-def test_spmd_execution_engine_kwargs_reserved_keys() -> None:
-    """engine_kwargs rejects keys that are set explicitly by spmd_execution."""
+def test_engine_options_reserved_keys() -> None:
+    """engine_options rejects keys that are set explicitly by spmd_execution."""
     for key in ("memory_resource", "executor"):
-        kwargs: dict[str, Any] = {key: "anything"}
         with (
-            pytest.raises(ValueError, match="reserved"),
-            spmd_execution(**kwargs),
+            pytest.raises(TypeError, match="reserved"),
+            spmd_execution(engine_options={key: "anything"}),
         ):
             pass
 
 
-def test_spmd_execution_engine_kwargs_parquet_options() -> None:
-    """engine_kwargs forwards parquet_options to GPUEngine without error."""
-    with spmd_execution(parquet_options={}) as (comm, ctx, engine):
+def test_engine_options_parquet_options() -> None:
+    """engine_options forwards parquet_options to GPUEngine without error."""
+    with spmd_execution(engine_options={"parquet_options": {}}) as (comm, ctx, engine):
         assert isinstance(engine, pl.GPUEngine)
 
 
-def test_spmd_execution_custom_mr() -> None:
-    """spmd_execution accepts a custom memory resource."""
-    mr = rmm.mr.CudaMemoryResource()
-    with spmd_execution(mr=mr) as (comm, ctx, engine):
-        result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
-    assert result.shape == (3, 1)
-
-
-def test_spmd_execution_scan() -> None:
+def test_scan() -> None:
     """Each rank scans its own single-row LazyFrame and gets that row back."""
     with spmd_execution() as (comm, ctx, engine):
         rank = comm.rank
@@ -79,7 +73,15 @@ def test_spmd_execution_scan() -> None:
     assert result["b"].to_list() == [rank * 10]
 
 
-def test_spmd_collect_then_lazy_equivalent() -> None:
+def test_basic_query() -> None:
+    """A simple in-memory LazyFrame can be collected."""
+    with spmd_execution() as (comm, ctx, engine):
+        result = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).collect(engine=engine)
+    assert result.shape == (3, 2)
+    assert result["a"].to_list() == [1, 2, 3]
+
+
+def test_collect_then_lazy_equivalent() -> None:
     """collect().lazy() preserves SPMD semantics: an intermediate materialize is a no-op.
 
     In SPMD mode a DataFrame is always rank-local.  When it is wrapped back
@@ -101,7 +103,7 @@ def test_spmd_collect_then_lazy_equivalent() -> None:
     assert one_step.sort("a").equals(two_step.sort("a"))
 
 
-def test_spmd_execution_group_by() -> None:
+def test_group_by() -> None:
     """Group-by on rank-local data, then allgather to verify the global result."""
     with spmd_execution() as (comm, ctx, engine):
         rank = comm.rank
@@ -132,7 +134,7 @@ def test_allgather_polars_dataframe() -> None:
     assert result["val"].to_list() == [r * 2 for r in range(nranks)]
 
 
-def test_spmd_execution_max_workers() -> None:
+def test_max_workers() -> None:
     """executor_options forwards rapidsmpf_py_executor_max_workers to the thread pool."""
     with spmd_execution(executor_options={"rapidsmpf_py_executor_max_workers": 2}) as (
         comm,
@@ -156,6 +158,20 @@ def test_allgather_polars_dataframe_empty() -> None:
     assert result.shape == (0, 2)
     assert result.columns == ["a", "b"]
     assert result.dtypes == [pl.Int32, pl.Float64]
+
+
+def test_mr_wrapped_as_current_inside_context() -> None:
+    """Inside spmd_execution the current device resource is RmmResourceAdaptor."""
+    with spmd_execution() as (comm, ctx, engine):
+        assert isinstance(rmm.mr.get_current_device_resource(), RmmResourceAdaptor)
+
+
+def test_mr_restored_after_context() -> None:
+    """After spmd_execution exits the original device resource is restored."""
+    original = rmm.mr.get_current_device_resource()
+    with spmd_execution() as (comm, ctx, engine):
+        pass
+    assert rmm.mr.get_current_device_resource() is original
 
 
 def test_allgather_polars_dataframe_multi_column() -> None:

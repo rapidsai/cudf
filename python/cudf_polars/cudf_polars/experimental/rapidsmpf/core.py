@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import contextlib
+import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
@@ -32,7 +33,7 @@ import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.repartition
-import cudf_polars.experimental.rapidsmpf.union  # noqa: F401
+import cudf_polars.experimental.rapidsmpf.union
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
@@ -100,55 +101,79 @@ def evaluate_logical_plan(
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
 
-    # Log the query plan structure for tracing (no-op if tracing disabled)
-    log_query_plan(ir, config_options)
+    query_id = uuid.uuid4()
 
     # Reserve shuffle IDs for the entire pipeline execution
-    with ReserveOpIDs(ir, config_options) as collective_id_map:
+    with (
+        ReserveOpIDs(ir, config_options) as collective_id_map,
+        cudf_polars.dsl.tracing.bound_contextvars(cudf_polars_query_id=str(query_id)),
+    ):
+        # Log the query plan structure for tracing (no-op if tracing disabled)
+        log_query_plan(ir, config_options)
+
         # Build and execute the streaming pipeline.
         # This must be done on all worker processes
         # for cluster == "distributed".
-        if (
-            config_options.executor.cluster == "distributed"
-        ):  # pragma: no cover; block depends on executor type and Distributed cluster
-            # Distributed execution: Use client.run
+        match config_options.executor.cluster:
+            case "distributed":  # pragma: no cover; block depends on executor type and Distributed cluster
+                # Distributed execution: Use client.run
+                # NOTE: Distributed execution requires Dask for now
+                from cudf_polars.experimental.rapidsmpf.dask import (
+                    evaluate_pipeline_dask,
+                )
 
-            # NOTE: Distributed execution requires Dask for now
-            from cudf_polars.experimental.rapidsmpf.dask import evaluate_pipeline_dask
+                result, metadata_collector = evaluate_pipeline_dask(
+                    evaluate_pipeline,
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case "spmd":
+                from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+                    evaluate_pipeline_spmd_mode,
+                )
 
-            result, metadata_collector = evaluate_pipeline_dask(
-                evaluate_pipeline,
-                ir,
-                partition_info,
-                config_options,
-                stats,
-                collective_id_map,
-                collect_metadata=collect_metadata,
-            )
-        elif config_options.executor.cluster == "spmd":
-            from cudf_polars.experimental.rapidsmpf.spmd import (
-                evaluate_pipeline_spmd_mode,
-            )
+                result, metadata_collector = evaluate_pipeline_spmd_mode(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case "ray":
+                from cudf_polars.experimental.rapidsmpf.frontend.ray import (
+                    evaluate_pipeline_ray_mode,
+                )
 
-            result, metadata_collector = evaluate_pipeline_spmd_mode(
-                ir,
-                partition_info,
-                config_options,
-                stats,
-                collective_id_map,
-                collect_metadata=collect_metadata,
-            )
-        else:
-            # Single-process execution: Run locally
-            result, metadata_collector = evaluate_pipeline(
-                ir,
-                partition_info,
-                config_options,
-                stats,
-                collective_id_map,
-                single_process_communicator(Options(), ProgressThread()),
-                collect_metadata=collect_metadata,
-            )
+                result, metadata_collector = evaluate_pipeline_ray_mode(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case "single":
+                # Single-process execution: Run locally
+                result, metadata_collector = evaluate_pipeline(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    single_process_communicator(Options(), ProgressThread()),
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
+            case other:
+                raise ValueError(f"Unknown cluster mode: {other}")
 
     return result, metadata_collector
 
@@ -163,6 +188,7 @@ def evaluate_pipeline(
     rmpf_context: Context | None = None,
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
@@ -185,6 +211,8 @@ def evaluate_pipeline(
         The RapidsMPF context.
     collect_metadata
         Whether to collect runtime metadata.
+    query_id
+        A unique identifier for the query.
 
     Returns
     -------
@@ -250,10 +278,12 @@ def evaluate_pipeline(
         # Create the IR execution context
         if use_stream_pool:
             ir_context = IRExecutionContext(
-                get_cuda_stream=rmpf_context.get_stream_from_pool
+                get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
             )
         else:
-            ir_context = IRExecutionContext.from_config_options(config_options)
+            ir_context = IRExecutionContext.from_config_options(
+                config_options, query_id=query_id
+            )
 
         # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
