@@ -28,7 +28,6 @@
 #include <cuda/std/limits>
 
 #include <memory>
-#include <utility>
 
 namespace cudf::detail {
 
@@ -162,6 +161,10 @@ using mark_storage_type = cuco::bucket_storage<mark_key_type,
                                                cuco::extent<std::size_t>,
                                                rmm::mr::polymorphic_allocator<char>>;
 
+using storage_ref_type =
+  cuco::bucket_storage_ref<mark_key_type, mark_join_bucket_size, cuco::extent<std::size_t>>;
+using probe_key_type = cuco::pair<hash_value_type, rhs_index_type>;
+
 using bloom_filter_policy_type =
   cuco::default_filter_policy<cuco::detail::identity_hash<hash_value_type>, hash_value_type, 2U>;
 using bloom_filter_allocator_type = rmm::mr::polymorphic_allocator<cuda::std::byte>;
@@ -195,9 +198,6 @@ class mark_join {
   using primitive_row_comparator = cudf::detail::row::primitive::row_equality_comparator;
   using row_hasher =
     cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::YES>;
-  using storage_ref_type = decltype(std::declval<mark_storage_type&>().ref());
-  using probe_key_type   = cuco::pair<hash_value_type, rhs_index_type>;
-
   bool _has_nested_columns;
   cudf::table_view _build;
   cudf::null_equality _nulls_equal;

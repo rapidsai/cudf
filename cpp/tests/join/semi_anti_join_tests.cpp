@@ -456,6 +456,39 @@ TEST_P(SemiAntiJoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
   });
 }
 
+TEST_F(SemiAntiJoinTest, PrefilterNullableColumnsNullsEqual)
+{
+  column_wrapper<int32_t> left_col0{{1, 2, 3, 4, 5}, {true, false, true, true, false}};
+  column_wrapper<int32_t> right_col0{{2, 3, 5, 6}, {false, true, true, true}};
+
+  auto left  = cudf::table_view{{left_col0}};
+  auto right = cudf::table_view{{right_col0}};
+
+  auto baseline = left_semi_join(
+    left, right, {0}, {0}, cudf::null_equality::EQUAL, join_implementation::MARK_JOIN);
+  auto filtered = left_semi_join(
+    left, right, {0}, {0}, cudf::null_equality::EQUAL, join_implementation::MARK_JOIN_PREFILTER);
+
+  auto baseline_order  = cudf::sorted_order(baseline->view());
+  auto filtered_order  = cudf::sorted_order(filtered->view());
+  auto sorted_baseline = cudf::gather(baseline->view(), *baseline_order);
+  auto sorted_filtered = cudf::gather(filtered->view(), *filtered_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_baseline, *sorted_filtered);
+
+  auto anti_baseline = left_anti_join(
+    left, right, {0}, {0}, cudf::null_equality::EQUAL, join_implementation::MARK_JOIN);
+  auto anti_filtered = left_anti_join(
+    left, right, {0}, {0}, cudf::null_equality::EQUAL, join_implementation::MARK_JOIN_PREFILTER);
+
+  auto anti_baseline_order  = cudf::sorted_order(anti_baseline->view());
+  auto anti_filtered_order  = cudf::sorted_order(anti_filtered->view());
+  auto anti_sorted_baseline = cudf::gather(anti_baseline->view(), *anti_baseline_order);
+  auto anti_sorted_filtered = cudf::gather(anti_filtered->view(), *anti_filtered_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*anti_sorted_baseline, *anti_sorted_filtered);
+}
+
 TEST_F(SemiAntiJoinTest, MarkJoinPrefilterLoadFactorOverload)
 {
   column_wrapper<int32_t> left_col0{0, 1, 1, 2, 3, 5};
