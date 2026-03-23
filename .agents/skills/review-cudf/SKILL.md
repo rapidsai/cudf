@@ -3,7 +3,12 @@ name: review-cudf
 description: Use this skill to review GitHub pull requests for cudf
 ---
 
-Use this skill when the user invokes `/review-cudf` with a GitHub PR link, or asks to review a PR, code changes, or diff for cudf.
+Use this skill when the user invokes `/review-cudf` with:
+- a cudf GitHub PR link
+- currently checked out cudf PR
+- specified cudf code changes or a diff
+
+cudf GitHub repository is located at: https://github.com/rapidsai/cudf
 
 # Review cuDF Pull Request
 
@@ -34,8 +39,8 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 
 ### Correctness & Logic
 
-- Core logic implemented by algorithms is correct and coherent.
-- No unnecessary memory usage or leaks.
+- Trace implemented core logic step by step to ensure it is correct and coherent.
+- No unnecessary memory usage, leaks, dangling references, lifetime issues.
 - Recursive and branched algorithms have no pitfalls, unintended fallthroughs, or unhandled cases. Trace such algorithms.
 - Algorithms cover all possible edge cases such as empty input and nulls, without being excessively defensive.
 - Offsets child of an empty string or list column is not accessed. **(guide: "Empty Columns")**
@@ -44,8 +49,9 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Google Tests and/or Python tests cover all possible edge cases; no duplicated tests.
 - No off-by-one errors in index arithmetic or kernel launch bounds.
 - Correct use of `cudf::size_type` (signed 32-bit) for sizes. **(guide: "cudf::size_type")**
-- Offset types should be either `cudf::size_type` or `int64_t` appropriately. Only `cudf::size_type` is supported for LIST types offsets.
+- Offsets into the column should be either `int32_t` or `int64_t` type appropriately. Only `int32_t` is supported for offsets of `LIST` types.
 - Stream ordering preserved across the API flow. **(guide: "Streams")**
+- Discourage implicit use of CUDA default stream to enable asynchronous execution. **(guide: "Streams")**
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
 
 ### Performance Optimization
@@ -103,13 +109,14 @@ Verify compliance with the developer guide sections: **(guide: "Directory Struct
 
 Additional key checks not in the guide:
 - No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
-- Prefer pinned memory/vectors for small H2D/D2H transfers via `cudf::detail::make_pinned_vector{,_async}` instead of `cudf::detail::make_host_vector{,_async}`.
+- Prefer pinned memory/vectors for small H2D/D2H transfers via `cudf::detail::make_pinned_vector{,_async}` instead of `cudf::detail::make_host_vector{,_async}` and `cudf::detail::make_std_vector{}`.
 - Prefer `span` versions of constructors for `cudf::detail::make_pinned_vector{,_async}` and `cudf::detail::make_host_vector{,_async}`.
 - Functions defined in headers (e.g. templates) must be `inline`.
 - Anonymous namespaces for single-TU helpers; never in headers.
 - Use `host_span`/`device_span` ; no owning vectors passed around by copy/reference unless explicitly moved (transferring ownership).
 - Use modern C++20 primitives such as `concepts`, `std::ranges`, `std::transform` over manual implementations and raw loops; Range-for loops are fine.
 - Use `static_assert` with a clear message to prevent accidental template misuse.
+- Use `[[nodiscard]]` when a function that returns a non-void result that has no side effects
 
 ### Memory Allocation & Management
 

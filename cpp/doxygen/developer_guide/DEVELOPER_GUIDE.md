@@ -337,8 +337,8 @@ specific elements, segments for subsets of column elements, etc. It is equivalen
 index values and those functions support a minimum value of -2147483648. This fundamental type also
 influences output values not just for column size limits but for counting elements as well.
 
-Offset to elements within a column should be either `cudf::size_type` or `int64_t` appropriately, except
-for `LIST` columns that only support `cudf::size_type` offsets.
+Offset to elements within a column should be either `int32_t` or `int64_t` appropriately, except
+for `LIST` columns that only support `int32_t` offsets.
 
 ## Spans
 
