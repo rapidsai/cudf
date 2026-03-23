@@ -85,7 +85,7 @@ struct TrueDiv {
 struct FloorDiv {
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> decltype(x / y)
-    requires(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)
+    requires(cuda::std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)
   {
     return cudf::detail::int_floor_div(x, y);
   }
