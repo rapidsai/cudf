@@ -102,7 +102,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
   auto result_table = cudf::detail::gather(cudf::table_view({input}),
                                            result_map,
                                            cudf::out_of_bounds_policy::NULLIFY,
-                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                           cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
   return std::move(result_table->release().front());

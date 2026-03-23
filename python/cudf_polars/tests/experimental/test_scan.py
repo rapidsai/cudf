@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -72,6 +72,21 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files):
         assert count > n_files
     else:
         assert count < n_files
+
+
+def test_split_scan_aligns_to_row_group_boundaries(tmp_path, df):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=1, row_group_size=10)
+    q = pl.scan_parquet(tmp_path)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "target_partition_size": 1_000,
+            "cluster": DEFAULT_CLUSTER,
+            "runtime": DEFAULT_RUNTIME,
+        },
+    )
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("mask", [None, pl.col("x") < 1_000])

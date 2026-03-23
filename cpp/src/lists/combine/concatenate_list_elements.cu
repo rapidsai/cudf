@@ -192,7 +192,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
   auto result = cudf::detail::gather(table_view{{entry_col}},
                                      gather_map,
                                      out_of_bounds_policy::DONT_CHECK,
-                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                     cudf::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
   return std::move(result->release()[0]);
