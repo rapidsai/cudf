@@ -1096,7 +1096,7 @@ TEST_F(ComputeColumnTest, FloorDivIntegerNegativeOperands)
   auto floor_div_pos =
     cudf::ast::operation(cudf::ast::ast_operator::FLOOR_DIV, col_ref, divisor_pos);
   auto result_pos   = cudf::compute_column(table, floor_div_pos);
-  auto expected_pos = column_wrapper<int64_t>{-4, 3, -3, -3};
+  auto expected_pos = column_wrapper<int64_t>{-4, 3, -3, 3};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_pos, result_pos->view(), verbosity);
 
   auto divisor_value_neg = cudf::numeric_scalar<int64_t>(-2);
@@ -1104,7 +1104,7 @@ TEST_F(ComputeColumnTest, FloorDivIntegerNegativeOperands)
   auto floor_div_neg =
     cudf::ast::operation(cudf::ast::ast_operator::FLOOR_DIV, col_ref, divisor_neg);
   auto result_neg   = cudf::compute_column(table, floor_div_neg);
-  auto expected_neg = column_wrapper<int64_t>{3, -4, 3, 3};
+  auto expected_neg = column_wrapper<int64_t>{3, -4, 3, -3};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_neg, result_neg->view(), verbosity);
 }
 
