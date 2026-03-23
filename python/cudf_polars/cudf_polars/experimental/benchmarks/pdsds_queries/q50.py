@@ -215,6 +215,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .sort(group_cols, nulls_last=True)
             .limit(limit)
         ),
-        sort_by=list(sort_by.items()),
+        sort_by=group_cols,
         limit=limit,
     )
