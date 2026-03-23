@@ -342,10 +342,7 @@ def slow_and_intermediate_with_doc():
     return Slow, SlowIntermediate
 
 
-def test_doc(
-    fast_and_intermediate_with_doc,
-    slow_and_intermediate_with_doc,
-):
+def test_doc(fast_and_intermediate_with_doc, slow_and_intermediate_with_doc):
     Fast, FastIntermediate = fast_and_intermediate_with_doc
     Slow, SlowIntermediate = slow_and_intermediate_with_doc
 
@@ -377,10 +374,7 @@ def test_doc(
     )
 
 
-def test_dir(
-    fast_and_intermediate_with_doc,
-    slow_and_intermediate_with_doc,
-):
+def test_dir(fast_and_intermediate_with_doc, slow_and_intermediate_with_doc):
     Fast, FastIntermediate = fast_and_intermediate_with_doc
     Slow, SlowIntermediate = slow_and_intermediate_with_doc
 
@@ -416,9 +410,7 @@ def test_dir(
     ],
 )
 def test_dir_bound_method(
-    fast_and_intermediate_with_doc,
-    slow_and_intermediate_with_doc,
-    check,
+    fast_and_intermediate_with_doc, slow_and_intermediate_with_doc, check
 ):
     """This test will fail because dir for bound methods is currently
     incorrect, but we have no way to fix it without materializing the slow
