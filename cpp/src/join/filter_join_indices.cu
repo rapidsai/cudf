@@ -28,6 +28,7 @@
 
 #include <cub/cub.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>

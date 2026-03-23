@@ -454,7 +454,7 @@ struct copy_block_partitions_dispatcher {
     auto gather_table = cudf::detail::gather(cudf::table_view({input}),
                                              gather_map,
                                              out_of_bounds_policy::DONT_CHECK,
-                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             cudf::negative_index_policy::NOT_ALLOWED,
                                              stream,
                                              mr);
     return std::move(gather_table->release().front());
@@ -844,20 +844,20 @@ namespace {
  */
 template <typename Key>
 struct IdentityHash {
-  using result_type        = uint32_t;
-  constexpr IdentityHash() = default;
-  constexpr IdentityHash(uint32_t) {}
+  using result_type                         = uint32_t;
+  CUDF_HOST_DEVICE constexpr IdentityHash() = default;
+  CUDF_HOST_DEVICE constexpr IdentityHash(uint32_t) {}
 
   template <typename return_type = result_type>
-  constexpr return_type operator()(Key const& key) const
-    requires(!std::is_arithmetic_v<Key>)
+  CUDF_HOST_DEVICE constexpr return_type operator()(Key const& key) const
+    requires(!cuda::std::is_arithmetic_v<Key>)
   {
     CUDF_UNREACHABLE("IdentityHash does not support this data type");
   }
 
   template <typename return_type = result_type>
-  constexpr return_type operator()(Key const& key) const
-    requires(std::is_arithmetic_v<Key>)
+  CUDF_HOST_DEVICE constexpr return_type operator()(Key const& key) const
+    requires(cuda::std::is_arithmetic_v<Key>)
   {
     return static_cast<result_type>(key);
   }
