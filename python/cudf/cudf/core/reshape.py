@@ -522,17 +522,12 @@ def concat(
         new_objs = [obj for obj in objs if len(obj)]
         if len(new_objs) == 1 and not ignore_index:
             result = new_objs[0]
-            # Promote dtype for empty series with explicit (non-all-null)
-            # dtypes, e.g. int64 + empty float64 should yield float64.
-            non_null_dtypes = [
-                obj.dtype
-                for obj in objs
-                if not obj._is_all_null and len(obj) > 0
-            ]
-            empty_dtypes = [obj.dtype for obj in objs if len(obj) == 0]
-            all_promote_dtypes = non_null_dtypes + empty_dtypes
-            if len(set(all_promote_dtypes)) > 1:
-                common_dtype = find_common_type(all_promote_dtypes)
+            # Promote dtype for empty series with explicit dtypes,
+            # e.g. int64 + empty float64 should yield float64.
+            all_promote_dtypes = {obj.dtype for obj in objs if len(obj) == 0}
+            all_promote_dtypes.add(result.dtype)
+            if len(all_promote_dtypes) > 1:
+                common_dtype = find_common_type(list(all_promote_dtypes))
                 result = result.astype(common_dtype)
             return result
         else:
