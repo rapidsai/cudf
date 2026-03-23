@@ -15,13 +15,17 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.fixture(scope="module")
 def df() -> pl.LazyFrame:
-    """Create a test DataFrame for groupby (keys + value columns)."""
+    """Create a test DataFrame for groupby."""
     return pl.LazyFrame(
         {
-            "key": list(range(50)) * 4,  # 200 rows, 50 unique keys
-            "key2": list(range(10)) * 20,  # 200 rows, 10 unique
-            "value": range(200),
-            "value2": [1.0, 2.0, 3.0, 4.0, 5.0] * 40,
+            "key": list(range(50)) * 3,  # 50 unique keys
+            "key2": list(range(10)) * 15,  # 10 unique keys
+            "value": range(150),
+            "value2": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
+            "x": range(150),
+            "xx": list(range(75)) * 2,
+            "y": [1, 2, 3] * 50,
+            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
         }
     )
 
@@ -93,22 +97,10 @@ def test_dynamic_groupby_single_row(engine):
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
-def gb_df() -> pl.LazyFrame:
-    return pl.LazyFrame(
-        {
-            "x": range(150),
-            "xx": list(range(75)) * 2,
-            "y": [1, 2, 3] * 50,
-            "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 30,
-        }
-    )
-
-
 @pytest.mark.parametrize("op", ["sum", "mean", "len"])
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-def test_groupby(gb_df, engine, op, keys):
-    q = getattr(gb_df.group_by(*keys), op)()
+def test_groupby(df, engine, op, keys):
+    q = getattr(df.group_by(*keys), op)()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -119,8 +111,8 @@ def test_groupby(gb_df, engine, op, keys):
     [{"executor_options": {"max_rows_per_partition": int(1e9)}}],
     indirect=True,
 )
-def test_groupby_single_partitions(gb_df, engine, op, keys):
-    q = getattr(gb_df.group_by(*keys), op)()
+def test_groupby_single_partitions(df, engine, op, keys):
+    q = getattr(df.group_by(*keys), op)()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -128,9 +120,9 @@ def test_groupby_single_partitions(gb_df, engine, op, keys):
     "op", ["sum", "mean", "len", "count", "min", "max", "n_unique"]
 )
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
-def test_groupby_agg(gb_df, engine, op, keys):
+def test_groupby_agg(df, engine, op, keys):
     agg = getattr(pl.col("x"), op)()
-    q = gb_df.group_by(*keys).agg(agg)
+    q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -144,10 +136,10 @@ def test_groupby_agg(gb_df, engine, op, keys):
     ],
     indirect=["engine"],
 )
-def test_groupby_fallback(gb_df, fallback_mode, engine):
+def test_groupby_fallback(df, fallback_mode, engine):
     match = "Failed to decompose groupby aggs"
 
-    q = gb_df.group_by("y").median()
+    q = df.group_by("y").median()
 
     if fallback_mode == "silent":
         ctx = contextlib.nullcontext()
@@ -167,8 +159,8 @@ def test_groupby_fallback(gb_df, fallback_mode, engine):
         assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_agg_literal(gb_df, engine):
-    q = gb_df.group_by("y").agg(1)
+def test_groupby_agg_literal(df, engine):
+    q = df.group_by("y").agg(1)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -181,8 +173,8 @@ def test_groupby_agg_literal(gb_df, engine):
         pl.max("x") + 1,
     ],
 )
-def test_groupby_agg_binop(gb_df: pl.LazyFrame, engine, op: pl.Expr) -> None:
-    q = gb_df.group_by("y").agg(op)
+def test_groupby_agg_binop(df: pl.LazyFrame, engine, op: pl.Expr) -> None:
+    q = df.group_by("y").agg(op)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -207,8 +199,8 @@ def test_groupby_agg_duplicate(engine, op: pl.Expr, column_name: str) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_agg_empty(gb_df: pl.LazyFrame, engine) -> None:
-    q = gb_df.group_by("y").agg()
+def test_groupby_agg_empty(df: pl.LazyFrame, engine) -> None:
+    q = df.group_by("y").agg()
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
@@ -266,9 +258,9 @@ def test_mean_partitioned(values: list[int | None], engine) -> None:
     [{"executor_options": {"stats_planning": {"use_reduction_planning": True}}}],
     indirect=True,
 )
-def test_groupby_literal_with_stats_planning(gb_df, engine):
+def test_groupby_literal_with_stats_planning(df, engine):
     q = (
-        gb_df.group_by(
+        df.group_by(
             pl.lit(True).alias("key"),  # noqa: FBT003
             maintain_order=False,
         )
@@ -298,9 +290,9 @@ def test_groupby_literal_with_stats_planning(gb_df, engine):
     ],
     indirect=True,
 )
-def test_groupby_agg_config_options(gb_df, op, keys, engine):
+def test_groupby_agg_config_options(df, op, keys, engine):
     agg = getattr(pl.col("x"), op)()
     if op in ("sum", "mean"):
         agg = agg.round(2)  # Unary test coverage
-    q = gb_df.group_by(*keys).agg(agg)
+    q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)

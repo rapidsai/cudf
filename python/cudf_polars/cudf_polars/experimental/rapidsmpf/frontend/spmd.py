@@ -218,7 +218,26 @@ def allgather_polars_dataframe(
 
 
 class SPMDEngine(StreamingEngine):
-    """Polars GPU engine for SPMD execution backed by RapidsMPF."""
+    """
+    Multi-GPU Polars engine for SPMD executions.
+
+    Parameters
+    ----------
+    comm
+        The RapidsMPF communicator for this rank.
+    ctx
+        The RapidsMPF execution context.
+    py_executor
+        Thread pool used for Python-side async I/O during streaming execution.
+    executor_options
+        Key/value options forwarded to the streaming executor.
+    engine_options
+        Additional keyword arguments forwarded to
+        :class:`~polars.lazyframe.engine_config.GPUEngine`.
+    exit_stack
+        A :class:`contextlib.ExitStack` whose registered contexts are closed
+        when :meth:`shutdown` is called. If ``None``, an empty stack is created.
+    """
 
     def __init__(
         self,
@@ -226,18 +245,18 @@ class SPMDEngine(StreamingEngine):
         comm: Communicator,
         ctx: Context,
         py_executor: ThreadPoolExecutor,
-        exit_stack: contextlib.ExitStack,
         executor_options: dict[str, object],
         engine_options: dict[str, Any],
+        exit_stack: contextlib.ExitStack | None = None,
     ) -> None:
         self._comm: Communicator | None = comm
         self._ctx: Context | None = ctx
         self._py_executor: ThreadPoolExecutor | None = py_executor
         super().__init__(
             nranks=comm.nranks,
-            exit_stack=exit_stack,
             executor_options=executor_options,
             engine_options=engine_options,
+            exit_stack=exit_stack,
         )
 
     @property
@@ -497,7 +516,6 @@ def spmd_execution(
             comm=comm,
             ctx=ctx,
             py_executor=py_executor,
-            exit_stack=stack,
             executor_options={
                 **executor_options,
                 "runtime": "rapidsmpf",
@@ -510,6 +528,7 @@ def spmd_execution(
                 **engine_options,
                 "memory_resource": ctx.br().device_mr,
             },
+            exit_stack=stack,
         )
     except Exception:
         py_executor.shutdown(wait=False)

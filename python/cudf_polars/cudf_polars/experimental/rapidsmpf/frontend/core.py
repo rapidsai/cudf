@@ -4,17 +4,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Self
+import contextlib
+from typing import Any, Self
 
 import polars as pl
-
-if TYPE_CHECKING:
-    import contextlib
 
 
 class StreamingEngine(pl.GPUEngine):
     """
-    Base class for multi-GPU Polars engines backed by a streaming executor.
+    Base class for multi-GPU Polars engines.
 
     The engine manages the lifecycle of a streaming execution and can
     be used as a context manager. On exit, :meth:`shutdown` is called.
@@ -29,26 +27,28 @@ class StreamingEngine(pl.GPUEngine):
     ----------
     nranks
         Number of ranks (workers or GPUs) in the cluster.
-    exit_stack
-        A :class:`contextlib.ExitStack` whose registered contexts are closed
-        when :meth:`shutdown` is called.
     executor_options
         Key/value options forwarded to the streaming executor.
     engine_options
         Additional keyword arguments forwarded to
         :class:`~polars.lazyframe.engine_config.GPUEngine`.
+    exit_stack
+        A :class:`contextlib.ExitStack` whose registered contexts are closed
+        when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
     def __init__(
         self,
         *,
         nranks: int,
-        exit_stack: contextlib.ExitStack,
         executor_options: dict[str, object],
         engine_options: dict[str, Any],
+        exit_stack: contextlib.ExitStack | None = None,
     ):
         self._nranks = nranks
-        self._exit_stack: contextlib.ExitStack | None = exit_stack
+        self._exit_stack: contextlib.ExitStack | None = (
+            exit_stack or contextlib.ExitStack()
+        )
         super().__init__(
             executor="streaming",
             executor_options=executor_options,
