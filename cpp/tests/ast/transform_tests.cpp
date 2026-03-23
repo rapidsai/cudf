@@ -1049,7 +1049,7 @@ TYPED_TEST(DecimalComparisonTest, DecimalComparison)
 
 TEST_F(ComputeColumnTest, FloorDivIntegerEqualComparison)
 {
-  auto col   = column_wrapper<int64_t>{300964, 300972, 500'000, 26};
+  auto col   = column_wrapper<int64_t>{300'964, 300'972, 500'000, 26};
   auto table = cudf::table_view{{col}};
 
   auto col_ref       = cudf::ast::column_reference(0);
