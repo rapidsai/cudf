@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -77,7 +77,7 @@ std::unique_ptr<column> aggregation_based_rolling_window(table_view const& group
   auto result_columns = cudf::detail::gather(cudf::table_view{{*aggregation_result_col}},
                                              group_labels,
                                              cudf::out_of_bounds_policy::DONT_CHECK,
-                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             cudf::negative_index_policy::NOT_ALLOWED,
                                              stream,
                                              mr)
                           ->release();
