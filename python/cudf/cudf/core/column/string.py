@@ -373,11 +373,6 @@ class StringColumn(ColumnBase, Scannable):
             not nullable
             and not arrow_type
             and isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.storage
-            in [
-                "pyarrow",
-                "python",
-            ]
         ):
             if self.dtype.storage == "pyarrow":
                 pa_array = self.to_arrow()
