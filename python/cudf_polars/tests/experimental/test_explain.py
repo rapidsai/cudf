@@ -44,10 +44,6 @@ def explain_engine():
         executor_options={
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
-            "stats_planning": {
-                "use_reduction_planning": True,
-                "default_selectivity": 0.5,
-            },
         },
     )
 
@@ -207,29 +203,24 @@ def test_explain_logical_io_then_distinct(
     # TODO: Is the cpu engine doing the right thing here?
     assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check query plan
+    # Check query plan - only SCAN nodes carry row_count annotations
     repr = explain_query(q, explain_engine, physical=False)
-    if kind == "csv":
-        # CSV will NOT provide row-count statistics unless n_rows is provided,
-        # and it will never provide unique-count statistics.
-        if n_rows is None:
-            assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-        else:
-            value = _fmt_row_count(n_rows)
-            assert re.search(
-                rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE
-            )
-    else:
-        value = _fmt_row_count(q.collect().height)
-        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+    assert "SORT" in repr
+    if kind == "parquet":
+        # Parquet footer always reports full file row count, regardless of n_rows
+        source_count = _fmt_row_count(df0.height)
+        assert re.search(rf"SCAN PARQUET.*row_count='~{source_count}'", repr)
+    elif kind == "frame":
+        expected_rows = n_rows if n_rows is not None else df0.height
+        source_count = _fmt_row_count(expected_rows)
+        assert re.search(rf"DATAFRAMESCAN.*row_count='~{source_count}'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.filterwarnings("ignore:Sort does not support multiple partitions")
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 def test_explain_logical_io_then_filter(explain_engine, tmp_path, kind):
     # Create simple Distinct or Select(unique) + Sort query.
-    # NOTE: This test depends on a "default_selectivity" of 0.5
-    # and a very-specific DataFrame and predicate.
     df = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -247,13 +238,14 @@ def test_explain_logical_io_then_filter(explain_engine, tmp_path, kind):
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check query plan
+    # Check query plan - only SCAN nodes carry row_count annotations
     repr = explain_query(q, explain_engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        value = _fmt_row_count(q.collect().height)
-        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+    assert "SORT" in repr
+    if kind == "parquet":
+        assert re.search(r"SCAN PARQUET.*row_count='~8'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~8'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -273,11 +265,14 @@ def test_explain_logical_agg(explain_engine, tmp_path, kind):
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check query plan - We should know that sum produces a single row.
+    # Check query plan - only SCAN nodes carry row_count annotations
     repr = explain_query(q, explain_engine, physical=False)
-    assert re.search(
-        rf"^\s*SELECT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-    )
+    assert "SELECT" in repr
+    if kind == "parquet":
+        assert re.search(r"SCAN PARQUET.*row_count='~6'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~6'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -305,13 +300,18 @@ def test_explain_logical_io_then_join(explain_engine, tmp_path, kind):
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check the query plan
+    # Check the query plan - only SCAN nodes carry row_count annotations
     repr = explain_query(q, explain_engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        value = _fmt_row_count(q.collect().height)
-        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+    assert "SORT" in repr
+    assert "JOIN Inner" in repr
+    if kind == "parquet":
+        # sales has 6 rows, customers has 3 rows
+        assert re.search(r"SCAN PARQUET.*row_count='~6'", repr)
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~6'", repr)
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -348,23 +348,19 @@ def test_explain_logical_io_then_join_then_groupby(explain_engine, tmp_path, kin
     # Verify the query runs correctly
     assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check the query plan
+    # Check the query plan - only SCAN nodes carry row_count annotations
     repr = explain_query(q, explain_engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        join_count = _fmt_row_count(q_join.collect().height)
-        gb_count = _fmt_row_count(q_gb.collect().height)
-        final_count = _fmt_row_count(q.collect().height)
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*JOIN Inner.*row_count=\'~{join_count}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE
-        )
+    assert "SORT" in repr
+    assert "GROUPBY" in repr
+    assert "JOIN Inner" in repr
+    if kind == "parquet":
+        # sales has 6 rows, customers has 3 rows
+        assert re.search(r"SCAN PARQUET.*row_count='~6'", repr)
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~6'", repr)
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
@@ -424,49 +420,28 @@ def test_explain_logical_io_then_concat_then_groupby(explain_engine, tmp_path, k
     assert_gpu_result_equal(q_1, engine=explain_engine)
     assert_gpu_result_equal(q_2, engine=explain_engine)
 
-    # Check query plan q_1
+    # Check query plan q_1 - only SCAN nodes carry row_count annotations
     repr = explain_query(q_1, explain_engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
-        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
-        final_count_1 = _fmt_row_count(q_1.collect().height)
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count_1}\'\s*$", repr, re.MULTILINE
-        )
+    assert "SORT" in repr
+    assert "GROUPBY" in repr
+    assert "UNION" in repr
+    if kind == "parquet":
+        # Each source file has 3 rows
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
-    # Check query plan q_2
+    # Check query plan q_2 - only SCAN nodes carry row_count annotations
     repr = explain_query(q_2, explain_engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
-        concat_count_2 = _fmt_row_count(q_concat_2.collect().height)
-        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
-        gb_count_2 = _fmt_row_count(q_gb_2.collect().height)
-        final_count_2 = _fmt_row_count(q_2.collect().height)
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_2}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_2}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
-        )
+    assert "SORT" in repr
+    assert "GROUPBY" in repr
+    assert "UNION" in repr
+    if kind == "parquet":
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 def test_serialize_query():

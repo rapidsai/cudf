@@ -52,24 +52,8 @@ def df():
 @pytest.mark.parametrize(
     "cardinality,engine",
     [
-        (
-            {},
-            {
-                "executor_options": {
-                    "unique_fraction": {},
-                    "stats_planning": {"use_reduction_planning": False},
-                }
-            },
-        ),
-        (
-            {"y": 0.7},
-            {
-                "executor_options": {
-                    "unique_fraction": {"y": 0.7},
-                    "stats_planning": {"use_reduction_planning": False},
-                }
-            },
-        ),
+        ({}, {"executor_options": {"unique_fraction": {}}}),
+        ({"y": 0.7}, {"executor_options": {"unique_fraction": {"y": 0.7}}}),
     ],
     indirect=["engine"],
 )

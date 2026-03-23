@@ -253,12 +253,7 @@ def test_mean_partitioned(values: list[int | None], engine) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-@pytest.mark.parametrize(
-    "engine",
-    [{"executor_options": {"stats_planning": {"use_reduction_planning": True}}}],
-    indirect=True,
-)
-def test_groupby_literal_with_stats_planning(df, engine):
+def test_groupby_literal_key(df, engine):
     q = (
         df.group_by(
             pl.lit(True).alias("key"),  # noqa: FBT003

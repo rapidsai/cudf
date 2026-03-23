@@ -44,6 +44,17 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn, engine):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"target_partition_size": 1_000}}],
+    indirect=True,
+)
+def test_split_scan_aligns_to_row_group_boundaries(tmp_path, df, engine):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=1, row_group_size=10)
+    q = pl.scan_parquet(tmp_path)
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize("mask", [None, pl.col("x") < 1_000])
 @pytest.mark.parametrize(
     "engine",
