@@ -128,18 +128,6 @@ struct reljunk {
   }
 };
 
-<<<<<<< HEAD
-/**
- * @brief Check for supported new-line characters
- *
- * '\n, \r, \u0085, \u2028, or \u2029'
- */
-CUDF_HOST_DEVICE constexpr bool is_newline(char32_t const ch)
-{
-  return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
-}
-=======
->>>>>>> 3d1726a287 (feature: implement Glushkov's NFA)
 
 /**
  * @brief Utility to check a specific character against this class instance.
@@ -437,7 +425,12 @@ __device__ __forceinline__ match_result reprog_device::find(int32_t const thread
 {
   // Dispatch to Glushkov bit-parallel engine when available.
   // extract() always uses Thompson (Glushkov does not track capture groups).
-  if (_glushkov) { return glushkov_find<P>(*_glushkov, dstr, begin, end); }
+  if (_glushkov) {
+    if (_glushkov_cache) {
+      return glushkov_find<P>(*_glushkov, dstr, begin, end, _glushkov_cache);
+    }
+    return glushkov_find<P>(*_glushkov, dstr, begin, end);
+  }
   return call_regexec<P>(thread_idx, dstr, begin, end);
 }
 

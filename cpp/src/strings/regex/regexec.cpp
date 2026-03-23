@@ -341,9 +341,19 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
   _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
 }
 
-int32_t reprog_device::compute_shared_memory_size() const
+int32_t reprog_device::compute_shared_memory_size_thompson() const
 {
   return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
+}
+
+int32_t reprog_device::compute_shared_memory_size() const
+{
+  auto size = compute_shared_memory_size_thompson();
+  if (_glushkov) {
+    size = cudf::util::round_up_unsafe(size, 8);
+    size += static_cast<int32_t>(sizeof(glushkov_shmem_cache));
+  }
+  return size;
 }
 
 std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count)
