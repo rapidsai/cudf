@@ -1867,7 +1867,12 @@ def run_polars_spmd(
         engine_options={
             "parquet_options": parquet_options,
             "cuda_stream_policy": run_config.stream_policy,
-        },
+rapidsmpf_options=Options(get_environment_variables()),
+executor_options=executor_options,
+engine_options={
+"parquet_options": parquet_options,
+"cuda_stream_policy": run_config.stream_policy,
+},
     ) as engine:
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
