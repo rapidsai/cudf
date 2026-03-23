@@ -335,7 +335,8 @@ async def sort_actor(
     collective_ids: list[int],
 ) -> None:
     """Streaming sort actor."""
-    async with shutdown_on_error(context, ch_in, ch_out):
+    local_sort_ir = ir.children[0]
+    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=local_sort_ir):
         metadata_in = await recv_metadata(ch_in, context)
         output_metadata = ChannelMetadata(
             local_count=max(1, num_partitions // comm.nranks),
@@ -343,9 +344,7 @@ async def sort_actor(
         )
         await send_metadata(ch_out, context, output_metadata)
 
-        local_sort_ir = ir.children[0]
         assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
-
         chunk_store = ChunkStore(context)
         local_candidates_list = await _receive_and_buffer_chunks(
             context, ch_in, chunk_store, local_sort_ir, by, num_partitions, comm

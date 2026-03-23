@@ -872,7 +872,7 @@ class StreamingExecutor:
             f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
         )
     )
-    spmd: SPMDContext | None = None
+    spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105

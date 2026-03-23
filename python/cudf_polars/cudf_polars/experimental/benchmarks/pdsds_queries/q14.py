@@ -467,4 +467,5 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             ("i_category_id", False),
         ],
         limit=100,
+        nulls_last=False,
     )

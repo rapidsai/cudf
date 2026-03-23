@@ -50,7 +50,7 @@ std::unique_ptr<column> build_histogram(column_view const& values,
   auto out_table = cudf::detail::gather(labeled_values,
                                         *distinct_indices,
                                         out_of_bounds_policy::DONT_CHECK,
-                                        cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                        cudf::negative_index_policy::NOT_ALLOWED,
                                         stream,
                                         mr);
 

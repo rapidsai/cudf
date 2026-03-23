@@ -152,7 +152,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   auto output_with_nulls = cudf::detail::gather(table_view{std::vector<column_view>{input}},
                                                 gather_map_column->view(),
                                                 out_of_bounds_policy::NULLIFY,
-                                                cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                                cudf::negative_index_policy::NOT_ALLOWED,
                                                 stream,
                                                 mr);
 
@@ -178,7 +178,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
     cudf::detail::gather(table_view{std::vector<column_view>{default_outputs}},
                          scatter_map,
                          out_of_bounds_policy::DONT_CHECK,
-                         cudf::detail::negative_index_policy::NOT_ALLOWED,
+                         cudf::negative_index_policy::NOT_ALLOWED,
                          stream,
                          cudf::get_current_device_resource_ref());
 
