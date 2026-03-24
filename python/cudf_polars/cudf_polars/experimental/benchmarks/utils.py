@@ -1760,7 +1760,7 @@ def run_polars(
                 date_type,
                 validation_files,
             )
-        case "single" | "distributed":
+        case "single" | "distributed" | None:
             run_polars_single_or_dask(
                 benchmark,
                 args,
