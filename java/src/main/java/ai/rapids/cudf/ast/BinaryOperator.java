@@ -17,7 +17,8 @@ public enum BinaryOperator {
   MUL(2),                 // operator *
   DIV(3),                 // operator / using common type of lhs and rhs
   TRUE_DIV(4),            // operator / after promoting type to floating point
-  FLOOR_DIV(5),           // operator / after promoting to 64 bit floating point and then flooring the result
+  FLOOR_DIV(5),           // ooperator / after promoting to the common type of lhs and rhs (integral or
+                          // floating point), and then flooring the result
   MOD(6),                 // operator %
   PYMOD(7),               // operator % using Python's sign rules for negatives
   POW(8),                 // lhs ^ rhs
