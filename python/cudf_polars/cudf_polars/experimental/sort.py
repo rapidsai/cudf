@@ -58,10 +58,9 @@ def find_sort_splits(
     """
     Find local sort splits given all (global) split candidates.
 
-    The reason for much of the complexity is to get the result sizes as
-    precise as possible even when e.g. all values are equal.
-    In other words, this goes through extra effort to split the data at the
-    precise boundaries (which includes part_id and local_row_number).
+    When multiple rows share a boundary value, they go to the later partition.
+    The ``part_id`` and ``local_row`` columns in ``sort_boundaries`` are used
+    for tiebreaking when ``chunk_relative=False``.
 
     Parameters
     ----------
@@ -97,10 +96,7 @@ def find_sort_splits(
     # the partition id and the local row number of the final split values
     *boundary_cols, split_part_id, split_local_row = sort_boundaries.columns()
     sort_boundaries = plc.Table(boundary_cols)
-    # Find the first and last row for each split value (there may be ties).
-    # upper_bound via lower_bound on the reversed table with flipped sort orders.
-    # (This is a work-around for a possible bug in upper_bound - TBD)
-    n = tbl.num_rows()
+    # Find the first row in tbl >= each boundary value (ties go to the later partition).
     split_first_col = plc.search.lower_bound(
         tbl,
         sort_boundaries,
@@ -108,55 +104,24 @@ def find_sort_splits(
         null_order,
         stream=stream,
     )
-    if n > 0:
-        rev_indices = plc.filling.sequence(
-            n,
-            plc.Scalar.from_py(n - 1, plc.DataType(plc.TypeId.INT32), stream=stream),
-            plc.Scalar.from_py(-1, plc.DataType(plc.TypeId.INT32), stream=stream),
-            stream=stream,
-        )
-        reversed_tbl = plc.copying.gather(
-            tbl, rev_indices, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
-        )
-        reversed_column_order = [
-            plc.types.Order.DESCENDING
-            if o == plc.types.Order.ASCENDING
-            else plc.types.Order.ASCENDING
-            for o in column_order
-        ]
-        reversed_null_order = [
-            plc.types.NullOrder.BEFORE
-            if o == plc.types.NullOrder.AFTER
-            else plc.types.NullOrder.AFTER
-            for o in null_order
-        ]
-        lower_of_reversed = plc.search.lower_bound(
-            reversed_tbl,
-            sort_boundaries,
-            reversed_column_order,
-            reversed_null_order,
-            stream=stream,
-        )
-        split_last = n - pl.Series(lower_of_reversed)
-    else:
-        split_last = pl.Series([0] * sort_boundaries.num_rows(), dtype=pl.Int32)
-    # Find the final split points.
     df = pl.DataFrame(
         {
             "first": pl.Series(split_first_col),
-            "last": split_last,
             "part_id": pl.Series(split_part_id),
             "local_row": pl.Series(split_local_row),
         }
     )
+    # For chunk_relative=True (streaming), always use first; there is no meaningful
+    # local_row within a chunk. For chunk_relative=False (tasks), use local_row when
+    # the boundary belongs to this partition so the split lands at the exact row.
     out = (
-        pl.when(pl.col("part_id") < my_part_id)
-        .then(pl.col("first"))
-        .when(pl.col("part_id") > my_part_id)
-        .then(pl.col("last"))
-        .otherwise(pl.col("first") if chunk_relative else pl.col("local_row"))
+        pl.col("first")
+        if chunk_relative
+        else pl.when(pl.col("part_id") == my_part_id)
+        .then(pl.col("local_row"))
+        .otherwise(pl.col("first"))
     )
-    cap = n
+    cap = tbl.num_rows()
     return df.select(out.clip(0, cap).sort()).to_series().to_list()
 
 
