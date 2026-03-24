@@ -785,6 +785,55 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
   }
 }
 
+TEST_F(HybridScanTest, DecimalTypeOption)
+{
+  auto const data = std::vector<int32_t>{1000, 2000, 3000, 4000, 5000};
+  auto col        = cudf::test::fixed_point_column_wrapper<int32_t>(
+    data.begin(), data.end(), numeric::scale_type{-2});
+
+  std::vector<char> parquet_buffer;
+  {
+    auto const table = cudf::table_view{{col}};
+    auto opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
+        .build();
+    cudf::io::write_parquet(opts);
+  }
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+  auto datasource   = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+
+  auto const read_with_decimal_type = [&](cudf::type_id decimal_type_id) {
+    auto options =
+      cudf::io::parquet_reader_options::builder().decimal_width(decimal_type_id).build();
+
+    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+    auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      *footer_buffer, options);
+
+    auto const row_groups   = reader->all_row_groups(options);
+    auto const chunk_ranges = reader->all_column_chunks_byte_ranges(row_groups, options);
+    auto [buffers, col_data, tasks] =
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, chunk_ranges, stream, mr);
+    tasks.get();
+
+    return reader->materialize_all_columns(row_groups, col_data, options, stream, mr);
+  };
+
+  {
+    auto result = read_with_decimal_type(cudf::type_id::DECIMAL128);
+    EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::DECIMAL128);
+    EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
+  }
+  {
+    auto result = read_with_decimal_type(cudf::type_id::DECIMAL64);
+    EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::DECIMAL64);
+    EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
+  }
+}
+
 TEST_F(HybridScanTest, ConstructRowGroupPassesBasic)
 {
   auto constexpr num_rg      = 8;
@@ -926,7 +975,8 @@ TEST_F(HybridScanTest, ConstructRowGroupPassesMatchesChunkedReader)
   }
   auto const num_chunked_reader_chunks = chunked_reader_tables.size();
 
-  // Read with the hybrid scan reader using construct_row_group_passes
+  // Read with the hybrid scan reader using construct_row_group_passes +
+  // setup_chunking_for_all_columns / materialize_all_columns_chunk
   auto datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
   auto options    = cudf::io::parquet_reader_options::builder().build();
@@ -938,71 +988,30 @@ TEST_F(HybridScanTest, ConstructRowGroupPassesMatchesChunkedReader)
   auto const all_rgs = reader->all_row_groups(options);
   auto const passes  = reader->construct_row_group_passes(all_rgs, pass_read_limit);
 
-  // The number of passes from construct_row_group_passes should match the number of
-  // table chunks from the chunked reader (since chunk_read_limit == 0)
-  EXPECT_EQ(passes.size(), num_chunked_reader_chunks);
-
-  // Read each pass with the hybrid scan reader and compare with chunked reader output
-  for (size_t pass_idx = 0; pass_idx < passes.size(); ++pass_idx) {
-    auto const& pass_rgs = passes[pass_idx];
-    auto const rg_span   = cudf::host_span<cudf::size_type const>(pass_rgs);
+  // Collect all hybrid scan output chunks across passes
+  std::vector<std::unique_ptr<cudf::table>> hybrid_scan_tables;
+  for (auto const& pass_rgs : passes) {
+    auto const rg_span = cudf::host_span<cudf::size_type const>(pass_rgs);
 
     auto const chunk_byte_ranges    = reader->all_column_chunks_byte_ranges(rg_span, options);
     auto [buffers, col_data, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
       *datasource, chunk_byte_ranges, stream, mr);
     tasks.get();
 
-    auto result = reader->materialize_all_columns(rg_span, col_data, options, stream, mr);
+    reader->setup_chunking_for_all_columns(
+      0, pass_read_limit, rg_span, col_data, options, stream, mr);
 
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(chunked_reader_tables[pass_idx]->view(), result.tbl->view());
-  }
-}
-
-TEST_F(HybridScanTest, DecimalTypeOption)
-{
-  auto const data = std::vector<int32_t>{1000, 2000, 3000, 4000, 5000};
-  auto col        = cudf::test::fixed_point_column_wrapper<int32_t>(
-    data.begin(), data.end(), numeric::scale_type{-2});
-
-  std::vector<char> parquet_buffer;
-  {
-    auto const table = cudf::table_view{{col}};
-    auto opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
-        .build();
-    cudf::io::write_parquet(opts);
+    while (reader->has_next_table_chunk()) {
+      auto chunk = reader->materialize_all_columns_chunk();
+      hybrid_scan_tables.push_back(std::move(chunk.tbl));
+    }
   }
 
-  auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
-  auto datasource   = cudf::io::datasource::create(cudf::host_span<std::byte const>(
-    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+  // The number of output tables should match the chunked reader
+  EXPECT_EQ(hybrid_scan_tables.size(), num_chunked_reader_chunks);
 
-  auto const read_with_decimal_type = [&](cudf::type_id decimal_type_id) {
-    auto options =
-      cudf::io::parquet_reader_options::builder().decimal_width(decimal_type_id).build();
-
-    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
-    auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
-      *footer_buffer, options);
-
-    auto const row_groups   = reader->all_row_groups(options);
-    auto const chunk_ranges = reader->all_column_chunks_byte_ranges(row_groups, options);
-    auto [buffers, col_data, tasks] =
-      cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, chunk_ranges, stream, mr);
-    tasks.get();
-
-    return reader->materialize_all_columns(row_groups, col_data, options, stream, mr);
-  };
-
-  {
-    auto result = read_with_decimal_type(cudf::type_id::DECIMAL128);
-    EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::DECIMAL128);
-    EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
-  }
-  {
-    auto result = read_with_decimal_type(cudf::type_id::DECIMAL64);
-    EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::DECIMAL64);
-    EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
+  for (size_t i = 0; i < hybrid_scan_tables.size(); ++i) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(chunked_reader_tables[i]->view(),
+                                       hybrid_scan_tables[i]->view());
   }
 }
