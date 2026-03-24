@@ -23,7 +23,7 @@ struct benchmark_domain {
  * Example:
  * ```
  * void some_function(){
- *    cudf::scoped_range rng{"custom_name"}; // Customizes range name
+ *    cudf::benchmark::scoped_range rng{"custom_name"}; // Customizes range name
  *    ...
  * }
  * ```
