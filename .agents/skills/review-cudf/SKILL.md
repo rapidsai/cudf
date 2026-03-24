@@ -19,7 +19,7 @@ gh pr view <PR_NUMBER> --repo rapidsai/cudf --json title,body,files,additions,de
 gh pr diff <PR_NUMBER> --repo rapidsai/cudf
 ```
 
-Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the environment (for example via your secret manager) so `gh` can authenticate and bypass rate limits; do not run `gh auth token` from within the agent. If no token is available, use alternative methods.
+Hint: Check if `GH_TOKEN` (or GitHub CLI auth) is already configured in the environment (for example via your secret manager) so `gh` can authenticate and bypass rate limits; do not run `gh auth token` from within the agent. If `gh` auth is unavailable, fall back to GitHub's raw diff/patch URLs, `git fetch` of the PR ref, unauthenticated GitHub REST API with `curl`, or any other available methods.
 
 2. **Fetch review comments already posted** for context on what's already been suggested and need not be repeated.
 
@@ -39,7 +39,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 
 ### Correctness & Logic
 
-- Trace implemented core logic step by step to ensure it is correct and coherent.
+- Thoroughly trace the implemented logic step by step to ensure it is correct and coherent.
 - No unnecessary memory usage, leaks, dangling references, lifetime issues.
 - Recursive and branched algorithms have no pitfalls, unintended fallthroughs, or unhandled cases. Trace such algorithms.
 - Algorithms cover all possible edge cases such as empty input and nulls, without being excessively defensive.
@@ -53,6 +53,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Stream ordering preserved across the API flow. **(guide: "Streams")**
 - Discourage implicit use of CUDA default stream to enable asynchronous execution. **(guide: "Streams")**
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
+- No use of relaxed constexpr functions in device code. i.e., Use `cuda::std::` type traits and constexpr functions instead of `std::` in device code and templates (e.g., `cuda::std::is_numeric_v<T>` not `std::is_numeric_v<T>`, `cuda::std::clamp` not `std::clamp`, `cuda::std::min` not `std::min` and so on).
 
 ### Performance Optimization
 
@@ -78,23 +79,10 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Unsupported type overloads call `CUDF_FAIL` or `CUDF_UNREACHABLE` as appropriate.
 - Functors may include a `static constexpr bool is_supported()` helper for compile-time type filtering.
 
-### Column Construction Patterns
-
-- Use `make_empty_column` to construct empty columns for early returns.
-- Use `cudf::make_column_from_scalar` to construct a column filled with the same value.
-- Use `cudf::detail::copy_bitmask` when output nullability mirrors the input.
-- Use `cudf::detail::bitmask_and` to combine null masks.
-- Use `rmm::device_buffer{0, stream, mr}` (or `rmm::device_buffer{0, stream}` when no MR is available), not a null pointer, when constructing a non-nullable column.
-- Strings columns may use a two-phase approach via `make_strings_children`.
-- Use `cudf::strings::detail::make_offsets_child_column` for strings; use `cudf::detail::make_offsets_child_column` for lists.
-- Use `cudf::detail::offsetalator_factory::make_input_iterator` for type-erased offset access supporting both INT32 and INT64 offsets.
-- Use `cudf::detail::make_counting_transform_iterator` instead of `thrust::make_transform_iterator(thrust::counting_iterator(0), fn)`.
-
 ### Naming & Code Duplication
 
 - No significant code duplication; reusable logic must be refactored into common helper functions.
 - Function and variable names are meaningful — not too vague or verbose.
-- No single-letter variable names except loop indices (`i`, `j`, `k`) or thread IDs (`t`, `tid`).
 - Private member variables prefixed with underscore. **(guide: "Code and Documentation Style")**
 
 ### API & Design (libcudf C++)
@@ -103,8 +91,8 @@ Verify compliance with the developer guide sections: **(guide: "Directory Struct
 
 - Public APIs in `cpp/include/cudf/` with `CUDF_EXPORT`; detail headers in `cpp/include/cudf/detail/` or `cpp/include/cudf/<sub>/detail/`.
 - Stream and MR as last two parameters (stream before MR); public defaults, no defaults in detail APIs.
-- `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` are used correctly; `CUDF_EXPECTS` condition must be a pure predicate.
-- Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`.
+- `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` are used correctly; `CUDF_EXPECTS` condition must be a pure predicate with no side effects.
+- Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`. Trivial functions may skip the `CUDF_FUNC_RANGE()`.
 - `cudaDeviceSynchronize()` is never ever used; sync only via `stream.synchronize()` when required.
 
 Additional key checks not in the guide:
@@ -116,7 +104,7 @@ Additional key checks not in the guide:
 - Use `host_span`/`device_span` ; no owning vectors passed around by copy/reference unless explicitly moved (transferring ownership).
 - Use modern C++20 primitives such as `concepts`, `std::ranges`, `std::transform` over manual implementations and raw loops; Range-for loops are fine.
 - Use `static_assert` with a clear message to prevent accidental template misuse.
-- Use `[[nodiscard]]` when a function that returns a non-void result that has no side effects
+- Use `[[nodiscard]]` when a function with no side effects returns a non-void result.
 
 ### Memory Allocation & Management
 
@@ -172,7 +160,7 @@ Refer to the **Testing Guide** (`cpp/doxygen/developer_guide/TESTING.md`) for fu
 
 Refer to the **Benchmarking Guide** (`cpp/doxygen/developer_guide/BENCHMARKING.md`). Key review checks:
 
-- New benchmarks use NVBench (not Google Benchmark).
+- Use NVBench (not Google Benchmark).
 - Benchmark source mirrors the feature path (`cpp/benchmarks/<feature>/`).
 - Prefer `.cpp` over `.cu` for benchmark files when possible.
 
