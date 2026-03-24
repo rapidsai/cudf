@@ -15,6 +15,8 @@ from cudf_polars.utils.config import RayContext
 
 ray = pytest.importorskip("ray")
 
+from rapidsmpf.bootstrap import is_running_with_rrun  # noqa: E402
+
 from cudf_polars.experimental.rapidsmpf.frontend.ray import (  # noqa: E402
     RayClient,
     ray_execution,
@@ -24,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def _ray_env() -> Iterator[tuple[RayClient, pl.GPUEngine]]:
     """Create one Ray cluster + GPU actors shared across the test session."""
     try:
@@ -42,13 +44,13 @@ def _ray_env() -> Iterator[tuple[RayClient, pl.GPUEngine]]:
         pytest.skip(f"Ray GPU cluster unavailable: {e}")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def ray_client(_ray_env: tuple[RayClient, pl.GPUEngine]) -> RayClient:
     """Session-scoped Ray cluster client."""
     return _ray_env[0]
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def engine(_ray_env: tuple[RayClient, pl.GPUEngine]) -> pl.GPUEngine:
     """Session-scoped GPU engine backed by the Ray cluster."""
     return _ray_env[1]
@@ -58,6 +60,10 @@ pytestmark = [
     # Ray's internal subprocess management leaks /dev/null file handles;
     # suppress the resulting ResourceWarning noise from its internals.
     pytest.mark.filterwarnings("ignore::ResourceWarning"),
+    pytest.mark.skipif(
+        is_running_with_rrun(),
+        reason="ray_execution() cannot be called from within an rrun cluster",
+    ),
 ]
 
 
