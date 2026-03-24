@@ -711,6 +711,77 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns_chunk()
   return result;
 }
 
+std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row_group_passes(
+  cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+
+  // If pass_read_limit is 0 or there is only one row group, return all in a single pass
+  if (pass_read_limit == 0 or row_group_indices.size() == 1) {
+    return {{row_group_indices.begin(), row_group_indices.end()}};
+  }
+
+  // Percentage of the total available input read limit reserved for compressed data.
+  // Mirrors input_limit_compression_reserve in reader_impl_chunking.cu
+  constexpr float compression_reserve = 0.3f;
+  auto const comp_read_limit =
+    static_cast<std::size_t>(pass_read_limit * compression_reserve);
+
+  auto constexpr max_rows_per_pass =
+    static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max());
+
+  // Hybrid scan reader currently supports reading 1 file only
+  constexpr std::size_t source_index = 0;
+
+  std::vector<std::vector<cudf::size_type>> passes;
+  std::size_t cur_pass_byte_size       = 0;
+  std::size_t cur_pass_num_rows        = 0;
+  std::size_t cur_rg_start             = 0;
+
+  for (std::size_t i = 0; i < row_group_indices.size(); ++i) {
+    auto const rg_index   = row_group_indices[i];
+    auto const& row_group = _extended_metadata->get_row_group(rg_index, source_index);
+    auto const rg_rows    = static_cast<std::size_t>(row_group.num_rows);
+
+    auto compressed_size_iter = thrust::make_transform_iterator(
+      row_group.columns.begin(),
+      [](auto const& c) { return c.meta_data.total_compressed_size; });
+    auto const compressed_rg_size =
+      std::reduce(compressed_size_iter, compressed_size_iter + row_group.columns.size());
+
+    if ((cur_pass_byte_size + compressed_rg_size >= comp_read_limit) or
+        (cur_pass_num_rows + rg_rows >= max_rows_per_pass)) {
+      // A single row group exceeds the limit: include it alone in a pass
+      if (cur_rg_start == i) {
+        CUDF_EXPECTS(rg_rows <= max_rows_per_pass,
+                     "Number of rows in each row group must be smaller than the column size limit");
+        passes.emplace_back(row_group_indices.begin() + cur_rg_start,
+                            row_group_indices.begin() + i + 1);
+        cur_rg_start        = i + 1;
+        cur_pass_byte_size  = 0;
+        cur_pass_num_rows   = 0;
+      } else {
+        // End the pass at the previous row group
+        passes.emplace_back(row_group_indices.begin() + cur_rg_start,
+                            row_group_indices.begin() + i);
+        cur_rg_start        = i;
+        cur_pass_byte_size  = compressed_rg_size;
+        cur_pass_num_rows   = rg_rows;
+      }
+    } else {
+      cur_pass_byte_size += compressed_rg_size;
+      cur_pass_num_rows += rg_rows;
+    }
+  }
+
+  // Add the last pass if any row groups remain
+  if (cur_rg_start < row_group_indices.size()) {
+    passes.emplace_back(row_group_indices.begin() + cur_rg_start, row_group_indices.end());
+  }
+
+  return passes;
+}
+
 bool hybrid_scan_reader_impl::has_next_table_chunk()
 {
   CUDF_EXPECTS(_file_preprocessed, "Chunking not yet setup");
