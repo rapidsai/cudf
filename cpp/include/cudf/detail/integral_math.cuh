@@ -35,11 +35,8 @@ __device__ inline constexpr auto integral_pow(Base base, Exp exp) -> Base
   if (base == 0) { return 0; }
   Base extra = 1;
   while (exp > 1) {
-    if (exp & 1) {
-      // The exponent is odd, so multiply by one factor of x.
-      extra *= base;
-      exp -= 1;
-    }
+    // The exponent is odd, so multiply by one factor of x.
+    if (exp & 1) { extra *= base; }
     // The exponent is even, so square x and divide the exponent y by 2.
     exp /= 2;
     base *= base;
