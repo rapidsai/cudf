@@ -156,7 +156,7 @@ Each entry includes `pid`, `hostname`, `cuda_visible_devices`, and `node_id`.
 pass-through dictionaries:
 
 ```python
-from rapidsmpf.integrations.cudf_polars import Options
+from rapidsmpf.config import Options
 
 with ray_execution(
     rapidsmpf_options=Options(num_streaming_threads=8),
@@ -269,7 +269,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     spmd_execution,
 )
 
-with spmd_execution() as (comm, ctx, engine):
+with spmd_execution() as engine:
     result = (
         pl.scan_parquet("/data/dataset/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -280,18 +280,17 @@ with spmd_execution() as (comm, ctx, engine):
 
     with reserve_op_id() as op_id:
         full = allgather_polars_dataframe(
-            comm=comm,
-            ctx=ctx,
+            engine=engine,
             local_df=result,
             op_id=op_id,
         )
 ```
 
-The context manager yields:
+The context manager yields an `SPMDEngine` with:
 
-* `comm` — [`rapidsmpf.communicator.Communicator`][rapidsmpf-communicator]
-* `ctx` — [`rapidsmpf.streaming.core.context.Context`][rapidsmpf-context]
-* `engine` — {class}`~polars.lazyframe.engine_config.GPUEngine`
+* `engine.comm` — [`rapidsmpf.communicator.Communicator`][rapidsmpf-communicator]
+* `engine.context` — [`rapidsmpf.streaming.core.context.Context`][rapidsmpf-context]
+* `engine.nranks` / `engine.rank` — cluster size and local rank index
 
 Pass `engine` to every `LazyFrame.collect()` or `sink*()` call inside the context block.
 
@@ -311,7 +310,7 @@ In practice:
 
 ```python
 # Every rank executes the same query in the same order.
-with spmd_execution() as (comm, ctx, engine):
+with spmd_execution() as engine:
     result = (
         pl.scan_parquet("/data/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -326,9 +325,9 @@ with spmd_execution() as (comm, ctx, engine):
 ```python
 # Rank 0 executes a group_by collective; other ranks do not.
 # The collective IDs go out of sync → deadlock.
-with spmd_execution() as (comm, ctx, engine):
+with spmd_execution() as engine:
     df = pl.scan_parquet("/data/*.parquet")
-    if comm.rank == 0:        # DON'T DO THIS
+    if engine.rank == 0:        # DON'T DO THIS
         df = df.group_by("customer_id").agg(pl.col("amount").sum())
     result = df.collect(engine=engine)
 ```
@@ -345,11 +344,10 @@ from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     spmd_execution,
 )
 
-with spmd_execution() as (comm, ctx, engine):
+with spmd_execution() as engine:
     with reserve_op_id() as op_id:
         full = allgather_polars_dataframe(
-            comm=comm,
-            ctx=ctx,
+            engine=engine,
             local_df=result,
             op_id=op_id,
         )
@@ -370,17 +368,16 @@ arguments:
 
 ```python
 import rmm
-from rapidsmpf.integrations.cudf_polars import Options
+from rapidsmpf.config import Options
 
 with spmd_execution(
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
-        "rapidsmpf_spill": True,
         "rapidsmpf_py_executor_max_workers": 2,
     },
     engine_options={"parquet_options": {"use_rapidsmpf_native": True}},
-) as (comm, ctx, engine):
+) as engine:
     ...
 ```
 
