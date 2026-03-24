@@ -451,8 +451,9 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
     cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{int32_t{0}} + size);
 
-  auto source = cudf::test::fixed_width_column_wrapper<float>(
-    cuda::counting_iterator{float{0}}, cuda::counting_iterator{float{0}} + size);
+  auto float_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](int32_t i) { return static_cast<float>(i); });
+  auto source = cudf::test::fixed_width_column_wrapper<float>(float_iter, float_iter + size);
 
   cudf::mutable_column_view target_view{target};
 

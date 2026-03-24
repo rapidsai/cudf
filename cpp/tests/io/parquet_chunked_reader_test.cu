@@ -1221,8 +1221,9 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
   auto iter1 = cuda::counting_iterator{int{0}};
   cudf::test::fixed_width_column_wrapper<int> col1(iter1, iter1 + num_rows);
 
-  auto iter2 = cuda::counting_iterator{int{0}};
-  cudf::test::fixed_width_column_wrapper<double, int> col2(iter2, iter2 + num_rows);
+  auto iter2 =
+    cudf::detail::make_counting_transform_iterator(0, [](int i) { return static_cast<double>(i); });
+  cudf::test::fixed_width_column_wrapper<double> col2(iter2, iter2 + num_rows);
 
   auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
   auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {

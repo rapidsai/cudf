@@ -52,12 +52,11 @@ bool boolean_from_string(std::string_view str)
 template <typename key_type>
 void BM_filter_min_max(nvbench::state& state)
 {
-  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const num_filter_columns =
-    static_cast<cudf::size_type>(state.get_int64("num_filter_columns"));
-  auto const engine_name = state.get_string("engine");
-  auto const nullable    = boolean_from_string(state.get_string("nullable"));
-  auto const engine      = engine_from_string(engine_name);
+  auto const num_rows           = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_filter_columns = state.get_int64("num_filter_columns");
+  auto const engine_name        = state.get_string("engine");
+  auto const nullable           = boolean_from_string(state.get_string("nullable"));
+  auto const engine             = engine_from_string(engine_name);
 
   auto const input_min   = static_cast<key_type>(0);
   auto const input_max   = static_cast<key_type>(100);
@@ -71,7 +70,7 @@ void BM_filter_min_max(nvbench::state& state)
   profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
 
   std::vector<std::unique_ptr<cudf::column>> filter_columns;
-  std::transform(cuda::counting_iterator{std::size_t{0}},
+  std::transform(cuda::counting_iterator{int64_t{0}},
                  cuda::counting_iterator{num_filter_columns},
                  std::back_inserter(filter_columns),
                  [&](auto) {

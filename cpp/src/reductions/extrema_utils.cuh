@@ -69,20 +69,23 @@ class arg_minmax_dispatcher {
                               rmm::cuda_stream_view stream,
                               BinaryPred comp) const
   {
+    using value_type = typename std::iterator_traits<InputIterator>::value_type;
     if constexpr (K == aggregation::ARGMIN) {
-      return thrust::reduce(
-        rmm::exec_policy_nosync(stream),
-        it,
-        it + size,
-        *it,
-        [comp] __device__(auto const& a, auto const& b) { return comp(a, b) ? a : b; });
+      return thrust::reduce(rmm::exec_policy_nosync(stream),
+                            it,
+                            it + size,
+                            *it,
+                            [comp] __device__(auto const& a, auto const& b) -> value_type {
+                              return comp(a, b) ? a : b;
+                            });
     } else {
-      return thrust::reduce(
-        rmm::exec_policy_nosync(stream),
-        it,
-        it + size,
-        *it,
-        [comp] __device__(auto const& a, auto const& b) { return comp(b, a) ? a : b; });
+      return thrust::reduce(rmm::exec_policy_nosync(stream),
+                            it,
+                            it + size,
+                            *it,
+                            [comp] __device__(auto const& a, auto const& b) -> value_type {
+                              return comp(b, a) ? a : b;
+                            });
     }
   }
 
@@ -95,7 +98,7 @@ class arg_minmax_dispatcher {
                             indices,
                             indices + size,
                             size_type{0},
-                            [it] __device__(size_type a, size_type b) {
+                            [it] __device__(size_type a, size_type b) -> size_type {
                               return cuda::std::less<>{}(*(it + a), *(it + b)) ? a : b;
                             });
     } else {
@@ -103,7 +106,7 @@ class arg_minmax_dispatcher {
                             indices,
                             indices + size,
                             size_type{0},
-                            [it] __device__(size_type a, size_type b) {
+                            [it] __device__(size_type a, size_type b) -> size_type {
                               return cuda::std::greater<>{}(*(it + a), *(it + b)) ? a : b;
                             });
     }

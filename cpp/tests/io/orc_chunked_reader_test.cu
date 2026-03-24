@@ -1083,8 +1083,9 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
   auto const iter1 = cuda::counting_iterator{int{0}};
   auto const col1  = int32s_col(iter1, iter1 + num_rows);
 
-  auto const iter2 = cuda::counting_iterator{double{0}};
-  auto const col2  = doubles_col(iter2, iter2 + num_rows);
+  auto const iter2 =
+    cudf::detail::make_counting_transform_iterator(0, [](int i) { return static_cast<double>(i); });
+  auto const col2 = doubles_col(iter2, iter2 + num_rows);
 
   auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
   auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {

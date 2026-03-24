@@ -38,7 +38,7 @@ static void BM_transform_polynomials(nvbench::state& state)
   std::vector<std::unique_ptr<cudf::column>> constants;
 
   std::transform(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::counting_iterator{order + 1},
     std::back_inserter(constants),
     [&](int) { return create_random_column(cudf::type_to_id<key_type>(), row_count{1}, profile); });

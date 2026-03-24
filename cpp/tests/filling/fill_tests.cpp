@@ -341,8 +341,9 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
   using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 
-  auto destination = cudf::test::fixed_width_column_wrapper<float>(
-    cuda::counting_iterator{float{0}}, cuda::counting_iterator{float{0}} + size);
+  auto float_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](int32_t i) { return static_cast<float>(i); });
+  auto destination = cudf::test::fixed_width_column_wrapper<float>(float_iter, float_iter + size);
 
   auto destination_view = cudf::mutable_column_view{destination};
 

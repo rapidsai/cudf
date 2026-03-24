@@ -720,8 +720,8 @@ get_array_children_indices(TreeDepthT row_array_children_level,
   rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
   rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
   cudf::detail::copy_if_async(
-    cuda::counting_iterator{NodeIndexT{0}},
-    cuda::counting_iterator{NodeIndexT{num_nodes}},
+    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator{num_nodes},
     node_levels.begin(),
     level2_nodes.begin(),
     [row_array_children_level] __device__(auto level) { return level == row_array_children_level; },
@@ -1030,8 +1030,8 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   // Propagate row offsets to non-list leaves from list's immediate children node by recursion
   thrust::transform_if(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{size_type{num_nodes}},
+    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator{num_nodes},
     row_offsets.begin(),
     [node_categories = d_tree.node_categories.data(),
      parent_node_ids = d_tree.parent_node_ids.begin(),

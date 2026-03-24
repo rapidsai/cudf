@@ -69,14 +69,15 @@ auto build_row_indices(cudf::host_span<std::size_t const> row_group_offsets,
                   expected_row_indices.begin());
 
   // Inclusive scan to compute the rest of the expected row indices
-  std::for_each(
-    cuda::counting_iterator{std::size_t{0}}, cuda::counting_iterator{num_row_groups}, [&](auto i) {
-      auto start_row_index = row_group_span_offsets[i];
-      auto end_row_index   = row_group_span_offsets[i + 1];
-      thrust::inclusive_scan(expected_row_indices.begin() + start_row_index,
-                             expected_row_indices.begin() + end_row_index,
-                             expected_row_indices.begin() + start_row_index);
-    });
+  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+                cuda::counting_iterator{num_row_groups},
+                [&](auto i) {
+                  auto start_row_index = row_group_span_offsets[i];
+                  auto end_row_index   = row_group_span_offsets[i + 1];
+                  thrust::inclusive_scan(expected_row_indices.begin() + start_row_index,
+                                         expected_row_indices.begin() + end_row_index,
+                                         expected_row_indices.begin() + start_row_index);
+                });
 
   return expected_row_indices;
 }
