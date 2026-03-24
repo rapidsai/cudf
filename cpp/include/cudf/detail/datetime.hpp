@@ -1,17 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/datetime.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <memory>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace datetime {
 namespace detail {
 /**
@@ -77,4 +78,4 @@ std::unique_ptr<cudf::column> extract_quarter(cudf::column_view const& column,
 
 }  // namespace detail
 }  // namespace datetime
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
