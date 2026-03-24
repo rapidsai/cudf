@@ -134,8 +134,10 @@ struct data_type_error : std::invalid_argument {
  * @param ... This macro accepts either two or three arguments:
  *   - The first argument must be an expression that evaluates to true or
  *     false, and is the condition being checked.
- *   - The second argument is a string literal used to construct the `what` of
- *     the exception.
+ *   - The second argument is an expression that produces the error message used to construct the
+ *     `what` of the exception. This can be a string literal or a dynamic expression (e.g.,
+ *     `std::to_string(x) + " is invalid"`). The expression is only evaluated when the condition
+ *     fails.
  *   - When given, the third argument is the exception to be thrown. When not
  *     specified, defaults to `cudf::logic_error`.
  * @throw `_exception_type` if the condition evaluates to 0 (false).
@@ -174,8 +176,9 @@ struct data_type_error : std::invalid_argument {
  * ```
  *
  * @param ... This macro accepts either one or two arguments:
- *   - The first argument is a string literal used to construct the `what` of
- *     the exception.
+ *   - The first argument is an expression that produces the error message used to construct the
+ *     `what` of the exception. This can be a string literal or a dynamic expression (e.g.,
+ *     `std::to_string(x) + " is invalid"`).
  *   - When given, the second argument is the exception to be thrown. When not
  *     specified, defaults to `cudf::logic_error`.
  * @throw `_exception_type` if the condition evaluates to 0 (false).
