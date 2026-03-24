@@ -39,7 +39,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 
 ### Correctness & Logic
 
-- Trace implemented core logic step by step to ensure it is correct and coherent.
+- Thoroughly trace the implemented logic step by step to ensure it is correct and coherent.
 - No unnecessary memory usage, leaks, dangling references, lifetime issues.
 - Recursive and branched algorithms have no pitfalls, unintended fallthroughs, or unhandled cases. Trace such algorithms.
 - Algorithms cover all possible edge cases such as empty input and nulls, without being excessively defensive.
@@ -53,6 +53,7 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - Stream ordering preserved across the API flow. **(guide: "Streams")**
 - Discourage implicit use of CUDA default stream to enable asynchronous execution. **(guide: "Streams")**
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
+- No use of relaxed constexpr functions in device code. i.e., Use `cuda::std::` type traits and constexpr functions instead of `std::` in device code and templates (e.g., `cuda::std::is_numeric_v<T>` not `std::is_numeric_v<T>`, `cuda::std::clamp` not `std::clamp`, `cuda::std::min` not `std::min` and so on).
 
 ### Performance Optimization
 
@@ -103,7 +104,7 @@ Verify compliance with the developer guide sections: **(guide: "Directory Struct
 - Public APIs in `cpp/include/cudf/` with `CUDF_EXPORT`; detail headers in `cpp/include/cudf/detail/` or `cpp/include/cudf/<sub>/detail/`.
 - Stream and MR as last two parameters (stream before MR); public defaults, no defaults in detail APIs.
 - `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` are used correctly; `CUDF_EXPECTS` condition must be a pure predicate.
-- Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`.
+- Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`. Trivial functions may skip the `CUDF_FUNC_RANGE()`.
 - `cudaDeviceSynchronize()` is never ever used; sync only via `stream.synchronize()` when required.
 
 Additional key checks not in the guide:
