@@ -663,6 +663,39 @@ class hybrid_scan_reader {
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
 
   /**
+   * @brief Construct row group passes that fit within the given memory limit
+   *
+   * Partitions the input list of row group indices into consecutive groups (passes) such that
+   * the compressed size of all row groups within each pass fits within the specified memory
+   * limit. This is useful for splitting a large set of row groups into smaller passes that
+   * can be read with bounded memory usage.
+   *
+   * The pass construction logic mirrors the pass splitting behavior used internally by the
+   * chunked parquet reader. The `pass_read_limit` is treated as a soft limit on the
+   * compressed data that will be read in a single pass.
+   *
+   * @code{.cpp}
+   * // After row group filtration, split into passes for low-memory reads
+   * auto passes = reader->construct_row_group_passes(current_row_group_indices, pass_read_limit);
+   * for (auto const& pass_row_groups : passes) {
+   *   // Read each pass individually using materialize_* APIs
+   *   auto rg_span = cudf::host_span<cudf::size_type const>(pass_row_groups);
+   *   // ... fetch column chunks and materialize ...
+   * }
+   * @endcode
+   *
+   * @param row_group_indices Input row group indices. Must not be empty
+   * @param pass_read_limit Limit on the memory used for reading compressed data in a single
+   *        pass in bytes. If `0`, all row groups are returned in a single pass (no splitting)
+   * @return Vector of vectors of row group indices, where each inner vector represents one pass
+   *
+   * @throws cudf::logic_error if `row_group_indices` is empty
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
+    cudf::host_span<cudf::size_type const> row_group_indices,
+    std::size_t pass_read_limit) const;
+
+  /**
    * @brief Check if there is any parquet data left to read for the current setup
    *
    * @return Boolean indicating if there is any data left to read
