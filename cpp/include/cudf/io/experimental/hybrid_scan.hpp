@@ -663,46 +663,24 @@ class hybrid_scan_reader {
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
 
   /**
-   * @brief Construct row group passes that fit within the given memory limit
+   * @brief Partition row groups into passes such that the amount of GPU memory required to read,
+   * decompress and decode a pass of row groups fits within the specified limit
    *
-   * Partitions the input list of row group indices into consecutive groups (passes) such that
-   * the compressed size of all row groups within each pass fits within the specified memory
-   * limit. This is useful for splitting a large set of row groups into smaller passes that
-   * can be read with bounded memory usage.
-   *
-   * The pass construction logic mirrors the pass splitting behavior used internally by the
-   * chunked parquet reader (including compressed byte size, leaf-level value count, and
-   * top-level row count checks). The `pass_read_limit` is treated as a soft limit on the
-   * compressed data that will be read in a single pass: only a fraction of the limit
-   * (currently 30%) is allocated to compressed data, matching the internal
-   * `input_limit_compression_reserve`. Very small values (e.g. 1) may result in each row
-   * group being placed in its own pass since the effective compressed limit truncates to 0.
-   *
-   * The compressed size is estimated over all columns in each row group (not just the columns
-   * selected for reading), so the resulting passes are a conservative upper-bound estimate.
-   * Row group indices are metadata-level indices as returned by @ref all_row_groups.
-   *
-   * @code{.cpp}
-   * // After row group filtration, split into passes for low-memory reads
-   * auto passes = reader->construct_row_group_passes(current_row_group_indices, pass_read_limit);
-   * for (auto const& pass_row_groups : passes) {
-   *   // Read each pass individually using materialize_* APIs
-   *   auto rg_span = cudf::host_span<cudf::size_type const>(pass_row_groups);
-   *   // ... fetch column chunks and materialize ...
-   * }
-   * @endcode
-   *
-   * @param row_group_indices Input row group indices (metadata-level, as returned by
-   *        @ref all_row_groups). Must not be empty
-   * @param pass_read_limit Limit on the memory used for reading compressed data in a single
-   *        pass in bytes. If `0`, all row groups are returned in a single pass (no splitting)
-   * @return Vector of vectors of row group indices, where each inner vector represents one pass
+   * Note that the `pass_read_limit` is a hint, not an absolute limit - if a single row group
+   * cannot fit within the limit given, it  will still constitute a pass. The compressed row group
+   * size is estimated over all columns in each row group (not just the columns selected for
+   * reading), for conservative estimates.
    *
    * @throws cudf::logic_error if `row_group_indices` is empty
+   *
+   * @param row_group_indices Input row group indices
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing row
+   * group data or `0` if there is no limit
+   *
+   * @return Vector of vectors of row group indices, one per constructed pass
    */
   [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
-    cudf::host_span<cudf::size_type const> row_group_indices,
-    std::size_t pass_read_limit) const;
+    cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup
