@@ -19,7 +19,7 @@ gh pr view <PR_NUMBER> --repo rapidsai/cudf --json title,body,files,additions,de
 gh pr diff <PR_NUMBER> --repo rapidsai/cudf
 ```
 
-Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the environment (for example via your secret manager) so `gh` can authenticate and bypass rate limits; do not run `gh auth token` from within the agent. If no token is available, use alternative methods.
+Hint: Check if `GH_TOKEN` (or GitHub CLI auth) is already configured in the environment (for example via your secret manager) so `gh` can authenticate and bypass rate limits; do not run `gh auth token` from within the agent. If `gh` auth is unavailable, fall back to GitHub's raw diff/patch URLs, `git fetch` of the PR ref, unauthenticated GitHub REST API with `curl`, or any other available methods.
 
 2. **Fetch review comments already posted** for context on what's already been suggested and need not be repeated.
 
@@ -78,18 +78,6 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 - New dispatch functors prefer C++20 `requires` clauses over `CUDF_ENABLE_IF` for type-gating `operator()` overloads.
 - Unsupported type overloads call `CUDF_FAIL` or `CUDF_UNREACHABLE` as appropriate.
 - Functors may include a `static constexpr bool is_supported()` helper for compile-time type filtering.
-
-### Column Construction Patterns
-
-- Use `make_empty_column` to construct empty columns for early returns.
-- Use `cudf::make_column_from_scalar` to construct a column filled with the same value.
-- Use `cudf::detail::copy_bitmask` when output nullability mirrors the input.
-- Use `cudf::detail::bitmask_and` to combine null masks.
-- Use `rmm::device_buffer{0, stream, mr}` (or `rmm::device_buffer{0, stream}` when no MR is available), not a null pointer, when constructing a non-nullable column.
-- Strings columns may use a two-phase approach via `make_strings_children`.
-- Use `cudf::strings::detail::make_offsets_child_column` for strings; use `cudf::detail::make_offsets_child_column` for lists.
-- Use `cudf::detail::offsetalator_factory::make_input_iterator` for type-erased offset access supporting both INT32 and INT64 offsets.
-- Use `cudf::detail::make_counting_transform_iterator` instead of `thrust::make_transform_iterator(thrust::counting_iterator(0), fn)`.
 
 ### Naming & Code Duplication
 
@@ -172,7 +160,7 @@ Refer to the **Testing Guide** (`cpp/doxygen/developer_guide/TESTING.md`) for fu
 
 Refer to the **Benchmarking Guide** (`cpp/doxygen/developer_guide/BENCHMARKING.md`). Key review checks:
 
-- New benchmarks use NVBench (not Google Benchmark).
+- Use NVBench (not Google Benchmark).
 - Benchmark source mirrors the feature path (`cpp/benchmarks/<feature>/`).
 - Prefer `.cpp` over `.cu` for benchmark files when possible.
 
