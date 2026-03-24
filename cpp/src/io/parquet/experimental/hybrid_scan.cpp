@@ -356,7 +356,6 @@ table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk() const
 std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_group_passes(
   cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
 {
-  CUDF_FUNC_RANGE();
   return _impl->construct_row_group_passes(row_group_indices, pass_read_limit);
 }
 
