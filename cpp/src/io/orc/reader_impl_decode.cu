@@ -294,8 +294,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
         cudf::detail::copy_if_async(
-          cuda::counting_iterator{size_type{0}},
-          cuda::counting_iterator{size_type{parent_mask_len}},
+          cuda::counting_iterator{int64_t{0}},
+          cuda::counting_iterator{parent_mask_len},
           dst_idx.begin(),
           [parent_valid_map_base] __device__(auto idx) {
             return bit_is_set(parent_valid_map_base, idx);
@@ -630,7 +630,7 @@ std::vector<range> find_table_splits(table_view const& input,
 
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::counting_iterator{d_segmented_sizes->size()},
     segmented_sizes.d_begin(),
     [segment_length,

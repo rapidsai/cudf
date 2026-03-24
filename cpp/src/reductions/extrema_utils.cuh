@@ -57,6 +57,7 @@ class arg_minmax_dispatcher {
     return !cudf::is_dictionary<ElementType>() && !std::is_same_v<ElementType, void>;
   }
 
+ public:
   // thrust::min_element / thrust::max_element internally call an unqualified
   // make_zip_iterator, which causes ADL ambiguity when the iterator type chain
   // includes cuda:: namespace types (e.g. cuda::counting_iterator).
@@ -161,8 +162,6 @@ class arg_minmax_dispatcher {
       return find_extremum_idx(input.begin<ElementType>(), input.size(), stream);
     }
   }
-
- public:
   /**
    * @brief Called by the type-dispatcher to reduce the input column.
    *

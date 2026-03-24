@@ -87,14 +87,15 @@ auto build_expected_row_indices(cudf::host_span<std::size_t const> row_group_off
                   expected_row_indices.begin());
 
   // Inclusive scan to compute the rest of the row indices
-  std::for_each(
-    cuda::counting_iterator{std::size_t{0}}, cuda::counting_iterator{num_row_groups}, [&](auto i) {
-      auto start_row_index = row_group_span_offsets[i];
-      auto end_row_index   = row_group_span_offsets[i + 1];
-      std::inclusive_scan(expected_row_indices.begin() + start_row_index,
-                          expected_row_indices.begin() + end_row_index,
-                          expected_row_indices.begin() + start_row_index);
-    });
+  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+                cuda::counting_iterator{num_row_groups},
+                [&](auto i) {
+                  auto start_row_index = row_group_span_offsets[i];
+                  auto end_row_index   = row_group_span_offsets[i + 1];
+                  std::inclusive_scan(expected_row_indices.begin() + start_row_index,
+                                      expected_row_indices.begin() + end_row_index,
+                                      expected_row_indices.begin() + start_row_index);
+                });
 
   return expected_row_indices;
 }
@@ -153,8 +154,8 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
   auto roaring64_context =
     roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
-                cuda::counting_iterator{std::size_t{num_rows}},
+  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+                cuda::counting_iterator{num_rows},
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not expected_row_mask[row_idx]) {
@@ -543,7 +544,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
   // Row offsets for each row group - arbitrary, only used to build the UINT64 `index` column
   auto row_group_offsets = std::vector<std::size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<std::size_t>(std::llround(1e9));
-  std::transform(cuda::counting_iterator{std::size_t{1}},
+  std::transform(cuda::counting_iterator{int{1}},
                  cuda::counting_iterator{num_row_groups},
                  row_group_offsets.begin() + 1,
                  [&](auto i) {

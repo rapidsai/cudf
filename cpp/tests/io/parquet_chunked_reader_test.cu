@@ -1221,8 +1221,8 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
   auto iter1 = cuda::counting_iterator{int{0}};
   cudf::test::fixed_width_column_wrapper<int> col1(iter1, iter1 + num_rows);
 
-  auto iter2 = cuda::counting_iterator{double{0}};
-  cudf::test::fixed_width_column_wrapper<double> col2(iter2, iter2 + num_rows);
+  auto iter2 = cuda::counting_iterator{int{0}};
+  cudf::test::fixed_width_column_wrapper<double, int> col2(iter2, iter2 + num_rows);
 
   auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
   auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
@@ -1854,9 +1854,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     int64_selected_data.reserve(nsources * num_rows);
 
     std::for_each(
-      cuda::counting_iterator{std::size_t{0}},
-      cuda::counting_iterator{nsources},
-      [&](auto const i) {
+      cuda::counting_iterator{int{0}}, cuda::counting_iterator{nsources}, [&](auto const i) {
         std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
       });
 
@@ -1899,9 +1897,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSourceMultipleSources)
     int64_selected_data.reserve(nsources * num_rows);
 
     std::for_each(
-      cuda::counting_iterator{std::size_t{0}},
-      cuda::counting_iterator{nsources},
-      [&](auto const i) {
+      cuda::counting_iterator{int{0}}, cuda::counting_iterator{nsources}, [&](auto const i) {
         std::copy(int64_data.begin(), int64_data.end(), std::back_inserter(int64_selected_data));
       });
 
