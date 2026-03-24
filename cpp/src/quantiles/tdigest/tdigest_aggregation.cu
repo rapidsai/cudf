@@ -700,12 +700,13 @@ void compute_cluster_starts(cluster_info& cinfo, rmm::cuda_stream_view stream)
  *
  * Each input group gets an independent set of clusters generated.
  *
- * @param delta_             tdigest compression level
+ * @param delta              tdigest compression level
  * @param num_groups         The number of input groups
  * @param nearest_weight     A functor which returns the nearest weight in the input
  * stream that falls before our current cluster limit
  * @param group_info         A functor which returns the info for the specified group (total weight,
  * size and start offset)
+ * @param cumulative_weight  Cumulative weight column for computing cluster boundaries
  * @param has_nulls          Whether or not the input data contains nulls
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -973,13 +974,11 @@ struct compute_tdigests_keys_fn {
  * @param delta              tdigest compression level
  * @param centroids_begin    Beginning of the range of centroids.
  * @param centroids_end      End of the range of centroids.
- * @param cumulative_weight  Functor which returns cumulative weight and group information for
+ * @param group_cumulative_weight Functor which returns cumulative weight and group information for
  * an absolute input value index.
  * @param min_col            Column containing the minimum value per group.
  * @param max_col            Column containing the maximum value per group.
- * @param group_cluster_wl   Cluster weight limits for each group.
- * @param group_cluster_start R-value reference of start positions by group into the
- * @param total_clusters     Total number of clusters in all groups.
+ * @param cinfo              Clustering info per group.
  * @param has_nulls          Whether or not the input contains nulls
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory

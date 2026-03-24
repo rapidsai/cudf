@@ -114,7 +114,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .agg(pl.len().alias("cnt"))
         .filter(pl.col("cnt") > 4)
         .select("ss_item_sk")
-        .unique()
     )
 
     customer_sales = (
@@ -144,9 +143,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
         )
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(
-            frequent_ss_items, left_on="cs_item_sk", right_on="ss_item_sk", how="semi"
-        )
+        .join(frequent_ss_items, left_on="cs_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
             left_on="cs_bill_customer_sk",
@@ -163,9 +160,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
         )
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .join(
-            frequent_ss_items, left_on="ws_item_sk", right_on="ss_item_sk", how="semi"
-        )
+        .join(frequent_ss_items, left_on="ws_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
             left_on="ws_bill_customer_sk",
@@ -188,4 +183,5 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+        nulls_last=False,
     )

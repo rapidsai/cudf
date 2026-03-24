@@ -28,6 +28,7 @@
 #include <numeric>
 #include <optional>
 #include <regex>
+#include <string_view>
 #include <utility>
 
 namespace cudf::io::parquet::detail {
@@ -91,9 +92,27 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
 
 }  // namespace
 
-/**
- * @brief Function that translates Parquet datatype to cuDF type enum
- */
+std::string normalize_column_path(std::string_view col_path, bool case_sensitive_names)
+{
+  if (case_sensitive_names) { return std::string{col_path}; }
+  auto normalized_path = std::string(col_path.size(), '\0');
+  std::transform(col_path.begin(), col_path.end(), normalized_path.begin(), [](unsigned char c) {
+    return std::tolower(c);
+  });
+  return normalized_path;
+}
+
+bool are_column_paths_equal(std::string_view lhs, std::string_view rhs, bool case_sensitive)
+{
+  if (lhs.size() != rhs.size()) { return false; }
+  if (case_sensitive) { return lhs == rhs; }
+  // Optimize by normalizing and comparing char-by-char instead of whole strings
+  return std::equal(
+    lhs.begin(), lhs.end(), rhs.begin(), [](unsigned char lhs_char, unsigned char rhs_char) {
+      return std::equal_to<>{}(std::tolower(lhs_char), std::tolower(rhs_char));
+    });
+}
+
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id,
@@ -310,7 +329,8 @@ metadata::metadata(datasource* source, bool read_page_indexes)
   auto const buffer = cudf::io::parquet::fetch_footer_to_host(*source);
   CompactProtocolReader cp(buffer->data(), buffer->size());
   cp.read(this);
-  CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+  auto const is_schema_initialized = cp.InitSchema(this);
+  CUDF_EXPECTS(is_schema_initialized, "Cannot initialize schema");
 
   // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
   // Currently the indexes are only used for the string size calculations.
@@ -1614,20 +1634,23 @@ aggregate_reader_metadata::select_columns(
   bool strings_to_categorical,
   bool ignore_missing_columns,
   type_id timestamp_type_id,
-  type_id decimal_type_id)
+  type_id decimal_type_id,
+  bool case_sensitive_names)
 {
-  auto const find_schema_child = [&](SchemaElement const& schema_elem,
-                                     std::string_view name,
-                                     int const pfm_idx = 0) {
-    auto const& col_schema_idx = std::find_if(
-      schema_elem.children_idx.cbegin(),
-      schema_elem.children_idx.cend(),
-      [&](std::size_t col_schema_idx) { return get_schema(col_schema_idx, pfm_idx).name == name; });
+  auto const find_schema_child =
+    [&](SchemaElement const& schema_elem, std::string_view name, int const pfm_idx = 0) {
+      auto const& col_schema_idx =
+        std::find_if(schema_elem.children_idx.cbegin(),
+                     schema_elem.children_idx.cend(),
+                     [&](std::size_t col_schema_idx) {
+                       return are_column_paths_equal(
+                         get_schema(col_schema_idx, pfm_idx).name, name, case_sensitive_names);
+                     });
 
-    return (col_schema_idx != schema_elem.children_idx.end())
-             ? static_cast<size_type>(*col_schema_idx)
-             : -1;
-  };
+      return (col_schema_idx != schema_elem.children_idx.end())
+               ? static_cast<size_type>(*col_schema_idx)
+               : -1;
+    };
 
   std::vector<cudf::io::detail::inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
@@ -1876,13 +1899,16 @@ aggregate_reader_metadata::select_columns(
       for (auto const& selected_path : used_column_names.get()) {
         auto found_path =
           std::find_if(all_paths.begin(), all_paths.end(), [&](path_info& valid_path) {
-            return valid_path.full_path == selected_path;
+            return are_column_paths_equal(
+              valid_path.full_path, selected_path, case_sensitive_names);
           });
         // Ensure that selected path matches a path in all_paths
+        CUDF_EXPECTS(found_path != all_paths.end() or ignore_missing_columns,
+                     "Encountered non-existent column in selected path",
+                     std::invalid_argument);
         if (found_path != all_paths.end()) {
-          valid_selected_paths.push_back({selected_path, found_path->schema_idx});
-        } else if (not ignore_missing_columns) {
-          CUDF_FAIL("Encountered non-existent column in selected path", std::invalid_argument);
+          // Use the file's actual path (preserving original case) for the valid_selected_paths
+          valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
         }
       }
     }
@@ -1982,6 +2008,33 @@ aggregate_reader_metadata::select_columns(
 
   return std::make_tuple(
     std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
+}
+
+std::vector<Type> aggregate_reader_metadata::get_parquet_types(
+  host_span<std::vector<size_type> const> row_group_indices,
+  host_span<int const> column_schemas) const
+{
+  std::vector<Type> parquet_types(column_schemas.size());
+  // Find a source with at least one row group
+  auto const src_iter = std::find_if(row_group_indices.begin(),
+                                     row_group_indices.end(),
+                                     [](auto const& rg) { return rg.size() > 0; });
+  CUDF_EXPECTS(src_iter != row_group_indices.end(),
+               "Cannot determine Parquet types as no source has any selected row groups.",
+               std::invalid_argument);
+
+  // Source index
+  auto const src_index = std::distance(row_group_indices.begin(), src_iter);
+  // Use the first row group in this source
+  auto const first_row_group_index = row_group_indices[src_index].front();
+  std::transform(column_schemas.begin(),
+                 column_schemas.end(),
+                 parquet_types.begin(),
+                 [&](auto const schema_idx) {
+                   return get_column_metadata(first_row_group_index, src_index, schema_idx).type;
+                 });
+
+  return parquet_types;
 }
 
 }  // namespace cudf::io::parquet::detail

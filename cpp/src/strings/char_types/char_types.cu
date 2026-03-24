@@ -21,6 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/limits>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -54,7 +55,7 @@ struct char_types_fn {
       if (is_utf8_continuation_char(chr)) { continue; }
       auto u8 = static_cast<char_utf8>(chr);  // holds UTF8 value
       // using max(int8) here since max(char)=255 on ARM systems
-      if (u8 > std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
+      if (u8 > cuda::std::numeric_limits<int8_t>::max()) { to_char_utf8(itr, u8); }
 
       // lookup flags in table by codepoint
       auto const code_point = utf8_to_codepoint(u8);

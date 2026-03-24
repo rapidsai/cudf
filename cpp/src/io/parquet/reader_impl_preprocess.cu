@@ -276,7 +276,8 @@ void reader_impl::allocate_level_decode_space()
   std::size_t total_memory_size = 0;
   for (std::size_t idx = 0; idx < num_pages; idx++) {
     // Skip pages that are masked out - no need to allocate level decode space for them
-    if (!_subpass_page_mask.empty() && !_subpass_page_mask[idx]) {
+    auto const page_mask = subpass_page_mask_span();
+    if (!page_mask.is_empty() && !page_mask[idx]) {
       def_level_sizes[idx] = 0;
       rep_level_sizes[idx] = 0;
       continue;
@@ -460,7 +461,7 @@ void reader_impl::compute_page_string_offset_indices(std::size_t skip_rows, std:
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
                                     subpass.page_string_offset_indices,
-                                    _subpass_page_mask,
+                                    subpass_page_mask_span(),
                                     skip_rows,
                                     num_rows,
                                     _stream);
@@ -710,7 +711,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, std::size_t chunk_rea
   // We can't determine subpass skip_rows & num_rows yet, so we use the pass values.
   detail::preprocess_levels(subpass.pages,
                             pass.chunks,
-                            _subpass_page_mask,
+                            subpass_page_mask_span(),
                             pass.skip_rows,
                             pass.num_rows,
                             pass.level_type_size,
@@ -753,7 +754,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, std::size_t chunk_rea
     // - we will be doing a chunked read
     compute_page_sizes(subpass.pages,
                        pass.chunks,
-                       _subpass_page_mask,
+                       subpass_page_mask_span(),
                        0,  // 0-max std::size_t. process all possible rows
                        std::numeric_limits<std::size_t>::max(),
                        true,  // compute num_rows
@@ -817,7 +818,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, std::size_t chunk_rea
       constexpr bool compute_all_string_sizes = true;
       compute_page_string_sizes_pass1(subpass.pages,
                                       pass.chunks,
-                                      _subpass_page_mask,
+                                      subpass_page_mask_span(),
                                       subpass.page_string_offset_indices,
                                       pass.skip_rows,
                                       pass.num_rows,

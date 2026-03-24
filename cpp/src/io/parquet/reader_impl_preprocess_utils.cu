@@ -18,6 +18,7 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <thrust/for_each.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
@@ -548,8 +549,8 @@ void decode_page_headers(pass_intermediate_data& pass,
   auto level_bit_size = cudf::detail::make_counting_transform_iterator(
     0, cuda::proclaim_return_type<int32_t>([chunks = pass.chunks.d_begin()] __device__(int i) {
       auto c = chunks[i];
-      return std::max<int32_t>(c.level_bits[level_type::REPETITION],
-                               c.level_bits[level_type::DEFINITION]);
+      return cuda::std::max<int32_t>(c.level_bits[level_type::REPETITION],
+                                     c.level_bits[level_type::DEFINITION]);
     }));
   // max level data bit size.
   auto const max_level_bits = cudf::detail::reduce(

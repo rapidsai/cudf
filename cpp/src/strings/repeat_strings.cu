@@ -21,6 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <thrust/for_each.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -204,7 +205,7 @@ struct compute_sizes_and_repeat_fn {
 
     if (!d_chars) {
       // repeat_times could be negative
-      d_sizes[idx] = std::max(repeat_times, 0) * d_str.size_bytes();
+      d_sizes[idx] = cuda::std::max(repeat_times, 0) * d_str.size_bytes();
     } else {
       auto output_ptr = d_chars + d_offsets[idx];
       while (repeat_times-- > 0) {

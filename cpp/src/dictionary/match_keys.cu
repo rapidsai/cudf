@@ -71,7 +71,7 @@ struct unique_keys_dispatch_fn {
 
     // gather the unique keys using the keys_indices
     auto const oob_policy   = cudf::out_of_bounds_policy::DONT_CHECK;
-    auto const index_policy = cudf::detail::negative_index_policy::NOT_ALLOWED;
+    auto const index_policy = cudf::negative_index_policy::NOT_ALLOWED;
     auto keys_column =
       std::move(cudf::detail::gather(keys_tv, keys_indices, oob_policy, index_policy, stream, mr)
                   ->release()

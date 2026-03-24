@@ -171,9 +171,8 @@ __device__ cuda::std::pair<bool, size_type> compare_literal(char const* target_i
  * It is only used for longer strings.
  *
  * @param d_strings The input strings column
- * @param d_pattern The pattern to match
+ * @param pattern_itr The pattern to match
  * @param d_escape The escape character
- * @param d_wcs The multi-wildcard indices
  * @param results The output of boolean values
  */
 template <typename PatternIterator>

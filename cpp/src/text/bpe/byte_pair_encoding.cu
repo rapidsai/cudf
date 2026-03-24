@@ -108,6 +108,7 @@ struct bpe_unpairable_offsets_fn {
  *
  * @tparam MapRefType The type of the map finder object
  * @param d_strings Input data
+ * @param d_input_chars Pointer to the input character data
  * @param d_map For looking up individual string candidates
  * @param d_spaces_data Output the location where separator will be inserted
  * @param d_ranks_data Working memory to hold pair ranks
@@ -280,6 +281,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
  * the current string size to produce the total output bytes.
  *
  * @param d_strings Input data
+ * @param d_input_chars Pointer to the input character data
  * @param d_spaces_data Output the location where separator will be inserted
  * @param d_sizes Output sizes of each row
  */

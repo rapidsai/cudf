@@ -27,6 +27,8 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
+#include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/transform.h>
 
@@ -53,7 +55,7 @@ struct substring_from_fn {
     if (d_column.is_null(idx)) { return string_index_pair{nullptr, 0}; }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
-    auto const start  = std::max(starts[idx], 0);
+    auto const start  = cuda::std::max(starts[idx], 0);
     if (start >= length) { return string_index_pair{"", 0}; }
 
     auto const stop    = stops[idx];
@@ -94,7 +96,7 @@ CUDF_KERNEL void substring_from_kernel(column_device_view const d_strings,
 
   auto const start = max(starts[str_idx], 0);
   auto stop        = [stop = stops[str_idx]] {
-    return (stop < 0) ? std::numeric_limits<size_type>::max() : stop;
+    return (stop < 0) ? cuda::std::numeric_limits<size_type>::max() : stop;
   }();
   auto const end = d_str.data() + d_str.size_bytes();
 

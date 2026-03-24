@@ -70,7 +70,9 @@ def lower_distinct(
     """
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
     distinct_keys = tuple(
-        NamedExpr(name, Col(ir.schema[name], name)) for name in subset
+        NamedExpr(name, Col(ir.schema[name], name))
+        for name in ir.schema
+        if name in subset
     )
 
     child_count = partition_info[child].count
@@ -121,7 +123,6 @@ def lower_distinct(
             new_node.schema,
             distinct_keys,
             config_options.executor.shuffle_method,
-            config_options.executor.shuffler_insertion_method,
             new_node,
         )
         partition_info[new_node] = PartitionInfo(count=output_count)
@@ -139,12 +140,13 @@ def _(
     ir: Distinct, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     # Extract child partitioning
-    original_child = ir.children[0]
     child, partition_info = rec(ir.children[0])
     child_count = partition_info[child].count
     subset: frozenset[str] = ir.subset or frozenset(ir.schema)
     distinct_keys = tuple(
-        NamedExpr(name, Col(ir.schema[name], name)) for name in subset
+        NamedExpr(name, Col(ir.schema[name], name))
+        for name in ir.schema
+        if name in subset
     )
 
     config_options = rec.state["config_options"]
@@ -171,7 +173,6 @@ def _(
                 child.schema,
                 distinct_keys,
                 config_options.executor.shuffle_method,
-                config_options.executor.shuffler_insertion_method,
                 child,
             )
             partition_info[child] = PartitionInfo(
@@ -205,8 +206,6 @@ def _(
     unique_fraction_dict = _get_unique_fractions(
         tuple(subset),
         config_options.executor.unique_fraction,
-        row_count=rec.state["stats"].row_count.get(original_child),
-        column_stats=rec.state["stats"].column_stats.get(original_child),
     )
     unique_fraction = (
         max(unique_fraction_dict.values()) if unique_fraction_dict else None

@@ -69,7 +69,7 @@ auto gather_histogram(table_view const& input,
   auto distinct_rows = cudf::detail::gather(input,
                                             distinct_indices,
                                             out_of_bounds_policy::DONT_CHECK,
-                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            cudf::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr);
 

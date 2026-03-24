@@ -25,7 +25,6 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import ColumnStat
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.statistics import (
@@ -195,11 +194,9 @@ def _repr_ir_tree(
 ) -> str:
     header = _repr_ir(ir, offset=offset)
     count = partition_info[ir].count if partition_info else None
-    if stats is not None:
-        # Include row-count estimate (if available)
-        row_count_estimate = _fmt_row_count(
-            stats.row_count.get(ir, ColumnStat[int](None)).value
-        )
+    if stats is not None and (source := stats.scan_stats.get(ir)) is not None:
+        # Only annotate leaf scan nodes that have a row-count estimate
+        row_count_estimate = _fmt_row_count(source.row_count)
         row_count = f"~{row_count_estimate}" if row_count_estimate else "unknown"
         header = header.rstrip("\n") + f" {row_count=}\n"
     if count is not None:
@@ -304,7 +301,6 @@ def _(ir: Shuffle) -> dict[str, Serializable]:
     return {
         "keys": [ne.name for ne in ir.keys],
         "shuffle_method": ir.shuffle_method.value,
-        "shuffler_insertion_method": ir.shuffler_insertion_method.value,
     }
 
 

@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/functional>
 #include <thrust/find.h>
 #include <thrust/scan.h>
@@ -89,6 +90,7 @@ struct scan_functor {
 };
 
 template <typename Op>
+  requires(not std::is_same_v<Op, DeviceCount>)
 struct scan_functor<Op, cudf::string_view> {
   static std::unique_ptr<column> invoke(column_view const& input_view,
                                         bitmask_type const* mask,
@@ -100,6 +102,7 @@ struct scan_functor<Op, cudf::string_view> {
 };
 
 template <typename Op>
+  requires(not std::is_same_v<Op, DeviceCount>)
 struct scan_functor<Op, cudf::struct_view> {
   static std::unique_ptr<column> invoke(column_view const& input,
                                         bitmask_type const*,
@@ -107,6 +110,34 @@ struct scan_functor<Op, cudf::struct_view> {
                                         rmm::device_async_resource_ref mr)
   {
     return cudf::structs::detail::scan_inclusive<Op>(input, stream, mr);
+  }
+};
+
+template <typename Op, typename T>
+  requires(std::is_same_v<Op, DeviceCount>)
+struct scan_functor<Op, T> {
+  static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        bitmask_type const* mask,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::device_async_resource_ref mr)
+  {
+    auto output_column = make_numeric_column(data_type{type_to_id<size_type>()},
+                                             input_view.size(),
+                                             cudf::mask_state::UNALLOCATED,
+                                             stream,
+                                             mr);
+    auto result        = output_column->mutable_view();
+
+    auto const begin = make_counting_transform_iterator(
+      0, cuda::proclaim_return_type<size_type>([mask] __device__(auto idx) -> size_type {
+        return static_cast<size_type>(mask == nullptr || bit_is_set(mask, idx));
+      }));
+
+    thrust::inclusive_scan(
+      rmm::exec_policy_nosync(stream), begin, begin + input_view.size(), result.data<size_type>());
+
+    CUDF_CHECK_CUDA(stream.value());
+    return output_column;
   }
 };
 
@@ -121,6 +152,7 @@ struct scan_dispatcher {
   template <typename T>
   static constexpr bool is_supported()
   {
+    if constexpr (std::is_same_v<Op, DeviceCount>) { return true; }
     if constexpr (std::is_same_v<T, cudf::struct_view>) {
       return std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>;
     } else {

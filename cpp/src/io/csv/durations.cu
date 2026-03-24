@@ -16,6 +16,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/cmath>
 #include <thrust/for_each.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -93,7 +94,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   __device__ char* int_to_2digitstr(int8_t value, char* str)
   {
     assert(value >= -99 && value <= 99);
-    value  = std::abs(value);
+    value  = cuda::std::abs(value);
     str[0] = '0' + value / 10;
     str[1] = '0' + value % 10;
     return str + 2;
@@ -124,7 +125,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     auto value = timeparts->nanosecond;
     *ptr       = '.';
     for (int idx = 9; idx > 0; idx--) {
-      *(ptr + idx) = '0' + std::abs(value % 10);
+      *(ptr + idx) = '0' + cuda::std::abs(value % 10);
       value /= 10;
     }
     return ptr + 10;

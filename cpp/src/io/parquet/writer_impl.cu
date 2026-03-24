@@ -1181,6 +1181,7 @@ void calculate_page_fragments(device_span<PageFragment> frag,
  *
  * @param frag_stats output statistics
  * @param frags Input page fragments
+ * @param int96_timestamps Whether timestamps are written as INT96
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
@@ -1486,7 +1487,6 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  *
  * @param chunks column chunk array
  * @param pages encoder pages array
- * @param num_rowgroups number of rowgroups
  * @param page_stats optional page-level statistics (nullptr if none)
  * @param chunk_stats optional chunk-level statistics (nullptr if none)
  * @param column_stats optional page-level statistics for column index (nullptr if none)
@@ -1628,10 +1628,11 @@ std::size_t column_index_buffer_size(EncColumnChunk* ck,
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @param stats_granularity Level of statistics requested in output file
  * @param compression Compression format
- * @param collect_statistics Flag to indicate if statistics should be collected
+ * @param collect_compression_statistics Flag to indicate if compression statistics should be
+ * collected
  * @param dict_policy Policy for dictionary use
  * @param max_dictionary_size Maximum dictionary size, in bytes
- * @param single_write_mode Flag to indicate that we are guaranteeing a single table write
+ * @param write_mode Flag to indicate that we are guaranteeing a single table write
  * @param int96_timestamps Flag to indicate if timestamps will be written as INT96
  * @param utc_timestamps Flag to indicate if timestamps are UTC
  * @param write_v2_headers True if V2 page headers are to be written

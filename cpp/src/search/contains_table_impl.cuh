@@ -20,6 +20,7 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/functional>
 #include <cuda/iterator>
 
 namespace cudf::detail {

@@ -20,6 +20,7 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/type_traits>
 
 #include <cmath>
 
@@ -106,12 +107,14 @@ struct row_is_valid {
  */
 template <typename Hasher>
 struct nan_to_null_hasher {
+  using result_type = cuda::std::invoke_result_t<Hasher, cudf::size_type>;
+
   Hasher base_hasher;
   table_device_view d_table;
 
-  __device__ hash_value_type operator()(cudf::size_type row_idx) const noexcept
+  __device__ result_type operator()(cudf::size_type row_idx) const noexcept
   {
-    constexpr auto null_hash = cuda::std::numeric_limits<hash_value_type>::max();
+    constexpr auto null_hash = cuda::std::numeric_limits<result_type>::max();
 
     for (cudf::size_type col_idx = 0; col_idx < d_table.num_columns(); ++col_idx) {
       auto const& col = d_table.column(col_idx);

@@ -59,8 +59,10 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
 
-# Keep a conservative distance from the 2^31-1 (~2.15 billion) row limit
-MAX_BROADCAST_ROWS = 1_500_000_000
+
+# cuDF column/concatenate row limit (int32)
+CUDF_ROW_LIMIT = 2**31 - 1
+MAX_BROADCAST_ROWS = CUDF_ROW_LIMIT // 2
 
 
 @dataclass(frozen=True)
@@ -133,7 +135,12 @@ async def broadcast_join_actor(
         The target partition size in bytes.
     """
     async with shutdown_on_error(
-        context, ch_out, ch_left, ch_right, trace_ir=ir
+        context,
+        ch_out,
+        ch_left,
+        ch_right,
+        trace_ir=ir,
+        ir_context=ir_context,
     ) as tracer:
         await _broadcast_join(
             context,
@@ -181,8 +188,7 @@ async def _collect_small_side_for_broadcast(
     )
     row_count = sum(c.table_view().num_rows() for c in chunks)
 
-    cudf_row_limit = 2**31 - 1
-    if (can_concatenate := row_count < cudf_row_limit) and concat_size_limit:
+    if (can_concatenate := row_count < CUDF_ROW_LIMIT) and concat_size_limit:
         can_concatenate = size <= concat_size_limit
 
     dfs: list[DataFrame] = []
@@ -543,7 +549,10 @@ async def _shuffle_join(
     # if the data is already partitioned correctly.
     ch_left_shuffle = context.create_channel()
     ch_right_shuffle = context.create_channel()
-    async with shutdown_on_error(context, ch_left_shuffle, ch_right_shuffle):
+    # note: this is an actor inside of an actor. How should we log that in our traces?
+    async with shutdown_on_error(
+        context, ch_left_shuffle, ch_right_shuffle, trace_ir=ir, ir_context=ir_context
+    ):
         actor_tasks = [
             _global_shuffle(
                 context,
@@ -668,6 +677,8 @@ async def _choose_strategy_from_samples(
     if chunkwise:
         if tracer is not None:
             tracer.decision = "chunkwise"
+        # TODO: Ensure this emits a "dynamic planning" decision of "chunkwise"
+        # Or push it up a level to the caller?
         return _make_shuffle_strategy(
             ir,
             left_partitioning.inter_rank_modulus,
@@ -731,6 +742,15 @@ async def _choose_strategy_from_samples(
     # from blowing up the chunk count.
     max_output_chunks = 10 * max(left_total_chunks, right_total_chunks)
     min_shuffle_modulus = min(ideal_output_count, max_output_chunks)
+
+    # Stay away from cuDF's row limit
+    if (estimated_rows_count := max(left_total_rows, right_total_rows)) > 0:
+        max_rows_per_partition = CUDF_ROW_LIMIT // 4
+        min_partitions_for_row_limit = (
+            estimated_rows_count + max_rows_per_partition - 1
+        ) // max_rows_per_partition
+        min_shuffle_modulus = max(min_shuffle_modulus, min_partitions_for_row_limit)
+
     shuffle_modulus = _choose_shuffle_modulus(
         comm,
         left_partitioning,
@@ -771,10 +791,10 @@ def _choose_shuffle_modulus(
     small, large = sorted(
         [left_modulus or default_modulus, right_modulus or default_modulus]
     )
-    if large % small == 0:
+    if large % small == 0 and small >= min_shuffle_modulus:
         return small
     else:
-        return large
+        return max(large, min_shuffle_modulus)
 
 
 async def _sample_chunks(
@@ -949,7 +969,12 @@ async def join_actor(
         List of collective IDs for shuffle/broadcast; consumed as needed.
     """
     async with shutdown_on_error(
-        context, ch_out, ch_left, ch_right, trace_ir=ir
+        context,
+        ch_out,
+        ch_left,
+        ch_right,
+        trace_ir=ir,
+        ir_context=ir_context,
     ) as tracer:
         left_metadata, right_metadata = await asyncio.gather(
             recv_metadata(ch_left, context),
@@ -978,6 +1003,7 @@ async def join_actor(
                 ch_left,
                 left_sample.chunks,
                 left_metadata,
+                trace_ir=ir,
             ),
             replay_buffered_channel(
                 context,
@@ -985,6 +1011,7 @@ async def join_actor(
                 ch_right,
                 right_sample.chunks,
                 right_metadata,
+                trace_ir=ir,
             ),
         ]
         ch_left = ch_left_replay

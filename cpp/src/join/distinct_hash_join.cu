@@ -26,6 +26,7 @@
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
+#include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/fill.h>

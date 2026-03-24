@@ -15,11 +15,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <cuda/std/iterator>
+#include <cuda/std/limits>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-
-#include <limits>
 
 namespace cudf::detail::rolling {
 
@@ -50,7 +50,7 @@ struct gather_index_calculator {
   rmm::cuda_stream_view stream;
 
   static size_type constexpr NULL_INDEX =
-    std::numeric_limits<size_type>::min();  // For nullifying with gather.
+    cuda::std::numeric_limits<size_type>::min();  // For nullifying with gather.
 
   gather_index_calculator(size_type n,
                           column_view input,

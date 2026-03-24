@@ -85,6 +85,8 @@ struct parent_nodeids_to_colids {
  *
  * @param node_tree Node tree representation of JSON string
  * @param original_col_ids Column ids of nodes
+ * @param sorted_col_ids Sorted column IDs
+ * @param ordered_node_ids Ordered node IDs
  * @param row_offsets Row offsets of nodes
  * @param is_array_of_arrays Whether the tree is an array of arrays
  * @param row_array_parent_col_id Column id of row array, if is_array_of_arrays is true

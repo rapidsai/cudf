@@ -21,6 +21,7 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/functional>
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
@@ -58,7 +59,7 @@ struct cast_to_integer_fn {
   {
     if (d_strings.is_null(idx)) { return; }
     auto const d_str = d_strings.element<string_view>(idx);
-    auto const size  = std::min(d_str.size_bytes(), output_type_size);
+    auto const size  = cuda::std::min(d_str.size_bytes(), output_type_size);
 
     auto value = uint64_t{0};
     auto data  = reinterpret_cast<u_char const*>(d_str.data());

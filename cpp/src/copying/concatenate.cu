@@ -454,7 +454,8 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  * @brief Verifies that the sum of the sizes of all the columns to be concatenated
  * will not exceed the max value of size_type, and verifies all column types match
  *
- * @param columns_to_concat Span of columns to check
+ * @param cols Span of columns to check
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @throws cudf::logic_error if the total length of the concatenated columns would
  * exceed the max value of size_type

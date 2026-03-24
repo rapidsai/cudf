@@ -31,6 +31,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/for_each.h>

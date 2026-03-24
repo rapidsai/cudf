@@ -26,6 +26,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cuda/atomic>
 #include <cuda/iterator>
+#include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
@@ -134,7 +135,7 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
   }();
 
   // each thread compares the target with the thread's individual starting byte
-  size_type position = forward ? std::numeric_limits<size_type>::max() : -1;
+  size_type position = forward ? cuda::std::numeric_limits<size_type>::max() : -1;
   for (auto itr = begin + lane_idx; itr + d_target.size_bytes() <= end;
        itr += cudf::detail::warp_size) {
     if (d_target.compare(d_str.data() + itr, d_target.size_bytes()) == 0) {
@@ -151,7 +152,7 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
     // the final result needs to be fixed up convert max() to -1
     // and a byte position to a character position
     d_results[str_idx] =
-      ((result < std::numeric_limits<size_type>::max()) && (result >= begin))
+      ((result < cuda::std::numeric_limits<size_type>::max()) && (result >= begin))
         ? start_char_pos + characters_in_string(d_str.data() + begin, result - begin)
         : -1;
   }
@@ -195,7 +196,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
 {
   CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
-  if ((stop > 0) && (start > stop)) CUDF_FAIL("Parameter start must be less than stop.");
+  CUDF_EXPECTS(stop <= 0 or start <= stop, "Parameter start must be less than stop.");
 
   // create output column
   auto results = make_numeric_column(data_type{type_to_id<size_type>()},

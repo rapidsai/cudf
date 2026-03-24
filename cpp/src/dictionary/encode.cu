@@ -113,7 +113,7 @@ std::unique_ptr<column> encode(column_view const& input,
 
   // use keys_indices to retrieve the keys
   auto const oob_policy   = cudf::out_of_bounds_policy::DONT_CHECK;
-  auto const index_policy = cudf::detail::negative_index_policy::NOT_ALLOWED;
+  auto const index_policy = cudf::negative_index_policy::NOT_ALLOWED;
   auto keys_column =
     std::move(cudf::detail::gather(tv, keys_indices, oob_policy, index_policy, stream, mr)
                 ->release()
