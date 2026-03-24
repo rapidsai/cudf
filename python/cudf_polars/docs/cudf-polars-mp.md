@@ -27,8 +27,93 @@ Two preview execution modes are available:
 
 This document describes these two execution modes.
 
+* [Unified configuration (StreamingOptions)](#unified-configuration-streamingoptions)
 * [Ray execution mode](#ray-execution-mode)
 * [SPMD execution mode](#spmd-execution-mode)
+
+---
+
+## Unified configuration (`StreamingOptions`)
+
+`StreamingOptions` is the recommended way to configure both Ray and SPMD engines.
+It provides a single typed object covering all configuration knobs across three
+categories:
+
+| Category    | Controls                                                   |
+| ----------- | ---------------------------------------------------------- |
+| `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level  |
+| `executor`  | Partitioning, fallback behavior, dynamic planning          |
+| `engine`    | Polars integration, IO options, RMM memory resource        |
+
+All fields default to `UNSPECIFIED`, which means: use the corresponding
+environment variable if set, otherwise let the underlying library apply its
+own built-in default.
+
+```python
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+
+opts = StreamingOptions(
+    num_streaming_threads=8,
+    log="DEBUG",
+    fallback_mode="silent",
+    spill_device_limit="70%",
+)
+```
+
+Pass the options object to `from_options()` on either engine — this is the
+recommended constructor for typical use:
+
+```python
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+with RayEngine.from_options(opts) as engine:
+    result = df.lazy().collect(engine=engine)
+
+# or, in SPMD mode:
+with SPMDEngine.from_options(opts) as engine:
+    result = df.lazy().collect(engine=engine)
+```
+
+### Building from a dictionary
+
+`StreamingOptions.from_dict()` accepts a flat dict of field names. Unknown keys
+raise `TypeError`; `None` values are treated as `UNSPECIFIED`:
+
+```python
+opts = StreamingOptions.from_dict({
+    "num_streaming_threads": 8,
+    "fallback_mode": "silent",
+})
+```
+
+### Building from CLI arguments
+
+`add_cli_args()` registers all options on an `ArgumentParser`.
+`from_argparse()` then converts the parsed namespace into a `StreamingOptions`:
+
+```python
+import argparse
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+
+parser = argparse.ArgumentParser()
+StreamingOptions.add_cli_args(parser)
+# ... add your own args ...
+args = parser.parse_args()
+opts = StreamingOptions.from_argparse(args)
+```
+
+Selected CLI flags (see `--help` for the full list):
+
+| Flag                          | Field                         | Default      |
+| ----------------------------- | ----------------------------- | ------------ |
+| `--num-streaming-threads N`   | `num_streaming_threads`       | `1`          |
+| `--rapidsmpf-log LEVEL`       | `log`                         | `WARN`       |
+| `--spill-device-limit PCT`    | `spill_device_limit`          | `80%`        |
+
+`from_argparse()` also accepts namespaces from legacy benchmark scripts that
+use the old dest names (`blocksize` → `target_partition_size`, `rapidsmpf_log`
+→ `log`, etc.).
 
 ---
 
@@ -90,11 +175,16 @@ broadcasts it to all actors, so every rank always executes the same query.
 Actors are shut down when `shutdown()` is called or the context manager exits. If the
 engine started Ray, it also calls `ray.shutdown()`.
 
+The recommended way to construct a `RayEngine` is via `from_options()`:
+
 ```python
 import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
-with RayEngine() as engine:
+opts = StreamingOptions(num_streaming_threads=8, fallback_mode="silent")
+
+with RayEngine.from_options(opts) as engine:
     result = (
         pl.scan_parquet("/data/dataset/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -104,6 +194,13 @@ with RayEngine() as engine:
     )
 
 print(result)
+```
+
+With no options, `RayEngine()` uses all built-in defaults:
+
+```python
+with RayEngine() as engine:
+    result = pl.scan_parquet(...).collect(engine=engine)
 ```
 
 ### Ray lifecycle
@@ -146,8 +243,9 @@ Each entry includes `pid`, `hostname`, `cuda_visible_devices`, and `node_id`.
 
 ### Passing options
 
-`rapidsmpf_options`, `executor_options`, `engine_options`, and `ray_init_options` accept
-pass-through dictionaries:
+Prefer `RayEngine.from_options()` with a `StreamingOptions` object (see
+[Unified configuration](#unified-configuration-streamingoptions)). For
+fine-grained control, the `__init__` parameters accept raw dicts:
 
 ```python
 from rapidsmpf.config import Options
@@ -164,19 +262,11 @@ with RayEngine(
     ...
 ```
 
-`rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context` on each
-worker. If not provided, `RayEngine` constructs a default `Options` with
-`num_streaming_threads=4`.
+`ray_init_options` is forwarded to `ray.init()` when Ray is not already
+initialized. It is kept separate from streaming behavior options and has no
+`StreamingOptions` equivalent.
 
-`executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
-argument; user-supplied keys are merged with reserved entries set by `RayEngine`.
-
-Notable `executor_options` keys:
-
-* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
-  `ThreadPoolExecutor` that drives the RapidsMPF actor network on each worker.
-
-Reserved keys:
+Reserved keys (do not set these via `executor_options` or `engine_options`):
 
 * `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
 * `engine_options`: `"memory_resource"`, `"executor"`
@@ -251,17 +341,22 @@ manager imported from `cudf_polars.experimental.rapidsmpf.frontend.spmd`. On con
 
 All resources are released when the context exits (or `shutdown()` is called).
 
+The recommended way to construct an `SPMDEngine` is via `from_options()`:
+
 ```python
 # multi-GPU launch: rrun -n 4 python my_script.py
 # single-GPU (no rrun needed): python my_script.py
 import polars as pl
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     SPMDEngine,
     allgather_polars_dataframe,
 )
 
-with SPMDEngine() as engine:
+opts = StreamingOptions(num_streaming_threads=8, fallback_mode="silent")
+
+with SPMDEngine.from_options(opts) as engine:
     result = (
         pl.scan_parquet("/data/dataset/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -276,6 +371,13 @@ with SPMDEngine() as engine:
             local_df=result,
             op_id=op_id,
         )
+```
+
+With no options, `SPMDEngine()` uses all built-in defaults:
+
+```python
+with SPMDEngine() as engine:
+    result = pl.scan_parquet(...).collect(engine=engine)
 ```
 
 `SPMDEngine` provides:
@@ -355,8 +457,9 @@ The result is guaranteed to be a `pl.DataFrame` containing rows from all ranks i
 
 ### Passing options
 
-`rapidsmpf_options`, `executor_options`, and `engine_options` accept pass-through
-arguments:
+Prefer `SPMDEngine.from_options()` with a `StreamingOptions` object (see
+[Unified configuration](#unified-configuration-streamingoptions)). For
+fine-grained control, the `__init__` parameters accept raw dicts:
 
 ```python
 import rmm
@@ -380,22 +483,7 @@ restores the original resource on shutdown. To use a custom allocator, call
 `rmm.mr.set_current_device_resource(your_mr)` **before** constructing `SPMDEngine`.
 Do not pre-wrap it in `RmmResourceAdaptor`.
 
-`rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context`. Defaults
-to `None` (uses RapidsMPF defaults).
-
-`executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
-argument; user-supplied keys are merged with reserved entries set by `SPMDEngine`.
-
-`engine_options` is forwarded as keyword arguments to `pl.GPUEngine`. For example,
-pass `engine_options={"parquet_options": {"use_rapidsmpf_native": True}}` to enable
-native Parquet reads.
-
-Notable `executor_options` keys:
-
-* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
-  `ThreadPoolExecutor` that drives the RapidsMPF actor network.
-
-Reserved keys:
+Reserved keys (do not set these via `executor_options` or `engine_options`):
 
 * `executor_options`: `"runtime"`, `"cluster"`, `"spmd_context"`
 * `engine_options`: `"memory_resource"`, `"executor"`
