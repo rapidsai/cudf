@@ -2892,6 +2892,11 @@ class RangeIndex(Index):
 
     @cached_property
     @_performance_tracking
+    def _numpy_values(self) -> np.ndarray:
+        return np.arange(self.start, self.stop, self.step)
+
+    @cached_property
+    @_performance_tracking
     def values_host(self) -> np.ndarray:
         """
         Return a numpy array from the RangeIndex.
@@ -2906,11 +2911,40 @@ class RangeIndex(Index):
             FutureWarning,
             stacklevel=2,
         )
-        return np.arange(self.start, self.stop, self.step)
+        return self.to_numpy(copy=False)
 
     @_performance_tracking
-    def to_numpy(self) -> np.ndarray:
-        return np.arange(self.start, self.stop, self.step)
+    def to_numpy(
+        self,
+        dtype: Dtype | None = None,
+        copy: bool = False,
+        na_value=None,
+    ) -> np.ndarray:
+        """Convert the RangeIndex to a NumPy array.
+
+        Parameters
+        ----------
+        dtype : str or :class:`numpy.dtype`, optional
+            The dtype to cast the result to. Defaults to the RangeIndex dtype.
+        copy : bool, default False
+            Whether to guarantee a copy of the returned array.
+            ``copy=False`` avoids an extra allocation when no dtype conversion
+            is needed; ``copy=True`` always returns a freshly allocated array.
+        na_value : Any, default None
+            Accepted for compatibility with the pandas API. Because
+            ``RangeIndex`` cannot contain missing values, this argument has no
+            effect.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        result = self._numpy_values
+        if dtype is not None:
+            result = result.astype(dtype, copy=False)
+        if copy:
+            result = result.copy()
+        return result
 
     @_performance_tracking
     def to_cupy(self) -> cupy.ndarray:
