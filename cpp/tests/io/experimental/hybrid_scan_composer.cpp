@@ -289,10 +289,13 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
       }
     };
 
-  // Use construct_row_group_passes to split row groups into memory-bounded passes
-  auto const filter_passes = reader->construct_row_group_passes(current_row_group_indices, 10240);
-  for (auto const& pass_rgs : filter_passes) {
-    materialize_filter_columns(cudf::host_span<cudf::size_type const>(pass_rgs));
+  if (current_row_group_indices.size() > 1) {
+    auto const row_group_split = current_row_group_indices.size() / 2;
+    materialize_filter_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_filter_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
+  } else {
+    materialize_filter_columns(current_row_group_indices);
   }
 
   auto filter_table = concatenate_tables(std::move(tables), stream, mr);
@@ -329,11 +332,13 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
       }
     };
 
-  // Use construct_row_group_passes for payload columns as well
-  auto const payload_passes =
-    reader->construct_row_group_passes(current_row_group_indices, 10240);
-  for (auto const& pass_rgs : payload_passes) {
-    materialize_payload_columns(cudf::host_span<cudf::size_type const>(pass_rgs));
+  if (current_row_group_indices.size() > 1) {
+    auto const row_group_split = current_row_group_indices.size() / 2;
+    materialize_payload_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_payload_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
+  } else {
+    materialize_payload_columns(current_row_group_indices);
   }
 
   auto payload_table = concatenate_tables(std::move(tables), stream, mr);
@@ -429,10 +434,13 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
       }
     };
 
-  // Use construct_row_group_passes to split row groups into memory-bounded passes
-  auto const all_passes = reader->construct_row_group_passes(current_row_group_indices, 10240);
-  for (auto const& pass_rgs : all_passes) {
-    materialize_all_columns(cudf::host_span<cudf::size_type const>(pass_rgs));
+  if (current_row_group_indices.size() > 1) {
+    auto const row_group_split = current_row_group_indices.size() / 2;
+    materialize_all_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_all_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
+  } else {
+    materialize_all_columns(current_row_group_indices);
   }
 
   return concatenate_tables(std::move(tables), stream, mr);
