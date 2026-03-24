@@ -96,8 +96,8 @@ void print_cumulative_page_info(host_span<cumulative_page_info const> sizes,
 
     if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
-      auto start             = thrust::make_transform_iterator(splits->begin(),
-                                                   [](row_range const& i) { return i.skip_rows; });
+      auto start             = cuda::make_transform_iterator(splits->begin(),
+                                                 [](row_range const& i) { return i.skip_rows; });
       auto end               = start + splits->size();
       auto split             = std::find(start, end, sizes[idx].end_row_index);
       auto const split_index = [&]() -> int {
@@ -126,7 +126,7 @@ void codec_stats::add_pages(host_span<ColumnChunkDesc const> chunks,
     0, [&](size_t page_idx) { return page_mask.empty() ? true : page_mask[page_idx]; });
 
   // Zip iterator for iterating over pages and the page mask
-  auto zip_iter = thrust::make_zip_iterator(pages.begin(), page_mask_iter);
+  auto zip_iter = cuda::make_zip_iterator(pages.begin(), page_mask_iter);
 
   std::for_each(zip_iter, zip_iter + pages.size(), [&](auto const& item) {
     auto& [page, is_page_needed] = item;
@@ -186,7 +186,7 @@ compression_type from_parquet_compression(Compression compression)
 size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_info,
                         size_t start_row)
 {
-  auto start = thrust::make_transform_iterator(
+  auto start = cuda::make_transform_iterator(
     aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.end_row_index; });
   return thrust::lower_bound(thrust::host, start, start + aggregated_info.size(), start_row) -
          start;
@@ -199,7 +199,7 @@ int64_t find_next_split(int64_t cur_pos,
                         size_t size_limit,
                         size_t min_row_count)
 {
-  auto const start = thrust::make_transform_iterator(
+  auto const start = cuda::make_transform_iterator(
     sizes.begin(),
     [&](cumulative_page_info const& i) { return i.size_bytes - cur_cumulative_size; });
   auto const end = start + sizes.size();
@@ -248,7 +248,7 @@ int64_t find_next_split(int64_t cur_pos,
 
 std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
 {
-  auto compressed_size_iter = thrust::make_transform_iterator(
+  auto compressed_size_iter = cuda::make_transform_iterator(
     rg.columns.begin(), [](ColumnChunk const& c) { return c.meta_data.total_compressed_size; });
 
   // the trick is that total temp space needed is tricky to know
@@ -390,7 +390,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
 
   // for each column, collect the set of pages that spans start_row / end_row
   rmm::device_uvector<page_span> page_bounds(num_columns, stream);
-  auto iter = thrust::make_counting_iterator(size_t{0});
+  auto iter = cuda::counting_iterator<size_t>(0);
   auto page_row_index =
     cudf::detail::make_counting_transform_iterator(0, get_page_end_row_index{c_info});
   thrust::transform(
@@ -402,7 +402,7 @@ std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
       page_offsets, chunks, page_row_index, start_row, end_row, is_first_subpass, has_page_index});
 
   // total page count over all columns
-  auto page_count_iter   = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
+  auto page_count_iter   = cuda::make_transform_iterator(page_bounds.begin(), get_span_size{});
   auto const total_pages = cudf::detail::reduce(
     page_count_iter, page_count_iter + num_columns, size_t{0}, cuda::std::plus<size_t>{}, stream);
 
@@ -654,7 +654,7 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
   rmm::device_uvector<size_type> row_counts(pages.size(),
                                             stream);  // worst case:  num keys == num pages
   auto const size_iter =
-    thrust::make_transform_iterator(pages.begin(), flat_column_num_rows{chunks.data()});
+    cuda::make_transform_iterator(pages.begin(), flat_column_num_rows{chunks.data()});
   auto const row_counts_begin = row_counts.begin();
   auto page_keys              = make_page_key_iterator(pages);
   auto const row_counts_end   = cudf::detail::reduce_by_key(page_keys,
@@ -704,7 +704,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
 
   // per-codec page counts and decompression sizes
   rmm::device_uvector<decompression_info> decomp_info(pages.size(), stream);
-  auto decomp_iter = thrust::make_transform_iterator(pages.begin(), get_decomp_info{chunks});
+  auto decomp_iter = cuda::make_transform_iterator(pages.begin(), get_decomp_info{chunks});
   thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                 page_keys,
                                 page_keys + pages.size(),
@@ -743,7 +743,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
 
       // Collect pages with matching codecs
       rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
-      auto iter = thrust::make_counting_iterator(size_t{0});
+      auto iter = cuda::counting_iterator<size_t>(0);
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
         iter,
@@ -793,8 +793,8 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
 
         // Apply the adjustment ratio to each page's temporary cost
         thrust::for_each(rmm::exec_policy_nosync(stream),
-                         thrust::make_counting_iterator(size_t{0}),
-                         thrust::make_counting_iterator(pages.size()),
+                         cuda::counting_iterator<size_t>(0),
+                         cuda::counting_iterator<size_t>(pages.size()),
                          [pages           = pages.begin(),
                           chunks          = chunks.begin(),
                           d_temp_cost_ptr = d_temp_cost.begin(),
@@ -821,7 +821,7 @@ void include_scratch_size(device_span<size_t const> temp_cost,
                           device_span<cumulative_page_info> c_info,
                           rmm::cuda_stream_view stream)
 {
-  auto iter = thrust::make_counting_iterator(size_t{0});
+  auto iter = cuda::counting_iterator<size_t>(0);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
                    iter + c_info.size(),
