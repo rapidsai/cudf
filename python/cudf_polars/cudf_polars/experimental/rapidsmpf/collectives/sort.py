@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import Schema
 
 
@@ -292,6 +293,8 @@ async def _extract_partitions_and_send(
     post_sort_ir: Sort,
     ir_context: IRExecutionContext,
     output_schema: Schema,
+    *,
+    tracer: ActorTracer | None,
 ) -> None:
     """Extract each local partition from the shuffle, sort if needed, and send."""
     ncols_out = len(output_schema)
@@ -311,6 +314,8 @@ async def _extract_partitions_and_send(
             ).table
         if table.num_columns() > ncols_out:
             table = plc.Table(table.columns()[:ncols_out])
+        if tracer is not None:
+            tracer.add_chunk(table=table)
         await ch_out.send(
             context,
             Message(
@@ -336,7 +341,9 @@ async def sort_actor(
 ) -> None:
     """Streaming sort actor."""
     local_sort_ir = ir.children[0]
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=local_sort_ir):
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=local_sort_ir, ir_context=ir_context
+    ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
         output_metadata = ChannelMetadata(
             local_count=max(1, num_partitions // comm.nranks),
@@ -376,7 +383,7 @@ async def sort_actor(
         )
 
         await _extract_partitions_and_send(
-            context, ch_out, shuffle, post_sort_ir, ir_context, ir.schema
+            context, ch_out, shuffle, post_sort_ir, ir_context, ir.schema, tracer=tracer
         )
 
 
