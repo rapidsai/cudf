@@ -526,7 +526,7 @@ class SPMDContext:
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
         ``SPMDContext`` locally inside
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.spmd_execution`, so
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine`, so
         pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 

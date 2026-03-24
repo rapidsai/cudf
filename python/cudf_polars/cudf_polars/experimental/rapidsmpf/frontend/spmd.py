@@ -170,13 +170,13 @@ def allgather_polars_dataframe(
     equivalent of a distributed ``collect``: after the call, every rank holds
     the same complete dataset.
 
-    Must be called while ``engine`` is still alive (inside a
-    :func:`spmd_execution` block or before :meth:`~SPMDEngine.shutdown`).
+    Must be called while ``engine`` is still alive (before
+    :meth:`~SPMDEngine.shutdown` is called).
 
     Parameters
     ----------
     engine
-        The active :class:`SPMDEngine` returned by :func:`spmd_execution`.
+        The active :class:`SPMDEngine`.
     local_df
         Rank-local DataFrame to contribute.
     op_id
@@ -221,43 +221,203 @@ class SPMDEngine(StreamingEngine):
     """
     Multi-GPU Polars engine for SPMD executions.
 
+    Bootstraps a RapidsMPF SPMD context and returns a matching engine.
+
+    **SPMD execution model**
+
+    SPMD (Single Program, Multiple Data) is a parallel programming model where each
+    process runs the *same* Python script independently on its own slice of data.
+    When launched with the RapidsMPF launcher `rrun`, multiple identical processes
+    are started. Each process owns a rank-local :class:`~polars.LazyFrame`
+    representing its fragment of the distributed dataset. Collective operations,
+    such as shuffles, all-gathers, and joins, coordinate across ranks to produce
+    a globally consistent result.
+
+    This class is the primary entry point for SPMD execution. It:
+
+    - Bootstraps a communicator connecting all ranks. When launched with ``rrun``
+      this is a full UCXX communicator. When running as a normal single Python
+      process (no ``rrun``) it falls back to a lightweight single-rank communicator
+      that requires no external communication library (no UCXX, Ray, or Dask).
+    - Creates a RapidsMPF :class:`~rapidsmpf.streaming.core.context.Context`
+      that owns GPU memory and a CUDA-stream pool.
+
+    All resources (communicator, stream pool, thread-pool) are released when
+    :meth:`~SPMDEngine.shutdown` is called or the engine is used as a context
+    manager.
+
+    **Memory resource**
+
+    ``SPMDEngine`` captures ``rmm.mr.get_current_device_resource()`` at construction,
+    wraps it in ``RmmResourceAdaptor`` (so libcudf temporary allocations and the
+    RapidsMPF ``Context`` share the same resource), sets the wrapped resource as
+    current, and restores the original on shutdown.
+
+    To use a custom allocator, call ``rmm.mr.set_current_device_resource(your_mr)``
+    before constructing ``SPMDEngine``. Do not pre-wrap it in ``RmmResourceAdaptor``.
+
+    .. code-block:: python
+
+        import rmm
+
+        # Optional: install a pool allocator before constructing SPMDEngine.
+        # rmm.mr.set_current_device_resource(
+        #     rmm.mr.PoolMemoryResource(rmm.mr.CudaMemoryResource())
+        # )
+        with SPMDEngine(...) as engine:
+            ...
+
+    **DataFrame and LazyFrame semantics**
+
+    Because every rank runs an independent Python process, a :class:`~polars.DataFrame`
+    is always *rank-local* i.e. it contains only that rank's fragment of the distributed
+    dataset.  This is true whether the DataFrame originates from a file reader or from
+    Python literals.
+
+    File-based sources (``scan_parquet``, ``scan_csv``, ...) distribute their work
+    automatically: the engine assigns disjoint file- or row-group ranges to each rank,
+    so different ranks produce different data.
+
+    An in-memory ``DataFrame`` (or one produced by a previous ``collect``) is already
+    rank-local by construction.  Each rank processes its own copy in full; the engine
+    does **not** re-slice it across ranks.  In particular, the two patterns below are
+    equivalent:
+
+    .. code-block:: python
+
+        # One-step: scan and transform in a single pipeline
+        result = pl.scan_parquet(...).pipe(transform).collect(engine=engine)
+
+        # Two-step: collect an intermediate result, then transform
+        intermediate = pl.scan_parquet(...).collect(engine=engine)
+        result = intermediate.lazy().pipe(transform).collect(engine=engine)
+
+    In both cases rank k operates on exactly the data it read from parquet. The
+    intermediate ``collect`` simply materializes the data in memory; it does not
+    change which rows belong to which rank.
+
+    **Query symmetry requirement**
+
+    Every rank must issue the *same* sequence of Polars queries in the *same*
+    order.  Collective operations (shuffles, all-gathers, joins) are matched
+    across ranks by a monotonically increasing operation ID — if one rank calls
+    a collective that another rank does not, all ranks will deadlock.  This means
+    your driver script must be fully deterministic: avoid rank-conditional
+    ``collect`` calls, early exits, or any branching that would cause different
+    ranks to execute different query graphs.
+
     Parameters
     ----------
-    comm
-        The RapidsMPF communicator for this rank.
-    ctx
-        The RapidsMPF execution context.
-    py_executor
-        Thread pool used for Python-side async I/O during streaming execution.
+    rapidsmpf_options
+        RapidsMPF options. Defaults to ``Options(get_environment_variables())``
+        when ``None``.
     executor_options
-        Key/value options forwarded to the streaming executor.
+        Extra keyword arguments forwarded to the ``executor_options`` dict of
+        :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
+        ``"runtime"``, ``"cluster"``, and ``"spmd_context"`` are reserved and
+        may not be overridden.
     engine_options
-        Additional keyword arguments forwarded to
-        :class:`~polars.lazyframe.engine_config.GPUEngine`.
-    exit_stack
-        A :class:`contextlib.ExitStack` whose registered contexts are closed
-        when :meth:`shutdown` is called. If ``None``, an empty stack is created.
+        Extra keyword arguments forwarded directly to
+        :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
+        pass ``engine_options={"parquet_options": {"use_rapidsmpf_native": True}}``
+        to enable native Parquet reads. The keys ``"memory_resource"`` and
+        ``"executor"`` are reserved and may not be overridden.
+
+    Raises
+    ------
+    TypeError
+        If ``executor_options`` contains any of the reserved keys
+        ``"runtime"``, ``"cluster"``, or ``"spmd_context"``.
+    TypeError
+        If ``engine_options`` contains any of the reserved keys
+        ``"memory_resource"`` or ``"executor"``.
+
+    Examples
+    --------
+    Context-manager style (recommended for scripts):
+
+    >>> with SPMDEngine() as engine:  # doctest: +SKIP
+    ...     result = (
+    ...         df.lazy().group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
+    ...     )
+    ...     full = allgather_polars_dataframe(engine=engine, local_df=result, op_id=0)
+
+    Direct style (Jupyter / long-lived clusters):
+
+    >>> engine = SPMDEngine()  # doctest: +SKIP
+    >>> result = df.lazy().collect(engine=engine)  # doctest: +SKIP
+    >>> engine.shutdown()  # doctest: +SKIP
     """
 
     def __init__(
         self,
         *,
-        comm: Communicator,
-        ctx: Context,
-        py_executor: ThreadPoolExecutor,
-        executor_options: dict[str, Any],
-        engine_options: dict[str, Any],
-        exit_stack: contextlib.ExitStack | None = None,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, object] | None = None,
+        engine_options: dict[str, Any] | None = None,
     ) -> None:
-        self._comm: Communicator | None = comm
-        self._ctx: Context | None = ctx
-        self._py_executor: ThreadPoolExecutor | None = py_executor
-        super().__init__(
-            nranks=comm.nranks,
-            executor_options=executor_options,
-            engine_options=engine_options,
-            exit_stack=exit_stack,
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+
+        # Check for reserved keys.
+        if bad := {"runtime", "cluster", "spmd_context"} & executor_options.keys():
+            raise TypeError(f"executor_options may not contain reserved keys: {bad}")
+        if bad := {"memory_resource", "executor"} & engine_options.keys():
+            raise TypeError(f"engine_options may not contain reserved keys: {bad}")
+
+        rapidsmpf_options = (
+            rapidsmpf_options
+            if rapidsmpf_options is not None
+            else Options(get_environment_variables())
         )
+        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+        if bootstrap.is_running_with_rrun():
+            comm = bootstrap.create_ucxx_comm(
+                progress_thread=ProgressThread(),
+                type=bootstrap.BackendType.AUTO,
+                options=rapidsmpf_options,
+            )
+        else:
+            comm = single_communicator(
+                progress_thread=ProgressThread(),
+                options=rapidsmpf_options,
+            )
+
+        py_executor = ThreadPoolExecutor(
+            max_workers=cast(
+                int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
+            ),
+            thread_name_prefix="spmd-executor",
+        )
+        stack = contextlib.ExitStack()
+        try:
+            stack.enter_context(set_memory_resource(mr))
+            ctx = stack.enter_context(
+                Context.from_options(comm.logger, mr, rapidsmpf_options)
+            )
+            self._comm: Communicator | None = comm
+            self._ctx: Context | None = ctx
+            self._py_executor: ThreadPoolExecutor | None = py_executor
+            super().__init__(
+                nranks=comm.nranks,
+                executor_options={
+                    **executor_options,
+                    "runtime": "rapidsmpf",
+                    "cluster": "spmd",
+                    "spmd_context": SPMDContext(
+                        comm=comm, context=ctx, py_executor=py_executor
+                    ),
+                },
+                engine_options={
+                    **engine_options,
+                    "memory_resource": ctx.br().device_mr,
+                },
+                exit_stack=stack,
+            )
+        except Exception:
+            py_executor.shutdown(wait=False)
+            stack.close()
+            raise
 
     @property
     def rank(self) -> int:
@@ -327,211 +487,3 @@ class SPMDEngine(StreamingEngine):
             self._ctx = None
             self._py_executor = None
             super().shutdown()
-
-
-def spmd_execution(
-    *,
-    rapidsmpf_options: Options | None = None,
-    executor_options: dict[str, object] | None = None,
-    engine_options: dict[str, Any] | None = None,
-) -> SPMDEngine:
-    """
-    Bootstrap a RapidsMPF SPMD context and return a matching :class:`SPMDEngine`.
-
-    **SPMD execution model**
-
-    SPMD (Single Program, Multiple Data) is a parallel programming model where each
-    process runs the *same* Python script independently on its own slice of data.
-    When launched with the RapidsMPF launcher `rrun`, multiple identical processes
-    are started. Each process owns a rank-local :class:`~polars.LazyFrame`
-    representing its fragment of the distributed dataset. Collective operations,
-    such as shuffles, all-gathers, and joins, coordinate across ranks to produce
-    a globally consistent result.
-
-    This function is the primary entry point for SPMD execution. It:
-
-    - Bootstraps a communicator connecting all ranks. When launched with ``rrun``
-      this is a full UCXX communicator. When running as a normal single Python
-      process (no ``rrun``) it falls back to a lightweight single-rank communicator
-      that requires no external communication library (no UCXX, Ray, or Dask).
-    - Creates a RapidsMPF :class:`~rapidsmpf.streaming.core.context.Context`
-      that owns GPU memory and a CUDA-stream pool.
-    - Returns a :class:`SPMDEngine` wired to that context so that
-      ``LazyFrame.collect(engine=engine)`` dispatches through the RapidsMPF
-      streaming executor.
-
-    All resources (communicator, stream pool, thread-pool) are released when
-    :meth:`~SPMDEngine.shutdown` is called or the engine is used as a context
-    manager.
-
-    **Memory resource**
-
-    ``spmd_execution`` captures ``rmm.mr.get_current_device_resource()`` at entry,
-    wraps it in ``RmmResourceAdaptor`` (so libcudf temporary allocations and the
-    RapidsMPF ``Context`` share the same resource), sets the wrapped resource as
-    current, and restores the original on shutdown.
-
-    To use a custom allocator, call ``rmm.mr.set_current_device_resource(your_mr)``
-    before calling ``spmd_execution()``. Do not pre-wrap it in ``RmmResourceAdaptor``.
-
-    .. code-block:: python
-
-        import rmm
-
-        # Optional: install a pool allocator before calling spmd_execution.
-        # rmm.mr.set_current_device_resource(
-        #     rmm.mr.PoolMemoryResource(rmm.mr.CudaMemoryResource())
-        # )
-        with spmd_execution(...) as engine:
-            ...
-
-    **DataFrame and LazyFrame semantics**
-
-    Because every rank runs an independent Python process, a :class:`~polars.DataFrame`
-    is always *rank-local* i.e. it contains only that rank's fragment of the distributed
-    dataset.  This is true whether the DataFrame originates from a file reader or from
-    Python literals.
-
-    File-based sources (``scan_parquet``, ``scan_csv``, ...) distribute their work
-    automatically: the engine assigns disjoint file- or row-group ranges to each rank,
-    so different ranks produce different data.
-
-    An in-memory ``DataFrame`` (or one produced by a previous ``collect``) is already
-    rank-local by construction.  Each rank processes its own copy in full; the engine
-    does **not** re-slice it across ranks.  In particular, the two patterns below are
-    equivalent:
-
-    .. code-block:: python
-
-        # One-step: scan and transform in a single pipeline
-        result = pl.scan_parquet(...).pipe(transform).collect(engine=engine)
-
-        # Two-step: collect an intermediate result, then transform
-        intermediate = pl.scan_parquet(...).collect(engine=engine)
-        result = intermediate.lazy().pipe(transform).collect(engine=engine)
-
-    In both cases rank k operates on exactly the data it read from parquet. The
-    intermediate ``collect`` simply materializes the data in memory; it does not
-    change which rows belong to which rank.
-
-    **Query symmetry requirement**
-
-    Every rank must issue the *same* sequence of Polars queries in the *same*
-    order.  Collective operations (shuffles, all-gathers, joins) are matched
-    across ranks by a monotonically increasing operation ID — if one rank calls
-    a collective that another rank does not, all ranks will deadlock.  This means
-    your driver script must be fully deterministic: avoid rank-conditional
-    ``collect`` calls, early exits, or any branching that would cause different
-    ranks to execute different query graphs.
-
-    Parameters
-    ----------
-    rapidsmpf_options
-        RapidsMPF options. Defaults to ``Options(get_environment_variables())``
-        when ``None``.
-    executor_options
-        Extra keyword arguments forwarded to the ``executor_options`` dict of
-        :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
-        ``"runtime"``, ``"cluster"``, and ``"spmd_context"`` are reserved and
-        may not be overridden.
-    engine_options
-        Extra keyword arguments forwarded directly to
-        :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
-        pass ``engine_options={"parquet_options": {"use_rapidsmpf_native": True}}``
-        to enable native Parquet reads. The keys ``"memory_resource"`` and
-        ``"executor"`` are reserved and may not be overridden.
-
-    Returns
-    -------
-    A Polars GPU engine wired to the bootstrapped communicator and context.
-    Pass it to ``LazyFrame.collect(engine=engine)`` on each rank.
-    Call :meth:`~SPMDEngine.shutdown` when done, or use it as a context
-    manager (``with spmd_execution() as engine``).
-
-    Raises
-    ------
-    TypeError
-        If ``executor_options`` contains any of the reserved keys
-        ``"runtime"``, ``"cluster"``, or ``"spmd_context"``.
-    TypeError
-        If ``engine_options`` contains any of the reserved keys
-        ``"memory_resource"`` or ``"executor"``.
-
-    Examples
-    --------
-    Context-manager style (recommended for scripts):
-
-    >>> with spmd_execution() as engine:  # doctest: +SKIP
-    ...     result = (
-    ...         df.lazy().group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
-    ...     )
-    ...     full = allgather_polars_dataframe(engine=engine, local_df=result, op_id=0)
-
-    Direct style (Jupyter / long-lived clusters):
-
-    >>> engine = spmd_execution()  # doctest: +SKIP
-    >>> result = df.lazy().collect(engine=engine)  # doctest: +SKIP
-    >>> engine.shutdown()  # doctest: +SKIP
-    """
-    executor_options = executor_options or {}
-    engine_options = engine_options or {}
-
-    # Check for reserved keys.
-    if bad := {"runtime", "cluster", "spmd_context"} & executor_options.keys():
-        raise TypeError(f"executor_options may not contain reserved keys: {bad}")
-    if bad := {"memory_resource", "executor"} & engine_options.keys():
-        raise TypeError(f"engine_options may not contain reserved keys: {bad}")
-
-    rapidsmpf_options = (
-        rapidsmpf_options
-        if rapidsmpf_options is not None
-        else Options(get_environment_variables())
-    )
-    mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-    if bootstrap.is_running_with_rrun():
-        comm = bootstrap.create_ucxx_comm(
-            progress_thread=ProgressThread(),
-            type=bootstrap.BackendType.AUTO,
-            options=rapidsmpf_options,
-        )
-    else:
-        comm = single_communicator(
-            progress_thread=ProgressThread(),
-            options=rapidsmpf_options,
-        )
-
-    py_executor = ThreadPoolExecutor(
-        max_workers=cast(
-            int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
-        ),
-        thread_name_prefix="spmd-executor",
-    )
-    stack = contextlib.ExitStack()
-    try:
-        stack.enter_context(set_memory_resource(mr))
-        ctx = stack.enter_context(
-            Context.from_options(comm.logger, mr, rapidsmpf_options)
-        )
-        engine = SPMDEngine(
-            comm=comm,
-            ctx=ctx,
-            py_executor=py_executor,
-            executor_options={
-                **executor_options,
-                "runtime": "rapidsmpf",
-                "cluster": "spmd",
-                "spmd_context": SPMDContext(
-                    comm=comm, context=ctx, py_executor=py_executor
-                ),
-            },
-            engine_options={
-                **engine_options,
-                "memory_resource": ctx.br().device_mr,
-            },
-            exit_stack=stack,
-        )
-    except Exception:
-        py_executor.shutdown(wait=False)
-        stack.close()
-        raise
-    return engine

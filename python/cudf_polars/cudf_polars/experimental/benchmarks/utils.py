@@ -33,7 +33,7 @@ import polars as pl
 
 import rmm.statistics
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 # The dtype for count() aggregations depends on the presence
 # of the polars-runtime-64 package (`polars[rt64]`).
@@ -1855,13 +1855,13 @@ def run_polars_spmd(
     if run_config.rmm_async:
         raise NotImplementedError("--rmm-async is not supported with --cluster spmd")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime" and "cluster" are reserved — spmd_execution sets them
+    # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
     rmm.mr.set_current_device_resource(
         rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
     )
-    with spmd_execution(
+    with SPMDEngine(
         rapidsmpf_options=Options(get_environment_variables()),
         executor_options=executor_options,
         engine_options={
