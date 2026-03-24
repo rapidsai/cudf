@@ -27,9 +27,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
+from rapidsmpf.config import Options, get_environment_variables
 
 import polars as pl
-import polars.testing
 
 import rmm.statistics
 
@@ -389,7 +389,6 @@ class RunConfig:
     spill_device: float
     query_set: str
     collect_traces: bool = False
-    stats_planning: bool
     dynamic_planning: bool | None = None
     max_io_threads: int
     native_parquet: bool
@@ -542,7 +541,6 @@ class RunConfig:
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
             collect_traces=args.collect_traces,
-            stats_planning=args.stats_planning,
             dynamic_planning=args.dynamic_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
@@ -580,7 +578,6 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-                print(f"stats_planning: {self.stats_planning}")
                 if self.runtime == "rapidsmpf":
                     print(f"native_parquet: {self.native_parquet}")
                     print(f"dynamic_planning: {self.dynamic_planning}")
@@ -644,13 +641,6 @@ def get_executor_options(
             executor_options["fallback_mode"] = run_config.fallback_mode
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
-        executor_options["stats_planning"] = {
-            "use_reduction_planning": run_config.stats_planning,
-            "use_sampling": (
-                # Always allow row-group sampling for rapidsmpf runtime
-                run_config.stats_planning or run_config.runtime == "rapidsmpf"
-            ),
-        }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
@@ -663,8 +653,6 @@ def get_executor_options(
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
-        # Only use the unique_fraction config if stats_planning is disabled
-        and not run_config.stats_planning
         and not run_config.dynamic_planning
     ):
         executor_options["unique_fraction"] = {
@@ -780,7 +768,6 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if run_config.shuffle != "tasks":
         try:
-            from rapidsmpf.config import Options
             from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
             bootstrap_dask_cluster(
@@ -1212,12 +1199,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         help="Collect data tracing cudf-polars execution.",
     )
 
-    parser.add_argument(
-        "--stats-planning",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable statistics planning.",
-    )
     parser.add_argument(
         "--dynamic-planning",
         action=argparse.BooleanOptionalAction,
@@ -1779,7 +1760,7 @@ def run_polars(
                 date_type,
                 validation_files,
             )
-        case "single" | "distributed":
+        case "single" | "distributed" | None:
             run_polars_single_or_dask(
                 benchmark,
                 args,
@@ -1881,12 +1862,13 @@ def run_polars_spmd(
         rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
     )
     with spmd_execution(
+        rapidsmpf_options=Options(get_environment_variables()),
         executor_options=executor_options,
         engine_options={
             "parquet_options": parquet_options,
             "cuda_stream_policy": run_config.stream_policy,
         },
-    ) as (comm, ctx, engine):
+    ) as engine:
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
             allgather_polars_dataframe,
@@ -1895,14 +1877,13 @@ def run_polars_spmd(
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
                 return allgather_polars_dataframe(
-                    comm=comm,
-                    ctx=ctx,
+                    engine=engine,
                     local_df=df,
                     op_id=op_id,
                 )
 
-        rank = comm.rank
-        run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
+        rank = engine.rank
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
