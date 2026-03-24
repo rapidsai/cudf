@@ -71,7 +71,7 @@ auto build_row_indices(cudf::host_span<std::size_t const> row_group_offsets,
   // Inclusive scan to compute the rest of the expected row indices
   std::for_each(cuda::counting_iterator{cudf::size_type{0}},
                 cuda::counting_iterator{num_row_groups},
-                [&](auto i) {
+                [&](cudf::size_type i) {
                   auto start_row_index = row_group_span_offsets[i];
                   auto end_row_index   = row_group_span_offsets[i + 1];
                   thrust::inclusive_scan(expected_row_indices.begin() + start_row_index,
@@ -115,8 +115,8 @@ auto build_deletion_vector(cudf::host_span<std::size_t const> row_group_offsets,
   auto roaring64_context =
     roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
-                cuda::counting_iterator{std::size_t{num_rows}},
+  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+                cuda::counting_iterator{num_rows},
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not input_row_mask[row_idx]) {
@@ -164,9 +164,9 @@ auto setup_table_and_deletion_vector(nvbench::state& state)
   auto row_group_offsets = std::vector<std::size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<std::size_t>(std::llround(2e9));
   std::for_each(
-    cuda::counting_iterator{std::size_t{1}},
-    cuda::counting_iterator{std::size_t{num_row_groups}},
-    [&](auto i) { row_group_offsets[i] = std::llround(row_group_offsets[i - 1] + 0.5e9); });
+    cuda::counting_iterator{int{1}}, cuda::counting_iterator{num_row_groups}, [&](auto i) {
+      row_group_offsets[i] = std::llround(row_group_offsets[i - 1] + 0.5e9);
+    });
 
   // Row group splits
   auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);

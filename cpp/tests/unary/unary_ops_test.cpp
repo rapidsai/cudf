@@ -366,7 +366,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloorLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto a = cuda::counting_iterator{RepType{100}};
+  auto a = cudf::detail::make_counting_transform_iterator(100, [](int i) { return RepType{i}; });
   auto b =
     cudf::detail::make_counting_transform_iterator(100, [](auto e) { return (e / 10) * 10; });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};

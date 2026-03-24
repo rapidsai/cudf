@@ -2000,8 +2000,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   for (auto const i : {0, -1, -2}) {
-    auto const scale          = scale_type{i};
-    auto f                    = cuda::counting_iterator{RepType{0}};
+    auto const scale = scale_type{i};
+    auto f = cudf::detail::make_counting_transform_iterator(0, [](int i) { return RepType{i}; });
     auto const values         = std::vector<RepType>(f, f + 1000);
     auto const column         = fp_wrapper{values.cbegin(), values.cend(), scale};
     auto const out_type       = static_cast<cudf::column_view>(column).type();
