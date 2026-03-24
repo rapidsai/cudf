@@ -33,7 +33,7 @@
 
 #include <optional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 namespace rolling {
 
@@ -684,4 +684,4 @@ struct range_window_clamper {
 };
 }  // namespace rolling
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
