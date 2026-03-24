@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -12,7 +12,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace CUDF_EXPORT nvtext {
+namespace nvtext {
 namespace detail {
 /**
  * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar
@@ -59,4 +59,4 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
                                            rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT nvtext
+}  // namespace nvtext
