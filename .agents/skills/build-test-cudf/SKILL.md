@@ -34,7 +34,7 @@ ninja
 
 #### CMake options
 
-Both `build-cudf-cpp` and `configure-cudf-cpp` accept CMake `-D` options directly as arguments. Alternatively, CMake options can be passed via the `CMAKE_ARGS` environment variable. See `cpp/CMakeLists.txt` for a full list of available CMake options
+Both `build-cudf-cpp` and `configure-cudf-cpp` accept CMake `-D` options directly as arguments. See `cpp/CMakeLists.txt` for a full list of available CMake options
 
 
 ```bash
@@ -42,8 +42,6 @@ Both `build-cudf-cpp` and `configure-cudf-cpp` accept CMake `-D` options directl
 build-cudf-cpp -j0 -DBUILD_BENCHMARKS=ON
 # Multiple options can be combined
 build-cudf-cpp -j0 -DBUILD_BENCHMARKS=ON -DBUILD_TESTS=OFF
-# Alternate option
-CMAKE_ARGS="-DBUILD_BENCHMARKS=ON" build-cudf-cpp -j0
 ```
 
 Similarly, configure without building:
@@ -72,22 +70,16 @@ build-cudf-polars-python # cudf-polars
 ```
 
 ## Clean up
+
 Similar to build instructions, we can use `clean-cudf-xxx` scripts also located at `/usr/bin`. Use `clean-cudf` to clean everything.
 
 ## Build error handling
-Oftentimes, clean building cudf will resolve all build problems. If we run into a fatal CMake error while building libcudf indicating packages/version mismatch, we can update our packages using the following script. If the error persists, use `--force` flag with the script
+
+If there are build errors, cleaning before building will usually resolve problems. If we run into a fatal CMake error while building libcudf indicating packages/version mismatch, update the environment using the following script. If the error persists, use `--force` flag with the script
 
 ```bash
-rapids-make-<ENV>-env
+rapids-make-${PYTHON_PACKAGE_MANAGER}-env
 ```
-
-where `<ENV>` is either `pip` or `conda` and can be read from the environment variables `PYTHON_PACKAGE_MANAGER` such as:
-
-```bash
-echo ${PYTHON_PACKAGE_MANAGER}
-```
-
-depending on the devcontainer environment. Prompt the user to specify this information if and only if not specified earlier and is needed.
 
 Make sure to run `clean-cudf` after running this for a fresh subsequent build.
 

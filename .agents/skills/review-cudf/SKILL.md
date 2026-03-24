@@ -94,7 +94,6 @@ Hint: Ensure `GH_TOKEN` (or GitHub CLI auth) is already configured in the enviro
 
 - No significant code duplication; reusable logic must be refactored into common helper functions.
 - Function and variable names are meaningful — not too vague or verbose.
-- No single-letter variable names except loop indices (`i`, `j`, `k`) or thread IDs (`t`, `tid`).
 - Private member variables prefixed with underscore. **(guide: "Code and Documentation Style")**
 
 ### API & Design (libcudf C++)
@@ -116,7 +115,7 @@ Additional key checks not in the guide:
 - Use `host_span`/`device_span` ; no owning vectors passed around by copy/reference unless explicitly moved (transferring ownership).
 - Use modern C++20 primitives such as `concepts`, `std::ranges`, `std::transform` over manual implementations and raw loops; Range-for loops are fine.
 - Use `static_assert` with a clear message to prevent accidental template misuse.
-- Use `[[nodiscard]]` when a function that returns a non-void result that has no side effects
+- Use `[[nodiscard]]` when a function with no side effects returns a non-void result.
 
 ### Memory Allocation & Management
 
