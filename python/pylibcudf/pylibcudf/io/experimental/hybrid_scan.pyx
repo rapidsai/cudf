@@ -821,6 +821,40 @@ cdef class HybridScanReader:
             c_result, self.stream, self.mr
         )
 
+    def construct_row_group_passes(
+        self,
+        list row_group_indices,
+        size_t pass_read_limit,
+    ):
+        """Construct row group passes that fit within a memory limit.
+
+        Partitions the input row group indices into consecutive groups
+        (passes) such that the compressed size of each pass fits within
+        the specified memory limit.
+
+        Parameters
+        ----------
+        row_group_indices : list[int]
+            Input row group indices. Must not be empty
+        pass_read_limit : int
+            Memory limit for reading compressed data per pass in bytes.
+            If 0, all row groups are returned in a single pass
+
+        Returns
+        -------
+        list[list[int]]
+            List of passes, where each pass is a list of row group indices
+        """
+        cdef vector[size_type] indices_vec = row_group_indices
+        cdef vector[vector[size_type]] passes = \
+            self.c_obj.get()[0].construct_row_group_passes(
+                host_span[const_size_type](
+                    indices_vec.data(), indices_vec.size()
+                ),
+                pass_read_limit
+            )
+        return [list(p) for p in passes]
+
     def has_next_table_chunk(self):
         """Check if there is any parquet data left to read.
 

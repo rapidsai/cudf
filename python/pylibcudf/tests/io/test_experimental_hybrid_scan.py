@@ -646,6 +646,44 @@ def test_hybrid_scan_chunked_reading(
     assert chunks_read > 0
 
 
+def test_hybrid_scan_construct_row_group_passes(
+    simple_hybrid_scan_reader,
+    simple_parquet_options,
+):
+    """Test construct_row_group_passes with various pass read limits."""
+    all_row_groups = simple_hybrid_scan_reader.all_row_groups(
+        simple_parquet_options
+    )
+
+    # zero pass read limit => single pass with all row groups
+    pass_read_limit = 0
+    passes = simple_hybrid_scan_reader.construct_row_group_passes(
+        all_row_groups, pass_read_limit
+    )
+    assert passes == [all_row_groups]
+
+    # small pass read limit => each row group in its own pass
+    pass_read_limit = 1
+    passes = simple_hybrid_scan_reader.construct_row_group_passes(
+        all_row_groups, pass_read_limit
+    )
+    assert passes == [[rg] for rg in all_row_groups]
+
+    # Passes should flatten to all row groups
+    pass_read_limit = 1024
+    passes = simple_hybrid_scan_reader.construct_row_group_passes(
+        all_row_groups, pass_read_limit
+    )
+    assert [rg for p in passes for rg in p] == all_row_groups
+    assert all(passes)
+
+    # Empty input row groups raise an error
+    with pytest.raises(RuntimeError):
+        simple_hybrid_scan_reader.construct_row_group_passes(
+            [], pass_read_limit
+        )
+
+
 def test_hybrid_scan_metadata_with_page_index(
     simple_parquet_bytes,
     simple_hybrid_scan_reader,
