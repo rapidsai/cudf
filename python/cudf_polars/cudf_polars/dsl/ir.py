@@ -1920,7 +1920,6 @@ class GroupBy(IR):
                 strict=True,
             )
         ]
-
         result_keys = [
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
