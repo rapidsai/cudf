@@ -12,11 +12,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.experimental.io import _clear_source_info_cache
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
-    assert_gpu_result_equal,
-)
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
 
@@ -32,26 +28,24 @@ def df():
     )
 
 
+# Simple engine for IR translation / stats collection only (no actual GPU execution)
 @pytest.fixture(scope="module")
-def engine():
+def stats_engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
         },
     )
 
 
-def test_base_stats_dataframescan(df, engine):
+def test_base_stats_dataframescan(df, stats_engine):
     row_count = df.height
     q = pl.LazyFrame(df)
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    stats = collect_statistics(ir, ConfigOptions.from_polars_engine(engine))
+    ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
+    stats = collect_statistics(ir, ConfigOptions.from_polars_engine(stats_engine))
 
     source = stats.scan_stats[ir]
     assert source.row_count == row_count
@@ -84,11 +78,7 @@ def test_base_stats_parquet(
     engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
-        executor_options={
-            "target_partition_size": 10_000,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-        },
+        executor_options={"target_partition_size": 10_000},
         parquet_options={
             "max_footer_samples": max_footer_samples,
             "max_row_group_samples": max_row_group_samples,
@@ -110,11 +100,11 @@ def test_base_stats_parquet(
         assert source.column_storage_size("y") is None
 
 
-def test_dataframescan_stats_pickle(engine):
+def test_dataframescan_stats_pickle(stats_engine):
     df = pl.DataFrame({"x": range(100), "y": [1, 2] * 50})
     q = pl.LazyFrame(df)
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    stats = collect_statistics(ir, ConfigOptions.from_polars_engine(engine))
+    ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
+    stats = collect_statistics(ir, ConfigOptions.from_polars_engine(stats_engine))
 
     # Pickle and unpickle the stats collector
     pickled = pickle.dumps(stats)
@@ -126,19 +116,19 @@ def test_dataframescan_stats_pickle(engine):
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_stats_planning(tmp_path, kind):
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
-            "target_partition_size": 10_000,
-            "max_rows_per_partition": 1_000,
-        },
-    )
-
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {
+                "target_partition_size": 10_000,
+                "max_rows_per_partition": 1_000,
+            }
+        }
+    ],
+    indirect=True,
+)
+def test_stats_planning(tmp_path, kind, engine):
     sales = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
