@@ -14,7 +14,7 @@ from cudf_polars.dsl.expr import Col, Len
 from cudf_polars.dsl.ir import Empty, HConcat, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
-from cudf_polars.experimental.base import ColumnStat, PartitionInfo
+from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.expressions import decompose_expr_graph
 from cudf_polars.experimental.repartition import Repartition
@@ -29,7 +29,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
-    from cudf_polars.experimental.statistics import StatsCollector
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
 
@@ -39,7 +38,6 @@ def decompose_select(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    stats: StatsCollector,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Decompose a multi-partition Select operation.
@@ -59,8 +57,6 @@ def decompose_select(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    stats
-        Statistics collector.
 
     Returns
     -------
@@ -90,8 +86,6 @@ def decompose_select(
             input_ir,
             partition_info,
             config_options,
-            stats.row_count.get(select_ir.children[0], ColumnStat[int](None)),
-            stats.column_stats.get(select_ir.children[0], {}),
             name_generator,
         )
         pi = _partition_info[partial_input_ir]
@@ -350,7 +344,6 @@ def _(
                 child,
                 partition_info,
                 config_options,
-                rec.state["stats"],
             )
         except NotImplementedError:
             return _lower_ir_fallback(

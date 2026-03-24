@@ -656,7 +656,9 @@ async def groupby_actor(
     collective_ids
         The collective IDs.
     """
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks

@@ -248,131 +248,37 @@ def test_timedelta_datetime_cast_invalid():
 
 
 @pytest.mark.parametrize(
-    "sr_data, sr_dtype, exp_data, exp_dtype",
+    "sr_data, sr_dtype",
     [
-        [
-            [1, 2, 3],
-            "timedelta64[ns]",
-            [
-                "0 days 00:00:00.000000001",
-                "0 days 00:00:00.000000002",
-                "0 days 00:00:00.000000003",
-            ],
-            None,
-        ],
-        [
-            [1000000, 200000, 3000000],
-            "timedelta64[ms]",
-            ["0 days 00:16:40", "0 days 00:03:20", "0 days 00:50:00"],
-            None,
-        ],
-        [
-            [1000000, 200000, 3000000],
-            "timedelta64[s]",
-            ["11 days 13:46:40", "2 days 07:33:20", "34 days 17:20:00"],
-            None,
-        ],
-        [
-            [None, None, None, None, None],
+        ([1, 2, 3], "timedelta64[ns]"),
+        ([1000000, 200000, 3000000], "timedelta64[ms]"),
+        ([1000000, 200000, 3000000], "timedelta64[s]"),
+        ([None, None, None, None, None], "timedelta64[us]"),
+        (
+            [136457654, None, 245345345, 223432411, None, 3634548734, 23234],
             "timedelta64[us]",
-            [None, None, None, None, None],
-            "str",
-        ],
-        [
-            [
-                136457654,
-                None,
-                245345345,
-                223432411,
-                None,
-                3634548734,
-                23234,
-            ],
-            "timedelta64[us]",
-            [
-                "0 days 00:02:16.457654",
-                None,
-                "0 days 00:04:05.345345",
-                "0 days 00:03:43.432411",
-                None,
-                "0 days 01:00:34.548734",
-                "0 days 00:00:00.023234",
-            ],
-            None,
-        ],
-        [
-            [
-                136457654,
-                None,
-                245345345,
-                223432411,
-                None,
-                3634548734,
-                23234,
-            ],
+        ),
+        (
+            [136457654, None, 245345345, 223432411, None, 3634548734, 23234],
             "timedelta64[ms]",
-            [
-                "1 days 13:54:17.654",
-                None,
-                "2 days 20:09:05.345",
-                "2 days 14:03:52.411",
-                None,
-                "42 days 01:35:48.734",
-                "0 days 00:00:23.234",
-            ],
-            None,
-        ],
-        [
-            [
-                136457654,
-                None,
-                245345345,
-                223432411,
-                None,
-                3634548734,
-                23234,
-            ],
+        ),
+        (
+            [136457654, None, 245345345, 223432411, None, 3634548734, 23234],
             "timedelta64[s]",
-            [
-                "1579 days 08:54:14",
-                None,
-                "2839 days 15:29:05",
-                "2586 days 00:33:31",
-                None,
-                "42066 days 12:52:14",
-                "0 days 06:27:14",
-            ],
-            None,
-        ],
-        [
-            [
-                136457654,
-                None,
-                245345345,
-                223432411,
-                None,
-                3634548734,
-                23234,
-            ],
+        ),
+        (
+            [136457654, None, 245345345, 223432411, None, 3634548734, 23234],
             "timedelta64[ns]",
-            [
-                "0 days 00:00:00.136457654",
-                None,
-                "0 days 00:00:00.245345345",
-                "0 days 00:00:00.223432411",
-                None,
-                "0 days 00:00:03.634548734",
-                "0 days 00:00:00.000023234",
-            ],
-            None,
-        ],
+        ),
     ],
 )
-def test_timedelta_str_roundtrip(sr_data, sr_dtype, exp_data, exp_dtype):
+def test_timedelta_str_roundtrip(sr_data, sr_dtype):
     gsr = cudf.Series(sr_data, dtype=sr_dtype)
-    actual_series = gsr.astype("str")
+    psr = gsr.to_pandas()
 
-    expected_series = cudf.Series(exp_data, dtype=exp_dtype)
+    actual_series = gsr.astype("str")
+    expected_series = psr.astype("str")
+
     assert_eq(expected_series, actual_series)
 
     assert_eq(gsr, actual_series.astype(gsr.dtype))
@@ -545,7 +451,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
     pd_sr = pd.Series(data)
     gdf_sr = cudf.Series(pd_sr)
 
-    expect = pd_sr.values.astype(datetime_types_as_str)
+    expect = np.array(data).astype(datetime_types_as_str)
     got = gdf_sr.astype(datetime_types_as_str).to_numpy()
 
     np.testing.assert_equal(expect, got)

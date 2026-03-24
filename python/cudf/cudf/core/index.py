@@ -55,7 +55,6 @@ from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
 )
-from cudf.core.frame import Frame
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.errors import MixedTypeError
@@ -781,17 +780,21 @@ class Index(SingleColumnFrame):
                 # mixed type for union in pandas.
                 raise MixedTypeError("Cannot perform union with mixed types")
 
-        if not len(other) or self.equals(other):
+        if not len(other):
+            res = self._get_reconciled_name_object(other)
+            if sort:
+                return res.sort_values()  # type: ignore[return-value]
+            return res
+        elif self.equals(other):
             common_dtype = find_common_type([self.dtype, other.dtype])
             res = self._get_reconciled_name_object(other).astype(common_dtype)
             if sort:
-                return res.sort_values()
+                return res.sort_values()  # type: ignore[return-value]
             return res
         elif not len(self):
-            common_dtype = find_common_type([self.dtype, other.dtype])
-            res = other._get_reconciled_name_object(self).astype(common_dtype)
+            res = other._get_reconciled_name_object(self)
             if sort:
-                return res.sort_values()
+                return res.sort_values()  # type: ignore[return-value]
             return res
 
         result = self._union(other, sort=sort)
@@ -1482,7 +1485,7 @@ class Index(SingleColumnFrame):
             if ret._column.has_nulls():
                 ret = ret.fillna(op == "__ne__")
 
-            if not isinstance(other, Frame):
+            if isinstance(ret, Index):
                 return ret.values
         return ret
 

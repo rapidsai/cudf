@@ -335,10 +335,13 @@ class CategoricalColumn(ColumnBase):
             if self.size > 0
             else np.dtype(np.int8)
         )
+        assert self.ordered is not None, (
+            "Categorical 'ordered' attribute must be set to convert to Arrow"
+        )
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            ordered=bool(self.ordered) if self.ordered is not None else False,
+            ordered=self.ordered,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:

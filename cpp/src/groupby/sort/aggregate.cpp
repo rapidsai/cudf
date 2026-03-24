@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -210,7 +210,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
                              null_removed_map,
                              argmin_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
                                                       : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             cudf::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
       return std::move(transformed_result->release()[0]);
@@ -249,7 +249,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
                              null_removed_map,
                              argmax_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
                                                       : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             cudf::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
       return std::move(transformed_result->release()[0]);

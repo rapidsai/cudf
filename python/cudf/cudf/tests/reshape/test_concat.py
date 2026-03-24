@@ -101,7 +101,7 @@ def test_concat_dataframe(index, nulls, axis_0):
 )
 def test_concat_all_nulls(values):
     pa = pd.Series(values)
-    pb = pd.Series([None])
+    pb = pd.Series([None], dtype=pa.dtype)
     ps = pd.concat([pa, pb])
 
     ga = cudf.Series(values)

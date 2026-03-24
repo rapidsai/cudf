@@ -251,29 +251,54 @@ def test_dataframe_null_index_repr(df):
 
 
 @pytest.mark.parametrize(
-    "df,expected_repr",
+    "df",
     [
-        (
-            lambda: cudf.DataFrame(
-                {
-                    "a": cudf.Series(
-                        [1000000, 200000, 3000000], dtype="timedelta64[s]"
-                    )
-                }
-            ),
-            textwrap.dedent(
-                """
-                                  a
-                0  11 days 13:46:40
-                1   2 days 07:33:20
-                2  34 days 17:20:00
-                """
-            ),
+        lambda: cudf.DataFrame(
+            {
+                "a": cudf.Series(
+                    [1000000, 200000, 3000000], dtype="timedelta64[s]"
+                )
+            }
         ),
-        (
-            lambda: cudf.DataFrame(
-                {
-                    "a": cudf.Series(
+        lambda: cudf.DataFrame(
+            {
+                "a": cudf.Series(
+                    [
+                        136457654,
+                        None,
+                        245345345,
+                        223432411,
+                        None,
+                        3634548734,
+                        23234,
+                    ],
+                    dtype="timedelta64[s]",
+                ),
+                "b": [10, 11, 22, 33, 44, 55, 66],
+            }
+        ),
+        lambda: cudf.DataFrame(
+            {
+                "a": cudf.Series(
+                    [
+                        136457654,
+                        None,
+                        245345345,
+                        223432411,
+                        None,
+                        3634548734,
+                        23234,
+                    ],
+                    dtype="timedelta64[s]",
+                    index=["a", "b", "c", "d", "e", "f", "g"],
+                )
+            }
+        ),
+        lambda: cudf.DataFrame(
+            {
+                "a": cudf.Series(
+                    [1, 2, 3, 4, 5, 6, 7],
+                    index=cudf.Index(
                         [
                             136457654,
                             None,
@@ -283,28 +308,16 @@ def test_dataframe_null_index_repr(df):
                             3634548734,
                             23234,
                         ],
-                        dtype="timedelta64[s]",
+                        dtype="timedelta64[ms]",
                     ),
-                    "b": [10, 11, 22, 33, 44, 55, 66],
-                }
-            ),
-            textwrap.dedent(
-                """
-                                     a   b
-                0   1579 days 08:54:14  10
-                1                  NaT  11
-                2   2839 days 15:29:05  22
-                3   2586 days 00:33:31  33
-                4                  NaT  44
-                5  42066 days 12:52:14  55
-                6      0 days 06:27:14  66
-                """
-            ),
+                )
+            }
         ),
-        (
-            lambda: cudf.DataFrame(
-                {
-                    "a": cudf.Series(
+        lambda: cudf.DataFrame(
+            {
+                "a": cudf.Series(
+                    ["a", "f", "q", "e", "w", "e", "t"],
+                    index=cudf.Index(
                         [
                             136457654,
                             None,
@@ -314,96 +327,17 @@ def test_dataframe_null_index_repr(df):
                             3634548734,
                             23234,
                         ],
-                        dtype="timedelta64[s]",
-                        index=["a", "b", "c", "d", "e", "f", "g"],
-                    )
-                }
-            ),
-            textwrap.dedent(
-                """
-                                     a
-                a   1579 days 08:54:14
-                b                  NaT
-                c   2839 days 15:29:05
-                d   2586 days 00:33:31
-                e                  NaT
-                f  42066 days 12:52:14
-                g      0 days 06:27:14
-                """
-            ),
-        ),
-        (
-            lambda: cudf.DataFrame(
-                {
-                    "a": cudf.Series(
-                        [1, 2, 3, 4, 5, 6, 7],
-                        index=cudf.Index(
-                            [
-                                136457654,
-                                None,
-                                245345345,
-                                223432411,
-                                None,
-                                3634548734,
-                                23234,
-                            ],
-                            dtype="timedelta64[ms]",
-                        ),
-                    )
-                }
-            ),
-            textwrap.dedent(
-                """
-                                      a
-                1 days 13:54:17.654   1
-                NaT                   2
-                2 days 20:09:05.345   3
-                2 days 14:03:52.411   4
-                NaT                   5
-                42 days 01:35:48.734  6
-                0 days 00:00:23.234   7
-                """
-            ),
-        ),
-        (
-            lambda: cudf.DataFrame(
-                {
-                    "a": cudf.Series(
-                        ["a", "f", "q", "e", "w", "e", "t"],
-                        index=cudf.Index(
-                            [
-                                136457654,
-                                None,
-                                245345345,
-                                223432411,
-                                None,
-                                3634548734,
-                                23234,
-                            ],
-                            dtype="timedelta64[ns]",
-                        ),
-                    )
-                }
-            ),
-            textwrap.dedent(
-                """
-                                    a
-                0 days 00:00:00.136457654  a
-                NaT                 f
-                0 days 00:00:00.245345345  q
-                0 days 00:00:00.223432411  e
-                NaT                 w
-                0 days 00:00:03.634548734  e
-                0 days 00:00:00.000023234  t
-                """
-            ),
+                        dtype="timedelta64[ns]",
+                    ),
+                )
+            }
         ),
     ],
 )
-def test_timedelta_dataframe_repr(df, expected_repr):
-    actual_repr = repr(df())
-
-    assert actual_repr.split() == expected_repr.split()
+def test_timedelta_dataframe_repr(df):
+    gdf = df()
+    pdf = gdf.to_pandas()
+    assert repr(gdf).split() == repr(pdf).split()
 
 
 def test_categorical_dataframe_with_nan_repr():
