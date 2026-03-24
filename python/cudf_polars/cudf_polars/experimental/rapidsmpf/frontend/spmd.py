@@ -353,7 +353,7 @@ class SPMDEngine(StreamingEngine):
         self,
         *,
         rapidsmpf_options: Options | None = None,
-        executor_options: dict[str, object] | None = None,
+        executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
     ) -> None:
         executor_options = executor_options or {}
