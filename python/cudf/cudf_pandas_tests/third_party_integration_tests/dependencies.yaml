@@ -63,13 +63,14 @@ files:
       - py_version
       - test_base
       - test_stumpy
-  test_tensorflow:
-    output: none
-    includes:
-      - cuda_version
-      - py_version
-      - test_base
-      - test_tensorflow
+  # TODO: Re-enable https://github.com/rapidsai/cudf/issues/21875
+  # test_tensorflow:
+  #   output: none
+  #   includes:
+  #     - cuda_version
+  #     - py_version
+  #     - test_base
+  #     - test_tensorflow
   test_xgboost:
     output: none
     includes:
@@ -328,13 +329,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - pip
-          - pip:
-              # ibis 11 is the first version that supports duckdb 1.4.0
-              - ibis-framework[duckdb]>=11.0.0
-              - duckdb>=1.4.0
-              # Exclude broken version: https://github.com/tobymao/sqlglot/issues/6908
-              - sqlglot!=28.7.*
+          - ibis-duckdb
   test_hvplot:
     common:
       - output_types: conda

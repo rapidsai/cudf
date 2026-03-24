@@ -454,7 +454,7 @@ struct copy_block_partitions_dispatcher {
     auto gather_table = cudf::detail::gather(cudf::table_view({input}),
                                              gather_map,
                                              out_of_bounds_policy::DONT_CHECK,
-                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             cudf::negative_index_policy::NOT_ALLOWED,
                                              stream,
                                              mr);
     return std::move(gather_table->release().front());
