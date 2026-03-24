@@ -1921,19 +1921,14 @@ class GroupBy(IR):
             )
         ]
 
-        if keys_are_sorted:
-
-            def sorted_key_like(key: Column, like: Column) -> Column:
-                return key.sorted_like(like)
-        else:
-
-            def sorted_key_like(key: Column, like: Column) -> Column:
-                return key
-
         result_keys = [
-            sorted_key_like(Column(grouped_key, name=key.name, dtype=key.dtype), key)
+            Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
+        if keys_are_sorted:
+            result_keys = [
+                col.sorted_like(key) for col, key in zip(result_keys, keys, strict=True)
+            ]
         broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
         if maintain_order and not keys_are_sorted:
