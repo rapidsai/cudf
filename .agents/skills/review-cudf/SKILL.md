@@ -103,7 +103,7 @@ Verify compliance with the developer guide sections: **(guide: "Directory Struct
 
 - Public APIs in `cpp/include/cudf/` with `CUDF_EXPORT`; detail headers in `cpp/include/cudf/detail/` or `cpp/include/cudf/<sub>/detail/`.
 - Stream and MR as last two parameters (stream before MR); public defaults, no defaults in detail APIs.
-- `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` are used correctly; `CUDF_EXPECTS` condition must be a pure predicate.
+- `CUDF_EXPECTS` / `CUDF_FAIL` / `CUDF_UNREACHABLE` are used correctly; `CUDF_EXPECTS` condition must be a pure predicate with no side effects.
 - Public functions: `CUDF_FUNC_RANGE()` then delegate to `detail::`. Trivial functions may skip the `CUDF_FUNC_RANGE()`.
 - `cudaDeviceSynchronize()` is never ever used; sync only via `stream.synchronize()` when required.
 
