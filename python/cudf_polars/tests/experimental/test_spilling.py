@@ -20,9 +20,9 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 )
 
 if TYPE_CHECKING:
-    from rapidsmpf.streaming.core.context import Context
-
     from rmm.pylibrmm.stream import Stream
+
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 
 def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
@@ -34,8 +34,9 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     return plc.Table([plc.Column.from_array(data, stream=stream)])
 
 
-def test_make_spill_function(local_context: Context) -> None:
+def test_make_spill_function(engine: SPMDEngine) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
+    context = engine.context
 
     # Create 3 spillable message containers simulating fanout buffers
     # Buffer 0: Fast consumer (2 messages)
@@ -48,7 +49,7 @@ def test_make_spill_function(local_context: Context) -> None:
     message_ids: dict[int, list[int]] = {}
 
     # Populate buffers with messages
-    stream = local_context.get_stream_from_pool()
+    stream = context.get_stream_from_pool()
     for buffer_idx, (sm, count) in enumerate(
         zip(buffers, messages_per_buffer, strict=False)
     ):
@@ -62,16 +63,14 @@ def test_make_spill_function(local_context: Context) -> None:
             message_ids[buffer_idx].append(mid)
 
     # Register spill function
-    spill_func = make_spill_function(buffers, local_context)
-    func_id = local_context.br().spill_manager.add_spill_function(
-        spill_func, priority=0
-    )
+    spill_func = make_spill_function(buffers, context)
+    func_id = context.br().spill_manager.add_spill_function(spill_func, priority=0)
 
     try:
         # Manually trigger spilling of 3MB
         # Expected: Buffer 1 (longest) should spill newest messages first
         amount_to_spill = 3 * 1024 * 1024
-        actual_spilled = local_context.br().spill_manager.spill(amount_to_spill)
+        actual_spilled = context.br().spill_manager.spill(amount_to_spill)
 
         # Allow some tolerance
         assert actual_spilled >= amount_to_spill * 0.95
@@ -110,9 +109,7 @@ def test_make_spill_function(local_context: Context) -> None:
         # Make it available should bring it back to device
         cost = chunk.make_available_cost()
         assert cost > 0
-        res, _ = local_context.br().reserve(
-            MemoryType.DEVICE, cost, allow_overbooking=True
-        )
+        res, _ = context.br().reserve(MemoryType.DEVICE, cost, allow_overbooking=True)
         chunk_available = chunk.make_available(res)
 
         assert chunk_available.is_available()
@@ -120,4 +117,4 @@ def test_make_spill_function(local_context: Context) -> None:
         assert chunk_available.table_view().num_rows() > 0
 
     finally:
-        local_context.br().spill_manager.remove_spill_function(func_id)
+        context.br().spill_manager.remove_spill_function(func_id)
