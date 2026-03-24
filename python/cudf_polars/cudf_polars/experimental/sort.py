@@ -99,6 +99,7 @@ def find_sort_splits(
     sort_boundaries = plc.Table(boundary_cols)
     # Find the first and last row for each split value (there may be ties).
     # upper_bound via lower_bound on the reversed table with flipped sort orders.
+    # (This is a work-around for a possible bug in upper_bound - TBD)
     n = tbl.num_rows()
     split_first_col = plc.search.lower_bound(
         tbl,
