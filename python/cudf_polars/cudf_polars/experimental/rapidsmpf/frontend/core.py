@@ -41,7 +41,7 @@ class StreamingEngine(pl.GPUEngine):
         self,
         *,
         nranks: int,
-        executor_options: dict[str, object],
+        executor_options: dict[str, Any],
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
     ):

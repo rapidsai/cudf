@@ -245,7 +245,7 @@ class SPMDEngine(StreamingEngine):
         comm: Communicator,
         ctx: Context,
         py_executor: ThreadPoolExecutor,
-        executor_options: dict[str, object],
+        executor_options: dict[str, Any],
         engine_options: dict[str, Any],
         exit_stack: contextlib.ExitStack | None = None,
     ) -> None:
