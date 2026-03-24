@@ -296,7 +296,9 @@ def _fuse_simple_reductions(
                 assert isinstance(select_a, Select), (
                     f"Expected Select, got {type(select_a)}"
                 )
-                if id(select_a) in seen_select_a_ids:
+                if (
+                    id(select_a) in seen_select_a_ids
+                ):  # pragma: no cover; only rapidsmpf hits this
                     continue  # shared by CachingVisitor — already contributed
                 seen_select_a_ids.add(id(select_a))
                 fused_select_b_exprs.extend(list(select_b.exprs))
