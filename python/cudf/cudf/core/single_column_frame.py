@@ -212,7 +212,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> import cudf
         >>> sr = cudf.Series(["a", "b", None])
         >>> sr.to_arrow() # doctest: +ELLIPSIS
-        <pyarrow.lib.StringArray object at ...>
+        <pyarrow.lib.LargeStringArray object at ...>
         [
           "a",
           "b",
@@ -220,7 +220,7 @@ class SingleColumnFrame(Frame, NotIterable):
         ]
         >>> ind = cudf.Index(["a", "b", None])
         >>> ind.to_arrow() # doctest: +ELLIPSIS
-        <pyarrow.lib.StringArray object at ...>
+        <pyarrow.lib.LargeStringArray object at ...>
         [
           "a",
           "b",
