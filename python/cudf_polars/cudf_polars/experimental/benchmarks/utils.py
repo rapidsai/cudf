@@ -27,9 +27,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
+from rapidsmpf.config import Options, get_environment_variables
 
 import polars as pl
-import polars.testing
 
 import rmm.statistics
 
@@ -768,7 +768,6 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if run_config.shuffle != "tasks":
         try:
-            from rapidsmpf.config import Options
             from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
             bootstrap_dask_cluster(
@@ -1761,7 +1760,7 @@ def run_polars(
                 date_type,
                 validation_files,
             )
-        case "single" | "distributed":
+        case "single" | "distributed" | None:
             run_polars_single_or_dask(
                 benchmark,
                 args,
@@ -1863,12 +1862,13 @@ def run_polars_spmd(
         rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
     )
     with spmd_execution(
+        rapidsmpf_options=Options(get_environment_variables()),
         executor_options=executor_options,
         engine_options={
             "parquet_options": parquet_options,
             "cuda_stream_policy": run_config.stream_policy,
         },
-    ) as (comm, ctx, engine):
+    ) as engine:
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
             allgather_polars_dataframe,
@@ -1877,14 +1877,13 @@ def run_polars_spmd(
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
                 return allgather_polars_dataframe(
-                    comm=comm,
-                    ctx=ctx,
+                    engine=engine,
                     local_df=df,
                     op_id=op_id,
                 )
 
-        rank = comm.rank
-        run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
+        rank = engine.rank
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
