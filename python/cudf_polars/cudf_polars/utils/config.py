@@ -539,7 +539,7 @@ class SPMDContext:
         :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
         cannot be serialized. In SPMD mode each rank constructs its own
         ``SPMDContext`` locally inside
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.spmd_execution`, so
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine`, so
         pickling is never required. Do not use this class with Dask or any other
         framework that serializes executor configuration across process boundaries.
 
@@ -567,7 +567,8 @@ class RayContext:
         This dataclass holds Ray actor handles, which are only valid within the
         Ray session that created them. It is stripped from ``config_options``
         before pickling for remote actor calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`.
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`
+        by :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`.
         Do not persist or transfer this object across Ray sessions.
 
     Parameters
