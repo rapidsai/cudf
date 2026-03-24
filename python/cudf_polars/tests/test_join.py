@@ -2,12 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import pickle
 from decimal import Decimal
 
 import pytest
 
 import polars as pl
 
+import pylibcudf as plc
+
+from cudf_polars.containers import DataType
+from cudf_polars.dsl import expr as ir_expr
+from cudf_polars.dsl.ir import ConditionalJoin
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     get_default_engine,
@@ -310,3 +316,22 @@ def test_cross_join_filter_with_decimals(request, expr, left_dtype, right_dtype)
     q = left.join(right, how="cross").filter(expr)
 
     assert_gpu_result_equal(q, check_row_order=False)
+
+
+def test_conditional_join_predicate_pickle():
+    dt = DataType(pl.Int64())
+    col_left = ir_expr.ColRef(
+        dt, 0, plc.expressions.TableReference.LEFT, ir_expr.Col(dt, "a")
+    )
+    col_right = ir_expr.ColRef(
+        dt, 0, plc.expressions.TableReference.RIGHT, ir_expr.Col(dt, "a")
+    )
+    predicate_expr = ir_expr.BinOp(
+        DataType(pl.Boolean()),
+        plc.binaryop.BinaryOperator.LESS,
+        col_left,
+        col_right,
+    )
+    predicate = ConditionalJoin.Predicate(predicate_expr)
+    unpickled = pickle.loads(pickle.dumps(predicate))
+    assert unpickled.predicate == predicate.predicate
