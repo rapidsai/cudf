@@ -826,24 +826,29 @@ cdef class HybridScanReader:
         list row_group_indices,
         size_t pass_read_limit,
     ):
-        """Construct row group passes that fit within a memory limit.
+        """Partition row groups into passes such that the GPU memory required to materialize a pass bounded by the specifed limit.
 
-        Partitions the input row group indices into consecutive groups
-        (passes) such that the compressed size of each pass fits within
-        the specified memory limit.
+        Note that ``pass_read_limit`` is a hint, not an absolute limit. i.e., if
+        a row group cannot fit within the limit, it will still constitute a valid 
+        pass.
 
         Parameters
         ----------
         row_group_indices : list[int]
-            Input row group indices. Must not be empty
+            Input row group indices
         pass_read_limit : int
-            Memory limit for reading compressed data per pass in bytes.
-            If 0, all row groups are returned in a single pass
+        Limit on the amount of memory used for reading and decompressing data
+        or 0 if there is no limit.
 
         Returns
         -------
         list[list[int]]
-            List of passes, where each pass is a list of row group indices
+            Lists of row group indices, one per pass.
+
+        Raises
+        ------
+        ValueError
+            If ``row_group_indices`` is empty.
         """
         cdef vector[size_type] indices_vec = row_group_indices
         cdef vector[vector[size_type]] passes = \
