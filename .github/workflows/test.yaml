@@ -164,7 +164,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_cudf_polars_with_rapidsmpf.sh"
+      script: "ci/test_cudf_polars_experimental.sh"
       continue-on-error: true
   cudf-polars-polars-tests:
     secrets: inherit
