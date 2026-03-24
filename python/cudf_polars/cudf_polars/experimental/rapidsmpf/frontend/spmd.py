@@ -380,15 +380,15 @@ class SPMDEngine(StreamingEngine):
             ),
             thread_name_prefix="spmd-executor",
         )
-        stack = contextlib.ExitStack()
+        exit_stack = contextlib.ExitStack()
         try:
-            stack.enter_context(set_memory_resource(mr))
-            ctx = stack.enter_context(
+            exit_stack.callback(py_executor.shutdown, wait=False)
+            exit_stack.enter_context(set_memory_resource(mr))
+            ctx = exit_stack.enter_context(
                 Context.from_options(comm.logger, mr, rapidsmpf_options)
             )
             self._comm: Communicator | None = comm
             self._ctx: Context | None = ctx
-            self._py_executor: ThreadPoolExecutor | None = py_executor
             super().__init__(
                 nranks=comm.nranks,
                 executor_options={
@@ -403,11 +403,10 @@ class SPMDEngine(StreamingEngine):
                     **engine_options,
                     "memory_resource": ctx.br().device_mr,
                 },
-                exit_stack=stack,
+                exit_stack=exit_stack,
             )
         except Exception:
-            py_executor.shutdown(wait=False)
-            stack.close()
+            exit_stack.close()
             raise
 
     @property
@@ -471,10 +470,6 @@ class SPMDEngine(StreamingEngine):
         """
         if self._ctx is None:
             return  # already shut down
-        try:
-            self._py_executor.shutdown(wait=False)  # type: ignore[union-attr]
-        finally:
-            self._comm = None
-            self._ctx = None
-            self._py_executor = None
-            super().shutdown()
+        self._comm = None
+        self._ctx = None
+        super().shutdown()
