@@ -554,7 +554,8 @@ class RayContext:
         This dataclass holds Ray actor handles, which are only valid within the
         Ray session that created them. It is stripped from ``config_options``
         before pickling for remote actor calls in
-        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`.
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.ray.evaluate_pipeline_ray_mode`
+        by :class:`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`.
         Do not persist or transfer this object across Ray sessions.
 
     Parameters

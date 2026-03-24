@@ -1926,7 +1926,7 @@ def run_polars_ray(
     validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Ray actor-based distributed execution."""
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
     if run_config.collect_traces:
         raise NotImplementedError(
@@ -1935,18 +1935,18 @@ def run_polars_ray(
     if run_config.rmm_async:
         raise NotImplementedError("--rmm-async is not supported with --cluster ray.")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime", "cluster" are reserved — ray_execution sets them
+    # "runtime", "cluster" are reserved — RayEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
     engine_options: dict[str, Any] = {
         "cuda_stream_policy": run_config.stream_policy,
         "parquet_options": parquet_options,
     }
-    with ray_execution(
+    with RayEngine(
         executor_options=executor_options,
         engine_options=engine_options,
-    ) as (ray_client, engine):
-        run_config = dataclasses.replace(run_config, n_workers=ray_client.nranks)
+    ) as engine:
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,

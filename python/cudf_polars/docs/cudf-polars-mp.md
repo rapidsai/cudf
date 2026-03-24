@@ -81,21 +81,20 @@ broadcasts it to all actors, so every rank always executes the same query.
 
 ### Running in Ray mode
 
-`ray_execution()` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. It:
+`RayEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. On construction it:
 
 1. Calls `ray.init()` if Ray is not already running
 2. Creates one `RankActor` per GPU
 3. Bootstraps a UCXX communicator across the actors
-4. Yields a `pl.GPUEngine` and a `RayClient`
 
-Actors are shut down on exit. If the context started Ray, it also calls
-`ray.shutdown()`.
+Actors are shut down when `shutdown()` is called or the context manager exits. If the
+engine started Ray, it also calls `ray.shutdown()`.
 
 ```python
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
-with ray_execution() as (ray_client, engine):
+with RayEngine() as engine:
     result = (
         pl.scan_parquet("/data/dataset/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -107,41 +106,36 @@ with ray_execution() as (ray_client, engine):
 print(result)
 ```
 
-The context manager yields:
-
-* `ray_client` — cluster diagnostics and utilities
-* `engine` — `pl.GPUEngine` configured for Ray execution
-
 ### Ray lifecycle
 
-If Ray is already initialized, `ray_execution()` attaches to the existing cluster and
+If Ray is already initialized, `RayEngine` attaches to the existing cluster and
 does not call `ray.shutdown()` on exit.
 
 ```python
 import ray
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
 ray.init(address="auto")
 
 try:
-    with ray_execution() as (ray_client, engine):
+    with RayEngine() as engine:
         result = pl.scan_parquet(...).collect(engine=engine)
 finally:
     ray.shutdown()
 ```
 
-`ray_execution()` raises `RuntimeError` if called inside an `rrun` cluster or if no
+`RayEngine` raises `RuntimeError` if created inside an `rrun` cluster or if no
 GPUs are available.
 
 ### Cluster diagnostics
 
-`RayClient.gather_cluster_info()` returns placement information for all rank actors:
+`RayEngine.gather_cluster_info()` returns placement information for all rank actors:
 
 ```python
-with ray_execution() as (ray_client, engine):
-    print(f"cluster has {ray_client.nranks} ranks")
-    for i, info in enumerate(ray_client.gather_cluster_info()):
+with RayEngine() as engine:
+    print(f"cluster has {engine.nranks} ranks")
+    for i, info in enumerate(engine.gather_cluster_info()):
         print(
             f"rank {i}: hostname={info['hostname']}, pid={info['pid']}, "
             f"CUDA_VISIBLE_DEVICES={info['cuda_visible_devices']}"
@@ -158,7 +152,7 @@ pass-through dictionaries:
 ```python
 from rapidsmpf.config import Options
 
-with ray_execution(
+with RayEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
@@ -166,17 +160,16 @@ with ray_execution(
     },
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
-) as (ray_client, engine):
+) as engine:
     ...
 ```
 
 `rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context` on each
-worker. If not provided, `ray_execution()` constructs a default `Options` with
+worker. If not provided, `RayEngine` constructs a default `Options` with
 `num_streaming_threads=4`.
 
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
-argument; user-supplied keys are merged with reserved entries set by `ray_execution()`.
-Any additional keyword arguments to `ray_execution()` are also forwarded to `pl.GPUEngine`.
+argument; user-supplied keys are merged with reserved entries set by `RayEngine`.
 
 Notable `executor_options` keys:
 
