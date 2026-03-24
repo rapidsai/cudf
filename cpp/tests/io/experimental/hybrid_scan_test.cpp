@@ -923,8 +923,8 @@ TEST_F(HybridScanTest, StructChildFilterColumn)
 
 TEST_F(HybridScanTest, RowGroupPassesBasic)
 {
-  auto constexpr num_rg      = 8;
-  auto constexpr rows_per_rg = 1000;
+  auto constexpr num_rg      = 10;
+  auto constexpr rows_per_rg = 1'000;
 
   // Create a per-row-group table (each write() call produces one row group)
   auto values = cuda::counting_iterator(0);
@@ -982,7 +982,7 @@ TEST_F(HybridScanTest, RowGroupPassesBasic)
 
   // All passes should cover all row groups and be consecutive
   {
-    auto passes = reader->construct_row_group_passes(all_row_groups, 1024);
+    auto passes = reader->construct_row_group_passes(all_row_groups, 1'024);
     std::vector<cudf::size_type> flattened;
     for (auto const& pass : passes) {
       EXPECT_GT(pass.size(), 0);
@@ -1001,7 +1001,7 @@ TEST_F(HybridScanTest, RowGroupPassesBasic)
 TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
 {
   auto constexpr num_rg      = 10;
-  auto constexpr rows_per_rg = 1000;
+  auto constexpr rows_per_rg = 1'000;
 
   // Create a per-row-group table (each write() call produces one row group)
   auto values = cuda::counting_iterator(0);
