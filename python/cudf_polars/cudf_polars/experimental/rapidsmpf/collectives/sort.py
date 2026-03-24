@@ -313,12 +313,19 @@ async def _extract_partitions_and_send(
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
         table = shuffle.extract_chunk(partition_id, stream)
-        print(
-            f"[sort_actor extract] partition_id={partition_id} "
-            f"pre_sort={[pl.Series(c).to_list() for c in table.columns()]}",
-            flush=True,
-            file=sys.stderr,
-        )
+        try:
+            print(
+                f"[sort_actor extract] partition_id={partition_id} "
+                f"pre_sort={[pl.Series(c).to_list() for c in table.columns()[:ncols_out]]}",
+                flush=True,
+                file=sys.stderr,
+            )
+        except Exception as e:
+            print(
+                f"[sort_actor extract] partition_id={partition_id} pre_sort=<error: {e}>",
+                flush=True,
+                file=sys.stderr,
+            )
         if table.num_rows() > 0:
             table = post_sort_ir.do_evaluate(
                 *post_sort_ir._non_child_args,
@@ -330,12 +337,19 @@ async def _extract_partitions_and_send(
                 ),
                 context=ir_context,
             ).table
-        print(
-            f"[sort_actor extract] partition_id={partition_id} "
-            f"post_sort={[pl.Series(c).to_list() for c in table.columns()[:ncols_out]]}",
-            flush=True,
-            file=sys.stderr,
-        )
+        try:
+            print(
+                f"[sort_actor extract] partition_id={partition_id} "
+                f"post_sort={[pl.Series(c).to_list() for c in table.columns()[:ncols_out]]}",
+                flush=True,
+                file=sys.stderr,
+            )
+        except Exception as e:
+            print(
+                f"[sort_actor extract] partition_id={partition_id} post_sort=<error: {e}>",
+                flush=True,
+                file=sys.stderr,
+            )
         if table.num_columns() > ncols_out:
             table = plc.Table(table.columns()[:ncols_out])
         await ch_out.send(
