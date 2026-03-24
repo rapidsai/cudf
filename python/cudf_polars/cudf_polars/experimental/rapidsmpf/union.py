@@ -54,7 +54,9 @@ async def union_node(
     chs_in
         The input Channel[TableChunk]s.
     """
-    async with shutdown_on_error(context, *chs_in, ch_out):
+    async with shutdown_on_error(
+        context, *chs_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ):
         # Merge and forward metadata.
         # Union loses partitioning/ordering info since sources may differ.
         # TODO: Warn users that Union does NOT preserve order?

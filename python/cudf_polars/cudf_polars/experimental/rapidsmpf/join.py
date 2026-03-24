@@ -8,7 +8,6 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-import numpy as np
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor, run_actor_network
@@ -144,7 +143,12 @@ async def broadcast_join_actor(
         The target partition size in bytes.
     """
     async with shutdown_on_error(
-        context, ch_out, ch_left, ch_right, trace_ir=ir
+        context,
+        ch_out,
+        ch_left,
+        ch_right,
+        trace_ir=ir,
+        ir_context=ir_context,
     ) as tracer:
         await _broadcast_join(
             context,
@@ -553,7 +557,10 @@ async def _shuffle_join(
     # if the data is already partitioned correctly.
     ch_left_shuffle = context.create_channel()
     ch_right_shuffle = context.create_channel()
-    async with shutdown_on_error(context, ch_left_shuffle, ch_right_shuffle):
+    # note: this is an actor inside of an actor. How should we log that in our traces?
+    async with shutdown_on_error(
+        context, ch_left_shuffle, ch_right_shuffle, trace_ir=ir, ir_context=ir_context
+    ):
         actor_tasks = [
             _global_shuffle(
                 context,
@@ -678,6 +685,8 @@ async def _choose_strategy_from_samples(
     if chunkwise:
         if tracer is not None:
             tracer.decision = "chunkwise"
+        # TODO: Ensure this emits a "dynamic planning" decision of "chunkwise"
+        # Or push it up a level to the caller?
         return _make_shuffle_strategy(
             ir,
             left_partitioning.inter_rank_modulus,
@@ -949,9 +958,10 @@ async def _replay_with_metadata(
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
     messages: list[Message],
+    trace_ir: Join,
 ) -> None:
     """Send metadata then all messages to ch_out, then drain."""
-    async with shutdown_on_error(context, ch_out):
+    async with shutdown_on_error(context, ch_out, trace_ir=trace_ir):
         await send_metadata(ch_out, context, metadata)
         for msg in messages:
             await ch_out.send(context, msg)
@@ -963,9 +973,10 @@ async def _relay_chunks_raw(
     ch_out: Channel[TableChunk],
     buffered_chunks: dict[int, TableChunk],
     ch_in: Channel[TableChunk],
+    trace_ir: Join,
 ) -> None:
     """Relay buffered chunks then remaining channel to ch_out, without metadata."""
-    async with shutdown_on_error(context, ch_out, ch_in):
+    async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
         for seq, chunk in sorted(buffered_chunks.items()):
             await ch_out.send(context, Message(seq, chunk))
         while (msg := await ch_in.recv(context)) is not None:
@@ -978,9 +989,10 @@ async def _forward_with_metadata(
     ch_out: Channel[TableChunk],
     metadata: ChannelMetadata,
     ch_in: Channel[TableChunk],
+    trace_ir: Join,
 ) -> None:
     """Send metadata to ch_out then forward all messages from ch_in."""
-    async with shutdown_on_error(context, ch_out, ch_in):
+    async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
         await send_metadata(ch_out, context, metadata)
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
@@ -1033,8 +1045,11 @@ async def _bloom_shuffle_join(
 
     def _make_key_msg(chunk: TableChunk, seq: int) -> Message:
         tv = chunk.table_view()
-        gather_map = plc.Column.from_array(
-            np.arange(tv.num_rows(), dtype=np.int32), stream=chunk.stream
+        int32 = plc.DataType(plc.TypeId.INT32)
+        init = plc.Scalar.from_py(0, dtype=int32, stream=chunk.stream)
+        step = plc.Scalar.from_py(1, dtype=int32, stream=chunk.stream)
+        gather_map = plc.filling.sequence(
+            tv.num_rows(), init, step, stream=chunk.stream
         )
         key_table = plc.copying.gather(
             plc.Table([tv.columns()[i] for i in small_key_indices]),
@@ -1078,15 +1093,18 @@ async def _bloom_shuffle_join(
         ch_build_in = context.create_channel()
         ch_filter = context.create_channel()
         pull_filter_actor, deferred_filter = pull_from_channel(context, ch_filter)
-        await asyncio.to_thread(
-            run_actor_network,
-            actors=[
-                push_to_channel(context, ch_build_in, small_key_msgs),
-                bloom.build(ch_build_in, ch_filter, tag=bloom_tag),
-                pull_filter_actor,
-            ],
-        )
-        (filter_message,) = deferred_filter.release()
+        async with shutdown_on_error(
+            context, ch_build_in, ch_filter, trace_ir=ir, ir_context=ir_context
+        ):
+            await asyncio.to_thread(
+                run_actor_network,
+                actors=[
+                    push_to_channel(context, ch_build_in, small_key_msgs),
+                    bloom.build(ch_build_in, ch_filter, tag=bloom_tag),
+                    pull_filter_actor,
+                ],
+            )
+            (filter_message,) = deferred_filter.release()
 
         # Stream the large side through bloom.apply without buffering it.
         # cpp_set_py_future uses asyncio.run_coroutine_threadsafe, so the Python
@@ -1103,42 +1121,59 @@ async def _bloom_shuffle_join(
         ch_left_new = ch_small_replay if small_is_left else ch_large_replay
         ch_right_new = ch_large_replay if small_is_left else ch_small_replay
 
-        await asyncio.gather(
-            _replay_with_metadata(
-                context,
-                ch_small_replay,
-                small_metadata,
-                small_replay_msgs,
-            ),
-            _relay_chunks_raw(context, ch_large_raw, large_chunks_init, ch_large),
-            asyncio.to_thread(
-                run_actor_network,
-                actors=[
-                    push_to_channel(context, ch_filter_for_apply, [filter_message]),
-                    bloom.apply(
-                        ch_filter_for_apply,
-                        ch_large_raw,
-                        ch_large_filtered,
-                        keys=large_key_indices,
-                    ),
-                ],
-            ),
-            _forward_with_metadata(
-                context, ch_large_replay, large_metadata, ch_large_filtered
-            ),
-            _shuffle_join(
-                context,
-                comm,
-                ir,
-                ir_context,
-                ch_out,
-                ch_left_new,
-                ch_right_new,
-                strategy,
-                collective_ids,
-                tracer=tracer,
-            ),
-        )
+        async with shutdown_on_error(
+            context,
+            ch_filter_for_apply,
+            ch_large_raw,
+            ch_large_filtered,
+            ch_small_replay,
+            ch_large_replay,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ) as tracer:
+            await asyncio.gather(
+                _replay_with_metadata(
+                    context,
+                    ch_small_replay,
+                    small_metadata,
+                    small_replay_msgs,
+                    trace_ir=ir,
+                ),
+                _relay_chunks_raw(
+                    context, ch_large_raw, large_chunks_init, ch_large, trace_ir=ir
+                ),
+                asyncio.to_thread(
+                    run_actor_network,
+                    actors=[
+                        push_to_channel(context, ch_filter_for_apply, [filter_message]),
+                        bloom.apply(
+                            ch_filter_for_apply,
+                            ch_large_raw,
+                            ch_large_filtered,
+                            keys=large_key_indices,
+                        ),
+                    ],
+                ),
+                _forward_with_metadata(
+                    context,
+                    ch_large_replay,
+                    large_metadata,
+                    ch_large_filtered,
+                    trace_ir=ir,
+                ),
+                _shuffle_join(
+                    context,
+                    comm,
+                    ir,
+                    ir_context,
+                    ch_out,
+                    ch_left_new,
+                    ch_right_new,
+                    strategy,
+                    collective_ids,
+                    tracer=tracer,
+                ),
+            )
     finally:
         context.br().spill_manager.remove_spill_function(spill_func_id)
 
@@ -1184,7 +1219,12 @@ async def join_actor(
         List of collective IDs for shuffle/broadcast; consumed as needed.
     """
     async with shutdown_on_error(
-        context, ch_out, ch_left, ch_right, trace_ir=ir
+        context,
+        ch_out,
+        ch_left,
+        ch_right,
+        trace_ir=ir,
+        ir_context=ir_context,
     ) as tracer:
         left_metadata, right_metadata = await asyncio.gather(
             recv_metadata(ch_left, context),
@@ -1241,6 +1281,7 @@ async def join_actor(
                 ch_left,
                 left_sample.chunks,
                 left_metadata,
+                trace_ir=ir,
             ),
             replay_buffered_channel(
                 context,
@@ -1248,6 +1289,7 @@ async def join_actor(
                 ch_right,
                 right_sample.chunks,
                 right_metadata,
+                trace_ir=ir,
             ),
         ]
         ch_left = ch_left_replay

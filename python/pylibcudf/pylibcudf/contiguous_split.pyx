@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from cpython.buffer cimport PyBuffer_FillInfo
 from cython.operator cimport dereference
 from libc.stdint cimport uint8_t
 from libc.stddef cimport size_t
@@ -70,18 +71,15 @@ cdef class HostBuffer:
     __hash__ = None
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
-        # Empty vec produces empty buffer
-        buffer.buf = NULL if self.nbytes == 0 else dereference(self.c_obj).data()
-        buffer.format = NULL  # byte
-        buffer.internal = NULL
-        buffer.itemsize = 1
-        buffer.len = self.nbytes
-        buffer.ndim = 1
-        buffer.obj = self
-        buffer.readonly = 0
-        buffer.shape = self.shape
-        buffer.strides = self.strides
-        buffer.suboffsets = NULL
+        PyBuffer_FillInfo(
+            buffer,
+            self,
+            # Empty vec produces empty buffer
+            NULL if self.nbytes == 0 else dereference(self.c_obj).data(),
+            self.nbytes,
+            False,
+            flags
+        )
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass

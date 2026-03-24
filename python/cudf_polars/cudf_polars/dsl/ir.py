@@ -18,7 +18,8 @@ import itertools
 import json
 import random
 import time
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, overload
@@ -114,15 +115,19 @@ class IRExecutionContext:
     """
 
     get_cuda_stream: Callable[[], Stream]
+    query_id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     @classmethod
-    def from_config_options(cls, config_options: ConfigOptions) -> IRExecutionContext:
+    def from_config_options(
+        cls, config_options: ConfigOptions, query_id: uuid.UUID | None = None
+    ) -> IRExecutionContext:
         """Create an IRExecutionContext from ConfigOptions."""
+        query_id = query_id or uuid.uuid4()
         match config_options.cuda_stream_policy:
             case CUDAStreamPolicy.DEFAULT:
-                return cls(get_cuda_stream=get_cuda_stream)
+                return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
             case CUDAStreamPolicy.NEW:
-                return cls(get_cuda_stream=get_new_cuda_stream)
+                return cls(get_cuda_stream=get_new_cuda_stream, query_id=query_id)
             case _:  # pragma: no cover
                 raise ValueError(
                     f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
@@ -2312,7 +2317,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        assert_never(how)  # pragma: no cover
+        assert_never(how)
 
     @staticmethod
     def _reorder_maps(
