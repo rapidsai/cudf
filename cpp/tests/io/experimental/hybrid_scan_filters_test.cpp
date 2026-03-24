@@ -1519,16 +1519,10 @@ TEST_F(HybridScanFiltersTest, RowGroupPasses)
   cudf::test::fixed_width_column_wrapper<double> col1(values, values + rows_per_rg);
   auto chunk_table = cudf::table_view{{col0, col1}};
 
-  cudf::io::table_input_metadata metadata(chunk_table);
-  metadata.column_metadata[0].set_name("col0");
-  metadata.column_metadata[1].set_name("col1");
-
   std::string parquet_filepath = temp_env->get_temp_filepath("RowGroupPassesBasic.parquet");
   {
     auto opts =
       cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath})
-        .metadata(std::move(metadata))
-        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
         .build();
     auto writer = cudf::io::chunked_parquet_writer(opts);
     for (int i = 0; i < num_rg; ++i) {
