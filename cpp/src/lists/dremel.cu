@@ -86,8 +86,8 @@ dremel_data get_encoding(column_view h_col,
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end = cudf::detail::copy_if(
-      cuda::counting_iterator{size_type{start}},
-      cuda::counting_iterator{size_type{end}},
+      cuda::counting_iterator<size_type>{start},
+      cuda::counting_iterator<size_type>{end},
       empties_idx.begin(),
       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; },
       stream);
@@ -341,7 +341,7 @@ dremel_data get_encoding(column_view h_col,
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       cuda::counting_iterator{cudf::size_type{0}},
+                       cuda::counting_iterator<cudf::size_type>{0},
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
                         scan_out = scan_out.data(),
@@ -405,7 +405,7 @@ dremel_data get_encoding(column_view h_col,
     auto ends = thrust::merge_by_key(rmm::exec_policy_nosync(stream),
                                      transformed_empties,
                                      transformed_empties + empties_size,
-                                     cuda::counting_iterator{cudf::size_type{0}},
+                                     cuda::counting_iterator<cudf::size_type>{0},
                                      cuda::counting_iterator{curr_rep_values_size},
                                      input_parent_zip_it,
                                      input_child_zip_it,
@@ -429,7 +429,7 @@ dremel_data get_encoding(column_view h_col,
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       cuda::counting_iterator{cudf::size_type{0}},
+                       cuda::counting_iterator<cudf::size_type>{0},
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
                         scan_out = scan_out.data(),

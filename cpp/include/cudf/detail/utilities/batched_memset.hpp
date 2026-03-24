@@ -44,7 +44,7 @@ void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
 
   // Vector of sizes of all buffer spans
   auto sizes = thrust::make_transform_iterator(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<std::size_t>(
       [buffers = buffers.data()] __device__(std::size_t i) { return buffers[i].size(); }));
 
@@ -53,7 +53,7 @@ void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
 
   // Iterator to each device span pointer
   auto iter_out = thrust::make_transform_iterator(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<T*>(
       [buffers = buffers.data()] __device__(std::size_t i) { return buffers[i].data(); }));
 

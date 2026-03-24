@@ -49,7 +49,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
   auto per_row_mapping_begin = per_row_mapping->mutable_view().template begin<size_type>();
   thrust::fill_n(rmm::exec_policy_nosync(stream), per_row_mapping_begin, num_child_rows, 0);
 
-  auto const begin = cuda::counting_iterator{size_type{0}};
+  auto const begin = cuda::counting_iterator<size_type>{0};
   thrust::scatter_if(rmm::exec_policy_nosync(stream),
                      begin,
                      begin + offsets.size() - 1,

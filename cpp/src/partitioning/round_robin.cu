@@ -79,7 +79,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
   // iterator for partition index rotated right by start_partition positions:
   auto rotated_iter_begin = thrust::make_transform_iterator(
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     cuda::proclaim_return_type<cudf::size_type>(
       [num_partitions, start_partition] __device__(auto index) {
         return (index + num_partitions - start_partition) % num_partitions;
@@ -200,7 +200,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
                   : start_partition * (max_partition_size - 1));
 
   auto iter_begin = thrust::make_transform_iterator(
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     cuda::proclaim_return_type<size_type>([nrows,
                                            num_partitions,
                                            max_partition_size,
@@ -236,7 +236,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   // right by start_partition positions:
   //
   auto rotated_iter_begin = thrust::make_transform_iterator(
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     [num_partitions, start_partition, max_partition_size, num_partitions_max_size](auto index) {
       return ((index + num_partitions - start_partition) % num_partitions < num_partitions_max_size
                 ? max_partition_size

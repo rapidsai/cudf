@@ -156,7 +156,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  rmm::device_async_resource_ref mr)
 {
   if (indices.is_empty()) {
-    auto begin = cuda::counting_iterator{size_type{0}};
+    auto begin = cuda::counting_iterator<size_type>{0};
     if (exact) {
       return quantile<true>(input, begin, input.size(), q, interp, exact, stream, mr);
     } else {

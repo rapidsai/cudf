@@ -51,7 +51,7 @@ jitify2::StringVec build_jit_template_params(null_aware is_null_aware,
   tparams.emplace_back(jitify2::reflection::reflect(may_evaluate_null));
   tparams.emplace_back(jitify2::reflection::reflect(has_user_data));
 
-  std::transform(cuda::counting_iterator{std::size_t{0}},
+  std::transform(cuda::counting_iterator<std::size_t>{0},
                  cuda::counting_iterator{span_outputs.size()},
                  std::back_inserter(tparams),
                  [&](auto i) {
@@ -59,7 +59,7 @@ jitify2::StringVec build_jit_template_params(null_aware is_null_aware,
                      .instantiate(span_outputs[i], i);
                  });
 
-  std::transform(cuda::counting_iterator{std::size_t{0}},
+  std::transform(cuda::counting_iterator<std::size_t>{0},
                  cuda::counting_iterator{column_outputs.size()},
                  std::back_inserter(tparams),
                  [&](auto i) {
@@ -67,7 +67,7 @@ jitify2::StringVec build_jit_template_params(null_aware is_null_aware,
                      .instantiate(column_outputs[i], i);
                  });
 
-  std::transform(cuda::counting_iterator{std::size_t{0}},
+  std::transform(cuda::counting_iterator<std::size_t>{0},
                  cuda::counting_iterator{inputs.size()},
                  std::back_inserter(tparams),
                  [&](auto i) { return inputs[i].accessor(i); });

@@ -140,7 +140,7 @@ struct dispatch_compute_indices {
     auto all_itr = thrust::make_permutation_iterator(
       keys_view->begin<Element>(),
       thrust::make_transform_iterator(
-        cuda::counting_iterator{size_type{0}},
+        cuda::counting_iterator<size_type>{0},
         cuda::proclaim_return_type<size_type>(
           [d_offsets, d_map_to_keys, d_all_indices, indices_itr] __device__(size_type idx) {
             if (d_all_indices.is_null(idx)) return 0;

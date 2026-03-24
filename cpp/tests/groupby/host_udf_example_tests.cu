@@ -102,7 +102,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
 
       thrust::transform(
         rmm::exec_policy_nosync(stream),
-        cuda::counting_iterator{cudf::size_type{0}},
+        cuda::counting_iterator<cudf::size_type>{0},
         cuda::counting_iterator{num_groups},
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
         transform_fn{*values_dv_ptr,

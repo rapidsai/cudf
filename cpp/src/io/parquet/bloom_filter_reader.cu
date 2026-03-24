@@ -304,7 +304,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
   // Read bloom filters for all column chunks
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{num_chunks},
     [&](auto const chunk) {
       // If bloom filter offset absent, fill in an empty buffer and skip ahead
@@ -437,7 +437,7 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   auto have_bloom_filters = false;
 
   // For all data sources
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
                 cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_index) {
                   // Get all row group indices in the data source
@@ -515,7 +515,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   std::vector<std::unique_ptr<cudf::column>> bloom_filter_membership_columns;
   std::size_t equality_col_idx = 0;
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{output_dtypes.size()},
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];

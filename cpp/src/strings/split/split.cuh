@@ -531,8 +531,8 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   // These may include overlapping or otherwise out-of-bounds delimiters which
   // will be resolved during token processing.
   auto delimiter_positions = rmm::device_uvector<int64_t>(d_count.value(stream), stream);
-  cudf::detail::copy_if_async(cuda::counting_iterator{int64_t{0}},
-                              cuda::counting_iterator{int64_t{chars_bytes}},
+  cudf::detail::copy_if_async(cuda::counting_iterator<int64_t>{0},
+                              cuda::counting_iterator<int64_t>{chars_bytes},
                               delimiter_positions.begin(),
                               delimiter_fn,
                               stream);
@@ -546,7 +546,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   // compute the number of tokens per string
   auto token_counts    = rmm::device_uvector<size_type>(input.size(), stream);
   auto d_positions     = delimiter_positions.data();
-  auto const zero_iter = cuda::counting_iterator{size_type{0}};
+  auto const zero_iter = cuda::counting_iterator<size_type>{0};
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     zero_iter,

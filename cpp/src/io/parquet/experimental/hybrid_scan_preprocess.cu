@@ -47,7 +47,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
 
   rmm::device_uvector<chunk_page_info> chunk_page_info(chunks.size(), stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
-                   cuda::counting_iterator{cuda::std::size_t{0}},
+                   cuda::counting_iterator<cuda::std::size_t>{0},
                    cuda::counting_iterator{chunks.size()},
                    [cpi = chunk_page_info.begin(), pages = pages.device_begin()] __device__(
                      auto page_idx) { cpi[page_idx].pages = &pages[page_idx]; });
@@ -293,7 +293,7 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_ma
   // Update output row mask such that out_row_mask[i] = true, iff in_row_mask[i] is valid and true.
   // This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    cuda::counting_iterator{cudf::size_type{0}},
+                    cuda::counting_iterator<cudf::size_type>{0},
                     cuda::counting_iterator{total_rows},
                     out_row_mask.begin<bool>() + out_row_mask_offset,
                     [is_nullable = in_row_mask.nullable(),

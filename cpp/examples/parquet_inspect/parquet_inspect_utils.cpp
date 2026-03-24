@@ -87,7 +87,7 @@ namespace {
 
         // For all pages in this column chunk, update page row counts and offsets.
         std::for_each(
-          cuda::counting_iterator{std::size_t{0}},
+          cuda::counting_iterator<std::size_t>{0},
           cuda::counting_iterator{row_group_num_pages},
           [&](auto const page_idx) {
             int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
@@ -334,7 +334,7 @@ void write_page_metadata(cudf::io::parquet::FileMetaData const& metadata,
   columns.emplace_back(make_index_column(num_row_groups, stream));
 
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{num_columns},
     [&](auto const col_idx) {
       auto const [page_row_counts, page_row_offsets, page_byte_offsets, col_page_offsets] =
@@ -362,7 +362,7 @@ void write_page_metadata(cudf::io::parquet::FileMetaData const& metadata,
   cudf::io::table_input_metadata out_metadata(table->view());
   out_metadata.column_metadata[0].set_name("row group index");
 
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
                 cuda::counting_iterator{num_columns},
                 [&](auto const col_idx) {
                   std::string const col_name = "col" + std::to_string(col_idx);

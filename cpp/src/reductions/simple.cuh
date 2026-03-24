@@ -314,7 +314,7 @@ struct same_element_type_dispatcher {
       cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
     auto const binary_op  = cudf::detail::cast_functor<size_type>(binop_generator.binop());
     auto const minmax_idx = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                           cuda::counting_iterator{cudf::size_type{0}},
+                                           cuda::counting_iterator<cudf::size_type>{0},
                                            cuda::counting_iterator{input.size()},
                                            size_type{0},
                                            binary_op);

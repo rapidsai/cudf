@@ -1354,8 +1354,8 @@ TEST_P(StringReductionTest, MinMax)
   // data and valid arrays
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
-  std::transform(cuda::counting_iterator{std::size_t{0}},
-                 cuda::counting_iterator{std::size_t{host_strings.size()}},
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator<std::size_t>{host_strings.size()},
                  host_strings.begin(),
                  [host_strings, host_bools](auto idx) {
                    return host_bools[idx] ? host_strings[idx] : std::string{};
@@ -1440,8 +1440,8 @@ TEST_P(StringReductionTest, ArgMinMax)
   // Data and valid arrays.
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
-  std::transform(cuda::counting_iterator{std::size_t{0}},
-                 cuda::counting_iterator{std::size_t{host_strings.size()}},
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator<std::size_t>{host_strings.size()},
                  host_strings.begin(),
                  [host_strings, host_bools](auto idx) {
                    return host_bools[idx] ? host_strings[idx] : std::string{};

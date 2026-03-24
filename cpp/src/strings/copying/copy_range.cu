@@ -69,8 +69,8 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
       return std::pair(rmm::device_buffer{}, 0);
     }
     return cudf::detail::valid_if(
-      cuda::counting_iterator{size_type{0}},
-      cuda::counting_iterator{size_type{target.size()}},
+      cuda::counting_iterator<size_type>{0},
+      cuda::counting_iterator<size_type>{target.size()},
       [d_source, d_target, source_begin, target_begin, target_end] __device__(size_type idx) {
         return (idx >= target_begin && idx < target_end)
                  ? d_source.is_valid(source_begin + (idx - target_begin))
@@ -92,7 +92,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
   auto d_chars    = chars_data.data();
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{target.size()},
     [d_source, d_target, source_begin, target_begin, target_end, d_offsets, d_chars] __device__(
       size_type idx) {

@@ -63,7 +63,7 @@ void bench_row_variable_rolling_sum(nvbench::state& state, nvbench::type_list<Ty
 
   auto preceding = [&] {
     auto data = std::vector<cudf::size_type>(num_rows);
-    auto it   = cuda::counting_iterator{cudf::size_type{0}};
+    auto it   = cuda::counting_iterator<cudf::size_type>{0};
     std::transform(it, it + num_rows, data.begin(), [num_rows, preceding_size](auto i) {
       return std::min(i + 1, std::max(preceding_size, i + 1 - num_rows));
     });
@@ -79,7 +79,7 @@ void bench_row_variable_rolling_sum(nvbench::state& state, nvbench::type_list<Ty
 
   auto following = [&] {
     auto data = std::vector<cudf::size_type>(num_rows);
-    auto it   = cuda::counting_iterator{cudf::size_type{0}};
+    auto it   = cuda::counting_iterator<cudf::size_type>{0};
     std::transform(it, it + num_rows, data.begin(), [num_rows, following_size](auto i) {
       return std::max(-i - 1, std::min(following_size, num_rows - i - 1));
     });

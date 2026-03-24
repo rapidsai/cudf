@@ -87,8 +87,8 @@ struct sort_radix_fn {
     auto d_out    = pair_out.begin();
 
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{input.size()}},
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       d_in,
                       float_to_pair_fn<T>{input.begin<T>()});
 

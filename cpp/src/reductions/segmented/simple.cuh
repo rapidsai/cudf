@@ -152,7 +152,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   // Pass to simple_segmented_reduction, get indices to gather, perform gather here.
   auto device_col = cudf::column_device_view::create(col, stream);
 
-  auto it                 = cuda::counting_iterator{cudf::size_type{0}};
+  auto it                 = cuda::counting_iterator<cudf::size_type>{0};
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
   bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::detail::op::min>;

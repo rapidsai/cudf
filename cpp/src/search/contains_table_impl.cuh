@@ -153,7 +153,7 @@ void perform_contains(table_view const& haystack,
     // - https://github.com/rapidsai/cudf/pull/8277
     set.insert_if_async(haystack_iter,
                         haystack_iter + haystack.num_rows(),
-                        cuda::counting_iterator{size_type{0}},  // stencil
+                        cuda::counting_iterator<size_type>{0},  // stencil
                         row_is_valid{row_bitmask_ptr},
                         stream.value());
   } else {
@@ -165,7 +165,7 @@ void perform_contains(table_view const& haystack,
     auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
     set.contains_if_async(needles_iter,
                           needles_iter + needles.num_rows(),
-                          cuda::counting_iterator{size_type{0}},  // stencil
+                          cuda::counting_iterator<size_type>{0},  // stencil
                           row_is_valid{row_bitmask_ptr},
                           contained.begin(),
                           stream.value());

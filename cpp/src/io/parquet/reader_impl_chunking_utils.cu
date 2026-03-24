@@ -390,7 +390,7 @@ std::tuple<rmm::device_uvector<page_span>, std::size_t, std::size_t> compute_nex
 
   // for each column, collect the set of pages that spans start_row / end_row
   rmm::device_uvector<page_span> page_bounds(num_columns, stream);
-  auto iter = cuda::counting_iterator{std::size_t{0}};
+  auto iter = cuda::counting_iterator<std::size_t>{0};
   auto page_row_index =
     cudf::detail::make_counting_transform_iterator(0, get_page_end_row_index{c_info});
   thrust::transform(
@@ -746,7 +746,7 @@ rmm::device_uvector<std::size_t> compute_decompression_scratch_sizes(
 
       // Collect pages with matching codecs
       rmm::device_uvector<device_span<uint8_t const>> temp_spans(pages.size(), stream);
-      auto iter = cuda::counting_iterator{std::size_t{0}};
+      auto iter = cuda::counting_iterator<std::size_t>{0};
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
         iter,
@@ -796,7 +796,7 @@ rmm::device_uvector<std::size_t> compute_decompression_scratch_sizes(
 
         // Apply the adjustment ratio to each page's temporary cost
         thrust::for_each(rmm::exec_policy_nosync(stream),
-                         cuda::counting_iterator{std::size_t{0}},
+                         cuda::counting_iterator<std::size_t>{0},
                          cuda::counting_iterator{pages.size()},
                          [pages           = pages.begin(),
                           chunks          = chunks.begin(),
@@ -824,7 +824,7 @@ void include_scratch_size(device_span<std::size_t const> temp_cost,
                           device_span<cumulative_page_info> c_info,
                           rmm::cuda_stream_view stream)
 {
-  auto iter = cuda::counting_iterator{std::size_t{0}};
+  auto iter = cuda::counting_iterator<std::size_t>{0};
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
                    iter + c_info.size(),

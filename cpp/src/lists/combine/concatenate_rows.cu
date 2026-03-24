@@ -72,14 +72,14 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
     data_type{type_to_id<size_type>()}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, mr);
 
   auto keys =
-    thrust::make_transform_iterator(cuda::counting_iterator{std::size_t{0}},
+    thrust::make_transform_iterator(cuda::counting_iterator<std::size_t>{0},
                                     cuda::proclaim_return_type<size_type>(
                                       [num_columns = input.num_columns()] __device__(
                                         std::size_t i) -> size_type { return i / num_columns; }));
 
   // generate sizes for the regrouped rows
   auto values = thrust::make_transform_iterator(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<size_type>([input,
                                            row_null_counts = row_null_counts.data(),
                                            null_policy] __device__(std::size_t i) -> size_type {
@@ -153,13 +153,13 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
   rmm::device_uvector<size_type> null_counts(input.num_rows(), stream);
 
   auto keys =
-    thrust::make_transform_iterator(cuda::counting_iterator{std::size_t{0}},
+    thrust::make_transform_iterator(cuda::counting_iterator<std::size_t>{0},
                                     cuda::proclaim_return_type<size_type>(
                                       [num_columns = input.num_columns()] __device__(
                                         std::size_t i) -> size_type { return i / num_columns; }));
 
   auto null_values = thrust::make_transform_iterator(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<size_type>([input] __device__(std::size_t i) -> size_type {
       auto const col_index = i % input.num_columns();
       auto const row_index = i / input.num_columns();
@@ -228,7 +228,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   // be nullified.
   if (build_null_mask) {
     auto [null_mask, null_count] = [&]() {
-      auto iter = cuda::counting_iterator{std::size_t{0}};
+      auto iter = cuda::counting_iterator<std::size_t>{0};
 
       // IGNORE.  Output row is nullified if all input rows are null.
       if (null_policy == concatenate_null_policy::IGNORE) {
@@ -266,7 +266,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   // we had concatenated all the rows together instead of concatenating within the rows.  To fix
   // this we can simply swap in a new set of offsets that re-groups them.  bmo
   auto iter = thrust::make_transform_iterator(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<size_type>(
       [num_columns = input.num_columns(),
        num_rows    = input.num_rows()] __device__(std::size_t i) -> size_type {

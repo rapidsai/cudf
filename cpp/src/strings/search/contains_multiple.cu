@@ -199,7 +199,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       cuda::proclaim_return_type<u_char>([] __device__(auto const& d_tgt) -> u_char {
         return d_tgt.empty() ? u_char{0} : static_cast<u_char>(d_tgt.data()[0]);
       }));
-    auto count_itr = cuda::counting_iterator{size_type{0}};
+    auto count_itr = cuda::counting_iterator<size_type>{0};
     auto keys_out  = first_bytes.begin();
     auto vals_out  = indices.begin();
     auto num_items = targets.size();

@@ -277,10 +277,10 @@ TEST_F(StringsContainsTests, OctalTest)
 TEST_F(StringsContainsTests, HexTest)
 {
   std::vector<char> ascii_chars(  // all possible matchable chars
-    {cuda::counting_iterator{char{0}}, cuda::counting_iterator{char{127}}});
+    {cuda::counting_iterator<char>{0}, cuda::counting_iterator<char>{127}});
   auto const count = static_cast<cudf::size_type>(ascii_chars.size());
-  std::vector<cudf::size_type> offsets({cuda::counting_iterator{cudf::size_type{0}},
-                                        cuda::counting_iterator{cudf::size_type{0}} + count + 1});
+  std::vector<cudf::size_type> offsets({cuda::counting_iterator<cudf::size_type>{0},
+                                        cuda::counting_iterator<cudf::size_type>{0} + count + 1});
   auto d_chars = cudf::detail::make_device_uvector(
     ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(

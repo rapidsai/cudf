@@ -91,7 +91,7 @@ struct is_supported_type_fn {
 template <bool forward>
 __device__ auto element_index_pair_iter(size_type const size)
 {
-  auto const begin = cuda::counting_iterator{cudf::size_type{0}};
+  auto const begin = cuda::counting_iterator<cudf::size_type>{0};
   auto const end   = cuda::counting_iterator{size};
 
   if constexpr (forward) {
@@ -350,7 +350,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
       auto const list = list_device_view{lists, list_idx};
       return list.is_null() ||
              thrust::any_of(thrust::seq,
-                            cuda::counting_iterator{cudf::size_type{0}},
+                            cuda::counting_iterator<cudf::size_type>{0},
                             cuda::counting_iterator{list.size()},
                             [&list](auto const idx) { return list.is_null(idx); });
     }));

@@ -473,8 +473,8 @@ TEST_F(GroupedRollingErrorTest, EmptyInput)
 TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
 {
   constexpr cudf::size_type size{10};
-  auto const d_iter  = cuda::counting_iterator{cudf::timestamp_D::rep{0}};
-  auto const ns_iter = cuda::counting_iterator{cudf::timestamp_s::rep{0}};
+  auto const d_iter  = cuda::counting_iterator<cudf::timestamp_D::rep>{0};
+  auto const ns_iter = cuda::counting_iterator<cudf::timestamp_s::rep>{0};
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
     d_iter, d_iter + size);
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(

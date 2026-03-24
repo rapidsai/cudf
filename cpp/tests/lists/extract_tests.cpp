@@ -42,7 +42,7 @@ TYPED_TEST_SUITE(ListsExtractNumericsTest, NumericTypesNotBool);
 
 TYPED_TEST(ListsExtractNumericsTest, ExtractElement)
 {
-  auto validity = thrust::make_transform_iterator(cuda::counting_iterator{cudf::size_type{0}},
+  auto validity = thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
                                                   [](auto i) { return i != 1; });
   using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
   LCW input({LCW{3, 2, 1}, LCW{}, LCW{30, 20, 10, 50}, LCW{100, 120}, LCW{0}}, validity);
@@ -101,7 +101,7 @@ TYPED_TEST(ListsExtractNumericsTest, ExtractElement)
 
 TEST_F(ListsExtractTest, ExtractElementStrings)
 {
-  auto validity = thrust::make_transform_iterator(cuda::counting_iterator{cudf::size_type{0}},
+  auto validity = thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
                                                   [](auto i) { return i != 1; });
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW input(
@@ -233,7 +233,7 @@ TEST_F(ListsExtractTest, ExtractElementEmpty)
 
 TEST_F(ListsExtractTest, ExtractElementWithNulls)
 {
-  auto validity = thrust::make_transform_iterator(cuda::counting_iterator{cudf::size_type{0}},
+  auto validity = thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
                                                   [](auto i) { return i != 1; });
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW input{

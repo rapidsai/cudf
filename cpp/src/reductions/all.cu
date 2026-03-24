@@ -59,7 +59,7 @@ struct all_fn {
     auto d_result =
       cudf::detail::device_scalar<int32_t>(1, stream, cudf::get_current_device_resource_ref());
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       cuda::counting_iterator{size_type{0}},
+                       cuda::counting_iterator<size_type>{0},
                        input.size(),
                        all_true_fn<decltype(iter)>{iter, d_result.data()});
     return std::make_unique<numeric_scalar<bool>>(d_result.value(stream), true, stream, mr);

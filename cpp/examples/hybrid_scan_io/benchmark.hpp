@@ -18,7 +18,7 @@ void benchmark(F&& f, std::size_t iterations)
   auto total_time = double{0.0};
 
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}}, cuda::counting_iterator{iterations}, [&](auto iter) {
+    cuda::counting_iterator<std::size_t>{0}, cuda::counting_iterator{iterations}, [&](auto iter) {
       timer timer;
 
       f();

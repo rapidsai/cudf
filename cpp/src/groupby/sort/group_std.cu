@@ -69,7 +69,7 @@ void reduce_by_key_fn(column_device_view const& values,
 {
   auto var_fn = var_transform<ResultType, decltype(values_iter)>{
     values, values_iter, d_means, d_group_sizes, group_labels.data(), ddof};
-  auto const itr = cuda::counting_iterator{size_type{0}};
+  auto const itr = cuda::counting_iterator<size_type>{0};
   // Using a temporary buffer for intermediate transform results instead of
   // using the transform-iterator directly in thrust::reduce_by_key
   // improves compile-time significantly.
@@ -128,7 +128,7 @@ struct var_functor {
     auto d_null_count = null_count.data();
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
-      cuda::counting_iterator{cudf::size_type{0}},
+      cuda::counting_iterator<cudf::size_type>{0},
       group_sizes.size(),
       [d_result = *result_view, d_group_sizes, ddof, d_null_count] __device__(size_type i) {
         size_type group_size = d_group_sizes[i];

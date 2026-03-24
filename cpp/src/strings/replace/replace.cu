@@ -289,7 +289,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // Create a vector of every target position in the chars column.
   // These may also include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
-  auto const copy_itr    = cuda::counting_iterator{int64_t{chars_offset}};
+  auto const copy_itr    = cuda::counting_iterator<int64_t>{chars_offset};
   auto const copy_end    = cudf::detail::copy_if(
     copy_itr,
     copy_itr + chars_bytes + chars_offset,
@@ -311,8 +311,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // compute the number of string segments produced by replace in each string
   auto counts = rmm::device_uvector<size_type>(strings_count, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    cuda::counting_iterator{size_type{0}},
-                    cuda::counting_iterator{size_type{strings_count}},
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings_count},
                     counts.begin(),
                     cuda::proclaim_return_type<size_type>(
                       [fn, d_positions, d_targets_offsets] __device__(size_type idx) -> size_type {
@@ -331,7 +331,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_sizes   = counts.data();  // reusing this vector to hold output sizes now
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{size_type{0}},
+    cuda::counting_iterator<size_type>{0},
     strings_count,
     [fn, d_strings_offsets, d_positions, d_targets_offsets, d_indices, d_sizes] __device__(
       size_type idx) {

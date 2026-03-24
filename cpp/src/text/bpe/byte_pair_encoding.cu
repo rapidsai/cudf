@@ -359,8 +359,8 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   // used for various purposes below: unpairable-offsets, pair ranks, separator insert positions
   rmm::device_uvector<int64_t> d_working(chars_size, stream);
 
-  auto const chars_begin = cuda::counting_iterator{int64_t{0}};
-  auto const chars_end   = cuda::counting_iterator{int64_t{chars_size}};
+  auto const chars_begin = cuda::counting_iterator<int64_t>{0};
+  auto const chars_end   = cuda::counting_iterator<int64_t>{chars_size};
 
   {
     // this kernel locates unpairable sections of strings to create artificial string row

@@ -73,7 +73,7 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
 
     if (configuration == flip_endianness::YES) {
       thrust::for_each(rmm::exec_policy_nosync(stream),
-                       cuda::counting_iterator{cudf::size_type{0}},
+                       cuda::counting_iterator<cudf::size_type>{0},
                        cuda::counting_iterator{num_bytes},
                        [d_inp, d_out] __device__(auto index) {
                          constexpr auto mask = static_cast<size_type>(sizeof(T) - 1);

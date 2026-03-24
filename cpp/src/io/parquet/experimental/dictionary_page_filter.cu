@@ -883,7 +883,7 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
       // Otherwise, check if we have more than one values in the dictionary (will never evaluate to
       // true so we can easily break) or if the decoded value was a match with the literal value.
       if (thrust::all_of(thrust::seq,
-                         cuda::counting_iterator{cudf::size_type{0}},
+                         cuda::counting_iterator<cudf::size_type>{0},
                          cuda::counting_iterator{total_num_scalars},
                          [&](auto scalar_idx) {
                            return operators[scalar_idx] == ast::ast_operator::EQUAL
@@ -978,7 +978,7 @@ CUDF_KERNEL void __launch_bounds__(DECODE_BLOCK_SIZE)
     // Otherwise, check if we have more than one values in the dictionary (will never evaluate to
     // true so we can easily break) or if the decoded value was a match with the literal value.
     if (thrust::all_of(thrust::seq,
-                       cuda::counting_iterator{cudf::size_type{0}},
+                       cuda::counting_iterator<cudf::size_type>{0},
                        cuda::counting_iterator{total_num_scalars},
                        [&](auto scalar_idx) {
                          return operators[scalar_idx] == ast::ast_operator::EQUAL
@@ -1068,7 +1068,7 @@ struct dictionary_caster {
 
     // Compute the running number of hash set slots and decoded values for all dictionaries
     std::for_each(
-      cuda::counting_iterator{std::size_t{0}},
+      cuda::counting_iterator<std::size_t>{0},
       cuda::counting_iterator{total_row_groups},
       [&](auto row_group_idx) {
         auto const chunk_idx        = dictionary_col_idx + (row_group_idx * num_dictionary_columns);
@@ -1123,7 +1123,7 @@ struct dictionary_caster {
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
     // Host vector of pointers to the result buffers
     auto host_results_ptrs = cudf::detail::make_host_vector<bool*>(total_num_literals, stream);
-    std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+    std::for_each(cuda::counting_iterator<cudf::size_type>{0},
                   cuda::counting_iterator{total_num_literals},
                   [&](auto i) {
                     // Allocate the results buffer using the user-provided memory resource (output
@@ -1255,7 +1255,7 @@ struct dictionary_caster {
     std::vector<rmm::device_buffer> results_buffers(total_num_literals);
     // Host vector of pointers to the result buffers
     auto host_results_ptrs = cudf::detail::make_host_vector<bool*>(total_num_literals, stream);
-    std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+    std::for_each(cuda::counting_iterator<cudf::size_type>{0},
                   cuda::counting_iterator{total_num_literals},
                   [&](auto i) {
                     // Allocate the results buffer using the user-provided memory resource (output
@@ -1516,7 +1516,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
 
   // For each input column
   std::for_each(
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{num_input_columns},
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];

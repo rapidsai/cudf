@@ -1506,7 +1506,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
 
   // Creating Struct<Numeric, Bool>.
   auto numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    cuda::counting_iterator{int32_t{0}},
+    cuda::counting_iterator<int32_t>{0},
     cuda::counting_iterator{num_struct_rows},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 
@@ -1540,7 +1540,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   // Verify that the child is unchanged.
 
   auto expected_numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    cuda::counting_iterator{int32_t{0}},
+    cuda::counting_iterator<int32_t>{0},
     cuda::counting_iterator{num_struct_rows},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 

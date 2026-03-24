@@ -37,8 +37,8 @@ struct dispatch_nan_to_null {
                  input_device_view.is_null(idx));
     };
 
-    auto mask = detail::valid_if(cuda::counting_iterator{cudf::size_type{0}},
-                                 cuda::counting_iterator{cudf::size_type{input.size()}},
+    auto mask = detail::valid_if(cuda::counting_iterator<cudf::size_type>{0},
+                                 cuda::counting_iterator<cudf::size_type>{input.size()},
                                  pred,
                                  stream,
                                  mr);

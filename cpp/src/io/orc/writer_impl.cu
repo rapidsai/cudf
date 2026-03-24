@@ -577,7 +577,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
     auto RLE_column_size = [&](TypeKind type_kind) {
       return std::accumulate(
-        cuda::counting_iterator{std::size_t{0}},
+        cuda::counting_iterator<std::size_t>{0},
         cuda::counting_iterator{segmentation.num_rowgroups()},
         0ul,
         [&](auto data_size, auto rg_idx) {
@@ -715,7 +715,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   // One thread per column, per stripe
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     orc_table.num_columns() * segmentation.num_stripes(),
     [columns = device_span<orc_column_device_view const>{orc_table.d_columns},
      stripes = device_span<stripe_rowgroups const>{d_stripes},
@@ -832,7 +832,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
   std::vector<std::vector<rowgroup_rows>> h_aligned_rgs;
   h_aligned_rgs.reserve(segmentation.num_rowgroups());
-  std::transform(cuda::counting_iterator{std::size_t{0}},
+  std::transform(cuda::counting_iterator<std::size_t>{0},
                  cuda::counting_iterator{segmentation.num_rowgroups()},
                  std::back_inserter(h_aligned_rgs),
                  [&](auto idx) -> std::vector<rowgroup_rows> {
@@ -890,7 +890,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   // and remove info from chunks that is common for the entire column
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     chunks.count(),
     [chunks = chunks.device_view(),
      cols = device_span<orc_column_device_view const>{orc_table.d_columns}] __device__(auto& idx) {
@@ -1149,7 +1149,7 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                              rmm::cuda_stream_view stream)
 {
   thrust::for_each(rmm::exec_policy_nosync(stream),
-                   cuda::counting_iterator{std::size_t{0}},
+                   cuda::counting_iterator<std::size_t>{0},
                    cuda::counting_iterator{stat_desc.size()},
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
@@ -1694,7 +1694,7 @@ void pushdown_lists_null_mask(orc_column_view const& col,
   // Reset bits where a null list element has rows in the child column
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     col.size(),
     [d_columns, col_idx = col.index(), parent_pd_mask, out_mask] __device__(auto& idx) {
       auto const d_col        = d_columns[col_idx];
@@ -1777,7 +1777,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
     mask_ptrs, stream, cudf::get_current_device_resource_ref());
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     orc_table.num_columns(),
     [cols = device_span<orc_column_device_view>{orc_table.d_columns},
      ptrs = device_span<bitmask_type const* const>{d_mask_ptrs}] __device__(auto& idx) {
@@ -1926,7 +1926,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
     num_rowgroups, orc_table.num_columns(), stream);
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     num_rowgroups,
     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
      rg_bounds = rowgroup_bounds.device_view(),
@@ -2278,7 +2278,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
         sd.data_order, current_stream, cudf::get_current_device_resource_ref());
       thrust::scatter(rmm::exec_policy_nosync(current_stream),
-                      cuda::counting_iterator{uint32_t{0}},
+                      cuda::counting_iterator<uint32_t>{0},
                       cuda::counting_iterator{static_cast<uint32_t>(sd.data_order.size())},
                       order_copy.begin(),
                       sd.data_order.begin());

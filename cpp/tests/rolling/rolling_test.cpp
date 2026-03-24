@@ -749,8 +749,8 @@ TEST_F(RollingErrorTest, WindowWrongDtype)
 TEST_F(RollingErrorTest, SumTimestampNotSupported)
 {
   constexpr cudf::size_type size{10};
-  auto const d_iter  = cuda::counting_iterator{cudf::timestamp_D::rep{0}};
-  auto const ns_iter = cuda::counting_iterator{cudf::timestamp_s::rep{0}};
+  auto const d_iter  = cuda::counting_iterator<cudf::timestamp_D::rep>{0};
+  auto const ns_iter = cuda::counting_iterator<cudf::timestamp_s::rep>{0};
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
     d_iter, d_iter + size);
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
@@ -783,8 +783,8 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
 TEST_F(RollingErrorTest, MeanTimestampNotSupported)
 {
   constexpr cudf::size_type size{10};
-  auto const d_iter  = cuda::counting_iterator{cudf::timestamp_D::rep{0}};
-  auto const ns_iter = cuda::counting_iterator{cudf::timestamp_s::rep{0}};
+  auto const d_iter  = cuda::counting_iterator<cudf::timestamp_D::rep>{0};
+  auto const ns_iter = cuda::counting_iterator<cudf::timestamp_s::rep>{0};
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> input_D(
     d_iter, d_iter + size);
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> input_s(
@@ -1104,7 +1104,7 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
   std::vector<cudf::size_type> preceding_window(num_rows);
   std::vector<cudf::size_type> following_window(num_rows);
 
-  auto it = cuda::counting_iterator{cudf::size_type{0}};
+  auto it = cuda::counting_iterator<cudf::size_type>{0};
   std::transform(it, it + num_rows, preceding_window.begin(), [&window_rng, num_rows](auto i) {
     auto p = window_rng.generate();
     return std::min(i + 1, std::max(p, i + 1 - num_rows));
@@ -1138,7 +1138,7 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   std::vector<cudf::size_type> preceding_window(num_rows);
   std::vector<cudf::size_type> following_window(num_rows);
 
-  auto it = cuda::counting_iterator{cudf::size_type{0}};
+  auto it = cuda::counting_iterator<cudf::size_type>{0};
   std::transform(it, it + num_rows, preceding_window.begin(), [&window_rng, num_rows](auto i) {
     auto p = window_rng.generate();
     return std::min(i + 1, std::max(p, i + 1 - num_rows));
@@ -1283,7 +1283,7 @@ TEST_F(RollingTestUdf, StaticWindow)
 {
   cudf::size_type size = 1000;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> input(cuda::counting_iterator{int32_t{0}},
+  cudf::test::fixed_width_column_wrapper<int32_t> input(cuda::counting_iterator<int32_t>{0},
                                                         cuda::counting_iterator{size},
                                                         cuda::make_constant_iterator(true));
 
@@ -1321,7 +1321,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
 {
   cudf::size_type size = 1000;
 
-  cudf::test::fixed_width_column_wrapper<int32_t> input(cuda::counting_iterator{int32_t{0}},
+  cudf::test::fixed_width_column_wrapper<int32_t> input(cuda::counting_iterator<int32_t>{0},
                                                         cuda::counting_iterator{size},
                                                         cuda::make_constant_iterator(true));
 

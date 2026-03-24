@@ -418,7 +418,7 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
     auto const samples_indices = sample_dist(engine, approx_run_len + 1);
     // This is gather.
     auto avg_repeated_sample_indices_iterator = thrust::make_transform_iterator(
-      cuda::counting_iterator{cudf::size_type{0}},
+      cuda::counting_iterator<cudf::size_type>{0},
       cuda::proclaim_return_type<cudf::size_type>(
         [rb              = run_lens.begin(),
          re              = run_lens.end(),
@@ -1085,8 +1085,8 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
   } else if (*null_probability == 1.0) {
     return {cudf::create_null_mask(size, cudf::mask_state::ALL_NULL), size};
   } else {
-    return cudf::detail::valid_if(cuda::counting_iterator{cudf::size_type{0}},
-                                  cuda::counting_iterator{cudf::size_type{size}},
+    return cudf::detail::valid_if(cuda::counting_iterator<cudf::size_type>{0},
+                                  cuda::counting_iterator<cudf::size_type>{size},
                                   bool_generator{seed, 1.0 - *null_probability},
                                   cudf::get_default_stream(),
                                   cudf::get_current_device_resource_ref());

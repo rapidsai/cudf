@@ -375,7 +375,7 @@ rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
                                                   size_type grid_size,
                                                   rmm::cuda_stream_view stream)
 {
-  auto sequence = cuda::counting_iterator{cudf::size_type{0}};
+  auto sequence = cuda::counting_iterator<cudf::size_type>{0};
   rmm::device_uvector<size_type> gather_map(num_rows, stream);
 
   copy_block_partitions_impl(sequence,

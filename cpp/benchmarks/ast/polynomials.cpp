@@ -59,7 +59,7 @@ void BM_ast_polynomials(nvbench::state& state)
     std::mt19937 generator;
     std::uniform_real_distribution<key_type> distribution{0, 1};
 
-    std::transform(cuda::counting_iterator{cudf::size_type{0}},
+    std::transform(cuda::counting_iterator<cudf::size_type>{0},
                    cuda::counting_iterator{order + 1},
                    std::back_inserter(constants),
                    [&](int) { return distribution(generator); });

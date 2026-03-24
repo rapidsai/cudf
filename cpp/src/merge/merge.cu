@@ -302,7 +302,7 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
   auto const left_indices_end     = left_indices.end<cudf::size_type>();
   auto left_indices_mutable_begin = left_indices_mutable.begin<cudf::size_type>();
 
-  auto const total_counter = cuda::counting_iterator{cudf::size_type{0}};
+  auto const total_counter = cuda::counting_iterator<cudf::size_type>{0};
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
     total_counter,

@@ -102,8 +102,8 @@ struct has_nans {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
     return thrust::any_of(rmm::exec_policy_nosync(stream),
-                          cuda::counting_iterator{cudf::size_type{0}},
-                          cuda::counting_iterator{cudf::size_type{input.size()}},
+                          cuda::counting_iterator<cudf::size_type>{0},
+                          cuda::counting_iterator<cudf::size_type>{input.size()},
                           check_for_nan<T>(device_view));
   }
 
@@ -153,7 +153,7 @@ cudf::size_type distinct_count(table_view const& keys,
                                     rmm::mr::polymorphic_allocator<char>{},
                                     stream.value()};
 
-    auto const iter = cuda::counting_iterator{cudf::size_type{0}};
+    auto const iter = cuda::counting_iterator<cudf::size_type>{0};
     // when nulls are equal, we skip hashing any row that has a null
     // in every column to improve efficiency.
     if (nulls_equal == null_equality::EQUAL and has_nulls) {

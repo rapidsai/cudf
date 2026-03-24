@@ -52,12 +52,12 @@ static void BM_transform(nvbench::state& state)
   std::string expression;
   if constexpr (reuse_columns) {
     expression = "c0 " + op + " c0";
-    std::for_each(cuda::counting_iterator{cudf::size_type{1}},
+    std::for_each(cuda::counting_iterator<cudf::size_type>{1},
                   cuda::counting_iterator{num_columns},
                   [&](cudf::size_type) { expression = "( " + expression + " ) " + op + " c0 "; });
   } else {
     expression = "c0 " + op + " c1";
-    std::for_each(cuda::counting_iterator{cudf::size_type{2}},
+    std::for_each(cuda::counting_iterator<cudf::size_type>{2},
                   cuda::counting_iterator{num_columns},
                   [&](cudf::size_type col) {
                     expression = "( " + expression + " ) " + op + " c" + std::to_string(col);
@@ -68,7 +68,7 @@ static void BM_transform(nvbench::state& state)
   std::string params    = type_name + " c0";
 
   std::for_each(
-    cuda::counting_iterator{cudf::size_type{1}},
+    cuda::counting_iterator<cudf::size_type>{1},
     cuda::counting_iterator{num_columns},
     [&](cudf::size_type param) { params += ", " + type_name + " c" + std::to_string(param); });
 
@@ -77,7 +77,7 @@ static void BM_transform(nvbench::state& state)
 
   std::vector<cudf::transform_input> inputs;
 
-  std::transform(cuda::counting_iterator{cudf::size_type{0}},
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
                  cuda::counting_iterator{source_table->num_columns()},
                  std::back_inserter(inputs),
                  [&source_table](int col) {

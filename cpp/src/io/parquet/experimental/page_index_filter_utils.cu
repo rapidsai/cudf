@@ -41,7 +41,7 @@ bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
 {
   // For all parquet data sources
   return std::all_of(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{row_group_indices.size()},
     [&](auto const src_index) {
       // For all row groups in this parquet data source
@@ -88,7 +88,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 
   // For all data sources
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{row_group_indices.size()},
     [&](auto src_idx) {
       // For all column chunks in this data source
@@ -112,7 +112,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 
           // For all pages in this column chunk, update page row counts and offsets.
           std::for_each(
-            cuda::counting_iterator{std::size_t{0}},
+            cuda::counting_iterator<std::size_t>{0},
             cuda::counting_iterator{row_group_num_pages},
             [&](auto const page_idx) {
               int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
@@ -150,7 +150,7 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   page_row_offsets.push_back(0);
   size_type max_page_size = 0;
 
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
                 cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_idx) {
                   // For all row groups in this source
@@ -167,7 +167,7 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
                       row_group.columns.begin() + colchunk_iter_offset.value();
                     auto const& offset_index       = colchunk_iter->offset_index.value();
                     auto const row_group_num_pages = offset_index.page_locations.size();
-                    std::for_each(cuda::counting_iterator{std::size_t{0}},
+                    std::for_each(cuda::counting_iterator<std::size_t>{0},
                                   cuda::counting_iterator{row_group_num_pages},
                                   [&](auto const page_idx) {
                                     int64_t const first_row_idx =
@@ -205,7 +205,7 @@ rmm::device_uvector<size_type> compute_page_indices_async(
 
   // Scatter page indices across the their first row's index
   thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                     cuda::counting_iterator{size_type{0}},
+                     cuda::counting_iterator<size_type>{0},
                      cuda::counting_iterator{static_cast<size_type>(row_counts.size())},
                      row_offsets.begin(),
                      row_counts.begin(),

@@ -109,7 +109,7 @@ column_device_view::create(column_view source, rmm::cuda_stream_view stream)
 std::size_t column_device_view::extent(column_view const& source)
 {
   auto get_extent =
-    thrust::make_transform_iterator(cuda::counting_iterator{cudf::size_type{0}},
+    thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
                                     [&source](auto i) { return extent(source.child(i)); });
 
   return std::accumulate(
@@ -159,7 +159,7 @@ mutable_column_device_view::create(mutable_column_view source, rmm::cuda_stream_
 std::size_t mutable_column_device_view::extent(mutable_column_view source)
 {
   auto get_extent =
-    thrust::make_transform_iterator(cuda::counting_iterator{cudf::size_type{0}},
+    thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
                                     [&source](auto i) { return extent(source.child(i)); });
 
   return std::accumulate(

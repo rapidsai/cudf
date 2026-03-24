@@ -402,7 +402,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   // compute partitions based on the size of each string
   if ((threshold_count > 0) && (threshold_count < size)) {
     auto sizes = rmm::device_uvector<cudf::size_type>(size, stream);
-    auto begin = cuda::counting_iterator{cudf::size_type{0}};
+    auto begin = cuda::counting_iterator<cudf::size_type>{0};
     auto end   = begin + size;
     thrust::transform(rmm::exec_policy_nosync(stream), begin, end, sizes.data(), tfn);
     // these 2 are slightly faster than using partition()

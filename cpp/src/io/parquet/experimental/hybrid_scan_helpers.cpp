@@ -176,7 +176,7 @@ size_type aggregate_reader_metadata::total_rows_in_row_groups(
 {
   std::size_t total_rows = 0;
 
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
                 cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_idx) {
                   auto const& pfm = per_file_metadata[src_idx];
@@ -355,7 +355,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   auto have_bloom_filters = false;
 
   // For all sources
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
                 cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_index) {
                   // Get all row group indices in the data source
@@ -421,7 +421,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
 
   // For all sources
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{row_group_indices.size()},
     [&](auto const src_index) {
       // Get all row group indices in the data source
@@ -619,7 +619,7 @@ named_to_reference_converter::named_to_reference_converter(
   std::transform(
     metadata.schema_info.cbegin(),
     metadata.schema_info.cend(),
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     std::inserter(_column_name_to_index, _column_name_to_index.end()),
     [&](auto const& sch, auto index) {
       return std::make_pair(

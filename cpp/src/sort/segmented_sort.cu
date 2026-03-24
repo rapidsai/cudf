@@ -28,7 +28,7 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
 
   auto offset_begin  = offsets.begin<size_type>();
   auto offset_end    = offsets.end<size_type>();
-  auto counting_iter = cuda::counting_iterator{size_type{0}};
+  auto counting_iter = cuda::counting_iterator<size_type>{0};
   thrust::transform(rmm::exec_policy_nosync(stream),
                     counting_iter,
                     counting_iter + segment_ids.size(),

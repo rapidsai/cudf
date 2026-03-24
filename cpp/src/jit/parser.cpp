@@ -346,7 +346,7 @@ std::string ptx_parser::parse_function_header(std::string const& src)
 
   std::vector<std::string> param_decls;
 
-  std::transform(cuda::counting_iterator{std::size_t{0}},
+  std::transform(cuda::counting_iterator<std::size_t>{0},
                  cuda::counting_iterator{ptx_params.size()},
                  std::back_inserter(param_decls),
                  [&](std::size_t param_index) {

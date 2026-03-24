@@ -234,7 +234,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
   // the row index is the token id (data value for each key in the map)
   auto iter = cudf::detail::make_counting_transform_iterator(0, key_pair{});
   vocab_map->insert_async(iter, iter + vocabulary->size(), stream.value());
-  auto const zero_itr = cuda::counting_iterator{cudf::size_type{0}};
+  auto const zero_itr = cuda::counting_iterator<cudf::size_type>{0};
 
   // get the indices of all the ## prefixed entries
   auto sub_map_indices = rmm::device_uvector<cudf::size_type>(vocabulary->size(), stream);
@@ -512,8 +512,8 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
   auto d_edges = rmm::device_uvector<int64_t>(chars_size / 2L, stream);
   // beginning of a word is a non-space preceded by a space
   auto edges_end = cudf::detail::copy_if(
-    cuda::counting_iterator{int64_t{0}},
-    cuda::counting_iterator{int64_t{chars_size}},
+    cuda::counting_iterator<int64_t>{0},
+    cuda::counting_iterator<int64_t>{chars_size},
     d_edges.begin(),
     [d_input_chars] __device__(auto idx) {
       if (idx == 0) { return d_input_chars[idx] == ' '; }
@@ -764,8 +764,8 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
 
   // compute max word counts for each row
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    cuda::counting_iterator{cudf::size_type{0}},
-                    cuda::counting_iterator{cudf::size_type{input.size()}},
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{input.size()},
                     max_word_offsets.begin(),
                     cuda::proclaim_return_type<cudf::size_type>(
                       [d_strings = *d_strings, max_words_per_row] __device__(auto idx) {

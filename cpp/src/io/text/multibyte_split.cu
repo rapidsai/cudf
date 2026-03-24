@@ -451,7 +451,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           return new_offsets_unclamped;
         }
         // if we are in the last chunk, we need to find the first out-of-bounds offset
-        auto const it = cuda::counting_iterator{output_offset{}};
+        auto const it = cuda::counting_iterator<output_offset>{};
         auto const end_loc =
           *thrust::find_if(rmm::exec_policy_nosync(scan_stream),
                            it,

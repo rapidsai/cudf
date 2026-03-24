@@ -259,7 +259,7 @@ auto hybrid_scan_pipelined(io_source const& io_source,
   std::vector<hybrid_scan_fn> read_tasks;
   read_tasks.reserve(num_partitions);
   std::for_each(
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{num_partitions},
     [&](auto task_id) {
       read_tasks.emplace_back(hybrid_scan_fn{.table              = std::ref(tables[task_id]),

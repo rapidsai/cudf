@@ -75,7 +75,7 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 
   // Convert scatter map to a gather map
   thrust::scatter(rmm::exec_policy_nosync(stream),
-                  cuda::counting_iterator{MapValueType{0}},
+                  cuda::counting_iterator<MapValueType>{0},
                   cuda::counting_iterator{
                     static_cast<MapValueType>(std::distance(scatter_map_begin, scatter_map_end))},
                   scatter_map_begin,

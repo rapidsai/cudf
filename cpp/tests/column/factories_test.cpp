@@ -741,7 +741,7 @@ void struct_from_scalar(bool is_valid)
 
   // generate a column of size num_rows
   std::vector<cudf::column_view> cols;
-  auto iter = cuda::counting_iterator{int{0}};
+  auto iter = cuda::counting_iterator<int>{0};
   std::transform(iter, iter + num_rows, std::back_inserter(cols), [&](int i) {
     return static_cast<cudf::column_view>(struct_col);
   });

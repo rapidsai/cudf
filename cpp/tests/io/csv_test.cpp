@@ -175,8 +175,8 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
   cudf::size_type nrows = h_lhs.size();
   EXPECT_TRUE(nrows == static_cast<cudf::size_type>(h_rhs.size()));
 
-  auto begin_count = cuda::counting_iterator{cudf::size_type{0}};
-  auto end_count   = cuda::counting_iterator{cudf::size_type{nrows}};
+  auto begin_count = cuda::counting_iterator<cudf::size_type>{0};
+  auto end_count   = cuda::counting_iterator<cudf::size_type>{nrows};
 
   auto* ptr_lhs = h_lhs.data();  // cannot capture host_vector in thrust,
                                  // not even in host lambda
@@ -357,7 +357,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   thrust::copy_if(thrust::host,
                   reference_strings.begin(),
                   reference_strings.end(),
-                  cuda::counting_iterator{std::size_t{0}},
+                  cuda::counting_iterator<std::size_t>{0},
                   std::back_inserter(valid_reference_strings),
                   validity.functor());
   reference_strings = valid_reference_strings;
@@ -404,7 +404,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   thrust::copy_if(thrust::host,
                   reference_strings.begin(),
                   reference_strings.end(),
-                  cuda::counting_iterator{std::size_t{0}},
+                  cuda::counting_iterator<std::size_t>{0},
                   std::back_inserter(valid_reference_strings),
                   validity.functor());
   reference_strings = valid_reference_strings;

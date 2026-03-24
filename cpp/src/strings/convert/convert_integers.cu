@@ -244,8 +244,8 @@ struct dispatch_to_integers_fn {
     requires(cudf::is_integral_not_bool<IntegerType>())
   {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{strings_column.size()}},
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{strings_column.size()},
                       output_column.data<IntegerType>(),
                       string_to_integer_fn<IntegerType>{strings_column});
   }

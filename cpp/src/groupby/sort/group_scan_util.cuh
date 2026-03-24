@@ -197,7 +197,7 @@ struct group_scan_functor<K,
     thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                   group_labels.begin(),
                                   group_labels.end(),
-                                  cuda::counting_iterator{size_type{0}},
+                                  cuda::counting_iterator<size_type>{0},
                                   gather_map.begin(),
                                   cuda::std::equal_to{},
                                   binop_generator.binop());

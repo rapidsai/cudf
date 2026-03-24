@@ -93,8 +93,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                     group_offsets.data(),
                                     group_labels.data()};
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{values.size()}},
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{values.size()},
                       d_result.begin(),
                       fn);
   };

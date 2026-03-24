@@ -40,8 +40,8 @@ struct calendrical_month_sequence_functor {
       output_column_type, n, cudf::mask_state::UNALLOCATED, stream, mr);
 
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{n}},
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{n},
                       output->mutable_view().begin<T>(),
                       [initial = device_input, months] __device__(size_type i) {
                         return datetime::detail::add_calendrical_months_with_scale_back(

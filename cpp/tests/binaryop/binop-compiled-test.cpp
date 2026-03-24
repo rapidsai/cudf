@@ -543,7 +543,7 @@ auto NullOp_Result(cudf::column_view lhs, cudf::column_view rhs)
   auto [rhs_data, rhs_mask] = cudf::test::to_host<TypeRhs>(rhs);
   std::vector<TypeOut> result(lhs.size());
   std::vector<bool> result_mask;
-  std::transform(cuda::counting_iterator{cudf::size_type{0}},
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
                  cuda::counting_iterator{lhs.size()},
                  result.begin(),
                  [&lhs_data    = lhs_data,

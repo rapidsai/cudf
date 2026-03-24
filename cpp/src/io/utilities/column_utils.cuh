@@ -47,7 +47,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
                                                             stream);
   auto leaf_columns = cudf::device_span<column_device_view>{leaf_column_views};
 
-  auto iter = cuda::counting_iterator{size_type{0}};
+  auto iter = cuda::counting_iterator<size_type>{0};
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
     iter,

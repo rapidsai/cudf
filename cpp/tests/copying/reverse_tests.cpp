@@ -31,7 +31,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
-    cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{int32_t{0}} + num_values);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + num_values);
 
   auto expected_elements = cudf::detail::make_counting_transform_iterator(
     0, [num_values] __device__(auto i) { return num_values - i - 1; });
@@ -53,7 +53,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
-    cuda::counting_iterator{int32_t{0}}, cuda::counting_iterator{int32_t{0}} + num_values);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + num_values);
 
   auto expected_elements = cudf::detail::make_counting_transform_iterator(
     0, [num_values] __device__(auto i) { return num_values - i - 1; });
@@ -104,11 +104,11 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
 TYPED_TEST(ReverseTypedTestFixture, ZeroSizeInput)
 {
   using T = TypeParam;
-  cudf::test::fixed_width_column_wrapper<T, int32_t> input(cuda::counting_iterator{int32_t{0}},
-                                                           cuda::counting_iterator{int32_t{0}});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> input(cuda::counting_iterator<int32_t>{0},
+                                                           cuda::counting_iterator<int32_t>{0});
 
-  cudf::test::fixed_width_column_wrapper<T, int32_t> expected(cuda::counting_iterator{int32_t{0}},
-                                                              cuda::counting_iterator{int32_t{0}});
+  cudf::test::fixed_width_column_wrapper<T, int32_t> expected(cuda::counting_iterator<int32_t>{0},
+                                                              cuda::counting_iterator<int32_t>{0});
 
   cudf::table_view input_table{{input}};
   auto p_ret = cudf::reverse(input_table);
@@ -157,7 +157,7 @@ TEST_F(ReverseStringTestFixture, ZeroSizeInput)
   auto input = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
 
   auto count = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    cuda::counting_iterator{cudf::size_type{0}}, cuda::counting_iterator{cudf::size_type{0}});
+    cuda::counting_iterator<cudf::size_type>{0}, cuda::counting_iterator<cudf::size_type>{0});
 
   auto expected = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
 

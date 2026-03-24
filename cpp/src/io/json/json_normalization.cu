@@ -355,12 +355,12 @@ std::
                          0);
 
   auto input_it = thrust::make_transform_iterator(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<char const*>(
       [d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(
         std::size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
   auto output_it = thrust::make_transform_iterator(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<char*>(
       [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.cbegin()] __device__(
         std::size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));

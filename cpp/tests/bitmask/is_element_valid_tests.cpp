@@ -28,7 +28,7 @@ TEST_F(IsElementValidTest, IsElementValidBasic)
 TEST_F(IsElementValidTest, IsElementValidLarge)
 {
   auto filter              = [](auto i) { return static_cast<bool>(i % 3); };
-  auto val                 = cuda::counting_iterator{int32_t{0}};
+  auto val                 = cuda::counting_iterator<int32_t>{0};
   auto valid               = cudf::detail::make_counting_transform_iterator(0, filter);
   cudf::size_type num_rows = 1000;
 
@@ -62,7 +62,7 @@ TEST_F(IsElementValidTest, IsElementValidOffsetLarge)
 {
   auto filter              = [](auto i) { return static_cast<bool>(i % 3); };
   cudf::size_type offset   = 37;
-  auto val                 = cuda::counting_iterator{int32_t{0}};
+  auto val                 = cuda::counting_iterator<int32_t>{0};
   auto valid               = cudf::detail::make_counting_transform_iterator(0, filter);
   cudf::size_type num_rows = 1000;
 

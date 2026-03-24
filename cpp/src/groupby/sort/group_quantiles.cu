@@ -58,7 +58,7 @@ struct calculate_quantile_fn {
 
     size_type offset = i * num_quantiles;
     thrust::for_each_n(thrust::seq,
-                       cuda::counting_iterator{cudf::size_type{0}},
+                       cuda::counting_iterator<cudf::size_type>{0},
                        num_quantiles,
                        [d_result = d_result, segment_size, offset, this](size_type j) {
                          if (segment_size == 0) {
@@ -104,7 +104,7 @@ struct quantiles_functor {
     if (!cudf::is_dictionary(values.type())) {
       auto values_iter = values_view->begin<T>();
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         cuda::counting_iterator{cudf::size_type{0}},
+                         cuda::counting_iterator<cudf::size_type>{0},
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
                            values_iter,
@@ -118,7 +118,7 @@ struct quantiles_functor {
     } else {
       auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_view);
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         cuda::counting_iterator{cudf::size_type{0}},
+                         cuda::counting_iterator<cudf::size_type>{0},
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
                            values_iter,

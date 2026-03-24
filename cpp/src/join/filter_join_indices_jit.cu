@@ -194,7 +194,7 @@ apply_join_semantics(cudf::table_view const& left,
     auto valid_predicate = [=] __device__(size_type i) -> bool { return predicate_results_ptr[i]; };
 
     auto const num_valid =
-      cudf::detail::count_if(cuda::counting_iterator{size_type{0}},
+      cudf::detail::count_if(cuda::counting_iterator<size_type>{0},
                              cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                              valid_predicate,
                              stream);
@@ -244,14 +244,14 @@ apply_join_semantics(cudf::table_view const& left,
     auto const num_filter_passing =
       filter_passing_indices.insert_if(left_ptr,
                                        left_ptr + left_indices.size(),
-                                       cuda::counting_iterator{std::size_t{0}},
+                                       cuda::counting_iterator<std::size_t>{0},
                                        predicate_func,
                                        stream.value());
 
     auto const num_invalid = left.num_rows() - num_filter_passing;
 
     auto const num_valid = cudf::detail::count_if(
-      cuda::counting_iterator{size_type{0}},
+      cuda::counting_iterator<size_type>{0},
       cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
       [predicate_results_ptr] __device__(size_type i) -> bool { return predicate_results_ptr[i]; },
       stream);
@@ -270,7 +270,7 @@ apply_join_semantics(cudf::table_view const& left,
 
       cudf::detail::copy_if(input_iter,
                             input_iter + left_indices.size(),
-                            cuda::counting_iterator{std::size_t{0}},
+                            cuda::counting_iterator<std::size_t>{0},
                             output_iter,
                             valid_predicate,
                             stream);
@@ -281,7 +281,7 @@ apply_join_semantics(cudf::table_view const& left,
         auto is_unmatched = !filter_passing_indices_ref.contains(idx);
         return is_unmatched;
       };
-      cudf::detail::copy_if(cuda::counting_iterator{std::size_t{0}},
+      cudf::detail::copy_if(cuda::counting_iterator<std::size_t>{0},
                             cuda::counting_iterator{static_cast<std::size_t>(left.num_rows())},
                             filtered_left_indices->begin() + num_valid,
                             is_unmatched_idx,
@@ -300,7 +300,7 @@ apply_join_semantics(cudf::table_view const& left,
     };
 
     auto const failed_matched_count =
-      cudf::detail::count_if(cuda::counting_iterator{cudf::size_type{0}},
+      cudf::detail::count_if(cuda::counting_iterator<cudf::size_type>{0},
                              cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                              is_failed_matched_pair,
                              stream);
@@ -311,7 +311,7 @@ apply_join_semantics(cudf::table_view const& left,
     auto [filtered_left_indices, filtered_right_indices] = make_result_vectors(output_size);
 
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{cudf::size_type{0}},
+                      cuda::counting_iterator<cudf::size_type>{0},
                       cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                       thrust::make_zip_iterator(cuda::std::tuple{filtered_left_indices->begin(),
                                                                  filtered_right_indices->begin()}),
@@ -335,7 +335,7 @@ apply_join_semantics(cudf::table_view const& left,
         });
       cudf::detail::copy_if(failed_match_iter,
                             failed_match_iter + left_indices.size(),
-                            cuda::counting_iterator{cudf::size_type{0}},
+                            cuda::counting_iterator<cudf::size_type>{0},
                             secondary_iter,
                             is_failed_matched_pair,
                             stream);

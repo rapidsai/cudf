@@ -170,7 +170,7 @@ struct group_reduction_functor<
     auto const result_begin = result->mutable_view().template begin<ResultDType>();
 
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
-      auto const count_iter = cuda::counting_iterator{ResultType{0}};
+      auto const count_iter = cuda::counting_iterator<ResultType>{0};
       auto const binop      = cudf::detail::element_argminmax_fn<T>{
         *d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
       do_reduction(count_iter, result_begin, binop);
@@ -229,7 +229,7 @@ struct group_reduction_functor<
                             binop);
     };
 
-    auto const count_iter   = cuda::counting_iterator{ResultType{0}};
+    auto const count_iter   = cuda::counting_iterator<ResultType>{0};
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     auto const binop_generator =
       cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);

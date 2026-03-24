@@ -505,7 +505,7 @@ struct ListGetStructValueTest : public cudf::test::BaseFixture {
     auto d_null_mask           = cudf::create_null_mask(
       num_lists, null_count == 0 ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL);
     if (null_count > 0) {
-      std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
                     cuda::counting_iterator{num_lists},
                     [&](auto i) {
                       if (*(null_mask.begin() + i)) {

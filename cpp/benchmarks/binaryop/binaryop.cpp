@@ -73,7 +73,7 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
   // Create table data
   auto const num_cols = tree_levels * 2;
   std::vector<std::unique_ptr<cudf::column>> columns;
-  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+  std::for_each(cuda::counting_iterator<cudf::size_type>{0},
                 cuda::counting_iterator{num_cols},
                 [&](cudf::size_type) {
                   columns.emplace_back(create_string_column(num_rows, string_width, hit_rate));
@@ -102,7 +102,7 @@ static void BM_string_compare_binaryop_transform(nvbench::state& state)
     std::unique_ptr<cudf::column> reduction =
       cudf::binary_operation(table.get_column(0), table.get_column(1), cmp_op, bool_type, stream);
     std::for_each(
-      cuda::counting_iterator{cudf::size_type{1}},
+      cuda::counting_iterator<cudf::size_type>{1},
       cuda::counting_iterator{tree_levels},
       [&](std::size_t idx) {
         std::unique_ptr<cudf::column> comparison = cudf::binary_operation(

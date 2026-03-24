@@ -125,7 +125,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   if (requests.empty()) {
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
-      cuda::counting_iterator{cudf::size_type{0}},
+      cuda::counting_iterator<cudf::size_type>{0},
       num_keys,
       [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {
         if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) { set_ref.insert(idx); }

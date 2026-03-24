@@ -132,7 +132,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   }
 
   // Perform the reduction using thrust::transform_reduce
-  auto counting_iter = cuda::counting_iterator{cudf::size_type{0}};
+  auto counting_iter = cuda::counting_iterator<cudf::size_type>{0};
   auto dcol_ptr      = dcol.get();
   sum_overflow_result result;
 

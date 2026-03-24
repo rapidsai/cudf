@@ -325,7 +325,7 @@ class key_remap_table : public key_remap_table_interface {
       auto set_ref = _hash_table.ref(cuco::op::insert);
       thrust::for_each_n(
         rmm::exec_policy_nosync(stream),
-        cuda::counting_iterator{cudf::size_type{0}},
+        cuda::counting_iterator<cudf::size_type>{0},
         build_num_rows,
         insert_only_fn<decltype(set_ref), decltype(key_iter)>{set_ref, key_iter, bitmask_ptr});
     }

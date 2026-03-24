@@ -74,7 +74,7 @@ void inline hybrid_scan_multifile(cudf::size_type num_threads, Functor const& hy
   threads.reserve(num_threads);
 
   // Create and launch threads
-  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+  std::for_each(cuda::counting_iterator<cudf::size_type>{0},
                 cuda::counting_iterator{num_threads},
                 [&](auto tid) { threads.emplace_back(hybrid_scan_fn, tid); });
 

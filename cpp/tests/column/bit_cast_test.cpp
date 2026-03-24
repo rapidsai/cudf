@@ -98,8 +98,8 @@ void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator 
 
 TYPED_TEST(ColumnViewAllTypesTests, BitCast)
 {
-  auto begin = cuda::counting_iterator{cudf::size_type{1}};
-  auto end   = cuda::counting_iterator{cudf::size_type{16}};
+  auto begin = cuda::counting_iterator<cudf::size_type>{1};
+  auto end   = cuda::counting_iterator<cudf::size_type>{16};
 
   cudf::test::fixed_width_column_wrapper<TypeParam, cudf::size_type> input(begin, end);
 

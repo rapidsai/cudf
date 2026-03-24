@@ -2210,7 +2210,7 @@ TEST_F(OrcChunkedWriterTest, FailedWriteCloseNotThrow)
     size_t bytes_written() override { return 0; }
   };
 
-  auto sequence = cuda::counting_iterator{int32_t{0}};
+  auto sequence = cuda::counting_iterator<int32_t>{0};
   column_wrapper<int8_t, int32_t> col(sequence, sequence + 10);
   table_view table({col});
 

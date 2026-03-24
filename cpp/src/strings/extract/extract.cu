@@ -107,8 +107,8 @@ std::unique_ptr<table> extract(strings_column_view const& input,
     return make_strings_column(indices_itr, indices_itr + input.size(), stream, mr);
   };
 
-  std::transform(cuda::counting_iterator{size_type{0}},
-                 cuda::counting_iterator{size_type{groups}},
+  std::transform(cuda::counting_iterator<size_type>{0},
+                 cuda::counting_iterator<size_type>{groups},
                  results.begin(),
                  make_strings_lambda);
 

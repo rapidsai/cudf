@@ -204,8 +204,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> distinct_filtered_join::qu
   }
   rmm::device_uvector<size_type> gather_map(probe.num_rows(), stream, mr);
   auto gather_map_end = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                        cuda::counting_iterator{size_type{0}},
-                                        cuda::counting_iterator{size_type{probe.num_rows()}},
+                                        cuda::counting_iterator<size_type>{0},
+                                        cuda::counting_iterator<size_type>{probe.num_rows()},
                                         gather_map.begin(),
                                         gather_mask{kind, contains_map});
   gather_map.resize(cuda::std::distance(gather_map.begin(), gather_map_end), stream);

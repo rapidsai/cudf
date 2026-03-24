@@ -720,7 +720,7 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
     // the input sources. This avoids recomputing this within build_column() and
     // populate_metadata().
     std::for_each(
-      cuda::counting_iterator{std::size_t{1}},
+      cuda::counting_iterator<std::size_t>{1},
       cuda::counting_iterator{schema.size()},
       [&](auto const schema_idx) {
         if (schema[schema_idx].repetition_type == FieldRepetitionType::REQUIRED and
@@ -809,7 +809,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       if (field_children != nullptr) {
         auto schema_children = std::vector<arrow_schema_data_types>(field->children()->size());
 
-        if (not std::all_of(cuda::counting_iterator{int32_t{0}},
+        if (not std::all_of(cuda::counting_iterator<int32_t>{0},
                             cuda::counting_iterator{static_cast<int32_t>(field_children->size())},
                             [&](auto const& idx) {
                               return walk_field((*field_children)[idx], schema_children[idx]);
@@ -897,7 +897,7 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
     schema.children = std::vector<arrow_schema_data_types>(fields->size());
 
     if (not std::all_of(
-          cuda::counting_iterator{int32_t{0}},
+          cuda::counting_iterator<int32_t>{0},
           cuda::counting_iterator{static_cast<int32_t>(fields->size())},
           [&](auto const& idx) { return walk_field((*fields)[idx], schema.children[idx]); })) {
       return {};
@@ -1130,12 +1130,12 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
       auto total_uncompressed_sizes = std::vector<int64_t>{};
       total_uncompressed_sizes.reserve(num_row_groups);
       // For each input source
-      std::for_each(cuda::counting_iterator{std::size_t{0}},
+      std::for_each(cuda::counting_iterator<std::size_t>{0},
                     cuda::counting_iterator{per_file_metadata.size()},
                     [&](auto const& src_idx) {
                       auto const& file_metadata = per_file_metadata[src_idx];
                       // For each row group in this source
-                      std::transform(cuda::counting_iterator{std::size_t{0}},
+                      std::transform(cuda::counting_iterator<std::size_t>{0},
                                      cuda::counting_iterator{file_metadata.row_groups.size()},
                                      std::back_inserter(total_uncompressed_sizes),
                                      [&](auto const& row_group_idx) {
@@ -1274,7 +1274,7 @@ aggregate_reader_metadata::apply_row_bounds_filter(
 
   // For each data source
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{num_sources},
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
@@ -1563,7 +1563,7 @@ aggregate_reader_metadata::select_row_groups(
 
   // For each data source
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{current_row_group_indices.size()},
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
@@ -1810,7 +1810,7 @@ aggregate_reader_metadata::select_columns(
                      "column in the selected path",
                      std::out_of_range);
 
-        std::for_each(cuda::counting_iterator{int32_t{0}},
+        std::for_each(cuda::counting_iterator<int32_t>{0},
                       cuda::counting_iterator{src_schema_elem.num_children},
                       [&](auto const child_idx) {
                         map_column(nullptr,
@@ -1986,7 +1986,7 @@ aggregate_reader_metadata::select_columns(
 
         // Map the column's schema_idx across the rest of the data sources if required.
         if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
-          std::for_each(cuda::counting_iterator{std::size_t{1}},
+          std::for_each(cuda::counting_iterator<std::size_t>{1},
                         cuda::counting_iterator{per_file_metadata.size()},
                         [&](auto const pfm_idx) {
                           auto const& dst_root = get_schema(0, pfm_idx);

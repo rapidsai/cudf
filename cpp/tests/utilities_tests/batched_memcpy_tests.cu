@@ -97,7 +97,7 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto d_dst_data = cudf::detail::make_zeroed_device_uvector_async<T1>(total_buff_len, stream, mr);
   // Pointers to destination buffers within the giant destination buffer
   std::vector<T1*> h_dst_ptrs(num_buffs);
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
                 cuda::counting_iterator{num_buffs},
                 [&](auto i) { return h_dst_ptrs[i] = d_dst_data.data() + h_lens_excl_sum[i]; });
   // Copy destination data pointers to device

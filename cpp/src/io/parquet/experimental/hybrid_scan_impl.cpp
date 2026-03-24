@@ -429,7 +429,7 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   auto column_chunk_byte_ranges = std::vector<byte_range_info>{};
   column_chunk_byte_ranges.reserve(num_chunks);
 
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
                 cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const source_idx) {
                   auto const& row_groups = row_group_indices[source_idx];
@@ -1047,7 +1047,7 @@ void hybrid_scan_reader_impl::set_pass_page_mask(cudf::host_span<bool const> dat
 
   std::size_t num_inserted_data_pages = 0;
   std::for_each(
-    cuda::counting_iterator{std::size_t{0}},
+    cuda::counting_iterator<std::size_t>{0},
     cuda::counting_iterator{_input_columns.size()},
     [&](auto col_idx) {
       for (std::size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {

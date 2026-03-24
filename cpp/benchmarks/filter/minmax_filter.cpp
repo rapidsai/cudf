@@ -70,7 +70,7 @@ void BM_filter_min_max(nvbench::state& state)
   profile.set_null_probability(nullable ? std::optional{0.3} : std::nullopt);
 
   std::vector<std::unique_ptr<cudf::column>> filter_columns;
-  std::transform(cuda::counting_iterator{int64_t{0}},
+  std::transform(cuda::counting_iterator<int64_t>{0},
                  cuda::counting_iterator{num_filter_columns},
                  std::back_inserter(filter_columns),
                  [&](auto) {

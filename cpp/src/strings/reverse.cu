@@ -62,7 +62,7 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
 
   auto const d_column = column_device_view::create(input.parent(), stream);
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     cuda::counting_iterator{size_type{0}},
+                     cuda::counting_iterator<size_type>{0},
                      input.size(),
                      reverse_characters_fn{*d_column, d_offsets, d_chars});
 

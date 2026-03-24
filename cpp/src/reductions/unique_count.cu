@@ -34,8 +34,8 @@ cudf::size_type unique_count(table_view const& keys,
     // runtime performance over using the comparator directly in thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(keys.num_rows(), stream);
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{size_type{0}},
-                      cuda::counting_iterator{size_type{keys.num_rows()}},
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{keys.num_rows()},
                       d_results.begin(),
                       [comp] __device__(auto i) { return (i == 0 or not comp(i, i - 1)); });
 
@@ -48,8 +48,8 @@ cudf::size_type unique_count(table_view const& keys,
     // improves runtime by up to 2x over the transform/count approach above.
     return thrust::count_if(
       rmm::exec_policy_nosync(stream),
-      cuda::counting_iterator{cudf::size_type{0}},
-      cuda::counting_iterator{cudf::size_type{keys.num_rows()}},
+      cuda::counting_iterator<cudf::size_type>{0},
+      cuda::counting_iterator<cudf::size_type>{keys.num_rows()},
       [comp] __device__(cudf::size_type i) { return (i == 0 or not comp(i, i - 1)); });
   }
 }

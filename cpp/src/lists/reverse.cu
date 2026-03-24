@@ -44,7 +44,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
   // Build a segmented reversed order for the child column.
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     cuda::counting_iterator{size_type{0}},
+                     cuda::counting_iterator<size_type>{0},
                      child.size(),
                      [list_offsets = out_offsets->view().begin<size_type>(),
                       list_indices = labels->view().begin<size_type>(),

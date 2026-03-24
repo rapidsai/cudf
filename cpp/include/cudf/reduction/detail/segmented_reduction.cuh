@@ -171,8 +171,8 @@ void segmented_reduce(InputIterator d_in,
   // compute the result value from intermediate value in device
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{size_type{num_segments}},
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{num_segments},
     d_out,
     [ir = intermediate_result.data(), op, d_valid_counts, ddof] __device__(auto idx) {
       auto const count = d_valid_counts[idx];

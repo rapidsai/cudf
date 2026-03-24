@@ -84,7 +84,7 @@ struct set_keys_dispatch_fn {
     auto const d_new_keys = column_device_view::create(new_keys, stream);
     auto const keys_itr =
       thrust::make_permutation_iterator(d_new_keys->begin<T>(), d_sorted_indices);
-    auto const iota = cuda::counting_iterator{cudf::size_type{0}};
+    auto const iota = cuda::counting_iterator<cudf::size_type>{0};
 
     // create a map from the old key indices to the new ones
     auto indices_map = rmm::device_uvector<size_type>(old_keys.size(), stream);

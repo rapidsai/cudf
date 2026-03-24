@@ -446,7 +446,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLargeArray)
   auto src_begin = cudf::detail::make_counting_transform_iterator(
     0, [](cudf::size_type i) { return static_cast<TypeParam>(i); });
   auto src_end         = src_begin + sz;
-  auto nulls_idx_begin = cuda::counting_iterator{cudf::size_type{1}};
+  auto nulls_idx_begin = cuda::counting_iterator<cudf::size_type>{1};
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 0, 0, 0, ...
@@ -468,7 +468,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
   auto src_begin = cudf::detail::make_counting_transform_iterator(
     0, [](cudf::size_type i) { return static_cast<TypeParam>(i); });
   auto src_end         = src_begin + sz;
-  auto nulls_idx_begin = cuda::counting_iterator{cudf::size_type{0}};
+  auto nulls_idx_begin = cuda::counting_iterator<cudf::size_type>{0};
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 999, 999, 999, ...

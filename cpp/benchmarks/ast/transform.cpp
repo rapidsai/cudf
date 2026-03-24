@@ -70,7 +70,7 @@ static void BM_ast_transform(nvbench::state& state)
 
   // Create column references
   std::for_each(
-    cuda::counting_iterator{cudf::size_type{0}},
+    cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{num_columns},
     [&](int column_id) { tree.push(cudf::ast::column_reference(reuse_columns ? 0 : column_id)); });
 
@@ -86,7 +86,7 @@ static void BM_ast_transform(nvbench::state& state)
   } else {
     tree.push(cudf::ast::operation(op, tree.at(0), tree.at(1)));
     std::for_each(
-      cuda::counting_iterator{cudf::size_type{2}},
+      cuda::counting_iterator<cudf::size_type>{2},
       cuda::counting_iterator{num_columns},
       [&](int col_id) { tree.push(cudf::ast::operation(op, tree.back(), tree.at(col_id))); });
   }
@@ -126,7 +126,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   // Create table data
   auto const num_columns = tree_levels * 2;
   std::vector<std::unique_ptr<cudf::column>> columns;
-  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+  std::for_each(cuda::counting_iterator<cudf::size_type>{0},
                 cuda::counting_iterator{num_columns},
                 [&](cudf::size_type) {
                   columns.emplace_back(create_string_column(num_rows, string_width, hit_rate));
@@ -147,7 +147,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   cudf::ast::tree tree;
 
   // Create column references
-  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
+  std::for_each(cuda::counting_iterator<cudf::size_type>{0},
                 cuda::counting_iterator{num_columns},
                 [&](int column_id) { tree.push(cudf::ast::column_reference{column_id}); });
 
@@ -155,7 +155,7 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
 
   tree.push(cudf::ast::operation(cmp_op, tree[0], tree[1]));
 
-  std::for_each(cuda::counting_iterator{cudf::size_type{1}},
+  std::for_each(cuda::counting_iterator<cudf::size_type>{1},
                 cuda::counting_iterator{tree_levels},
                 [&](std::size_t idx) {
                   auto const& lhs = tree.back();

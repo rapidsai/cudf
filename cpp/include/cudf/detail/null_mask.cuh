@@ -665,10 +665,10 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
 
   // Compute the bit counts over each segment.
   auto first_bit_indices_begin = thrust::make_transform_iterator(
-    cuda::counting_iterator{cudf::size_type{0}}, index_alternator{false, d_indices.data()});
+    cuda::counting_iterator<cudf::size_type>{0}, index_alternator{false, d_indices.data()});
   auto const first_bit_indices_end = first_bit_indices_begin + num_segments;
   auto last_bit_indices_begin      = thrust::make_transform_iterator(
-    cuda::counting_iterator{cudf::size_type{0}}, index_alternator{true, d_indices.data()});
+    cuda::counting_iterator<cudf::size_type>{0}, index_alternator{true, d_indices.data()});
   rmm::device_uvector<size_type> d_bit_counts =
     cudf::detail::segmented_count_bits(bitmask,
                                        first_bit_indices_begin,

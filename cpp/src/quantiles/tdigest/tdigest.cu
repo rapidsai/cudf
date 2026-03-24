@@ -214,8 +214,8 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   auto [null_mask, null_count] = [&]() {
     return percentiles.null_count() != 0
              ? cudf::detail::valid_if(
-                 cuda::counting_iterator{size_type{0}},
-                 cuda::counting_iterator{size_type{0}} + num_output_values,
+                 cuda::counting_iterator<size_type>{0},
+                 cuda::counting_iterator<size_type>{0} + num_output_values,
                  [percentiles = *percentiles_cdv] __device__(size_type i) {
                    return percentiles.is_valid(i % percentiles.size());
                  },

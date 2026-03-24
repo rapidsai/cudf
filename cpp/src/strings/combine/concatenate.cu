@@ -138,8 +138,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   // create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{size_type{strings_count}},
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings_count},
     [d_table = *d_table, d_narep] __device__(size_type idx) {
       if (d_narep.is_valid()) return true;
       return !thrust::any_of(
@@ -230,8 +230,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    cuda::counting_iterator{size_type{0}},
-    cuda::counting_iterator{size_type{strings_count}},
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings_count},
     [d_table = *d_table, separator_col_view, separator_rep, col_rep] __device__(size_type idx) {
       if (!separator_col_view.is_valid(idx) && !separator_rep.is_valid()) return false;
       if (col_rep.is_valid()) return true;

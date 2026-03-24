@@ -48,7 +48,7 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
   auto d_indices = indices.data();
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    cuda::counting_iterator{int64_t{0}},
+    cuda::counting_iterator<int64_t>{0},
     positions.size(),
     [d_indices, d_counts] __device__(int64_t idx) {
       auto const str_idx = d_indices[idx] - 1;

@@ -65,14 +65,14 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
   auto const comparator = cudf::detail::row::equality::self_comparator{t_input, stream};
 
   auto const sorted_index_order = thrust::make_permutation_iterator(
-    sorted_order_view.begin<size_type>(), cuda::counting_iterator{size_type{0}});
+    sorted_order_view.begin<size_type>(), cuda::counting_iterator<size_type>{0});
 
   auto const input_size = input_col.size();
   rmm::device_uvector<size_type> dense_rank_sorted(input_size, stream);
 
   auto const comparator_helper = [&](auto const device_comparator) {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator{cudf::size_type{0}},
+                      cuda::counting_iterator<cudf::size_type>{0},
                       cuda::counting_iterator{input_size},
                       dense_rank_sorted.data(),
                       unique_functor<decltype(sorted_index_order), decltype(device_comparator)>{
@@ -157,8 +157,8 @@ void rank_first(column_view sorted_order_view,
 {
   // stable sort order ranking (no ties)
   thrust::scatter(rmm::exec_policy_nosync(stream),
-                  cuda::counting_iterator{size_type{1}},
-                  cuda::counting_iterator{size_type{rank_mutable_view.size() + 1}},
+                  cuda::counting_iterator<size_type>{1},
+                  cuda::counting_iterator<size_type>{rank_mutable_view.size() + 1},
                   sorted_order_view.begin<size_type>(),
                   rank_mutable_view.begin<outputType>());
 }
@@ -187,7 +187,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
   // All equal values have min of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, min), scatter
   tie_break_ranks_transform<size_type>(group_keys,
-                                       cuda::counting_iterator{size_type{1}},
+                                       cuda::counting_iterator<size_type>{1},
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
                                        cuda::minimum{},
@@ -205,7 +205,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
   // All equal values have max of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, max), scatter
   tie_break_ranks_transform<size_type>(group_keys,
-                                       cuda::counting_iterator{size_type{1}},
+                                       cuda::counting_iterator<size_type>{1},
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
                                        cuda::maximum{},

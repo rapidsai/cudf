@@ -74,7 +74,7 @@ OutputIterator unique_copy(InputIterator first,
   return cudf::detail::copy_if(
     first,
     last,
-    cuda::counting_iterator{size_type{0}},
+    cuda::counting_iterator<size_type>{0},
     output,
     unique_copy_fn<InputIterator, BinaryPredicate>{first, keep, comp, last_index},
     stream);

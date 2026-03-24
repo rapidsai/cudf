@@ -75,7 +75,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
   if (is_input_sorted == sorted::YES) {
-    return detail::quantiles(input, cuda::counting_iterator{size_type{0}}, q, interp, stream, mr);
+    return detail::quantiles(input, cuda::counting_iterator<size_type>{0}, q, interp, stream, mr);
   } else {
     auto sorted_idx = detail::sorted_order(
       input, column_order, null_precedence, stream, cudf::get_current_device_resource_ref());

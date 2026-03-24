@@ -178,7 +178,7 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      std::transform(cuda::counting_iterator{size_type{0}},
+      std::transform(cuda::counting_iterator<size_type>{0},
                      cuda::counting_iterator{col.size()},
                      out.begin(),
                      [&h_data](auto idx) {
@@ -227,7 +227,7 @@ struct column_view_printer {
   {
     auto const h_data = cudf::test::to_host<Element>(col);
     if (col.nullable()) {
-      std::transform(cuda::counting_iterator{size_type{0}},
+      std::transform(cuda::counting_iterator<size_type>{0},
                      cuda::counting_iterator{col.size()},
                      std::back_inserter(out),
                      [&h_data](auto idx) {
@@ -272,7 +272,7 @@ struct column_view_printer {
     };
 
     out.resize(col.size());
-    std::transform(cuda::counting_iterator{size_type{0}},
+    std::transform(cuda::counting_iterator<size_type>{0},
                    cuda::counting_iterator{col.size()},
                    out.begin(),
                    [&](auto idx) {
@@ -313,7 +313,7 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      std::transform(cuda::counting_iterator{size_type{0}},
+      std::transform(cuda::counting_iterator<size_type>{0},
                      cuda::counting_iterator{col.size()},
                      out.begin(),
                      [&h_data](auto idx) {
@@ -377,7 +377,7 @@ struct column_view_printer {
                  << detail::to_string(cudf::test::bitmask_to_host(col), col.size(), indent) << "\n";
     }
 
-    auto iter = cuda::counting_iterator{cudf::size_type{0}};
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::transform(
       iter,
       iter + view.num_children(),

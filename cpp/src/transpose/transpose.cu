@@ -39,7 +39,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
     "Column type mismatch");
 
   auto output_column = cudf::detail::interleave_columns(input, stream, mr);
-  auto one_iter      = cuda::counting_iterator{size_type{1}};
+  auto one_iter      = cuda::counting_iterator<size_type>{1};
   auto splits_iter   = thrust::make_transform_iterator(
     one_iter, [width = input.num_columns()](size_type idx) { return idx * width; });
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);

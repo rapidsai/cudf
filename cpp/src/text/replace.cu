@@ -293,7 +293,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
   auto tmp_offsets = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
-    auto const count_itr = cuda::counting_iterator{int64_t{0}};
+    auto const count_itr = cuda::counting_iterator<int64_t>{0};
     thrust::transform(rmm::exec_policy_nosync(stream),
                       count_itr,
                       count_itr + sub_count,
