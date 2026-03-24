@@ -278,60 +278,6 @@ def build_average_sales(  # noqa: D103
     )
 
 
-def build_channel_result(  # noqa: D103
-    sales: pl.LazyFrame,
-    item: pl.LazyFrame,
-    date_dim: pl.LazyFrame,
-    cross_items: pl.LazyFrame,
-    *,
-    item_key: str,
-    date_key: str,
-    qty_col: str,
-    price_col: str,
-    channel_label: str,
-    year: int,
-    moy: int,
-    dom: int,
-    average_sales_threshold: float,
-) -> pl.LazyFrame:
-    # DuckDB uses d_week_seq to filter, which includes all days in the target week.
-    # Find the d_week_seq for the specific date, then join on that week.
-    target_week = (
-        date_dim.filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == moy)
-            & (pl.col("d_dom") == dom)
-        )
-        .select("d_week_seq")
-        .unique()
-    )
-    week_dates = date_dim.join(target_week, on="d_week_seq").select("d_date_sk")
-    return (
-        sales.join(cross_items, left_on=item_key, right_on="ss_item_sk")
-        .join(item, left_on=item_key, right_on="i_item_sk")
-        .join(week_dates, left_on=date_key, right_on="d_date_sk")
-        .group_by(["i_brand_id", "i_class_id", "i_category_id"])
-        .agg(
-            [
-                (pl.col(qty_col) * pl.col(price_col)).sum().alias("sales"),
-                pl.len().alias("number_sales"),
-            ]
-        )
-        .filter(pl.col("sales") > average_sales_threshold)
-        .with_columns(pl.lit(channel_label).alias("channel"))
-        .select(
-            [
-                "channel",
-                "i_brand_id",
-                "i_class_id",
-                "i_category_id",
-                "sales",
-                "number_sales",
-            ]
-        )
-    )
-
-
 def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:  # noqa: D103
     if group_cols:
         lf = y.group_by(group_cols).agg(
@@ -389,11 +335,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    # Polars does not CSE cross_items or average_sales across 3 separate channel
-    # build_channel_result calls — each branch re-scans the source tables.  Fix:
-    # union all 3 channels to a common schema first so that cross_items and
-    # average_sales each appear exactly ONCE in the query plan.  Polars CACHE nodes
-    # then work correctly in both single-GPU and distributed (per-worker) modes.
     all_sales = pl.concat(
         [
             store_sales.select(
