@@ -64,6 +64,8 @@ Notes:
 
 ## Running Java tests
 
+**Always run `mvn install -DskipTests` first** (see Building section above) before running tests. The `mvn test` goal re-triggers the cmake/native build step. If `target/cmake-build` already contains fully built artifacts from a prior `mvn install`, this is an incremental no-op. But if the cmake-build directory was cleaned or is missing, `mvn test` may hit a race condition where the linker tries to link `libcudfjni.so` before `libarrow.a` is fully built, causing a `cannot find libarrow.a` error. If this happens, re-run `mvn install -DskipTests` to rebuild the native code cleanly, then retry `mvn test`.
+
 ### All tests
 
 ```bash
