@@ -130,7 +130,16 @@ def find_sort_splits(
         .otherwise(pl.col("first") if chunk_relative else pl.col("local_row"))
     )
     cap = tbl.num_rows()
-    return df.select(out.clip(0, cap).sort()).to_series().to_list()
+    result = df.select(out.clip(0, cap).sort()).to_series().to_list()
+    import sys
+
+    print(
+        f"[find_sort_splits] my_part_id={my_part_id} cap={cap} "
+        f"df={df.to_dict(as_series=False)} result={result}",
+        flush=True,
+        file=sys.stderr,
+    )
+    return result
 
 
 def _select_local_split_candidates(

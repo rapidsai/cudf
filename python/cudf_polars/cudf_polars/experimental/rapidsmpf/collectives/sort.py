@@ -320,7 +320,7 @@ async def _extract_partitions_and_send(
                 flush=True,
                 file=sys.stderr,
             )
-        except Exception as e:
+        except BaseException as e:
             print(
                 f"[sort_actor extract] partition_id={partition_id} pre_sort=<error: {e}>",
                 flush=True,
@@ -344,7 +344,7 @@ async def _extract_partitions_and_send(
                 flush=True,
                 file=sys.stderr,
             )
-        except Exception as e:
+        except BaseException as e:
             print(
                 f"[sort_actor extract] partition_id={partition_id} post_sort=<error: {e}>",
                 flush=True,
