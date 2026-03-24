@@ -34,6 +34,7 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/iterator>
+#include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 
 #include <nanoarrow/nanoarrow.h>
