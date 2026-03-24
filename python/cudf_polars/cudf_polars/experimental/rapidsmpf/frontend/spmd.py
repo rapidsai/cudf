@@ -208,7 +208,7 @@ def allgather_polars_dataframe(
     allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
 
-    # Deserialize and concatenate all ranks' contributions
+    # Deserialize and concatenate each rank's contribution
     plc_result = unpack_and_concat(results, stream, ctx.br())
 
     # pylibcudf Table -> pl.DataFrame (restore column names)
