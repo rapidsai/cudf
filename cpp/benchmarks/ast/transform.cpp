@@ -126,9 +126,9 @@ static void BM_string_compare_ast_transform(nvbench::state& state)
   // Create table data
   auto const num_columns = tree_levels * 2;
   std::vector<std::unique_ptr<cudf::column>> columns;
-  std::for_each(cuda::counting_iterator{std::size_t{0}},
+  std::for_each(cuda::counting_iterator{cudf::size_type{0}},
                 cuda::counting_iterator{num_columns},
-                [&](std::size_t) {
+                [&](cudf::size_type) {
                   columns.emplace_back(create_string_column(num_rows, string_width, hit_rate));
                 });
 
