@@ -92,11 +92,8 @@ def find_sort_splits(
     column_order = list(column_order)
     null_order = list(null_order)
 
-    # We now need to find the local split points.  To do this, first split out
-    # the partition id and the local row number of the final split values
     *boundary_cols, split_part_id, split_local_row = sort_boundaries.columns()
     sort_boundaries = plc.Table(boundary_cols)
-    # Find the first row in tbl >= each boundary value (ties go to the later partition).
     split_first_col = plc.search.lower_bound(
         tbl,
         sort_boundaries,
@@ -104,20 +101,15 @@ def find_sort_splits(
         null_order,
         stream=stream,
     )
-    # pl.Series() triggers a D→H transfer on the default stream, which does not
-    # automatically wait for kernels enqueued on `stream`.  Record a GPU-side
-    # dependency so the default stream waits before reading the result.
-    join_cuda_streams(downstreams=[DEFAULT_STREAM], upstreams=[stream])
-    df = pl.DataFrame(
-        {
-            "first": pl.Series(split_first_col),
-            "part_id": pl.Series(split_part_id),
-            "local_row": pl.Series(split_local_row),
-        }
-    )
-    # For chunk_relative=True (streaming), always use first; there is no meaningful
-    # local_row within a chunk. For chunk_relative=False (tasks), use local_row when
-    # the boundary belongs to this partition so the split lands at the exact row.
+    # Use DataFrame.to_polars() for a stream-aware D→H transfer.
+    # lower_bound returns size_type (INT32); part_id/local_row are UInt32.
+    _u32 = DataType(pl.UInt32())
+    df = DataFrame.from_table(
+        plc.Table([split_first_col, split_part_id, split_local_row]),
+        ["first", "part_id", "local_row"],
+        [DataType(pl.Int32()), _u32, _u32],
+        stream=stream,
+    ).to_polars()
     out = (
         pl.col("first")
         if chunk_relative
