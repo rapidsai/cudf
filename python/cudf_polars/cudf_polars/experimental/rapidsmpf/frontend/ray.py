@@ -33,7 +33,10 @@ import rmm.mr
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.core import generate_network
-from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    StreamingEngine,
+    check_reserved_keys,
+)
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import RayContext
@@ -426,16 +429,13 @@ class RayEngine(StreamingEngine):
     Parameters
     ----------
     rapidsmpf_options
-        RapidsMPF options forwarded to every actor. If ``None``, defaults to
-        ``Options(get_environment_variables())``.
+        RapidsMPF-specific options. Defaults to the reading ``RAPIDSMPF_*``
+        environment variables.
     executor_options
-        Additional key-value pairs forwarded to the Polars executor options.
-        The keys ``"runtime"``, ``"cluster"``, ``"spmd"``, and ``"ray_context"``
-        are reserved and may not be overridden.
+        Executor-specific options (e.g. ``max_rows_per_partition``).
     engine_options
-        Additional keyword arguments forwarded to :class:`polars.GPUEngine`.
-        The keys ``"memory_resource"`` and ``"executor"`` are reserved and may
-        not be overridden.
+        Engine-specific keyword arguments (e.g. ``raise_on_fail``,
+        ``parquet_options``).
     ray_init_options
         Keyword arguments forwarded to :func:`ray.init` when Ray is not
         already initialized.
@@ -449,9 +449,7 @@ class RayEngine(StreamingEngine):
     RuntimeError
         If no GPUs are available in the Ray cluster.
     TypeError
-        If ``executor_options`` contains a reserved key.
-    TypeError
-        If ``engine_options`` contains a reserved key.
+        If ``executor_options`` or ``engine_options`` contains a reserved key.
 
     Examples
     --------
@@ -486,14 +484,7 @@ class RayEngine(StreamingEngine):
                 "cluster nodes."
             )
 
-        # Check for reserved keys.
-        if (
-            bad := {"runtime", "cluster", "spmd", "ray_context"}
-            & executor_options.keys()
-        ):
-            raise TypeError(f"executor_options may not contain reserved keys: {bad}")
-        if bad := {"memory_resource", "executor"} & engine_options.keys():
-            raise TypeError(f"engine_options may not contain reserved keys: {bad}")
+        check_reserved_keys(executor_options, engine_options)
 
         rapidsmpf_options = (
             rapidsmpf_options

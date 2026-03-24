@@ -31,7 +31,10 @@ from pylibcudf.contiguous_split import pack
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.rapidsmpf.core import generate_network
-from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    StreamingEngine,
+    check_reserved_keys,
+)
 from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     set_memory_resource,
@@ -170,9 +173,6 @@ def allgather_polars_dataframe(
     equivalent of a distributed ``collect``: after the call, every rank holds
     the same complete dataset.
 
-    Must be called while ``engine`` is still alive (before
-    :meth:`~SPMDEngine.shutdown` is called).
-
     Parameters
     ----------
     engine
@@ -188,6 +188,11 @@ def allgather_polars_dataframe(
     Returns
     -------
     DataFrame containing rows from all ranks, ordered by rank.
+
+    Raises
+    ------
+    RuntimeError
+        If ``engine`` has already been shut down.
     """
     comm = engine.comm
     ctx = engine.context
@@ -309,28 +314,18 @@ class SPMDEngine(StreamingEngine):
     Parameters
     ----------
     rapidsmpf_options
-        RapidsMPF options. Defaults to ``Options(get_environment_variables())``
-        when ``None``.
+        RapidsMPF-specific options. Defaults to the reading ``RAPIDSMPF_*``
+        environment variables.
     executor_options
-        Extra keyword arguments forwarded to the ``executor_options`` dict of
-        :class:`~polars.lazyframe.engine_config.GPUEngine`. The keys
-        ``"runtime"``, ``"cluster"``, and ``"spmd_context"`` are reserved and
-        may not be overridden.
+        Executor-specific options (e.g. ``max_rows_per_partition``).
     engine_options
-        Extra keyword arguments forwarded directly to
-        :class:`~polars.lazyframe.engine_config.GPUEngine`.  For example,
-        pass ``engine_options={"parquet_options": {"use_rapidsmpf_native": True}}``
-        to enable native Parquet reads. The keys ``"memory_resource"`` and
-        ``"executor"`` are reserved and may not be overridden.
+        Engine-specific keyword arguments (e.g. ``raise_on_fail``,
+        ``parquet_options``).
 
     Raises
     ------
     TypeError
-        If ``executor_options`` contains any of the reserved keys
-        ``"runtime"``, ``"cluster"``, or ``"spmd_context"``.
-    TypeError
-        If ``engine_options`` contains any of the reserved keys
-        ``"memory_resource"`` or ``"executor"``.
+        If ``executor_options`` or ``engine_options`` contains a reserved key.
 
     Examples
     --------
@@ -359,11 +354,7 @@ class SPMDEngine(StreamingEngine):
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
-        # Check for reserved keys.
-        if bad := {"runtime", "cluster", "spmd_context"} & executor_options.keys():
-            raise TypeError(f"executor_options may not contain reserved keys: {bad}")
-        if bad := {"memory_resource", "executor"} & engine_options.keys():
-            raise TypeError(f"engine_options may not contain reserved keys: {bad}")
+        check_reserved_keys(executor_options, engine_options)
 
         rapidsmpf_options = (
             rapidsmpf_options
