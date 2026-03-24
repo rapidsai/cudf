@@ -423,7 +423,7 @@ def test_temporal_scalar_series_init(data, klass):
 
     expected = pd.Series(scalar)
     actual = cudf.Series(scalar)
-    # import pdb;pdb.set_trace()
+
     assert_eq(expected, actual)
 
 
