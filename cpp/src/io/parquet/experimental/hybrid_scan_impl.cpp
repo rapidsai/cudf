@@ -734,6 +734,9 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row
     return {{row_group_indices.begin(), row_group_indices.end()}};
   }
 
+  // TODO(mh): The following logic has been borrowed from `reader_impl::compute_input_passes`
+  // defined in `reader_impl_chunking.cu`. Deduplicate this in a future PR.
+
   // Percentage of the total available input read limit that should be reserved for compressed
   // data vs uncompressed data.
   constexpr float compression_reserve = cudf::io::parquet::detail::input_limit_compression_reserve;
