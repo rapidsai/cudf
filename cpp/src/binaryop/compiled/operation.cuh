@@ -99,7 +99,7 @@ struct FloorDiv {
 
   template <typename TypeLhs, typename TypeRhs>
   __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> double
-    requires(std::is_same_v<std::common_type_t<TypeLhs, TypeRhs>, double>)
+    requires(cuda::std::is_same_v<cuda::std::common_type_t<TypeLhs, TypeRhs>, double>)
   {
     return floor(x / y);
   }
