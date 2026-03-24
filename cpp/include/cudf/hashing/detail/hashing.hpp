@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <functional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace hashing::detail {
 
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
@@ -112,7 +112,7 @@ CUDF_HOST_DEVICE constexpr uint64_t hash_combine(uint64_t lhs, uint64_t rhs)
 // SPDX-SnippetEnd
 
 }  // namespace hashing::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
 
 // specialization of std::hash for cudf::data_type
 namespace std {
