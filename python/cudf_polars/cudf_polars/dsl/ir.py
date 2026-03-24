@@ -2327,7 +2327,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        assert_never(how)  # pragma: no cover
+        assert_never(how)
 
     @staticmethod
     def _reorder_maps(

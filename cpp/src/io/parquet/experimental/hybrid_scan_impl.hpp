@@ -298,9 +298,16 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
  private:
   /**
-   * @brief The enum indicating whether we are reading the filter, payload, or all columns
+   * @brief Enum indicating whether we are reading the filter, payload, or all columns
    */
   enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS, ALL_COLUMNS };
+
+  /**
+   * @brief Initialize column selection related options
+   *
+   * @param options Reader options
+   */
+  void initialize_column_selection_options(parquet_reader_options const& options);
 
   /**
    * @brief Initialize the necessary options related internal variables for use later on
