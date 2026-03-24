@@ -104,6 +104,10 @@ def find_sort_splits(
         null_order,
         stream=stream,
     )
+    # pl.Series() triggers a D→H transfer on the default stream, which does not
+    # automatically wait for kernels enqueued on `stream`.  Record a GPU-side
+    # dependency so the default stream waits before reading the result.
+    join_cuda_streams(downstreams=[DEFAULT_STREAM], upstreams=[stream])
     df = pl.DataFrame(
         {
             "first": pl.Series(split_first_col),
