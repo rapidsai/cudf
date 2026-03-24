@@ -7,6 +7,8 @@
 
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/error.hpp>
+
 #include <jni.h>
 
 namespace cudf::jni {
