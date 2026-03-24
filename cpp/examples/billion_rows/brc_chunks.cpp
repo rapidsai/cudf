@@ -1,12 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "common.hpp"
-#include "groupby_results.hpp"
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_view.hpp>
+#include <cudf/groupby.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -17,8 +15,8 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
-#include <memory>
 #include <string>
+#include <vector>
 
 using elapsed_t = std::chrono::duration<double>;
 
@@ -27,7 +25,7 @@ std::unique_ptr<cudf::table> load_chunk(std::string const& input_file,
                                         std::size_t size,
                                         rmm::cuda_stream_view stream)
 {
-  cudf::io::csv_reader_options in_opts =
+  auto const in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{input_file})
       .header(-1)
       .delimiter(';')
@@ -54,19 +52,33 @@ int main(int argc, char const** argv)
   std::cout << "Input: " << input_file << std::endl;
   std::cout << "Chunks: " << divider << std::endl;
 
-  auto const mr_name = std::string("pool");
+  auto const mr_name = std::string{"pool"};
   auto resource      = create_memory_resource(mr_name);
   auto stats_mr =
-    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
+    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>{resource.get()};
   rmm::mr::set_current_device_resource(&stats_mr);
-  auto stream = cudf::get_default_stream();
+  auto const stream = cudf::get_default_stream();
 
-  std::filesystem::path p = input_file;
-  auto const file_size    = std::filesystem::file_size(p);
+  std::filesystem::path const p = input_file;
+  auto const file_size          = std::filesystem::file_size(p);
 
-  auto start = std::chrono::steady_clock::now();
+  auto const start = std::chrono::steady_clock::now();
 
-  std::vector<std::unique_ptr<cudf::table>> agg_data;
+  std::vector<cudf::size_type> const key_indices{0};
+  std::vector<cudf::groupby::streaming_aggregation_request> reqs;
+  {
+    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
+    aggs.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
+    aggs.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+    aggs.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+    cudf::groupby::streaming_aggregation_request req;
+    req.column_index = 1;
+    req.aggregations = std::move(aggs);
+    reqs.push_back(std::move(req));
+  }
+
+  cudf::groupby::streaming_groupby streaming_agg{key_indices, reqs};
+
   std::size_t chunk_size     = file_size / divider + ((file_size % divider) != 0);
   std::size_t start_pos      = 0;
   cudf::size_type total_rows = 0;
@@ -75,29 +87,21 @@ int main(int argc, char const** argv)
     auto const read_rows   = input_table->num_rows();
     if (read_rows == 0) break;
 
-    auto const cities = input_table->view().column(0);
-    auto const temps  = input_table->view().column(1);
+    streaming_agg.aggregate(input_table->view(), stream);
 
-    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
-    aggregations.emplace_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
-    aggregations.emplace_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
-    aggregations.emplace_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-    aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
-    auto result = compute_results(cities, temps, std::move(aggregations), stream);
-
-    agg_data.emplace_back(
-      cudf::sort_by_key(result->view(), result->view().select({0}), {}, {}, stream));
     start_pos += chunk_size;
     chunk_size = std::min(chunk_size, file_size - start_pos);
     total_rows += read_rows;
   } while (start_pos < file_size && chunk_size > 0);
 
-  // now aggregate the aggregate results
-  auto results = compute_final_aggregates(agg_data, stream);
+  auto [keys, results]    = streaming_agg.finalize(stream);
+  auto const sorted_order = cudf::sorted_order(keys->view(), {}, {}, stream);
+  auto const sorted_keys =
+    cudf::gather(keys->view(), *sorted_order, cudf::out_of_bounds_policy::DONT_CHECK, stream);
   stream.synchronize();
 
-  elapsed_t elapsed = std::chrono::steady_clock::now() - start;
-  std::cout << "Number of keys: " << results->num_rows() << std::endl;
+  elapsed_t const elapsed = std::chrono::steady_clock::now() - start;
+  std::cout << "Number of keys: " << sorted_keys->num_rows() << std::endl;
   std::cout << "Process time: " << elapsed.count() << " seconds\n";
   std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n";
 
