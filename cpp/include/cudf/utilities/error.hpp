@@ -188,12 +188,9 @@ struct data_type_error : std::invalid_argument {
 
 #define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
 
-#define CUDF_FAIL_2(_what, _exception_type)                            \
-  do {                                                                 \
-    static_assert(std::is_base_of_v<std::exception, _exception_type>); \
-    cudf::detail::cudf_fail<_exception_type>(                          \
-      [&]() -> std::string { return _what; }, __LINE__, __FILE__);     \
-  } while (0)
+#define CUDF_FAIL_2(_what, _exception_type) \
+  cudf::detail::cudf_fail<_exception_type>( \
+    [&]() -> std::string { return _what; }, __LINE__, __FILE__)
 
 #define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
 
