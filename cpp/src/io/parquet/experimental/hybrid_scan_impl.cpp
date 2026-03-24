@@ -109,9 +109,12 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   if (read_columns_mode == read_columns_mode::ALL_COLUMNS) {
     if (_is_all_columns_selected) { return; }
 
-    // list, struct, dictionary are not supported by AST filter yet.
+    // Select only columns required by the options and filter
     auto const select_column_names =
       get_column_projection(options, options.is_enabled_ignore_missing_columns());
+
+    // Initialize column selection related options
+    initialize_column_selection_options(options);
 
     // Select only columns required by the options and filter.
     // Using as is from:
@@ -129,7 +132,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                 _strings_to_categorical,
                                 options.is_enabled_ignore_missing_columns(),
                                 _options.timestamp_type.id(),
-                                _options.decimal_width);
+                                _options.decimal_width,
+                                _options.case_sensitive_names);
 
     _is_all_columns_selected     = true;
     _is_filter_columns_selected  = false;
@@ -137,8 +141,11 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   } else if (read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
     if (_is_filter_columns_selected) { return; }
 
-    // list, struct, dictionary are not supported by AST filter yet.
+    // Must not ignore missing filter columns
     auto constexpr ignore_missing_columns = false;
+
+    // Initialize column selection related options
+    initialize_column_selection_options(options);
 
     _filter_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
       options.get_filter(), {}, options, _extended_metadata->get_schema_tree());
@@ -150,13 +157,17 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                          _strings_to_categorical,
                                          ignore_missing_columns,
                                          _options.timestamp_type.id(),
-                                         _options.decimal_width);
+                                         _options.decimal_width,
+                                         _options.case_sensitive_names);
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
     _is_all_columns_selected     = false;
   } else {
     if (_is_payload_columns_selected) { return; }
+
+    // Initialize column selection related options
+    initialize_column_selection_options(options);
 
     auto select_column_names =
       get_column_projection(options, options.is_enabled_ignore_missing_columns());
@@ -167,7 +178,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                                  _strings_to_categorical,
                                                  options.is_enabled_ignore_missing_columns(),
                                                  _options.timestamp_type.id(),
-                                                 _options.decimal_width);
+                                                 _options.decimal_width,
+                                                 _options.case_sensitive_names);
 
     _is_payload_columns_selected = true;
     _is_filter_columns_selected  = false;
@@ -736,13 +748,29 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _options.decimal_width  = type_id::EMPTY;
   _options.num_rows       = std::nullopt;
   _options.row_group_indices.clear();
-  _num_sources             = 0;
-  _input_pass_read_limit   = 0;
-  _output_chunk_read_limit = 0;
-  _strings_to_categorical  = false;
+  _options.use_jit_filter       = false;
+  _options.case_sensitive_names = true;
+  _num_sources                  = 0;
+  _input_pass_read_limit        = 0;
+  _output_chunk_read_limit      = 0;
+  _strings_to_categorical       = false;
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
   _mr        = cudf::get_current_device_resource_ref();
+}
+
+void hybrid_scan_reader_impl::initialize_column_selection_options(
+  parquet_reader_options const& options)
+{
+  // Strings may be returned as either string or categorical columns
+  _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
+
+  _options.timestamp_type       = cudf::data_type{options.get_timestamp_type().id()};
+  _options.decimal_width        = options.get_decimal_width();
+  _options.use_jit_filter       = options.is_enabled_use_jit_filter();
+  _options.case_sensitive_names = options.is_enabled_case_sensitive_names();
+
+  _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 }
 
 void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& options,
@@ -750,13 +778,8 @@ void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& o
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  // Strings may be returned as either string or categorical columns
-  _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
-
-  _options.timestamp_type = cudf::data_type{options.get_timestamp_type().id()};
-  _options.decimal_width  = options.get_decimal_width();
-
-  _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
+  // Initialize column selection related options
+  initialize_column_selection_options(options);
 
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
@@ -777,8 +800,11 @@ named_to_reference_converter hybrid_scan_reader_impl::build_converted_expression
 
   table_metadata metadata;
   populate_metadata(metadata);
-  auto expr_conv = named_to_reference_converter(
-    options.get_filter(), metadata, _extended_metadata->get_schema_tree(), options);
+  auto expr_conv = named_to_reference_converter(options.get_filter(),
+                                                metadata,
+                                                _extended_metadata->get_schema_tree(),
+                                                options,
+                                                options.is_enabled_case_sensitive_names());
   CUDF_EXPECTS(expr_conv.get_converted_expr().has_value(),
                "Columns names in filter expression must be convertible to index references");
   return expr_conv;
