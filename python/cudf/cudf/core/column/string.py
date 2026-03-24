@@ -401,12 +401,11 @@ class StringColumn(ColumnBase, Scannable):
             )
         if not nullable and isinstance(self.dtype, pd.StringDtype):
             if self.dtype.storage == "pyarrow":
-                pa_array = ColumnBase.to_arrow(self)
-                pa_array = pa_array.cast(pa.large_string())
+                pa_array = self.to_arrow()
                 pandas_array = self.dtype.__from_arrow__(pa_array)
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
-                    ColumnBase.to_arrow(self).to_pandas(), dtype=self.dtype
+                    self.to_arrow().to_pandas(), dtype=self.dtype
                 )
             else:
                 return super().to_pandas(
