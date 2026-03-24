@@ -9,6 +9,38 @@ from typing import Any, Self
 
 import polars as pl
 
+_RESERVED_EXECUTOR_KEYS: frozenset[str] = frozenset(
+    {"runtime", "cluster", "spmd_context", "spmd", "ray_context"}
+)
+_RESERVED_ENGINE_KEYS: frozenset[str] = frozenset({"memory_resource", "executor"})
+
+
+def check_reserved_keys(
+    executor_options: dict[str, Any],
+    engine_options: dict[str, Any],
+) -> None:
+    """
+    Raise :exc:`TypeError` if any reserved keys are present in the option dicts.
+
+    Parameters
+    ----------
+    executor_options
+        Executor-specific options to validate.
+    engine_options
+        Engine-specific options to validate.
+
+    Raises
+    ------
+    TypeError
+        If ``executor_options`` contains any reserved key.
+    TypeError
+        If ``engine_options`` contains any reserved key.
+    """
+    if bad := _RESERVED_EXECUTOR_KEYS & executor_options.keys():
+        raise TypeError(f"executor_options may not contain reserved keys: {bad}")
+    if bad := _RESERVED_ENGINE_KEYS & engine_options.keys():
+        raise TypeError(f"engine_options may not contain reserved keys: {bad}")
+
 
 class StreamingEngine(pl.GPUEngine):
     """
@@ -28,10 +60,10 @@ class StreamingEngine(pl.GPUEngine):
     nranks
         Number of ranks (workers or GPUs) in the cluster.
     executor_options
-        Key/value options forwarded to the streaming executor.
+        Executor-specific options (e.g. ``max_rows_per_partition``).
     engine_options
-        Additional keyword arguments forwarded to
-        :class:`~polars.lazyframe.engine_config.GPUEngine`.
+        Engine-specific keyword arguments (e.g. ``raise_on_fail``,
+        ``parquet_options``).
     exit_stack
         A :class:`contextlib.ExitStack` whose registered contexts are closed
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
