@@ -834,13 +834,13 @@ TEST_F(HybridScanTest, DecimalTypeOption)
   }
 }
 
-TEST_F(HybridScanTest, ConstructRowGroupPassesBasic)
+TEST_F(HybridScanTest, RowGroupPassesBasic)
 {
   auto constexpr num_rg      = 8;
   auto constexpr rows_per_rg = 1000;
 
   // Create a per-row-group table (each write() call produces one row group)
-  auto values = thrust::make_counting_iterator(0);
+  auto values = cuda::counting_iterator(0);
   cudf::test::fixed_width_column_wrapper<int32_t> col0(values, values + rows_per_rg);
   cudf::test::fixed_width_column_wrapper<double> col1(values, values + rows_per_rg);
   auto chunk_table = cudf::table_view{{col0, col1}};
@@ -849,10 +849,10 @@ TEST_F(HybridScanTest, ConstructRowGroupPassesBasic)
   metadata.column_metadata[0].set_name("col0");
   metadata.column_metadata[1].set_name("col1");
 
-  std::vector<char> parquet_buffer;
+  std::string parquet_filepath = temp_env->get_temp_filepath("RowGroupPassesBasic.parquet");
   {
     auto opts =
-      cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer})
+      cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath})
         .metadata(std::move(metadata))
         .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
         .build();
@@ -863,75 +863,61 @@ TEST_F(HybridScanTest, ConstructRowGroupPassesBasic)
     writer.close();
   }
 
-  auto datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
-    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
-
   auto options = cudf::io::parquet_reader_options::builder().build();
 
+  auto datasource          = cudf::io::datasource::create(parquet_filepath);
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
   auto reader =
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
 
-  auto const all_rgs = reader->all_row_groups(options);
-  EXPECT_EQ(static_cast<int>(all_rgs.size()), num_rg);
+  auto const all_row_groups = reader->all_row_groups(options);
+  EXPECT_EQ(static_cast<int>(all_row_groups.size()), num_rg);
 
-  // pass_read_limit == 0 => single pass with all row groups
+  // No pass read limit. All row groups in a single pass
   {
-    auto passes = reader->construct_row_group_passes(all_rgs, 0);
+    auto passes = reader->construct_row_group_passes(all_row_groups, 0);
     EXPECT_EQ(passes.size(), 1);
-    EXPECT_EQ(passes[0].size(), all_rgs.size());
-    for (size_t i = 0; i < all_rgs.size(); ++i) {
-      EXPECT_EQ(passes[0][i], all_rgs[i]);
-    }
+    EXPECT_EQ(passes.front(), all_row_groups);
   }
 
-  // Single row group => single pass regardless of limit
+  // Small pass limit would result in each row group in its own pass
   {
-    auto single_rg = std::vector<cudf::size_type>{all_rgs[0]};
-    auto passes    = reader->construct_row_group_passes(single_rg, 1);
-    EXPECT_EQ(passes.size(), 1);
-    EXPECT_EQ(passes[0].size(), 1);
-  }
-
-  // Very small limit => each row group in its own pass
-  {
-    auto passes = reader->construct_row_group_passes(all_rgs, 1);
-    EXPECT_EQ(passes.size(), all_rgs.size());
-    for (size_t i = 0; i < passes.size(); ++i) {
-      EXPECT_EQ(passes[i].size(), 1);
-      EXPECT_EQ(passes[i][0], all_rgs[i]);
-    }
-  }
-
-  // Very large limit => single pass
-  {
-    auto passes = reader->construct_row_group_passes(all_rgs, std::numeric_limits<size_t>::max());
-    EXPECT_EQ(passes.size(), 1);
-    EXPECT_EQ(passes[0].size(), all_rgs.size());
+    auto passes = reader->construct_row_group_passes(all_row_groups, 1);
+    EXPECT_EQ(passes.size(), all_row_groups.size());
+    auto zipped = cuda::make_zip_iterator(passes.begin(), all_row_groups.begin());
+    std::for_each(zipped, zipped + passes.size(), [&](auto const& iter) {
+      auto const& pass      = cuda::std::get<0>(iter);
+      auto const& row_group = cuda::std::get<1>(iter);
+      EXPECT_EQ(pass.size(), 1);
+      EXPECT_EQ(pass.front(), row_group);
+    });
   }
 
   // All passes should cover all row groups and be consecutive
   {
-    auto passes = reader->construct_row_group_passes(all_rgs, 100);
+    auto passes = reader->construct_row_group_passes(all_row_groups, 1024);
     std::vector<cudf::size_type> flattened;
     for (auto const& pass : passes) {
       EXPECT_GT(pass.size(), 0);
       flattened.insert(flattened.end(), pass.begin(), pass.end());
     }
-    EXPECT_EQ(flattened.size(), all_rgs.size());
-    for (size_t i = 0; i < all_rgs.size(); ++i) {
-      EXPECT_EQ(flattened[i], all_rgs[i]);
-    }
+    EXPECT_EQ(flattened.size(), all_row_groups.size());
+    auto zipped = cuda::make_zip_iterator(flattened.begin(), all_row_groups.begin());
+    std::for_each(zipped, zipped + flattened.size(), [&](auto const& iter) {
+      auto const& flattened_value = cuda::std::get<0>(iter);
+      auto const& row_group       = cuda::std::get<1>(iter);
+      EXPECT_EQ(flattened_value, row_group);
+    });
   }
 }
 
-TEST_F(HybridScanTest, ConstructRowGroupPassesMatchesChunkedReader)
+TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
 {
   auto constexpr num_rg      = 10;
   auto constexpr rows_per_rg = 1000;
 
   // Create a per-row-group table (each write() call produces one row group)
-  auto values = thrust::make_counting_iterator(0);
+  auto values = cuda::counting_iterator(0);
   cudf::test::fixed_width_column_wrapper<int32_t> col0(values, values + rows_per_rg);
   cudf::test::fixed_width_column_wrapper<float> col1(values, values + rows_per_rg);
   auto chunk_table = cudf::table_view{{col0, col1}};
@@ -940,78 +926,75 @@ TEST_F(HybridScanTest, ConstructRowGroupPassesMatchesChunkedReader)
   metadata.column_metadata[0].set_name("col0");
   metadata.column_metadata[1].set_name("col1");
 
-  std::vector<char> parquet_buffer;
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  std::string parquet_filepath =
+    temp_env->get_temp_filepath("RowGroupPassesMatchesChunkedReader.parquet");
   {
     auto opts =
-      cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer})
+      cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath})
         .metadata(std::move(metadata))
         .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
         .build();
-    auto writer = cudf::io::chunked_parquet_writer(opts);
+    auto writer = cudf::io::chunked_parquet_writer(opts, stream);
     for (int i = 0; i < num_rg; ++i) {
       writer.write(chunk_table);
     }
     writer.close();
+    stream.synchronize();
   }
 
-  auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
-
   // Pick a pass_read_limit that forces multiple passes but groups some row groups together
-  std::size_t const pass_read_limit = 2048;
+  std::size_t const pass_read_limit = 2'048;
+
+  // Table chunks from hybrid scan passes
+  std::vector<std::unique_ptr<cudf::table>> hybrid_scan_tables;
+  {
+    auto options    = cudf::io::parquet_reader_options::builder().build();
+    auto datasource = cudf::io::datasource::create(parquet_filepath);
+
+    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+    auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      *footer_buffer, options);
+
+    auto const all_row_groups = reader->all_row_groups(options);
+    auto const passes         = reader->construct_row_group_passes(all_row_groups, pass_read_limit);
+
+    for (auto const& pass_row_groups : passes) {
+      auto const chunk_byte_ranges =
+        reader->all_column_chunks_byte_ranges(pass_row_groups, options);
+      auto [buffers, col_data, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        *datasource, chunk_byte_ranges, stream, mr);
+      tasks.get();
+
+      reader->setup_chunking_for_all_columns(
+        0, pass_read_limit, pass_row_groups, col_data, options, stream, mr);
+
+      while (reader->has_next_table_chunk()) {
+        auto chunk = reader->materialize_all_columns_chunk();
+        hybrid_scan_tables.push_back(std::move(chunk.tbl));
+      }
+    }
+  }
 
   // Read with the chunked parquet reader using the same pass_read_limit and chunk_read_limit == 0
   std::vector<std::unique_ptr<cudf::table>> chunked_reader_tables;
   {
     auto opts =
-      cudf::io::parquet_reader_options::builder(
-        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
-        .build();
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(parquet_filepath)).build();
     auto chunked_reader = cudf::io::chunked_parquet_reader(0, pass_read_limit, opts, stream, mr);
     while (chunked_reader.has_next()) {
       auto chunk = chunked_reader.read_chunk();
       chunked_reader_tables.push_back(std::move(chunk.tbl));
     }
   }
-  auto const num_chunked_reader_chunks = chunked_reader_tables.size();
 
-  // Read with the hybrid scan reader using construct_row_group_passes +
-  // setup_chunking_for_all_columns / materialize_all_columns_chunk
-  auto datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
-    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
-  auto options    = cudf::io::parquet_reader_options::builder().build();
-
-  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
-  auto reader =
-    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
-
-  auto const all_rgs = reader->all_row_groups(options);
-  auto const passes  = reader->construct_row_group_passes(all_rgs, pass_read_limit);
-
-  // Collect all hybrid scan output chunks across passes
-  std::vector<std::unique_ptr<cudf::table>> hybrid_scan_tables;
-  for (auto const& pass_rgs : passes) {
-    auto const rg_span = cudf::host_span<cudf::size_type const>(pass_rgs);
-
-    auto const chunk_byte_ranges    = reader->all_column_chunks_byte_ranges(rg_span, options);
-    auto [buffers, col_data, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
-      *datasource, chunk_byte_ranges, stream, mr);
-    tasks.get();
-
-    reader->setup_chunking_for_all_columns(
-      0, pass_read_limit, rg_span, col_data, options, stream, mr);
-
-    while (reader->has_next_table_chunk()) {
-      auto chunk = reader->materialize_all_columns_chunk();
-      hybrid_scan_tables.push_back(std::move(chunk.tbl));
-    }
-  }
-
-  // The number of output tables should match the chunked reader
-  EXPECT_EQ(hybrid_scan_tables.size(), num_chunked_reader_chunks);
-
-  for (size_t i = 0; i < hybrid_scan_tables.size(); ++i) {
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(chunked_reader_tables[i]->view(),
-                                       hybrid_scan_tables[i]->view());
-  }
+  // Check
+  EXPECT_EQ(hybrid_scan_tables.size(), chunked_reader_tables.size());
+  auto iter = cuda::make_zip_iterator(hybrid_scan_tables.begin(), chunked_reader_tables.begin());
+  std::for_each(iter, iter + hybrid_scan_tables.size(), [&](auto const& iter) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cuda::std::get<0>(iter)->view(),
+                                       cuda::std::get<1>(iter)->view());
+  });
 }
