@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from collections import deque
 from typing import TYPE_CHECKING
 
@@ -170,13 +169,6 @@ async def _receive_and_buffer_chunks(
             ),
             sort_ir,
         )
-        print(
-            f"[sort_actor recv] rank={comm.rank} seq_num={seq_num} "
-            f"nrows={df.num_rows} "
-            f"sort_cols={[pl.Series(c).to_list() for c in df.select(by).table.columns()]}",
-            flush=True,
-            file=sys.stderr,
-        )
         local_candidates_list.append(
             TableChunk.from_pylibcudf_table(
                 _select_local_split_candidates(
@@ -269,13 +261,6 @@ async def _insert_chunks_into_shuffle(
             stream=stream,
             chunk_relative=True,
         )
-        print(
-            f"[sort_actor insert] rank={comm.rank} seq_num={seq_num} "
-            f"sort_cols={[pl.Series(c).to_list() for c in sort_cols_tbl.columns()]} "
-            f"splits={splits}",
-            flush=True,
-            file=sys.stderr,
-        )
         shuffle.insert_split(available_chunk, splits)
 
     await shuffle.insert_finished()
@@ -313,19 +298,6 @@ async def _extract_partitions_and_send(
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
         table = shuffle.extract_chunk(partition_id, stream)
-        try:
-            print(
-                f"[sort_actor extract] partition_id={partition_id} "
-                f"pre_sort={[pl.Series(c).to_list() for c in table.columns()[:ncols_out]]}",
-                flush=True,
-                file=sys.stderr,
-            )
-        except BaseException as e:
-            print(
-                f"[sort_actor extract] partition_id={partition_id} pre_sort=<error: {e}>",
-                flush=True,
-                file=sys.stderr,
-            )
         if table.num_rows() > 0:
             table = post_sort_ir.do_evaluate(
                 *post_sort_ir._non_child_args,
@@ -337,19 +309,6 @@ async def _extract_partitions_and_send(
                 ),
                 context=ir_context,
             ).table
-        try:
-            print(
-                f"[sort_actor extract] partition_id={partition_id} "
-                f"post_sort={[pl.Series(c).to_list() for c in table.columns()[:ncols_out]]}",
-                flush=True,
-                file=sys.stderr,
-            )
-        except BaseException as e:
-            print(
-                f"[sort_actor extract] partition_id={partition_id} post_sort=<error: {e}>",
-                flush=True,
-                file=sys.stderr,
-            )
         if table.num_columns() > ncols_out:
             table = plc.Table(table.columns()[:ncols_out])
         await ch_out.send(
@@ -401,13 +360,6 @@ async def sort_actor(
             by,
             num_partitions,
             collective_ids.pop() if need_allgather else None,
-        )
-
-        print(
-            f"[sort_actor boundaries] rank={comm.rank} "
-            f"boundaries={[pl.Series(c).to_list() for c in sort_boundaries_df.table.columns()]}",
-            flush=True,
-            file=sys.stderr,
         )
 
         shuffle, post_sort_ir = await _insert_chunks_into_shuffle(

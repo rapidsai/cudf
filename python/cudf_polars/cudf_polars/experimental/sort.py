@@ -97,8 +97,9 @@ def find_sort_splits(
     # the partition id and the local row number of the final split values
     *boundary_cols, split_part_id, split_local_row = sort_boundaries.columns()
     sort_boundaries = plc.Table(boundary_cols)
-    # Now we find the first and last row in the local table corresponding to the split value
-    # (first and last, because there may be multiple rows with the same split value)
+    # Find the first and last row for each split value (there may be ties).
+    # upper_bound via lower_bound on the reversed table with flipped sort orders.
+    n = tbl.num_rows()
     split_first_col = plc.search.lower_bound(
         tbl,
         sort_boundaries,
@@ -106,18 +107,43 @@ def find_sort_splits(
         null_order,
         stream=stream,
     )
-    split_last_col = plc.search.upper_bound(
-        tbl,
-        sort_boundaries,
-        column_order,
-        null_order,
-        stream=stream,
-    )
+    if n > 0:
+        rev_indices = plc.filling.sequence(
+            n,
+            plc.Scalar.from_py(n - 1, plc.DataType(plc.TypeId.INT32), stream=stream),
+            plc.Scalar.from_py(-1, plc.DataType(plc.TypeId.INT32), stream=stream),
+            stream=stream,
+        )
+        reversed_tbl = plc.copying.gather(
+            tbl, rev_indices, plc.copying.OutOfBoundsPolicy.DONT_CHECK, stream=stream
+        )
+        reversed_column_order = [
+            plc.types.Order.DESCENDING
+            if o == plc.types.Order.ASCENDING
+            else plc.types.Order.ASCENDING
+            for o in column_order
+        ]
+        reversed_null_order = [
+            plc.types.NullOrder.BEFORE
+            if o == plc.types.NullOrder.AFTER
+            else plc.types.NullOrder.AFTER
+            for o in null_order
+        ]
+        lower_of_reversed = plc.search.lower_bound(
+            reversed_tbl,
+            sort_boundaries,
+            reversed_column_order,
+            reversed_null_order,
+            stream=stream,
+        )
+        split_last = n - pl.Series(lower_of_reversed)
+    else:
+        split_last = pl.Series([0] * sort_boundaries.num_rows(), dtype=pl.Int32)
     # Find the final split points.
     df = pl.DataFrame(
         {
             "first": pl.Series(split_first_col),
-            "last": pl.Series(split_last_col),
+            "last": split_last,
             "part_id": pl.Series(split_part_id),
             "local_row": pl.Series(split_local_row),
         }
@@ -129,17 +155,8 @@ def find_sort_splits(
         .then(pl.col("last"))
         .otherwise(pl.col("first") if chunk_relative else pl.col("local_row"))
     )
-    cap = tbl.num_rows()
-    result = df.select(out.clip(0, cap).sort()).to_series().to_list()
-    import sys
-
-    print(
-        f"[find_sort_splits] my_part_id={my_part_id} cap={cap} "
-        f"df={df.to_dict(as_series=False)} result={result}",
-        flush=True,
-        file=sys.stderr,
-    )
-    return result
+    cap = n
+    return df.select(out.clip(0, cap).sort()).to_series().to_list()
 
 
 def _select_local_split_candidates(
