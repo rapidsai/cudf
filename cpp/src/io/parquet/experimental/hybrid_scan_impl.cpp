@@ -28,6 +28,7 @@
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <utility>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -726,56 +727,62 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row
   // since this API is called before column selection. This is a conservative upper-bound estimate;
   // downstream setup_chunking_for_* will re-compute passes internally on the selected columns.
   constexpr float compression_reserve = 0.3f;
-  auto const comp_read_limit = static_cast<std::size_t>(pass_read_limit * compression_reserve);
+  auto const comp_read_limit =
+    static_cast<std::size_t>(pass_read_limit * compression_reserve);
 
-  // Only top-level row count is checked here. The leaf_values bound from compute_input_passes
-  // is intentionally omitted: this API produces advisory pass hints, and the authoritative
-  // pass computation in setup_chunking_for_* accounts for leaf values on the selected columns.
   auto constexpr max_rows_per_pass =
     static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max());
 
-  // Hybrid scan reader currently supports reading 1 file only
   constexpr std::size_t source_index = 0;
 
   std::vector<std::vector<cudf::size_type>> passes;
-  std::size_t cur_pass_byte_size = 0;
-  std::size_t cur_pass_num_rows  = 0;
-  std::size_t cur_rg_start       = 0;
+  std::size_t cur_pass_byte_size       = 0;
+  std::size_t cur_pass_num_leaf_values = 0;
+  std::size_t cur_pass_num_rows        = 0;
+  std::size_t cur_rg_start             = 0;
 
   for (std::size_t i = 0; i < row_group_indices.size(); ++i) {
     auto const rg_index   = row_group_indices[i];
     auto const& row_group = _extended_metadata->get_row_group(rg_index, source_index);
-    auto const rg_rows    = static_cast<std::size_t>(row_group.num_rows);
 
-    auto const compressed_rg_size =
-      std::transform_reduce(row_group.columns.begin(),
-                            row_group.columns.end(),
-                            std::size_t{0},
-                            std::plus{},
-                            [](auto const& c) { return c.meta_data.total_compressed_size; });
+    auto const compressed_rg_size = std::get<0>(parquet::detail::get_row_group_size(row_group));
+
+    auto const row_group_rows = row_group.num_rows;
+
+    // Max leaf-level num_values across columns in this row group
+    auto const row_group_leaf_values =
+      std::max_element(row_group.columns.cbegin(),
+                       row_group.columns.cend(),
+                       [](auto const& a, auto const& b) {
+                         return a.meta_data.num_values < b.meta_data.num_values;
+                       })
+        ->meta_data.num_values;
 
     if ((cur_pass_byte_size + compressed_rg_size >= comp_read_limit) or
-        (cur_pass_num_rows + rg_rows >= max_rows_per_pass)) {
-      // A single row group exceeds the limit: include it alone in a pass
+        (cur_pass_num_leaf_values + row_group_leaf_values >= max_rows_per_pass) or
+        (cur_pass_num_rows + row_group_rows >= max_rows_per_pass)) {
       if (cur_rg_start == i) {
-        CUDF_EXPECTS(rg_rows <= max_rows_per_pass,
-                     "Number of rows in each row group must be smaller than the column size limit");
+        CUDF_EXPECTS(
+          std::cmp_less_equal(row_group_rows, max_rows_per_pass),
+          "Number of rows in each row group must be smaller than the column size limit");
         passes.emplace_back(row_group_indices.begin() + cur_rg_start,
                             row_group_indices.begin() + i + 1);
-        cur_rg_start       = i + 1;
-        cur_pass_byte_size = 0;
-        cur_pass_num_rows  = 0;
+        cur_rg_start             = i + 1;
+        cur_pass_byte_size       = 0;
+        cur_pass_num_leaf_values = 0;
+        cur_pass_num_rows        = 0;
       } else {
-        // End the pass at the previous row group
         passes.emplace_back(row_group_indices.begin() + cur_rg_start,
                             row_group_indices.begin() + i);
-        cur_rg_start       = i;
-        cur_pass_byte_size = compressed_rg_size;
-        cur_pass_num_rows  = rg_rows;
+        cur_rg_start             = i;
+        cur_pass_byte_size       = compressed_rg_size;
+        cur_pass_num_leaf_values = row_group_leaf_values;
+        cur_pass_num_rows        = row_group_rows;
       }
     } else {
       cur_pass_byte_size += compressed_rg_size;
-      cur_pass_num_rows += rg_rows;
+      cur_pass_num_leaf_values += row_group_leaf_values;
+      cur_pass_num_rows += row_group_rows;
     }
   }
 
