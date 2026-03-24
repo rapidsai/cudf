@@ -421,7 +421,7 @@ class UnaryFunction(Expr):
                     1, dtype=column.dtype.plc_type, stream=df.stream
                 )
             else:
-                assert_never(strategy)  # pragma: no cover
+                assert_never(strategy)
 
             if strategy == "mean":
                 return Column(
