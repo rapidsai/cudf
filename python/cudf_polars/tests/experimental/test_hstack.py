@@ -109,7 +109,8 @@ def test_with_columns_scalar_upstream_20981(engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_cse_agg_shared_decomposition(engine):
+@pytest.mark.parametrize("comm_subexpr_elim", [True, False])
+def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
     # CSE: Check that col("a").sum() is only computed once.
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5, 6]})
     q = df.with_columns(
