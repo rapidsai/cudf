@@ -664,7 +664,7 @@ class hybrid_scan_reader {
 
   /**
    * @brief Partition row groups into passes such that the amount of GPU memory required to read,
-   * decompress and decode a pass of row groups fits within the specified limit
+   * decompress and decode a pass is bounded by the specified limit
    *
    * Note that the `pass_read_limit` is a hint, not an absolute limit - if a single row group
    * cannot fit within the limit given, it  will still constitute a pass. The compressed row group
