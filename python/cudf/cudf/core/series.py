@@ -527,10 +527,14 @@ class Series(SingleColumnFrame, IndexedFrame):
         attrs = None
         if isinstance(data, (pd.Series, pd.Index, Index, Series)):
             attrs = deepcopy(getattr(data, "attrs", None))
-            if copy and not isinstance(data, (pd.Series, pd.Index)):
-                data = data.copy(deep=True)
             name_from_data = data.name
             column = as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+            if not isinstance(data, (pd.Series, pd.Index)):
+                # Shallow copy so the new column gets its own Buffer
+                # reference in the BufferOwner's _slices WeakSet.
+                # This enables CoW: writes trigger
+                # make_single_owner_inplace() when len(_slices) > 1.
+                column = column.copy(deep=copy)
             if isinstance(data, (pd.Series, Series)):
                 index_from_data = ensure_index(data.index)
         elif isinstance(data, ColumnAccessor):

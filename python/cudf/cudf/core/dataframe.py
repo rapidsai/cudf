@@ -3633,6 +3633,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if dtype.kind == "U":
                     dtype = DEFAULT_STRING_DTYPE
                 value = value.item()
+                if dtype.kind == "O" and isinstance(value, str):
+                    dtype = DEFAULT_STRING_DTYPE
             if is_na_like(value):
                 dtype = DEFAULT_STRING_DTYPE
             value = as_column(

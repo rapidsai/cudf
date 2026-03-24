@@ -423,7 +423,7 @@ def test_temporal_scalar_series_init(data, klass):
 
     expected = pd.Series(scalar)
     actual = cudf.Series(scalar)
-
+    # import pdb;pdb.set_trace()
     assert_eq(expected, actual)
 
 
@@ -551,11 +551,6 @@ def test_series_constructor_unbounded_sequence():
 
     with pytest.raises(TypeError):
         cudf.Series(A())
-
-
-def test_series_constructor_error_mixed_type():
-    with pytest.raises(MixedTypeError):
-        cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
 
 
 def test_series_from_pandas_sparse():
@@ -1124,7 +1119,7 @@ def test_series_arrow_list_types_roundtrip():
 
 
 def test_series_error_nan_mixed_types():
-    ps = pd.Series([np.nan, "ab", "cd"])
+    ps = pd.Series([np.nan, "ab", "cd"], dtype=object)
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(MixedTypeError):
             cudf.from_pandas(ps)
@@ -1504,14 +1499,12 @@ def test_as_column_types():
     assert_eq(col.dtype, pd.StringDtype(na_value=np.nan))
     gds = cudf.Series._from_column(col)
     pds = pd.Series(pd.Series([], dtype="str"))
-
     assert_eq(pds, gds)
 
     col = as_column(cudf.Series([], dtype="float64"), dtype=cudf.dtype("str"))
     assert_eq(col.dtype, pd.StringDtype(na_value=np.nan))
     gds = cudf.Series._from_column(col)
-    pds = pd.Series(pd.Series([], dtype=pd.StringDtype(na_value=np.nan)))
-
+    pds = pd.Series(pd.Series([], dtype="str"))
     assert_eq(pds, gds)
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
