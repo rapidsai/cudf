@@ -132,9 +132,9 @@ async def default_node_multi(
         local_count = 1
         duplicated = True
         partitioning = None
-        for idx, md_child in enumerate(
-            await asyncio.gather(*(recv_metadata(ch, context) for ch in chs_in))
-        ):
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(recv_metadata(ch, context)) for ch in chs_in]
+        for idx, md_child in enumerate(task.result() for task in tasks):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
             # Set "duplicated" to False as soon as we
@@ -274,7 +274,9 @@ async def fanout_node_bounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        async with asyncio.TaskGroup() as tg:
+            for ch in chs_out:
+                tg.create_task(send_metadata(ch, context, metadata))
 
         while (msg := await ch_in.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg).make_available_and_spill(
@@ -296,7 +298,9 @@ async def fanout_node_bounded(
                 )
             del table_chunk
 
-        await asyncio.gather(*(ch.drain(context) for ch in chs_out))
+        async with asyncio.TaskGroup() as tg:
+            for ch in chs_out:
+                tg.create_task(ch.drain(context))
 
 
 @define_actor()
@@ -342,7 +346,9 @@ async def fanout_node_unbounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        async with asyncio.TaskGroup() as tg:
+            for ch in chs_out:
+                tg.create_task(send_metadata(ch, context, metadata))
 
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
