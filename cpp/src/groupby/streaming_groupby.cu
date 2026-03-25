@@ -6,6 +6,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
@@ -28,6 +29,7 @@
 #include <numeric>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -385,26 +387,18 @@ std::unique_ptr<groupby_aggregation> make_merge_agg(aggregation::Kind kind,
 
 /**
  * @brief Determine the data type of a partial-state column after merging.
+ *
+ * For non-fixed-width batch results (structs from M2, tdigest; lists from collect/histogram)
+ * the batch output is already in the correct form for the merge aggregation, so we return
+ * it directly rather than calling target_type (which cannot dispatch on STRUCT/LIST sources).
  */
 data_type compute_partial_state_type(data_type batch_result_type,
                                      aggregation::Kind batch_kind,
                                      aggregation::Kind merge_kind)
 {
   if (batch_kind == merge_kind) { return batch_result_type; }
+  if (!cudf::is_fixed_width(batch_result_type)) { return batch_result_type; }
   return cudf::detail::target_type(batch_result_type, merge_kind);
-}
-
-/**
- * @brief Combine key columns and partial-state columns into a single state table.
- */
-std::unique_ptr<table> build_state_table(std::unique_ptr<table>&& keys,
-                                         std::vector<std::unique_ptr<column>>& partial_cols)
-{
-  auto cols = keys->release();
-  for (auto& c : partial_cols) {
-    cols.push_back(std::move(c));
-  }
-  return std::make_unique<table>(std::move(cols));
 }
 
 /**
@@ -414,7 +408,17 @@ std::unique_ptr<table> build_state_table(std::unique_ptr<table>&& keys,
  * with the appropriate merge aggregations (one per unique_agg_column) to collapse
  * duplicate keys back to one row per group.
  */
-void merge_partial_states(std::unique_ptr<table>& accumulated,
+table_view columns_as_table_view(std::vector<std::unique_ptr<column>> const& cols)
+{
+  std::vector<column_view> views;
+  views.reserve(cols.size());
+  for (auto const& c : cols) {
+    views.push_back(c->view());
+  }
+  return table_view{views};
+}
+
+void merge_partial_states(std::vector<std::unique_ptr<column>>& accumulated,
                           table_view new_partials,
                           size_type num_keys,
                           std::vector<unique_agg_column> const& agg_columns,
@@ -422,7 +426,8 @@ void merge_partial_states(std::unique_ptr<table>& accumulated,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
-  std::vector<table_view> const to_concat{accumulated->view(), new_partials};
+  auto const acc_view = columns_as_table_view(accumulated);
+  std::vector<table_view> const to_concat{acc_view, new_partials};
   auto const concatenated = cudf::concatenate(to_concat, stream, mr);
 
   std::vector<size_type> key_col_indices(num_keys);
@@ -448,7 +453,10 @@ void merge_partial_states(std::unique_ptr<table>& accumulated,
     }
   }
 
-  accumulated = build_state_table(std::move(merged_keys), merged_partials);
+  accumulated = merged_keys->release();
+  for (auto& c : merged_partials) {
+    accumulated.push_back(std::move(c));
+  }
 }
 
 }  // namespace
@@ -463,7 +471,7 @@ struct streaming_groupby::impl {
   std::vector<order> _column_order;
   std::vector<null_order> _null_precedence;
 
-  std::unique_ptr<table> _partial_state;
+  std::vector<std::unique_ptr<column>> _partial_columns;
   std::vector<data_type> _partial_column_types;
   std::vector<data_type> _finalize_output_types;
 
@@ -471,6 +479,18 @@ struct streaming_groupby::impl {
    * @brief Whether partial-state column types have been determined from the first batch.
    */
   [[nodiscard]] bool types_initialized() const { return !_partial_column_types.empty(); }
+
+  [[nodiscard]] bool has_state() const { return !_partial_columns.empty(); }
+
+  [[nodiscard]] table_view state_as_table_view() const
+  {
+    std::vector<column_view> views;
+    views.reserve(_partial_columns.size());
+    for (auto const& c : _partial_columns) {
+      views.push_back(c->view());
+    }
+    return table_view{views};
+  }
 
   /**
    * @brief Number of key columns.
@@ -522,9 +542,16 @@ struct streaming_groupby::impl {
       _partial_column_types.push_back(state_type);
     }
 
+    size_type plan_idx = 0;
     for (auto const& plan : _plans) {
-      _finalize_output_types.push_back(cudf::detail::target_type(
-        data.column(plan.value_column_index).type(), plan.requested_kind));
+      auto const& state_col = batch_partial_cols[plan.agg_column_refs[0]];
+      if (!cudf::is_fixed_width(state_col->type())) {
+        _finalize_output_types.push_back(state_col->type());
+      } else {
+        _finalize_output_types.push_back(cudf::detail::target_type(
+          data.column(plan.value_column_index).type(), plan.requested_kind));
+      }
+      ++plan_idx;
     }
   }
 
@@ -552,6 +579,8 @@ struct streaming_groupby::impl {
    * @brief Run a standard cudf::groupby on the incoming data batch.
    *
    * Creates one aggregation_request per unique_agg_column (deduplicated).
+   * For M2 columns, three separate aggregations (COUNT_VALID, MEAN, M2) are run
+   * and assembled into a struct column suitable for MERGE_M2.
    */
   std::vector<std::unique_ptr<column>> run_batch_groupby(table_view const& data,
                                                          std::unique_ptr<table>& out_keys,
@@ -568,20 +597,101 @@ struct streaming_groupby::impl {
     cudf::groupby::groupby batch_groupby{
       keys_view, _null_handling, _keys_are_sorted, _column_order, _null_precedence};
 
+    struct m2_assembly_info {
+      size_type request_index;
+      size_type count_result_index;
+      size_type mean_result_index;
+      size_type m2_result_index;
+    };
+    std::vector<m2_assembly_info> m2_assemblies;
+
     std::vector<aggregation_request> batch_requests;
-    for (auto const& agg_col : _agg_columns) {
-      aggregation_request req;
-      req.values = data.column(agg_col.value_column_index);
-      req.aggregations.push_back(make_batch_agg(agg_col.batch_kind, *agg_col.original_agg));
-      batch_requests.push_back(std::move(req));
+    std::vector<size_type> result_to_agg_col;
+
+    for (size_type ac = 0; ac < num_agg_columns(); ++ac) {
+      auto const& agg_col = _agg_columns[ac];
+
+      if (agg_col.batch_kind == aggregation::M2) {
+        auto const req_idx = static_cast<size_type>(batch_requests.size());
+        {
+          aggregation_request req;
+          req.values = data.column(agg_col.value_column_index);
+          req.aggregations.push_back(
+            make_count_aggregation<groupby_aggregation>(null_policy::EXCLUDE));
+          batch_requests.push_back(std::move(req));
+        }
+        auto const count_idx = static_cast<size_type>(batch_requests.size() - 1);
+        {
+          aggregation_request req;
+          req.values = data.column(agg_col.value_column_index);
+          req.aggregations.push_back(make_mean_aggregation<groupby_aggregation>());
+          batch_requests.push_back(std::move(req));
+        }
+        auto const mean_idx = static_cast<size_type>(batch_requests.size() - 1);
+        {
+          aggregation_request req;
+          req.values = data.column(agg_col.value_column_index);
+          req.aggregations.push_back(make_m2_aggregation<groupby_aggregation>());
+          batch_requests.push_back(std::move(req));
+        }
+        auto const m2_idx = static_cast<size_type>(batch_requests.size() - 1);
+
+        m2_assemblies.push_back({req_idx, count_idx, mean_idx, m2_idx});
+        result_to_agg_col.push_back(ac);
+      } else {
+        aggregation_request req;
+        req.values = data.column(agg_col.value_column_index);
+        req.aggregations.push_back(make_batch_agg(agg_col.batch_kind, *agg_col.original_agg));
+        batch_requests.push_back(std::move(req));
+        result_to_agg_col.push_back(ac);
+      }
     }
 
     auto [batch_keys, batch_results] = batch_groupby.aggregate(batch_requests, stream, mr);
     out_keys                         = std::move(batch_keys);
 
+    if (m2_assemblies.empty()) {
+      std::vector<std::unique_ptr<column>> partial_cols;
+      for (auto& res : batch_results) {
+        for (auto& col : res.results) {
+          partial_cols.push_back(std::move(col));
+        }
+      }
+      return partial_cols;
+    }
+
+    std::unordered_set<size_type> m2_consumed_indices;
+    for (auto const& info : m2_assemblies) {
+      m2_consumed_indices.insert(info.count_result_index);
+      m2_consumed_indices.insert(info.mean_result_index);
+      m2_consumed_indices.insert(info.m2_result_index);
+    }
+
     std::vector<std::unique_ptr<column>> partial_cols;
-    for (auto& res : batch_results) {
-      for (auto& col : res.results) {
+    size_type m2_assembly_idx = 0;
+    for (size_type ri = 0; ri < static_cast<size_type>(batch_results.size()); ++ri) {
+      if (m2_consumed_indices.count(ri) > 0) {
+        if (m2_assembly_idx < static_cast<size_type>(m2_assemblies.size()) &&
+            m2_assemblies[m2_assembly_idx].count_result_index == ri) {
+          auto const& info = m2_assemblies[m2_assembly_idx];
+          auto count_col   = std::move(batch_results[info.count_result_index].results[0]);
+          auto mean_col    = std::move(batch_results[info.mean_result_index].results[0]);
+          auto m2_col      = std::move(batch_results[info.m2_result_index].results[0]);
+          auto const nrows = count_col->size();
+
+          auto count_f64 = cudf::cast(count_col->view(), data_type{type_id::FLOAT64}, stream, mr);
+
+          std::vector<std::unique_ptr<column>> children;
+          children.push_back(std::move(count_f64));
+          children.push_back(std::move(mean_col));
+          children.push_back(std::move(m2_col));
+          partial_cols.push_back(
+            make_structs_column(nrows, std::move(children), 0, rmm::device_buffer{}, stream, mr));
+          ++m2_assembly_idx;
+        }
+        continue;
+      }
+      for (auto& col : batch_results[ri].results) {
         partial_cols.push_back(std::move(col));
       }
     }
@@ -601,15 +711,20 @@ struct streaming_groupby::impl {
     if (!types_initialized()) { initialize_types(batch_partials, data); }
 
     auto cast_partials = cast_to_state_types(batch_partials, stream, mr);
-    auto batch_state   = build_state_table(std::move(batch_keys), cast_partials);
 
-    if (!_partial_state) {
-      _partial_state = std::move(batch_state);
+    auto batch_cols = batch_keys->release();
+    for (auto& c : cast_partials) {
+      batch_cols.push_back(std::move(c));
+    }
+
+    if (!has_state()) {
+      _partial_columns = std::move(batch_cols);
       return;
     }
 
+    auto batch_state = std::make_unique<table>(std::move(batch_cols));
     merge_partial_states(
-      _partial_state, batch_state->view(), num_keys(), _agg_columns, _null_handling, stream, mr);
+      _partial_columns, batch_state->view(), num_keys(), _agg_columns, _null_handling, stream, mr);
   }
 
   /**
@@ -648,10 +763,12 @@ struct streaming_groupby::impl {
   void do_merge(impl const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   {
     validate_compatible(other);
-    if (!other._partial_state) { return; }
+    if (!other.has_state()) { return; }
 
-    if (!_partial_state) {
-      _partial_state = std::make_unique<table>(other._partial_state->view(), stream, mr);
+    if (!has_state()) {
+      auto const other_view = other.state_as_table_view();
+      auto copied           = std::make_unique<table>(other_view, stream, mr);
+      _partial_columns      = copied->release();
       if (!types_initialized() && other.types_initialized()) {
         _partial_column_types  = other._partial_column_types;
         _finalize_output_types = other._finalize_output_types;
@@ -659,13 +776,9 @@ struct streaming_groupby::impl {
       return;
     }
 
-    merge_partial_states(_partial_state,
-                         other._partial_state->view(),
-                         num_keys(),
-                         _agg_columns,
-                         _null_handling,
-                         stream,
-                         mr);
+    auto const other_view = other.state_as_table_view();
+    merge_partial_states(
+      _partial_columns, other_view, num_keys(), _agg_columns, _null_handling, stream, mr);
   }
 
   /**
@@ -674,13 +787,14 @@ struct streaming_groupby::impl {
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> do_finalize(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
   {
-    CUDF_EXPECTS(_partial_state != nullptr,
-                 "Cannot finalize streaming_groupby with no accumulated data.");
+    CUDF_EXPECTS(has_state(), "Cannot finalize streaming_groupby with no accumulated data.");
 
-    std::vector<size_type> key_col_indices(num_keys());
-    std::iota(key_col_indices.begin(), key_col_indices.end(), 0);
-    auto keys_table =
-      std::make_unique<table>(_partial_state->view().select(key_col_indices), stream, mr);
+    std::vector<column_view> key_views;
+    key_views.reserve(num_keys());
+    for (size_type i = 0; i < num_keys(); ++i) {
+      key_views.push_back(_partial_columns[i]->view());
+    }
+    auto keys_table = std::make_unique<table>(table_view{key_views}, stream, mr);
 
     auto req_idx = size_type{0};
     std::vector<aggregation_result> results;
@@ -693,22 +807,23 @@ struct streaming_groupby::impl {
         switch (plan.finalization) {
           case finalize_kind::IDENTITY: {
             auto const state_col_idx = _agg_columns[plan.agg_column_refs[0]].column_index;
-            auto const& src          = _partial_state->view().column(num_keys() + state_col_idx);
+            auto const& src_col      = *_partial_columns[num_keys() + state_col_idx];
             if (req_idx < static_cast<size_type>(_finalize_output_types.size()) &&
-                src.type() != _finalize_output_types[req_idx] && cudf::is_fixed_width(src.type()) &&
+                src_col.type() != _finalize_output_types[req_idx] &&
+                cudf::is_fixed_width(src_col.type()) &&
                 cudf::is_fixed_width(_finalize_output_types[req_idx])) {
               agg_result.results.push_back(
-                cudf::cast(src, _finalize_output_types[req_idx], stream, mr));
+                cudf::cast(src_col.view(), _finalize_output_types[req_idx], stream, mr));
             } else {
-              agg_result.results.push_back(std::make_unique<column>(src, stream, mr));
+              agg_result.results.push_back(std::make_unique<column>(src_col, stream, mr));
             }
             break;
           }
           case finalize_kind::MEAN_FROM_SUM_COUNT: {
             auto const sum_col_idx   = _agg_columns[plan.agg_column_refs[0]].column_index;
             auto const count_col_idx = _agg_columns[plan.agg_column_refs[1]].column_index;
-            auto const sum_col       = _partial_state->view().column(num_keys() + sum_col_idx);
-            auto const count_col     = _partial_state->view().column(num_keys() + count_col_idx);
+            auto const sum_col       = _partial_columns[num_keys() + sum_col_idx]->view();
+            auto const count_col     = _partial_columns[num_keys() + count_col_idx]->view();
 
             auto const count_as_double =
               cudf::cast(count_col, data_type{type_id::FLOAT64}, stream, mr);
@@ -724,7 +839,7 @@ struct streaming_groupby::impl {
           }
           case finalize_kind::VARIANCE_FROM_M2: {
             auto const m2_col_idx = _agg_columns[plan.agg_column_refs[0]].column_index;
-            auto const m2_struct  = _partial_state->view().column(num_keys() + m2_col_idx);
+            auto const m2_struct  = _partial_columns[num_keys() + m2_col_idx]->view();
             auto const count_col  = m2_struct.child(0);
             auto const m2_col     = m2_struct.child(2);
 
@@ -764,7 +879,7 @@ struct streaming_groupby::impl {
           }
           case finalize_kind::STD_FROM_M2: {
             auto const m2_col_idx = _agg_columns[plan.agg_column_refs[0]].column_index;
-            auto const m2_struct  = _partial_state->view().column(num_keys() + m2_col_idx);
+            auto const m2_struct  = _partial_columns[num_keys() + m2_col_idx]->view();
             auto const count_col  = m2_struct.child(0);
             auto const m2_col     = m2_struct.child(2);
 
@@ -818,9 +933,8 @@ struct streaming_groupby::impl {
    */
   std::vector<std::unique_ptr<column>> do_release()
   {
-    if (!_partial_state) { return {}; }
-    auto cols      = _partial_state->release();
-    _partial_state = nullptr;
+    if (!has_state()) { return {}; }
+    auto cols = std::move(_partial_columns);
     _partial_column_types.clear();
     return cols;
   }
@@ -856,10 +970,10 @@ streaming_groupby::streaming_groupby(std::vector<std::unique_ptr<column>>&& part
                    std::to_string(_impl->num_agg_columns()) + " partial columns.",
                  std::invalid_argument);
 
-    _impl->_partial_state = std::make_unique<table>(std::move(partial_state));
+    _impl->_partial_columns = std::move(partial_state);
     _impl->_partial_column_types.reserve(_impl->num_agg_columns());
     for (auto i = _impl->num_keys(); i < _impl->num_keys() + _impl->num_agg_columns(); ++i) {
-      _impl->_partial_column_types.push_back(_impl->_partial_state->view().column(i).type());
+      _impl->_partial_column_types.push_back(_impl->_partial_columns[i]->type());
     }
   }
 }
