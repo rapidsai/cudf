@@ -136,8 +136,6 @@ std::vector<cudf::groupby::streaming_aggregation_request> single_agg_req(
 
 }  // namespace
 
-// -- Fixed-type tests --
-
 struct StreamingGroupbyTest : public cudf::test::BaseFixture {};
 
 TEST_F(StreamingGroupbyTest, SumTwoBatches)
@@ -291,8 +289,6 @@ TEST_F(StreamingGroupbyTest, MaxMinOnIntegers)
 
   verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
 }
-
-// -- Merge, release/restore, edge cases --
 
 TEST_F(StreamingGroupbyTest, MergeTwoObjects)
 {
@@ -486,8 +482,6 @@ TEST_F(StreamingGroupbyTest, FinalizeDoesNotModifyState)
   check(keys, results, cudf::table_view{{ek}}, {ev});
 }
 
-// -- Null key handling --
-
 TEST_F(StreamingGroupbyTest, NullKeysExcluded)
 {
   using K = int32_t;
@@ -562,8 +556,6 @@ TEST_F(StreamingGroupbyTest, AllNullKeysExcluded)
   EXPECT_EQ(results[0].results[0]->size(), 0);
 }
 
-// -- Typed SUM test across multiple value types --
-
 template <typename V>
 struct StreamingGroupbySumTypedTest : public cudf::test::BaseFixture {};
 
@@ -597,8 +589,6 @@ TYPED_TEST(StreamingGroupbySumTypedTest, TwoBatches)
   verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
 }
 
-// -- Typed MIN test across multiple value types --
-
 template <typename V>
 struct StreamingGroupbyMinTypedTest : public cudf::test::BaseFixture {};
 
@@ -631,8 +621,6 @@ TYPED_TEST(StreamingGroupbyMinTypedTest, TwoBatches)
 
   verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
 }
-
-// -- VARIANCE / STD null-semantics and ddof tests --
 
 TEST_F(StreamingGroupbyTest, VarianceBasic)
 {
@@ -779,8 +767,6 @@ TEST_F(StreamingGroupbyTest, StdDdofLargerThanGroup)
   verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
 }
 
-// -- COLLECT_LIST / COLLECT_SET parity tests --
-
 TEST_F(StreamingGroupbyTest, CollectListBasic)
 {
   using K = int32_t;
@@ -848,8 +834,6 @@ TEST_F(StreamingGroupbyTest, CollectSetNullExclude)
 
   verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
 }
-
-// -- TDIGEST parameter propagation test --
 
 TEST_F(StreamingGroupbyTest, TdigestCustomMaxCentroids)
 {
