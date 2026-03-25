@@ -13,3 +13,4 @@ cdef extern from "cudf/strings/regex/flags.hpp" namespace "cudf::strings" nogil:
         IGNORECASE "cudf::strings::regex_flags::IGNORECASE"
         MULTILINE "cudf::strings::regex_flags::MULTILINE"
         DOTALL "cudf::strings::regex_flags::DOTALL"
+        GLUSHKOV "cudf::strings::regex_flags::GLUSHKOV"
