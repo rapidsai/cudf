@@ -13,6 +13,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/lists/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -622,6 +623,249 @@ TYPED_TEST(StreamingGroupbyMinTypedTest, TwoBatches)
   cudf::table_view batch2{{keys2, vals2}};
 
   auto reqs = single_agg_req(1, cudf::make_min_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}
+
+// -- VARIANCE / STD null-semantics and ddof tests --
+
+TEST_F(StreamingGroupbyTest, VarianceBasic)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
+  fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
+
+  fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_variance_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, VarianceZeroValidValues)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{1, 1, 1};
+  fixed_width_column_wrapper<V> vals1{{3.0, 4.0, 5.0}, {false, false, false}};
+
+  cudf::table_view batch1{{keys1, vals1}};
+
+  auto reqs = single_agg_req(1, cudf::make_variance_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, VarianceDdofNonDefault)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{{1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                      {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}};
+  fixed_width_column_wrapper<V> vals1{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 3},
+                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1}};
+
+  cudf::table_view batch1{{keys1, vals1}};
+
+  auto reqs = single_agg_req(1, cudf::make_variance_aggregation<cudf::groupby_aggregation>(2));
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, VarianceSingleElementGroups)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{1, 2, 3};
+  fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
+
+  cudf::table_view batch1{{keys1, vals1}};
+
+  auto reqs = single_agg_req(1, cudf::make_variance_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, StdBasic)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
+  fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
+
+  fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_std_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, StdZeroValidValues)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{1, 1};
+  fixed_width_column_wrapper<V> vals1{{1.0, 2.0}, {false, false}};
+
+  cudf::table_view batch1{{keys1, vals1}};
+
+  auto reqs = single_agg_req(1, cudf::make_std_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, StdDdofLargerThanGroup)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{1, 1, 2};
+  fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
+
+  cudf::table_view batch1{{keys1, vals1}};
+
+  auto reqs = single_agg_req(1, cudf::make_std_aggregation<cudf::groupby_aggregation>(2));
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
+}
+
+// -- COLLECT_LIST / COLLECT_SET parity tests --
+
+TEST_F(StreamingGroupbyTest, CollectListBasic)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  fixed_width_column_wrapper<V> vals1{10, 20, 30};
+
+  fixed_width_column_wrapper<K> keys2{2, 1};
+  fixed_width_column_wrapper<V> vals2{40, 50};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_collect_list_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, CollectSetDedup)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  fixed_width_column_wrapper<K> keys1{1, 2, 1, 2};
+  fixed_width_column_wrapper<V> vals1{10, 20, 10, 30};
+
+  fixed_width_column_wrapper<K> keys2{1, 2};
+  fixed_width_column_wrapper<V> vals2{10, 20};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_collect_set_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, CollectSetNullExclude)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  fixed_width_column_wrapper<K> keys1{1, 1, 2};
+  fixed_width_column_wrapper<V> vals1{{10, 20, 30}, {true, false, true}};
+
+  cudf::table_view batch1{{keys1, vals1}};
+
+  auto reqs = single_agg_req(
+    1, cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE));
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
+}
+
+// -- TDIGEST parameter propagation test --
+
+TEST_F(StreamingGroupbyTest, TdigestCustomMaxCentroids)
+{
+  using K = int32_t;
+  using V = double;
+
+  fixed_width_column_wrapper<K> keys1{1, 2, 1, 2, 1};
+  fixed_width_column_wrapper<V> vals1{1.0, 2.0, 3.0, 4.0, 5.0};
+
+  fixed_width_column_wrapper<K> keys2{1, 2, 1};
+  fixed_width_column_wrapper<V> vals2{6.0, 7.0, 8.0};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(100));
 
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
   streaming_agg.aggregate(batch1);
