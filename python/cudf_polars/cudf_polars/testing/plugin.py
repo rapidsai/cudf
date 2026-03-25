@@ -399,6 +399,7 @@ def pytest_collection_modifyitems(
             and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
             is not None
         ):
+            # Also sets --runtime=rapidsmpf also sets --executor=streaming, so check last
             item.add_marker(pytest.mark.xfail(reason=s_reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):
