@@ -659,7 +659,11 @@ def test_string_zfill_forbidden_chars():
         ),
     ],
 )
-def test_string_pad_start(width, char):
+def test_string_pad_start(width, char, using_rapidsmpf):
+    if using_rapidsmpf:
+        pytest.skip(
+            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
+        )
     df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
     q = df.select(pl.col("a").str.pad_start(width, char))
     assert_gpu_result_equal(q)
