@@ -26,6 +26,7 @@ from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
+import pylibcudf as plc
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
@@ -56,7 +57,6 @@ from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
@@ -338,16 +338,26 @@ def evaluate_pipeline(
         ]
         dfs: list[DataFrame] = []
         if chunks:
+            col_names = list(ir.schema.keys())
+            col_dtypes = list(ir.schema.values())
             dfs = [
                 DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
+                    chunk.table_view(), col_names, col_dtypes, chunk.stream
                 )
                 for chunk in chunks
             ]
-            df = _concat(*dfs, context=ir_context)
+            if len(dfs) == 1:
+                df = dfs[0]
+            else:
+                with ir_context.stream_ordered_after(*dfs) as stream:
+                    df = DataFrame.from_table(
+                        plc.concatenate.concatenate(
+                            [d.table for d in dfs], stream=stream
+                        ),
+                        col_names,
+                        col_dtypes,
+                        stream,
+                    )
         else:
             # No chunks received - create an empty DataFrame with correct schema
             stream = ir_context.get_cuda_stream()

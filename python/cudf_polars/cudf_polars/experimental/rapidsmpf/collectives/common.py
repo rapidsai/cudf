@@ -132,10 +132,19 @@ class ReserveOpIDs:
                     _get_new_collective_id(),
                 ]
             elif isinstance(node, ShuffleSorted):
-                self.collective_id_map[node] = [
-                    _get_new_collective_id(),
-                    _get_new_collective_id(),
-                ]
+                if self.dynamic_planning_enabled:
+                    # 3 IDs: size-estimate allgather, boundary allgather, shuffle
+                    self.collective_id_map[node] = [
+                        _get_new_collective_id(),
+                        _get_new_collective_id(),
+                        _get_new_collective_id(),
+                    ]
+                else:
+                    # 2 IDs: boundary allgather, shuffle
+                    self.collective_id_map[node] = [
+                        _get_new_collective_id(),
+                        _get_new_collective_id(),
+                    ]
             else:
                 self.collective_id_map[node] = [_get_new_collective_id()]
 

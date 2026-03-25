@@ -8,6 +8,7 @@ import asyncio
 from collections import deque
 from typing import TYPE_CHECKING
 
+from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
@@ -28,6 +29,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    allgather_reduce,
     chunk_to_frame,
     concat_batch,
     empty_table_chunk,
@@ -54,6 +56,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
     from cudf_polars.typing import Schema
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 class ChunkStore:
@@ -148,6 +151,74 @@ async def _compute_sort_boundaries(
         return local_boundaries_df
 
 
+async def _sample_chunks_for_size_estimate(
+    context: Context,
+    comm: Communicator,
+    ch_in: Channel[TableChunk],
+    num_partitions: int,
+    metadata_in: ChannelMetadata,
+    executor: StreamingExecutor,
+    collective_ids: list[int],
+) -> tuple[dict[int, TableChunk], int]:
+    """
+    Sample chunks and estimate total data size to derive num_partitions dynamically.
+
+    The sampled chunks are returned keyed by sequence number. The caller is
+    responsible for replaying them into a channel (see sort_actor / _replay_into_channel).
+    """
+    if executor.dynamic_planning is None:
+        return {}, num_partitions
+
+    size_estimate_id = collective_ids.pop()
+    target_partition_size = executor.target_partition_size
+    sample_chunk_count = executor.dynamic_planning.sample_chunk_count
+
+    sampled_chunks: dict[int, TableChunk] = {}
+    sampled_bytes = 0
+    for _ in range(sample_chunk_count):
+        msg = await ch_in.recv(context)
+        if msg is None:
+            break
+        chunk = TableChunk.from_message(msg).make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
+        sampled_bytes += chunk.data_alloc_size(MemoryType.DEVICE)
+        sampled_chunks[msg.sequence_number] = chunk
+        if sampled_bytes >= target_partition_size:
+            break
+
+    # Extrapolate local size estimate from samples
+    local_count = metadata_in.local_count
+    local_size = (
+        int(sampled_bytes / len(sampled_chunks) * local_count) if sampled_chunks else 0
+    )
+
+    # Allgather to get global size estimate across all ranks
+    if comm.nranks > 1 and not metadata_in.duplicated:
+        (global_size,) = await allgather_reduce(
+            context, comm, size_estimate_id, local_size
+        )
+    else:
+        global_size = local_size
+
+    num_partitions = max(1, global_size // target_partition_size)
+    return sampled_chunks, num_partitions
+
+
+async def _replay_into_channel(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    buffered_chunks: dict[int, TableChunk],
+) -> None:
+    """Replay buffered chunks then forward remaining messages from ch_in into ch_out."""
+    for seq_num, chunk in buffered_chunks.items():
+        await ch_out.send(context, Message(seq_num, chunk))
+    while (msg := await ch_in.recv(context)) is not None:
+        await ch_out.send(context, msg)
+    await ch_out.drain(context)
+
+
 async def _receive_and_buffer_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -161,15 +232,8 @@ async def _receive_and_buffer_chunks(
     local_candidates_list: list[TableChunk] = []
     local_row_offset = 0
 
-    while (msg := await ch_in.recv(context)) is not None:
-        seq_num = msg.sequence_number
-        df = await asyncio.to_thread(
-            chunk_to_frame,
-            TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            ),
-            sort_ir,
-        )
+    def _buffer_df(seq_num: int, df: DataFrame) -> None:
+        nonlocal local_row_offset
         local_candidates_list.append(
             TableChunk.from_pylibcudf_table(
                 _select_local_split_candidates(
@@ -205,6 +269,17 @@ async def _receive_and_buffer_chunks(
                 TableChunk.from_pylibcudf_table(tbl, df.stream, exclusive_view=True),
             )
         )
+
+    while (msg := await ch_in.recv(context)) is not None:
+        seq_num = msg.sequence_number
+        df = await asyncio.to_thread(
+            chunk_to_frame,
+            TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            ),
+            sort_ir,
+        )
+        _buffer_df(seq_num, df)
         del df
 
     return local_candidates_list
@@ -337,24 +412,41 @@ async def sort_actor(
     ch_out: Channel[TableChunk],
     by: list[str],
     num_partitions: int,
+    executor: StreamingExecutor,
     collective_ids: list[int],
 ) -> None:
     """Streaming sort actor."""
     local_sort_ir = ir.children[0]
+    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
+    ch_replay = context.create_channel()
     async with shutdown_on_error(
-        context, ch_in, ch_out, trace_ir=local_sort_ir, ir_context=ir_context
+        context, ch_in, ch_out, ch_replay, trace_ir=ir, ir_context=ir_context
     ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
+
+        # Sample chunks to estimate total data size and derive num_partitions
+        sampled_chunks, num_partitions = await _sample_chunks_for_size_estimate(
+            context, comm, ch_in, num_partitions, metadata_in, executor, collective_ids
+        )
+
         output_metadata = ChannelMetadata(
             local_count=max(1, num_partitions // comm.nranks),
             partitioning=Partitioning(inter_rank=None, local="inherit"),
         )
         await send_metadata(ch_out, context, output_metadata)
 
-        assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
         chunk_store = ChunkStore(context)
-        local_candidates_list = await _receive_and_buffer_chunks(
-            context, ch_in, chunk_store, local_sort_ir, by, num_partitions, comm
+        _, local_candidates_list = await asyncio.gather(
+            _replay_into_channel(context, ch_replay, ch_in, sampled_chunks),
+            _receive_and_buffer_chunks(
+                context,
+                ch_replay,
+                chunk_store,
+                local_sort_ir,
+                by,
+                num_partitions,
+                comm,
+            ),
         )
 
         need_allgather = comm.nranks > 1 and not metadata_in.duplicated
@@ -396,9 +488,14 @@ def _shuffle_sorted_network(
     by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
     if len(by) != len(ir.by):
         raise NotImplementedError("Sorting columns must be column names.")
-    num_partitions = rec.state["partition_info"][ir].count
+
+    executor = rec.state["config_options"].executor
+    dynamic = executor.dynamic_planning is not None
     collective_ids = list(rec.state["collective_id_map"][ir])
-    assert len(collective_ids) == 2, "Sort must have 2 collective IDs."
+    expected_id_count = 3 if dynamic else 2
+    assert len(collective_ids) == expected_id_count, (
+        f"Sort must have {expected_id_count} collective IDs, got {len(collective_ids)}."
+    )
 
     channels[ir] = ChannelManager(rec.state["context"])
     nodes[ir] = [
@@ -410,7 +507,8 @@ def _shuffle_sorted_network(
             ch_in=channels[child].reserve_output_slot(),
             ch_out=channels[ir].reserve_input_slot(),
             by=by,
-            num_partitions=num_partitions,
+            num_partitions=rec.state["partition_info"][ir].count,
+            executor=executor,
             collective_ids=collective_ids,
         )
     ]
