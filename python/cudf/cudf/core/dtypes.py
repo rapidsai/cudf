@@ -77,6 +77,11 @@ def dtype(arbitrary: Any) -> DtypeObj:
             "but got the class instead. Try instantiating 'dtype'."
         )
         raise TypeError(msg)
+
+    if isinstance(arbitrary, str) and arbitrary == "str":
+        # "str" -> pd.StringDtype
+        return pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
+
     # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
@@ -84,11 +89,9 @@ def dtype(arbitrary: Any) -> DtypeObj:
         pass
     else:
         if np_dtype.kind == "U":
-            if cudf.get_option("mode.pandas_compatible"):
-                # Like pandas, allow users to pass this object to signal "string"
-                # but the dtype metadata should result in np.dtype(object)
-                return np_dtype
-            return DEFAULT_STRING_DTYPE
+            # Like pandas, allow users to pass this object to signal "string"
+            # but the dtype metadata should result in np.dtype(object)
+            return np_dtype
         elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype

@@ -596,10 +596,9 @@ def test_series_zero_copy_cow():
     s5 = cudf.Series(s4)
     assert_eq(s5, cudf.Series([10, 20, 30, 40, 50]))
     s5[0:2] = 1
-    # Modifying `s5` should also modify `s4`
-    # because they are zero-copied.
+    # With CoW, modifying `s5` should NOT modify `s4`.
     assert_eq(s5, cudf.Series([1, 1, 30, 40, 50]))
-    assert_eq(s4, cudf.Series([1, 1, 30, 40, 50]))
+    assert_eq(s4, cudf.Series([10, 20, 30, 40, 50]))
 
 
 def test_series_str_copy():

@@ -1181,8 +1181,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         else:
             # xref https://github.com/rapidsai/cudf/issues/21120
             # TODO: Revisit using pa_array.to_pandas() once pandas 3.0 is supported
+            np_array = pa_array.to_numpy(zero_copy_only=False, writable=True)
             return pd.Index(
-                pa_array.to_numpy(zero_copy_only=False, writable=True),
+                np_array,
+                dtype=np_array.dtype,
                 copy=False,
             )
 
@@ -3540,10 +3542,15 @@ def as_column(
                 raise ValueError(
                     "Need to pass dtype when passing pd.NA or None"
                 )
-        elif (
-            isinstance(arbitrary, (pd.Timestamp, pd.Timedelta))
-            or arbitrary is pd.NaT
-        ):
+        elif arbitrary is pd.NaT:
+            # NaT.to_numpy() defaults to ns resolution, but pandas 3.0
+            # defaults NaT to seconds resolution. Use the dtype's kind
+            # if provided to distinguish datetime vs timedelta.
+            if dtype is not None and dtype.kind == "m":
+                arbitrary = arbitrary.to_numpy("timedelta64[s]")
+            else:
+                arbitrary = arbitrary.to_numpy("datetime64[s]")
+        elif isinstance(arbitrary, (pd.Timestamp, pd.Timedelta)):
             arbitrary = arbitrary.to_numpy()
         elif isinstance(arbitrary, (np.datetime64, np.timedelta64)):
             unit = np.datetime_data(arbitrary.dtype)[0]
