@@ -261,6 +261,23 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     # Add tests that are expected to fail with the streaming executor
 }
 
+RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH: Mapping[str, str] = {
+    "tests/benchmark/test_io.py": "Extra long running tests",
+    "tests/benchmark/test_join_where.py": "Extra long running tests",
+    "tests/benchmark/test_group_by.py": "Extra long running tests",
+    "tests/unit/io/test_hive.py": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py": "Crashes pytest worker",
+    "tests/unit/io/test_partition.py": "Extra long running tests",
+    "tests/unit/io/test_parquet.py": "Extra long running tests",
+    "tests/unit/io/test_scan.py": "Extra long running tests",
+    "tests/unit/io/test_scan_lines.py": "Crashes pytest worker",
+    "tests/unit/sql/test_group_by.py": "Crashes pytest worker",
+    "tests/unit/operations/test_group_by.py": "Crashes pytest worker",
+    "tests/unit/streaming/test_streaming_io.py": "Extra long running tests",
+    "tests/unit/streaming/test_streaming_join.py": "Extra long running tests",
+    "tests/unit/streaming/test_streaming_sort.py": "Extra long running tests",
+}
+
 RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/sql/test_group_by.py::test_group_by_having_misc_02[ABS(SUM(b)) + ABS(AVG(b)) > 100-expected4]": "Crashes pytest worker",
     "tests/unit/operations/test_group_by.py::test_grouped_agg_parametric[drop_nulls-True-False-False-False]": "Crashes pytest worker",
@@ -299,17 +316,26 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Takes >20 seconds to run locally",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Takes >x minutes/seconds to run locally",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Takes >x minutes/seconds to run locally",
-    "tests/unit/io/test_parquet.py::test_head_union": "Takes >20 seconds to run locally",
-    "tests/unit/io/test_parquet.py::test_parametric_small_page_mask_filtering": "Takes >20 seconds to run locally",
-    "tests/benchmark/test_join_where.py::test_single_inequality": "Takes >20 seconds to run locally",
-    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Takes >20 seconds to run locally",
-    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Takes >20 seconds to run locally",
-    "tests/benchmark/test_io.py::test_write_read_scan_large_csv": "Takes >20 seconds to run locally",
+    "tests/unit/io/test_parquet.py::test_head_union": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_parquet.py::test_parametric_small_page_mask_filtering": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_join_where.py::test_single_inequality": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_io.py::test_write_read_scan_large_csv": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Takes >60 seconds to run locally",
 }
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
-    "tests/unit/operations/test_join.py::test_join_panic_on_binary_expr_5915": "AssertionError",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Requested number of partitions does not fit in shared memory.",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Requested number of partitions does not fit in shared memory.",
     "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "RuntimeError: Cannot broadcast columns of length nrows=30 to target_length=4",
@@ -335,8 +361,6 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-True-True]": "AssertionError: Expected ChannelMetadata message, got None.",
     "tests/unit/operations/test_group_by.py::test_n_unique_masked_bools[df0-out0-True]": "DataFrames are different (value mismatch for column 'key')",
     "tests/unit/dataframe/test_null_count.py::test_null_count_optimization_23031": "DataFrames are different (height (row count) mismatch)",
-    "tests/unit/io/test_scan.py::test_scan_ndjson_streaming_decompression[schema0]": "OSError: corrupt deflate stream",
-    "tests/unit/io/test_scan.py::test_scan_ndjson_streaming_decompression[schema1]": "OSError: corrupt deflate stream",
     "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "DataFrames are different (value mismatch for column 'a')",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "AssertionError:",
 }
@@ -356,11 +380,16 @@ def pytest_collection_modifyitems(
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (
             config.getoption("--runtime") == "rapidsmpf"
-            and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            and any(
+                item.nodeid.startswith(file_path)
+                for file_path in RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH
+            )
             is not None
         ):
             # Also sets --executor=streaming, so check first
-            item.add_marker(pytest.mark.xfail(reason=r_reason))
+            item.add_marker(
+                pytest.mark.xfail(reason="Contains slow tests or maybe segfaults")
+            )
         elif (
             config.getoption("--executor") == "streaming"
             and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
