@@ -860,3 +860,49 @@ TEST_F(StreamingGroupbyTest, TdigestCustomMaxCentroids)
   EXPECT_EQ(results[0].results.size(), 1u);
   EXPECT_EQ(results[0].results[0]->type().id(), cudf::type_id::STRUCT);
 }
+
+TEST_F(StreamingGroupbyTest, DualCollectSetDifferentNullPolicy)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  fixed_width_column_wrapper<K> keys1{1, 1, 2, 2};
+  fixed_width_column_wrapper<V> vals1{{10, 20, 30, 40}, {true, false, true, false}};
+
+  cudf::table_view batch1{{keys1, vals1}};
+
+  std::vector<cudf::groupby::streaming_aggregation_request> reqs;
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
+  aggs.push_back(
+    cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(cudf::null_policy::INCLUDE));
+  aggs.push_back(
+    cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE));
+  reqs.push_back(make_req(1, std::move(aggs)));
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs);
+  streaming_agg.aggregate(batch1);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, MergeRejectsParameterMismatch)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  fixed_width_column_wrapper<K> keys1{1, 2};
+  fixed_width_column_wrapper<V> vals1{10, 20};
+
+  auto reqs_include = single_agg_req(
+    1, cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(cudf::null_policy::INCLUDE));
+  cudf::groupby::streaming_groupby worker_include(KEY_COL, reqs_include);
+  worker_include.aggregate(cudf::table_view{{keys1, vals1}});
+
+  auto reqs_exclude = single_agg_req(
+    1, cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE));
+  cudf::groupby::streaming_groupby worker_exclude(KEY_COL, reqs_exclude);
+  worker_exclude.aggregate(cudf::table_view{{keys1, vals1}});
+
+  EXPECT_THROW(worker_include.merge(worker_exclude), std::invalid_argument);
+}

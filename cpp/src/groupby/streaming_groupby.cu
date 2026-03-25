@@ -26,8 +26,6 @@
 
 #include <memory>
 #include <numeric>
-#include <tuple>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -68,7 +66,7 @@ struct unique_agg_column {
   bool operator==(unique_agg_column const& other) const
   {
     return value_column_index == other.value_column_index && batch_kind == other.batch_kind &&
-           merge_kind == other.merge_kind;
+           merge_kind == other.merge_kind && original_agg->is_equal(*other.original_agg);
   }
 };
 
@@ -87,38 +85,9 @@ struct request_plan {
 };
 
 /**
- * @brief Composite key for deduplicating partial-state columns:
- * (value_column_index, batch_kind, merge_kind).
- */
-using agg_key_t = std::tuple<size_type, aggregation::Kind, aggregation::Kind>;
-
-/**
- * @brief Hash functor for agg_key_t, using boost-style hash combining.
- */
-struct agg_key_hash {
-  std::size_t operator()(agg_key_t const& key) const noexcept
-  {
-    auto hash = std::hash<size_type>{}(std::get<0>(key));
-    hash ^= std::hash<int32_t>{}(static_cast<int32_t>(std::get<1>(key))) + 0x9e3779b9 +
-            (hash << 6) + (hash >> 2);
-    hash ^= std::hash<int32_t>{}(static_cast<int32_t>(std::get<2>(key))) + 0x9e3779b9 +
-            (hash << 6) + (hash >> 2);
-    return hash;
-  }
-};
-
-/**
- * @brief Maps agg_key_t to the index of the corresponding unique_agg_column.
- *
- * Used during build_plans_and_columns to ensure that identical
- * (value_column_index, batch_kind, merge_kind) combinations share a single
- * partial-state column rather than each request plan allocating its own.
- */
-using dedup_map_t = std::unordered_map<agg_key_t, size_type, agg_key_hash>;
-
-/**
- * @brief Register a unique_agg_column, reusing an existing one if the same
- * (value_column_index, batch_kind, merge_kind) combination was already registered.
+ * @brief Register a unique_agg_column, reusing an existing one if a fully matching
+ * entry (value_column_index, batch_kind, merge_kind, and aggregation parameters)
+ * was already registered.
  *
  * @return The index of the (possibly existing) unique_agg_column.
  */
@@ -126,12 +95,15 @@ size_type register_agg_column(size_type value_column,
                               aggregation::Kind batch_kind,
                               aggregation::Kind merge_kind,
                               aggregation const& original_agg,
-                              std::vector<unique_agg_column>& columns,
-                              dedup_map_t& dedup_map)
+                              std::vector<unique_agg_column>& columns)
 {
-  auto const key = agg_key_t{value_column, batch_kind, merge_kind};
-  auto const it  = dedup_map.find(key);
-  if (it != dedup_map.end()) { return it->second; }
+  for (size_type i = 0; i < static_cast<size_type>(columns.size()); ++i) {
+    auto const& existing = columns[i];
+    if (existing.value_column_index == value_column && existing.batch_kind == batch_kind &&
+        existing.merge_kind == merge_kind && existing.original_agg->is_equal(original_agg)) {
+      return i;
+    }
+  }
 
   auto const index = static_cast<size_type>(columns.size());
   columns.push_back({value_column,
@@ -139,7 +111,6 @@ size_type register_agg_column(size_type value_column,
                      merge_kind,
                      std::shared_ptr<aggregation>(original_agg.clone()),
                      index});
-  dedup_map[key] = index;
   return index;
 }
 
@@ -154,7 +125,6 @@ std::pair<std::vector<request_plan>, std::vector<unique_agg_column>> build_plans
 {
   std::vector<request_plan> plans;
   std::vector<unique_agg_column> agg_columns;
-  dedup_map_t dedup_map;
 
   for (auto const& request : requests) {
     for (auto const& agg : request.aggregations) {
@@ -171,79 +141,54 @@ std::pair<std::vector<request_plan>, std::vector<unique_agg_column>> build_plans
         case aggregation::MIN:
         case aggregation::MAX:
           plan.agg_column_refs = {
-            register_agg_column(column_idx, agg->kind, agg->kind, *agg, agg_columns, dedup_map)};
+            register_agg_column(column_idx, agg->kind, agg->kind, *agg, agg_columns)};
           plan.finalization = finalize_kind::IDENTITY;
           break;
         case aggregation::COUNT_VALID:
         case aggregation::COUNT_ALL:
-          plan.agg_column_refs = {register_agg_column(
-            column_idx, agg->kind, aggregation::SUM, *agg, agg_columns, dedup_map)};
-          plan.finalization    = finalize_kind::IDENTITY;
+          plan.agg_column_refs = {
+            register_agg_column(column_idx, agg->kind, aggregation::SUM, *agg, agg_columns)};
+          plan.finalization = finalize_kind::IDENTITY;
           break;
         case aggregation::MEAN:
           plan.agg_column_refs = {
+            register_agg_column(column_idx, aggregation::SUM, aggregation::SUM, *agg, agg_columns),
             register_agg_column(
-              column_idx, aggregation::SUM, aggregation::SUM, *agg, agg_columns, dedup_map),
-            register_agg_column(column_idx,
-                                aggregation::COUNT_VALID,
-                                aggregation::SUM,
-                                *agg,
-                                agg_columns,
-                                dedup_map)};
+              column_idx, aggregation::COUNT_VALID, aggregation::SUM, *agg, agg_columns)};
           plan.finalization = finalize_kind::MEAN_FROM_SUM_COUNT;
           break;
         case aggregation::SUM_OF_SQUARES:
-          plan.agg_column_refs = {register_agg_column(column_idx,
-                                                      aggregation::SUM_OF_SQUARES,
-                                                      aggregation::SUM,
-                                                      *agg,
-                                                      agg_columns,
-                                                      dedup_map)};
+          plan.agg_column_refs = {register_agg_column(
+            column_idx, aggregation::SUM_OF_SQUARES, aggregation::SUM, *agg, agg_columns)};
           plan.finalization    = finalize_kind::IDENTITY;
           break;
         case aggregation::M2:
         case aggregation::VARIANCE:
         case aggregation::STD:
           plan.agg_column_refs = {register_agg_column(
-            column_idx, aggregation::M2, aggregation::MERGE_M2, *agg, agg_columns, dedup_map)};
+            column_idx, aggregation::M2, aggregation::MERGE_M2, *agg, agg_columns)};
           plan.finalization = (agg->kind == aggregation::VARIANCE) ? finalize_kind::VARIANCE_FROM_M2
                               : (agg->kind == aggregation::STD)    ? finalize_kind::STD_FROM_M2
                                                                    : finalize_kind::IDENTITY;
           break;
         case aggregation::TDIGEST:
-          plan.agg_column_refs = {register_agg_column(column_idx,
-                                                      aggregation::TDIGEST,
-                                                      aggregation::MERGE_TDIGEST,
-                                                      *agg,
-                                                      agg_columns,
-                                                      dedup_map)};
+          plan.agg_column_refs = {register_agg_column(
+            column_idx, aggregation::TDIGEST, aggregation::MERGE_TDIGEST, *agg, agg_columns)};
           plan.finalization    = finalize_kind::IDENTITY;
           break;
         case aggregation::HISTOGRAM:
-          plan.agg_column_refs = {register_agg_column(column_idx,
-                                                      aggregation::HISTOGRAM,
-                                                      aggregation::MERGE_HISTOGRAM,
-                                                      *agg,
-                                                      agg_columns,
-                                                      dedup_map)};
+          plan.agg_column_refs = {register_agg_column(
+            column_idx, aggregation::HISTOGRAM, aggregation::MERGE_HISTOGRAM, *agg, agg_columns)};
           plan.finalization    = finalize_kind::IDENTITY;
           break;
         case aggregation::COLLECT_LIST:
-          plan.agg_column_refs = {register_agg_column(column_idx,
-                                                      aggregation::COLLECT_LIST,
-                                                      aggregation::MERGE_LISTS,
-                                                      *agg,
-                                                      agg_columns,
-                                                      dedup_map)};
+          plan.agg_column_refs = {register_agg_column(
+            column_idx, aggregation::COLLECT_LIST, aggregation::MERGE_LISTS, *agg, agg_columns)};
           plan.finalization    = finalize_kind::IDENTITY;
           break;
         case aggregation::COLLECT_SET:
-          plan.agg_column_refs = {register_agg_column(column_idx,
-                                                      aggregation::COLLECT_SET,
-                                                      aggregation::MERGE_SETS,
-                                                      *agg,
-                                                      agg_columns,
-                                                      dedup_map)};
+          plan.agg_column_refs = {register_agg_column(
+            column_idx, aggregation::COLLECT_SET, aggregation::MERGE_SETS, *agg, agg_columns)};
           plan.finalization    = finalize_kind::IDENTITY;
           break;
         case aggregation::MERGE_TDIGEST:
@@ -251,7 +196,7 @@ std::pair<std::vector<request_plan>, std::vector<unique_agg_column>> build_plans
         case aggregation::MERGE_LISTS:
         case aggregation::MERGE_SETS:
           plan.agg_column_refs = {
-            register_agg_column(column_idx, agg->kind, agg->kind, *agg, agg_columns, dedup_map)};
+            register_agg_column(column_idx, agg->kind, agg->kind, *agg, agg_columns)};
           plan.finalization = finalize_kind::IDENTITY;
           break;
         default:
