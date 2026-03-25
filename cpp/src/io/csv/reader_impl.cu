@@ -750,6 +750,25 @@ cudf::detail::host_vector<data_type> determine_column_types(
   return active_col_types;
 }
 
+void set_column_dealloc_stream(std::unique_ptr<column>& col, rmm::cuda_stream_view stream)
+{
+  auto const dtype      = col->type();
+  auto const sz         = col->size();
+  auto const null_count = col->null_count();
+  auto contents         = col->release();
+  contents.data->set_stream(stream);
+  contents.null_mask->set_stream(stream);
+  for (auto& child : contents.children) {
+    set_column_dealloc_stream(child, stream);
+  }
+  col = std::make_unique<column>(dtype,
+                                 sz,
+                                 std::move(*contents.data),
+                                 std::move(*contents.null_mask),
+                                 null_count,
+                                 std::move(contents.children));
+}
+
 table_with_metadata read_csv(cudf::io::datasource* source,
                              csv_reader_options const& reader_opts,
                              parse_options const& parse_opts,
@@ -1055,6 +1074,10 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       }
 
       cudf::detail::join_streams(streams, stream);
+
+      for (auto const col_idx : string_col_indices) {
+        if (out_columns[col_idx]) { set_column_dealloc_stream(out_columns[col_idx], stream); }
+      }
     }
 
     // Create output columns for the columns that were not processed in the parallel loop
