@@ -22,7 +22,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/logger.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -2556,28 +2555,20 @@ void writer::impl::write(table_view const& input)
                          streams,
                          stripes,
                          stripe_dicts, /* unused, but its data will be accessed via pointer later */
-                         bounce_buffer] = [&] {
-    try {
-      return convert_table_to_orc_data(input,
-                                       *_table_meta,
-                                       _max_stripe_size,
-                                       _row_index_stride,
-                                       _enable_dictionary,
-                                       _sort_dictionaries,
-                                       _compression,
-                                       _compression_blocksize,
-                                       _stats_freq,
-                                       _compression_statistics != nullptr,
-                                       _single_write_mode,
-                                       *_out_sink,
-                                       _stream);
-    } catch (...) {  // catch any exception type
-      CUDF_LOG_ERROR(
-        "ORC writer encountered exception during processing. "
-        "No data has been written to the sink.");
-      throw;  // this throws the same exception
-    }
-  }();
+                         bounce_buffer] =
+    convert_table_to_orc_data(input,
+                              *_table_meta,
+                              _max_stripe_size,
+                              _row_index_stride,
+                              _enable_dictionary,
+                              _sort_dictionaries,
+                              _compression,
+                              _compression_blocksize,
+                              _stats_freq,
+                              _compression_statistics != nullptr,
+                              _single_write_mode,
+                              *_out_sink,
+                              _stream);
 
   if (_state == writer_state::NO_DATA_WRITTEN) {
     // Write the ORC file header if this is the first write
