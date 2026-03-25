@@ -14,7 +14,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/rolling.hpp>
@@ -582,20 +581,14 @@ class RollingTest : public cudf::test::BaseFixture {
       case cudf::aggregation::SUM:
         return create_reference_output<cudf::DeviceSum,
                                        cudf::aggregation::SUM,
-                                       cudf::detail::target_type_t<T, cudf::aggregation::SUM>,
+                                       std::conditional_t<std::is_integral_v<T>, int64_t, T>,
                                        false>(
           input, preceding_window, following_window, min_periods);
       case cudf::aggregation::MIN:
-        return create_reference_output<cudf::DeviceMin,
-                                       cudf::aggregation::MIN,
-                                       cudf::detail::target_type_t<T, cudf::aggregation::MIN>,
-                                       false>(
+        return create_reference_output<cudf::DeviceMin, cudf::aggregation::MIN, T, false>(
           input, preceding_window, following_window, min_periods);
       case cudf::aggregation::MAX:
-        return create_reference_output<cudf::DeviceMax,
-                                       cudf::aggregation::MAX,
-                                       cudf::detail::target_type_t<T, cudf::aggregation::MAX>,
-                                       false>(
+        return create_reference_output<cudf::DeviceMax, cudf::aggregation::MAX, T, false>(
           input, preceding_window, following_window, min_periods);
       case cudf::aggregation::COUNT_VALID:
         return create_count_reference_output<false>(
@@ -606,7 +599,7 @@ class RollingTest : public cudf::test::BaseFixture {
       case cudf::aggregation::MEAN:
         return create_reference_output<cudf::DeviceSum,
                                        cudf::aggregation::MEAN,
-                                       cudf::detail::target_type_t<T, cudf::aggregation::MEAN>,
+                                       std::conditional_t<cudf::is_duration<T>(), T, double>,
                                        true>(
           input, preceding_window, following_window, min_periods);
       default: return cudf::test::fixed_width_column_wrapper<T>({}).release();
