@@ -18,6 +18,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 
+#include <rmm/cuda_stream.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
@@ -1044,6 +1046,27 @@ TYPED_TEST(DecimalComparisonTest, DecimalComparison)
   auto result        = cudf::compute_column(table, expression);
 
   auto expected = column_wrapper<bool>({false, true, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, NonDefaultStream)
+{
+  using Executor = TypeParam;
+
+  rmm::cuda_stream stream;
+
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<int32_t>{13, 27, 21, 50};
+  auto result   = Executor::compute_column(table, expression, stream);
+  stream.synchronize();
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
