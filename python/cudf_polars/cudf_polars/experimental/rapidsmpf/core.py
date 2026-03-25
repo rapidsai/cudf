@@ -26,17 +26,26 @@ from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
+import pylibcudf as plc
 import rmm
 
 import cudf_polars.experimental.rapidsmpf.collectives.shuffle
+import cudf_polars.experimental.rapidsmpf.collectives.sort
 import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.repartition
 import cudf_polars.experimental.rapidsmpf.union
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import DataFrameScan, IRExecutionContext, Join, Scan, Union
+from cudf_polars.dsl.ir import (
+    DataFrameScan,
+    IRExecutionContext,
+    Join,
+    Scan,
+    Union,
+)
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
@@ -46,8 +55,8 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
-from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
@@ -61,7 +70,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
+    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import (
         LowerIRTransformer,
         State as LowerState,
@@ -100,6 +109,14 @@ def evaluate_logical_plan(
 
     # Lower the IR graph on the client process (for now).
     ir, partition_info, stats = lower_ir_graph(ir, config_options)
+
+    # Dask may return chunks in arbitrary order.
+    # Make sure we always finish with a Repartition for now.
+    if config_options.executor.cluster == "distributed" and not isinstance(
+        ir, Repartition
+    ):
+        ir = Repartition(ir.schema, ir)
+        partition_info[ir] = PartitionInfo(count=1)
 
     query_id = uuid.uuid4()
 
@@ -321,16 +338,26 @@ def evaluate_pipeline(
         ]
         dfs: list[DataFrame] = []
         if chunks:
+            col_names = list(ir.schema.keys())
+            col_dtypes = list(ir.schema.values())
             dfs = [
                 DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
+                    chunk.table_view(), col_names, col_dtypes, chunk.stream
                 )
                 for chunk in chunks
             ]
-            df = _concat(*dfs, context=ir_context)
+            if len(dfs) == 1:
+                df = dfs[0]
+            else:
+                with ir_context.stream_ordered_after(*dfs) as stream:
+                    df = DataFrame.from_table(
+                        plc.concatenate.concatenate(
+                            [d.table for d in dfs], stream=stream
+                        ),
+                        col_names,
+                        col_dtypes,
+                        stream,
+                    )
         else:
             # No chunks received - create an empty DataFrame with correct schema
             stream = ir_context.get_cuda_stream()
