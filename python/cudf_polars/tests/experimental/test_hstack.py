@@ -111,8 +111,6 @@ def test_with_columns_scalar_upstream_20981(engine):
 
 @pytest.mark.parametrize("comm_subexpr_elim", [True, False])
 def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
-    # CSE: Check that col("a").sum() is only computed once
-    # (whether or not comm_subexpr_elim is enabled in Polars)
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5, 6]})
     q = df.with_columns(
         pl.col("a").sum().alias("s"),
@@ -122,9 +120,18 @@ def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
     ir = Translator(
         q._ldf.with_optimizations(opts._pyoptflags).visit(), engine
     ).translate_ir()
+
+    # With CSE, Polars lifts sum(a) into a nested HStack(should_broadcast=False).
+    # Without CSE, a single flat HStack contains both expressions.
+    inner_hstacks = [
+        n for n in traversal([ir]) if isinstance(n, HStack) and not n.should_broadcast
+    ]
+    assert len(inner_hstacks) == (1 if comm_subexpr_elim else 0)
+
     config_options = ConfigOptions.from_polars_engine(engine)
     lowered, _, _ = lower_ir_graph(ir, config_options)
 
+    # Both paths must lower to a single Repartition computing one aggregation.
     repartitions = [n for n in traversal([lowered]) if isinstance(n, Repartition)]
     assert len(repartitions) == 1
     assert len(repartitions[0].children[0].exprs) == 1
