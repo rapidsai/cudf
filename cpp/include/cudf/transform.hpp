@@ -82,8 +82,8 @@ using transform_input = std::variant<column_view, scalar_column_view>;
  *
  *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
- * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
- * types
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width, string,
+ * or dictionary types
  * @throws std::invalid_argument if any of the input columns have nulls
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
