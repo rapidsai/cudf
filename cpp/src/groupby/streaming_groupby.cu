@@ -737,8 +737,6 @@ struct streaming_groupby::impl {
   }
 };
 
-// -- Public method implementations --
-
 streaming_groupby::streaming_groupby(host_span<size_type const> key_indices,
                                      host_span<streaming_aggregation_request const> requests,
                                      null_policy null_handling,
