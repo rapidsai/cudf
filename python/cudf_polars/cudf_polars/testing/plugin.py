@@ -377,8 +377,7 @@ def pytest_collection_modifyitems(
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
             with_rapidsmpf
-            and (reason := RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH.get(item.nodeid, None))
-            is not None
+            and (reason := RAPIDSMPF_TESTS_TO_SKIP.get(item.nodeid, None)) is not None
         ):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif with_rapidsmpf and any(
