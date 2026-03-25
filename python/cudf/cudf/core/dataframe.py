@@ -5714,6 +5714,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             it does not support automatically setting index column(s).
         """
         out = super().from_arrow(table)
+        if table.num_columns == 0:
+            # Match pyarrow's to_pandas: empty tables produce object dtype
+            # columns, not the cudf default string dtype.
+            out._data.label_dtype = np.dtype("O")
         if isinstance(table.schema.pandas_metadata, dict):
             # Maybe set .index or .columns attributes
             pd_meta = table.schema.pandas_metadata

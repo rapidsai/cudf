@@ -363,20 +363,45 @@ class StringColumn(ColumnBase, Scannable):
         # dask checks for a TypeError instead of NotImplementedError
         raise TypeError(f"cupy does not support {self.dtype}")
 
+    @property
+    def _should_use_large_string(self) -> bool:
+        """Whether this column's dtype maps to arrow large_string."""
+        dtype = self.dtype
+        if isinstance(dtype, pd.StringDtype):
+            return dtype.storage == "pyarrow"
+        if isinstance(dtype, pd.ArrowDtype):
+            return pa.types.is_large_string(dtype.pyarrow_dtype)
+        return False
+
+    def to_arrow(self) -> pa.Array:
+        result = super().to_arrow()
+        # libcudf produces arrow string (32-bit offsets), but pandas 3.0
+        # uses large_string (64-bit offsets) for pyarrow-backed string
+        # dtypes. Cast to large_string to match pandas arrow output.
+        if pa.types.is_string(result.type) and self._should_use_large_string:
+            result = result.cast(pa.large_string())
+        return result
+
     def to_pandas(
         self,
         *,
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if (
-            not nullable
-            and not arrow_type
-            and isinstance(self.dtype, pd.StringDtype)
-        ):
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        if arrow_type:
+            # Use the raw column arrow (without large_string cast)
+            # so that ArrowExtensionArray preserves the original type.
+            pa_array = ColumnBase.to_arrow(self)
+            return pd.Index(
+                pd.arrays.ArrowExtensionArray(pa_array), copy=False
+            )
+        if not nullable and isinstance(self.dtype, pd.StringDtype):
             if self.dtype.storage == "pyarrow":
                 pa_array = self.to_arrow()
-                pa_array = pa_array.cast(pa.large_string())
                 pandas_array = self.dtype.__from_arrow__(pa_array)
             elif self.dtype.na_value is np.nan:
                 pandas_array = pd.array(
