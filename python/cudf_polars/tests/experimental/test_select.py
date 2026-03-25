@@ -17,7 +17,7 @@ from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import HStack, Projection, Select
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.experimental.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
@@ -45,7 +45,7 @@ def engine(
         "dynamic_planning": {},
         **params.get("executor_options", {}),
     }
-    with spmd_execution(executor_options=executor_options) as engine:
+    with SPMDEngine(executor_options=executor_options) as engine:
         yield engine
 
 

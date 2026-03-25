@@ -9,7 +9,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
@@ -30,7 +30,7 @@ def engine(
         "dynamic_planning": {},
         **params.get("executor_options", {}),
     }
-    with spmd_execution(executor_options=executor_options) as engine:
+    with SPMDEngine(executor_options=executor_options) as engine:
         yield engine
 
 
