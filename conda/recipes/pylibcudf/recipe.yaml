@@ -78,7 +78,6 @@ requirements:
     - dlpack >=0.8,<1.0
     - libcudf =${{ version }}
     - rmm =${{ minor_version }}
-    - cuda-cudart-dev
     - cuda-nvrtc
     - if: linux and x86_64
       then:
@@ -98,7 +97,6 @@ requirements:
     - pyarrow>=19.0.0
   ignore_run_exports:
     from_package:
-      - cuda-cudart-dev
       - libcudf
       - if: linux and x86_64
         then:
