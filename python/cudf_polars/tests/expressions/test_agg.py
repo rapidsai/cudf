@@ -194,13 +194,7 @@ def test_implode_agg_unsupported():
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_decimal_aggs(decimal_df: pl.LazyFrame, using_rapidsmpf, request) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=using_rapidsmpf,
-            reason="https://github.com/rapidsai/cudf/issues/21645",
-        )
-    )
+def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
     q = decimal_df.with_columns(
         sum=pl.col("a").sum(),
         min=pl.col("a").min(),

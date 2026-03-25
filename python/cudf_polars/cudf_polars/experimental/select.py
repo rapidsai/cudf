@@ -255,7 +255,7 @@ def _fuse_simple_reductions(
             reduction_groups[select_c].append(select_c)
 
     new_decomposed_select_irs: list[IR] = []
-    # Schemas already projected to final output names (used for already_computed below).
+    # Schemas already projected to final output names.
     already_projected: Schema = {}
     for root_ir, group in reduction_groups.items():
         if len(group) > 1:
@@ -323,8 +323,12 @@ def _fuse_simple_reductions(
             pi[fused_select_b] = PartitionInfo(count=1)
             new_decomposed_select_irs.append(fused_select_b)
         else:
-            # Nothing to fuse for this group
-            new_decomposed_select_irs.append(group[0])
+            # Nothing to fuse for this group, but we still need to add the
+            # inner IR (children[0], ie. select_b) rather than the outer select_c.
+            # fused_select_c_exprs is built from select_c.exprs, which reference
+            # intermediate column names in select_c.children[0].schema, not the
+            # final output names in select_c.schema.
+            new_decomposed_select_irs.append(group[0].children[0])
 
     # If any aggregations were fused, we must concatenate
     # the results and apply the final (fused) "c" selection,
@@ -342,19 +346,9 @@ def _fuse_simple_reductions(
         count = max(pi[c].count for c in new_decomposed_select_irs)
         pi[new_hconcat] = PartitionInfo(count=count)
 
-        # Non-fused columns are already computed in new_decomposed_select_irs.
-        # Replace their exprs with Col references to avoid re-evaluation against
-        # the HConcat (which would double-apply any pointwise expression).
-        already_computed: Schema = {}
-        for group in reduction_groups.values():
-            if len(group) == 1:
-                already_computed |= group[0].schema
-        # Also include outputs from the "already shared" path above.
-        already_computed |= already_projected
-
         final_exprs = [
-            expr.NamedExpr(ne.name, Col(already_computed[ne.name], ne.name))
-            if ne.name in already_computed
+            expr.NamedExpr(ne.name, Col(already_projected[ne.name], ne.name))
+            if ne.name in already_projected
             else ne
             for ne in fused_select_c_exprs
         ]
