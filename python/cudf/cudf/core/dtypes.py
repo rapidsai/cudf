@@ -77,13 +77,14 @@ def dtype(arbitrary: Any) -> DtypeObj:
             "but got the class instead. Try instantiating 'dtype'."
         )
         raise TypeError(msg)
+
+    if isinstance(arbitrary, str) and arbitrary == "str":
+        # "str" -> pd.StringDtype
+        return pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
+
     # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
-        if isinstance(arbitrary, str) and arbitrary == "str":
-            # "str" -> pd.StringDtype
-            return pd.api.types.pandas_dtype(arbitrary)  # noqa: TID251
-        else:
-            np_dtype = np.dtype(arbitrary)
+        np_dtype = np.dtype(arbitrary)
     except TypeError:
         pass
     else:
