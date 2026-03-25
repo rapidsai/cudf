@@ -4,8 +4,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock, patch
+from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 import pytest
 
@@ -15,49 +15,37 @@ from cudf_polars.utils.config import RayContext
 
 ray = pytest.importorskip("ray")
 
-from cudf_polars.experimental.rapidsmpf.frontend.ray import (  # noqa: E402
-    RayClient,
-    ray_execution,
-)
+from rapidsmpf.bootstrap import is_running_with_rrun  # noqa: E402
+
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-@pytest.fixture(scope="session")
-def _ray_env() -> Iterator[tuple[RayClient, pl.GPUEngine]]:
+@pytest.fixture(scope="module")
+def engine() -> Iterator[RayEngine]:
     """Create one Ray cluster + GPU actors shared across the test session."""
     try:
-        with ray_execution(
+        with RayEngine(
             # Use a small partition size so tests exercise the multi-partition
             # code path deterministically, regardless of input size.
             executor_options={"max_rows_per_partition": 10},
             ray_init_options={"include_dashboard": False},
-        ) as (
-            ray_client,
-            engine,
-        ):
-            yield ray_client, engine
+        ) as engine:
+            yield engine
     except RuntimeError as e:
         pytest.skip(f"Ray GPU cluster unavailable: {e}")
-
-
-@pytest.fixture(scope="session")
-def ray_client(_ray_env: tuple[RayClient, pl.GPUEngine]) -> RayClient:
-    """Session-scoped Ray cluster client."""
-    return _ray_env[0]
-
-
-@pytest.fixture(scope="session")
-def engine(_ray_env: tuple[RayClient, pl.GPUEngine]) -> pl.GPUEngine:
-    """Session-scoped GPU engine backed by the Ray cluster."""
-    return _ray_env[1]
 
 
 pytestmark = [
     # Ray's internal subprocess management leaks /dev/null file handles;
     # suppress the resulting ResourceWarning noise from its internals.
     pytest.mark.filterwarnings("ignore::ResourceWarning"),
+    pytest.mark.skipif(
+        is_running_with_rrun(),
+        reason="RayEngine must not be created from within an rrun cluster",
+    ),
 ]
 
 
@@ -70,42 +58,18 @@ def test_reserved_executor_keys() -> None:
     """executor_options rejects reserved keys."""
     for key in ("runtime", "cluster", "spmd", "ray_context"):
         with pytest.raises(TypeError, match="reserved"):
-            ray_execution(executor_options={key: "anything"})
+            RayEngine(executor_options={key: "anything"})
 
 
 def test_reserved_engine_options_keys() -> None:
-    """engine_options rejects keys that are set explicitly by ray_execution."""
+    """engine_options rejects reserved keys."""
     for key in ("memory_resource", "executor"):
-        kwargs: dict[str, Any] = {key: "anything"}
         with pytest.raises(TypeError, match="reserved"):
-            ray_execution(engine_options=kwargs)
-
-
-def test_ray_client_shutdown_idempotent() -> None:
-    """RayClient.shutdown() is safe to call more than once."""
-    mock_engine = MagicMock(spec=pl.GPUEngine)
-    mock_engine.config = {"executor_options": {"ray_context": RayContext([])}}
-    client = RayClient(mock_engine, owns_ray=False)
-    client.shutdown()
-    client.shutdown()  # must not raise
-
-
-def test_ray_client_post_shutdown_state() -> None:
-    """After shutdown, rank_actors, nranks, and engine all raise RuntimeError."""
-    mock_engine = MagicMock(spec=pl.GPUEngine)
-    mock_engine.config = {"executor_options": {"ray_context": RayContext([])}}
-    client = RayClient(mock_engine, owns_ray=False)
-    client.shutdown()
-    with pytest.raises(RuntimeError, match="shutdown"):
-        _ = client.rank_actors
-    with pytest.raises(RuntimeError, match="shutdown"):
-        _ = client.nranks
-    with pytest.raises(RuntimeError, match="shutdown"):
-        _ = client.engine
+            RayEngine(engine_options={key: "anything"})
 
 
 def test_raises_inside_rrun() -> None:
-    """ray_execution() must not be called from within an rrun cluster."""
+    """RayEngine must not be created from within an rrun cluster."""
     with (
         patch(
             "rapidsmpf.bootstrap.is_running_with_rrun",
@@ -113,7 +77,7 @@ def test_raises_inside_rrun() -> None:
         ),
         pytest.raises(RuntimeError, match="rrun"),
     ):
-        ray_execution()
+        RayEngine()
 
 
 # ---------------------------------------------------------------------------
@@ -121,33 +85,30 @@ def test_raises_inside_rrun() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_yields_client_and_engine(
-    ray_client: RayClient,
-    engine: pl.GPUEngine,
+def test_yields_engine(
+    engine: RayEngine,
 ) -> None:
-    """ray_execution yields a (RayClient, GPUEngine) pair."""
-    assert isinstance(ray_client, RayClient)
+    """RayEngine is a GPUEngine with at least one rank."""
     assert isinstance(engine, pl.GPUEngine)
-    assert ray_client.nranks >= 1
+    assert engine.nranks >= 1
 
 
 def test_executor_options_forwarded(
-    ray_client: RayClient,
-    engine: pl.GPUEngine,
+    engine: RayEngine,
 ) -> None:
     """Reserved executor_options keys are injected into the engine config."""
     opts = engine.config["executor_options"]
     assert opts["runtime"] == "rapidsmpf"
     assert opts["cluster"] == "ray"
     assert isinstance(opts["ray_context"], RayContext)
-    assert ray_client.rank_actors == opts["ray_context"].rank_actors
-    assert len(ray_client.rank_actors) == ray_client.nranks
+    assert engine.rank_actors == opts["ray_context"].rank_actors
+    assert len(engine.rank_actors) == engine.nranks
 
 
-def test_gather_cluster_info(ray_client: RayClient) -> None:
+def test_gather_cluster_info(engine: RayEngine) -> None:
     """gather_cluster_info returns one info dict per rank with expected fields."""
-    infos = ray_client.gather_cluster_info()
-    assert len(infos) == ray_client.nranks
+    infos = engine.gather_cluster_info()
+    assert len(infos) == engine.nranks
     for info in infos:
         assert "node_id" in info
         assert "hostname" in info
@@ -155,10 +116,10 @@ def test_gather_cluster_info(ray_client: RayClient) -> None:
         assert "cuda_visible_devices" in info
         assert isinstance(info["pid"], int)
     # Each actor runs in its own process.
-    assert len({info["pid"] for info in infos}) == ray_client.nranks
+    assert len({info["pid"] for info in infos}) == engine.nranks
 
 
-def test_scan(engine: pl.GPUEngine) -> None:
+def test_scan(engine: RayEngine) -> None:
     """Input rows are partitioned across actors; total output equals input."""
     lf = pl.LazyFrame({"a": [1, 2, 3]})
     result = lf.collect(engine=engine)
@@ -166,7 +127,7 @@ def test_scan(engine: pl.GPUEngine) -> None:
     assert sorted(result["a"].to_list()) == [1, 2, 3]
 
 
-def test_filter(engine: pl.GPUEngine) -> None:
+def test_filter(engine: RayEngine) -> None:
     """Filter is applied correctly across all actors."""
     lf = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
     result = lf.filter(pl.col("a") > 3).collect(engine=engine)
@@ -174,11 +135,11 @@ def test_filter(engine: pl.GPUEngine) -> None:
     assert sorted(result["a"].to_list()) == [4, 5]
 
 
-def test_group_by(ray_client: RayClient, engine: pl.GPUEngine) -> None:
+def test_group_by(engine: RayEngine) -> None:
     """Group-by produces the correct aggregation across all ranks."""
     # max_rows_per_partition=10 (set on the session fixture) gives each rank
     # exactly 5 partitions, so the multi-partition path is always exercised.
-    n, n_keys = ray_client.nranks * 50, 5
+    n, n_keys = engine.nranks * 50, 5
     keys = [str(i % n_keys) for i in range(n)]
     vals = list(range(n))
     lf = pl.LazyFrame({"key": keys, "val": vals})
@@ -197,11 +158,11 @@ def test_group_by(ray_client: RayClient, engine: pl.GPUEngine) -> None:
     assert result["val"].to_list() == expected["val"].to_list()
 
 
-def test_join(ray_client: RayClient, engine: pl.GPUEngine) -> None:
+def test_join(engine: RayEngine) -> None:
     """Hash join between two tables produces the correct result across all ranks."""
     # max_rows_per_partition=10 (set on the session fixture) gives each rank
     # exactly 5 partitions, so the multi-partition path is always exercised.
-    n = ray_client.nranks * 50
+    n = engine.nranks * 50
     lf_left = pl.LazyFrame({"key": list(range(n)), "val_left": list(range(n))})
     lf_right = pl.LazyFrame(
         {"key": list(range(n)), "val_right": [x * 2 for x in range(n)]}
@@ -212,7 +173,7 @@ def test_join(ray_client: RayClient, engine: pl.GPUEngine) -> None:
     assert result["val_right"].to_list() == [x * 2 for x in range(n)]
 
 
-def test_empty_dataframe(engine: pl.GPUEngine) -> None:
+def test_empty_dataframe(engine: RayEngine) -> None:
     """An empty LazyFrame produces an empty result with the correct schema."""
     lf = pl.LazyFrame(
         {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
