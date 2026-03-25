@@ -429,6 +429,7 @@ struct streaming_groupby::impl {
 
   std::unique_ptr<table> _partial_state;
   std::vector<data_type> _partial_column_types;
+  std::vector<data_type> _finalize_output_types;
 
   /**
    * @brief Whether partial-state column types have been determined from the first batch.
@@ -472,13 +473,18 @@ struct streaming_groupby::impl {
   }
 
   /**
-   * @brief Determine the stable partial-state column types from the first batch's results.
+   * @brief Determine the stable partial-state column types and expected finalize output types
+   * from the first batch's results and input data.
    */
-  void initialize_types(std::vector<std::unique_ptr<column>> const& batch_partial_cols)
+  void initialize_types(std::vector<std::unique_ptr<column>> const& batch_partial_cols,
+                        table_view const& data)
   {
     _partial_column_types.clear();
+    _finalize_output_types.clear();
     auto col_idx = size_type{0};
     for (auto const& plan : _plans) {
+      _finalize_output_types.push_back(cudf::detail::target_type(
+        data.column(plan.value_column_index).type(), plan.requested_kind));
       for (size_type i = 0; i < plan.num_partial_columns; ++i) {
         auto batch_type = batch_partial_cols[col_idx]->type();
         auto state_type = compute_partial_state_type(
@@ -563,7 +569,7 @@ struct streaming_groupby::impl {
     std::unique_ptr<table> batch_keys;
     auto batch_partials = run_batch_groupby(data, batch_keys, stream, mr);
 
-    if (!types_initialized()) { initialize_types(batch_partials); }
+    if (!types_initialized()) { initialize_types(batch_partials, data); }
 
     auto cast_partials = cast_to_state_types(batch_partials, stream, mr);
     auto batch_state   = build_state_table(std::move(batch_keys), cast_partials);
@@ -620,7 +626,8 @@ struct streaming_groupby::impl {
     if (!_partial_state) {
       _partial_state = std::make_unique<table>(other._partial_state->view(), stream, mr);
       if (!types_initialized() && other.types_initialized()) {
-        _partial_column_types = other._partial_column_types;
+        _partial_column_types  = other._partial_column_types;
+        _finalize_output_types = other._finalize_output_types;
       }
       return;
     }
@@ -655,7 +662,14 @@ struct streaming_groupby::impl {
         switch (plan.finalization) {
           case finalize_kind::IDENTITY: {
             auto const& src = _partial_state->view().column(num_keys() + plan.partial_state_offset);
-            agg_result.results.push_back(std::make_unique<column>(src, stream, mr));
+            if (req_idx < static_cast<size_type>(_finalize_output_types.size()) &&
+                src.type() != _finalize_output_types[req_idx] && cudf::is_fixed_width(src.type()) &&
+                cudf::is_fixed_width(_finalize_output_types[req_idx])) {
+              auto const& expected_type = _finalize_output_types[req_idx];
+              agg_result.results.push_back(cudf::cast(src, expected_type, stream, mr));
+            } else {
+              agg_result.results.push_back(std::make_unique<column>(src, stream, mr));
+            }
             break;
           }
           case finalize_kind::MEAN_FROM_SUM_COUNT: {
