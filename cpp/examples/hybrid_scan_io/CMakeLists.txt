@@ -39,7 +39,7 @@ target_link_libraries(hybrid_scan_utils PRIVATE cudf::cudf)
 function(add_hybrid_scan_example target_name source_file)
   add_executable(${target_name} ${source_file})
   target_link_libraries(
-    ${target_name} PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+    ${target_name} PRIVATE cudf::cudf kvikio::kvikio $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
                            $<TARGET_OBJECTS:hybrid_scan_utils>
   )
   target_compile_features(${target_name} PRIVATE cxx_std_20)

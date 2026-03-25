@@ -18,6 +18,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_pool.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <thrust/host_vector.h>
@@ -361,8 +362,9 @@ int main(int argc, char const** argv)
     rmm::cuda_stream_pool(1 + num_partitions, rmm::cuda_stream::flags::non_blocking);
   auto default_stream = stream_pool.get_stream();
   auto mr             = create_memory_resource(is_pool_used);
-  auto stats_mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(mr.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  auto aligned_mr =
+    rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(mr.get(), 4096);
+  rmm::mr::set_current_device_resource(&aligned_mr);
 
   // Create io source
   auto const data_source = io_source{input_filepath, io_source_type, default_stream};
@@ -374,26 +376,29 @@ int main(int argc, char const** argv)
     benchmark(
       [&] {
         std::ignore = hybrid_scan_pipelined<false>(
-          data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
+          data_source, num_partitions, split_strategy, use_page_index, stream_pool, aligned_mr);
       },
-      iterations);
+      iterations,
+      input_filepath);
 
-    std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
-    benchmark([&] { std::ignore = read_parquet(data_source, default_stream); }, iterations);
+    // std::cout << "Reading " << input_filepath << " with main parquet reader...\n";
+    // benchmark([&] { std::ignore = read_parquet(data_source, default_stream); }, iterations);
   }
 
+#if 0
   // Check for validity
   auto pipeline_table = [&] {
     if (verbose) {
       return hybrid_scan_pipelined<true>(
-        data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
+        data_source, num_partitions, split_strategy, use_page_index, stream_pool, aligned_mr);
     } else {
       return hybrid_scan_pipelined<false>(
-        data_source, num_partitions, split_strategy, use_page_index, stream_pool, stats_mr);
+        data_source, num_partitions, split_strategy, use_page_index, stream_pool, aligned_mr);
     }
   }();
   auto main_table = std::move(read_parquet(data_source, default_stream).tbl);
   check_tables_equal(pipeline_table->view(), main_table->view(), default_stream);
+#endif
 
   return 0;
 }

@@ -26,3 +26,17 @@ CPMFindPackage(
     SOURCE_SUBDIR
     cpp
 )
+
+# kvikio::kvikio is a dependency of cudf; find the already-installed package or
+# fall back to building it via CPM from the same branch as cudf.
+CPMFindPackage(
+  NAME kvikio
+  FIND_PACKAGE_ARGUMENTS "PATHS ${kvikio_ROOT} ${kvikio_ROOT}/latest" GIT_REPOSITORY
+                         https://github.com/rapidsai/kvikio
+  GIT_TAG ${CUDF_TAG}
+  GIT_SHALLOW
+    TRUE
+    SOURCE_SUBDIR
+    cpp
+  OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
+)
