@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -26,6 +26,11 @@ def clear_memory_resource_cache():
     cudf_polars.callback.default_memory_resource.cache_clear()
     yield
     cudf_polars.callback.default_memory_resource.cache_clear()
+
+
+@pytest.fixture
+def using_rapidsmpf():
+    return cudf_polars.testing.asserts.DEFAULT_RUNTIME == "rapidsmpf"
 
 
 def pytest_addoption(parser):
