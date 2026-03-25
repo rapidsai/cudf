@@ -12,7 +12,7 @@ import pytest
 
 import polars
 
-from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.utils.config import Runtime, StreamingFallbackMode
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -46,6 +46,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "to run most tests with multiple partitions."
         ),
     )
+    group.addoption(
+        "--runtime",
+        action="store",
+        default="tasks",
+        choices=("tasks", "rapidsmpf"),
+        help="Runtime to use for the 'streaming' executor.",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -53,6 +60,7 @@ def pytest_configure(config: pytest.Config) -> None:
     no_fallback = config.getoption("--cudf-polars-no-fallback")
     executor = config.getoption("--executor")
     blocksize_mode = config.getoption("--blocksize-mode")
+    runtime = config.getoption("--runtime")
     if no_fallback:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
@@ -68,6 +76,7 @@ def pytest_configure(config: pytest.Config) -> None:
         executor_options["target_partition_size"] = 10
         # We expect many tests to fall back, so silence the warnings
         executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
+        executor_options["runtime"] = Runtime[runtime.upper()]
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
         polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
@@ -252,6 +261,110 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     # Add tests that are expected to fail with the streaming executor
 }
 
+RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH: Mapping[str, str] = {
+    "tests/benchmark/test_io.py": "Extra long running tests",
+    "tests/benchmark/test_join_where.py": "Extra long running tests",
+    "tests/benchmark/test_group_by.py": "Extra long running tests",
+    "tests/unit/io/test_hive.py": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py": "Crashes pytest worker",
+    "tests/unit/io/test_partition.py": "Extra long running tests",
+    "tests/unit/io/test_parquet.py": "Extra long running tests",
+    "tests/unit/io/test_scan.py": "Extra long running tests",
+    "tests/unit/io/test_scan_lines.py": "Crashes pytest worker",
+    "tests/unit/sql/test_group_by.py": "Crashes pytest worker",
+    "tests/unit/operations/test_group_by.py": "Crashes pytest worker",
+    "tests/unit/streaming/test_streaming_io.py": "Extra long running tests",
+    "tests/unit/streaming/test_streaming_join.py": "Extra long running tests",
+    "tests/unit/streaming/test_streaming_sort.py": "Extra long running tests",
+}
+
+RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
+    "tests/unit/sql/test_group_by.py::test_group_by_having_misc_02[ABS(SUM(b)) + ABS(AVG(b)) > 100-expected4]": "Crashes pytest worker",
+    "tests/unit/operations/test_group_by.py::test_grouped_agg_parametric[drop_nulls-True-False-False-False]": "Crashes pytest worker",
+    "tests/unit/io/test_hive.py::test_hive_partition_directory_scan[False-scan_parquet-write_parquet]": "Crashes pytest worker",
+    "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-True-True]": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_statistics": "Crashes pytest worker",
+    "tests/unit/streaming/test_streaming_join.py::test_merge_join[right_left-True-False-True-True-left-on0]": "Crashes pytest worker",
+    "tests/unit/operations/test_group_by.py::test_grouped_agg_parametric[unique-False-False-False-False]": "Crashes pytest worker",
+    "tests/unit/sql/test_distinct.py::test_distinct_with_expressions": "Crashes pytest worker",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "Crashes pytest worker",
+    "tests/unit/lazyframe/test_schema.py::test_lazy_collect_schema_matches_computed_schema[Date-dtype110-expr2]": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py::test_sink_parquet_arrow_schema_logical_types": "Crashes pytest worker",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Crashes pytest worker",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Takes >2 minutes to run locally",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Takes >2 minutes to run locally",
+    "tests/unit/streaming/test_streaming_io.py::test_sink_parquet": "Take >20 seconds to run locally",
+    "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Take >20 seconds to run locally",
+    "tests/unit/io/test_partition.py::test_partition_approximate_size": "Takes >20 seconds to run locally",
+    "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-False]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-True]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-False]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-True]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-True]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-False]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Takes >20 seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Takes >20 seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Takes >20 seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Takes >x minutes/seconds to run locally",
+    "tests/unit/io/test_parquet.py::test_head_union": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_parquet.py::test_parametric_small_page_mask_filtering": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_join_where.py::test_single_inequality": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Takes >60 seconds to run locally",
+    "tests/benchmark/test_io.py::test_write_read_scan_large_csv": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Takes >60 seconds to run locally",
+}
+
+RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Requested number of partitions does not fit in shared memory.",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Requested number of partitions does not fit in shared memory.",
+    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "RuntimeError: Cannot broadcast columns of length nrows=30 to target_length=4",
+    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "RuntimeError: Cannot broadcast columns of length nrows=30 to target_length=4",
+    "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
+    "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "RuntimeError: Cannot broadcast columns of length nrows=5 to target_length=4",
+    "tests/unit/lazyframe/test_cse.py::test_cse_expr_selection_context": "https://github.com/rapidsai/cudf/issues/21645",
+    "tests/unit/lazyframe/test_cse.py::test_cse_10441": "https://github.com/rapidsai/cudf/issues/21645",
+    "tests/unit/lazyframe/test_cse.py::test_cse_10452": "https://github.com/rapidsai/cudf/issues/21645",
+    "tests/unit/lazyframe/test_cse.py::test_cse_non_scalar_length_mismatch_17732": "https://github.com/rapidsai/cudf/issues/21645",
+    "tests/unit/lazyframe/test_optimizations.py::test_is_null_followed_by_all": "AssertionError: DataFrames are different (height (row count) mismatch)",
+    "tests/unit/lazyframe/test_optimizations.py::test_is_not_null_followed_by_any": "AssertionError: DataFrames are different (height (row count) mismatch)",
+    "tests/unit/lazyframe/test_optimizations.py::test_is_not_null_followed_by_sum": "AssertionError: DataFrames are different (height (row count) mismatch)",
+    "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "RapidsMPF fatal error at: /cpp/src/streaming/cudf/table_chunk.cpp:52: packed data cannot be empty",
+    "tests/unit/sql/test_miscellaneous.py::test_count": "https://github.com/rapidsai/cudf/issues/21757",
+    "tests/unit/streaming/test_streaming.py::test_streaming_9776": "Type mismatch in columns to concatenate.",
+    "tests/unit/operations/test_shift.py::test_shift_fill_value": "https://github.com/rapidsai/cudf/issues/21645",
+    "tests/unit/operations/test_shift.py::test_shift_expr": "https://github.com/rapidsai/cudf/issues/21645",
+    "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "Cannot broadcast columns of length nrows=10 to target_length=4",
+    "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-False-False]": "Type mismatch in columns to concatenate.",
+    "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-False-True]": "Type mismatch in columns to concatenate.",
+    "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-True-False]": "Type mismatch in columns to concatenate.",
+    "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-True-True]": "AssertionError: Expected ChannelMetadata message, got None.",
+    "tests/unit/operations/test_group_by.py::test_n_unique_masked_bools[df0-out0-True]": "DataFrames are different (value mismatch for column 'key')",
+    "tests/unit/dataframe/test_null_count.py::test_null_count_optimization_23031": "DataFrames are different (height (row count) mismatch)",
+    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "DataFrames are different (value mismatch for column 'a')",
+    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "AssertionError:",
+}
+
 
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
@@ -260,14 +373,32 @@ def pytest_collection_modifyitems(
     if config.getoption("--cudf-polars-no-fallback"):
         # Don't xfail tests if running without fallback
         return
+    with_rapidsmpf = config.getoption("--runtime") == "rapidsmpf"
     for item in items:
-        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None:
+        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
+            with_rapidsmpf
+            and (reason := RAPIDSMPF_TESTS_TO_SKIP.get(item.nodeid, None)) is not None
+        ):
             item.add_marker(pytest.mark.skip(reason=reason))
+        elif with_rapidsmpf and any(
+            item.nodeid.startswith(file_path)
+            for file_path in RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH
+        ):
+            item.add_marker(
+                pytest.mark.skip(reason="Contains slow tests or maybe segfaults")
+            )
+        elif (
+            with_rapidsmpf
+            and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            is not None
+        ):
+            item.add_marker(pytest.mark.xfail(reason=r_reason))
         elif (
             config.getoption("--executor") == "streaming"
             and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
             is not None
         ):
+            # Also sets --runtime=rapidsmpf also sets --executor=streaming, so check last
             item.add_marker(pytest.mark.xfail(reason=s_reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):

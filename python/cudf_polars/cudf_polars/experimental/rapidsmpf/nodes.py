@@ -132,9 +132,9 @@ async def default_node_multi(
         local_count = 1
         duplicated = True
         partitioning = None
-        for idx, md_child in enumerate(
-            await asyncio.gather(*(recv_metadata(ch, context) for ch in chs_in))
-        ):
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(recv_metadata(ch, context)) for ch in chs_in]
+        for idx, md_child in enumerate(task.result() for task in tasks):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
             # Set "duplicated" to False as soon as we
@@ -274,7 +274,9 @@ async def fanout_node_bounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        async with asyncio.TaskGroup() as tg:
+            for ch in chs_out:
+                tg.create_task(send_metadata(ch, context, metadata))
 
         while (msg := await ch_in.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg).make_available_and_spill(
@@ -296,7 +298,9 @@ async def fanout_node_bounded(
                 )
             del table_chunk
 
-        await asyncio.gather(*(ch.drain(context) for ch in chs_out))
+        async with asyncio.TaskGroup() as tg:
+            for ch in chs_out:
+                tg.create_task(ch.drain(context))
 
 
 @define_actor()
@@ -342,7 +346,9 @@ async def fanout_node_unbounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        async with asyncio.TaskGroup() as tg:
+            for ch in chs_out:
+                tg.create_task(send_metadata(ch, context, metadata))
 
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
@@ -357,18 +363,19 @@ async def fanout_node_unbounded(
             make_spill_function(output_buffers, context), priority=0
         )
 
+        # Track active send/drain tasks for each output
+        active_tasks: dict[int, asyncio.Task] = {}
+
+        # Track which outputs need to be drained (set when no more input)
+        needs_drain: set[int] = set()
+
+        # Receive task
+        recv_task: asyncio.Task | None = asyncio.create_task(ch_in.recv(context))
+
+        # Flag to indicate we should start a new receive (for backpressure)
+        can_receive: bool = True
+
         try:
-            # Track active send/drain tasks for each output
-            active_tasks: dict[int, asyncio.Task] = {}
-
-            # Track which outputs need to be drained (set when no more input)
-            needs_drain: set[int] = set()
-
-            # Receive task
-            recv_task: asyncio.Task | None = asyncio.create_task(ch_in.recv(context))
-
-            # Flag to indicate we should start a new receive (for backpressure)
-            can_receive: bool = True
 
             async def send_one_from_buffer(idx: int) -> None:
                 """
@@ -499,6 +506,12 @@ async def fanout_node_unbounded(
                                 break
 
         finally:
+            # Cancel any outstanding tasks
+            if recv_task is not None and not recv_task.done():
+                recv_task.cancel()
+            for task in active_tasks.values():
+                if not task.done():
+                    task.cancel()
             # Clean up spill function registration
             context.br().spill_manager.remove_spill_function(spill_func_id)
 
