@@ -55,7 +55,7 @@ std::unique_ptr<column> gather_argminmax(hash_compound_agg_finalizer const& fina
     table_view{{col}},
     null_removed_map,
     col.nullable() ? cudf::out_of_bounds_policy::NULLIFY : cudf::out_of_bounds_policy::DONT_CHECK,
-    cudf::detail::negative_index_policy::NOT_ALLOWED,
+    cudf::negative_index_policy::NOT_ALLOWED,
     finalizer.stream,
     finalizer.mr);
   return std::move(result->release()[0]);
