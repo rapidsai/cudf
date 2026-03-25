@@ -3304,7 +3304,7 @@ def as_column(
             arbitrary = arbitrary._column
         if dtype is not None:
             return arbitrary.astype(dtype)
-        return arbitrary
+        return arbitrary.copy(deep=False)
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         column = ColumnBase.from_cuda_array_interface(arbitrary)
         if nan_as_null is not False:
@@ -3540,7 +3540,14 @@ def as_column(
             isinstance(arbitrary, (pd.Timestamp, pd.Timedelta))
             or arbitrary is pd.NaT
         ):
-            arbitrary = arbitrary.to_numpy()
+            if arbitrary is pd.NaT:
+                if dtype is not None and dtype.kind in "mM":
+                    unit = np.datetime_data(dtype)[0]
+                else:
+                    unit = "s"
+                arbitrary = np.datetime64("NaT", unit)
+            else:
+                arbitrary = arbitrary.to_numpy()
         elif isinstance(arbitrary, (np.datetime64, np.timedelta64)):
             unit = np.datetime_data(arbitrary.dtype)[0]
             if unit not in {"s", "ms", "us", "ns"}:
