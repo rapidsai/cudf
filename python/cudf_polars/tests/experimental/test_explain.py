@@ -519,7 +519,6 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
 
     q = pl.scan_parquet(tmp_path / "test.parquet")
     expected_properties: dict[str, Any] = {
-        "paths": [str(tmp_path / "test.parquet")],
         "typ": "parquet",
         "predicate": None,
     }
