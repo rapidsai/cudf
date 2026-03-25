@@ -27,13 +27,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
+from rapidsmpf.config import Options, get_environment_variables
 
 import polars as pl
-import polars.testing
 
 import rmm.statistics
 
-from cudf_polars.experimental.rapidsmpf.spmd import spmd_execution
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 # The dtype for count() aggregations depends on the presence
 # of the polars-runtime-64 package (`polars[rt64]`).
@@ -389,7 +389,6 @@ class RunConfig:
     spill_device: float
     query_set: str
     collect_traces: bool = False
-    stats_planning: bool
     dynamic_planning: bool | None = None
     max_io_threads: int
     native_parquet: bool
@@ -542,7 +541,6 @@ class RunConfig:
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
             collect_traces=args.collect_traces,
-            stats_planning=args.stats_planning,
             dynamic_planning=args.dynamic_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
@@ -580,7 +578,6 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-                print(f"stats_planning: {self.stats_planning}")
                 if self.runtime == "rapidsmpf":
                     print(f"native_parquet: {self.native_parquet}")
                     print(f"dynamic_planning: {self.dynamic_planning}")
@@ -601,14 +598,19 @@ class RunConfig:
                 print(f"max time : {max(valid_durations):0.4f}")
                 print(f"mean time: {statistics.mean(valid_durations):0.4f}")
                 print("=======================================")
-        total_mean_time = sum(
-            statistics.mean(
-                record.duration for record in records if record.status == "success"
+        any_success = any(record.status == "success" for record in records)
+
+        if any_success:
+            total_mean_time = sum(
+                statistics.mean(
+                    record.duration for record in records if record.status == "success"
+                )
+                for records in self.records.values()
+                if records
             )
-            for records in self.records.values()
-            if records
-        )
-        print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+            print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+        else:
+            print("No successful queries")
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -639,13 +641,6 @@ def get_executor_options(
             executor_options["fallback_mode"] = run_config.fallback_mode
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
-        executor_options["stats_planning"] = {
-            "use_reduction_planning": run_config.stats_planning,
-            "use_sampling": (
-                # Always allow row-group sampling for rapidsmpf runtime
-                run_config.stats_planning or run_config.runtime == "rapidsmpf"
-            ),
-        }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
@@ -658,8 +653,6 @@ def get_executor_options(
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
-        # Only use the unique_fraction config if stats_planning is disabled
-        and not run_config.stats_planning
         and not run_config.dynamic_planning
     ):
         executor_options["unique_fraction"] = {
@@ -775,7 +768,6 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if run_config.shuffle != "tasks":
         try:
-            from rapidsmpf.config import Options
             from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
             bootstrap_dask_cluster(
@@ -965,12 +957,13 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--cluster",
         default=None,
         type=str,
-        choices=["single", "distributed", "spmd"],
+        choices=["single", "distributed", "spmd", "ray"],
         help=textwrap.dedent("""\
             Cluster type to use with the 'streaming' executor.
                 - single      : Run locally in a single process
                 - distributed : Use Dask for multi-GPU execution
-                - spmd        : SPMD execution via rrun launcher"""),
+                - spmd        : SPMD execution via rrun launcher
+                - ray         : Ray actor-based multi-GPU execution"""),
     )
     parser.add_argument(
         "-s",
@@ -1207,12 +1200,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--stats-planning",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable statistics planning.",
-    )
-    parser.add_argument(
         "--dynamic-planning",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1389,6 +1376,7 @@ class QueryResult:
     frame: pl.LazyFrame
     sort_by: list[tuple[str, bool]]
     limit: int | None = None
+    nulls_last: bool = True
 
 
 def check_input_data_type(
@@ -1473,6 +1461,7 @@ def run_polars_query_iteration(
             expected,
             query_result.sort_by,
             limit=query_result.limit,
+            nulls_last=query_result.nulls_last,
             **get_validation_options(args),
         )
     else:
@@ -1761,7 +1750,17 @@ def run_polars(
                 date_type,
                 validation_files,
             )
-        case "single" | "distributed":
+        case "ray":
+            run_polars_ray(
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
+        case "single" | "distributed" | None:
             run_polars_single_or_dask(
                 benchmark,
                 args,
@@ -1851,34 +1850,40 @@ def run_polars_spmd(
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     if run_config.collect_traces:
         raise NotImplementedError(
-            "--collect-traces is not yet supported with --cluster spmd."
+            "--collect-traces is not yet supported with --cluster spmd"
         )
+    if run_config.rmm_async:
+        raise NotImplementedError("--rmm-async is not supported with --cluster spmd")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime" and "cluster" are reserved — spmd_execution sets them
+    # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
-    with spmd_execution(
-        mr=rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
-        if run_config.rmm_async
-        else None,
+    rmm.mr.set_current_device_resource(
+        rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
+    )
+    with SPMDEngine(
+        rapidsmpf_options=Options(get_environment_variables()),
         executor_options=executor_options,
-        parquet_options=parquet_options,
-        cuda_stream_policy=run_config.stream_policy,
-    ) as (comm, ctx, engine):
+        engine_options={
+            "parquet_options": parquet_options,
+            "cuda_stream_policy": run_config.stream_policy,
+        },
+    ) as engine:
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
-        from cudf_polars.experimental.rapidsmpf.spmd import allgather_polars_dataframe
+        from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+            allgather_polars_dataframe,
+        )
 
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
                 return allgather_polars_dataframe(
-                    comm=comm,
-                    ctx=ctx,
+                    engine=engine,
                     local_df=df,
                     op_id=op_id,
                 )
 
-        rank = comm.rank
-        run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
+        rank = engine.rank
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
@@ -1908,6 +1913,66 @@ def run_polars_spmd(
         # engine is not JSON-serializable (holds the SPMD Cython context)
         args.output.write(json.dumps(run_config.serialize(engine=None)))
         args.output.write("\n")
+    sys.exit(1 if (query_failures or validation_failures) else 0)
+
+
+def run_polars_ray(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    parquet_options: dict[str, Any],
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using Ray actor-based distributed execution."""
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+    if run_config.collect_traces:
+        raise NotImplementedError(
+            "--collect-traces is not yet supported with --cluster ray."
+        )
+    if run_config.rmm_async:
+        raise NotImplementedError("--rmm-async is not supported with --cluster ray.")
+    executor_options = get_executor_options(run_config, benchmark=benchmark)
+    # "runtime", "cluster" are reserved — RayEngine sets them
+    executor_options.pop("runtime", None)
+    executor_options.pop("cluster", None)
+    engine_options: dict[str, Any] = {
+        "cuda_stream_policy": run_config.stream_policy,
+        "parquet_options": parquet_options,
+    }
+    with RayEngine(
+        executor_options=executor_options,
+        engine_options=engine_options,
+    ) as engine:
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
+        records, plans, validation_failures, query_failures = _run_query_loop(
+            benchmark,
+            args,
+            run_config,
+            engine,
+            None,
+            numeric_type,
+            date_type,
+            validation_files,
+        )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    if args.summarize:
+        run_config.summarize()
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: "
+                f"{sorted(set(validation_failures))}"
+            )
+        else:
+            print("✅ All validated queries passed.")
+    # engine holds ray_client (not JSON-serializable); serialize without it
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
 

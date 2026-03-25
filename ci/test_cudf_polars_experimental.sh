@@ -15,8 +15,18 @@ PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel
 
 rapids-logger "Installing cudf_polars and its dependencies (including rapidsmpf)"
 
+# generate constraints (possibly pinning to oldest support versions of dependencies)
+rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
+
+# notes:
+#
+#   * echo to expand wildcard before adding `[test]` requires for pip
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
+    --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental,rapidsmpf]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
@@ -39,10 +49,8 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
-rapids-logger "Running cudf_polars tests with rapidsmpf"
-
-# Run cudf_polars tests with rapidsmpf using dedicated test runner
-timeout 15m ./ci/run_cudf_polars_with_rapidsmpf_pytests.sh \
+rapids-logger "Running cudf_polars experimental tests (non-ci-blocking)"
+timeout 15m ./ci/run_cudf_polars_experimental_pytests.sh \
     --no-cov \
     --numprocesses=8 \
     --dist=worksteal \
