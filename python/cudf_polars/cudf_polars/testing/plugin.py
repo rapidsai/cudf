@@ -373,23 +373,27 @@ def pytest_collection_modifyitems(
     if config.getoption("--cudf-polars-no-fallback"):
         # Don't xfail tests if running without fallback
         return
+    with_rapidsmpf = config.getoption("--runtime") == "rapidsmpf"
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
-            reason := RAPIDSMPF_TESTS_TO_SKIP.get(item.nodeid, None)
-        ) is not None:
-            item.add_marker(pytest.mark.skip(reason=reason))
-        elif (
-            config.getoption("--runtime") == "rapidsmpf"
-            and any(
-                item.nodeid.startswith(file_path)
-                for file_path in RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH
-            )
+            with_rapidsmpf
+            and (reason := RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH.get(item.nodeid, None))
             is not None
         ):
-            # Also sets --executor=streaming, so check first
+            item.add_marker(pytest.mark.skip(reason=reason))
+        elif with_rapidsmpf and any(
+            item.nodeid.startswith(file_path)
+            for file_path in RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH
+        ):
             item.add_marker(
-                pytest.mark.xfail(reason="Contains slow tests or maybe segfaults")
+                pytest.mark.skip(reason="Contains slow tests or maybe segfaults")
             )
+        elif (
+            with_rapidsmpf
+            and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            is not None
+        ):
+            item.add_marker(pytest.mark.xfail(reason=r_reason))
         elif (
             config.getoption("--executor") == "streaming"
             and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
