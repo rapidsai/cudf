@@ -522,24 +522,28 @@ class MaskCAIWrapper:
         )
 
 
-def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
+def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
     # Recursively replace all-null nested arrays with arrow NullArrays and make all
     # types nullable in the schema even if the columns contain no nulls
     array_type = arrow_array.type
 
-    # Empty nested (except interval types) or string types should become pyarrow null arrays instead of the
-    # normal array classes to match how pyarrow ingests such pandas objects.
+    # All-null nested (except interval types) should become pyarrow null
+    # arrays to match how pyarrow ingests such pandas objects.
+    # All-null string arrays nested inside list/struct children should also
+    # become null arrays, but top-level string columns should preserve their
+    # string type to match pandas str dtype behavior.
     is_interval_type = (
         pa.types.is_struct(array_type)
         and len(array_type) == 2
         and array_type[0].name == "left"
         and array_type[1].name == "right"
     )
-    if (
-        (pa.types.is_nested(array_type) and not is_interval_type)
-        or pa.types.is_string(array_type)
-        or pa.types.is_large_string(array_type)
-    ) and arrow_array.null_count == len(arrow_array):
+    is_all_null = arrow_array.null_count == len(arrow_array)
+    is_nested_type = pa.types.is_nested(array_type) and not is_interval_type
+    is_string_type = pa.types.is_string(
+        array_type
+    ) or pa.types.is_large_string(array_type)
+    if is_all_null and (is_nested_type or (nested and is_string_type)):
         return pa.NullArray.from_buffers(
             pa.null(), len(arrow_array), [pa.py_buffer(b"")]
         )
@@ -557,7 +561,7 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
                 or pa.types.is_string(field_type)
                 or pa.types.is_large_string(field_type)
             ):
-                new_field_array = _handle_nulls(field_array)
+                new_field_array = _handle_nulls(field_array, nested=True)
             new_fields.append(new_field_array)
             # Reconstruct if we replaced nulls in children or need nullability change
             requires_reconstruction = (
@@ -587,7 +591,7 @@ def _handle_nulls(arrow_array: pa.Array) -> pa.Array:
         arrow_array = cast("pa.ListArray", arrow_array)
 
         values = arrow_array.values
-        new_values = _handle_nulls(values)
+        new_values = _handle_nulls(values, nested=True)
 
         value_field = array_type.value_field
         has_non_nullable_field = (
