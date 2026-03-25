@@ -70,7 +70,9 @@ column_views_to_device(std::span<ColumnView const> views,
   // Use pinned host memory so cuda_memcpy_async takes the device-accessible
   // path instead of cudaMemcpyBatchAsync with deferred source reads.
   auto host_array = detail::make_empty_pinned_vector<DeviceView>(handles.size(), stream);
-  for (auto const& h : handles) { host_array.push_back(*h); }
+  for (auto const& h : handles) {
+    host_array.push_back(*h);
+  }
 
   rmm::device_uvector<DeviceView> device_array{handles.size(), stream, mr};
   cudf::detail::cuda_memcpy_async<DeviceView>(device_array, host_array, stream);

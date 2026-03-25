@@ -1051,6 +1051,9 @@ TYPED_TEST(DecimalComparisonTest, DecimalComparison)
 
 TYPED_TEST(TransformTest, NonDefaultStream)
 {
+  // This test ensures that the algorithm is stream safe when a nondefault
+  // custom stream is passed. See #21920.
+
   using Executor = TypeParam;
 
   rmm::cuda_stream stream;
