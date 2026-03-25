@@ -216,6 +216,9 @@ def _get_final_sort_boundaries(
         The number of partitions to split the data into.
 
     """
+    if sort_boundaries_candidates.num_rows == 0:
+        return sort_boundaries_candidates
+
     column_order = list(column_order)
     null_order = list(null_order)
 
