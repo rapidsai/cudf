@@ -26,7 +26,6 @@
 
 #include <memory>
 #include <numeric>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -351,7 +350,15 @@ void merge_partial_states(std::vector<std::unique_ptr<column>>& accumulated,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
+  if (new_partials.num_rows() == 0) { return; }
+
   auto const accumulated_view = columns_as_table_view(accumulated);
+  if (accumulated_view.num_rows() == 0) {
+    auto copied = std::make_unique<table>(new_partials, stream, mr);
+    accumulated = copied->release();
+    return;
+  }
+
   std::vector<table_view> const to_concat{accumulated_view, new_partials};
   auto const concatenated = cudf::concatenate(to_concat, stream, mr);
 
@@ -371,16 +378,12 @@ void merge_partial_states(std::vector<std::unique_ptr<column>>& accumulated,
 
   auto [merged_keys, merged_results] = merge_groupby.aggregate(merge_requests, stream, mr);
 
-  std::vector<std::unique_ptr<column>> merged_partials;
+  accumulated = merged_keys->release();
+  accumulated.reserve(accumulated.size() + agg_columns.size());
   for (auto& result : merged_results) {
     for (auto& result_column : result.results) {
-      merged_partials.push_back(std::move(result_column));
+      accumulated.push_back(std::move(result_column));
     }
-  }
-
-  accumulated = merged_keys->release();
-  for (auto& column_ptr : merged_partials) {
-    accumulated.push_back(std::move(column_ptr));
   }
 }
 
@@ -599,51 +602,31 @@ struct streaming_groupby::impl {
     auto [batch_keys, batch_results] = batch_groupby.aggregate(batch_requests, stream, mr);
     out_keys                         = std::move(batch_keys);
 
-    if (m2_assemblies.empty()) {
-      std::vector<std::unique_ptr<column>> partial_cols;
-      for (auto& result : batch_results) {
-        for (auto& result_column : result.results) {
-          partial_cols.push_back(std::move(result_column));
-        }
-      }
-      return partial_cols;
-    }
-
-    std::unordered_set<size_type> m2_consumed_indices;
-    for (auto const& info : m2_assemblies) {
-      m2_consumed_indices.insert(info.count_result_index);
-      m2_consumed_indices.insert(info.mean_result_index);
-      m2_consumed_indices.insert(info.m2_result_index);
-    }
-
     std::vector<std::unique_ptr<column>> partial_cols;
-    size_type m2_assembly_idx = 0;
-    for (size_type result_index = 0; result_index < static_cast<size_type>(batch_results.size());
-         ++result_index) {
-      if (m2_consumed_indices.count(result_index) > 0) {
-        if (m2_assembly_idx < static_cast<size_type>(m2_assemblies.size()) &&
-            m2_assemblies[m2_assembly_idx].count_result_index == result_index) {
-          auto const& info    = m2_assemblies[m2_assembly_idx];
-          auto count_column   = std::move(batch_results[info.count_result_index].results[0]);
-          auto mean_column    = std::move(batch_results[info.mean_result_index].results[0]);
-          auto m2_column      = std::move(batch_results[info.m2_result_index].results[0]);
-          auto const num_rows = count_column->size();
+    size_type result_cursor      = 0;
+    size_type m2_assembly_cursor = 0;
+    for (size_type agg_column_index = 0; agg_column_index < num_agg_columns(); ++agg_column_index) {
+      if (_agg_columns[agg_column_index].batch_kind == aggregation::M2) {
+        auto const& info    = m2_assemblies[m2_assembly_cursor];
+        auto count_column   = std::move(batch_results[info.count_result_index].results[0]);
+        auto mean_column    = std::move(batch_results[info.mean_result_index].results[0]);
+        auto m2_column      = std::move(batch_results[info.m2_result_index].results[0]);
+        auto const num_rows = count_column->size();
 
-          auto count_as_float64 =
-            cudf::cast(count_column->view(), data_type{type_id::FLOAT64}, stream, mr);
+        auto count_as_float64 =
+          cudf::cast(count_column->view(), data_type{type_id::FLOAT64}, stream, mr);
 
-          std::vector<std::unique_ptr<column>> children;
-          children.push_back(std::move(count_as_float64));
-          children.push_back(std::move(mean_column));
-          children.push_back(std::move(m2_column));
-          partial_cols.push_back(make_structs_column(
-            num_rows, std::move(children), 0, rmm::device_buffer{}, stream, mr));
-          ++m2_assembly_idx;
-        }
-        continue;
-      }
-      for (auto& result_column : batch_results[result_index].results) {
-        partial_cols.push_back(std::move(result_column));
+        std::vector<std::unique_ptr<column>> children;
+        children.push_back(std::move(count_as_float64));
+        children.push_back(std::move(mean_column));
+        children.push_back(std::move(m2_column));
+        partial_cols.push_back(
+          make_structs_column(num_rows, std::move(children), 0, rmm::device_buffer{}, stream, mr));
+        result_cursor += 3;
+        ++m2_assembly_cursor;
+      } else {
+        partial_cols.push_back(std::move(batch_results[result_cursor].results[0]));
+        ++result_cursor;
       }
     }
     return partial_cols;
@@ -658,6 +641,8 @@ struct streaming_groupby::impl {
   {
     std::unique_ptr<table> batch_keys;
     auto batch_partials = run_batch_groupby(data, batch_keys, stream, mr);
+
+    if (batch_keys->num_rows() == 0 && has_state()) { return; }
 
     if (!types_initialized()) { initialize_types(batch_partials, data); }
 
