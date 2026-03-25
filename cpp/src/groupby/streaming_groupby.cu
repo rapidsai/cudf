@@ -468,12 +468,13 @@ struct streaming_groupby::impl {
        sorted keys_are_sorted,
        std::vector<order> const& column_order,
        std::vector<null_order> const& null_precedence)
-    : _key_indices{key_indices.begin(), key_indices.end()},
+    : _key_indices{},
       _null_handling{null_handling},
       _keys_are_sorted{keys_are_sorted},
       _column_order{column_order},
       _null_precedence{null_precedence}
   {
+    if (!key_indices.empty()) { _key_indices.assign(key_indices.begin(), key_indices.end()); }
     auto [plans, agg_columns] = build_plans_and_columns(requests);
     _plans                    = std::move(plans);
     _agg_columns              = std::move(agg_columns);
