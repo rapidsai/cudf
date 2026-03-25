@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -531,13 +530,8 @@ class CategoricalColumn(ColumnBase):
         new_cats_col = ColumnBase.create(new_cats_plc, cats_col.dtype)
         result_dtype = CategoricalDtype(new_cats_col, self.dtype.ordered)
         if result_dtype != self.dtype:
-            warnings.warn(
-                "The behavior of replace with "
-                "CategoricalDtype is deprecated. In a future version, replace "
-                "will only be used for cases that preserve the categories. "
-                "To change the categories, use ser.cat.rename_categories "
-                "instead.",
-                FutureWarning,
+            raise TypeError(
+                f"Cannot setitem on a Categorical with a new category ({result_dtype}), set the categories first"
             )
         return cast("Self", ColumnBase.create(new_codes, result_dtype))
 

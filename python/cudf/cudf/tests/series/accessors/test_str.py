@@ -1099,12 +1099,12 @@ def test_string_str_rindex(data, sub, er):
         (
             ["hello", "there", "world", "-1234", None, "accént"],
             ["lo", "e", "o", "+1234", " ", "e"],
-            [True, True, True, False, None, False],
+            [True, True, True, False, False, False],
         ),
         (
             ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", "", "x", None],
             ["A", "B", "C", " ", "y", "e"],
-            [True, True, True, False, False, None],
+            [True, True, True, False, False, False],
         ),
     ],
 )
@@ -1113,7 +1113,7 @@ def test_string_contains_multi(data, sub, expect):
     sub = cudf.Series(sub)
     got = gs.str.contains(sub)
     expect = cudf.Series(expect)
-    assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got)
 
 
 # Pandas does not allow 'case' or 'flags' if 'pat' is re.Pattern

@@ -79,7 +79,6 @@ def test_series_replace_all(request, gsr_data, dtype, to_replace, value):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="cuDF doesn't raise introducing a new category")
 def test_series_replace_new_string_category_raises():
     psr = pd.Series(["one", "two", "three", None, "one"], dtype="category")
     gsr = cudf.Series(["one", "two", "three", None, "one"], dtype="category")
@@ -361,7 +360,7 @@ def test_series_replace_errors():
         match=re.escape(
             "to_replace and value should be of same types,"
             "got to_replace dtype: int64 and "
-            "value dtype: object"
+            "value dtype: str"
         ),
     ):
         gsr.replace(1, "a")
@@ -372,7 +371,7 @@ def test_series_replace_errors():
         match=re.escape(
             "to_replace and value should be of same types,"
             "got to_replace dtype: int64 and "
-            "value dtype: object"
+            "value dtype: str"
         ),
     ):
         gsr.replace([1, 2], ["a", "b"])
@@ -407,74 +406,72 @@ def test_series_replace_errors():
 
 
 @pytest.mark.parametrize(
-    "gsr,old,new,expected",
+    "gsr,old,new",
     [
         (
             lambda: cudf.Series(["a", "b", "c", None]),
-            None,
+            pd.NA,
             "a",
-            lambda: cudf.Series(["a", "b", "c", "a"]),
         ),
         (
             lambda: cudf.Series(["a", "b", "c", None]),
-            [None, "a", "a"],
+            [pd.NA, "a", "a"],
             ["c", "b", "d"],
-            lambda: cudf.Series(["d", "b", "c", "c"]),
         ),
         (
             lambda: cudf.Series(["a", "b", "c", None]),
-            [None, "a"],
-            ["b", None],
-            lambda: cudf.Series([None, "b", "c", "b"]),
+            [pd.NA, "a"],
+            ["b", pd.NA],
         ),
         (
             lambda: cudf.Series(["a", "b", "c", None]),
-            [None, None],
-            [None, None],
-            lambda: cudf.Series(["a", "b", "c", None]),
+            [pd.NA, pd.NA],
+            [pd.NA, pd.NA],
         ),
         (
-            lambda: cudf.Series([1, 2, None, 3]),
-            None,
+            lambda: cudf.Series([1, 2, None, 3], dtype="Int64"),
+            pd.NA,
             10,
-            lambda: cudf.Series([1, 2, 10, 3]),
         ),
         (
-            lambda: cudf.Series([1, 2, None, 3]),
+            lambda: cudf.Series([1, 2, None, 3], dtype="Int64"),
             [None, 1, 1],
             [3, 2, 4],
-            lambda: cudf.Series([4, 2, 3, 3]),
         ),
         (
-            lambda: cudf.Series([1, 2, None, 3]),
-            [None, 1],
-            [2, None],
-            lambda: cudf.Series([None, 2, 2, 3]),
+            lambda: cudf.Series([1, 2, None, 3], dtype="Int64"),
+            [pd.NA, 1],
+            [2, pd.NA],
         ),
         (
             lambda: cudf.Series(["a", "q", "t", None], dtype="category"),
             None,
             "z",
-            lambda: cudf.Series(["a", "q", "t", "z"], dtype="category"),
         ),
         (
             lambda: cudf.Series(["a", "q", "t", None], dtype="category"),
             [None, "a", "q"],
             ["z", None, None],
-            lambda: cudf.Series([None, None, "t", "z"], dtype="category"),
         ),
         (
             lambda: cudf.Series(["a", None, "t", None], dtype="category"),
             [None, "t"],
             ["p", None],
-            lambda: cudf.Series(["a", "p", None, "p"], dtype="category"),
         ),
     ],
 )
-def test_replace_nulls(gsr, old, new, expected):
+def test_replace_nulls(gsr, old, new):
     gsr = gsr()
-    actual = gsr.replace(old, new)
-    assert_eq(expected(), actual)
+    psr = gsr.to_pandas()
+
+    try:
+        expected = psr.replace(old, new)
+    except Exception as e:
+        with pytest.raises(type(e)):
+            gsr.replace(old, new)
+    else:
+        actual = gsr.replace(old, new)
+        assert_eq(expected, actual)
 
 
 def test_replace_with_index_objects():
