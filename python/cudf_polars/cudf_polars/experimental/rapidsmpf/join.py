@@ -15,6 +15,7 @@ from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.bloom_filter import BloomFilter
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -24,6 +25,9 @@ from rapidsmpf.streaming.cudf.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+
+import pylibcudf as plc
+from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
@@ -51,9 +55,12 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
+    from rapidsmpf.streaming.cudf.bloom_filter import BloomFilterChunk
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
@@ -514,6 +521,60 @@ def _log_shuffle_strategy_decision(
         tracer.decision = "shuffle"
 
 
+async def passthrough_split(
+    context: Context,
+    ch_in: Channel[TableChunk],
+    ch_split: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    *,
+    indices: Iterable[int],
+) -> None:
+    """
+    Pass all messages from ch_in to ch_out, copying key columns to ch_split.
+
+    Parameters
+    ----------
+    context
+         Streaming context
+    ch_in
+         Channel to consume
+    ch_split
+         Channel to send key columns to
+    ch_out
+         Channel to forward ch_in to
+    indices
+         Column indices of the input table to send to ch_split
+
+    Notes
+    -----
+    This sends everything to ch_split before forwarding to ch_out, so the
+    consumer must consume all of ch_split before consuming ch_out.
+    """
+    meta = await recv_metadata(ch_in, context)
+    await send_metadata(ch_out, context, meta)
+    buffer = context.spillable_messages()
+    mids = []
+    while (msg := await ch_in.recv(context)) is not None:
+        chunk = await TableChunk.from_message(msg).make_available_or_wait(
+            context, net_memory_delta=0
+        )
+        columns = chunk.table_view().columns()
+        key_table = TableChunk.from_pylibcudf_table(
+            plc.Table(
+                [
+                    columns[i].copy(chunk.stream, mr=context.br().device_mr)
+                    for i in indices
+                ]
+            ),
+            chunk.stream,
+            exclusive_view=True,
+        )
+        mids.append(buffer.insert(Message(msg.sequence_number, chunk)))
+        await ch_split.send(context, Message(msg.sequence_number, key_table))
+    for mid in mids:
+        await ch_out.send(context, buffer.extract(mid))
+
+
 async def _shuffle_join(
     context: Context,
     comm: Communicator,
@@ -525,6 +586,7 @@ async def _shuffle_join(
     strategy: JoinStrategy,
     collective_ids: list[int],
     *,
+    size_estimates: tuple[int, int],
     tracer: ActorTracer | None,
 ) -> None:
     """Execute a shuffle (hash) join."""
@@ -544,6 +606,27 @@ async def _shuffle_join(
     )
     await send_metadata(ch_out, context, metadata_out)
 
+    left_size, right_size = size_estimates
+    bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
+    bloom_build_input: Channel[TableChunk] = context.create_channel()
+    passthrough_output: Channel[TableChunk] = context.create_channel()
+    if left_size < right_size:
+        passthrough_input = ch_left
+        ch_left = passthrough_output
+        build_indices = strategy.left_indices
+        bloom_apply_input = ch_right
+        apply_indices = strategy.right_indices
+        ch_right = context.create_channel()
+        bloom_apply_output = ch_right
+    else:
+        passthrough_input = ch_right
+        ch_right = passthrough_output
+        build_indices = strategy.right_indices
+        bloom_apply_input = ch_left
+        apply_indices = strategy.left_indices
+        ch_left = context.create_channel()
+        bloom_apply_output = ch_left
+
     # Construct a shuffle-shuffle-join pipeline.
     # The shuffle operations will pass chunks through unchanged
     # if the data is already partitioned correctly.
@@ -553,7 +636,27 @@ async def _shuffle_join(
     async with shutdown_on_error(
         context, ch_left_shuffle, ch_right_shuffle, trace_ir=ir, ir_context=ir_context
     ):
+        nblocks = BloomFilter.fitting_num_blocks(32 * 1024 * 1024)
+        filter = BloomFilter(context, comm, LIBCUDF_DEFAULT_HASH_SEED, nblocks)
+        # TODO: if we end up not needing to shuffle, should we apply the bloom filter?
         actor_tasks = [
+            passthrough_split(
+                context,
+                passthrough_input,
+                bloom_build_input,
+                passthrough_output,
+                indices=build_indices,
+            ),
+            filter.build(
+                context, bloom_build_input, bloom_build_output, collective_ids.pop(0)
+            ),
+            filter.apply(
+                context,
+                bloom_build_output,
+                bloom_apply_input,
+                bloom_apply_output,
+                apply_indices,
+            ),
             _global_shuffle(
                 context,
                 comm,
@@ -1045,6 +1148,7 @@ async def join_actor(
                     ch_right,
                     strategy,
                     collective_ids,
+                    size_estimates=(left_sample.total_size, right_sample.total_size),
                     tracer=tracer,
                 )
             )
@@ -1110,10 +1214,10 @@ def _(
         assert executor.dynamic_planning is not None  # Checked in use_dynamic
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
         # Join uses up to 3 collective IDs: 1 allgather + up to 2 (left/right shuffle)
-        if len(collective_ids) < 3:
+        if len(collective_ids) < 4:
             raise ValueError(
                 "Dynamic join requires 3 reserved collective IDs "
-                "(allgather + left shuffle + right shuffle); got "
+                "(allgather + left shuffle + right shuffle + bloom filter); got "
                 f"{len(collective_ids)} for this Join. "
                 "Ensure ReserveOpIDs is run with dynamic_planning enabled."
             )
