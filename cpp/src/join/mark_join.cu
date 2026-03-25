@@ -7,6 +7,7 @@
 #include "mark_join.cuh"
 
 #include <cudf/detail/cuco_helpers.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
@@ -16,7 +17,6 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -326,6 +326,8 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
       offset              = cg::reduce(warp, offset, cg::greater<uint32_t>{});
       build_buffer_offset = offset + 1;
       pending_writes      = (offset >= static_cast<uint32_t>(warp_buffer_capacity));
+      warp.sync();
+
       if (pending_writes) {
         build_buffer_offset = 0;
         // Reserve one contiguous output range for the whole warp and flush the
@@ -338,6 +340,7 @@ CUDF_KERNEL __launch_bounds__(block_size) void mark_retrieve_kernel(
           output[output_offset + k] = build_buffer[k + warp_buffer_offset];
         }
       }
+      warp.sync();
     }
   }
   block.sync();
@@ -399,7 +402,7 @@ cudf::size_type mark_join::mark_probe_without_prefilter(storage_ref_type storage
                                                         bitmask_type const* probe_row_bitmask,
                                                         rmm::cuda_stream_view stream)
 {
-  rmm::device_scalar<cudf::size_type> d_mark_counter(0, stream);
+  cudf::detail::device_scalar<cudf::size_type> d_mark_counter(0, stream);
 
   if (num_probe_rows > 0) {
     int grid_size = 0;
@@ -435,7 +438,7 @@ cudf::size_type mark_join::mark_probe_with_prefilter(storage_ref_type storage_re
   CUDF_EXPECTS(_bloom_filter != nullptr, "Prefilter-enabled mark_join is missing bloom filter.");
 
   auto filtered_probe_rows = rmm::device_uvector<probe_key_type>(num_probe_rows, stream, mr);
-  rmm::device_scalar<cudf::size_type> d_filtered_count(0, stream, mr);
+  cudf::detail::device_scalar<cudf::size_type> d_filtered_count(0, stream, mr);
 
   auto const filter_ref = _bloom_filter->ref();
   using prefilter_operator_type =
@@ -531,7 +534,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
     return std::make_unique<rmm::device_uvector<size_type>>(std::move(result));
   }
 
-  rmm::device_scalar<cudf::size_type> d_scan_offset(0, stream);
+  cudf::detail::device_scalar<cudf::size_type> d_scan_offset(0, stream);
 
   {
     int grid_size = 0;
