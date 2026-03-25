@@ -537,7 +537,7 @@ class streaming_groupby {
    * @param mr Device memory resource used to allocate the returned table and columns
    * @return Pair of unique keys table and a vector of aggregation_results (one per request)
    */
-  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> finalize(
+  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> finalize(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -549,7 +549,7 @@ class streaming_groupby {
    *
    * @return The internal partial state as a vector of columns
    */
-  std::vector<std::unique_ptr<column>> release();
+  [[nodiscard]] std::vector<std::unique_ptr<column>> release();
 
  private:
   struct impl;
