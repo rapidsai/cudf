@@ -240,6 +240,20 @@ def test_join_and_slice(zlice, engine):
         assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("how", ["inner", "semi"])
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 20, "broadcast_join_limit": 0}}],
+    indirect=True,
+)
+def test_bloom_filter_join(how, engine):
+    """Bloom filter path: small dimension table joined to large fact table."""
+    dim = pl.LazyFrame({"key": range(10), "val": range(10)})
+    fact = pl.LazyFrame({"key": list(range(5)) * 40, "data": range(200)})
+    q = fact.join(dim, on="key", how=how)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )
