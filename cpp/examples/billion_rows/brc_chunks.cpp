@@ -4,6 +4,7 @@
  */
 #include "common.hpp"
 
+#include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/sorting.hpp>
@@ -79,20 +80,14 @@ int main(int argc, char const** argv)
 
   cudf::groupby::streaming_groupby streaming_agg{key_indices, reqs};
 
-  std::size_t chunk_size     = file_size / divider + ((file_size % divider) != 0);
-  std::size_t start_pos      = 0;
-  cudf::size_type total_rows = 0;
-  do {
-    auto const input_table = load_chunk(input_file, start_pos, chunk_size, stream);
-    auto const read_rows   = input_table->num_rows();
-    if (read_rows == 0) break;
-
+  auto const chunk_size = file_size / divider + ((file_size % divider) != 0);
+  for (std::size_t start_pos = 0; start_pos < file_size; start_pos += chunk_size) {
+    auto const remaining   = file_size - start_pos;
+    auto const read_size   = std::min(chunk_size, remaining);
+    auto const input_table = load_chunk(input_file, start_pos, read_size, stream);
+    if (input_table->num_rows() == 0) { break; }
     streaming_agg.aggregate(input_table->view(), stream);
-
-    start_pos += chunk_size;
-    chunk_size = std::min(chunk_size, file_size - start_pos);
-    total_rows += read_rows;
-  } while (start_pos < file_size && chunk_size > 0);
+  }
 
   auto [keys, results]    = streaming_agg.finalize(stream);
   auto const sorted_order = cudf::sorted_order(keys->view(), {}, {}, stream);
