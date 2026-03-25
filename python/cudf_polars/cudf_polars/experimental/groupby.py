@@ -120,7 +120,8 @@ def decompose(
                     *expr.children,
                 )
                 selection = NamedExpr(
-                    name, Cast(dtype, False, Col(intermediate_dtype, name)) # noqa: FBT003
+                    name,
+                    Cast(dtype, False, Col(intermediate_dtype, name)),  # noqa: FBT003
                 )
             else:
                 intermediate_dtype = dtype
