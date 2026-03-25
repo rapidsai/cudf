@@ -2675,9 +2675,9 @@ class HStack(IR):
                 target_length=df.num_rows if df.num_columns != 0 else None,
                 stream=df.stream,
             )
-        else:
+        else:  # pragma: no cover; streaming rewrites HStack(False)
             # Polars ensures this is true, but let's make sure nothing
-            # went wrong. In this case, the parent node is a
+            # went wrong. In this case, the parent node is
             # guaranteed to be a Select which will take care of making
             # sure that everything is the same length. The result
             # table that might have mismatching column lengths will
