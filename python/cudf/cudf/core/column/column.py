@@ -3542,7 +3542,7 @@ def as_column(
             # NaT.to_numpy() defaults to ns resolution, but pandas 3.0
             # defaults NaT to seconds resolution. Use the dtype's kind
             # if provided to distinguish datetime vs timedelta.
-            if dtype is not None and np.dtype(dtype).kind == "m":
+            if dtype is not None and dtype.kind == "m":
                 arbitrary = arbitrary.to_numpy("timedelta64[s]")
             else:
                 arbitrary = arbitrary.to_numpy("datetime64[s]")
