@@ -702,7 +702,13 @@ def test_scan_tiny_file_not_compressed(tmp_path):
     reason="height parameter added in Polars 1.38",
 )
 @pytest.mark.parametrize("engine", [None, NO_CHUNK_ENGINE])
-def test_scan_parquet_zero_width_with_limit(tmp_path, engine):
+def test_scan_parquet_zero_width_with_limit(tmp_path, engine, request, using_rapidsmpf):
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf and engine is None,
+            reason="https://github.com/rapidsai/cudf/issues/21644",
+        )
+    )
     path = tmp_path / "zero_width.parquet"
     pl.LazyFrame(height=20).sink_parquet(path)
     q = pl.scan_parquet(path).head(5)
