@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <memory>
 #include <numeric>
+#include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -32,18 +34,6 @@ namespace cudf {
 namespace groupby {
 
 namespace {
-
-/**
- * @brief Describes one partial-state column: how to produce it from a batch and how to merge two
- * instances.
- *
- * For example, MEAN stores two partial columns: one with batch_kind=SUM / merge_kind=SUM
- * (running sum) and one with batch_kind=COUNT_VALID / merge_kind=SUM (running count).
- */
-struct partial_agg_descriptor {
-  aggregation::Kind batch_kind;  ///< Aggregation to run on each incoming batch
-  aggregation::Kind merge_kind;  ///< Aggregation to combine two partial-state columns
-};
 
 /**
  * @brief How to convert accumulated partial state into the final result.
@@ -56,28 +46,227 @@ enum class finalize_kind : int32_t {
 };
 
 /**
+ * @brief One deduplicated partial-state column in the state table.
+ *
+ * Multiple request_plans may reference the same unique_agg_column if they need the
+ * same (value_column_index, batch_kind, merge_kind) combination. For example, both
+ * a SUM request and a MEAN request on the same column share a single SUM column.
+ */
+struct unique_agg_column {
+  size_type value_column_index;  ///< Column index in the input data table
+  aggregation::Kind batch_kind;  ///< Aggregation to run on each incoming batch
+  aggregation::Kind merge_kind;  ///< Aggregation to combine two partial-state columns
+  size_type column_index;        ///< Position in the partial-state table (after key columns)
+
+  bool operator==(unique_agg_column const& other) const
+  {
+    return value_column_index == other.value_column_index && batch_kind == other.batch_kind &&
+           merge_kind == other.merge_kind;
+  }
+};
+
+/**
  * @brief Execution plan for a single requested aggregation.
  *
- * Maps one requested aggregation (e.g. MEAN on column 3) to the batch aggregations,
- * merge aggregations, partial-state layout, and finalization logic needed to
- * implement it incrementally.
+ * Maps one requested aggregation (e.g. MEAN on column 3) to references into the
+ * deduplicated unique_agg_column table, plus finalization logic.
  */
 struct request_plan {
   size_type value_column_index;                ///< Column index in the input data table
   aggregation::Kind requested_kind;            ///< The originally requested aggregation kind
   std::unique_ptr<aggregation> requested_agg;  ///< Clone of the original agg (for params like ddof)
-  std::vector<partial_agg_descriptor> partial_descs;  ///< One entry per partial-state column
-  finalize_kind finalization;                         ///< How to produce the final result
-  size_type partial_state_offset;                     ///< First partial column index (after keys)
-  size_type num_partial_columns;                      ///< Number of partial-state columns
+  std::vector<size_type> agg_column_refs;      ///< Indices into the shared unique_agg_column list
+  finalize_kind finalization;                  ///< How to produce the final result
 };
 
 /**
- * @brief Create a groupby_aggregation to run on an incoming data batch.
+ * @brief Composite key for deduplicating partial-state columns:
+ * (value_column_index, batch_kind, merge_kind).
+ */
+using agg_key_t = std::tuple<size_type, aggregation::Kind, aggregation::Kind>;
+
+/**
+ * @brief Hash functor for agg_key_t, using boost-style hash combining.
+ */
+struct agg_key_hash {
+  std::size_t operator()(agg_key_t const& k) const noexcept
+  {
+    auto h = std::hash<size_type>{}(std::get<0>(k));
+    h ^=
+      std::hash<int32_t>{}(static_cast<int32_t>(std::get<1>(k))) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^=
+      std::hash<int32_t>{}(static_cast<int32_t>(std::get<2>(k))) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+  }
+};
+
+/**
+ * @brief Maps agg_key_t to the index of the corresponding unique_agg_column.
  *
- * Maps the requested aggregation kind (or its decomposed component, e.g. MEAN→SUM)
- * to a concrete groupby_aggregation factory call. COLLECT_SET is mapped to COLLECT_LIST
- * because duplicate removal happens during the merge step via MERGE_SETS.
+ * Used during build_plans_and_columns to ensure that identical
+ * (value_column_index, batch_kind, merge_kind) combinations share a single
+ * partial-state column rather than each request plan allocating its own.
+ */
+using dedup_map_t = std::unordered_map<agg_key_t, size_type, agg_key_hash>;
+
+/**
+ * @brief Register a unique_agg_column, reusing an existing one if the same
+ * (value_column_index, batch_kind, merge_kind) combination was already registered.
+ *
+ * @return The index of the (possibly existing) unique_agg_column.
+ */
+size_type register_agg_column(size_type value_col,
+                              aggregation::Kind batch_kind,
+                              aggregation::Kind merge_kind,
+                              std::vector<unique_agg_column>& columns,
+                              dedup_map_t& dedup_map)
+{
+  auto const key = agg_key_t{value_col, batch_kind, merge_kind};
+  auto const it  = dedup_map.find(key);
+  if (it != dedup_map.end()) { return it->second; }
+
+  auto const idx = static_cast<size_type>(columns.size());
+  columns.push_back({value_col, batch_kind, merge_kind, idx});
+  dedup_map[key] = idx;
+  return idx;
+}
+
+/**
+ * @brief Build the list of request_plans and the deduplicated unique_agg_columns
+ * from streaming_aggregation_requests.
+ *
+ * @throws cudf::invalid_argument for unsupported aggregation kinds
+ */
+std::pair<std::vector<request_plan>, std::vector<unique_agg_column>> build_plans_and_columns(
+  host_span<streaming_aggregation_request const> requests)
+{
+  std::vector<request_plan> plans;
+  std::vector<unique_agg_column> agg_columns;
+  dedup_map_t dedup_map;
+
+  for (auto const& req : requests) {
+    for (auto const& agg : req.aggregations) {
+      auto const col = req.column_index;
+
+      request_plan plan;
+      plan.value_column_index = col;
+      plan.requested_kind     = agg->kind;
+      plan.requested_agg      = agg->clone();
+
+      switch (agg->kind) {
+        case aggregation::SUM:
+          plan.agg_column_refs = {
+            register_agg_column(col, aggregation::SUM, aggregation::SUM, agg_columns, dedup_map)};
+          plan.finalization = finalize_kind::IDENTITY;
+          break;
+        case aggregation::PRODUCT:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::PRODUCT, aggregation::PRODUCT, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::MIN:
+          plan.agg_column_refs = {
+            register_agg_column(col, aggregation::MIN, aggregation::MIN, agg_columns, dedup_map)};
+          plan.finalization = finalize_kind::IDENTITY;
+          break;
+        case aggregation::MAX:
+          plan.agg_column_refs = {
+            register_agg_column(col, aggregation::MAX, aggregation::MAX, agg_columns, dedup_map)};
+          plan.finalization = finalize_kind::IDENTITY;
+          break;
+        case aggregation::COUNT_VALID:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::COUNT_VALID, aggregation::SUM, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::COUNT_ALL:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::COUNT_ALL, aggregation::SUM, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::MEAN:
+          plan.agg_column_refs = {
+            register_agg_column(col, aggregation::SUM, aggregation::SUM, agg_columns, dedup_map),
+            register_agg_column(
+              col, aggregation::COUNT_VALID, aggregation::SUM, agg_columns, dedup_map)};
+          plan.finalization = finalize_kind::MEAN_FROM_SUM_COUNT;
+          break;
+        case aggregation::SUM_OF_SQUARES:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::SUM_OF_SQUARES, aggregation::SUM, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::M2:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::M2, aggregation::MERGE_M2, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::VARIANCE:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::M2, aggregation::MERGE_M2, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::VARIANCE_FROM_M2;
+          break;
+        case aggregation::STD:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::M2, aggregation::MERGE_M2, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::STD_FROM_M2;
+          break;
+        case aggregation::TDIGEST:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::TDIGEST, aggregation::MERGE_TDIGEST, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::MERGE_TDIGEST:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::MERGE_TDIGEST, aggregation::MERGE_TDIGEST, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::HISTOGRAM:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::HISTOGRAM, aggregation::MERGE_HISTOGRAM, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::MERGE_HISTOGRAM:
+          plan.agg_column_refs = {register_agg_column(col,
+                                                      aggregation::MERGE_HISTOGRAM,
+                                                      aggregation::MERGE_HISTOGRAM,
+                                                      agg_columns,
+                                                      dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::COLLECT_LIST:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::COLLECT_LIST, aggregation::MERGE_LISTS, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::COLLECT_SET:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::COLLECT_SET, aggregation::MERGE_SETS, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::MERGE_LISTS:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::MERGE_LISTS, aggregation::MERGE_LISTS, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        case aggregation::MERGE_SETS:
+          plan.agg_column_refs = {register_agg_column(
+            col, aggregation::MERGE_SETS, aggregation::MERGE_SETS, agg_columns, dedup_map)};
+          plan.finalization    = finalize_kind::IDENTITY;
+          break;
+        default:
+          CUDF_FAIL(
+            "Unsupported aggregation kind for streaming groupby: " + std::to_string(agg->kind),
+            std::invalid_argument);
+      }
+      plans.push_back(std::move(plan));
+    }
+  }
+  return {std::move(plans), std::move(agg_columns)};
+}
+
+/**
+ * @brief Create a groupby_aggregation to run on an incoming data batch.
  */
 std::unique_ptr<groupby_aggregation> make_batch_agg(aggregation::Kind kind)
 {
@@ -92,9 +281,6 @@ std::unique_ptr<groupby_aggregation> make_batch_agg(aggregation::Kind kind)
       return make_count_aggregation<groupby_aggregation>(null_policy::INCLUDE);
     case aggregation::SUM_OF_SQUARES: return make_sum_of_squares_aggregation<groupby_aggregation>();
     case aggregation::M2: return make_m2_aggregation<groupby_aggregation>();
-    case aggregation::MEAN: return make_sum_aggregation<groupby_aggregation>();
-    case aggregation::VARIANCE: return make_m2_aggregation<groupby_aggregation>();
-    case aggregation::STD: return make_m2_aggregation<groupby_aggregation>();
     case aggregation::TDIGEST:
     case aggregation::MERGE_TDIGEST: return make_tdigest_aggregation<groupby_aggregation>();
     case aggregation::HISTOGRAM: return make_histogram_aggregation<groupby_aggregation>();
@@ -110,14 +296,8 @@ std::unique_ptr<groupby_aggregation> make_batch_agg(aggregation::Kind kind)
 
 /**
  * @brief Create a groupby_aggregation to merge two partial-state columns.
- *
- * For simple associative aggregations (SUM, MIN, MAX, PRODUCT) the merge agg is the
- * same as the batch agg. For compound types (M2, TDIGEST, HISTOGRAM, LISTS, SETS)
- * the corresponding MERGE_* aggregation is used. @p original_agg is consulted for
- * parameters like max_centroids on TDIGEST.
  */
-std::unique_ptr<groupby_aggregation> make_merge_agg(aggregation::Kind kind,
-                                                    aggregation const* original_agg = nullptr)
+std::unique_ptr<groupby_aggregation> make_merge_agg(aggregation::Kind kind)
 {
   switch (kind) {
     case aggregation::SUM: return make_sum_aggregation<groupby_aggregation>();
@@ -125,19 +305,7 @@ std::unique_ptr<groupby_aggregation> make_merge_agg(aggregation::Kind kind,
     case aggregation::MIN: return make_min_aggregation<groupby_aggregation>();
     case aggregation::MAX: return make_max_aggregation<groupby_aggregation>();
     case aggregation::MERGE_M2: return make_merge_m2_aggregation<groupby_aggregation>();
-    case aggregation::MERGE_TDIGEST: {
-      auto max_centroids = 1000;
-      if (original_agg) {
-        if (auto const* td = dynamic_cast<cudf::detail::tdigest_aggregation const*>(original_agg)) {
-          max_centroids = td->max_centroids;
-        }
-        if (auto const* mtd =
-              dynamic_cast<cudf::detail::merge_tdigest_aggregation const*>(original_agg)) {
-          max_centroids = mtd->max_centroids;
-        }
-      }
-      return make_merge_tdigest_aggregation<groupby_aggregation>(max_centroids);
-    }
+    case aggregation::MERGE_TDIGEST: return make_merge_tdigest_aggregation<groupby_aggregation>();
     case aggregation::MERGE_HISTOGRAM:
       return make_merge_histogram_aggregation<groupby_aggregation>();
     case aggregation::MERGE_LISTS: return make_merge_lists_aggregation<groupby_aggregation>();
@@ -147,204 +315,7 @@ std::unique_ptr<groupby_aggregation> make_merge_agg(aggregation::Kind kind,
 }
 
 /**
- * @brief Construct a request_plan from its components.
- */
-request_plan make_plan(size_type col_idx,
-                       aggregation const& agg,
-                       size_type offset,
-                       std::vector<partial_agg_descriptor> descs,
-                       finalize_kind fin,
-                       size_type num_cols)
-{
-  request_plan plan;
-  plan.value_column_index   = col_idx;
-  plan.requested_kind       = agg.kind;
-  plan.requested_agg        = agg.clone();
-  plan.partial_state_offset = offset;
-  plan.partial_descs        = std::move(descs);
-  plan.finalization         = fin;
-  plan.num_partial_columns  = num_cols;
-  return plan;
-}
-
-/**
- * @brief Convert streaming_aggregation_requests into an ordered list of request_plans.
- *
- * Each aggregation in each request becomes one plan. The plan specifies which batch
- * and merge aggregations to use, how many partial-state columns are needed, and what
- * finalization to apply. Partial-state column offsets are assigned contiguously.
- *
- * @throws cudf::invalid_argument for unsupported aggregation kinds
- */
-std::vector<request_plan> build_request_plans(
-  host_span<streaming_aggregation_request const> requests)
-{
-  std::vector<request_plan> plans;
-  auto offset = size_type{0};
-
-  for (auto const& req : requests) {
-    for (auto const& agg : req.aggregations) {
-      auto const col = req.column_index;
-
-      switch (agg->kind) {
-        case aggregation::SUM:
-          plans.push_back(make_plan(
-            col, *agg, offset, {{aggregation::SUM, aggregation::SUM}}, finalize_kind::IDENTITY, 1));
-          break;
-        case aggregation::PRODUCT:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::PRODUCT, aggregation::PRODUCT}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::MIN:
-          plans.push_back(make_plan(
-            col, *agg, offset, {{aggregation::MIN, aggregation::MIN}}, finalize_kind::IDENTITY, 1));
-          break;
-        case aggregation::MAX:
-          plans.push_back(make_plan(
-            col, *agg, offset, {{aggregation::MAX, aggregation::MAX}}, finalize_kind::IDENTITY, 1));
-          break;
-        case aggregation::COUNT_VALID:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::COUNT_VALID, aggregation::SUM}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::COUNT_ALL:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::COUNT_ALL, aggregation::SUM}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::MEAN:
-          plans.push_back(make_plan(
-            col,
-            *agg,
-            offset,
-            {{aggregation::SUM, aggregation::SUM}, {aggregation::COUNT_VALID, aggregation::SUM}},
-            finalize_kind::MEAN_FROM_SUM_COUNT,
-            2));
-          break;
-        case aggregation::SUM_OF_SQUARES:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::SUM_OF_SQUARES, aggregation::SUM}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::M2:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::M2, aggregation::MERGE_M2}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::VARIANCE:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::M2, aggregation::MERGE_M2}},
-                                    finalize_kind::VARIANCE_FROM_M2,
-                                    1));
-          break;
-        case aggregation::STD:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::M2, aggregation::MERGE_M2}},
-                                    finalize_kind::STD_FROM_M2,
-                                    1));
-          break;
-        case aggregation::TDIGEST:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::TDIGEST, aggregation::MERGE_TDIGEST}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::MERGE_TDIGEST:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::MERGE_TDIGEST, aggregation::MERGE_TDIGEST}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::HISTOGRAM:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::HISTOGRAM, aggregation::MERGE_HISTOGRAM}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::MERGE_HISTOGRAM:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::MERGE_HISTOGRAM, aggregation::MERGE_HISTOGRAM}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::COLLECT_LIST:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::COLLECT_LIST, aggregation::MERGE_LISTS}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::COLLECT_SET:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::COLLECT_SET, aggregation::MERGE_SETS}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::MERGE_LISTS:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::MERGE_LISTS, aggregation::MERGE_LISTS}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        case aggregation::MERGE_SETS:
-          plans.push_back(make_plan(col,
-                                    *agg,
-                                    offset,
-                                    {{aggregation::MERGE_SETS, aggregation::MERGE_SETS}},
-                                    finalize_kind::IDENTITY,
-                                    1));
-          break;
-        default:
-          CUDF_FAIL(
-            "Unsupported aggregation kind for streaming groupby: " + std::to_string(agg->kind),
-            std::invalid_argument);
-      }
-      offset += plans.back().num_partial_columns;
-    }
-  }
-  return plans;
-}
-
-/**
  * @brief Determine the data type of a partial-state column after merging.
- *
- * When the batch and merge aggregation kinds differ (e.g. COUNT_VALID batched, SUM
- * merged), the merge output type may be wider than the batch output type (INT32→INT64).
- * This function returns the stable type that the partial-state column should be stored as.
  */
 data_type compute_partial_state_type(data_type batch_result_type,
                                      aggregation::Kind batch_kind,
@@ -356,8 +327,6 @@ data_type compute_partial_state_type(data_type batch_result_type,
 
 /**
  * @brief Combine key columns and partial-state columns into a single state table.
- *
- * The resulting table layout is [key_col_0, ..., key_col_N, partial_col_0, ...].
  */
 std::unique_ptr<table> build_state_table(std::unique_ptr<table>&& keys,
                                          std::vector<std::unique_ptr<column>>& partial_cols)
@@ -373,35 +342,32 @@ std::unique_ptr<table> build_state_table(std::unique_ptr<table>&& keys,
  * @brief Merge new partial results into the accumulated state.
  *
  * Concatenates @p accumulated and @p new_partials vertically, then runs a groupby
- * with the appropriate merge aggregations to collapse duplicate keys back to one row
- * per group. The merged result replaces @p accumulated in place.
+ * with the appropriate merge aggregations (one per unique_agg_column) to collapse
+ * duplicate keys back to one row per group.
  */
 void merge_partial_states(std::unique_ptr<table>& accumulated,
                           table_view new_partials,
                           size_type num_keys,
-                          std::vector<request_plan> const& plans,
+                          std::vector<unique_agg_column> const& agg_columns,
                           null_policy null_handling,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
-  std::vector<table_view> to_concat{accumulated->view(), new_partials};
-  auto concatenated = cudf::concatenate(to_concat, stream, mr);
+  std::vector<table_view> const to_concat{accumulated->view(), new_partials};
+  auto const concatenated = cudf::concatenate(to_concat, stream, mr);
 
   std::vector<size_type> key_col_indices(num_keys);
   std::iota(key_col_indices.begin(), key_col_indices.end(), 0);
-  auto concat_keys = concatenated->view().select(key_col_indices);
+  auto const concat_keys = concatenated->view().select(key_col_indices);
 
   cudf::groupby::groupby merge_groupby{concat_keys, null_handling};
 
   std::vector<aggregation_request> merge_requests;
-  for (auto const& plan : plans) {
-    for (size_type i = 0; i < plan.num_partial_columns; ++i) {
-      aggregation_request req;
-      req.values = concatenated->view().column(num_keys + plan.partial_state_offset + i);
-      req.aggregations.push_back(
-        make_merge_agg(plan.partial_descs[i].merge_kind, plan.requested_agg.get()));
-      merge_requests.push_back(std::move(req));
-    }
+  for (auto const& agg_col : agg_columns) {
+    aggregation_request req;
+    req.values = concatenated->view().column(num_keys + agg_col.column_index);
+    req.aggregations.push_back(make_merge_agg(agg_col.merge_kind));
+    merge_requests.push_back(std::move(req));
   }
 
   auto [merged_keys, merged_results] = merge_groupby.aggregate(merge_requests, stream, mr);
@@ -422,6 +388,7 @@ struct streaming_groupby::impl {
   std::vector<size_type> _key_indices;
   std::vector<size_type> _aggs_per_request;
   std::vector<request_plan> _plans;
+  std::vector<unique_agg_column> _agg_columns;
   null_policy _null_handling;
   sorted _keys_are_sorted;
   std::vector<order> _column_order;
@@ -437,21 +404,16 @@ struct streaming_groupby::impl {
   [[nodiscard]] bool types_initialized() const { return !_partial_column_types.empty(); }
 
   /**
-   * @brief Number of key columns, derived from the key_indices passed at construction.
+   * @brief Number of key columns.
    */
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
 
   /**
-   * @brief Total number of partial-state columns across all plans.
-   *
-   * The internal state table has `num_keys() + total_partial_columns()` columns.
+   * @brief Number of deduplicated partial-state columns.
    */
-  [[nodiscard]] size_type total_partial_columns() const
+  [[nodiscard]] size_type num_agg_columns() const
   {
-    return std::accumulate(
-      _plans.begin(), _plans.end(), size_type{0}, [](size_type acc, auto const& p) {
-        return acc + p.num_partial_columns;
-      });
+    return static_cast<size_type>(_agg_columns.size());
   }
 
   impl(host_span<size_type const> key_idx,
@@ -466,38 +428,39 @@ struct streaming_groupby::impl {
       _column_order{column_order},
       _null_precedence{null_precedence}
   {
-    _plans = build_request_plans(requests);
+    auto [plans, agg_columns] = build_plans_and_columns(requests);
+    _plans                    = std::move(plans);
+    _agg_columns              = std::move(agg_columns);
     for (auto const& req : requests) {
       _aggs_per_request.push_back(static_cast<size_type>(req.aggregations.size()));
     }
   }
 
   /**
-   * @brief Determine the stable partial-state column types and expected finalize output types
-   * from the first batch's results and input data.
+   * @brief Determine partial-state column types and expected finalize output types.
    */
   void initialize_types(std::vector<std::unique_ptr<column>> const& batch_partial_cols,
                         table_view const& data)
   {
     _partial_column_types.clear();
     _finalize_output_types.clear();
-    auto col_idx = size_type{0};
+
+    for (size_type i = 0; i < num_agg_columns(); ++i) {
+      auto const& agg_col   = _agg_columns[i];
+      auto const batch_type = batch_partial_cols[i]->type();
+      auto const state_type =
+        compute_partial_state_type(batch_type, agg_col.batch_kind, agg_col.merge_kind);
+      _partial_column_types.push_back(state_type);
+    }
+
     for (auto const& plan : _plans) {
       _finalize_output_types.push_back(cudf::detail::target_type(
         data.column(plan.value_column_index).type(), plan.requested_kind));
-      for (size_type i = 0; i < plan.num_partial_columns; ++i) {
-        auto batch_type = batch_partial_cols[col_idx]->type();
-        auto state_type = compute_partial_state_type(
-          batch_type, plan.partial_descs[i].batch_kind, plan.partial_descs[i].merge_kind);
-        _partial_column_types.push_back(state_type);
-        ++col_idx;
-      }
     }
   }
 
   /**
-   * @brief Cast batch result columns to the established partial-state types where they differ
-   * (e.g. COUNT INT32 to INT64 for SUM-based merging). Non-fixed-width columns are passed through.
+   * @brief Cast batch result columns to the established partial-state types where they differ.
    */
   std::vector<std::unique_ptr<column>> cast_to_state_types(
     std::vector<std::unique_ptr<column>>& cols,
@@ -519,8 +482,7 @@ struct streaming_groupby::impl {
   /**
    * @brief Run a standard cudf::groupby on the incoming data batch.
    *
-   * Returns the partial result columns (one per partial_agg_descriptor across all plans)
-   * and writes the unique keys to @p out_keys.
+   * Creates one aggregation_request per unique_agg_column (deduplicated).
    */
   std::vector<std::unique_ptr<column>> run_batch_groupby(table_view const& data,
                                                          std::unique_ptr<table>& out_keys,
@@ -532,19 +494,17 @@ struct streaming_groupby::impl {
     for (auto idx : _key_indices) {
       key_cols.push_back(data.column(idx));
     }
-    table_view keys_view{key_cols};
+    table_view const keys_view{key_cols};
 
     cudf::groupby::groupby batch_groupby{
       keys_view, _null_handling, _keys_are_sorted, _column_order, _null_precedence};
 
     std::vector<aggregation_request> batch_requests;
-    for (auto const& plan : _plans) {
-      for (auto const& desc : plan.partial_descs) {
-        aggregation_request req;
-        req.values = data.column(plan.value_column_index);
-        req.aggregations.push_back(make_batch_agg(desc.batch_kind));
-        batch_requests.push_back(std::move(req));
-      }
+    for (auto const& agg_col : _agg_columns) {
+      aggregation_request req;
+      req.values = data.column(agg_col.value_column_index);
+      req.aggregations.push_back(make_batch_agg(agg_col.batch_kind));
+      batch_requests.push_back(std::move(req));
     }
 
     auto [batch_keys, batch_results] = batch_groupby.aggregate(batch_requests, stream, mr);
@@ -580,12 +540,11 @@ struct streaming_groupby::impl {
     }
 
     merge_partial_states(
-      _partial_state, batch_state->view(), num_keys(), _plans, _null_handling, stream, mr);
+      _partial_state, batch_state->view(), num_keys(), _agg_columns, _null_handling, stream, mr);
   }
 
   /**
-   * @brief Verify that @p other has the same configuration (key indices, null handling,
-   * sort metadata, and aggregation plan) so their partial states can be merged.
+   * @brief Verify that @p other has the same configuration so their partial states can be merged.
    */
   void validate_compatible(impl const& other) const
   {
@@ -604,13 +563,12 @@ struct streaming_groupby::impl {
     CUDF_EXPECTS(_null_precedence == other._null_precedence,
                  "Cannot merge streaming_groupby objects with different null precedence.",
                  std::invalid_argument);
-    CUDF_EXPECTS(_plans.size() == other._plans.size(),
-                 "Cannot merge streaming_groupby objects with different aggregation requests.",
+    CUDF_EXPECTS(_agg_columns.size() == other._agg_columns.size(),
+                 "Cannot merge streaming_groupby objects with different aggregation layouts.",
                  std::invalid_argument);
-    for (size_t i = 0; i < _plans.size(); ++i) {
-      CUDF_EXPECTS(_plans[i].requested_kind == other._plans[i].requested_kind &&
-                     _plans[i].value_column_index == other._plans[i].value_column_index,
-                   "Cannot merge streaming_groupby objects with different aggregation requests.",
+    for (size_t i = 0; i < _agg_columns.size(); ++i) {
+      CUDF_EXPECTS(_agg_columns[i] == other._agg_columns[i],
+                   "Cannot merge streaming_groupby objects with different aggregation layouts.",
                    std::invalid_argument);
     }
   }
@@ -632,13 +590,17 @@ struct streaming_groupby::impl {
       return;
     }
 
-    merge_partial_states(
-      _partial_state, other._partial_state->view(), num_keys(), _plans, _null_handling, stream, mr);
+    merge_partial_states(_partial_state,
+                         other._partial_state->view(),
+                         num_keys(),
+                         _agg_columns,
+                         _null_handling,
+                         stream,
+                         mr);
   }
 
   /**
-   * @brief Copy the accumulated state and apply finalization transforms (identity, mean
-   * division, variance/std from M2 struct) to produce the final result columns.
+   * @brief Copy the accumulated state and apply finalization transforms to produce final results.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> do_finalize(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
@@ -661,24 +623,27 @@ struct streaming_groupby::impl {
 
         switch (plan.finalization) {
           case finalize_kind::IDENTITY: {
-            auto const& src = _partial_state->view().column(num_keys() + plan.partial_state_offset);
+            auto const state_col_idx = _agg_columns[plan.agg_column_refs[0]].column_index;
+            auto const& src          = _partial_state->view().column(num_keys() + state_col_idx);
             if (req_idx < static_cast<size_type>(_finalize_output_types.size()) &&
                 src.type() != _finalize_output_types[req_idx] && cudf::is_fixed_width(src.type()) &&
                 cudf::is_fixed_width(_finalize_output_types[req_idx])) {
-              auto const& expected_type = _finalize_output_types[req_idx];
-              agg_result.results.push_back(cudf::cast(src, expected_type, stream, mr));
+              agg_result.results.push_back(
+                cudf::cast(src, _finalize_output_types[req_idx], stream, mr));
             } else {
               agg_result.results.push_back(std::make_unique<column>(src, stream, mr));
             }
             break;
           }
           case finalize_kind::MEAN_FROM_SUM_COUNT: {
-            auto sum_col = _partial_state->view().column(num_keys() + plan.partial_state_offset);
-            auto count_col =
-              _partial_state->view().column(num_keys() + plan.partial_state_offset + 1);
+            auto const sum_col_idx   = _agg_columns[plan.agg_column_refs[0]].column_index;
+            auto const count_col_idx = _agg_columns[plan.agg_column_refs[1]].column_index;
+            auto const sum_col       = _partial_state->view().column(num_keys() + sum_col_idx);
+            auto const count_col     = _partial_state->view().column(num_keys() + count_col_idx);
 
-            auto count_as_double = cudf::cast(count_col, data_type{type_id::FLOAT64}, stream, mr);
-            auto sum_as_double   = cudf::cast(sum_col, data_type{type_id::FLOAT64}, stream, mr);
+            auto const count_as_double =
+              cudf::cast(count_col, data_type{type_id::FLOAT64}, stream, mr);
+            auto const sum_as_double = cudf::cast(sum_col, data_type{type_id::FLOAT64}, stream, mr);
 
             agg_result.results.push_back(cudf::binary_operation(sum_as_double->view(),
                                                                 count_as_double->view(),
@@ -689,9 +654,10 @@ struct streaming_groupby::impl {
             break;
           }
           case finalize_kind::VARIANCE_FROM_M2: {
-            auto m2_struct = _partial_state->view().column(num_keys() + plan.partial_state_offset);
-            auto count_col = m2_struct.child(0);
-            auto m2_col    = m2_struct.child(2);
+            auto const m2_col_idx = _agg_columns[plan.agg_column_refs[0]].column_index;
+            auto const m2_struct  = _partial_state->view().column(num_keys() + m2_col_idx);
+            auto const count_col  = m2_struct.child(0);
+            auto const m2_col     = m2_struct.child(2);
 
             auto ddof = size_type{1};
             if (auto const* var_agg =
@@ -699,17 +665,18 @@ struct streaming_groupby::impl {
               ddof = var_agg->_ddof;
             }
 
-            auto count_dbl = cudf::cast(count_col, data_type{type_id::FLOAT64}, stream, mr);
-            auto ddof_scalar =
+            auto const count_as_double =
+              cudf::cast(count_col, data_type{type_id::FLOAT64}, stream, mr);
+            auto const ddof_scalar =
               cudf::numeric_scalar<double>{static_cast<double>(ddof), true, stream};
-            auto denom = cudf::binary_operation(count_dbl->view(),
-                                                ddof_scalar,
-                                                binary_operator::SUB,
-                                                data_type{type_id::FLOAT64},
-                                                stream,
-                                                mr);
+            auto const denominator = cudf::binary_operation(count_as_double->view(),
+                                                            ddof_scalar,
+                                                            binary_operator::SUB,
+                                                            data_type{type_id::FLOAT64},
+                                                            stream,
+                                                            mr);
             agg_result.results.push_back(cudf::binary_operation(m2_col,
-                                                                denom->view(),
+                                                                denominator->view(),
                                                                 binary_operator::DIV,
                                                                 data_type{type_id::FLOAT64},
                                                                 stream,
@@ -717,9 +684,10 @@ struct streaming_groupby::impl {
             break;
           }
           case finalize_kind::STD_FROM_M2: {
-            auto m2_struct = _partial_state->view().column(num_keys() + plan.partial_state_offset);
-            auto count_col = m2_struct.child(0);
-            auto m2_col    = m2_struct.child(2);
+            auto const m2_col_idx = _agg_columns[plan.agg_column_refs[0]].column_index;
+            auto const m2_struct  = _partial_state->view().column(num_keys() + m2_col_idx);
+            auto const count_col  = m2_struct.child(0);
+            auto const m2_col     = m2_struct.child(2);
 
             auto ddof = size_type{1};
             if (auto const* std_agg =
@@ -727,17 +695,22 @@ struct streaming_groupby::impl {
               ddof = std_agg->_ddof;
             }
 
-            auto count_dbl = cudf::cast(count_col, data_type{type_id::FLOAT64}, stream, mr);
-            auto ddof_scalar =
+            auto const count_as_double =
+              cudf::cast(count_col, data_type{type_id::FLOAT64}, stream, mr);
+            auto const ddof_scalar =
               cudf::numeric_scalar<double>{static_cast<double>(ddof), true, stream};
-            auto denom    = cudf::binary_operation(count_dbl->view(),
-                                                ddof_scalar,
-                                                binary_operator::SUB,
-                                                data_type{type_id::FLOAT64},
-                                                stream,
-                                                mr);
-            auto variance = cudf::binary_operation(
-              m2_col, denom->view(), binary_operator::DIV, data_type{type_id::FLOAT64}, stream, mr);
+            auto const denominator = cudf::binary_operation(count_as_double->view(),
+                                                            ddof_scalar,
+                                                            binary_operator::SUB,
+                                                            data_type{type_id::FLOAT64},
+                                                            stream,
+                                                            mr);
+            auto const variance    = cudf::binary_operation(m2_col,
+                                                         denominator->view(),
+                                                         binary_operator::DIV,
+                                                         data_type{type_id::FLOAT64},
+                                                         stream,
+                                                         mr);
             agg_result.results.push_back(
               cudf::unary_operation(variance->view(), unary_operator::SQRT, stream, mr));
             break;
@@ -788,20 +761,19 @@ streaming_groupby::streaming_groupby(std::vector<std::unique_ptr<column>>&& part
       key_indices, requests, null_handling, keys_are_sorted, column_order, null_precedence)}
 {
   if (!partial_state.empty()) {
-    auto const expected_cols = _impl->num_keys() + _impl->total_partial_columns();
+    auto const expected_cols = static_cast<size_type>(_impl->num_keys() + _impl->num_agg_columns());
     CUDF_EXPECTS(static_cast<size_type>(partial_state.size()) == expected_cols,
                  "partial_state column count (" + std::to_string(partial_state.size()) +
                    ") does not match expected (" + std::to_string(expected_cols) +
                    "): " + std::to_string(_impl->num_keys()) + " key columns + " +
-                   std::to_string(_impl->total_partial_columns()) + " partial columns.",
+                   std::to_string(_impl->num_agg_columns()) + " partial columns.",
                  std::invalid_argument);
 
     _impl->_partial_state = std::make_unique<table>(std::move(partial_state));
-    _impl->_partial_column_types.reserve(_impl->total_partial_columns());
-    for (auto i = _impl->num_keys(); i < _impl->num_keys() + _impl->total_partial_columns(); ++i) {
+    _impl->_partial_column_types.reserve(_impl->num_agg_columns());
+    for (auto i = _impl->num_keys(); i < _impl->num_keys() + _impl->num_agg_columns(); ++i) {
       _impl->_partial_column_types.push_back(_impl->_partial_state->view().column(i).type());
     }
-    // types_initialized() is now true via non-empty _partial_column_types
   }
 }
 
