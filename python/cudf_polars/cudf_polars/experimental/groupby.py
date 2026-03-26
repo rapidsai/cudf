@@ -152,8 +152,8 @@ def decompose(
         elif expr.name in ("std", "var"):
             ddof = expr.options
             (child,) = expr.children
-            # Do the decomposition using the formula for variance
-            # ar = (E[X^2] - E[X]^2) * n / (n - ddof)
+            # Do the decomposition using the formula for variance:
+            # var = (E[X^2] - E[X]^2) * n / (n - ddof)
             x_sq = BinOp(dtype, plc.binaryop.BinaryOperator.MUL, child, child)
             (
                 (sum_x2_val, sum_x_val, count_val),
@@ -237,14 +237,19 @@ def decompose(
                     UnaryFunction(dtype, "sqrt", (), variance),
                 ),
             )
-            standard_deviation: Expr = (
-                UnaryFunction(dtype, "sqrt", (), sanitized)
-                if expr.name == "std"
-                else sanitized
-            )
             # mask_nans converts NaN -> null to match Polars semantics.
             selection = NamedExpr(
-                name, UnaryFunction(dtype, "mask_nans", (), standard_deviation)
+                name,
+                UnaryFunction(
+                    dtype,
+                    "mask_nans",
+                    (),
+                    (
+                        UnaryFunction(dtype, "sqrt", (), sanitized)
+                        if expr.name == "std"
+                        else sanitized
+                    ),
+                ),
             )
             return selection, aggregations, reductions, need_preshuffle
         else:
