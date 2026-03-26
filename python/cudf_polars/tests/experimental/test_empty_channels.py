@@ -1,42 +1,38 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for empty channel handling in RapidsMPF streaming nodes."""
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
-    assert_gpu_result_equal,
-)
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 
-pytestmark = [
-    pytest.mark.skipif(
-        DEFAULT_RUNTIME != "rapidsmpf", reason="Requires 'rapidsmpf' runtime."
-    ),
-    pytest.mark.skipif(
-        DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster."
-    ),
-]
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
 @pytest.fixture
-def engine():
-    """Standard GPU engine for tests."""
-    return pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 2,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-        },
-    )
+def engine(
+    request: pytest.FixtureRequest,
+) -> Generator[StreamingEngine, None, None]:
+    """StreamingEngine with empty-channel-specific defaults (small partitions)."""
+    params: dict[str, Any] = getattr(request, "param", {})
+    executor_options = {
+        "max_rows_per_partition": 2,
+        "dynamic_planning": {},
+        **params.get("executor_options", {}),
+    }
+    with SPMDEngine(executor_options=executor_options) as engine:
+        yield engine
 
 
 def test_empty_dataframe_source(engine):
