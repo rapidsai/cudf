@@ -7,6 +7,7 @@
 #include "global_memory_aggregator.cuh"
 #include "helpers.cuh"
 #include "shared_memory_aggregator.cuh"
+#include "shmem_dispatch.cuh"
 #include "single_pass_functors.cuh"
 
 #include <cudf/aggregation.hpp>
@@ -81,12 +82,12 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
         reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + shmem_agg_res_offsets[col_idx]);
       auto target_mask =
         reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
-      cudf::detail::dispatch_type_and_aggregation(output_values.column(col_idx).type(),
-                                                  d_agg_kinds[col_idx],
-                                                  initialize_shmem{},
-                                                  target,
-                                                  target_mask,
-                                                  idx);
+      dispatch_type_and_shmem_aggregation(output_values.column(col_idx).type(),
+                                          d_agg_kinds[col_idx],
+                                          initialize_shmem{},
+                                          target,
+                                          target_mask,
+                                          idx);
     }
   }
 }
@@ -116,14 +117,14 @@ __device__ void compute_pre_aggregations(cudf::size_type col_start,
         bool* target_mask =
           reinterpret_cast<bool*>(shmem_agg_storage + shmem_agg_mask_offsets[col_idx]);
 
-        cudf::detail::dispatch_type_and_aggregation(source_col.type(),
-                                                    d_agg_kinds[col_idx],
-                                                    shmem_element_aggregator{},
-                                                    target,
-                                                    target_mask,
-                                                    target_idx,
-                                                    source_col,
-                                                    source_idx);
+        dispatch_type_and_shmem_aggregation(source_col.type(),
+                                            d_agg_kinds[col_idx],
+                                            shmem_element_aggregator{},
+                                            target,
+                                            target_mask,
+                                            target_idx,
+                                            source_col,
+                                            source_idx);
       }
     }
   }
@@ -154,15 +155,15 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
         reinterpret_cast<cuda::std::byte*>(shmem_agg_storage + agg_res_offsets[col_idx]);
       bool* source_mask = reinterpret_cast<bool*>(shmem_agg_storage + agg_mask_offsets[col_idx]);
 
-      cudf::detail::dispatch_type_and_aggregation(input_values.column(col_idx).type(),
-                                                  d_agg_kinds[col_idx],
-                                                  gmem_element_aggregator{},
-                                                  target_col,
-                                                  target_idx,
-                                                  input_values.column(col_idx),
-                                                  source,
-                                                  source_mask,
-                                                  idx);
+      dispatch_type_and_shmem_aggregation(input_values.column(col_idx).type(),
+                                          d_agg_kinds[col_idx],
+                                          gmem_element_aggregator{},
+                                          target_col,
+                                          target_idx,
+                                          input_values.column(col_idx),
+                                          source,
+                                          source_mask,
+                                          idx);
     }
   }
 }
