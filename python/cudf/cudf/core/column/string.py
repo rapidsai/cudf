@@ -213,18 +213,18 @@ class StringColumn(ColumnBase, Scannable):
         For StringDtype with na_value=np.nan, returns get_dtype_of_same_kind(self.dtype, target_dtype).
         Otherwise, returns get_dtype_of_same_kind(pd.StringDtype() or self.dtype, target_dtype).
         """
-        if (
-            isinstance(self.dtype, pd.StringDtype)
-            and self.dtype.na_value is np.nan
-        ):
-            return get_dtype_of_same_kind(self.dtype, target_dtype)
-        else:
-            return get_dtype_of_same_kind(
-                pd.StringDtype()
-                if isinstance(self.dtype, pd.StringDtype)
-                else self.dtype,
-                target_dtype,
-            )
+        # if (
+        #     isinstance(self.dtype, pd.StringDtype)
+        #     and self.dtype.na_value is np.nan
+        # ):
+        return get_dtype_of_same_kind(self.dtype, target_dtype)
+        # else:
+        #     return get_dtype_of_same_kind(
+        #         pd.StringDtype()
+        #         if isinstance(self.dtype, pd.StringDtype)
+        #         else self.dtype,
+        #         target_dtype,
+        #     )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
@@ -1560,6 +1560,7 @@ class StringColumn(ColumnBase, Scannable):
             plc_result = plc.strings.char_types.all_characters_of_type(
                 self.plc_column, char_type, case_type
             )
+            # import pdb;pdb.set_trace()
             dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
             result = cast(
                 "cudf.core.column.numerical.NumericalColumn",
