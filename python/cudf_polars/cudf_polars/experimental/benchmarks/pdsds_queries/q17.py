@@ -95,6 +95,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     year = params["year"]
 
+    # Load tables
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
@@ -148,6 +149,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("ss_quantity").count().alias("store_sales_quantitycount"),
                     pl.col("ss_quantity").mean().alias("store_sales_quantityave"),
                     pl.col("ss_quantity").std().alias("store_sales_quantitystdev"),
+                    (pl.col("ss_quantity").std() / pl.col("ss_quantity").mean()).alias(
+                        "store_sales_quantitycov"
+                    ),
                     pl.col("sr_return_quantity")
                     .count()
                     .alias("store_returns_quantitycount"),
@@ -157,44 +161,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("sr_return_quantity")
                     .std()
                     .alias("store_returns_quantitystdev"),
+                    (
+                        pl.col("sr_return_quantity").std()
+                        / pl.col("sr_return_quantity").mean()
+                    ).alias("store_returns_quantitycov"),
                     pl.col("cs_quantity").count().alias("catalog_sales_quantitycount"),
                     pl.col("cs_quantity").mean().alias("catalog_sales_quantityave"),
                     pl.col("cs_quantity").std().alias("catalog_sales_quantitystdev"),
-                ]
-            )
-            .with_columns(
-                [
-                    (
-                        pl.col("store_sales_quantitystdev")
-                        / pl.col("store_sales_quantityave")
-                    ).alias("store_sales_quantitycov"),
-                    (
-                        pl.col("store_returns_quantitystdev")
-                        / pl.col("store_returns_quantityave")
-                    ).alias("store_returns_quantitycov"),
-                    (
-                        pl.col("catalog_sales_quantitystdev")
-                        / pl.col("catalog_sales_quantityave")
-                    ).alias("catalog_sales_quantitycov"),
-                ]
-            )
-            .select(
-                [
-                    "i_item_id",
-                    "i_item_desc",
-                    "s_state",
-                    "store_sales_quantitycount",
-                    "store_sales_quantityave",
-                    "store_sales_quantitystdev",
-                    "store_sales_quantitycov",
-                    "store_returns_quantitycount",
-                    "store_returns_quantityave",
-                    "store_returns_quantitystdev",
-                    "store_returns_quantitycov",
-                    "catalog_sales_quantitycount",
-                    "catalog_sales_quantityave",
-                    "catalog_sales_quantitystdev",
-                    "catalog_sales_quantitycov",
+                    (pl.col("cs_quantity").std() / pl.col("cs_quantity").mean()).alias(
+                        "catalog_sales_quantitycov"
+                    ),
                 ]
             )
             .sort(sort_by.keys(), nulls_last=True)
