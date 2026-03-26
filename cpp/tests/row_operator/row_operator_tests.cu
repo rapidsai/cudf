@@ -20,7 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 template <typename T>
@@ -353,8 +353,8 @@ TEST_F(RowOperatorTest, TestRowHasher64BitHash)
 
   auto results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0}};
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>{0},
-                    thrust::counting_iterator<cudf::size_type>{3},
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{3},
                     cudf::mutable_column_view{results}.begin<std::uint64_t>(),
                     hasher);
 
@@ -379,8 +379,8 @@ TEST_F(RowOperatorTest, TestPrimitiveRowHasher64BitHash)
   auto results = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0}};
 
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>{0},
-                    thrust::counting_iterator<cudf::size_type>{3},
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{3},
                     cudf::mutable_column_view{results}.begin<std::uint64_t>(),
                     hasher);
 
@@ -414,13 +414,13 @@ TEST_F(RowOperatorTest, TestRowHasherDictionaryColumn)
   auto str_results  = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0, 0, 0}};
 
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>{0},
-                    thrust::counting_iterator<cudf::size_type>{5},
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{5},
                     cudf::mutable_column_view{dict_results}.begin<std::uint64_t>(),
                     dict_hasher);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>{0},
-                    thrust::counting_iterator<cudf::size_type>{5},
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{5},
                     cudf::mutable_column_view{str_results}.begin<std::uint64_t>(),
                     str_hasher);
 
@@ -449,13 +449,13 @@ TEST_F(RowOperatorTest, TestRowHasherDictionaryColumnWithNulls)
   auto int_results  = cudf::test::fixed_width_column_wrapper<std::uint64_t>{{0, 0, 0, 0, 0}};
 
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>{0},
-                    thrust::counting_iterator<cudf::size_type>{5},
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{5},
                     cudf::mutable_column_view{dict_results}.begin<std::uint64_t>(),
                     dict_hasher);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>{0},
-                    thrust::counting_iterator<cudf::size_type>{5},
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{5},
                     cudf::mutable_column_view{int_results}.begin<std::uint64_t>(),
                     int_hasher);
 

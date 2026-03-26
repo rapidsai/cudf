@@ -19,7 +19,7 @@
 
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <numeric>
@@ -61,7 +61,7 @@ struct row_group_stats_caster : public stats_caster_base {
       if (has_is_null_operator) { is_null = host_column<bool>(total_row_groups, stream); }
 
       size_type stats_idx = 0;
-      for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+      for (std::size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
           auto col              = std::find_if(
@@ -143,7 +143,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
     .row_group_indices    = input_row_group_indices,
     .has_is_null_operator = has_is_null_operator};
 
-  for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
+  for (std::size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
     auto const schema_idx = output_column_schemas[col_idx];
     auto const& dtype     = output_dtypes[col_idx];
     // Only participating columns and comparable types are supported

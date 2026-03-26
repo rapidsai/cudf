@@ -40,6 +40,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuda/iterator>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 
@@ -83,7 +84,7 @@ struct aggregate_writer_metadata {
       schema(std::vector<SchemaElement>(tbl_schema.begin(), tbl_schema.end())),
       files(partitions.size())
   {
-    for (size_t i = 0; i < partitions.size(); ++i) {
+    for (std::size_t i = 0; i < partitions.size(); ++i) {
       this->files[i].num_rows = partitions[i].num_rows;
     }
 
@@ -92,7 +93,7 @@ struct aggregate_writer_metadata {
       this->column_orders       = std::vector<ColumnOrder>(num_columns, default_order);
     }
 
-    for (size_t p = 0; p < kv_md.size(); ++p) {
+    for (std::size_t p = 0; p < kv_md.size(); ++p) {
       std::transform(kv_md[p].begin(),
                      kv_md[p].end(),
                      std::back_inserter(this->files[p].key_value_metadata),
@@ -113,12 +114,12 @@ struct aggregate_writer_metadata {
   {
     CUDF_EXPECTS(partitions.size() == this->files.size(),
                  "New partitions must be same size as previously passed number of partitions");
-    for (size_t i = 0; i < partitions.size(); ++i) {
+    for (std::size_t i = 0; i < partitions.size(); ++i) {
       this->files[i].num_rows += partitions[i].num_rows;
     }
   }
 
-  FileMetaData get_metadata(size_t part)
+  FileMetaData get_metadata(std::size_t part)
   {
     CUDF_EXPECTS(part < files.size(), "Invalid part index queried");
     FileMetaData meta{};
@@ -134,7 +135,7 @@ struct aggregate_writer_metadata {
 
   void set_file_paths(host_span<std::string const> column_chunks_file_path)
   {
-    for (size_t p = 0; p < this->files.size(); ++p) {
+    for (std::size_t p = 0; p < this->files.size(); ++p) {
       auto& file            = this->files[p];
       auto const& file_path = column_chunks_file_path[p];
       for (auto& rowgroup : file.row_groups) {
@@ -148,7 +149,7 @@ struct aggregate_writer_metadata {
   FileMetaData get_merged_metadata()
   {
     FileMetaData merged_md;
-    for (size_t p = 0; p < this->files.size(); ++p) {
+    for (std::size_t p = 0; p < this->files.size(); ++p) {
       auto& file = this->files[p];
       if (p == 0) {
         merged_md = this->get_metadata(0);
@@ -162,9 +163,9 @@ struct aggregate_writer_metadata {
     return merged_md;
   }
 
-  std::vector<size_t> num_row_groups_per_file()
+  std::vector<std::size_t> num_row_groups_per_file()
   {
-    std::vector<size_t> global_rowgroup_base;
+    std::vector<std::size_t> global_rowgroup_base;
     std::transform(this->files.begin(),
                    this->files.end(),
                    std::back_inserter(global_rowgroup_base),
@@ -176,8 +177,8 @@ struct aggregate_writer_metadata {
   {
     return this->schema == schema;
   }
-  auto& file(size_t p) { return files[p]; }
-  [[nodiscard]] size_t num_files() const { return files.size(); }
+  auto& file(std::size_t p) { return files[p]; }
+  [[nodiscard]] std::size_t num_files() const { return files.size(); }
 
  private:
   int32_t version = 0;
@@ -263,7 +264,7 @@ void update_chunk_encoding_stats(ColumnChunkMetaData& chunk_meta,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The data size of the input
  */
-size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
+std::size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
 {
   if (column.is_empty()) { return 0; }
 
@@ -276,7 +277,7 @@ size_t column_size(column_view const& column, rmm::cuda_stream_view stream)
            cudf::strings::detail::get_offset_value(scol.offsets(), column.offset(), stream);
   } else if (column.type().id() == type_id::STRUCT) {
     auto const scol = structs_column_view(column);
-    size_t ret      = 0;
+    std::size_t ret = 0;
     for (int i = 0; i < scol.num_children(); i++) {
       ret += column_size(scol.get_sliced_child(i, stream), stream);
     }
@@ -654,8 +655,10 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
-    [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
+  std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, std::size_t)>
+    add_schema = [&](cudf::detail::LinkedColPtr const& col,
+                     column_in_metadata& col_meta,
+                     std::size_t parent_idx) {
       bool const col_nullable = is_output_column_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
@@ -804,9 +807,9 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
         // for (auto child_it = col->children.begin(); child_it < col->children.end(); child_it++) {
         //   add_schema(*child_it, struct_node_index);
         // }
-        CUDF_EXPECTS(col->children.size() == static_cast<size_t>(col_meta.num_children()),
+        CUDF_EXPECTS(col->children.size() == static_cast<std::size_t>(col_meta.num_children()),
                      "Mismatch in number of child columns between input table and metadata");
-        for (size_t i = 0; i < col->children.size(); ++i) {
+        for (std::size_t i = 0; i < col->children.size(); ++i) {
           add_schema(col->children[i], col_meta.child(i), struct_node_index);
         }
       } else if (col->type().id() == type_id::LIST && !col_meta.is_map()) {
@@ -932,7 +935,7 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
   CUDF_EXPECTS(metadata.column_metadata.size() == linked_columns.size(),
                "Mismatch in the number of columns and the corresponding metadata elements");
   // Add all linked_columns to schema using parent_idx = 0 (root)
-  for (size_t i = 0; i < linked_columns.size(); ++i) {
+  for (std::size_t i = 0; i < linked_columns.size(); ++i) {
     add_schema(linked_columns[i], metadata.column_metadata[i], 0);
   }
 
@@ -1197,7 +1200,7 @@ void gather_fragment_statistics(device_span<statistics_chunk> frag_stats,
 auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                      device_span<parquet_column_device_view const> col_desc,
                      uint32_t num_columns,
-                     size_t max_page_size_bytes,
+                     std::size_t max_page_size_bytes,
                      size_type max_page_size_rows,
                      bool write_v2_headers,
                      compression_type compression,
@@ -1273,7 +1276,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
   return comp_page_sizes;
 }
 
-size_t max_page_bytes(compression_type compression, size_t max_page_size_bytes)
+std::size_t max_page_bytes(compression_type compression, std::size_t max_page_size_bytes)
 {
   if (compression == compression_type::NONE) { return max_page_size_bytes; }
 
@@ -1281,7 +1284,7 @@ size_t max_page_bytes(compression_type compression, size_t max_page_size_bytes)
 
   auto max_size = std::min(comp_limit.value_or(max_page_size_bytes), max_page_size_bytes);
   // page size must fit in a 32-bit signed integer
-  return std::min<size_t>(max_size, std::numeric_limits<int32_t>::max());
+  return std::min<std::size_t>(max_size, std::numeric_limits<int32_t>::max());
 }
 
 std::pair<std::vector<rmm::device_uvector<size_type>>, std::vector<rmm::device_uvector<size_type>>>
@@ -1290,7 +1293,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
                          device_2dspan<PageFragment const> frags,
                          compression_type compression,
                          dictionary_policy dict_policy,
-                         size_t max_dict_size,
+                         std::size_t max_dict_size,
                          rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
@@ -1311,7 +1314,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   }
 
   // Variable to keep track of the current total map storage size
-  size_t total_map_storage_size = 0;
+  std::size_t total_map_storage_size = 0;
   // Populate dict offsets and sizes for each chunk that need to build a dictionary.
   std::for_each(h_chunks.begin(), h_chunks.end(), [&](auto& chunk) {
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
@@ -1373,7 +1376,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 
       // don't use dictionary if it gets too large for the given compression codec
       if (dict_policy == dictionary_policy::ADAPTIVE) {
-        auto const unique_size = static_cast<size_t>(ck.uniq_data_size);
+        auto const unique_size = static_cast<std::size_t>(ck.uniq_data_size);
         if (unique_size > max_page_bytes(compression, max_dict_size)) { return {false, 0}; }
       }
 
@@ -1401,11 +1404,11 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   for (auto& chunk : h_chunks) {
     if (not chunk.use_dictionary) { continue; }
 
-    size_t dict_data_size     = std::min(MAX_DICT_SIZE, chunk.dict_map_size);
-    auto& inserted_dict_data  = dict_data.emplace_back(dict_data_size, stream);
-    auto& inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
-    chunk.dict_data           = inserted_dict_data.data();
-    chunk.dict_index          = inserted_dict_index.data();
+    std::size_t dict_data_size = std::min(MAX_DICT_SIZE, chunk.dict_map_size);
+    auto& inserted_dict_data   = dict_data.emplace_back(dict_data_size, stream);
+    auto& inserted_dict_index  = dict_index.emplace_back(chunk.num_values, stream);
+    chunk.dict_data            = inserted_dict_data.data();
+    chunk.dict_index           = inserted_dict_index.data();
   }
   chunks.host_to_device_async(stream);
   collect_map_entries(map_storage_data, chunks.device_view().flat_view(), stream);
@@ -1441,8 +1444,8 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                         uint32_t num_columns,
                         uint32_t num_pages,
                         uint32_t num_stats_bfr,
-                        size_t alignment,
-                        size_t max_page_size_bytes,
+                        std::size_t alignment,
+                        std::size_t max_page_size_bytes,
                         size_type max_page_size_rows,
                         bool write_v2_headers,
                         rmm::cuda_stream_view stream)
@@ -1557,9 +1560,9 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
  * @param column_index_truncate_length maximum length of min or max values in column index, in bytes
  * @return Computed buffer size needed to encode the column index
  */
-size_t column_index_buffer_size(EncColumnChunk* ck,
-                                parquet_column_device_view const& col,
-                                int32_t column_index_truncate_length)
+std::size_t column_index_buffer_size(EncColumnChunk* ck,
+                                     parquet_column_device_view const& col,
+                                     int32_t column_index_truncate_length)
 {
   // encoding the column index for a given chunk requires:
   //   each list (4 of them) requires 6 bytes of overhead
@@ -1603,7 +1606,7 @@ size_t column_index_buffer_size(EncColumnChunk* ck,
   auto const size_struct_size = 2 + def_hist_size + rep_hist_size + var_bytes_size;
 
   // calculating this per-chunk because the sizes can be wildly different.
-  constexpr size_t padding = 7;
+  constexpr std::size_t padding = 7;
   return ck->ck_stat_size * num_pages + column_index_truncate_length + padding + size_struct_size;
 }
 
@@ -1646,8 +1649,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    host_span<std::map<std::string, std::string> const> kv_meta,
                                    std::unique_ptr<aggregate_writer_metadata> const& curr_agg_meta,
                                    std::optional<size_type> max_page_fragment_size_opt,
-                                   size_t max_row_group_size,
-                                   size_t max_page_size_bytes,
+                                   std::size_t max_row_group_size,
+                                   std::size_t max_page_size_bytes,
                                    size_type max_row_group_rows,
                                    size_type max_page_size_rows,
                                    int32_t column_index_truncate_length,
@@ -1655,7 +1658,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    compression_type compression,
                                    bool collect_compression_statistics,
                                    dictionary_policy dict_policy,
-                                   size_t max_dictionary_size,
+                                   std::size_t max_dictionary_size,
                                    single_write_mode write_mode,
                                    bool int96_timestamps,
                                    bool utc_timestamps,
@@ -1707,7 +1710,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   std::fill(column_frag_size.begin(), column_frag_size.end(), max_page_fragment_size);
 
   if (input.num_rows() > 0 && not max_page_fragment_size_opt.has_value()) {
-    std::vector<size_t> column_sizes;
+    std::vector<std::size_t> column_sizes;
     std::transform(single_streams_table.begin(),
                    single_streams_table.end(),
                    std::back_inserter(column_sizes),
@@ -1715,13 +1718,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     // adjust global fragment size if a single fragment will overrun a rowgroup
     auto const table_size  = std::reduce(column_sizes.begin(), column_sizes.end());
-    auto const avg_row_len = util::div_rounding_up_safe<size_t>(table_size, input.num_rows());
+    auto const avg_row_len = util::div_rounding_up_safe<std::size_t>(table_size, input.num_rows());
     if (avg_row_len > 0) {
       // Ensure `rg_frag_size` is not bigger than size_type::max for default max_row_group_size
       // value (=uint64::max) to avoid a sign overflow when comparing
       auto const rg_frag_size =
-        std::min<size_t>(std::numeric_limits<size_type>::max(),
-                         util::div_rounding_up_safe(max_row_group_size, avg_row_len));
+        std::min<std::size_t>(std::numeric_limits<size_type>::max(),
+                              util::div_rounding_up_safe(max_row_group_size, avg_row_len));
       // Safe comparison as rg_frag_size fits in size_type
       max_page_fragment_size =
         std::min<size_type>(static_cast<size_type>(rg_frag_size), max_page_fragment_size);
@@ -1732,10 +1735,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
     // for multiple fragments per page to smooth things out. using 2 was too
     // unbalanced in final page sizes, so using 4 which seems to be a good
     // compromise at smoothing things out without getting fragment sizes too small.
-    auto frag_size_fn = [&](auto const& col, size_t col_size) {
+    auto frag_size_fn = [&](auto const& col, std::size_t col_size) {
       int const target_frags_per_page = col.is_fixed_width() ? 1 : 4;
       auto const avg_len =
-        target_frags_per_page * util::div_rounding_up_safe<size_t>(col_size, input.num_rows());
+        target_frags_per_page * util::div_rounding_up_safe<std::size_t>(col_size, input.num_rows());
       if (avg_len > 0) {
         auto const frag_size = util::div_rounding_up_safe<size_type>(max_page_size_bytes, avg_len);
         return std::min<size_type>(max_page_fragment_size, frag_size);
@@ -1828,13 +1831,13 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   size_type num_rowgroups = 0;
 
   std::vector<int> num_rg_in_part(partitions.size());
-  for (size_t p = 0; p < partitions.size(); ++p) {
-    size_type curr_rg_num_rows = 0;
-    size_t curr_rg_data_size   = 0;
-    int first_frag_in_rg       = part_frag_offset[p];
-    int last_frag_in_part      = part_frag_offset[p + 1] - 1;
+  for (std::size_t p = 0; p < partitions.size(); ++p) {
+    size_type curr_rg_num_rows    = 0;
+    std::size_t curr_rg_data_size = 0;
+    int first_frag_in_rg          = part_frag_offset[p];
+    int last_frag_in_part         = part_frag_offset[p + 1] - 1;
     for (auto f = first_frag_in_rg; f <= last_frag_in_part; ++f) {
-      size_t fragment_data_size = 0;
+      std::size_t fragment_data_size = 0;
       for (auto c = 0; c < num_columns; c++) {
         fragment_data_size += row_group_fragments[c][f].fragment_data_size;
       }
@@ -1876,11 +1879,12 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   // total fragments per column (in case they are non-uniform)
   std::vector<size_type> frags_per_column(num_columns, 0);
 
-  for (size_t p = 0; p < partitions.size(); ++p) {
+  for (std::size_t p = 0; p < partitions.size(); ++p) {
     int f               = part_frag_offset[p];
     size_type start_row = partitions[p].start_row;
     for (int r = 0; r < num_rg_in_part[p]; r++) {
-      size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
+      std::size_t global_r =
+        global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       auto& row_group = agg_meta->file(p).row_groups[global_r];
       auto const fragments_in_chunk =
         util::div_rounding_up_safe<uint32_t>(row_group.num_rows, max_page_fragment_size);
@@ -1952,7 +1956,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       auto frag_offset     = frag_offsets[c];
       auto const frag_size = column_frag_size[c];
 
-      for (size_t p = 0; p < partitions.size(); ++p) {
+      for (std::size_t p = 0; p < partitions.size(); ++p) {
         for (int r = 0; r < num_rg_in_part[p]; r++) {
           auto const global_r   = global_rowgroup_base[p] + r;
           auto const& row_group = agg_meta->file(p).row_groups[global_r];
@@ -1982,10 +1986,11 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     // and gather fragment statistics
     if (not frag_stats.is_empty()) {
-      gather_fragment_statistics(frag_stats,
-                                 {page_fragments.device_ptr(), static_cast<size_t>(total_frags)},
-                                 int96_timestamps,
-                                 stream);
+      gather_fragment_statistics(
+        frag_stats,
+        {page_fragments.device_ptr(), static_cast<std::size_t>(total_frags)},
+        int96_timestamps,
+        stream);
     }
   }
 
@@ -2001,17 +2006,17 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
   // Find which partition a rg belongs to
   std::vector<int> rg_to_part;
-  for (size_t p = 0; p < num_rg_in_part.size(); ++p) {
+  for (std::size_t p = 0; p < num_rg_in_part.size(); ++p) {
     std::fill_n(std::back_inserter(rg_to_part), num_rg_in_part[p], p);
   }
 
   // Initialize rowgroups to encode
-  size_type num_pages           = 0;
-  size_t max_uncomp_bfr_size    = 0;
-  size_t max_comp_bfr_size      = 0;
-  size_t column_index_bfr_size  = 0;
-  size_t def_histogram_bfr_size = 0;
-  size_t rep_histogram_bfr_size = 0;
+  size_type num_pages                = 0;
+  std::size_t max_uncomp_bfr_size    = 0;
+  std::size_t max_comp_bfr_size      = 0;
+  std::size_t column_index_bfr_size  = 0;
+  std::size_t def_histogram_bfr_size = 0;
+  std::size_t rep_histogram_bfr_size = 0;
   for (size_type r = 0; r < num_rowgroups; r++) {
     for (int i = 0; i < num_columns; i++) {
       EncColumnChunk* ck = &chunks[r][i];
@@ -2232,7 +2237,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
           auto const num_data_pages = ck.num_data_pages();
           if (col.max_def_level > DEF_LVL_HIST_CUTOFF) {
-            size_t const hist_size        = col.max_def_level + 1;
+            std::size_t const hist_size   = col.max_def_level + 1;
             uint32_t const* const ck_hist = h_def_ptr + hist_size * num_data_pages;
             host_span<uint32_t const> ck_def_hist{ck_hist, hist_size};
 
@@ -2241,7 +2246,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           }
 
           if (col.max_rep_level > REP_LVL_HIST_CUTOFF) {
-            size_t const hist_size        = col.max_rep_level + 1;
+            std::size_t const hist_size   = col.max_rep_level + 1;
             uint32_t const* const ck_hist = h_rep_ptr + hist_size * num_data_pages;
             host_span<uint32_t const> ck_rep_hist{ck_hist, hist_size};
 
@@ -2454,7 +2459,7 @@ void writer::impl::write_parquet_data_to_sink(
   std::unique_ptr<aggregate_writer_metadata>& updated_agg_meta,
   device_span<EncPage const> pages,
   host_2dspan<EncColumnChunk const> chunks,
-  host_span<size_t const> global_rowgroup_base,
+  host_span<std::size_t const> global_rowgroup_base,
   host_span<int const> first_rg_in_part,
   host_span<int const> rg_to_part,
   host_span<uint8_t> bounce_buffer)
@@ -2580,7 +2585,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   if (_closed) { return nullptr; }
   _closed = true;
   if (not _last_write_successful) { return nullptr; }
-  for (size_t p = 0; p < _out_sink.size(); p++) {
+  for (std::size_t p = 0; p < _out_sink.size(); p++) {
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     auto& fmd = _agg_meta->file(p);
@@ -2612,7 +2617,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     }
 
     // set row group ordinals
-    auto iter        = thrust::counting_iterator(0);
+    auto iter        = cuda::counting_iterator<std::size_t>{0};
     auto& row_groups = fmd.row_groups;
     std::for_each(
       iter, iter + row_groups.size(), [&row_groups](auto idx) { row_groups[idx].ordinal = idx; });
@@ -2708,7 +2713,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   for (auto const& blob : metadata_list) {
     CompactProtocolReader cpreader(
       blob.get()->data(),
-      std::max<size_t>(blob.get()->size(), sizeof(file_ender_s)) - sizeof(file_ender_s));
+      std::max<std::size_t>(blob.get()->size(), sizeof(file_ender_s)) - sizeof(file_ender_s));
     cpreader.skip_bytes(sizeof(file_header_s));  // Skip over file header
     if (md.num_rows == 0) {
       cpreader.read(&md);

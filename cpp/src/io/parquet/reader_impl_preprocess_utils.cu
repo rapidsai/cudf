@@ -20,7 +20,6 @@
 #include <cuda/iterator>
 #include <cuda/std/algorithm>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -169,17 +168,17 @@ void generate_depth_remappings(
   std::vector<std::unique_ptr<datasource>> const& sources,
   cudf::host_span<rmm::device_buffer> page_data,
   cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks,
-  size_t begin_chunk,
-  size_t end_chunk,
-  std::vector<size_t> const& column_chunk_offsets,
+  std::size_t begin_chunk,
+  std::size_t end_chunk,
+  std::vector<std::size_t> const& column_chunk_offsets,
   std::vector<size_type> const& chunk_source_map,
   rmm::cuda_stream_view stream)
 {
   // Calculate total size per source and offset for each chunk
-  std::vector<size_t> source_total_size(sources.size(), 0);
-  std::vector<size_t> chunk_buffer_offset(end_chunk - begin_chunk);
+  std::vector<std::size_t> source_total_size(sources.size(), 0);
+  std::vector<std::size_t> chunk_buffer_offset(end_chunk - begin_chunk);
 
-  for (size_t chunk = begin_chunk; chunk < end_chunk; ++chunk) {
+  for (std::size_t chunk = begin_chunk; chunk < end_chunk; ++chunk) {
     auto const source_idx                    = chunk_source_map[chunk];
     chunk_buffer_offset[chunk - begin_chunk] = source_total_size[source_idx];
     source_total_size[source_idx] += chunks[chunk].compressed_size;
@@ -187,7 +186,10 @@ void generate_depth_remappings(
 
   // Allocate one buffer per source
   std::transform(
-    source_total_size.begin(), source_total_size.end(), page_data.begin(), [&](size_t total_size) {
+    source_total_size.begin(),
+    source_total_size.end(),
+    page_data.begin(),
+    [&](std::size_t total_size) {
       return rmm::device_buffer(
         cudf::util::round_up_safe(total_size, cudf::io::detail::BUFFER_PADDING_MULTIPLE), stream);
     });
@@ -195,13 +197,13 @@ void generate_depth_remappings(
   stream.synchronize();
 
   // Issue reads, coalescing adjacent chunks
-  std::vector<std::future<size_t>> read_tasks;
-  for (size_t chunk = begin_chunk; chunk < end_chunk;) {
-    auto const source_idx    = chunk_source_map[chunk];
-    auto const io_offset     = column_chunk_offsets[chunk];
-    size_t io_size           = chunks[chunk].compressed_size;
-    size_t const first_chunk = chunk;
-    size_t next_chunk        = chunk + 1;
+  std::vector<std::future<std::size_t>> read_tasks;
+  for (std::size_t chunk = begin_chunk; chunk < end_chunk;) {
+    auto const source_idx         = chunk_source_map[chunk];
+    auto const io_offset          = column_chunk_offsets[chunk];
+    std::size_t io_size           = chunks[chunk].compressed_size;
+    std::size_t const first_chunk = chunk;
+    std::size_t next_chunk        = chunk + 1;
 
     while (next_chunk < end_chunk) {
       if (chunk_source_map[next_chunk] != source_idx) { break; }
@@ -233,7 +235,7 @@ void generate_depth_remappings(
 
       // Set compressed_data pointers for all coalesced chunks
       auto* ptr = static_cast<uint8_t const*>(dest);
-      for (size_t c = first_chunk; c < next_chunk; ++c) {
+      for (std::size_t c = first_chunk; c < next_chunk; ++c) {
         chunks[c].compressed_data = ptr;
         ptr += chunks[c].compressed_size;
       }
@@ -250,10 +252,10 @@ void generate_depth_remappings(
   return std::async(std::launch::deferred, sync_fn, std::move(read_tasks));
 }
 
-[[nodiscard]] size_t count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
-                                        rmm::cuda_stream_view stream)
+[[nodiscard]] std::size_t count_page_headers(cudf::detail::hostdevice_span<ColumnChunkDesc> chunks,
+                                             rmm::cuda_stream_view stream)
 {
-  size_t total_pages = 0;
+  std::size_t total_pages = 0;
 
   kernel_error error_code(stream);
   chunks.host_to_device_async(stream);
@@ -277,11 +279,11 @@ void generate_depth_remappings(
   return total_pages;
 }
 
-[[nodiscard]] size_t count_page_headers_with_pgidx(
+[[nodiscard]] std::size_t count_page_headers_with_pgidx(
   cudf::detail::hostdevice_span<ColumnChunkDesc> chunks, rmm::cuda_stream_view stream)
 {
-  auto const total_pages =
-    std::accumulate(chunks.host_begin(), chunks.host_end(), size_t{0}, [](size_t sum, auto& chunk) {
+  auto const total_pages = std::accumulate(
+    chunks.host_begin(), chunks.host_end(), std::size_t{0}, [](std::size_t sum, auto& chunk) {
       CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
       auto const& chunk_info = *(chunk.h_chunk_info);
       chunk.num_dict_pages   = chunk_info.has_dictionary() ? 1 : 0;
@@ -302,13 +304,13 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
   auto const num_pages = pages.size();
   auto page_indexes    = cudf::detail::make_pinned_vector_async<page_index_info>(num_pages, stream);
 
-  for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
+  for (std::size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
     CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
     auto const& chunk_info = *chunk.h_chunk_info;
-    size_t start_row       = 0;
+    std::size_t start_row  = 0;
     page_count += chunk.num_dict_pages;
-    for (size_t p = 0; p < chunk_info.pages.size(); p++, page_count++) {
+    for (std::size_t p = 0; p < chunk_info.pages.size(); p++, page_count++) {
       auto& page      = page_indexes[page_count];
       page.num_rows   = chunk_info.pages[p].num_rows;
       page.chunk_row  = start_row;
@@ -323,7 +325,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
   auto d_page_indexes = cudf::detail::make_device_uvector_async(
     page_indexes, stream, cudf::get_current_device_resource_ref());
 
-  auto iter = thrust::make_counting_iterator<size_type>(0);
+  auto iter = cuda::counting_iterator<size_type>{0};
   thrust::for_each(
     rmm::exec_policy_nosync(stream), iter, iter + num_pages, copy_page_info{d_page_indexes, pages});
 }
@@ -351,7 +353,7 @@ std::string encoding_to_string(Encoding encoding)
   std::bitset<32> bits(encoding_bitmask);
   std::string result;
 
-  for (size_t i = 0; i < bits.size(); ++i) {
+  for (std::size_t i = 0; i < bits.size(); ++i) {
     if (bits.test(i)) {
       auto const current = static_cast<Encoding>(i);
       if (!is_supported_encoding(current)) { result.append(encoding_to_string(current) + " "); }
@@ -435,7 +437,7 @@ void decode_page_headers(pass_intermediate_data& pass,
 {
   CUDF_FUNC_RANGE();
 
-  auto iter = thrust::counting_iterator<size_t>(0);
+  auto iter = cuda::counting_iterator<std::size_t>{0};
   rmm::device_uvector<size_type> chunk_page_offsets(pass.chunks.size() + 1, stream);
   thrust::transform_exclusive_scan(
     rmm::exec_policy_nosync(stream),
@@ -443,7 +445,7 @@ void decode_page_headers(pass_intermediate_data& pass,
     iter + pass.chunks.size() + 1,
     chunk_page_offsets.begin(),
     cuda::proclaim_return_type<size_type>(
-      [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(size_t i) {
+      [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(std::size_t i) {
         return static_cast<size_type>(
           i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
       }),
@@ -455,7 +457,7 @@ void decode_page_headers(pass_intermediate_data& pass,
                    iter + pass.chunks.size(),
                    [cpi                = d_chunk_page_info.begin(),
                     chunk_page_offsets = chunk_page_offsets.begin(),
-                    unsorted_pages     = unsorted_pages.begin()] __device__(size_t i) {
+                    unsorted_pages     = unsorted_pages.begin()] __device__(std::size_t i) {
                      cpi[i].pages = &unsorted_pages[chunk_page_offsets[i]];
                    });
 
@@ -493,8 +495,8 @@ void decode_page_headers(pass_intermediate_data& pass,
                      std::cmp_equal(chunk.h_chunk_info->pages.size(), chunk.num_data_pages),
                    "Encountered invalid sized data page information in the page index");
       auto const num_data_pages = chunk.num_data_pages;
-      std::for_each(thrust::counting_iterator(0),
-                    thrust::counting_iterator(num_data_pages),
+      std::for_each(cuda::counting_iterator<int32_t>{0},
+                    cuda::counting_iterator{num_data_pages},
                     [&](auto const page_idx) {
                       host_page_locations[curr_page_idx] = data_ptr;
                       ++curr_page_idx;
