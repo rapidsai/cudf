@@ -17,8 +17,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
-#include <cuda/std/functional>
-#include <thrust/reduce.h>
+#include <thrust/extrema.h>
 
 namespace cudf::reduction::simple::detail {
 
@@ -57,59 +56,22 @@ class arg_minmax_dispatcher {
     return !cudf::is_dictionary<ElementType>() && !std::is_same_v<ElementType, void>;
   }
 
- public:
-  // thrust::min_element / thrust::max_element internally call an unqualified
-  // make_zip_iterator, which causes ADL ambiguity when the iterator type chain
-  // includes cuda:: namespace types (e.g. cuda::counting_iterator).
-  // Use thrust::reduce instead, which does not create internal zip iterators.
-
-  template <typename InputIterator, typename BinaryPred>
+  template <typename InputIterator, typename... Args>
   size_type find_extremum_idx(InputIterator it,
                               size_type size,
                               rmm::cuda_stream_view stream,
-                              BinaryPred comp) const
+                              Args&&... args) const
   {
-    using value_type = typename std::iterator_traits<InputIterator>::value_type;
-    if constexpr (K == aggregation::ARGMIN) {
-      return thrust::reduce(rmm::exec_policy_nosync(stream),
-                            it,
-                            it + size,
-                            *it,
-                            [comp] __device__(auto const& a, auto const& b) -> value_type {
-                              return comp(a, b) ? a : b;
-                            });
-    } else {
-      return thrust::reduce(rmm::exec_policy_nosync(stream),
-                            it,
-                            it + size,
-                            *it,
-                            [comp] __device__(auto const& a, auto const& b) -> value_type {
-                              return comp(b, a) ? a : b;
-                            });
-    }
-  }
-
-  template <typename InputIterator>
-  size_type find_extremum_idx(InputIterator it, size_type size, rmm::cuda_stream_view stream) const
-  {
-    auto indices = cuda::counting_iterator<size_type>{0};
-    if constexpr (K == aggregation::ARGMIN) {
-      return thrust::reduce(rmm::exec_policy_nosync(stream),
-                            indices,
-                            indices + size,
-                            size_type{0},
-                            [it] __device__(size_type a, size_type b) -> size_type {
-                              return cuda::std::less<>{}(*(it + a), *(it + b)) ? a : b;
-                            });
-    } else {
-      return thrust::reduce(rmm::exec_policy_nosync(stream),
-                            indices,
-                            indices + size,
-                            size_type{0},
-                            [it] __device__(size_type a, size_type b) -> size_type {
-                              return cuda::std::greater<>{}(*(it + a), *(it + b)) ? a : b;
-                            });
-    }
+    auto const pos = [&] {
+      if constexpr (K == aggregation::ARGMIN) {
+        return thrust::min_element(
+          rmm::exec_policy_nosync(stream), it, it + size, std::forward<Args>(args)...);
+      } else {
+        return thrust::max_element(
+          rmm::exec_policy_nosync(stream), it, it + size, std::forward<Args>(args)...);
+      }
+    }();
+    return static_cast<size_type>(cuda::std::distance(it, pos));
   }
 
   template <typename ElementType>
@@ -165,6 +127,8 @@ class arg_minmax_dispatcher {
       return find_extremum_idx(input.begin<ElementType>(), input.size(), stream);
     }
   }
+
+ public:
   /**
    * @brief Called by the type-dispatcher to reduce the input column.
    *
