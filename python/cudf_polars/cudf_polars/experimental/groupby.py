@@ -13,7 +13,7 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
+from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, Literal, NamedExpr, UnaryFunction
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
@@ -147,6 +147,104 @@ def decompose(
             selection = NamedExpr(
                 name,
                 BinOp(dtype, plc.binaryop.BinaryOperator.DIV, sum.value, count.value),
+            )
+            return selection, aggregations, reductions, need_preshuffle
+        elif expr.name in ("std", "var"):
+            ddof = expr.options
+            (child,) = expr.children
+            # Do the decomposition using the formula for variance
+            # ar = (E[X^2] - E[X]^2) * n / (n - ddof)
+            x_sq = BinOp(dtype, plc.binaryop.BinaryOperator.MUL, child, child)
+            (
+                (sum_x2_val, sum_x_val, count_val),
+                aggregations,
+                reductions,
+                need_preshuffle,
+            ) = combine(
+                decompose(
+                    f"{next(names)}__std_sum_x2",
+                    Agg(dtype, "sum", None, ExecutionContext.GROUPBY, x_sq),
+                    names=names,
+                ),
+                decompose(
+                    f"{next(names)}__std_sum_x",
+                    Agg(dtype, "sum", None, ExecutionContext.GROUPBY, child),
+                    names=names,
+                ),
+                decompose(
+                    f"{next(names)}__std_count",
+                    Agg(
+                        DataType(pl.Int64()),
+                        "count",
+                        False,  # noqa: FBT003
+                        ExecutionContext.GROUPBY,
+                        child,
+                    ),
+                    names=names,
+                ),
+            )
+            n = count_val.value
+            variance = BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.DIV,
+                BinOp(
+                    dtype,
+                    plc.binaryop.BinaryOperator.MUL,
+                    BinOp(
+                        dtype,
+                        plc.binaryop.BinaryOperator.SUB,
+                        BinOp(
+                            dtype, plc.binaryop.BinaryOperator.DIV, sum_x2_val.value, n
+                        ),
+                        BinOp(
+                            dtype,
+                            plc.binaryop.BinaryOperator.MUL,
+                            BinOp(
+                                dtype,
+                                plc.binaryop.BinaryOperator.DIV,
+                                sum_x_val.value,
+                                n,
+                            ),
+                            BinOp(
+                                dtype,
+                                plc.binaryop.BinaryOperator.DIV,
+                                sum_x_val.value,
+                                n,
+                            ),
+                        ),
+                    ),
+                    n,
+                ),
+                BinOp(
+                    dtype,
+                    plc.binaryop.BinaryOperator.SUB,
+                    n,
+                    Literal(dtype, float(ddof)),
+                ),
+            )
+            # When n <= ddof the result is invalid: variance is negative (n < ddof)
+            # or inf (n == ddof, non-zero population variance). Adding 0 * sqrt(variance)
+            # converts both to NaN using IEEE 754 rules: sqrt(negative) = NaN and 0 * inf = NaN,
+            # so any invalid variance becomes NaN before mask_nans converts it to null.
+            sanitized = BinOp(
+                dtype,
+                plc.binaryop.BinaryOperator.ADD,
+                variance,
+                BinOp(
+                    dtype,
+                    plc.binaryop.BinaryOperator.MUL,
+                    Literal(dtype, 0.0),
+                    UnaryFunction(dtype, "sqrt", (), variance),
+                ),
+            )
+            standard_deviation: Expr = (
+                UnaryFunction(dtype, "sqrt", (), sanitized)
+                if expr.name == "std"
+                else sanitized
+            )
+            # mask_nans converts NaN -> null to match Polars semantics.
+            selection = NamedExpr(
+                name, UnaryFunction(dtype, "mask_nans", (), standard_deviation)
             )
             return selection, aggregations, reductions, need_preshuffle
         else:
