@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -238,6 +239,12 @@ class SPMDEngine(StreamingEngine):
     such as shuffles, all-gathers, and joins, coordinate across ranks to produce
     a globally consistent result.
 
+    Prefer :meth:`from_options` for typical use — pass a
+    :class:`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`
+    instance for a unified, typed interface. The ``__init__`` parameters
+    (``rapidsmpf_options``, ``executor_options``, ``engine_options``) are
+    intended for advanced use when fine-grained control is needed.
+
     This class is the primary entry point for SPMD execution. It:
 
     - Bootstraps a communicator connecting all ranks. When launched with ``rrun``
@@ -408,6 +415,40 @@ class SPMDEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    @classmethod
+    def from_options(cls, options: StreamingOptions) -> SPMDEngine:
+        """
+        Create an :class:`SPMDEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct an ``SPMDEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+
+        Returns
+        -------
+        A new :class:`SPMDEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=8, fallback_mode="silent")
+        >>> with SPMDEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = df.lazy().collect(engine=engine)
+        """
+        return cls(
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+        )
 
     @property
     def rank(self) -> int:
