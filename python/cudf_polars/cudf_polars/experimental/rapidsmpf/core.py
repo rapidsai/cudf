@@ -160,6 +160,20 @@ def evaluate_logical_plan(
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
+            case "dask":
+                from cudf_polars.experimental.rapidsmpf.frontend.dask import (
+                    evaluate_pipeline_dask_mode,
+                )
+
+                result, metadata_collector = evaluate_pipeline_dask_mode(
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    collective_id_map,
+                    collect_metadata=collect_metadata,
+                    query_id=query_id,
+                )
             case "single":
                 # Single-process execution: Run locally
                 result, metadata_collector = evaluate_pipeline(
