@@ -3664,8 +3664,8 @@ class IndexedFrame(Frame):
         else:
             raise KeyError(by)
 
-        if cudf.get_option("mode.pandas_compatible"):
-            by_columns = by_columns.nans_to_nulls()
+        # if cudf.get_option("mode.pandas_compatible"):
+        by_columns = by_columns.nans_to_nulls()
         # argsort the `by` column
         out = self._gather(
             GatherMap.from_column_unchecked(
@@ -6367,8 +6367,7 @@ class IndexedFrame(Frame):
             else plc.types.NullPolicy.INCLUDE
         )
 
-        if cudf.get_option("mode.pandas_compatible"):
-            source = source.nans_to_nulls()
+        source = source.nans_to_nulls()
         result_columns = [
             col.rank(
                 method=method_enum,
