@@ -14,22 +14,28 @@ import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+    SPMDEngine,
     allgather_polars_dataframe,
-    spmd_execution,
 )
 
-pytestmark = pytest.mark.skipif(
-    not is_running_with_rrun(),
-    reason="use something like `rrun -n <nproc> python -m pytest ...` to run SPMD tests",
-)
+pytestmark = pytest.mark.spmd
 
 
 def test_yields_context_and_engine() -> None:
-    """spmd_execution yields a (Communicator, Context, GPUEngine) triple."""
-    with spmd_execution() as (comm, ctx, engine):
-        assert comm is not None
-        assert ctx is not None
+    """SPMDEngine has comm and context properties."""
+    with SPMDEngine() as engine:
+        assert engine.comm is not None
+        assert engine.context is not None
         assert isinstance(engine, pl.GPUEngine)
+
+
+def test_single_communicator_outside_rrun() -> None:
+    """Outside rrun the communicator has exactly one rank."""
+    if is_running_with_rrun():
+        pytest.skip("single-rank check only applies outside rrun")
+    with SPMDEngine() as engine:
+        assert engine.nranks == 1
+        assert engine.rank == 0
 
 
 def test_reserved_keys() -> None:
@@ -37,36 +43,43 @@ def test_reserved_keys() -> None:
     for key in ("runtime", "cluster", "spmd_context"):
         with (
             pytest.raises(TypeError, match="reserved"),
-            spmd_execution(executor_options={key: "anything"}),
+            SPMDEngine(executor_options={key: "anything"}),
         ):
             pass
 
 
 def test_engine_options_reserved_keys() -> None:
-    """engine_options rejects keys that are set explicitly by spmd_execution."""
+    """engine_options rejects keys that are set explicitly by SPMDEngine."""
     for key in ("memory_resource", "executor"):
         with (
             pytest.raises(TypeError, match="reserved"),
-            spmd_execution(engine_options={key: "anything"}),
+            SPMDEngine(engine_options={key: "anything"}),
         ):
             pass
 
 
 def test_engine_options_parquet_options() -> None:
     """engine_options forwards parquet_options to GPUEngine without error."""
-    with spmd_execution(engine_options={"parquet_options": {}}) as (comm, ctx, engine):
+    with SPMDEngine(engine_options={"parquet_options": {}}) as engine:
         assert isinstance(engine, pl.GPUEngine)
 
 
 def test_scan() -> None:
     """Each rank scans its own single-row LazyFrame and gets that row back."""
-    with spmd_execution() as (comm, ctx, engine):
-        rank = comm.rank
-        lf = pl.LazyFrame({"a": [rank], "b": [rank * 10]})
+    with SPMDEngine() as engine:
+        lf = pl.LazyFrame({"a": [engine.rank], "b": [engine.rank * 10]})
         result = lf.collect(engine=engine)
-    assert result.shape == (1, 2)
-    assert result["a"].to_list() == [rank]
-    assert result["b"].to_list() == [rank * 10]
+        assert result.shape == (1, 2)
+        assert result["a"].to_list() == [engine.rank]
+        assert result["b"].to_list() == [engine.rank * 10]
+
+
+def test_basic_query() -> None:
+    """A simple in-memory LazyFrame can be collected."""
+    with SPMDEngine() as engine:
+        result = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).collect(engine=engine)
+    assert result.shape == (3, 2)
+    assert result["a"].to_list() == [1, 2, 3]
 
 
 def test_collect_then_lazy_equivalent() -> None:
@@ -77,9 +90,10 @@ def test_collect_then_lazy_equivalent() -> None:
     re-slicing it across ranks.  So ``lf.collect().lazy().op.collect()`` must
     produce the same result as ``lf.op.collect()``.
     """
-    with spmd_execution() as (comm, ctx, engine):
-        rank = comm.rank
-        lf = pl.LazyFrame({"a": [rank, rank + 1, rank + 2], "b": [0, 1, 2]})
+    with SPMDEngine() as engine:
+        lf = pl.LazyFrame(
+            {"a": [engine.rank, engine.rank + 1, engine.rank + 2], "b": [0, 1, 2]}
+        )
 
         # One-step
         one_step = lf.filter(pl.col("b") >= 1).collect(engine=engine)
@@ -93,55 +107,51 @@ def test_collect_then_lazy_equivalent() -> None:
 
 def test_group_by() -> None:
     """Group-by on rank-local data, then allgather to verify the global result."""
-    with spmd_execution() as (comm, ctx, engine):
-        rank = comm.rank
-        nranks = comm.nranks
-        lf = pl.LazyFrame({"a": [rank], "b": [rank * 10]})
+    with SPMDEngine() as engine:
+        lf = pl.LazyFrame({"a": [engine.rank], "b": [engine.rank * 10]})
         local_result = lf.group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
         with reserve_op_id() as op_id:
             global_result = allgather_polars_dataframe(
-                comm=comm, ctx=ctx, local_df=local_result, op_id=op_id
+                engine=engine, local_df=local_result, op_id=op_id
             )
-    assert global_result.shape == (nranks, 2)
-    assert global_result.sort("a")["a"].to_list() == list(range(nranks))
-    assert global_result.sort("a")["b"].to_list() == [r * 10 for r in range(nranks)]
+        assert global_result.shape == (engine.nranks, 2)
+        assert global_result.sort("a")["a"].to_list() == list(range(engine.nranks))
+        assert global_result.sort("a")["b"].to_list() == [
+            r * 10 for r in range(engine.nranks)
+        ]
 
 
 def test_allgather_polars_dataframe() -> None:
     """allgather_polars_dataframe collects every rank's contribution in rank order."""
-    with spmd_execution() as (comm, ctx, _):
-        rank = comm.rank
-        nranks = comm.nranks
-        local = pl.DataFrame({"rank": [rank], "val": [rank * 2]})
+    with SPMDEngine() as engine:
+        local = pl.DataFrame({"rank": [engine.rank], "val": [engine.rank * 2]})
         with reserve_op_id() as op_id:
             result = allgather_polars_dataframe(
-                comm=comm, ctx=ctx, local_df=local, op_id=op_id
+                engine=engine, local_df=local, op_id=op_id
             )
-    assert result.shape == (nranks, 2)
-    assert result["rank"].to_list() == list(range(nranks))
-    assert result["val"].to_list() == [r * 2 for r in range(nranks)]
+        assert result.shape == (engine.nranks, 2)
+        assert result["rank"].to_list() == list(range(engine.nranks))
+        assert result["val"].to_list() == [r * 2 for r in range(engine.nranks)]
 
 
 def test_max_workers() -> None:
     """executor_options forwards rapidsmpf_py_executor_max_workers to the thread pool."""
-    with spmd_execution(executor_options={"rapidsmpf_py_executor_max_workers": 2}) as (
-        comm,
-        ctx,
-        engine,
-    ):
+    with SPMDEngine(
+        executor_options={"rapidsmpf_py_executor_max_workers": 2}
+    ) as engine:
         result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
     assert result.shape == (3, 1)
 
 
 def test_allgather_polars_dataframe_empty() -> None:
     """allgather handles an empty (zero-row) local DataFrame on every rank."""
-    with spmd_execution() as (comm, ctx, _):
+    with SPMDEngine() as engine:
         local = pl.DataFrame(
             {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
         )
         with reserve_op_id() as op_id:
             result = allgather_polars_dataframe(
-                comm=comm, ctx=ctx, local_df=local, op_id=op_id
+                engine=engine, local_df=local, op_id=op_id
             )
     assert result.shape == (0, 2)
     assert result.columns == ["a", "b"]
@@ -149,34 +159,38 @@ def test_allgather_polars_dataframe_empty() -> None:
 
 
 def test_mr_wrapped_as_current_inside_context() -> None:
-    """Inside spmd_execution the current device resource is RmmResourceAdaptor."""
-    with spmd_execution() as (comm, ctx, engine):
+    """Inside SPMDEngine the current device resource is RmmResourceAdaptor."""
+    with SPMDEngine():
         assert isinstance(rmm.mr.get_current_device_resource(), RmmResourceAdaptor)
 
 
 def test_mr_restored_after_context() -> None:
-    """After spmd_execution exits the original device resource is restored."""
+    """After SPMDEngine exits the original device resource is restored."""
     original = rmm.mr.get_current_device_resource()
-    with spmd_execution() as (comm, ctx, engine):
+    with SPMDEngine():
         pass
     assert rmm.mr.get_current_device_resource() is original
 
 
 def test_allgather_polars_dataframe_multi_column() -> None:
     """allgather preserves column names, count, and dtypes for multi-column DataFrames."""
-    with spmd_execution() as (comm, ctx, _):
-        rank = comm.rank
-        nranks = comm.nranks
+    with SPMDEngine() as engine:
         local = pl.DataFrame(
-            {"rank": [rank], "x": [float(rank)], "label": [f"r{rank}"]}
+            {
+                "rank": [engine.rank],
+                "x": [float(engine.rank)],
+                "label": [f"r{engine.rank}"],
+            }
         )
         with reserve_op_id() as op_id:
             result = allgather_polars_dataframe(
-                comm=comm, ctx=ctx, local_df=local, op_id=op_id
+                engine=engine, local_df=local, op_id=op_id
             )
-    assert result.shape == (nranks, 3)
-    assert result.columns == ["rank", "x", "label"]
-    sorted_result = result.sort("rank")
-    assert sorted_result["rank"].to_list() == list(range(nranks))
-    assert sorted_result["x"].to_list() == [float(r) for r in range(nranks)]
-    assert sorted_result["label"].to_list() == [f"r{r}" for r in range(nranks)]
+        assert result.shape == (engine.nranks, 3)
+        assert result.columns == ["rank", "x", "label"]
+        sorted_result = result.sort("rank")
+        assert sorted_result["rank"].to_list() == list(range(engine.nranks))
+        assert sorted_result["x"].to_list() == [float(r) for r in range(engine.nranks)]
+        assert sorted_result["label"].to_list() == [
+            f"r{r}" for r in range(engine.nranks)
+        ]
