@@ -184,6 +184,7 @@ def decompose(
                 ),
             )
             n = count_val.value
+            mean_x = BinOp(dtype, plc.binaryop.BinaryOperator.DIV, sum_x_val.value, n)
             variance = BinOp(
                 dtype,
                 plc.binaryop.BinaryOperator.DIV,
@@ -199,18 +200,8 @@ def decompose(
                         BinOp(
                             dtype,
                             plc.binaryop.BinaryOperator.MUL,
-                            BinOp(
-                                dtype,
-                                plc.binaryop.BinaryOperator.DIV,
-                                sum_x_val.value,
-                                n,
-                            ),
-                            BinOp(
-                                dtype,
-                                plc.binaryop.BinaryOperator.DIV,
-                                sum_x_val.value,
-                                n,
-                            ),
+                            mean_x,
+                            mean_x,
                         ),
                     ),
                     n,
