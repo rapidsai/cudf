@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -417,6 +418,12 @@ class RayEngine(StreamingEngine):
     Creates a RapidsMPF Ray cluster and returns an engine that can be passed
     to ``LazyFrame.collect(engine=engine)``.
 
+    Prefer :meth:`from_options` for typical use — pass a
+    :class:`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`
+    instance for a unified, typed interface. The ``__init__`` parameters
+    (``rapidsmpf_options``, ``executor_options``, ``engine_options``) are
+    intended for advanced use when fine-grained control is needed.
+
     Prefer the context-manager form in scripts: it guarantees that actors and
     Ray are shut down even if an exception is raised. In interactive environments
     such as Jupyter notebooks, the direct form lets the cluster persist across
@@ -546,6 +553,50 @@ class RayEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    @classmethod
+    def from_options(
+        cls,
+        options: StreamingOptions,
+        *,
+        ray_init_options: dict[str, object] | None = None,
+    ) -> RayEngine:
+        """
+        Create a :class:`RayEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct a ``RayEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+        ray_init_options
+            Keyword arguments forwarded to :func:`ray.init` when Ray is not
+            already initialized. These are Ray infrastructure settings and are
+            kept separate from streaming behavior options.
+
+        Returns
+        -------
+        A new :class:`RayEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=4, fallback_mode="silent")
+        >>> with RayEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+        """
+        return cls(
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+            ray_init_options=ray_init_options,
+        )
 
     @property
     def rank_actors(self) -> list[ActorHandle[RankActor]]:
