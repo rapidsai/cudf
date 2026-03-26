@@ -206,26 +206,6 @@ class StringColumn(ColumnBase, Scannable):
         other = [item] if is_scalar(item) else item
         return self.contains(as_column(other, dtype=self.dtype)).any()
 
-    def _get_pandas_compatible_dtype(self, target_dtype: np.dtype) -> DtypeObj:
-        """
-        Get the appropriate dtype for pandas-compatible mode.
-
-        For StringDtype with na_value=np.nan, returns get_dtype_of_same_kind(self.dtype, target_dtype).
-        Otherwise, returns get_dtype_of_same_kind(pd.StringDtype() or self.dtype, target_dtype).
-        """
-        # if (
-        #     isinstance(self.dtype, pd.StringDtype)
-        #     and self.dtype.na_value is np.nan
-        # ):
-        return get_dtype_of_same_kind(self.dtype, target_dtype)
-        # else:
-        #     return get_dtype_of_same_kind(
-        #         pd.StringDtype()
-        #         if isinstance(self.dtype, pd.StringDtype)
-        #         else self.dtype,
-        #         target_dtype,
-        #     )
-
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
         if dtype.kind == "b":
             result = self.count_characters() > np.int8(0)
@@ -1397,7 +1377,7 @@ class StringColumn(ColumnBase, Scannable):
                     plc_flags_from_re_flags(flags),
                 ),
             )
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
             return cast(Self, ColumnBase.create(plc_column, dtype))
 
     def str_contains(self, pattern: str | Self) -> Self:
@@ -1560,8 +1540,7 @@ class StringColumn(ColumnBase, Scannable):
             plc_result = plc.strings.char_types.all_characters_of_type(
                 self.plc_column, char_type, case_type
             )
-            # import pdb;pdb.set_trace()
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
             result = cast(
                 "cudf.core.column.numerical.NumericalColumn",
                 ColumnBase.create(plc_result, dtype),
@@ -1694,7 +1673,7 @@ class StringColumn(ColumnBase, Scannable):
             )
             res = ColumnBase.create(
                 plc_result,
-                self._get_pandas_compatible_dtype(np.dtype(np.int32)),
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
             )
             return cast(cudf.core.column.numerical.NumericalColumn, res)
 
@@ -1779,7 +1758,7 @@ class StringColumn(ColumnBase, Scannable):
                 raise TypeError(
                     f"expected a str or tuple[str, ...], not {type(pat).__name__}"
                 )
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
             result = cast(Self, ColumnBase.create(plc_result, dtype))
         if self._PANDAS_NA_VALUE in {np.nan, None}:
             result = result.fillna(False)
@@ -1806,7 +1785,7 @@ class StringColumn(ColumnBase, Scannable):
                 Self,
                 ColumnBase.create(
                     plc_result,
-                    self._get_pandas_compatible_dtype(np.dtype("int64")),
+                    get_dtype_of_same_kind(self.dtype, np.dtype("int64")),
                 ),
             )
 
@@ -1818,7 +1797,7 @@ class StringColumn(ColumnBase, Scannable):
                     pattern, plc_flags_from_re_flags(flags)
                 ),
             )
-            dtype = self._get_pandas_compatible_dtype(np.dtype(np.bool_))
+            dtype = get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_))
             return cast(Self, ColumnBase.create(plc_result, dtype))
 
     def code_points(self) -> Self:
