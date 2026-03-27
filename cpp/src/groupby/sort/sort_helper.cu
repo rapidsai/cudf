@@ -3,35 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "common_utils.cuh"
-#include "stream_compaction/stream_compaction_common.cuh"
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
-#include <cudf/strings/string_view.hpp>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/functional>
-#include <cuda/std/iterator>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/unique.h>
 
 #include <algorithm>
 #include <numeric>
@@ -121,53 +108,6 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   }
 
   return sliced_key_sorted_order();
-}
-
-sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
-  rmm::cuda_stream_view stream)
-{
-  if (_group_offsets) return *_group_offsets;
-
-  auto const size = num_keys(stream);
-  // Create a temporary variable and only set _group_offsets right before the return.
-  // This way, a 2nd (parallel) call to this will not be given a partially created object.
-  auto group_offsets = std::make_unique<index_vector>(size + 1, stream);
-
-  auto const comparator = cudf::detail::row::equality::self_comparator{_keys, stream};
-
-  auto const sorted_order = key_sort_order(stream).data<size_type>();
-  decltype(group_offsets->begin()) result_end;
-
-  if (cudf::detail::has_nested_columns(_keys)) {
-    auto const d_key_equal = comparator.equal_to<true>(
-      cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    // Using a temporary buffer for intermediate transform results from the iterator containing
-    // the comparator speeds up compile-time significantly without much degradation in
-    // runtime performance over using the comparator directly in thrust::unique_copy.
-    auto result       = rmm::device_uvector<bool>(size, stream);
-    auto const itr    = thrust::make_counting_iterator<size_type>(0);
-    auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
-    auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
-      itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy_nosync(stream), itr, itr + size, result.begin(), ufn);
-    result_end = cudf::detail::copy_if(
-      itr, itr + size, result.begin(), group_offsets->begin(), cuda::std::identity{}, stream);
-  } else {
-    auto const d_key_equal = comparator.equal_to<false>(
-      cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
-                                     thrust::counting_iterator<size_type>(0),
-                                     thrust::counting_iterator<size_type>(size),
-                                     group_offsets->begin(),
-                                     permuted_row_equality_comparator(d_key_equal, sorted_order));
-  }
-
-  auto const num_groups = cuda::std::distance(group_offsets->begin(), result_end);
-  group_offsets->set_element_async(num_groups, size, stream);
-  group_offsets->resize(num_groups + 1, stream);
-
-  _group_offsets = std::move(group_offsets);
-  return *_group_offsets;
 }
 
 sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
@@ -271,24 +211,6 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
                                                    mr);
 
   return std::move(grouped_values_table->release()[0]);
-}
-
-std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
-{
-  auto idx_data = key_sort_order(stream).data<size_type>();
-
-  auto gather_map_it =
-    thrust::make_transform_iterator(group_offsets(stream).begin(),
-                                    cuda::proclaim_return_type<size_type>(
-                                      [idx_data] __device__(size_type i) { return idx_data[i]; }));
-
-  return cudf::detail::gather(_keys,
-                              gather_map_it,
-                              gather_map_it + num_groups(stream),
-                              out_of_bounds_policy::DONT_CHECK,
-                              stream,
-                              mr);
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,
