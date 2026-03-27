@@ -3435,6 +3435,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * For each string, replaces any character sequence matching the given regex program pattern
    * using the replacement string scalar.
    *
+   * Example:
+   * <pre>{@code
+   * // col       = ["a1b2c", "d3e4f", null], DType = STRING
+   * // regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * // repl      = "X",                      DType = STRING
+   * ColumnVector result = col.replaceRegex(regexProg, repl);
+   * // result    = ["aXbXc", "dXeXf", null], DType = STRING
+   * }</pre>
+   *
    * @param regexProg The regex program with pattern to search within each string.
    * @param repl The string scalar to replace for each pattern match.
    * @return A new column vector containing the string results.
@@ -3446,6 +3455,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * For each string, replaces any character sequence matching the given pattern using the
    * replacement string scalar.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a1b2c3", "d4e5f6", null], DType = STRING
+   * // repl   = "X",                        DType = STRING
+   * ColumnVector result = col.replaceRegex("\\d+", repl, 2);
+   * // result = ["aXbXc3", "dXeXf6", null], DType = STRING
+   * }</pre>
    *
    * @param pattern The regular expression pattern to search within each string.
    * @param repl The string scalar to replace for each pattern match.
@@ -3460,6 +3477,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * For each string, replaces any character sequence matching the given regex program pattern
    * using the replacement string scalar.
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = ["a1b2c3", "d4e5f6", null], DType = STRING
+   * // regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * // repl      = "X",                        DType = STRING
+   * ColumnVector result = col.replaceRegex(regexProg, repl, 2);
+   * // result    = ["aXbXc3", "dXeXf6", null], DType = STRING
+   * }</pre>
    *
    * @param regexProg The regex program with pattern to search within each string.
    * @param repl The string scalar to replace for each pattern match.
@@ -3479,6 +3505,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * For each string, replaces any character sequence matching any of the regular expression
    * patterns with the corresponding replacement strings.
    *
+   * Example:
+   * <pre>{@code
+   * // col      = ["abc123", "xyz789", null], DType = STRING
+   * // patterns = ["\\d+", "[a-z]+"]
+   * // repls    = ["NUM", "ALPHA"],           DType = STRING
+   * ColumnVector result = col.replaceMultiRegex(patterns, repls);
+   * // result   = ["ALPHANUM", "ALPHANUM", null], DType = STRING
+   * }</pre>
+   *
    * @param patterns The regular expression patterns to search within each string.
    * @param repls The string scalars to replace for each corresponding pattern match.
    * @return A new column vector containing the string results.
@@ -3494,6 +3529,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Any null string entries return corresponding null output column entries.
    *
+   * Example:
+   * <pre>{@code
+   * // col     = ["A543", "B123", null],  DType = STRING
+   * // pattern = "([A-Z])(\\d+)"
+   * // replace = "${2}-${1}"
+   * ColumnVector result = col.stringReplaceWithBackrefs(pattern, replace);
+   * // result  = ["543-A", "123-B", null], DType = STRING
+   * }</pre>
+   *
    * @param pattern The regular expression patterns to search within each string.
    * @param replace The replacement template for creating the output string.
    * @return A new java column vector containing the string results.
@@ -3508,6 +3552,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * pattern using the replace template for back-references.
    *
    * Any null string entries return corresponding null output column entries.
+   *
+   * Example:
+   * <pre>{@code
+   * // col       = ["A543", "B123", null],  DType = STRING
+   * // regexProg = new RegexProgram("([A-Z])(\\d+)")
+   * // replace   = "${2}-${1}"
+   * ColumnVector result = col.stringReplaceWithBackrefs(regexProg, replace);
+   * // result    = ["543-A", "123-B", null], DType = STRING
+   * }</pre>
    *
    * @param regexProg The regex program with pattern to search within each string.
    * @param replace The replacement template for creating the output string.
@@ -3528,6 +3581,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Null string entries result in null entries in the output column.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["1", "23", "456", null], DType = STRING
+   * ColumnVector result = col.zfill(5);
+   * // result = ["00001", "00023", "00456", null], DType = STRING
+   * }</pre>
+   *
    * @param width The minimum number of characters for each string.
    * @return New column of strings.
    */
@@ -3543,6 +3603,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Null string entries result in null entries in the output column.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a", "bb", "ccc", null], DType = STRING
+   * ColumnVector result = col.pad(5);
+   * // result = ["a    ", "bb   ", "ccc  ", null], DType = STRING
+   * }</pre>
+   *
    * @param width the minimum number of characters for each string.
    * @return the new strings column.
    */
@@ -3557,6 +3624,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * No strings are truncated.
    *
    * Null string entries result in null entries in the output column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a", "bb", "ccc", null], DType = STRING
+   * ColumnVector result = col.pad(5, PadSide.LEFT);
+   * // result = ["    a", "   bb", "  ccc", null], DType = STRING
+   * }</pre>
    *
    * @param width the minimum number of characters for each string.
    * @param side where to add new characters.
@@ -3574,6 +3648,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Null string entries result in null entries in the output column.
    *
+   * Example:
+   * <pre>{@code
+   * // col    = ["a", "bb", "ccc", null], DType = STRING
+   * ColumnVector result = col.pad(5, PadSide.RIGHT, "-");
+   * // result = ["a----", "bb---", "ccc--", null], DType = STRING
+   * }</pre>
+   *
    * @param width the minimum number of characters for each string.
    * @param side where to add new characters.
    * @param fillChar a single character string that holds what should be added.
@@ -3588,6 +3669,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Checks if each string in a column starts with a specified comparison string, resulting in a
    * parallel column of the boolean results.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = ["hello", "world", "help", null], DType = STRING
+   * // pattern = "hel",                            DType = STRING
+   * ColumnVector result = col.startsWith(pattern);
+   * // result  = [true, false, true, null],        DType = BOOL8
+   * }</pre>
+   *
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
    * @return A new java column vector containing the boolean results.
    */
@@ -3601,6 +3691,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Checks if each string in a column ends with a specified comparison string, resulting in a
    * parallel column of the boolean results.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = ["hello", "world", "yellow", null], DType = STRING
+   * // pattern = "llo",                              DType = STRING
+   * ColumnVector result = col.endsWith(pattern);
+   * // result  = [true, false, true, null],          DType = BOOL8
+   * }</pre>
+   *
    * @param pattern scalar containing the string being searched for at the end of the column's strings.
    * @return A new java column vector containing the boolean results.
    */
@@ -3613,6 +3712,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Removes whitespace from the beginning and end of a string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["  hello  ", "\tworld\n", " test"], DType = STRING
+   * ColumnVector result = col.strip();
+   * // result = ["hello", "world", "test"],          DType = STRING
+   * }</pre>
+   *
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector strip() {
@@ -3625,6 +3732,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Removes the specified characters from the beginning and end of each string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = ["##hello##", "world###", "##test"], DType = STRING
+   * // toStrip = "#",                                 DType = STRING
+   * ColumnVector result = col.strip(toStrip);
+   * // result  = ["hello", "world", "test"],          DType = STRING
+   * }</pre>
+   *
    * @param toStrip UTF-8 encoded characters to strip from each string.
    * @return A new java column vector containing the stripped strings.
    */
@@ -3637,6 +3753,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Removes whitespace from the beginning of a string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["  hello  ", "\tworld", " test"], DType = STRING
+   * ColumnVector result = col.lstrip();
+   * // result = ["hello  ", "world", "test"],      DType = STRING
+   * }</pre>
+   *
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector lstrip() {
@@ -3649,6 +3773,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Removes the specified characters from the beginning of each string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = ["##hello", "##world", "test##"], DType = STRING
+   * // toStrip = "#",                              DType = STRING
+   * ColumnVector result = col.lstrip(toStrip);
+   * // result  = ["hello", "world", "test##"],     DType = STRING
+   * }</pre>
+   *
    * @param toStrip UTF-8 encoded characters to strip from each string.
    * @return A new java column vector containing the stripped strings.
    */
@@ -3661,6 +3794,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Removes whitespace from the end of a string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["  hello  ", "world\t", "test "], DType = STRING
+   * ColumnVector result = col.rstrip();
+   * // result = ["  hello", "world", "test"],      DType = STRING
+   * }</pre>
+   *
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector rstrip() {
@@ -3673,6 +3814,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Removes the specified characters from the end of each string.
+   *
+   * Example:
+   * <pre>{@code
+   * // col     = ["hello##", "world##", "##test"], DType = STRING
+   * // toStrip = "#",                              DType = STRING
+   * ColumnVector result = col.rstrip(toStrip);
+   * // result  = ["hello", "world", "##test"],     DType = STRING
+   * }</pre>
+   *
    * @param toStrip UTF-8 encoded characters to strip from each string.
    * @return A new java column vector containing the stripped strings.
    */
@@ -3686,10 +3836,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Checks if each string in a column contains a specified comparison string, resulting in a
    * parallel column of the boolean results.
+   *
+   * Example:
+   * <pre>{@code
+   * // col        = ["hello", "world", "foo", null], DType = STRING
+   * // compString = "o",                             DType = STRING
+   * ColumnVector result = col.stringContains(compString);
+   * // result     = [true, true, true, null],        DType = BOOL8
+   * }</pre>
+   *
    * @param compString scalar containing the string being searched for.
    * @return A new java column vector containing the boolean results.
    */
-
   public final ColumnVector stringContains(Scalar compString) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert compString != null : "compString scalar may not be null";
@@ -3698,7 +3856,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * @brief Searches for the given target strings within each string in the provided column
+   * Searches for the given target strings within each string in the provided column.
    *
    * Each column in the result table corresponds to the result for the target string at the same
    * ordinal. i.e. 0th column is the BOOL8 column result for the 0th target string, 1th for 1th,
@@ -3709,11 +3867,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Any null input strings return corresponding null entries in the output columns.
    *
-   * input = ["a", "b", "c"]
-   * targets = ["a", "c"]
-   * output is a table with two boolean columns:
-   *   column 0: [true, false, false]
-   *   column 1: [false, false, true]
+   * Example:
+   * <pre>{@code
+   * // col     = ["a", "b", "c"],  DType = STRING
+   * // targets = ["a", "c"],       DType = STRING
+   * ColumnVector[] result = col.stringContains(targets);
+   * // result[0] = [true, false, false], DType = BOOL8
+   * // result[1] = [false, false, true], DType = BOOL8
+   * }</pre>
    *
    * @param targets UTF-8 encoded strings to search for in each string in `input`
    * @return BOOL8 columns
@@ -3731,27 +3892,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Replaces values less than `lo` in `input` with `lo`,
    * and values greater than `hi` with `hi`.
    *
-   * if `lo` is invalid, then lo will not be considered while
-   * evaluating the input (Essentially considered minimum value of that type).
-   * if `hi` is invalid, then hi will not be considered while
-   * evaluating the input (Essentially considered maximum value of that type).
+   * If `lo` is invalid, then lo will not be considered while
+   * evaluating the input (essentially considered minimum value of that type).
+   * If `hi` is invalid, then hi will not be considered while
+   * evaluating the input (essentially considered maximum value of that type).
    *
-   * ```
    * Example:
-   * input: {1, 2, 3, NULL, 5, 6, 7}
+   * <pre>{@code
+   * // col    = [1, 2, 3, null, 5, 6, 7], DType = INT32
+   * // lo     = 3,                        DType = INT32
+   * // hi     = 5,                        DType = INT32
+   * ColumnVector result = col.clamp(lo, hi);
+   * // result = [3, 3, 3, null, 5, 5, 5], DType = INT32
+   * }</pre>
    *
-   * valid lo and hi
-   * lo: 3, hi: 5, lo_replace : 0, hi_replace : 16
-   * output:{0, 0, 3, NULL, 5, 16, 16}
-   *
-   * invalid lo
-   * lo: NULL, hi: 5, lo_replace : 0, hi_replace : 16
-   * output:{1, 2, 3, NULL, 5, 16, 16}
-   *
-   * invalid hi
-   * lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
-   * output:{0, 0, 3, NULL, 5, 6, 7}
-   * ```
    * @param lo - Minimum clamp value. All elements less than `lo` will be replaced by `lo`.
    *           Ignored if null.
    * @param hi - Maximum clamp value. All elements greater than `hi` will be replaced by `hi`.
@@ -3764,33 +3918,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Replaces values less than `lo` in `input` with `lo_replace`,
-   * and values greater than `hi` with `hi_replace`.
+   * Replaces values less than `lo` in `input` with `loReplace`,
+   * and values greater than `hi` with `hiReplace`.
    *
-   * if `lo` is invalid, then lo will not be considered while
-   * evaluating the input (Essentially considered minimum value of that type).
-   * if `hi` is invalid, then hi will not be considered while
-   * evaluating the input (Essentially considered maximum value of that type).
+   * If `lo` is invalid, then lo will not be considered while
+   * evaluating the input (essentially considered minimum value of that type).
+   * If `hi` is invalid, then hi will not be considered while
+   * evaluating the input (essentially considered maximum value of that type).
    *
-   * @note: If `lo` is valid then `lo_replace` should be valid
-   *        If `hi` is valid then `hi_replace` should be valid
+   * Note: If `lo` is valid then `loReplace` should be valid.
+   *       If `hi` is valid then `hiReplace` should be valid.
    *
-   * ```
    * Example:
-   *    input: {1, 2, 3, NULL, 5, 6, 7}
-   *
-   *    valid lo and hi
-   *    lo: 3, hi: 5, lo_replace : 0, hi_replace : 16
-   *    output:{0, 0, 3, NULL, 5, 16, 16}
-   *
-   *    invalid lo
-   *    lo: NULL, hi: 5, lo_replace : 0, hi_replace : 16
-   *    output:{1, 2, 3, NULL, 5, 16, 16}
-   *
-   *    invalid hi
-   *    lo: 3, hi: NULL, lo_replace : 0, hi_replace : 16
-   *    output:{0, 0, 3, NULL, 5, 6, 7}
-   * ```
+   * <pre>{@code
+   * // col       = [1, 2, 3, null, 5, 6, 7], DType = INT32
+   * // lo        = 3,                        DType = INT32
+   * // loReplace = 0,                        DType = INT32
+   * // hi        = 5,                        DType = INT32
+   * // hiReplace = 16,                       DType = INT32
+   * ColumnVector result = col.clamp(lo, loReplace, hi, hiReplace);
+   * // result    = [0, 0, 3, null, 5, 16, 16], DType = INT32
+   * }</pre>
    *
    * @param lo - Minimum clamp value. All elements less than `lo` will be replaced by `loReplace`. Ignored if null.
    * @param loReplace - All elements less than `lo` will be replaced by `loReplace`.
@@ -3807,11 +3955,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean ColumnVector identifying rows which
    * match the given regex pattern but only at the beginning of the string.
    *
-   * ```
-   * cv = ["abc", "123", "def456"]
-   * result = cv.matchesRe("\\d+")
-   * r is now [false, true, false]
-   * ```
+   * Example:
+   * <pre>{@code
+   * // col    = ["abc", "123", "def456"], DType = STRING
+   * ColumnVector result = col.matchesRe("\\d+");
+   * // result = [false, true, false],     DType = BOOL8
+   * }</pre>
+   *
    * Any null string entries return corresponding null output column entries.
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
@@ -3828,12 +3978,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean ColumnVector identifying rows which
    * match the given regex program pattern but only at the beginning of the string.
    *
-   * ```
-   * cv = ["abc", "123", "def456"]
-   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
-   * r = cv.matchesRe(p)
-   * r is now [false, true, false]
-   * ```
+   * Example:
+   * <pre>{@code
+   * // col       = ["abc", "123", "def456"], DType = STRING
+   * // regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * ColumnVector result = col.matchesRe(regexProg);
+   * // result    = [false, true, false],     DType = BOOL8
+   * }</pre>
+   *
    * Any null string entries return corresponding null output column entries.
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
@@ -3853,11 +4005,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean ColumnVector identifying rows which
    * match the given regex pattern starting at any location.
    *
-   * ```
-   * cv = ["abc", "123", "def456"]
-   * r = cv.containsRe("\\d+")
-   * r is now [false, true, true]
-   * ```
+   * Example:
+   * <pre>{@code
+   * // col    = ["abc", "123", "def456"], DType = STRING
+   * ColumnVector result = col.containsRe("\\d+");
+   * // result = [false, true, true],      DType = BOOL8
+   * }</pre>
+   *
    * Any null string entries return corresponding null output column entries.
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
@@ -3874,12 +4028,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean ColumnVector identifying rows which
    * match the given RegexProgram pattern starting at any location.
    *
-   * ```
-   * cv = ["abc", "123", "def456"]
-   * p = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
-   * r = cv.containsRe(p)
-   * r is now [false, true, true]
-   * ```
+   * Example:
+   * <pre>{@code
+   * // col       = ["abc", "123", "def456"], DType = STRING
+   * // regexProg = new RegexProgram("\\d+", CaptureGroups.NON_CAPTURE)
+   * ColumnVector result = col.containsRe(regexProg);
+   * // result    = [false, true, true],      DType = BOOL8
+   * }</pre>
+   *
    * Any null string entries return corresponding null output column entries.
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
@@ -3900,8 +4056,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * return a column in the table. Null entries are added if the string
    * does not match. Any null inputs also result in null output entries.
    *
+   * Example:
+   * <pre>{@code
+   * // col     = ["A1", "B2", "C3"], DType = STRING
+   * // pattern = "([A-Z])(\\d)"
+   * Table result = col.extractRe(pattern);
+   * // result:
+   * //   col0 = ["A", "B", "C"], DType = STRING
+   * //   col1 = ["1", "2", "3"], DType = STRING
+   * }</pre>
+   *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
    * @param pattern the pattern to use
    * @return the table of extracted matches
    * @throws CudfException if any error happens including if the RE does
@@ -3917,8 +4084,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * return a column in the table. Null entries are added if the string
    * does not match. Any null inputs also result in null output entries.
    *
+   * Example:
+   * <pre>{@code
+   * // col       = ["A1", "B2", "C3"], DType = STRING
+   * // regexProg = new RegexProgram("([A-Z])(\\d)")
+   * Table result = col.extractRe(regexProg);
+   * // result:
+   * //   col0 = ["A", "B", "C"], DType = STRING
+   * //   col1 = ["1", "2", "3"], DType = STRING
+   * }</pre>
+   *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
    * @param regexProg the regex program to use
    * @return the table of extracted matches
    * @throws CudfException if any error happens including if the regex
@@ -3935,8 +4113,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Extracts all strings that match the given regular expression and corresponds to the
    * regular expression group index. Any null inputs also result in null output entries.
    *
+   * Example:
+   * <pre>{@code
+   * // col     = ["a1b2", "c3d4"], DType = STRING
+   * // pattern = "(\\d)"
+   * // idx     = 1
+   * ColumnVector result = col.extractAllRecord(pattern, idx);
+   * // result  = [["1", "2"], ["3", "4"]], DType = LIST of STRING
+   * }</pre>
+   *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
    * @param pattern The regex pattern
    * @param idx The regex group index
    * @return A new column vector of extracted matches
@@ -3953,8 +4141,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Extracts all strings that match the given regex program pattern and corresponds to the
    * regular expression group index. Any null inputs also result in null output entries.
    *
+   * Example:
+   * <pre>{@code
+   * // col       = ["a1b2", "c3d4"], DType = STRING
+   * // regexProg = new RegexProgram("(\\d)")
+   * // idx       = 1
+   * ColumnVector result = col.extractAllRecord(regexProg, idx);
+   * // result    = [["1", "2"], ["3", "4"]], DType = LIST of STRING
+   * }</pre>
+   *
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   *
    * @param regexProg The regex program
    * @param idx The regex group index
    * @return A new column vector of extracted matches
@@ -3972,27 +4170,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean ColumnVector identifying rows which
    * match the given like pattern.
    *
-   * The like pattern expects only 2 wildcard special characters
+   * The like pattern expects only 2 wildcard special characters:
    * - `%` any number of any character (including no characters)
    * - `_` any single character
    *
-   * ```
-   * cv = ["azaa", "ababaabba", "aaxa"]
-   * r = cv.like("%a_aa%", "\\")
-   * r is now [true, true, false]
-   * r = cv.like("a__a", "\\")
-   * r is now [true, false, true]
-   * ```
+   * Example:
+   * <pre>{@code
+   * // col        = ["azaa", "ababaabba", "aaxa"],  DType = STRING
+   * // pattern    = "%a_aa%",                       DType = STRING
+   * // escapeChar = "\\",                           DType = STRING
+   * ColumnVector result = col.like(pattern, escapeChar);
+   * // result     = [true, true, false],            DType = BOOL8
+   * }</pre>
    *
    * The escape character is specified to include either `%` or `_` in the search,
    * which is expected to be either 0 or 1 character.
    * If more than one character is specified, only the first character is used.
    *
-   * ```
-   * cv = ["abc_def", "abc1def", "abc_"]
-   * r = cv.like("abc/_d%", "/")
-   * r is now [true, false, false]
-   * ```
+   * Example with escape character:
+   * <pre>{@code
+   * // col        = ["abc_def", "abc1def", "abc_"], DType = STRING
+   * // pattern    = "abc/_d%",                      DType = STRING
+   * // escapeChar = "/",                            DType = STRING
+   * ColumnVector result = col.like(pattern, escapeChar);
+   * // result     = [true, false, false],           DType = BOOL8
+   * }</pre>
+   *
    * Any null string entries return corresponding null output column entries.
    *
    * @param pattern Like pattern to match to each string.
@@ -4015,10 +4218,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * For example, the sequence '%20' is converted into byte (0x20) which is a single
    * space character. Another example converts '%C3%A9' into 2 sequential bytes
    * (0xc3 and 0xa9 respectively) which is the é character. Overall, 3 characters
-   * are converted into one char byte whenever a '%%' (single percent) character
+   * are converted into one char byte whenever a '%' (percent) character
    * is encountered in the string.
-   * <p>
+   *
    * Any null entries will result in corresponding null entries in the output column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["hello%20world", "a%2Bb", null], DType = STRING
+   * ColumnVector result = col.urlDecode();
+   * // result = ["hello world", "a+b", null],     DType = STRING
+   * }</pre>
    *
    * @return a new column instance containing the decoded strings
    */
@@ -4033,8 +4243,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * the '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters are
    * converted to multiple hex characters. For example, the é character is converted to characters
    * '%C3%A9' where 'C3A9' is the UTF-8 bytes 0xC3A9 for this character.
-   * <p>
+   *
    * Any null entries will result in corresponding null entries in the output column.
+   *
+   * Example:
+   * <pre>{@code
+   * // col    = ["hello world", "a+b", null], DType = STRING
+   * ColumnVector result = col.urlEncode();
+   * // result = ["hello%20world", "a%2Bb", null], DType = STRING
+   * }</pre>
    *
    * @return a new column instance containing the encoded strings
    */
@@ -4050,9 +4267,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Given a column of type List<Struct<X, Y>> and a key column of type X, return a column of type Y,
+   * Given a column of type {@code List<Struct<X, Y>>} and a key column of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
    * If the key is not found, the corresponding output value is null.
+   *
+   * Example:
+   * <pre>{@code
+   * // mapCol (List<Struct<String, Int>>):
+   * //   row 0: [{"a": 1}, {"b": 2}]
+   * //   row 1: [{"c": 3}, {"d": 4}]
+   * // keys = ["a", "d"], DType = STRING
+   * ColumnVector result = mapCol.getMapValue(keys);
+   * // result = [1, 4], DType = INT32
+   * }</pre>
+   *
    * @param keys the column view with keys to lookup in the column
    * @return a column of values or nulls based on the lookup result
    */
@@ -4063,9 +4291,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
+   * Given a column of type {@code List<Struct<X, Y>>} and a key of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
    * If the key is not found, the corresponding output value is null.
+   *
+   * Example:
+   * <pre>{@code
+   * // mapCol (List<Struct<String, Int>>):
+   * //   row 0: [{"a": 1}, {"b": 2}]
+   * //   row 1: [{"a": 3}, {"c": 4}]
+   * // key = "a", DType = STRING
+   * ColumnVector result = mapCol.getMapValue(key);
+   * // result = [1, 3], DType = INT32
+   * }</pre>
+   *
    * @param key the scalar key to lookup in the column
    * @return a column of values or nulls based on the lookup result
    */
@@ -4076,9 +4315,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
-  /** For a column of type List<Struct<String, String>> and a passed in String key, return a boolean
-   * column for all keys in the structs, It is true if the key exists in the corresponding map for
-   * that row, false otherwise. It will never return null for a row.
+  /**
+   * For a column of type {@code List<Struct<X, Y>>} and a passed in String key, return a boolean
+   * column indicating whether the key exists in the map for each row. It is true if the key
+   * exists in the corresponding struct for that row, false otherwise. It will never return null.
+   *
+   * Example:
+   * <pre>{@code
+   * // mapCol (List<Struct<String, Int>>):
+   * //   row 0: [{"a": 1}, {"b": 2}]
+   * //   row 1: [{"c": 3}, {"d": 4}]
+   * // key = "a", DType = STRING
+   * ColumnVector result = mapCol.getMapKeyExistence(key);
+   * // result = [true, false], DType = BOOL8
+   * }</pre>
+   *
    * @param key the String scalar to lookup in the column
    * @return a boolean column based on the lookup result
    */
@@ -4089,9 +4340,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
   }
 
-  /** For a column of type List<Struct<_, _>> and a passed in key column, return a boolean
-   * column for all keys in the map. Each output row is true if the key exists in the corresponding map for
-   * that row, false otherwise. It will never return null for a row.
+  /**
+   * For a column of type {@code List<Struct<X, Y>>} and a passed in key column, return a boolean
+   * column indicating whether each key exists in the map for the corresponding row. Each output
+   * row is true if the key exists in the corresponding map for that row, false otherwise.
+   * It will never return null.
+   *
+   * Example:
+   * <pre>{@code
+   * // mapCol (List<Struct<String, Int>>):
+   * //   row 0: [{"a": 1}, {"b": 2}]
+   * //   row 1: [{"c": 3}, {"d": 4}]
+   * // keys = ["a", "d"], DType = STRING
+   * ColumnVector result = mapCol.getMapKeyExistence(keys);
+   * // result = [true, true], DType = BOOL8
+   * }</pre>
+   *
    * @param keys the keys to lookup in the column
    * @return a boolean column based on the lookup result
    */
@@ -4106,6 +4370,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a new struct column view of existing column views. Note that this will NOT copy
    * the contents of the input columns to make a new vector, but makes a view that must not
    * outlive the child views that it references. The resulting column cannot be null.
+   *
+   * Example:
+   * <pre>{@code
+   * // col0 = ["a", "b", "c"], DType = STRING
+   * // col1 = [1, 2, 3],       DType = INT32
+   * ColumnView result = ColumnView.makeStructView(3, col0, col1);
+   * // result (Struct<String, Int>):
+   * //   row 0: {"a", 1}
+   * //   row 1: {"b", 2}
+   * //   row 2: {"c", 3}
+   * }</pre>
+   *
    * @param rows the number of rows in the struct column. This is needed if no columns
    *             are provided.
    * @param columns the columns to add to the struct in the order they should be added
@@ -4127,6 +4403,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Create a new struct column view of existing column views. Note that this will NOT copy
    * the contents of the input columns to make a new vector, but makes a view that must not
    * outlive the child views that it references. The resulting column cannot be null.
+   *
+   * Example:
+   * <pre>{@code
+   * // col0 = ["a", "b", "c"], DType = STRING
+   * // col1 = [1, 2, 3],       DType = INT32
+   * ColumnView result = ColumnView.makeStructView(col0, col1);
+   * // result (Struct<String, Int>):
+   * //   row 0: {"a", 1}
+   * //   row 1: {"b", 2}
+   * //   row 2: {"c", 3}
+   * }</pre>
+   *
    * @param columns the columns to add to the struct in the order they should be added
    * @return the new column view. It is the responsibility of the caller to close this.
    */
