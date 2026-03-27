@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -157,7 +157,6 @@ class filtered_join {
    */
   virtual ~filtered_join() = default;
 
- protected:
   // Key type used in the hash table
   using key = cuco::pair<hash_value_type, lhs_index_type>;
 
@@ -189,11 +188,12 @@ class filtered_join {
     cudf::nullate::YES,
     cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
-  storage_type _bucket_storage;  ///< Storage for hash table buckets
-
   // Empty sentinel key used to mark empty slots in the hash table
   static constexpr auto empty_sentinel_key = cuco::empty_key{
     cuco::pair{std::numeric_limits<hash_value_type>::max(), lhs_index_type{cudf::JoinNoMatch}}};
+
+ protected:
+  storage_type _bucket_storage;            ///< Storage for hash table buckets
   build_properties _build_props;           ///< Properties of the build table
   cudf::table_view _build;                 ///< input table to build the hash map
   cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal

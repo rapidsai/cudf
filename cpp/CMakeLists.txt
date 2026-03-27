@@ -588,6 +588,9 @@ add_library(
   src/join/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
+  src/join/filtered_join_nested.cu
+  src/join/filtered_join_primitive.cu
+  src/join/filtered_join_simple.cu
   src/join/mark_join.cu
   src/join/hash_join.cu
   src/join/filter_join_indices_jit.cu
