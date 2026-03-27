@@ -1,0 +1,176 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include "hash_join_helpers.cuh"
+
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/prefetch.hpp>
+
+#include <rmm/exec_policy.hpp>
+
+#include <cuda/std/iterator>
+#include <thrust/iterator/transform_output_iterator.h>
+
+namespace cudf::detail {
+
+std::size_t compute_join_output_size(
+  table_view const& build_table,
+  table_view const& probe_table,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_probe,
+  hash_table_t const& hash_table,
+  join_kind join,
+  bool has_nulls,
+  cudf::null_equality nulls_equal,
+  rmm::cuda_stream_view stream)
+{
+  size_type const build_table_num_rows{build_table.num_rows()};
+  size_type const probe_table_num_rows{probe_table.num_rows()};
+
+  if (0 == build_table_num_rows) {
+    switch (join) {
+      case join_kind::INNER_JOIN: return 0;
+      case join_kind::LEFT_JOIN: return probe_table_num_rows;
+      default: CUDF_FAIL("Unsupported join type");
+    }
+  }
+
+  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+
+  auto compute_size = [&](auto equality, auto d_hasher) {
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
+
+    if (join == join_kind::LEFT_JOIN) {
+      return hash_table.count_outer(
+        iter, iter + probe_table_num_rows, equality, hash_table.hash_function(), stream.value());
+    } else {
+      return hash_table.count(
+        iter, iter + probe_table_num_rows, equality, hash_table.hash_function(), stream.value());
+    }
+  };
+
+  if (cudf::detail::is_primitive_row_op_compatible(build_table)) {
+    auto const d_hasher = cudf::detail::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+    auto const d_equal  = cudf::detail::row::primitive::row_equality_comparator{
+      probe_nulls, preprocessed_probe, preprocessed_build, nulls_equal};
+
+    return compute_size(primitive_pair_equal{d_equal}, d_hasher);
+  } else {
+    auto const d_hasher =
+      cudf::detail::row::hash::row_hasher{preprocessed_probe}.device_hasher(probe_nulls);
+    auto const row_comparator =
+      cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+
+    if (cudf::detail::has_nested_columns(probe_table)) {
+      auto const d_equal = row_comparator.equal_to<true>(has_nulls, nulls_equal);
+      return compute_size(pair_equal{d_equal}, d_hasher);
+    } else {
+      auto const d_equal = row_comparator.equal_to<false>(has_nulls, nulls_equal);
+      return compute_size(pair_equal{d_equal}, d_hasher);
+    }
+  }
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+probe_join_hash_table(
+  cudf::table_view const& build_table,
+  cudf::table_view const& probe_table,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_probe,
+  hash_table_t const& hash_table,
+  join_kind join,
+  bool has_nulls,
+  null_equality compare_nulls,
+  std::optional<std::size_t> output_size,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const probe_join_type = (join == join_kind::FULL_JOIN) ? join_kind::LEFT_JOIN : join;
+
+  std::size_t const join_size = output_size ? *output_size
+                                            : compute_join_output_size(build_table,
+                                                                       probe_table,
+                                                                       preprocessed_build,
+                                                                       preprocessed_probe,
+                                                                       hash_table,
+                                                                       probe_join_type,
+                                                                       has_nulls,
+                                                                       compare_nulls,
+                                                                       stream);
+
+  if (join_size == 0) {
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
+
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  cudf::prefetch::detail::prefetch(*left_indices, stream);
+  cudf::prefetch::detail::prefetch(*right_indices, stream);
+
+  auto const probe_table_num_rows = probe_table.num_rows();
+  auto const out_probe_begin =
+    thrust::make_transform_output_iterator(left_indices->begin(), output_fn{});
+  auto const out_build_begin =
+    thrust::make_transform_output_iterator(right_indices->begin(), output_fn{});
+
+  auto retrieve_results = [&](auto equality, auto iter) {
+    if (join == join_kind::FULL_JOIN || join == join_kind::LEFT_JOIN) {
+      [[maybe_unused]] auto out_probe_end = hash_table
+                                              .retrieve_outer(iter,
+                                                              iter + probe_table_num_rows,
+                                                              equality,
+                                                              hash_table.hash_function(),
+                                                              out_probe_begin,
+                                                              out_build_begin,
+                                                              stream.value())
+                                              .first;
+
+      if (join == join_kind::FULL_JOIN) {
+        auto const actual_size = cuda::std::distance(out_probe_begin, out_probe_end);
+        left_indices->resize(actual_size, stream);
+        right_indices->resize(actual_size, stream);
+      }
+    } else {
+      hash_table.retrieve(iter,
+                          iter + probe_table_num_rows,
+                          equality,
+                          hash_table.hash_function(),
+                          out_probe_begin,
+                          out_build_begin,
+                          stream.value());
+    }
+  };
+
+  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+
+  if (cudf::detail::is_primitive_row_op_compatible(build_table)) {
+    auto const d_hasher = cudf::detail::row::primitive::row_hasher{probe_nulls, preprocessed_probe};
+    auto const d_equal  = cudf::detail::row::primitive::row_equality_comparator{
+      probe_nulls, preprocessed_probe, preprocessed_build, compare_nulls};
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
+
+    retrieve_results(primitive_pair_equal{d_equal}, iter);
+  } else {
+    auto const d_hasher =
+      cudf::detail::row::hash::row_hasher{preprocessed_probe}.device_hasher(probe_nulls);
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
+
+    auto const row_comparator =
+      cudf::detail::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
+
+    if (cudf::detail::has_nested_columns(probe_table)) {
+      auto const d_equal = row_comparator.equal_to<true>(probe_nulls, compare_nulls);
+      retrieve_results(pair_equal{d_equal}, iter);
+    } else {
+      auto const d_equal = row_comparator.equal_to<false>(probe_nulls, compare_nulls);
+      retrieve_results(pair_equal{d_equal}, iter);
+    }
+  }
+
+  return std::pair(std::move(left_indices), std::move(right_indices));
+}
+
+}  // namespace cudf::detail
