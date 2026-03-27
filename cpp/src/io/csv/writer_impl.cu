@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,8 @@
 #include "csv_common.hpp"
 #include "csv_gpu.hpp"
 #include "durations.hpp"
+#include "io/comp/compression.hpp"
+#include "io/comp/nvcomp_adapter.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
@@ -31,11 +33,16 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
 #include <thrust/execution_policy.h>
+#include <thrust/fill.h>
 #include <thrust/host_vector.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -56,6 +63,148 @@ using namespace cudf::io::csv;
 using namespace cudf::io;
 
 namespace {
+
+/**
+ * @brief Returns maximum compressed size for given input size.
+ */
+size_t max_compressed_size(compression_type compression, size_t input_size)
+{
+  if (compression == compression_type::ZSTD) {
+    return nvcomp::compress_max_output_chunk_size(nvcomp::compression_type::ZSTD, input_size);
+  }
+  return input_size;
+}
+
+/**
+ * @brief Compresses data using nvCOMP batched compression.
+ *
+ * This function compresses data from input_buffer to output_buffer using ZSTD compression.
+ * Only ZSTD is supported for CSV writer because it allows concatenated frames,
+ * which is required for progressive compression with standard tool decompression.
+ *
+ * @param input_buffer Input device buffer containing uncompressed data
+ * @param input_size Size of input data in bytes
+ * @param output_buffer Output device buffer for compressed data (must be pre-allocated)
+ * @param output_buffer_size Size of output buffer in bytes
+ * @param compression Compression algorithm (only ZSTD is supported)
+ * @param stream CUDA stream for asynchronous operations
+ * @return Size of compressed data in bytes, or 0 if compression failed
+ */
+size_t compress_chunk(void const* input_buffer,
+                      size_t input_size,
+                      void* output_buffer,
+                      size_t output_buffer_size,
+                      compression_type compression,
+                      rmm::cuda_stream_view stream)
+{
+  // Only ZSTD is supported for CSV writer because it allows concatenated frames
+  CUDF_EXPECTS(compression == compression_type::ZSTD,
+               "Only ZSTD compression is supported for CSV writer. "
+               "ZSTD supports concatenated frames which enables progressive compression "
+               "compatible with standard decompression tools.");
+
+  nvcomp::compression_type nvcomp_type = nvcomp::compression_type::ZSTD;
+
+  // Check if nvCOMP is disabled for this compression type
+  auto nvcomp_disabled = cudf::io::detail::nvcomp::is_compression_disabled(nvcomp_type);
+  if (nvcomp_disabled.has_value()) {
+    // nvCOMP is disabled - return 0 to signal fallback to uncompressed
+    return 0;
+  }
+
+  // Prepare input/output spans for batched compression (batch size = 1)
+  device_span<uint8_t const> input_span(static_cast<uint8_t const*>(input_buffer), input_size);
+  device_span<uint8_t> output_span(static_cast<uint8_t*>(output_buffer), output_buffer_size);
+
+  rmm::device_uvector<device_span<uint8_t const>> inputs(1, stream);
+  rmm::device_uvector<device_span<uint8_t>> outputs(1, stream);
+  rmm::device_uvector<io::detail::codec_exec_result> results(1, stream);
+
+  // Copy spans to device vectors
+  thrust::copy(rmm::exec_policy_nosync(stream), &input_span, &input_span + 1, inputs.begin());
+  thrust::copy(rmm::exec_policy_nosync(stream), &output_span, &output_span + 1, outputs.begin());
+
+  // Initialize result with FAILURE status (will be set to SUCCESS if compression succeeds)
+  io::detail::codec_exec_result init_result{0, io::detail::codec_status::FAILURE};
+  thrust::fill(rmm::exec_policy_nosync(stream), results.begin(), results.end(), init_result);
+
+  // Call nvCOMP batched compression
+  nvcomp::batched_compress(nvcomp_type, inputs, outputs, results, stream);
+
+  // Get result from device
+  auto h_results = cudf::detail::make_host_vector_async(results, stream);
+  stream.synchronize();
+
+  // Check compression result
+  if (h_results[0].status == io::detail::codec_status::SUCCESS) {
+    return h_results[0].bytes_written;
+  } else {
+    // Compression failed or was skipped - return 0 to signal fallback to uncompressed
+    return 0;
+  }
+}
+
+/**
+ * @brief Writes device data to sink, optionally compressing it.
+ *
+ * This helper function handles the common pattern of:
+ * 1. If compression enabled: compress data, write compressed (or fallback to uncompressed)
+ * 2. If compression disabled: write data directly
+ *
+ * @param out_sink Output data sink
+ * @param device_data Pointer to device data
+ * @param data_size Size of data in bytes
+ * @param compression Compression type
+ * @param stream CUDA stream
+ */
+void write_data_with_compression(data_sink* out_sink,
+                                 void const* device_data,
+                                 size_t data_size,
+                                 compression_type compression,
+                                 rmm::cuda_stream_view stream)
+{
+  auto const ptr_bytes = static_cast<char const*>(device_data);
+
+  if (compression != compression_type::NONE) {
+    // Compressed write
+    auto const max_comp_size = max_compressed_size(compression, data_size);
+    rmm::device_buffer comp_buffer(max_comp_size, stream);
+
+    auto const compressed_size = compress_chunk(
+      device_data, data_size, comp_buffer.data(), max_comp_size, compression, stream);
+
+    if (compressed_size > 0) {
+      // Compression succeeded - write compressed data
+      if (out_sink->is_device_write_preferred(compressed_size)) {
+        out_sink->device_write(
+          static_cast<char const*>(comp_buffer.data()), compressed_size, stream);
+      } else {
+        auto const h_bytes = cudf::detail::make_host_vector(
+          device_span<char const>{static_cast<char const*>(comp_buffer.data()), compressed_size},
+          stream);
+        out_sink->host_write(h_bytes.data(), compressed_size);
+      }
+    } else {
+      // Compression failed - fallback to uncompressed
+      if (out_sink->is_device_write_preferred(data_size)) {
+        out_sink->device_write(ptr_bytes, data_size, stream);
+      } else {
+        auto const h_bytes =
+          cudf::detail::make_host_vector(device_span<char const>{ptr_bytes, data_size}, stream);
+        out_sink->host_write(h_bytes.data(), data_size);
+      }
+    }
+  } else {
+    // Uncompressed write
+    if (out_sink->is_device_write_preferred(data_size)) {
+      out_sink->device_write(ptr_bytes, data_size, stream);
+    } else {
+      auto const h_bytes =
+        cudf::detail::make_host_vector(device_span<char const>{ptr_bytes, data_size}, stream);
+      out_sink->host_write(h_bytes.data(), data_size);
+    }
+  }
+}
 
 /**
  * @brief Functor to modify a string column for CSV format.
@@ -320,7 +469,21 @@ void write_chunked_begin(data_sink* out_sink,
     }
     header.append(terminator);
 
-    out_sink->host_write(header.data(), header.size());
+    // Get compression setting
+    auto const compression = options.get_compression();
+
+    if (compression != compression_type::NONE) {
+      // Compressed write: transfer header to GPU first
+      auto const header_size = header.size();
+      rmm::device_buffer header_buffer(header_size, stream);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        header_buffer.data(), header.data(), header_size, cudaMemcpyHostToDevice, stream.value()));
+
+      write_data_with_compression(out_sink, header_buffer.data(), header_size, compression, stream);
+    } else {
+      // Uncompressed write (original behavior)
+      out_sink->host_write(header.data(), header.size());
+    }
   }
 }
 
@@ -372,23 +535,28 @@ void write_chunked(data_sink* out_sink,
   auto const total_num_bytes = contents_w_nl.data->size();
   auto const ptr_all_bytes   = static_cast<char const*>(contents_w_nl.data->data());
 
-  if (out_sink->is_device_write_preferred(total_num_bytes)) {
-    // Direct write from device memory
-    out_sink->device_write(ptr_all_bytes, total_num_bytes, stream);
-  } else {
-    // copy the bytes to host to write them out
-    auto const h_bytes = cudf::detail::make_host_vector(
-      device_span<char const>{ptr_all_bytes, total_num_bytes}, stream);
+  // Get compression setting
+  auto const compression = options.get_compression();
 
-    out_sink->host_write(h_bytes.data(), total_num_bytes);
-  }
+  // Write data (compressed or uncompressed)
+  write_data_with_compression(
+    out_sink, contents_w_nl.data->data(), total_num_bytes, compression, stream);
 
-  // Needs newline at the end, to separate from next chunk
-  if (out_sink->is_device_write_preferred(newline.size())) {
-    out_sink->device_write(newline.data(), newline.size(), stream);
+  // Write trailing newline to separate from next chunk
+  if (compression != compression_type::NONE) {
+    // For compressed output, write newline as separate ZSTD frame.
+    // ZSTD supports concatenated frames, so they will be correctly joined during decompression.
+    // This approach avoids copying the entire data buffer just to append a newline,
+    // which is important for memory efficiency with large chunks.
+    write_data_with_compression(out_sink, newline.data(), newline.size(), compression, stream);
   } else {
-    out_sink->host_write(options.get_line_terminator().data(),
-                         options.get_line_terminator().size());
+    // For uncompressed output, write newline directly
+    if (out_sink->is_device_write_preferred(newline.size())) {
+      out_sink->device_write(newline.data(), newline.size(), stream);
+    } else {
+      out_sink->host_write(options.get_line_terminator().data(),
+                           options.get_line_terminator().size());
+    }
   }
 }
 
