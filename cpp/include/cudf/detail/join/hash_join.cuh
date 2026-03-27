@@ -133,8 +133,8 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::inner_join
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
@@ -143,8 +143,8 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::left_join
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
@@ -153,8 +153,8 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::full_join
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size,
             rmm::cuda_stream_view stream,
@@ -175,9 +175,9 @@ struct hash_join {
   /**
    * @copydoc cudf::hash_join::full_join_size
    */
-  std::size_t full_join_size(cudf::table_view const& probe,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr) const;
+  [[nodiscard]] std::size_t full_join_size(cudf::table_view const& probe,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr) const;
 
   /**
    * @copydoc cudf::hash_join::inner_join_match_context
@@ -204,49 +204,22 @@ struct hash_join {
     rmm::device_async_resource_ref mr) const;
 
  private:
-  template <typename OutputIterator>
-  void compute_match_counts(cudf::table_view const& probe,
-                            OutputIterator output_iter,
-                            rmm::cuda_stream_view stream) const;
+  template <join_kind Join>
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  join_retrieve(cudf::table_view const& probe,
+                std::optional<std::size_t> output_size,
+                rmm::cuda_stream_view stream,
+                rmm::device_async_resource_ref mr) const;
 
-  /**
-   * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
-   * and returns the output indices of `build_table` and `probe_table` as a combined table,
-   * i.e. if full join is specified as the join type then left join is called. Behavior
-   * is undefined if the provided `output_size` is smaller than the actual output size.
-   *
-   * @throw cudf::logic_error if build table is empty and `join == INNER_JOIN`.
-   *
-   * @param probe_table Table of probe side columns to join.
-   * @param join The type of join to be performed.
-   * @param output_size Optional value which allows users to specify the exact output size.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource used to allocate the returned vectors.
-   *
-   * @return Join output indices vector pair.
-   */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  probe_join_indices(cudf::table_view const& probe_table,
-                     join_kind join,
-                     std::optional<std::size_t> output_size,
-                     rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr) const;
+  template <join_kind Join>
+  [[nodiscard]] std::size_t join_size(cudf::table_view const& probe,
+                                      rmm::cuda_stream_view stream) const;
 
-  /**
-   * @copydoc cudf::detail::hash_join::probe_join_indices
-   *
-   * @throw cudf::logic_error if probe table is empty.
-   * @throw cudf::logic_error if the number of columns in build table and probe table do not match.
-   * @throw cudf::logic_error if the column data types in build table and probe table do not match.
-   */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  compute_hash_join(cudf::table_view const& probe,
-                    join_kind join,
-                    std::optional<std::size_t> output_size,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr) const;
+  template <join_kind Join>
+  [[nodiscard]] std::size_t join_size(cudf::table_view const& probe,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
 }  // namespace cudf
