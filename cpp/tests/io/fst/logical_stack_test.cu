@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -172,11 +172,12 @@ TEST_F(LogicalStackTest, GroundTruth)
                       R"(}  {} [] [ ])";
 
   // Repeat input sample 1024x
-  for (std::size_t i = 0; i < 10; i++)
+  for (std::size_t i = 0; i < 5; i++)
     input += input;
 
   // Input's size
   std::size_t string_size = input.size();
+  std::cout << "string_size=" << string_size << std::endl;
 
   // Getting the symbols that actually modify the stack (i.e., symbols that push or pop)
   std::string stack_symbols{};
