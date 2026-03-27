@@ -237,6 +237,10 @@ TEST_F(LogicalStackTest, GroundTruth)
   // Verify results
   ASSERT_EQ(string_size, top_of_stack_cpu.size());
   ASSERT_EQ(top_of_stack_gpu.size(), top_of_stack_cpu.size());
+  auto r = std::string(top_of_stack_gpu.host_ptr(), string_size);
+  std::cout << r.c_str() + 7936 << std::endl;
+  std::cout << "-----------------------------------------------" << std::endl;
+  std::cout << top_of_stack_cpu.c_str() + 7936 << std::endl;
   CUDF_TEST_EXPECT_VECTOR_EQUAL(top_of_stack_gpu.host_ptr(), top_of_stack_cpu, string_size);
 }
 
