@@ -202,3 +202,45 @@ def test_datetimeindex_inferred_type(dates):
     gidx = cudf.DatetimeIndex(dates)
     pidx = pd.DatetimeIndex(dates)
     assert_eq(gidx.inferred_type, pidx.inferred_type)
+
+
+def test_freq_invalidated_after_sort_values():
+    """Freq should not persist after sort_values reorders the index."""
+    df = cudf.DataFrame(
+        {"a": [5, 3, 1, 2, 4]},
+        index=pd.date_range(start="20260101", freq="D", periods=5),
+    )
+    sorted_df = df.sort_values(by="a")
+    assert sorted_df.index.freq is None
+    # Conversion to pandas should not raise
+    result = sorted_df.to_pandas()
+    expected = df.to_pandas().sort_values(by="a")
+    tm.assert_frame_equal(result, expected)
+
+
+def test_freq_invalidated_after_boolean_indexing():
+    """Freq should not persist after boolean indexing filters rows."""
+    df = cudf.DataFrame(
+        {"a": [5, 3, 1, 2, 4]},
+        index=pd.date_range(start="20260101", freq="D", periods=5),
+    )
+    filtered_df = df[df["a"] > 3]
+    assert filtered_df.index.freq is None
+    # Conversion to pandas should not raise
+    result = filtered_df.to_pandas()
+    expected = df.to_pandas().query("a > 3")
+    tm.assert_frame_equal(result, expected)
+
+
+def test_freq_preserved_when_still_valid():
+    """Freq should be retained when the operation preserves the frequency."""
+    df = cudf.DataFrame(
+        {"a": [1, 2, 3, 4, 5]},
+        index=pd.date_range(start="20260101", freq="D", periods=5),
+    )
+    # head keeps the first N rows in order, so freq is still valid
+    head_df = df.head(3)
+    assert head_df.index.freq is not None
+    result = head_df.to_pandas()
+    expected = df.to_pandas().head(3)
+    tm.assert_frame_equal(result, expected)
