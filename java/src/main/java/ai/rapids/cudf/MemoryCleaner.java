@@ -374,8 +374,8 @@ public final class MemoryCleaner {
     all.put(cleaner.id, new CleanerWeakReference(hashJoin, cleaner, collected, true));
   }
 
-  static void register(KeyRemapping keyRemapping, Cleaner cleaner) {
-    all.put(cleaner.id, new CleanerWeakReference(keyRemapping, cleaner, collected, true));
+  static void register(JoinFactorizer jointFactorizer, Cleaner cleaner) {
+    all.put(cleaner.id, new CleanerWeakReference(jointFactorizer, cleaner, collected, true));
   }
 
   /**
