@@ -254,4 +254,141 @@ void dispatch_nan_comparator(table_view const& haystack,
   }
 }
 
+// ---------------------------------------------------------------------------
+// Extern template declarations to suppress implicit instantiation in TUs that
+// only call (not define) these templates.  The corresponding explicit
+// instantiations live in contains_table_impl.cu, contains_table_impl_nested.cu,
+// and contains_table_impl_primitive.cu.
+// ---------------------------------------------------------------------------
+
+// Common hasher type used by non-nested and nested paths
+using hasher_adapter_default_t = hasher_adapter<
+  cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::DYNAMIC>,
+  cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                             nullate::DYNAMIC>>;
+
+// --- Non-nested (HasNested=false) ---
+extern template void dispatch_nan_comparator<false, hasher_adapter_default_t>(
+  table_view const&,
+  table_view const&,
+  null_equality,
+  nan_equality,
+  bool,
+  bool,
+  bool,
+  cudf::detail::row::equality::self_comparator,
+  cudf::detail::row::equality::two_table_comparator,
+  hasher_adapter_default_t const&,
+  rmm::device_uvector<bool>&,
+  rmm::cuda_stream_view);
+
+using nn_nan_eq_self = cudf::detail::row::equality::device_row_comparator<
+  false,
+  cudf::nullate::DYNAMIC,
+  cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
+using nn_nan_eq_two = cudf::detail::row::equality::strong_index_comparator_adapter<nn_nan_eq_self>;
+using nn_nan_eq_adapter = comparator_adapter<nn_nan_eq_self, nn_nan_eq_two>;
+
+extern template void perform_contains(table_view const&,
+                                      table_view const&,
+                                      bool,
+                                      bool,
+                                      null_equality,
+                                      nn_nan_eq_adapter const&,
+                                      cuco::linear_probing<1, hasher_adapter_default_t> const&,
+                                      rmm::device_uvector<bool>&,
+                                      rmm::cuda_stream_view);
+
+using nn_nan_neq_self = cudf::detail::row::equality::device_row_comparator<
+  false,
+  cudf::nullate::DYNAMIC,
+  cudf::detail::row::equality::physical_equality_comparator>;
+using nn_nan_neq_two =
+  cudf::detail::row::equality::strong_index_comparator_adapter<nn_nan_neq_self>;
+using nn_nan_neq_adapter = comparator_adapter<nn_nan_neq_self, nn_nan_neq_two>;
+
+extern template void perform_contains(table_view const&,
+                                      table_view const&,
+                                      bool,
+                                      bool,
+                                      null_equality,
+                                      nn_nan_neq_adapter const&,
+                                      cuco::linear_probing<1, hasher_adapter_default_t> const&,
+                                      rmm::device_uvector<bool>&,
+                                      rmm::cuda_stream_view);
+
+// --- Nested (HasNested=true) ---
+extern template void dispatch_nan_comparator<true, hasher_adapter_default_t>(
+  table_view const&,
+  table_view const&,
+  null_equality,
+  nan_equality,
+  bool,
+  bool,
+  bool,
+  cudf::detail::row::equality::self_comparator,
+  cudf::detail::row::equality::two_table_comparator,
+  hasher_adapter_default_t const&,
+  rmm::device_uvector<bool>&,
+  rmm::cuda_stream_view);
+
+using n_nan_eq_self = cudf::detail::row::equality::device_row_comparator<
+  true,
+  cudf::nullate::DYNAMIC,
+  cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
+using n_nan_eq_two = cudf::detail::row::equality::strong_index_comparator_adapter<n_nan_eq_self>;
+using n_nan_eq_adapter = comparator_adapter<n_nan_eq_self, n_nan_eq_two>;
+
+extern template void perform_contains(table_view const&,
+                                      table_view const&,
+                                      bool,
+                                      bool,
+                                      null_equality,
+                                      n_nan_eq_adapter const&,
+                                      cuco::linear_probing<4, hasher_adapter_default_t> const&,
+                                      rmm::device_uvector<bool>&,
+                                      rmm::cuda_stream_view);
+
+using n_nan_neq_self = cudf::detail::row::equality::device_row_comparator<
+  true,
+  cudf::nullate::DYNAMIC,
+  cudf::detail::row::equality::physical_equality_comparator>;
+using n_nan_neq_two = cudf::detail::row::equality::strong_index_comparator_adapter<n_nan_neq_self>;
+using n_nan_neq_adapter = comparator_adapter<n_nan_neq_self, n_nan_neq_two>;
+
+extern template void perform_contains(table_view const&,
+                                      table_view const&,
+                                      bool,
+                                      bool,
+                                      null_equality,
+                                      n_nan_neq_adapter const&,
+                                      cuco::linear_probing<4, hasher_adapter_default_t> const&,
+                                      rmm::device_uvector<bool>&,
+                                      rmm::cuda_stream_view);
+
+// --- Primitive ---
+// Forward declarations to avoid including primitive_row_operators.cuh
+namespace row::primitive {
+template <template <typename> class Hash>
+class row_hasher;
+class row_equality_comparator;
+}  // namespace row::primitive
+
+using prim_hasher_adapter_t =
+  hasher_adapter<cudf::detail::row::primitive::row_hasher<cudf::hashing::detail::default_hash>,
+                 cudf::detail::row::primitive::row_hasher<cudf::hashing::detail::default_hash>>;
+using prim_comparator_adapter_t =
+  comparator_adapter<cudf::detail::row::primitive::row_equality_comparator,
+                     cudf::detail::row::primitive::row_equality_comparator>;
+
+extern template void perform_contains(table_view const&,
+                                      table_view const&,
+                                      bool,
+                                      bool,
+                                      null_equality,
+                                      prim_comparator_adapter_t const&,
+                                      cuco::linear_probing<1, prim_hasher_adapter_t> const&,
+                                      rmm::device_uvector<bool>&,
+                                      rmm::cuda_stream_view);
+
 }  // namespace cudf::detail
