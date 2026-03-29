@@ -460,6 +460,7 @@ add_library(
   src/groupby/sort/scan.cpp
   src/groupby/sort/sort_helper.cu
   src/groupby/sort/sort_helper_group_offsets.cu
+  src/groupby/sort/sort_helper_group_offsets_nested.cu
   src/groupby/sort/sort_helper_unique_keys.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu

@@ -204,6 +204,11 @@ struct sort_groupby_helper {
    */
   column_view keys_bitmask_column(rmm::cuda_stream_view stream);
 
+  // Nested-column path for group_offsets(), compiled in a separate TU.
+  index_vector group_offsets_nested(size_type size,
+                                    size_type const* sorted_order,
+                                    rmm::cuda_stream_view stream);
+
   column_ptr _key_sorted_order;      ///< Indices to produce _keys in sorted order
   column_ptr _unsorted_keys_labels;  ///< Group labels for unsorted _keys
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
