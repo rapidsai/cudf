@@ -4,6 +4,7 @@
  */
 
 #include "detail/range_utils.cuh"
+#include "detail/range_window_dispatch.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -82,22 +83,27 @@ std::unique_ptr<column> make_range_window(
   bool const nulls_at_start = (order == order::ASCENDING && null_order == null_order::BEFORE) ||
                               (order == order::DESCENDING && null_order == null_order::AFTER);
 
-  auto dispatch = [&](auto&& clamper, scalar const* row_delta) {
-    return type_dispatcher(orderby.type(),
-                           clamper,
-                           orderby,
-                           direction,
-                           order,
-                           grouping,
-                           nulls_at_start,
-                           row_delta,
-                           stream,
-                           mr);
-  };
   return std::visit(
     [&](auto&& window) -> std::unique_ptr<column> {
       using WindowType = cuda::std::decay_t<decltype(window)>;
-      return dispatch(rolling::range_window_clamper<WindowType>{}, window.delta());
+      if constexpr (cuda::std::is_same_v<WindowType, bounded_closed>) {
+        return rolling::make_range_window_bounded_closed(
+          orderby, grouping, direction, order, nulls_at_start, window.delta(), stream, mr);
+      } else if constexpr (cuda::std::is_same_v<WindowType, bounded_open>) {
+        return rolling::make_range_window_bounded_open(
+          orderby, grouping, direction, order, nulls_at_start, window.delta(), stream, mr);
+      } else {
+        return type_dispatcher(orderby.type(),
+                               rolling::range_window_clamper<WindowType>{},
+                               orderby,
+                               direction,
+                               order,
+                               grouping,
+                               nulls_at_start,
+                               window.delta(),
+                               stream,
+                               mr);
+      }
     },
     window);
 }

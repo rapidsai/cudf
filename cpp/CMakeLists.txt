@@ -703,6 +703,8 @@ add_library(
   src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/range_rolling.cu
+  src/rolling/range_rolling_bounded_closed.cu
+  src/rolling/range_rolling_bounded_open.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cpp
   src/round/round.cu
