@@ -605,6 +605,9 @@ add_library(
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu
+  src/join/key_remapping_nested.cu
+  src/join/key_remapping_non_nested.cu
+  src/join/key_remapping_primitive.cu
   src/join/mixed_join.cu
   src/join/mixed_join_kernel.cu
   src/join/mixed_join_kernel_nulls.cu
