@@ -584,6 +584,7 @@ add_library(
   src/jit/row_ir.cpp
   src/jit/util.cpp
   src/join/conditional_join.cu
+  src/join/conditional_join_anti_semi.cu
   src/join/cross_join.cu
   src/join/distinct_hash_join.cu
   src/join/filter_join_indices.cu
