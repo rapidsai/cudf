@@ -11,6 +11,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -100,8 +101,8 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
   /// Generate order-by column with values: [0, 100,   200,   300,   ... 1100,   1200,   1300]
   [[nodiscard]] column_ptr generate_order_by_column() const
   {
-    auto const begin = thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
-                                                       [&](T const& i) -> T { return i * 100; });
+    auto const begin = cudf::detail::make_counting_transform_iterator(
+      cudf::size_type{0}, [&](T const& i) -> T { return i * 100; });
 
     return fwcw<T>(begin, begin + num_rows).release();
   }
@@ -109,9 +110,8 @@ struct GroupedRollingRangeOrderByNumericTest : public BaseGroupedRollingRangeOrd
   /// Generate order-by column with values: [-1400, -1300, -1200 ... -300, -200, -100]
   [[nodiscard]] column_ptr generate_negative_order_by_column() const
   {
-    auto const begin =
-      thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
-                                      [&](T const& i) -> T { return (i - num_rows) * 100; });
+    auto const begin = cudf::detail::make_counting_transform_iterator(
+      cudf::size_type{0}, [&](T const& i) -> T { return (i - num_rows) * 100; });
 
     return fwcw<T>(begin, begin + num_rows).release();
   }

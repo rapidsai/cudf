@@ -9,10 +9,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/count_elements.hpp>
-
-#include <cuda/iterator>
-#include <thrust/iterator/transform_iterator.h>
 
 struct ListsElementsTest : public cudf::test::BaseFixture {};
 
@@ -26,8 +24,8 @@ TYPED_TEST_SUITE(ListsElementsNumericsTest, NumericTypesNotBool);
 
 TYPED_TEST(ListsElementsNumericsTest, CountElements)
 {
-  auto validity = thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
-                                                  [](auto i) { return i != 1; });
+  auto validity = cudf::detail::make_counting_transform_iterator(cudf::size_type{0},
+                                                                 [](auto i) { return i != 1; });
   using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
   LCW input({LCW{3, 2, 1}, LCW{}, LCW{30, 20, 10, 50}, LCW{100, 120}, LCW{0}}, validity);
 
@@ -39,8 +37,8 @@ TYPED_TEST(ListsElementsNumericsTest, CountElements)
 
 TEST_F(ListsElementsTest, CountElementsStrings)
 {
-  auto validity = thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
-                                                  [](auto i) { return i != 1; });
+  auto validity = cudf::detail::make_counting_transform_iterator(cudf::size_type{0},
+                                                                 [](auto i) { return i != 1; });
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW input(
     {LCW{"", "Héllo", "thesé"}, LCW{}, LCW{"are", "some", "", "z"}, LCW{"tést", "String"}, LCW{""}},
@@ -54,8 +52,8 @@ TEST_F(ListsElementsTest, CountElementsStrings)
 
 TEST_F(ListsElementsTest, CountElementsSliced)
 {
-  auto validity = thrust::make_transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
-                                                  [](auto i) { return i != 1; });
+  auto validity = cudf::detail::make_counting_transform_iterator(cudf::size_type{0},
+                                                                 [](auto i) { return i != 1; });
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   LCW input(
     {LCW{"", "Héllo", "thesé"}, LCW{}, LCW{"are", "some", "", "z"}, LCW{"tést", "String"}, LCW{""}},
