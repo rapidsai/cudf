@@ -80,7 +80,7 @@ python -m pytest -p cudf.pandas \
     -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
-available_pandas_versions=$(rapids-pip-retry index versions pandas --json | jq '.versions')
+available_pandas_versions=$(python -m pip index versions pandas --json | jq '.versions')
 output=$(python ci/utils/filter_package_versions.py dependencies.yaml run_common pandas "$available_pandas_versions")
 
 # Convert the comma-separated list into an array
