@@ -78,7 +78,7 @@ def get_polars_versions(polars_range, latest_only=False):
             if attempt == max_attempts - 1:
                 raise e
             # Just retry retryable errors
-            if (
+            if "unreachable" in e.reason or (
                 code
                 in {
                     http.HTTPStatus.REQUEST_TIMEOUT,
