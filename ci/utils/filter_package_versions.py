@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import itertools
 import json
 
 import yaml
@@ -47,11 +48,11 @@ def filter_versions(
         Version,
         SpecifierSet(library_range).filter(available_versions),
     )
-    # Latest patch only
-    return sorted(
-        set(".".join((str(v.major), str(v.minor))) for v in matching_versions),
-        key=Version,
+    grouped_by_major_minor = itertools.groupby(
+        sorted(matching_versions), key=lambda v: (v.major, v.minor)
     )
+    # Latest patch only
+    return [str(max(versions)) for _, versions in grouped_by_major_minor]
 
 
 if __name__ == "__main__":

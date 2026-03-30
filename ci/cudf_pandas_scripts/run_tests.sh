@@ -83,9 +83,8 @@ python -m pytest -p cudf.pandas \
 available_pandas_versions=$(python -m pip index versions pandas --json | jq '.versions')
 output=$(python ci/utils/filter_package_versions.py dependencies.yaml run_common pandas "$available_pandas_versions")
 
-# Convert the comma-separated list into an array
-IFS=',' read -r -a versions <<< "$output"
-
+# Convert the space-separated list into an array
+read -r -a versions <<< "${output}"
 
 version_lte() {
   [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
@@ -98,7 +97,7 @@ if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
         # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
         # downgrade cupy here to avoid an import failure when cupy tries
         # to load against the older numpy.
-        rapids-pip-retry install "numpy>=1.26,<2.0a0" "pandas==${version}.*" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+        rapids-pip-retry install "numpy>=1.26,<2.0a0" "pandas==${version}" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
         python -m pytest -p cudf.pandas \
             --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
             --numprocesses=8 \
