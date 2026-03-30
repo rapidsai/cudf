@@ -307,7 +307,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                      std::size_t const num_symbols_out,
                                      rmm::cuda_stream_view stream)
 {
-  rmm::device_buffer temp_storage{};
+  rmm::device_buffer temp_storage{1024, stream};
 
   // Type used to hold pairs of (stack_level, value) pairs
   using StackOpT = detail::StackOp<StackLevelT, StackSymbolT>;
@@ -500,7 +500,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       d_kv_operations.Current(),
       detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
       num_symbols_in,
-      stream));
+      stream.value()));
   }
 
   // Check if the last element of d_kv_operations is 0. If not, then we have a problem.
@@ -522,6 +522,9 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   //                                               end_bit,
   //                                               stream));
 
+  std::cout << "bits " << begin_bit << "," << end_bit << std::endl;
+  std::cout << "num_symbols_in=" << num_symbols_in << std::endl;
+  std::cout << "total_temp_storage_bytes=" << total_temp_storage_bytes << std::endl;
   CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
                                                 total_temp_storage_bytes,
                                                 d_kv_operations_unsigned.Current(),
@@ -531,7 +534,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                                 num_symbols_in,
                                                 begin_bit,
                                                 end_bit,
-                                                stream));
+                                                stream.value()));
 
   std::cout << "d_kv_ops_current==d_kv_operations_unsigned:"
             << int(reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data()) ==
@@ -565,7 +568,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     kv_ops_scan_out,
     detail::PopulatePopWithPush<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
     num_symbols_in,
-    stream));
+    stream.value()));
 
   // Fill the output tape with read-symbol
   thrust::fill(rmm::exec_policy_nosync(stream),
@@ -606,7 +609,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                    detail::PropagateLastWrite<StackSymbolT>{read_symbol},
                                    empty_stack_symbol,
                                    num_symbols_out,
-                                   stream));
+                                   stream.value()));
 }
 
 }  // namespace cudf::io::fst
