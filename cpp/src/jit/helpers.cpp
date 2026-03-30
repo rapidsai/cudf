@@ -96,13 +96,16 @@ jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preproces
 
   int runtime_version;
   CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
-  int constexpr min_pch_runtime_version = 12800;  // CUDA 12.8
+
+  constexpr int min_pch_cuda_version     = 12800;  // CUDA 12.8
+  constexpr int min_minimal_cuda_version = 12800;  // CUDA 12.8
 
   std::vector<std::string> options;
   options.emplace_back("-arch=sm_.");
-  options.emplace_back("-minimal");
 
-  if (runtime_version >= min_pch_runtime_version) { options.emplace_back("-pch"); }
+  if (runtime_version >= min_minimal_cuda_version) { options.emplace_back("-minimal"); }
+
+  if (runtime_version >= min_pch_cuda_version) { options.emplace_back("-pch"); }
 
   for (auto& opt : extra_options) {
     options.push_back(opt);
