@@ -70,6 +70,14 @@ struct StackOp {
   ValueT value;
 };
 
+template <typename StackOpT>
+struct custom_op {
+  CUDF_HOST_DEVICE constexpr bool operator()(StackOpT const& x, StackOpT const& y)
+  {
+    return x.stack_level < y.stack_level;
+  }
+};
+
 /**
  * @brief Helper class to assist with radix sorting StackOp instances by stack level.
  *
@@ -522,18 +530,36 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   //                                               end_bit,
   //                                               stream));
 
-  std::cout << "bits " << begin_bit << "," << end_bit << std::endl;
-  std::cout << "num_symbols_in=" << num_symbols_in << std::endl;
-  std::cout << "total_temp_storage_bytes=" << total_temp_storage_bytes << std::endl;
-  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
-                                                total_temp_storage_bytes,
-                                                d_kv_operations_unsigned.Current(),
-                                                d_kv_operations_unsigned.Alternate(),
-                                                d_symbol_positions_db.Current(),
-                                                d_symbol_positions_db.Alternate(),
+  //  std::cout << "bits " << begin_bit << "," << end_bit << std::endl;
+  //  std::cout << "num_symbols_in=" << num_symbols_in << std::endl;
+  //  std::cout << "total_temp_storage_bytes=" << total_temp_storage_bytes << std::endl;
+  //  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
+  //                                                total_temp_storage_bytes,
+  //                                                d_kv_operations_unsigned.Current(),
+  //                                                d_kv_operations_unsigned.Alternate(),
+  //                                                d_symbol_positions_db.Current(),
+  //                                                d_symbol_positions_db.Alternate(),
+  //                                                num_symbols_in,
+  //                                                begin_bit,
+  //                                                end_bit,
+  //                                                stream.value()));
+
+  auto temp_bytes = std::size_t{0};
+  CUDF_CUDA_TRY(cub::DeviceMergeSort::SortPairs(nullptr,
+                                                temp_bytes,
+                                                d_kv_ops_current.data(),
+                                                d_symbol_positions.data(),
                                                 num_symbols_in,
-                                                begin_bit,
-                                                end_bit,
+                                                detail::custom_op<StackOpT>{},
+                                                stream.value()));
+  std::cout << "temp_bytes=" << temp_bytes << std::endl;
+  auto tmp = rmm::device_buffer(temp_bytes, stream);
+  CUDF_CUDA_TRY(cub::DeviceMergeSort::SortPairs(tmp.data(),
+                                                temp_bytes,
+                                                d_kv_ops_current.data(),
+                                                d_symbol_positions.data(),
+                                                num_symbols_in,
+                                                detail::custom_op<StackOpT>{},
                                                 stream.value()));
 
   std::cout << "d_kv_ops_current==d_kv_operations_unsigned:"
@@ -545,12 +571,12 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   //                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
   //                      ? d_kv_ops_current.data()
   //                      : d_kv_ops_alt.data();
-  auto kv_ops_cur = d_kv_ops_alt.data();
+  auto kv_ops_cur = d_kv_ops_current.data();  // alt
   //  auto kv_ops_alt = d_kv_operations_unsigned.Current() ==
   //                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
   //                      ? d_kv_ops_alt.data()
   //                      : d_kv_ops_current.data();
-  auto kv_ops_alt = d_kv_ops_current.data();
+  auto kv_ops_alt = d_kv_ops_alt.data();  // current
 
   // transform_iterator that remaps all operations on stack level 0 to the empty stack symbol
   // kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
@@ -587,7 +613,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // auto d_symbol_positions_cur = d_symbol_positions_db.Current() == d_symbol_positions.data()
   //                                 ? d_symbol_positions.data()
   //                                 : d_symbol_position_alt.data();
-  auto d_symbol_positions_cur = d_symbol_position_alt.data();
+  auto d_symbol_positions_cur = d_symbol_positions.data();  // alt
 
   // Scatter the stack symbols to the output tape (spots that are not
   // scattered to have been pre-filled with the read-symbol)
