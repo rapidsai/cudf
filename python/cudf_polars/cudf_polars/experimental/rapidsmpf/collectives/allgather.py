@@ -49,8 +49,12 @@ class AllGatherManager:
         sequence_number: int
             The sequence number of the chunk to insert.
         chunk: TableChunk
-            The table chunk to insert.
+            The table chunk to insert. Need not be GPU-resident; if spilled,
+            it will be made available internally.
         """
+        chunk = chunk.make_available_and_spill(
+            self.context.br(), allow_overbooking=True
+        )
         self.allgather.insert(
             sequence_number,
             PackedData.from_cudf_packed_columns(
