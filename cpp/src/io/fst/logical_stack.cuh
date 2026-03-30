@@ -25,7 +25,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <type_traits>
+#include <vector>
 
 namespace cudf::io::fst {
 
@@ -508,6 +510,31 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     CUDF_EXPECTS(last_symbol.stack_level == 0, "The logical stack is not empty!");
   }
 
+  // DEBUG: Print state after inclusive scan (before sort)
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    stream.synchronize();
+    std::vector<StackOpT> h_kv_ops(num_symbols_in);
+    std::vector<SymbolPositionT> h_positions(num_symbols_in);
+    CUDF_CUDA_TRY(cudaMemcpy(h_kv_ops.data(),
+                             d_kv_ops_current.data(),
+                             num_symbols_in * sizeof(StackOpT),
+                             cudaMemcpyDefault));
+    CUDF_CUDA_TRY(cudaMemcpy(h_positions.data(),
+                             d_symbol_positions.data(),
+                             num_symbols_in * sizeof(SymbolPositionT),
+                             cudaMemcpyDefault));
+    printf("\n=== STEP 1: After InclusiveScan (before sort) ===\n");
+    printf("num_symbols_in=%zu, num_symbols_out=%zu\n", num_symbols_in, num_symbols_out);
+    for (size_t i = 0; i < std::min(num_symbols_in, size_t(50)); i++) {
+      printf("[%3zu] pos=%5u level=%3d sym='%c'\n",
+             i,
+             h_positions[i],
+             (int)h_kv_ops[i].stack_level,
+             h_kv_ops[i].value);
+    }
+    if (num_symbols_in > 50) printf("... (%zu more)\n", num_symbols_in - 50);
+  }
+
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
@@ -521,10 +548,58 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                                 end_bit,
                                                 stream));
 
+  // DEBUG: Print state after radix sort
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    stream.synchronize();
+    std::vector<StackOpT> h_kv_ops(num_symbols_in);
+    std::vector<SymbolPositionT> h_positions(num_symbols_in);
+    CUDF_CUDA_TRY(cudaMemcpy(h_kv_ops.data(),
+                             d_kv_operations_unsigned.Current(),
+                             num_symbols_in * sizeof(StackOpT),
+                             cudaMemcpyDefault));
+    CUDF_CUDA_TRY(cudaMemcpy(h_positions.data(),
+                             d_symbol_positions_db.Current(),
+                             num_symbols_in * sizeof(SymbolPositionT),
+                             cudaMemcpyDefault));
+    printf("\n=== STEP 2: After RadixSort ===\n");
+    printf("kv_ops buffer selector=%d, positions buffer selector=%d\n",
+           d_kv_operations_unsigned.selector,
+           d_symbol_positions_db.selector);
+    for (size_t i = 0; i < std::min(num_symbols_in, size_t(50)); i++) {
+      printf("[%3zu] pos=%5u level=%3d sym='%c'\n",
+             i,
+             h_positions[i],
+             (int)h_kv_ops[i].stack_level,
+             h_kv_ops[i].value);
+    }
+    if (num_symbols_in > 50) printf("... (%zu more)\n", num_symbols_in - 50);
+  }
+
   // transform_iterator that remaps all operations on stack level 0 to the empty stack symbol
   kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
                      detail::RemapEmptyStack<StackOpT>{empty_stack}};
   kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
+
+  // DEBUG: Print scan input (after remap)
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    stream.synchronize();
+    std::vector<StackOpT> h_kv_ops(num_symbols_in);
+    // Read the raw data before transform
+    CUDF_CUDA_TRY(cudaMemcpy(h_kv_ops.data(),
+                             d_kv_operations_unsigned.Current(),
+                             num_symbols_in * sizeof(StackOpT),
+                             cudaMemcpyDefault));
+    printf("\n=== STEP 2b: Scan input (raw, before RemapEmptyStack transform) ===\n");
+    // Show first few at each level
+    int counts[5] = {0, 0, 0, 0, 0};
+    for (size_t i = 0; i < num_symbols_in && (counts[0] < 3 || counts[1] < 3 || counts[2] < 3); i++) {
+      int lvl = h_kv_ops[i].stack_level;
+      if (lvl >= 0 && lvl <= 4 && counts[lvl] < 3) {
+        printf("[%3zu] level=%3d sym='%c'\n", i, lvl, h_kv_ops[i].value);
+        counts[lvl]++;
+      }
+    }
+  }
 
   // Inclusive scan to match pop operations with the latest push operation of that level
   CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
@@ -535,6 +610,30 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     detail::PopulatePopWithPush<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
     num_symbols_in,
     stream));
+
+  // DEBUG: Print state after PopulatePopWithPush scan
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    stream.synchronize();
+    std::vector<StackOpT> h_kv_ops(num_symbols_in);
+    CUDF_CUDA_TRY(cudaMemcpy(
+      h_kv_ops.data(), kv_ops_scan_out, num_symbols_in * sizeof(StackOpT), cudaMemcpyDefault));
+    printf("\n=== STEP 3: After PopulatePopWithPush scan ===\n");
+    // Show first 10 at level 0
+    printf("Level 0 (first 10):\n");
+    for (size_t i = 0; i < std::min(num_symbols_in, size_t(10)); i++) {
+      printf("[%3zu] level=%3d sym='%c'\n", i, (int)h_kv_ops[i].stack_level, h_kv_ops[i].value);
+    }
+    // Show elements around index 160 (where level 1 should start)
+    printf("Around index 160 (level 1 should start here):\n");
+    for (size_t i = 155; i < std::min(num_symbols_in, size_t(170)); i++) {
+      printf("[%3zu] level=%3d sym='%c'\n", i, (int)h_kv_ops[i].stack_level, h_kv_ops[i].value);
+    }
+    // Show elements around index 384 (where level 2 should start)
+    printf("Around index 384 (level 2 should start here):\n");
+    for (size_t i = 380; i < std::min(num_symbols_in, size_t(395)); i++) {
+      printf("[%3zu] level=%3d sym='%c'\n", i, (int)h_kv_ops[i].stack_level, h_kv_ops[i].value);
+    }
+  }
 
   // Fill the output tape with read-symbol
   thrust::fill(rmm::exec_policy_nosync(stream),
@@ -554,6 +653,45 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                   d_symbol_positions_db.Current(),
                   d_top_of_stack);
 
+  // DEBUG: Print state after scatter (before final propagation)
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    stream.synchronize();
+    // Print the positions being scattered to
+    std::vector<SymbolPositionT> h_positions(num_symbols_in);
+    CUDF_CUDA_TRY(cudaMemcpy(h_positions.data(),
+                             d_symbol_positions_db.Current(),
+                             num_symbols_in * sizeof(SymbolPositionT),
+                             cudaMemcpyDefault));
+    printf("\n=== STEP 4a: Scatter positions (sorted order) ===\n");
+    printf("positions buffer selector=%d\n", d_symbol_positions_db.selector);
+
+    // Find what indices scatter to positions 8070-8150
+    printf("Indices scattering to positions 8070-8150:\n");
+    std::vector<StackOpT> h_kv_ops(num_symbols_in);
+    CUDF_CUDA_TRY(cudaMemcpy(
+      h_kv_ops.data(), kv_ops_scan_out, num_symbols_in * sizeof(StackOpT), cudaMemcpyDefault));
+    for (size_t i = 0; i < num_symbols_in; i++) {
+      if (h_positions[i] >= 8070 && h_positions[i] <= 8150) {
+        printf("[%3zu] pos=%5u level=%d sym='%c'\n",
+               i,
+               h_positions[i],
+               (int)h_kv_ops[i].stack_level,
+               h_kv_ops[i].value);
+      }
+    }
+
+    std::vector<StackSymbolT> h_top_of_stack(num_symbols_out);
+    CUDF_CUDA_TRY(cudaMemcpy(h_top_of_stack.data(),
+                             d_top_of_stack,
+                             num_symbols_out * sizeof(StackSymbolT),
+                             cudaMemcpyDefault));
+    printf("\n=== STEP 4b: After scatter (before final propagation) ===\n");
+    // Print ALL values in 8070-8150
+    for (size_t i = 8070; i <= 8150; i++) {
+      printf("[%5zu] '%c'\n", i, h_top_of_stack[i]);
+    }
+  }
+
   // We perform an exclusive scan in order to fill the items at the very left that may
   // be reading the empty stack before there's the first push occurrence in the sequence.
   // Also, we're interested in the top-of-the-stack symbol before the operation was applied.
@@ -566,6 +704,21 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                    empty_stack_symbol,
                                    num_symbols_out,
                                    stream));
+
+  // DEBUG: Print final state
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) {
+    stream.synchronize();
+    std::vector<StackSymbolT> h_top_of_stack(num_symbols_out);
+    CUDF_CUDA_TRY(cudaMemcpy(h_top_of_stack.data(),
+                             d_top_of_stack,
+                             num_symbols_out * sizeof(StackSymbolT),
+                             cudaMemcpyDefault));
+    printf("\n=== STEP 5: Final output (after propagation) ===\n");
+    // Print from position 8070 to 8160
+    for (size_t i = 8070; i < num_symbols_out; i++) {
+      printf("[%5zu] '%c'\n", i, h_top_of_stack[i]);
+    }
+  }
 }
 
 }  // namespace cudf::io::fst

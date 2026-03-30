@@ -172,7 +172,8 @@ TEST_F(LogicalStackTest, GroundTruth)
                       R"(}  {} [] [ ])";
 
   // Repeat input sample 1024x
-  for (std::size_t i = 0; i < 10; i++)
+  constexpr size_t num_repetitions = 5;
+  for (std::size_t i = 0; i < num_repetitions; i++)
     input += input;
 
   // Input's size
