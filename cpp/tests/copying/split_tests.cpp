@@ -243,10 +243,10 @@ void split_custom_column(SplitFunc Split,
     create_expected_columns_for_splits<T>(splits, size, valids);
   std::vector<cudf::test::strings_column_wrapper> expected_strings =
     create_expected_string_columns_for_splits(strings, splits, valids2);
-  std::transform(cuda::counting_iterator<std::size_t>{0},
+  std::transform(cuda::counting_iterator{static_cast<size_t>(0)},
                  cuda::counting_iterator{expected_fixed.size()},
                  std::back_inserter(expected),
-                 [&expected_fixed, &expected_strings](std::size_t i) {
+                 [&expected_fixed, &expected_strings](size_t i) {
                    return cudf::table_view({expected_fixed[i], expected_strings[i]});
                  });
 
@@ -1539,7 +1539,7 @@ TYPED_TEST(ContiguousSplitTest, LongColumnBigSplits)
 TYPED_TEST(ContiguousSplitTest, LongColumnTinySplits)
 {
   std::vector<cudf::size_type> splits(cuda::counting_iterator<cudf::size_type>{0},
-                                      cuda::counting_iterator<cudf::size_type>{10000});
+cuda::counting_iterator{10000});
 
   split_custom_column<TypeParam>(
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
@@ -1661,7 +1661,7 @@ TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
   auto expected = cudf::split(t, {num_rows / 2});
   ASSERT_EQ(result.size(), expected.size());
 
-  for (std::size_t idx = 0; idx < result.size(); idx++) {
+  for (size_t idx = 0; idx < result.size(); idx++) {
     CUDF_TEST_EXPECT_TABLES_EQUAL(result[idx].table, expected[idx]);
   }
 }
@@ -1767,14 +1767,14 @@ TEST_F(ContiguousSplitUntypedTest, OffsetAlignment)
   // 32 bit offsets
   {
     cudf::table_view tbl({str});
-    for (std::size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
-      for (std::size_t cidx = 0; cidx < row_counts.size(); cidx++) {
+    for (size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
+      for (size_t cidx = 0; cidx < row_counts.size(); cidx++) {
         std::vector<int> splits{row_index_start[ridx], row_index_start[ridx] + row_counts[cidx]};
 
         auto res      = cudf::contiguous_split(tbl, splits);
         auto expected = cudf::split(tbl, splits);
 
-        for (std::size_t idx = 0; idx < expected.size(); idx++) {
+        for (size_t idx = 0; idx < expected.size(); idx++) {
           CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
         }
       }
@@ -1793,14 +1793,14 @@ TEST_F(ContiguousSplitUntypedTest, OffsetAlignment)
     CUDF_EXPECTS(scv.offsets().type().id() == cudf::type_id::INT64, "Unexpected short offset type");
 
     cudf::table_view tbl({*long_str});
-    for (std::size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
-      for (std::size_t cidx = 0; cidx < row_counts.size(); cidx++) {
+    for (size_t ridx = 0; ridx < row_index_start.size(); ridx++) {
+      for (size_t cidx = 0; cidx < row_counts.size(); cidx++) {
         std::vector<int> splits{row_index_start[ridx], row_index_start[ridx] + row_counts[cidx]};
 
         auto res      = cudf::contiguous_split(tbl, splits);
         auto expected = cudf::split(tbl, splits);
 
-        for (std::size_t idx = 0; idx < expected.size(); idx++) {
+        for (size_t idx = 0; idx < expected.size(); idx++) {
           CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
         }
       }
@@ -2134,7 +2134,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
     auto result   = cudf::contiguous_split(pre_split[1], splits);
     auto expected = cudf::split(pre_split[1], splits);
 
-    for (std::size_t index = 0; index < expected.size(); index++) {
+    for (size_t index = 0; index < expected.size(); index++) {
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[index], result[index].table);
     }
   }
@@ -2145,7 +2145,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
     auto result   = cudf::contiguous_split(pre_split[1], splits);
     auto expected = cudf::split(pre_split[1], splits);
 
-    for (std::size_t index = 0; index < expected.size(); index++) {
+    for (size_t index = 0; index < expected.size(); index++) {
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[index], result[index].table);
     }
   }
@@ -2700,7 +2700,7 @@ TEST_F(ContiguousSplitLongStrings, LongOffsets)
     auto res      = cudf::contiguous_split(tbl, {});
     auto expected = cudf::split(tbl, {});
 
-    for (std::size_t idx = 0; idx < expected.size(); idx++) {
+    for (size_t idx = 0; idx < expected.size(); idx++) {
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
     }
   }
@@ -2710,7 +2710,7 @@ TEST_F(ContiguousSplitLongStrings, LongOffsets)
     auto res      = cudf::contiguous_split(tbl, splits);
     auto expected = cudf::split(tbl, splits);
 
-    for (std::size_t idx = 0; idx < expected.size(); idx++) {
+    for (size_t idx = 0; idx < expected.size(); idx++) {
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
     }
   }
@@ -2731,7 +2731,7 @@ TEST_F(ContiguousSplitLongStrings, LongOffsetsNested)
   auto res      = cudf::contiguous_split(tbl, splits);
   auto expected = cudf::split(tbl, splits);
 
-  for (std::size_t idx = 0; idx < expected.size(); idx++) {
+  for (size_t idx = 0; idx < expected.size(); idx++) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
   }
 }
@@ -2745,7 +2745,7 @@ TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndChars)
   auto res      = cudf::contiguous_split(tbl, splits);
   auto expected = cudf::split(tbl, splits);
 
-  for (std::size_t idx = 0; idx < expected.size(); idx++) {
+  for (size_t idx = 0; idx < expected.size(); idx++) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
   }
 }
@@ -2761,7 +2761,7 @@ TEST_F(ContiguousSplitLongStrings, DISABLED_LongOffsetsAndCharsNested)
   auto res      = cudf::contiguous_split(tbl, splits);
   auto expected = cudf::split(tbl, splits);
 
-  for (std::size_t idx = 0; idx < expected.size(); idx++) {
+  for (size_t idx = 0; idx < expected.size(); idx++) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected[idx], res[idx].table);
   }
 }

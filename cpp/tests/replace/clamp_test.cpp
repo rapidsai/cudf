@@ -607,7 +607,7 @@ TYPED_TEST(FixedPointTest, LargeTest)
   auto const lo    = cudf::make_fixed_point_scalar<decimalXX>(1000, scale);
   auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(2000, scale);
 
-  auto begin          = cuda::counting_iterator{-1000};
+  auto begin          = cuda::counting_iterator<int>{-1000};
   auto clamp          = [](int e) { return e < 1000 ? 1000 : e > 2000 ? 2000 : e; };
   auto begin2         = cudf::detail::make_counting_transform_iterator(-1000, clamp);
   auto const input    = fp_wrapper{begin, begin + 5000, scale};

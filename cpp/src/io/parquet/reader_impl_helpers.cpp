@@ -46,7 +46,7 @@ namespace {
   auto const total_row_groups =
     std::accumulate(row_group_indices.begin(),
                     row_group_indices.end(),
-                    std::size_t{0},
+                    size_t{0},
                     [](auto sum, auto const& row_groups) { return sum + row_groups.size(); });
 
   // Check if we have less than 2B total row groups.
@@ -268,7 +268,7 @@ void metadata::sanitize_schema()
   //
   // This code attempts to make this less messy for the code that follows.
 
-  std::function<void(std::size_t)> process = [&](std::size_t schema_idx) -> void {
+  std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
       auto const parent_type = schema[schema_elem.parent_idx].converted_type;
@@ -351,8 +351,8 @@ metadata::metadata(datasource* source, bool read_page_indexes)
     int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
 
     if (max_offset > min_offset) {
-      std::size_t const length = max_offset - min_offset;
-      auto const page_idx_buf  = source->host_read(min_offset, length);
+      size_t const length     = max_offset - min_offset;
+      auto const page_idx_buf = source->host_read(min_offset, length);
       setup_page_index({page_idx_buf->data(), length}, min_offset);
     }
   }
@@ -399,7 +399,7 @@ void metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes,
     auto const ratio                = static_cast<double>(total_column_chunks) / parallel_threshold;
     // Scale the number of tasks and task size evenly (e.g. quadrupling the number of elements
     // doubles both the number of tasks and the task size)
-    auto const multiplier = std::size_t(1) << (static_cast<std::size_t>(std::log2(ratio)) / 2);
+    auto const multiplier = std::size_t(1) << (static_cast<size_t>(std::log2(ratio)) / 2);
 
     auto const num_tasks              = std::clamp(min_tasks * multiplier, min_tasks, max_tasks);
     auto const column_chunks_per_task = total_column_chunks / num_tasks;
@@ -419,7 +419,7 @@ void metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes,
         [&all_column_chunks, &read_column_indexes, start_idx, end_idx]() {
           CompactProtocolReader local_cp;
 
-          for (std::size_t i = start_idx; i < end_idx && i < all_column_chunks.size(); ++i) {
+          for (size_t i = start_idx; i < end_idx && i < all_column_chunks.size(); ++i) {
             read_column_indexes(local_cp, all_column_chunks[i].get());
           }
         }));
@@ -525,11 +525,10 @@ int64_t aggregate_reader_metadata::calc_num_rows() const
 
 size_type aggregate_reader_metadata::calc_num_row_groups() const
 {
-  auto const total_row_groups =
-    std::accumulate(per_file_metadata.cbegin(),
-                    per_file_metadata.cend(),
-                    std::size_t{0},
-                    [](std::size_t sum, auto& pfm) { return sum + pfm.row_groups.size(); });
+  auto const total_row_groups = std::accumulate(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), size_t{0}, [](size_t sum, auto& pfm) {
+      return sum + pfm.row_groups.size();
+    });
 
   // Check if we have less than 2B total row groups.
   CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
@@ -550,14 +549,14 @@ std::vector<size_type> aggregate_reader_metadata::get_num_row_groups_per_file() 
 
 // Copies info from the column and offset indexes into the passed in row_group_info.
 void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
-                                                          std::size_t chunk_start_row) const
+                                                          size_t chunk_start_row) const
 {
   auto const& fmd = per_file_metadata[rg_info.source_index];
   auto const& rg  = fmd.row_groups[rg_info.index];
 
   std::vector<column_chunk_info> chunks(rg.columns.size());
 
-  for (std::size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
+  for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
     auto const& col_chunk = rg.columns[col_idx];
     auto const is_schema_idx_mapped =
       is_schema_index_mapped(col_chunk.schema_idx, rg_info.source_index);
@@ -613,7 +612,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
                                       ? column_index.repetition_level_histogram.value().data()
                                       : nullptr;
 
-    for (std::size_t pg_idx = 0; pg_idx < num_pages; pg_idx++) {
+    for (size_t pg_idx = 0; pg_idx < num_pages; pg_idx++) {
       auto const& page_loc = offset_index.page_locations[pg_idx];
       // translate chunk-relative row nums to absolute within the file
       auto const pg_start_row = chunk_start_row + page_loc.first_row_index;
@@ -720,7 +719,7 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
     // the input sources. This avoids recomputing this within build_column() and
     // populate_metadata().
     std::for_each(
-      cuda::counting_iterator<std::size_t>{1},
+      cuda::counting_iterator{static_cast<size_t>(1)},
       cuda::counting_iterator{schema.size()},
       [&](auto const schema_idx) {
         if (schema[schema_idx].repetition_type == FieldRepetitionType::REQUIRED and
@@ -1130,12 +1129,12 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
       auto total_uncompressed_sizes = std::vector<int64_t>{};
       total_uncompressed_sizes.reserve(num_row_groups);
       // For each input source
-      std::for_each(cuda::counting_iterator<std::size_t>{0},
+      std::for_each(cuda::counting_iterator<size_t>{0},
                     cuda::counting_iterator{per_file_metadata.size()},
                     [&](auto const& src_idx) {
                       auto const& file_metadata = per_file_metadata[src_idx];
                       // For each row group in this source
-                      std::transform(cuda::counting_iterator<std::size_t>{0},
+                      std::transform(cuda::counting_iterator<size_t>{0},
                                      cuda::counting_iterator{file_metadata.row_groups.size()},
                                      std::back_inserter(total_uncompressed_sizes),
                                      [&](auto const& row_group_idx) {
@@ -1252,8 +1251,8 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
 
 std::tuple<int64_t,
            std::vector<std::vector<size_type>>,
-           std::vector<std::vector<std::size_t>>,
-           std::vector<std::vector<std::size_t>>>
+           std::vector<std::vector<size_t>>,
+           std::vector<std::vector<size_t>>>
 aggregate_reader_metadata::apply_row_bounds_filter(
   host_span<std::vector<size_type> const> input_row_group_indices,
   int64_t rows_to_skip,
@@ -1262,19 +1261,19 @@ aggregate_reader_metadata::apply_row_bounds_filter(
   auto const num_sources = input_row_group_indices.size();
 
   auto filtered_row_group_indices = std::vector<std::vector<size_type>>(num_sources);
-  auto row_group_row_counts       = std::vector<std::vector<std::size_t>>{};
+  auto row_group_row_counts       = std::vector<std::vector<size_t>>{};
   row_group_row_counts.reserve(num_sources);
-  auto row_group_row_offsets = std::vector<std::vector<std::size_t>>{};
+  auto row_group_row_offsets = std::vector<std::vector<size_t>>{};
   row_group_row_offsets.reserve(num_sources);
 
-  std::size_t current_row_index = 0;
+  size_t current_row_index = 0;
 
   // Rows to skip relative to the row offset of the first surviving row group index
   int64_t first_row_group_relative_rows_to_skip = 0;
 
   // For each data source
   std::for_each(
-    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator<size_t>{0},
     cuda::counting_iterator{num_sources},
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
@@ -1328,8 +1327,8 @@ aggregate_reader_metadata::apply_row_bounds_filter(
 
 std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds_filter(
   host_span<std::vector<size_type> const> input_row_group_indices,
-  std::size_t bytes_to_skip,
-  std::optional<std::size_t> const& bytes_to_read) const
+  size_t bytes_to_skip,
+  std::optional<size_t> const& bytes_to_read) const
 {
   CUDF_EXPECTS(input_row_group_indices.size() == 1,
                "Byte bounds filter can only be applied to a single source",
@@ -1359,11 +1358,11 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds
 
       // Check if the row group starts within the byte range: row group file offset is >=
       // bytes_to_skip AND (bytes_to_read is not specified OR the max byte offset overflows
-      // std::size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
+      // size_t OR row group file offset is < bytes_to_skip + bytes_to_read)
       auto const is_within_byte_range =
         std::cmp_greater_equal(row_group_file_offset, bytes_to_skip) and
         (not bytes_to_read.has_value() or
-         (std::numeric_limits<std::size_t>::max() - bytes_to_read.value() <= bytes_to_skip) or
+         (std::numeric_limits<size_t>::max() - bytes_to_read.value() <= bytes_to_skip) or
          std::cmp_less(row_group_file_offset, bytes_to_skip + bytes_to_read.value()));
 
       if (is_within_byte_range) { filtered_row_group_indices.front().emplace_back(rg_idx); }
@@ -1373,9 +1372,9 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::apply_byte_bounds
 }
 
 std::tuple<int64_t,
-           std::size_t,
+           size_t,
            std::vector<row_group_info>,
-           std::vector<std::size_t>,
+           std::vector<size_t>,
            size_type,
            surviving_row_group_metrics>
 aggregate_reader_metadata::select_row_groups(
@@ -1383,8 +1382,8 @@ aggregate_reader_metadata::select_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
   int64_t skip_rows_opt,
   std::optional<int64_t> const& num_rows_opt,
-  std::size_t skip_bytes_opt,
-  std::optional<std::size_t> const& byte_count_opt,
+  size_t skip_bytes_opt,
+  std::optional<size_t> const& byte_count_opt,
   host_span<data_type const> output_dtypes,
   host_span<int const> output_column_schemas,
   std::optional<std::reference_wrapper<ast::expression const>> filter,
@@ -1400,11 +1399,10 @@ aggregate_reader_metadata::select_row_groups(
 
   // Compute the row bounds if no row group indices are provided, else return zeros
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not row_group_indices.empty()) { return std::pair<int64_t, std::size_t>{}; }
+    if (not row_group_indices.empty()) { return std::pair<int64_t, size_t>{}; }
     auto const from_opts =
       cudf::io::detail::skip_rows_num_rows_from_options(skip_rows_opt, num_rows_opt, max_num_rows);
-    return std::pair{static_cast<int64_t>(from_opts.first),
-                     static_cast<std::size_t>(from_opts.second)};
+    return std::pair{static_cast<int64_t>(from_opts.first), static_cast<size_t>(from_opts.second)};
   }();
 
   // If there are no input row groups specified and zero number of rows to read, return empty
@@ -1417,7 +1415,7 @@ aggregate_reader_metadata::select_row_groups(
     return {rows_to_skip,
             rows_to_read,
             {},
-            std::vector<std::size_t>(per_file_metadata.size(), 0),
+            std::vector<size_t>(per_file_metadata.size(), 0),
             total_row_bounds_filtered_row_groups,
             {num_filtered_row_groups, num_filtered_row_groups}};
   }
@@ -1462,8 +1460,8 @@ aggregate_reader_metadata::select_row_groups(
 
   // Use row bounds to filter row group indices if possible
   std::vector<std::vector<size_type>> trimmed_row_group_indices;
-  std::vector<std::vector<std::size_t>> row_group_row_counts;
-  std::vector<std::vector<std::size_t>> row_group_row_offsets;
+  std::vector<std::vector<size_t>> row_group_row_counts;
+  std::vector<std::vector<size_t>> row_group_row_offsets;
 
   if (is_row_bounded_row_groups) {
     std::tie(first_row_group_relative_rows_to_skip,
@@ -1552,18 +1550,18 @@ aggregate_reader_metadata::select_row_groups(
   std::vector<row_group_info> selection;
 
   // Vector to store the number of rows read from each data source
-  std::vector<std::size_t> num_rows_per_source(per_file_metadata.size(), 0);
+  std::vector<size_t> num_rows_per_source(per_file_metadata.size(), 0);
 
   // Track the starting row index of the current row group
-  std::size_t current_row_index = 0;
+  size_t current_row_index = 0;
 
   // Track the number of rows read so far (may be different from the current row index if row bounds
   // were applied)
-  std::size_t total_selected_rows = 0;
+  size_t total_selected_rows = 0;
 
   // For each data source
   std::for_each(
-    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator<size_t>{0},
     cuda::counting_iterator{current_row_group_indices.size()},
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
@@ -1642,7 +1640,7 @@ aggregate_reader_metadata::select_columns(
       auto const& col_schema_idx =
         std::find_if(schema_elem.children_idx.cbegin(),
                      schema_elem.children_idx.cend(),
-                     [&](std::size_t col_schema_idx) {
+                     [&](size_t col_schema_idx) {
                        return are_column_paths_equal(
                          get_schema(col_schema_idx, pfm_idx).name, name, case_sensitive_names);
                      });
@@ -1986,7 +1984,7 @@ aggregate_reader_metadata::select_columns(
 
         // Map the column's schema_idx across the rest of the data sources if required.
         if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
-          std::for_each(cuda::counting_iterator<std::size_t>{1},
+          std::for_each(cuda::counting_iterator{static_cast<size_t>(1)},
                         cuda::counting_iterator{per_file_metadata.size()},
                         [&](auto const pfm_idx) {
                           auto const& dst_root = get_schema(0, pfm_idx);
