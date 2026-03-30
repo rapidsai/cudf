@@ -381,7 +381,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (inputs.empty()) {
     // no input, set all to valid
-    CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0xFF, num_bytes, stream.value()));
+    set_null_mask(null_mask, 0, row_size, true, stream);
     return 0;
   }
 
@@ -397,7 +397,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
     if (scalar_is_null) {
       // scalar is null, all rows will be null
-      CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0x00, num_bytes, stream.value()));
+      set_null_mask(null_mask, 0, row_size, false, stream);
       return row_size;
     }
   }
@@ -407,7 +407,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (!has_cols) {
     // no non-scalar columns, so all rows are valid
-    CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0xFF, num_bytes, stream.value()));
+    set_null_mask(null_mask, 0, row_size, true, stream);
     return 0;
   }
 
@@ -428,7 +428,7 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (nullable_masks.empty()) {
     // we only have non-nullable columns, so all rows are valid
-    CUDF_CUDA_TRY(cudaMemsetAsync(null_mask, 0xFF, num_bytes, stream.value()));
+    set_null_mask(null_mask, 0, row_size, true, stream);
     return 0;
   }
 
