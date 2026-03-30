@@ -503,9 +503,6 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       stream));
   }
 
-  std::cout << "d_kv_operations==d_kv_ops_current:"
-            << int(d_kv_operations.Current() == d_kv_ops_current.data()) << std::endl;
-
   // Check if the last element of d_kv_operations is 0. If not, then we have a problem.
   if (num_symbols_in && !supports_reset_op) {
     StackOpT last_symbol = d_kv_ops_current.element(num_symbols_in - 1, stream);
@@ -516,10 +513,21 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Alternate())};
+  // CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
+  //                                               total_temp_storage_bytes,
+  //                                               d_kv_operations_unsigned,
+  //                                               d_symbol_positions_db,
+  //                                               num_symbols_in,
+  //                                               begin_bit,
+  //                                               end_bit,
+  //                                               stream));
+
   CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
                                                 total_temp_storage_bytes,
-                                                d_kv_operations_unsigned,
-                                                d_symbol_positions_db,
+                                                d_kv_operations_unsigned.Current(),
+                                                d_kv_operations_unsigned.Alternate(),
+                                                d_symbol_positions_db.Current(),
+                                                d_symbol_positions_db.Alternate(),
                                                 num_symbols_in,
                                                 begin_bit,
                                                 end_bit,
@@ -530,14 +538,16 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                    d_kv_operations_unsigned.Current())
             << std::endl;
 
-  auto kv_ops_cur = d_kv_operations_unsigned.Current() ==
-                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
-                      ? d_kv_ops_current.data()
-                      : d_kv_ops_alt.data();
-  auto kv_ops_alt = d_kv_operations_unsigned.Current() ==
-                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
-                      ? d_kv_ops_alt.data()
-                      : d_kv_ops_current.data();
+  //  auto kv_ops_cur = d_kv_operations_unsigned.Current() ==
+  //                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
+  //                      ? d_kv_ops_current.data()
+  //                      : d_kv_ops_alt.data();
+  auto kv_ops_cur = d_kv_ops_alt.data();
+  //  auto kv_ops_alt = d_kv_operations_unsigned.Current() ==
+  //                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
+  //                      ? d_kv_ops_alt.data()
+  //                      : d_kv_ops_current.data();
+  auto kv_ops_alt = d_kv_ops_current.data();
 
   // transform_iterator that remaps all operations on stack level 0 to the empty stack symbol
   // kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
@@ -571,16 +581,17 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   std::cout << "d_symbol_positions_db==d_symbol_positions:"
             << int(d_symbol_positions_db.Current() == d_symbol_positions.data()) << std::endl;
 
-  auto d_symbol_positions_current = d_symbol_positions_db.Current() == d_symbol_positions.data()
-                                      ? d_symbol_positions.data()
-                                      : d_symbol_position_alt.data();
+  // auto d_symbol_positions_cur = d_symbol_positions_db.Current() == d_symbol_positions.data()
+  //                                 ? d_symbol_positions.data()
+  //                                 : d_symbol_position_alt.data();
+  auto d_symbol_positions_cur = d_symbol_position_alt.data();
 
   // Scatter the stack symbols to the output tape (spots that are not
   // scattered to have been pre-filled with the read-symbol)
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   kv_op_to_stack_sym_it,
                   kv_op_to_stack_sym_it + num_symbols_in,
-                  d_symbol_positions_current,  // d_symbol_positions_db.Current(),
+                  d_symbol_positions_cur,  // d_symbol_positions_db.Current(),
                   d_top_of_stack);
 
   // We perform an exclusive scan in order to fill the items at the very
