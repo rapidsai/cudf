@@ -465,6 +465,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
   d_kv_operations = cub::DoubleBuffer<StackOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
 
+  std::cout << "supports_reset_op=" << supports_reset_op << std::endl;
   // Compute prefix sum of the stack level after each operation
   if constexpr (supports_reset_op) {
     // Iterator that returns `1` for every symbol that corresponds to a `reset` operation
@@ -502,6 +503,9 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       stream));
   }
 
+  std::cout << "d_kv_operations==d_kv_ops_current:"
+            << int(d_kv_operations.Current() == d_kv_ops_current.data()) << std::endl;
+
   // Check if the last element of d_kv_operations is 0. If not, then we have a problem.
   if (num_symbols_in && !supports_reset_op) {
     StackOpT last_symbol = d_kv_ops_current.element(num_symbols_in - 1, stream);
@@ -520,6 +524,11 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                                 begin_bit,
                                                 end_bit,
                                                 stream));
+
+  std::cout << "d_kv_operations==d_kv_operations_unsigned:"
+            << int(reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()) ==
+                   d_kv_operations_unsigned.Current())
+            << std::endl;
 
   // transform_iterator that remaps all operations on stack level 0 to the empty stack symbol
   kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
