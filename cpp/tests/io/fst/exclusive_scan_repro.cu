@@ -11,6 +11,7 @@
 
 #include <cub/cub.cuh>
 
+#include <numeric>
 #include <vector>
 
 // The operator from logical_stack.cuh - copied here for standalone reproduction
@@ -25,29 +26,6 @@ struct PropagateLastWrite {
   }
   StackSymbolT read_symbol;
 };
-
-// CPU reference implementation of exclusive scan with PropagateLastWrite
-std::vector<char> cpu_exclusive_scan(std::vector<char> const& input,
-                                      char init_value,
-                                      char read_symbol)
-{
-  std::vector<char> output(input.size());
-  char aggregate = init_value;
-
-  for (size_t i = 0; i < input.size(); i++) {
-    // Exclusive scan: output[i] gets the aggregate BEFORE processing input[i]
-    output[i] = aggregate;
-
-    // Update aggregate using PropagateLastWrite logic
-    char const& lhs   = aggregate;
-    char const& rhs   = input[i];
-    bool is_rhs_read  = (rhs == read_symbol);
-    bool is_lhs_write = (lhs != read_symbol);
-    aggregate         = (is_rhs_read && is_lhs_write) ? lhs : rhs;
-  }
-
-  return output;
-}
 
 struct ExclusiveScanReproTest : public cudf::test::BaseFixture {};
 
@@ -85,8 +63,14 @@ TEST_F(ExclusiveScanReproTest, PropagateLastWriteBug)
   h_input[8061] = '[';
   h_input[8068] = '{';
 
-  // Compute CPU reference result
-  std::vector<char> h_expected = cpu_exclusive_scan(h_input, empty_stack_symbol, read_symbol);
+  // Compute CPU reference using std::exclusive_scan
+  // This validates that the operator is associative (std::exclusive_scan requires this)
+  std::vector<char> h_expected(num_elements);
+  std::exclusive_scan(h_input.begin(),
+                      h_input.end(),
+                      h_expected.begin(),
+                      empty_stack_symbol,
+                      PropagateLastWrite<char>{read_symbol});
 
   // Allocate device memory
   rmm::device_uvector<char> d_input{num_elements, stream_view};
@@ -132,7 +116,7 @@ TEST_F(ExclusiveScanReproTest, PropagateLastWriteBug)
                                  stream.value()));
   stream.synchronize();
 
-  // Compare GPU output against CPU reference for all positions
+  // Compare GPU output against CPU reference (std::exclusive_scan) for all positions
   for (size_t i = 0; i < num_elements; i++) {
     EXPECT_EQ(h_output[i], h_expected[i]) << "Mismatch at position " << i << ": GPU='"
                                            << h_output[i] << "', CPU='" << h_expected[i] << "'";
