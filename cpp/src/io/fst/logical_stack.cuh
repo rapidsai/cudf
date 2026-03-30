@@ -70,6 +70,14 @@ struct StackOp {
   ValueT value;
 };
 
+template <typename StackOpT>
+struct custom_op {
+  CUDF_HOST_DEVICE constexpr bool operator()(StackOpT const& x, StackOpT const& y)
+  {
+    return x.stack_level < y.stack_level;
+  }
+};
+
 /**
  * @brief Helper class to assist with radix sorting StackOp instances by stack level.
  *
@@ -307,7 +315,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                      std::size_t const num_symbols_out,
                                      rmm::cuda_stream_view stream)
 {
-  rmm::device_buffer temp_storage{};
+  rmm::device_buffer temp_storage{1024, stream};
 
   // Type used to hold pairs of (stack_level, value) pairs
   using StackOpT = detail::StackOp<StackLevelT, StackSymbolT>;
@@ -465,6 +473,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Initialize double-buffer for sorting the indexes of the sequence of sparse stack operations
   d_kv_operations = cub::DoubleBuffer<StackOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
 
+  std::cout << "supports_reset_op=" << supports_reset_op << std::endl;
   // Compute prefix sum of the stack level after each operation
   if constexpr (supports_reset_op) {
     // Iterator that returns `1` for every symbol that corresponds to a `reset` operation
@@ -499,7 +508,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
       d_kv_operations.Current(),
       detail::AddStackLevelFromStackOp<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
       num_symbols_in,
-      stream));
+      stream.value()));
   }
 
   // Check if the last element of d_kv_operations is 0. If not, then we have a problem.
@@ -512,21 +521,72 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Alternate())};
-  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
-                                                total_temp_storage_bytes,
-                                                d_kv_operations_unsigned,
-                                                d_symbol_positions_db,
+  // CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
+  //                                               total_temp_storage_bytes,
+  //                                               d_kv_operations_unsigned,
+  //                                               d_symbol_positions_db,
+  //                                               num_symbols_in,
+  //                                               begin_bit,
+  //                                               end_bit,
+  //                                               stream));
+
+  //  std::cout << "bits " << begin_bit << "," << end_bit << std::endl;
+  //  std::cout << "num_symbols_in=" << num_symbols_in << std::endl;
+  //  std::cout << "total_temp_storage_bytes=" << total_temp_storage_bytes << std::endl;
+  //  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
+  //                                                total_temp_storage_bytes,
+  //                                                d_kv_operations_unsigned.Current(),
+  //                                                d_kv_operations_unsigned.Alternate(),
+  //                                                d_symbol_positions_db.Current(),
+  //                                                d_symbol_positions_db.Alternate(),
+  //                                                num_symbols_in,
+  //                                                begin_bit,
+  //                                                end_bit,
+  //                                                stream.value()));
+
+  auto temp_bytes = std::size_t{0};
+  CUDF_CUDA_TRY(cub::DeviceMergeSort::SortPairs(nullptr,
+                                                temp_bytes,
+                                                d_kv_ops_current.data(),
+                                                d_symbol_positions.data(),
                                                 num_symbols_in,
-                                                begin_bit,
-                                                end_bit,
-                                                stream));
+                                                detail::custom_op<StackOpT>{},
+                                                stream.value()));
+  std::cout << "temp_bytes=" << temp_bytes << std::endl;
+  auto tmp = rmm::device_buffer(temp_bytes, stream);
+  CUDF_CUDA_TRY(cub::DeviceMergeSort::SortPairs(tmp.data(),
+                                                temp_bytes,
+                                                d_kv_ops_current.data(),
+                                                d_symbol_positions.data(),
+                                                num_symbols_in,
+                                                detail::custom_op<StackOpT>{},
+                                                stream.value()));
+
+  std::cout << "d_kv_ops_current==d_kv_operations_unsigned:"
+            << int(reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data()) ==
+                   d_kv_operations_unsigned.Current())
+            << std::endl;
+
+  //  auto kv_ops_cur = d_kv_operations_unsigned.Current() ==
+  //                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
+  //                      ? d_kv_ops_current.data()
+  //                      : d_kv_ops_alt.data();
+  auto kv_ops_cur = d_kv_ops_current.data();  // alt
+  //  auto kv_ops_alt = d_kv_operations_unsigned.Current() ==
+  //                        reinterpret_cast<StackOpUnsignedT*>(d_kv_ops_current.data())
+  //                      ? d_kv_ops_alt.data()
+  //                      : d_kv_ops_current.data();
+  auto kv_ops_alt = d_kv_ops_alt.data();  // current
 
   // transform_iterator that remaps all operations on stack level 0 to the empty stack symbol
-  kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
-                     detail::RemapEmptyStack<StackOpT>{empty_stack}};
-  kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
+  // kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
+  //                   detail::RemapEmptyStack<StackOpT>{empty_stack}};
+  // kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
+  kv_ops_scan_in  = {kv_ops_cur, detail::RemapEmptyStack<StackOpT>{empty_stack}};
+  kv_ops_scan_out = kv_ops_alt;
 
-  // Inclusive scan to match pop operations with the latest push operation of that level
+  // Inclusive scan to match pop operations with the latest push operation
+  // of that level
   CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
     temp_storage.data(),
     total_temp_storage_bytes,
@@ -534,7 +594,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     kv_ops_scan_out,
     detail::PopulatePopWithPush<StackSymbolToStackOpTypeT>{symbol_to_stack_op},
     num_symbols_in,
-    stream));
+    stream.value()));
 
   // Fill the output tape with read-symbol
   thrust::fill(rmm::exec_policy_nosync(stream),
@@ -542,21 +602,31 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                thrust::device_ptr<StackSymbolT>{d_top_of_stack + num_symbols_out},
                read_symbol);
 
-  // transform_iterator the stack operations to the stack symbol they represent
+  // transform_iterator the stack operations to the stack symbol they
+  // represent
   thrust::transform_iterator<detail::StackOpToStackSymbol, StackOpT*> kv_op_to_stack_sym_it(
     kv_ops_scan_out, detail::StackOpToStackSymbol{});
 
-  // Scatter the stack symbols to the output tape (spots that are not scattered to have been
-  // pre-filled with the read-symbol)
+  std::cout << "d_symbol_positions_db==d_symbol_positions:"
+            << int(d_symbol_positions_db.Current() == d_symbol_positions.data()) << std::endl;
+
+  // auto d_symbol_positions_cur = d_symbol_positions_db.Current() == d_symbol_positions.data()
+  //                                 ? d_symbol_positions.data()
+  //                                 : d_symbol_position_alt.data();
+  auto d_symbol_positions_cur = d_symbol_positions.data();  // alt
+
+  // Scatter the stack symbols to the output tape (spots that are not
+  // scattered to have been pre-filled with the read-symbol)
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   kv_op_to_stack_sym_it,
                   kv_op_to_stack_sym_it + num_symbols_in,
-                  d_symbol_positions_db.Current(),
+                  d_symbol_positions_cur,  // d_symbol_positions_db.Current(),
                   d_top_of_stack);
 
-  // We perform an exclusive scan in order to fill the items at the very left that may
-  // be reading the empty stack before there's the first push occurrence in the sequence.
-  // Also, we're interested in the top-of-the-stack symbol before the operation was applied.
+  // We perform an exclusive scan in order to fill the items at the very
+  // left that may be reading the empty stack before there's the first push
+  // occurrence in the sequence. Also, we're interested in the
+  // top-of-the-stack symbol before the operation was applied.
   CUDF_CUDA_TRY(
     cub::DeviceScan::ExclusiveScan(temp_storage.data(),
                                    total_temp_storage_bytes,
@@ -565,7 +635,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                    detail::PropagateLastWrite<StackSymbolT>{read_symbol},
                                    empty_stack_symbol,
                                    num_symbols_out,
-                                   stream));
+                                   stream.value()));
 }
 
 }  // namespace cudf::io::fst

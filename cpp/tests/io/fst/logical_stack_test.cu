@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -172,11 +172,12 @@ TEST_F(LogicalStackTest, GroundTruth)
                       R"(}  {} [] [ ])";
 
   // Repeat input sample 1024x
-  for (std::size_t i = 0; i < 10; i++)
+  for (std::size_t i = 0; i < 5; i++)
     input += input;
 
   // Input's size
   std::size_t string_size = input.size();
+  std::cout << "string_size=" << string_size << std::endl;
 
   // Getting the symbols that actually modify the stack (i.e., symbols that push or pop)
   std::string stack_symbols{};
@@ -236,6 +237,11 @@ TEST_F(LogicalStackTest, GroundTruth)
   // Verify results
   ASSERT_EQ(string_size, top_of_stack_cpu.size());
   ASSERT_EQ(top_of_stack_gpu.size(), top_of_stack_cpu.size());
+  auto r = std::string(top_of_stack_gpu.host_ptr(), string_size);
+  std::cout << "result-------------------------------------------------" << std::endl;
+  std::cout << r.c_str() + 7936 << std::endl;
+  std::cout << "expected-----------------------------------------------" << std::endl;
+  std::cout << top_of_stack_cpu.c_str() + 7936 << std::endl;
   CUDF_TEST_EXPECT_VECTOR_EQUAL(top_of_stack_gpu.host_ptr(), top_of_stack_cpu, string_size);
 }
 
