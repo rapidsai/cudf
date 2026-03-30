@@ -4,10 +4,10 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/error.hpp>
@@ -84,7 +84,7 @@ void BM_ast_polynomials(nvbench::state& state)
   state.add_global_memory_writes<key_type>(num_rows);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::scoped_range range{"benchmark_iteration"};
+    cudf::benchmark::scoped_range range{"benchmark_iteration"};
 
     switch (engine) {
       case engine_type::AST: {
