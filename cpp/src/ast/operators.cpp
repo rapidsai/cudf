@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/ast/detail/operators.cuh>
@@ -151,6 +151,7 @@ struct type_dispatch_binary_op {
  *
  * @tparam F Type of forwarded functor.
  * @tparam Ts Parameter pack of forwarded arguments.
+ * @param op The binary operator to dispatch
  * @param lhs_type Type of left input data.
  * @param rhs_type Type of right input data.
  * @param f Forwarded functor to be called.
@@ -218,6 +219,7 @@ struct type_dispatch_unary_op {
  *
  * @tparam F Type of forwarded functor.
  * @tparam Ts Parameter pack of forwarded arguments.
+ * @param op The unary operator to dispatch
  * @param input_type Type of input data.
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.

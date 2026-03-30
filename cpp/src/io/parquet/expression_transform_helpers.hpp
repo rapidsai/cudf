@@ -203,6 +203,7 @@ class names_from_expression : public ast::detail::expression_transformer {
   std::unordered_map<cudf::size_type, std::string> _column_indices_to_names;
   std::unordered_set<std::string> _column_names;
   std::unordered_set<std::string> _skip_names;
+  bool _case_sensitive_names{true};
 };
 
 /**
@@ -213,7 +214,8 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   named_to_reference_converter() = default;
 
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                               table_metadata const& metadata);
+                               table_metadata const& metadata,
+                               bool case_sensitive_names);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -253,6 +255,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
+  bool _case_sensitive_names{true};
 };
 
 /**
@@ -310,13 +313,17 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  * @return Map of column indices to their names
  */
 [[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
-  cudf::io::parquet_reader_options const& options, std::vector<SchemaElement> const& schema_tree);
+  cudf::io::parquet_reader_options const& options,
+  std::vector<SchemaElement> const& schema_tree,
+  bool case_sensitive_names);
 
 /**
  * @brief Get the column names in expression object
  *
  * @param expr The optional expression object to get the column names from
  * @param skip_names The names of column names to skip in returned column names
+ * @param options Reader options
+ * @param schema_tree The schema tree describing the file structure
  * @return The column names present in expression object except the skip_names
  */
 [[nodiscard]] std::vector<std::string> get_column_names_in_expression(
@@ -329,7 +336,7 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  * @brief Filter table using the provided (StatsAST or BloomfilterAST) expression and
  * collect filtered row group indices
  *
- * @param table Table of stats or bloom filter membership columns
+ * @param ast_table Table of stats or bloom filter membership columns
  * @param ast_expr StatsAST or BloomfilterAST expression to filter with
  * @param input_row_group_indices Lists of input row groups to read, one per source
  * @param stream CUDA stream used for device memory operations and kernel launches

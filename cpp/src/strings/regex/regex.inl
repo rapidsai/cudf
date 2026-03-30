@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace strings {
@@ -22,7 +23,7 @@ struct alignas(8) relist {
   /**
    * @brief Compute the memory size for the state data.
    */
-  constexpr inline static std::size_t data_size_for(int32_t insts)
+  CUDF_HOST_DEVICE constexpr inline static std::size_t data_size_for(int32_t insts)
   {
     return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) +
            cudf::util::div_rounding_up_unsafe(insts, 8);
@@ -31,7 +32,8 @@ struct alignas(8) relist {
   /**
    * @brief Compute the aligned memory allocation size.
    */
-  constexpr inline static std::size_t alloc_size(int32_t insts, int32_t num_threads)
+  CUDF_HOST_DEVICE constexpr inline static std::size_t alloc_size(int32_t insts,
+                                                                  int32_t num_threads)
   {
     return cudf::util::round_up_unsafe<size_t>(data_size_for(insts) * num_threads, sizeof(restate));
   }
@@ -131,7 +133,7 @@ struct reljunk {
  *
  * '\n, \r, \u0085, \u2028, or \u2029'
  */
-constexpr bool is_newline(char32_t const ch)
+CUDF_HOST_DEVICE constexpr bool is_newline(char32_t const ch)
 {
   return (ch == '\n' || ch == '\r' || ch == 0x00c285 || ch == 0x00e280a8 || ch == 0x00e280a9);
 }

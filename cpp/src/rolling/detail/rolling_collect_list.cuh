@@ -181,7 +181,7 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
   auto gather_output = cudf::detail::gather(table_view{std::vector<column_view>{input}},
                                             gather_map->view(),
                                             cudf::out_of_bounds_policy::DONT_CHECK,
-                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            cudf::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr);
 

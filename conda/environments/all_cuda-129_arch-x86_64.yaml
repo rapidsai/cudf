@@ -12,7 +12,6 @@ dependencies:
 - breathe>=4.35.0
 - c-compiler
 - cachetools
-- certifi
 - clang-tools==20.1.4
 - clang==20.1.4
 - cmake>=3.30.4
@@ -37,6 +36,7 @@ dependencies:
 - hypothesis>=6.131.7
 - identify>=2.5.20
 - include-what-you-use==0.24.0
+- ipykernel
 - ipython
 - jupyter_client
 - libcufile-dev
@@ -57,7 +57,7 @@ dependencies:
 - nbsphinx
 - ninja
 - notebook
-- numba-cuda>=0.22.2
+- numba-cuda>=0.22.2,<0.29.0
 - numba>=0.60.0,<0.65.0
 - numpy>=1.26,<3.0
 - numpydoc
