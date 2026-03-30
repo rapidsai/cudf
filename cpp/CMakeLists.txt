@@ -601,6 +601,7 @@ add_library(
   src/join/hash_join_build.cu
   src/join/hash_join_full.cu
   src/join/hash_join_probe.cu
+  src/join/hash_join_probe_compute_size.cu
   src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
