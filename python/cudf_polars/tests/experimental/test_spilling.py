@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pytest
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -34,9 +35,21 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     return plc.Table([plc.Column.from_array(data, stream=stream)])
 
 
+@pytest.mark.parametrize(
+    "engine",
+    [{"rapidsmpf_options": {"pinned_memory": f"{v}"}} for v in [False, True]],
+    indirect=True,
+)
 def test_make_spill_function(engine: SPMDEngine) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
     context = engine.context
+
+    # if pinned memory is available, data will be spilled to pinned memory else to host memory
+    spilled_host_mem_type = (
+        MemoryType.HOST
+        if engine.context.br().pinned_mr is None
+        else MemoryType.PINNED_HOST
+    )
 
     # Create 3 spillable message containers simulating fanout buffers
     # Buffer 0: Fast consumer (2 messages)
@@ -81,7 +94,7 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
             mid = message_ids[1][i]
             desc = buffer_1_descs[mid]
             # Should be in HOST memory (spilled)
-            assert desc.content_sizes[MemoryType.HOST] > 0
+            assert desc.content_sizes[spilled_host_mem_type] > 0
             assert desc.content_sizes[MemoryType.DEVICE] == 0
 
         # Buffer 1: oldest messages should still be in device
@@ -90,14 +103,14 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
             desc = buffer_1_descs[mid]
             # Should still be in DEVICE memory
             assert desc.content_sizes[MemoryType.DEVICE] > 0
-            assert desc.content_sizes[MemoryType.HOST] == 0
+            assert desc.content_sizes[spilled_host_mem_type] == 0
 
         # Buffer 0 (shortest queue): all messages should still be on device
         buffer_0_descs = buffers[0].get_content_descriptions()
         for mid in message_ids[0]:
             desc = buffer_0_descs[mid]
             assert desc.content_sizes[MemoryType.DEVICE] > 0
-            assert desc.content_sizes[MemoryType.HOST] == 0
+            assert desc.content_sizes[spilled_host_mem_type] == 0
 
         # Verify we can extract and make available a spilled message
         spilled_mid = message_ids[1][4]  # Newest message from longest queue
