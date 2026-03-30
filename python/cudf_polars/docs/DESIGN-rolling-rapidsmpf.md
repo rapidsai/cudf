@@ -116,23 +116,17 @@ Capabilities the **RapidsMPF** library (and agreed **cudf-polars ↔ RapidsMPF**
 
 #### Multi-rank patterns and P2P
 
-**Not all of it.** Only a **subset** of multi-rank window work **naturally** wants a **point-to-point (or directed send/recv / pair-channel) API** in **RapidsMPF**. The rest is mostly **shuffle** and **collectives** you likely already route through existing subnets.
+| Multi-rank track                                  | Dependence on a **P2P-style** API |
+| ------------------------------------------------- | --------------------------------- |
+| **Unordered** `.over` (Phase **C**)               | **Low** — **hash shuffle** is the core primitive. |
+| **Ordered** `.over` / **`sort_by`** (Phase **D**) | **Low** — canonical plan is shuffle-then-local-sort (see below). |
+| **Range rolling** across ranks (Phase **E**)      | **High** — correctness needs **O(window)** halo visibility at partition seams; directed low-fanout messaging is the natural fit. |
 
+**Why Phase D does not need rank-to-rank P2P (canonical plan):** For `.over(partition_by, order_by=...)` and `group_by.agg(..., sort_by=...)`, the window / ordered agg is defined **inside each partition key**. Recipe: **(1) hash shuffle** so all rows of a key land on one rank, **(2) sort locally** by `order_by` / within-group key, **(3) evaluate locally**. No cross-rank boundary inside a group. Seams between consecutive chunks on the same rank are handled with **in-actor carry-over state** (same as single-rank Phase B).
 
-| Multi-rank track                                  | Dependence on a **P2P-style** API                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Unordered** `.over` (Phase **C**)               | **Low** — **hash shuffle** / all-to-all redistribution is the core primitive.                                                                                                                                                                                                                                                                                                                                                        |
-| **Ordered** `.over` / **`sort_by`** (Phase **D**) | **Low** for the **usual** plan — see paragraph below.                                                                                                                                                                                                                                                                                                                                                                                |
-| **Range rolling** across ranks (Phase **E**)      | **High for the scalable design** — after **range partition** on the index, correctness needs **O(window)** visibility at **partition seams** (for backward-looking windows, mostly **tail halo: rank *r*−1 → *r***; bidirectional when semantics require it), not a full **all-to-all**. Implementing that **without** directed messages usually means **heavier** collectives or **gathering** more than needed—still *possible* for correctness experiments, but a **poor** long-term fit for §9.3. |
+**P2P status (resolved):** RapidsMPF already has the underlying P2P primitives. The outstanding work is a **Python wrapper** to make these messages **awaitable** (async API). This is sufficient to begin Phase E prototypes; Phases C and D should proceed on shuffle + local eval in parallel.
 
-
-**Why Phase D does not need rank-to-rank "seam" P2P (canonical plan):** For `.over(partition_by, order_by=...)` and `group_by.agg(..., sort_by=...)`, the window / ordered agg is defined **inside each partition key**. The standard recipe is **(1) hash shuffle on `partition_by` (or group key)** so **all rows of a key land on one rank**, **(2) sort locally** on that rank by `order_by` (or within-group for `sort_by`), **(3) evaluate** `GroupedRollingWindow` (or agg) **locally**. There is **no cross-rank boundary inside a group**—only **shuffle** (collective / all-to-all style) up front. Remaining "seams" are **between consecutive chunks on the same rank** (streaming), handled with **in-actor carry-over state**, same family as single-rank Phase **B**, not P2P.
-
-P2P can still show up for Phase **D** only if you choose an **alternate** implementation (e.g. a **distributed sort** algorithm that range-partitions **before** groups are complete and relies on **neighbor merge** steps)—**not** required for the shuffle-then-local-sort plan above.
-
-**Logical** requirement for **Phase E** specifically: **cross-boundary visibility** along the **global index order** across ranks. **P2P vs collective** is an **implementation** choice; for **Phase E**, **directed low-fanout messaging** is the **expected** RapidsMPF capability to motivate early.
-
-**Early P2P work:** A **minimal** directed-messaging API in **RapidsMPF** (e.g. **neighbor** exchange, **tagged send/recv**) is **sufficient to begin Phase E** (multi-rank **range rolling**) prototypes. **Phases C and D** do **not** depend on it; they should proceed on **shuffle + local** eval. **Phase D** is not blocked on P2P for the canonical shuffle-then-local-sort plan (see table above).
+**Halo exchange design for Phase E:** Because the rolling actor must buffer all local chunks in a **spillable messages container** before producing output (output ordering constraint — see §7.5), both the **upper and lower halo regions are exchanged simultaneously**. There is no sequencing benefit to doing one direction before the other, and the buffering cost is already paid.
 
 ### 6.2 rapidsmpf runtime (cudf-polars)
 
@@ -149,7 +143,7 @@ P2P can still show up for Phase **D** only if you choose an **alternate** implem
 
 **Single-rank:** After **sort order** per group (or globally), a **rolling actor** consumes **ordered chunks** with **carry-over state** across chunk boundaries. Sort via **sort_actor** or **metadata skip**. See **§7.5** for a diagram.
 
-**Multi-rank:** Establish order (**range partition** on index, or **shuffle by group** + sort within group). **Directed boundary / halo messaging** between ranks on **adjacent intervals** (see **§7.5** for backward vs bidirectional cases); then same logical rolling as single-rank with **cross-rank** merge. **No production all-gather** (§9.3).
+**Multi-rank:** Establish order (**range partition** on index, or **shuffle by group** + sort within group). The rolling actor **buffers all local chunks** in a spillable messages container (it cannot push output out of order), then exchanges **both upper and lower halos simultaneously** with adjacent ranks — the buffering cost is already paid so there is no reason to sequence the two directions. Then applies rolling locally with cross-rank boundary data merged in. **No production all-gather** (§9.3). See §7.5.
 
 ### 7.2 `.over` / `GroupedRollingWindow`
 
@@ -183,28 +177,29 @@ flowchart TB
 
 Interpretation: after **Chunk 0**, the actor retains a **trailing suffix** inside its state; when **Chunk 1** arrives, it **logically prepends** that suffix so windows **straddling** the chunk boundary match libcudf / Polars on the **concatenated** table. The same actor repeats for **Chunk 2**, …
 
-**Multi-rank** — after **range partition** on the index, each rank holds a **contiguous index interval**. For the usual **backward-looking** range window, a row near the **start** of interval **I₁** needs rows from the **tail** of **I₀** that sit on the **previous** rank. That is **one-directional** halo traffic along increasing index (**lower rank → higher rank**). **Bidirectional** halos (also **R₁ → R₀**) matter for **forward-looking** spans, **centered** windows, or some **`closed=`** regimes—do not assume `<-->` for every query.
+**Multi-rank** — after **range partition** on the index, each rank holds a **contiguous index interval**. The rolling actor must buffer all local chunks in a **spillable messages container** before producing any output (it cannot push results out of order). Since all local data is already buffered, **both upper and lower halos are exchanged simultaneously** with adjacent ranks — there is no sequencing benefit to doing one direction first, and the buffering cost is already paid regardless.
 
 ```mermaid
 flowchart TB
   R0[Rank 0 owns index interval I0]
   R1[Rank 1 owns index interval I1]
   R2[Rank 2 owns index interval I2]
-  R0 -->|tail halo for backward window| R1
-  R1 -->|tail halo for backward window| R2
+  R0 <-->|halo exchange at shared boundary| R1
+  R1 <-->|halo exchange at shared boundary| R2
 ```
 
-Interpretation: **Rank 1** receives a **halo** of rows from **Rank 0's tail** (or an equivalent compact representation) so rolling near the **low** end of **I₁** is correct. **Rank 2** receives a halo from **Rank 1's tail** similarly. This **directed** seam is what **Phase E** ties to **P2P / directed** messaging (§6.1); volume is **O(halo)**, not full-table.
+Interpretation: **Rank 1** exchanges halos with both **Rank 0** and **Rank 2** simultaneously. The halo size is **O(window width)**, not full-table. This directed seam is what **Phase E** ties to the P2P Python wrapper work described in §6.1.
 
 Plain-language contrast:
 
 | Question | Single-rank | Multi-rank (range rolling) |
 |----------|-------------|----------------------------|
 | **Who "talks"?** | Same **actor instance**, **later in time** | **Different ranks**, same pipeline stage |
-| **What crosses the boundary?** | **In-process** buffer (chunk *k*−1 → chunk *k*) | **Messages**: often **rank *r*−1 → *r*** (backward-looking); **both directions** only when the window is not purely backward-looking |
+| **What crosses the boundary?** | **In-process** buffer (chunk *k*−1 → chunk *k*) | **Bidirectional halo messages** with adjacent ranks (both directions exchanged simultaneously) |
 | **Typical size** | **≈ window footprint** at seam | **≈ window footprint** at each rank seam |
+| **Why buffer everything?** | Carry-over state is small | Output ordering constraint forces full local buffering; simultaneous halo exchange is the natural consequence |
 
-If a Mermaid renderer is unavailable, the same story in one line: **single-rank = one stateful actor + tail buffer between chunks; multi-rank = directed tail halos along index order (bidirectional only when semantics require it).**
+If a Mermaid renderer is unavailable: **single-rank = one stateful actor + tail buffer between chunks; multi-rank = full local buffer in spillable messages + simultaneous bidirectional halo exchange with neighbors.**
 
 ---
 
@@ -268,7 +263,7 @@ The inventory also records **TPC-DS vs FSI ordering** in the backlog; this doc d
 1. **Workload priority within Phase A:** Order **TPC-DS** vs **FSI** rows in the signed-off inventory (implementation order **B→F** is fixed by difficulty).
 2. **FSI workflow explicitly:** v1 expressible with **`Rolling` + joins** only, or **as-of** / other ops—possibly separate design doc.
 3. **Window IR node:** Explicit **`Window` / `RollingExec` IR** vs composing **Sort + Shuffle + Map** only.
-4. **RapidsMPF library transport:** **P2P** (or directed channels) vs **collective-only** boundary exchange—see **§6.1**, heading *Multi-rank patterns and P2P*; Phase **E** is the main motivator for **early** P2P work.
+4. ~~**RapidsMPF library transport:** P2P vs collective-only~~ **Resolved:** RapidsMPF already has the P2P primitives; the work is a Python **awaitable wrapper**. Both upper and lower halos are exchanged simultaneously (see §6.1 and §7.5).
 5. **Debug gather flag:** **Name**, **scope** (CI vs dev), **removal criteria** when **B** and **E** are green on the Phase A list.
 
 ---
