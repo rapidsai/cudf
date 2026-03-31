@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
@@ -25,13 +25,13 @@ from cudf_polars.dsl.utils.windows import (
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.typing import ClosedInterval, Duration
 
-__all__ = ["GroupedWindow", "RollingWindow", "to_request"]
+__all__ = ["FixedSizeRollingWindow", "GroupedWindow", "RollingWindow", "to_request"]
 
 
 @dataclass(frozen=True)
@@ -203,6 +203,100 @@ class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling
             [to_request(agg, orderby, df)],
             stream=df.stream,
         ).columns()
+        return Column(result, dtype=self.dtype)
+
+
+class FixedSizeRollingWindow(Expr):
+    """
+    Fixed-size integer-based rolling window aggregation.
+
+    Handles expressions like ``pl.col("x").rolling_sum(window_size=3)``.
+    Uses ``pylibcudf.rolling.rolling_window`` with integer preceding
+    and following window sizes.
+    """
+
+    __slots__ = (
+        "_agg_request",
+        "agg_name",
+        "fn_params",
+        "following",
+        "min_periods",
+        "preceding",
+    )
+    _non_child = (
+        "dtype",
+        "agg_name",
+        "preceding",
+        "following",
+        "min_periods",
+        "fn_params",
+    )
+
+    _aggregations: ClassVar[dict[str, Callable[..., plc.aggregation.Aggregation]]] = {
+        "sum": plc.aggregation.sum,
+        "min": plc.aggregation.min,
+        "max": plc.aggregation.max,
+        "mean": plc.aggregation.mean,
+        "var": plc.aggregation.variance,
+        "std": plc.aggregation.std,
+    }
+
+    def __init__(
+        self,
+        dtype: DataType,
+        agg_name: str,
+        preceding: int,
+        following: int,
+        min_periods: int,
+        fn_params: tuple[Any, ...],
+        child: Expr,
+    ) -> None:
+        self.dtype = dtype
+        self.agg_name = agg_name
+        self.preceding = preceding
+        self.following = following
+        self.min_periods = min_periods
+        self.fn_params = fn_params
+        self.children = (child,)
+        self.is_pointwise = False
+        self._agg_request = self._make_agg_request()
+        if not plc.rolling.is_valid_rolling_aggregation(
+            child.dtype.plc_type, self._agg_request
+        ):
+            raise NotImplementedError(
+                f"Unsupported fixed-size rolling aggregation {agg_name}"
+            )
+
+    def _make_agg_request(self) -> plc.aggregation.Aggregation:
+        agg_fn = self._aggregations.get(self.agg_name)
+        if agg_fn is None:
+            raise NotImplementedError(
+                f"Unsupported fixed-size rolling aggregation: {self.agg_name}"
+            )
+        return agg_fn(*self.fn_params)
+
+    def do_evaluate(
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        if context != ExecutionContext.FRAME:
+            raise RuntimeError(
+                "Rolling aggregation inside groupby/over/rolling"
+            )  # pragma: no cover; translation raises first
+        (child,) = self.children
+        col = child.evaluate(df, context=context)
+
+        result = plc.rolling.rolling_window(
+            col.obj,
+            self.preceding,
+            self.following,
+            self.min_periods,
+            self._agg_request,
+            stream=df.stream,
+        )
+        if result.type() != self.dtype.plc_type:
+            result = plc.unary.cast(result, self.dtype.plc_type, stream=df.stream)
+
         return Column(result, dtype=self.dtype)
 
 
