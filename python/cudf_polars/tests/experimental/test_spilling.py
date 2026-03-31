@@ -36,20 +36,25 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 
 
 @pytest.mark.parametrize(
-    "engine",
-    [{"rapidsmpf_options": {"pinned_memory": str(v)}} for v in [False, True]],
-    indirect=True,
+    "engine,spilled_host_mem_type",
+    [
+        ({"rapidsmpf_options": {"pinned_memory": "true"}}, MemoryType.PINNED_HOST),
+        ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
+    ],
+    indirect=["engine"],
 )
-def test_make_spill_function(engine: SPMDEngine) -> None:
+def test_make_spill_function(
+    engine: SPMDEngine, spilled_host_mem_type: MemoryType
+) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
     context = engine.context
 
-    # if pinned memory is available, data will be spilled to pinned memory else to host memory
-    spilled_host_mem_type, other_host_mem_type = (
-        (MemoryType.HOST, MemoryType.PINNED_HOST)
-        if engine.context.br().pinned_mr is None
-        else (MemoryType.PINNED_HOST, MemoryType.HOST)
-    )
+    if spilled_host_mem_type == MemoryType.PINNED_HOST:
+        assert engine.context.br().pinned_mr is not None
+        other_host_mem_type = MemoryType.HOST
+    else:
+        assert engine.context.br().pinned_mr is None
+        other_host_mem_type = MemoryType.PINNED_HOST
 
     # Create 3 spillable message containers simulating fanout buffers
     # Buffer 0: Fast consumer (2 messages)
