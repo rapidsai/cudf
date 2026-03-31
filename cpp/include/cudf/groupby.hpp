@@ -493,8 +493,10 @@ class streaming_groupby {
   /**
    * @brief Merge another streaming_groupby's accumulated partial state into this one.
    *
-   * Finalizes the other object and feeds its keys+results as a batch into this object.
-   * The other object must have been constructed with compatible aggregation requests.
+   * Extracts the other object's accumulated intermediate state and merges it into this
+   * object's persistent hash table. The other object is not modified.
+   * Both objects must have been constructed with compatible aggregation requests,
+   * and this object must have had at least one `aggregate()` call.
    *
    * @param other The streaming_groupby whose partial state to merge
    * @param stream CUDA stream used for device memory operations and kernel launches
