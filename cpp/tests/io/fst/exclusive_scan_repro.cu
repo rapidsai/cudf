@@ -8,8 +8,11 @@
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
+#include <thrust/copy.h>
+#include <thrust/fill.h>
 
 #include <numeric>
 #include <vector>
@@ -111,6 +114,108 @@ TEST_F(ExclusiveScanReproTest, PropagateLastWriteBug)
   std::vector<char> h_output(num_elements);
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_output.data(),
                                  d_output.data(),
+                                 num_elements * sizeof(char),
+                                 cudaMemcpyDeviceToHost,
+                                 stream.value()));
+  stream.synchronize();
+
+  // Compare GPU output against CPU reference (std::exclusive_scan) for all positions
+  for (size_t i = 0; i < num_elements; i++) {
+    EXPECT_EQ(h_output[i], h_expected[i]) << "Mismatch at position " << i << ": GPU='"
+                                           << h_output[i] << "', CPU='" << h_expected[i] << "'";
+  }
+}
+
+// Workaround attempt: Prepend init value, run InclusiveScan, take first N results.
+// This correctly implements exclusive scan semantics for non-identity init values,
+// but still fails because CUB's InclusiveScan has the same underlying bug as ExclusiveScan.
+// Both tests fail at the same positions (8127-8148), confirming the bug is in CUB's
+// scan implementation, not specific to exclusive vs inclusive scan.
+TEST_F(ExclusiveScanReproTest, InclusiveScanWorkaround)
+{
+  constexpr size_t num_elements     = 8160;
+  constexpr char read_symbol        = 'x';
+  constexpr char empty_stack_symbol = '_';
+
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  // Create input with exact pattern from failing logical_stack_test
+  std::vector<char> h_input(num_elements, read_symbol);
+
+  // Set the exact scattered values from the failing test
+  h_input[8073] = '[';
+  h_input[8074] = '{';
+  h_input[8075] = '[';
+  h_input[8076] = '{';  // Last '{' before the gap
+  // Positions 8077-8147 are 'x' (read_symbol)
+  h_input[8148] = '_';
+  h_input[8151] = '{';
+  h_input[8152] = '_';
+  h_input[8154] = '[';
+  h_input[8155] = '_';
+  h_input[8157] = '[';
+  h_input[8159] = '_';
+
+  // Earlier scattered values
+  h_input[8020] = '_';
+  h_input[8023] = '{';
+  h_input[8057] = '[';
+  h_input[8060] = '{';
+  h_input[8061] = '[';
+  h_input[8068] = '{';
+
+  // Compute CPU reference using std::exclusive_scan
+  std::vector<char> h_expected(num_elements);
+  std::exclusive_scan(h_input.begin(),
+                      h_input.end(),
+                      h_expected.begin(),
+                      empty_stack_symbol,
+                      PropagateLastWrite<char>{read_symbol});
+
+  // WORKAROUND: Prepend init value to input, run InclusiveScan, take first N results
+  // This correctly implements exclusive scan for non-identity init values
+  size_t extended_size = num_elements + 1;
+
+  // Allocate device memory
+  rmm::device_uvector<char> d_extended_input{extended_size, stream_view};
+  rmm::device_uvector<char> d_inclusive_result{extended_size, stream_view};
+
+  // Prepend init value and copy original input
+  thrust::fill_n(rmm::exec_policy(stream), d_extended_input.data(), 1, empty_stack_symbol);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_extended_input.data() + 1,
+                                 h_input.data(),
+                                 num_elements * sizeof(char),
+                                 cudaMemcpyHostToDevice,
+                                 stream.value()));
+
+  // Get temp storage size for InclusiveScan
+  size_t temp_storage_bytes = 0;
+  PropagateLastWrite<char> op{read_symbol};
+
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(nullptr,
+                                                temp_storage_bytes,
+                                                d_extended_input.data(),
+                                                d_inclusive_result.data(),
+                                                op,
+                                                extended_size,
+                                                stream.value()));
+
+  rmm::device_uvector<char> d_temp{temp_storage_bytes, stream_view};
+
+  // Run InclusiveScan on extended input
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(d_temp.data(),
+                                                temp_storage_bytes,
+                                                d_extended_input.data(),
+                                                d_inclusive_result.data(),
+                                                op,
+                                                extended_size,
+                                                stream.value()));
+
+  // Copy first N results (the exclusive scan output)
+  std::vector<char> h_output(num_elements);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_output.data(),
+                                 d_inclusive_result.data(),
                                  num_elements * sizeof(char),
                                  cudaMemcpyDeviceToHost,
                                  stream.value()));
