@@ -286,13 +286,13 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
     dv_row_counts_queue.push(deletion_vector_row_counts[i]);
   }
 
-  size_t rows_deleted   = 0;
-  size_t rows_remaining = num_rows;
+  size_t deleted_rows   = 0;
+  size_t remaining_rows = num_rows;
   size_t start_row      = 0;
 
-  while (rows_remaining > 0) {
-    auto const chunk_rows = std::min<size_t>(rows_remaining, max_chunk_rows);
-
+  while (remaining_rows > 0) {
+    // Maximum number of rows to process in this chunk
+    auto const chunk_rows = std::min<size_t>(remaining_rows, max_chunk_rows);
     auto row_index_column =
       compute_partial_row_index_column(rg_offsets_queue,
                                        rg_counts_queue,
@@ -301,15 +301,14 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                        is_row_group_data_unspecified,
                                        stream,
                                        cudf::get_current_device_resource_ref());
-
-    rows_deleted += compute_partial_deleted_row_count(
+    deleted_rows += compute_partial_deleted_row_count(
       row_index_column->view(), dv_queue, dv_row_counts_queue, stream);
 
     start_row += chunk_rows;
-    rows_remaining -= chunk_rows;
+    remaining_rows -= chunk_rows;
   }
 
-  return rows_deleted;
+  return deleted_rows;
 }
 
 }  // namespace cudf::io::parquet::experimental
