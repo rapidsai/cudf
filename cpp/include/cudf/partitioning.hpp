@@ -113,7 +113,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
  * `[offsets[i], offsets[i+1])`. The last offset is always equal to the total
  * number of rows in the output table.
  *
- * @throw std::invalid_argument if `keys` does not have the same number of rows as `input`.
+ * @throw std::invalid_argument if `keys` is not empty and does not have the same number of rows as
+ * `input`.
  *
  * @param input The table to partition
  * @param keys The table of keys to hash defining the partitioning

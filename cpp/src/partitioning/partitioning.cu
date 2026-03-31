@@ -937,9 +937,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(input.num_rows() == keys.num_rows(),
-               "Input table and key table must have same number of rows",
-               std::invalid_argument);
+  CUDF_EXPECTS(
+    keys.num_columns() == 0 || input.num_rows() == keys.num_rows(),
+    "Input table and key table must have same number of rows, or key table should have no columns.",
+    std::invalid_argument);
   switch (hash_function) {
     case (hash_id::HASH_IDENTITY):
       return detail::hash_partition<cudf::detail::IdentityHash>(
