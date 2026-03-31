@@ -569,11 +569,16 @@ async def scan_node(
 
         async with (
             shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
-            asyncio.TaskGroup() as tg,
         ):
-            tg.create_task(lineariser.drain())
-            for i, ch_in in enumerate(lineariser.input_channels):
-                tg.create_task(_producer(i, ch_in))
+            await run_tasks_without_outputs(
+                itertools.chain(
+                    [lineariser.drain()],
+                    (
+                        _producer(i, ch_in)
+                        for i, ch_in in enumerate(lineariser.input_channels)
+                    ),
+                )
+            )
 
 
 def make_rapidsmpf_read_parquet_node(
