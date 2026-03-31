@@ -1171,7 +1171,6 @@ TEST_F(ComputeColumnTest, PowIntegerNegativeExponent)
 
   auto result   = cudf::compute_column(table, pow_expr);
   auto expected = column_wrapper<int64_t>{0, 0, 0, 0};
-  
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
