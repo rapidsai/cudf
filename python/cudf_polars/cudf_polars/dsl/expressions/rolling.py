@@ -31,7 +31,12 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import ClosedInterval, Duration
 
-__all__ = ["GroupedRollingWindow", "RollingWindow", "to_request"]
+__all__ = [
+    "FixedSizeRollingWindow",
+    "GroupedRollingWindow",
+    "RollingWindow",
+    "to_request",
+]
 
 
 @dataclass(frozen=True)
@@ -203,6 +208,108 @@ class RollingWindow(Expr):  # pragma: no cover; polars >1.36 uses AExpr::Rolling
             [to_request(agg, orderby, df)],
             stream=df.stream,
         ).columns()
+        return Column(result, dtype=self.dtype)
+
+
+class FixedSizeRollingWindow(Expr):
+    """
+    Fixed-size integer-based rolling window aggregation.
+
+    Handles expressions like ``pl.col("x").rolling_sum(window_size=3)``.
+    Uses a synthetic sequential orderby column with the range-based
+    rolling window API to implement row-count-based windows.
+    """
+
+    __slots__ = ("agg_name", "center", "fn_params", "min_periods", "window_size")
+    _non_child = ("dtype", "agg_name", "window_size", "min_periods", "center", "fn_params")
+
+    def __init__(
+        self,
+        dtype: DataType,
+        agg_name: str,
+        window_size: int,
+        min_periods: int,
+        center: bool,  # noqa: FBT001
+        fn_params: tuple[Any, ...] | None,
+        child: Expr,
+    ) -> None:
+        self.dtype = dtype
+        self.agg_name = agg_name
+        self.window_size = window_size
+        self.min_periods = min_periods
+        self.center = center
+        self.fn_params = fn_params
+        self.children = (child,)
+        self.is_pointwise = False
+
+    def _make_agg_request(self) -> plc.aggregation.Aggregation:
+        if self.agg_name == "var":
+            ddof = self.fn_params[1] if self.fn_params is not None else 1
+            return plc.aggregation.variance(ddof=ddof)
+        elif self.agg_name == "std":
+            ddof = self.fn_params[1] if self.fn_params is not None else 1
+            return plc.aggregation.std(ddof=ddof)
+        return {
+            "sum": plc.aggregation.sum,
+            "min": plc.aggregation.min,
+            "max": plc.aggregation.max,
+            "mean": plc.aggregation.mean,
+        }[self.agg_name]()
+
+    def do_evaluate(
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        (child,) = self.children
+        col = child.evaluate(df, context=context)
+        stream = df.stream
+
+        n = col.size
+        int64_type = plc.DataType(plc.TypeId.INT64)
+
+        orderby = plc.filling.sequence(
+            n,
+            plc.Scalar.from_py(0, int64_type, stream=stream),
+            plc.Scalar.from_py(1, int64_type, stream=stream),
+            stream=stream,
+        )
+
+        if self.center:
+            half_after = (self.window_size - 1) // 2
+            half_before = self.window_size - 1 - half_after
+        else:
+            half_before = self.window_size - 1
+            half_after = 0
+
+        preceding = plc.rolling.BoundedClosed(
+            plc.Scalar.from_py(half_before, int64_type, stream=stream)
+        )
+        following = plc.rolling.BoundedClosed(
+            plc.Scalar.from_py(half_after, int64_type, stream=stream)
+        )
+
+        # Polars produces null when count <= ddof for var/std, but
+        # libcudf produces NaN. Raise min_periods so that libcudf
+        # returns null instead.
+        min_periods = self.min_periods
+        if self.agg_name in ("var", "std"):
+            ddof = self.fn_params[1] if self.fn_params is not None else 1
+            min_periods = max(min_periods, ddof + 1)
+
+        agg_request = self._make_agg_request()
+        request = plc.rolling.RollingRequest(col.obj, min_periods, agg_request)
+
+        (result,) = plc.rolling.grouped_range_rolling_window(
+            plc.Table([]),
+            orderby,
+            plc.types.Order.ASCENDING,
+            plc.types.NullOrder.BEFORE,
+            preceding,
+            following,
+            [request],
+            stream=stream,
+        ).columns()
+
         return Column(result, dtype=self.dtype)
 
 
