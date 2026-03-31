@@ -8,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
@@ -633,4 +634,231 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
                                                    stream,
                                                    mr);
   }
+}
+
+// Tests for compute_num_deleted_rows
+
+TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsEmpty)
+{
+  auto const stream = cudf::get_default_stream();
+
+  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{};
+  auto const result         = cudf::io::parquet::experimental::compute_num_deleted_rows(
+    deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
+  EXPECT_EQ(result, 0);
+}
+
+TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsNoRowIndex)
+{
+  auto constexpr num_rows             = 50'000;
+  auto constexpr deletion_probability = 0.5;
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  auto row_indices = thrust::host_vector<size_t>(num_rows);
+  std::iota(row_indices.begin(), row_indices.end(), size_t{0});
+
+  auto [deletion_vector, expected_row_mask_column] = build_deletion_vector_and_expected_row_mask(
+    num_rows, deletion_probability, row_indices, stream, mr);
+
+  auto const expected_row_mask = cudf::detail::make_host_vector(
+    cudf::device_span<bool const>(expected_row_mask_column->view().data<bool>(), num_rows), stream);
+  auto const expected_deleted =
+    std::count(expected_row_mask.begin(), expected_row_mask.end(), false);
+
+  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
+    .serialized_roaring_bitmaps = {deletion_vector},
+    .deletion_vector_row_counts = {num_rows},
+    .row_group_offsets          = {},
+    .row_group_num_rows         = {num_rows}};
+
+  auto const result = cudf::io::parquet::experimental::compute_num_deleted_rows(
+    deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
+  EXPECT_EQ(result, static_cast<size_t>(expected_deleted));
+}
+
+TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsCustomRowIndex)
+{
+  auto constexpr num_rows             = 25'000;
+  auto constexpr num_row_groups       = 5;
+  auto constexpr deletion_probability = 0.4;
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  // Arbitrary row group offsets
+  auto row_group_offsets = std::vector<size_t>(num_row_groups);
+  row_group_offsets[0]   = static_cast<size_t>(std::llround(1e9));
+  std::transform(
+    thrust::counting_iterator(1),
+    thrust::counting_iterator(num_row_groups),
+    row_group_offsets.begin() + 1,
+    [&](auto i) { return static_cast<size_t>(std::llround(row_group_offsets[i - 1] + 0.5e9)); });
+
+  // Split num_rows into num_row_groups spans
+  auto row_group_splits = std::vector<cudf::size_type>(num_row_groups - 1);
+  {
+    std::mt19937 engine{0xf00d};
+    std::uniform_int_distribution<cudf::size_type> dist{1, num_rows};
+    std::generate(row_group_splits.begin(), row_group_splits.end(), [&]() { return dist(engine); });
+    std::sort(row_group_splits.begin(), row_group_splits.end());
+  }
+
+  auto row_group_num_rows = std::vector<cudf::size_type>{};
+  {
+    row_group_num_rows.reserve(num_row_groups);
+    auto previous_split = cudf::size_type{0};
+    std::transform(row_group_splits.begin(),
+                   row_group_splits.end(),
+                   std::back_inserter(row_group_num_rows),
+                   [&](auto current_split) {
+                     auto current_split_size = current_split - previous_split;
+                     previous_split          = current_split;
+                     return current_split_size;
+                   });
+    row_group_num_rows.push_back(num_rows - row_group_splits.back());
+  }
+
+  auto expected_row_indices =
+    build_expected_row_indices(row_group_offsets, row_group_num_rows, num_rows);
+
+  auto [deletion_vector, expected_row_mask_column] = build_deletion_vector_and_expected_row_mask(
+    num_rows, deletion_probability, expected_row_indices, stream, mr);
+
+  auto const expected_row_mask = cudf::detail::make_host_vector(
+    cudf::device_span<bool const>(expected_row_mask_column->view().data<bool>(), num_rows), stream);
+  auto const expected_deleted =
+    std::count(expected_row_mask.begin(), expected_row_mask.end(), false);
+
+  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
+    .serialized_roaring_bitmaps = {deletion_vector},
+    .deletion_vector_row_counts = {num_rows},
+    .row_group_offsets          = row_group_offsets,
+    .row_group_num_rows         = row_group_num_rows};
+
+  auto const result = cudf::io::parquet::experimental::compute_num_deleted_rows(
+    deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
+  EXPECT_EQ(result, static_cast<size_t>(expected_deleted));
+}
+
+TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsMultipleDeletionVectors)
+{
+  auto constexpr num_rows_per_dv      = 10'000;
+  auto constexpr num_deletion_vectors = 5;
+  auto constexpr total_rows           = num_rows_per_dv * num_deletion_vectors;
+  auto constexpr deletion_probability = 0.3;
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  // Each deletion vector covers a separate row group with a distinct offset
+  auto row_group_offsets  = std::vector<size_t>(num_deletion_vectors);
+  auto row_group_num_rows = std::vector<cudf::size_type>(num_deletion_vectors, num_rows_per_dv);
+  for (int i = 0; i < num_deletion_vectors; ++i) {
+    row_group_offsets[i] = static_cast<size_t>(i) * 100'000;
+  }
+
+  auto expected_row_indices =
+    build_expected_row_indices(row_group_offsets, row_group_num_rows, total_rows);
+
+  size_t total_expected_deleted = 0;
+  auto serialized_bitmaps       = std::vector<std::vector<cuda::std::byte>>{};
+  auto bitmap_spans             = std::vector<cudf::host_span<cuda::std::byte const>>{};
+  auto dv_row_counts            = std::vector<cudf::size_type>{};
+
+  for (int i = 0; i < num_deletion_vectors; ++i) {
+    auto span_start = i * num_rows_per_dv;
+    auto local_indices =
+      cudf::host_span<size_t const>(expected_row_indices.data() + span_start, num_rows_per_dv);
+
+    auto [dv, mask_col] = build_deletion_vector_and_expected_row_mask(
+      num_rows_per_dv, deletion_probability, local_indices, stream, mr);
+
+    auto const host_mask = cudf::detail::make_host_vector(
+      cudf::device_span<bool const>(mask_col->view().data<bool>(), num_rows_per_dv), stream);
+    total_expected_deleted += std::count(host_mask.begin(), host_mask.end(), false);
+
+    serialized_bitmaps.emplace_back(std::move(dv));
+    dv_row_counts.push_back(num_rows_per_dv);
+  }
+
+  bitmap_spans.reserve(num_deletion_vectors);
+  for (auto const& bm : serialized_bitmaps) {
+    bitmap_spans.emplace_back(bm);
+  }
+
+  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
+    .serialized_roaring_bitmaps = bitmap_spans,
+    .deletion_vector_row_counts = dv_row_counts,
+    .row_group_offsets          = row_group_offsets,
+    .row_group_num_rows         = row_group_num_rows};
+
+  auto const result = cudf::io::parquet::experimental::compute_num_deleted_rows(
+    deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
+  EXPECT_EQ(result, total_expected_deleted);
+}
+
+TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsChunked)
+{
+  auto constexpr num_rows_per_dv      = 10'000;
+  auto constexpr num_deletion_vectors = 5;
+  auto constexpr total_rows           = num_rows_per_dv * num_deletion_vectors;
+  auto constexpr deletion_probability = 0.35;
+  // Force the chunking path by using a small chunk size
+  auto constexpr chunk_max_rows = size_t{15'000};
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  // No custom row indices — row_group_offsets is empty, row_group_num_rows provides the counts
+  auto row_group_num_rows = std::vector<cudf::size_type>(num_deletion_vectors, num_rows_per_dv);
+
+  // Build row indices as a simple 0..total_rows sequence (no custom offsets)
+  auto row_indices = thrust::host_vector<size_t>(total_rows);
+  std::iota(row_indices.begin(), row_indices.end(), size_t{0});
+
+  size_t total_expected_deleted = 0;
+  auto serialized_bitmaps       = std::vector<std::vector<cuda::std::byte>>{};
+  auto bitmap_spans             = std::vector<cudf::host_span<cuda::std::byte const>>{};
+  auto dv_row_counts            = std::vector<cudf::size_type>{};
+
+  for (int i = 0; i < num_deletion_vectors; ++i) {
+    auto span_start = i * num_rows_per_dv;
+    auto local_indices =
+      cudf::host_span<size_t const>(row_indices.data() + span_start, num_rows_per_dv);
+
+    auto [dv, mask_col] = build_deletion_vector_and_expected_row_mask(
+      num_rows_per_dv, deletion_probability, local_indices, stream, mr);
+
+    auto const host_mask = cudf::detail::make_host_vector(
+      cudf::device_span<bool const>(mask_col->view().data<bool>(), num_rows_per_dv), stream);
+    total_expected_deleted += std::count(host_mask.begin(), host_mask.end(), false);
+
+    serialized_bitmaps.emplace_back(std::move(dv));
+    dv_row_counts.push_back(num_rows_per_dv);
+  }
+
+  bitmap_spans.reserve(num_deletion_vectors);
+  for (auto const& bm : serialized_bitmaps) {
+    bitmap_spans.emplace_back(bm);
+  }
+
+  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
+    .serialized_roaring_bitmaps = bitmap_spans,
+    .deletion_vector_row_counts = dv_row_counts,
+    .row_group_offsets          = {},
+    .row_group_num_rows         = row_group_num_rows};
+
+  // With default chunk_max_rows (small-path): verify baseline
+  auto const result_default = cudf::io::parquet::experimental::compute_num_deleted_rows(
+    deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
+  EXPECT_EQ(result_default, total_expected_deleted);
+
+  // With small chunk_max_rows: forces the chunking path and splits across deletion vector
+  // boundaries (chunk_max_rows=15000 with 5 DVs of 10000 rows each = 50000 total rows,
+  // so we get chunks of 15000, 15000, 15000, 5000 rows)
+  auto const result_chunked = cudf::io::parquet::experimental::compute_num_deleted_rows(
+    deletion_vector_info, chunk_max_rows, stream);
+  EXPECT_EQ(result_chunked, total_expected_deleted);
 }
