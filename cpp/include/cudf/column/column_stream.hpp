@@ -29,6 +29,10 @@ namespace CUDF_EXPORT cudf {
  * this column's device memory to @p stream (for example `cudf::detail::join_streams` after
  * parallel work on a stream pool, or explicit events / synchronization).
  *
+ * @note `column_view` instances (including nested child views) that already referenced @p col's
+ * device data remain valid: no device memory is copied or relocated, so their pointers and
+ * metadata still describe the same buffers now owned by the returned column.
+ *
  * @param col Column to rebind; ownership is transferred from this rvalue
  * @param stream Stream used for future asynchronous deallocation of the buffers
  * @return Column with equivalent contents and rebinding applied
