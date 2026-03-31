@@ -230,8 +230,16 @@ def log_do_evaluate(
                 ev_s, ev_e = gpu_events
                 assert trace_event_id is not None
                 assert query_id_str is not None
+                # TODO: figure out why we can't just use `result.stream` here.
+                # For correctness, we just need our stream to be downstream of the IR work,
+                # which we know `result.stream` is.
+                # However, this (apparently) hangs in some cases.
+                timing_stream = get_joined_cuda_stream(
+                    exec_ctx.get_cuda_stream,
+                    upstreams=[exec_ctx.get_cuda_stream(), result.stream],
+                )
                 ok, gpu_err = _tracing_gpu.enqueue_gpu_trace_completion(
-                    stream=result.stream,
+                    stream=timing_stream,
                     ev_start=ev_s,
                     ev_end=ev_e,
                     trace_event_id=trace_event_id,
