@@ -443,9 +443,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
 
   // Validate
   stream.synchronize();
-  EXPECT_TRUE(std::all_of(cuda::counting_iterator<Key>(0),
-                          cuda::counting_iterator<Key>(num_keys),
-                          [&](auto key) { return results[key] == is_even[key]; }));
+  EXPECT_TRUE(std::equal(results.begin(), results.end(), is_even));
 }
 
 // Base test fixture for API tests
