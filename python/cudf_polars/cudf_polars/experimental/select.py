@@ -235,8 +235,12 @@ def _fuse_simple_reductions(
             pi[fused_select_b] = PartitionInfo(count=1)
             new_decomposed_select_irs.append(fused_select_b)
         else:
-            # Nothing to fuse for this group
-            new_decomposed_select_irs.append(group[0])
+            # Nothing to fuse for this group, but we still need to add the
+            # inner IR (children[0], ie. select_b) rather than the outer select_c.
+            # fused_select_c_exprs is built from select_c.exprs, which reference
+            # intermediate column names in select_c.children[0].schema, not the
+            # final output names in select_c.schema.
+            new_decomposed_select_irs.append(group[0].children[0])
 
     # If any aggregations were fused, we must concatenate
     # the results and apply the final (fused) "c" selection,
