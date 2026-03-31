@@ -658,8 +658,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
     create_random_utf8_string_column(profile, engine, cardinality == 0 ? num_rows : cardinality);
   if (cardinality == 0) { return sample_strings; }
   auto sample_indices = sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);
-  auto gather_map     = cudf::column_view(
-    cudf::device_span<cudf::size_type const>(sample_indices.data(), sample_indices.size()));
+  auto gather_map =
+    cudf::device_span<cudf::size_type const>(sample_indices.data(), sample_indices.size());
   auto str_table = cudf::gather(cudf::table_view{{sample_strings->view()}},
                                 gather_map,
                                 cudf::out_of_bounds_policy::DONT_CHECK,
