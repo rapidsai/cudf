@@ -309,10 +309,12 @@ struct streaming_groupby::impl {
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
   {
-    auto const needed = _staging_end + additional_rows;
-    if (needed <= _staging_capacity) { return; }
+    auto const needed64 = static_cast<int64_t>(_staging_end) + additional_rows;
+    if (needed64 <= _staging_capacity) { return; }
 
-    auto const new_capacity = std::max(static_cast<size_type>(_staging_capacity * 2), needed);
+    auto const new_cap64    = std::max(static_cast<int64_t>(_staging_capacity) * 2, needed64);
+    auto const new_capacity = static_cast<size_type>(
+      std::min(new_cap64, static_cast<int64_t>(std::numeric_limits<size_type>::max())));
 
     for (auto& col : _key_columns) {
       auto new_col =
@@ -397,6 +399,9 @@ struct streaming_groupby::impl {
                             size_type staging_offset,
                             rmm::cuda_stream_view stream)
   {
+    // Collect temp bitmask buffers so they survive async kernels launched below.
+    std::vector<rmm::device_buffer> temp_masks;
+
     for (size_type c = 0; c < num_keys(); ++c) {
       auto const& src = batch_keys.column(c);
       auto& dst       = _key_columns[c];
@@ -413,9 +418,9 @@ struct streaming_groupby::impl {
         dst_view.null_mask(), staging_offset, staging_offset + src.size(), true, stream);
 
       if (src.nullable()) {
-        _has_nullable_keys   = true;
-        auto temp_mask       = cudf::copy_bitmask(src, stream);
-        auto const* temp_ptr = static_cast<bitmask_type const*>(temp_mask.data());
+        _has_nullable_keys = true;
+        temp_masks.push_back(cudf::copy_bitmask(src, stream));
+        auto const* temp_ptr = static_cast<bitmask_type const*>(temp_masks.back().data());
         thrust::for_each_n(rmm::exec_policy_nosync(stream),
                            cuda::counting_iterator<size_type>(0),
                            src.size(),
@@ -549,7 +554,7 @@ struct streaming_groupby::impl {
 
     auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(int64_t{0}),
+                       cuda::counting_iterator<int64_t>(0),
                        static_cast<int64_t>(batch_size) * num_agg_cols,
                        detail::hash::compute_single_pass_aggs_dense_output_fn{
                          target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
