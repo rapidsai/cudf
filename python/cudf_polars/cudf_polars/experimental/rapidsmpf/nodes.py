@@ -31,6 +31,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     maybe_remap_partitioning,
     process_children,
     recv_metadata,
+    run_tasks_without_outputs,
     send_metadata,
     shutdown_on_error,
 )
@@ -274,9 +275,9 @@ async def fanout_node_bounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        async with asyncio.TaskGroup() as tg:
-            for ch in chs_out:
-                tg.create_task(send_metadata(ch, context, metadata))
+        await run_tasks_without_outputs(
+            send_metadata(ch, context, metadata) for ch in chs_out
+        )
 
         while (msg := await ch_in.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg).make_available_and_spill(
@@ -298,9 +299,7 @@ async def fanout_node_bounded(
                 )
             del table_chunk
 
-        async with asyncio.TaskGroup() as tg:
-            for ch in chs_out:
-                tg.create_task(ch.drain(context))
+        await run_tasks_without_outputs(ch.drain(context) for ch in chs_out)
 
 
 @define_actor()
@@ -346,9 +345,12 @@ async def fanout_node_unbounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
+        task_references = set()
         async with asyncio.TaskGroup() as tg:
             for ch in chs_out:
-                tg.create_task(send_metadata(ch, context, metadata))
+                task = tg.create_task(send_metadata(ch, context, metadata))
+                task_references.add(task)
+                task.add_done_callback(task_references.discard)
 
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]

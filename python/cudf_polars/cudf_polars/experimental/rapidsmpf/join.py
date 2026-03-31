@@ -44,6 +44,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     process_children,
     recv_metadata,
     replay_buffered_channel,
+    run_tasks_without_outputs,
     send_metadata,
     shutdown_on_error,
 )
@@ -419,9 +420,9 @@ async def _join_chunks(
     tracer: ActorTracer | None,
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
-    async with asyncio.TaskGroup() as tg:
-        tg.create_task(recv_metadata(ch_left, context))
-        tg.create_task(recv_metadata(ch_right, context))
+    await run_tasks_without_outputs(
+        (recv_metadata(ch_left, context), recv_metadata(ch_right, context))
+    )
 
     left, right = ir.children
     while True:
@@ -555,17 +556,10 @@ async def _shuffle_join(
     ch_left_shuffle = context.create_channel()
     ch_right_shuffle = context.create_channel()
     # note: this is an actor inside of an actor. How should we log that in our traces?
-    async with (
-        shutdown_on_error(
-            context,
-            ch_left_shuffle,
-            ch_right_shuffle,
-            trace_ir=ir,
-            ir_context=ir_context,
-        ),
-        asyncio.TaskGroup() as tg,
+    async with shutdown_on_error(
+        context, ch_left_shuffle, ch_right_shuffle, trace_ir=ir, ir_context=ir_context
     ):
-        tg.create_task(
+        actor_tasks = [
             _global_shuffle(
                 context,
                 comm,
@@ -575,9 +569,7 @@ async def _shuffle_join(
                 strategy.left_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
-            )
-        )
-        tg.create_task(
+            ),
             _global_shuffle(
                 context,
                 comm,
@@ -587,9 +579,7 @@ async def _shuffle_join(
                 strategy.right_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
-            )
-        )
-        tg.create_task(
+            ),
             _join_chunks(
                 context,
                 ir,
@@ -598,8 +588,9 @@ async def _shuffle_join(
                 ch_left_shuffle,
                 ch_right_shuffle,
                 tracer=tracer,
-            )
-        )
+            ),
+        ]
+        await run_tasks_without_outputs(actor_tasks)
 
 
 def _make_shuffle_strategy(
@@ -1015,17 +1006,14 @@ async def join_actor(
 
         ch_left_replay = context.create_channel()
         ch_right_replay = context.create_channel()
-        async with (
-            shutdown_on_error(
-                context,
-                ch_left_replay,
-                ch_right_replay,
-                trace_ir=ir,
-                ir_context=ir_context,
-            ),
-            asyncio.TaskGroup() as tg,
+        async with shutdown_on_error(
+            context,
+            ch_left_replay,
+            ch_right_replay,
+            trace_ir=ir,
+            ir_context=ir_context,
         ):
-            tg.create_task(
+            actor_tasks = [
                 replay_buffered_channel(
                     context,
                     ch_left_replay,
@@ -1033,9 +1021,7 @@ async def join_actor(
                     left_sample.chunks,
                     left_metadata,
                     trace_ir=ir,
-                )
-            )
-            tg.create_task(
+                ),
                 replay_buffered_channel(
                     context,
                     ch_right_replay,
@@ -1043,13 +1029,13 @@ async def join_actor(
                     right_sample.chunks,
                     right_metadata,
                     trace_ir=ir,
-                )
-            )
+                ),
+            ]
             ch_left = ch_left_replay
             ch_right = ch_right_replay
 
             if strategy.broadcast_side is not None:
-                tg.create_task(
+                actor_tasks.append(
                     _broadcast_join(
                         context,
                         comm,
@@ -1065,7 +1051,7 @@ async def join_actor(
                     )
                 )
             else:
-                tg.create_task(
+                actor_tasks.append(
                     _shuffle_join(
                         context,
                         comm,
@@ -1079,6 +1065,7 @@ async def join_actor(
                         tracer=tracer,
                     )
                 )
+            await run_tasks_without_outputs(actor_tasks)
 
 
 @generate_ir_sub_network.register(Join)
