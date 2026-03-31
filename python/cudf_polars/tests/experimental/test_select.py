@@ -206,3 +206,12 @@ def test_select_with_len(engine):
         UserWarning, match="Cross join not support for multiple partitions"
     ):
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_select_with_mixed_fusable_non_fusable_exprs(df, engine):
+    q = df.select(
+        foo=pl.col("a").n_unique(),
+        bar=pl.col("b").sum(),
+        baz=pl.col("c").sum(),
+    )
+    assert_gpu_result_equal(q, engine=engine)
