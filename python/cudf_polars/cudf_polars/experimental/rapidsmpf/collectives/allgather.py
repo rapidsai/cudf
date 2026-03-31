@@ -57,10 +57,13 @@ class AllGatherManager:
         )
         self.allgather.insert(
             sequence_number,
+            # TODO: Avoid unnecessary copies.
+            # See https://github.com/rapidsai/rapidsmpf/issues/933
             PackedData.from_cudf_packed_columns(
                 pack(
                     chunk.table_view(),
                     chunk.stream,
+                    mr=self.context.br().device_mr,
                 ),
                 chunk.stream,
                 self.context.br(),
