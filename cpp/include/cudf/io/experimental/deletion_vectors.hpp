@@ -187,7 +187,7 @@ table_with_metadata read_parquet(
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Number of rows deleted by the specified 64-bit roaring bitmap deletion vectors
  */
-size_t compute_num_deleted_rows(
+[[nodiscard]] size_t compute_num_deleted_rows(
   deletion_vector_info const& deletion_vector_info,
   cudf::size_type max_chunk_rows = std::numeric_limits<size_type>::max(),
   rmm::cuda_stream_view stream   = cudf::get_default_stream());

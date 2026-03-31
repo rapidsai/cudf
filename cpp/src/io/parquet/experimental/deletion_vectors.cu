@@ -4,7 +4,8 @@
  */
 
 #include "deletion_vectors_helpers.hpp"
-
+#
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/error.hpp>
@@ -109,6 +110,8 @@ bool chunked_parquet_reader::has_next() const { return _reader->has_next(); }
  */
 table_with_metadata chunked_parquet_reader::read_chunk()
 {
+  CUDF_FUNC_RANGE();
+
   // Read a chunk of the parquet table
   auto [table, metadata] = _reader->read_chunk();
   auto const num_rows    = table->num_rows();
@@ -156,6 +159,8 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
+
   auto const& serialized_roaring_bitmaps = deletion_vector_info.serialized_roaring_bitmaps;
   auto const& deletion_vector_row_counts = deletion_vector_info.deletion_vector_row_counts;
   auto const& row_group_offsets          = deletion_vector_info.row_group_offsets;
@@ -230,10 +235,12 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
 /**
  * @copydoc cudf::io::parquet::experimental::compute_num_deleted_rows
  */
-size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info,
-                                cudf::size_type max_chunk_rows,
-                                rmm::cuda_stream_view stream)
+[[nodiscard]] size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info,
+                                              cudf::size_type max_chunk_rows,
+                                              rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   auto const& serialized_roaring_bitmaps = deletion_vector_info.serialized_roaring_bitmaps;
   auto const& deletion_vector_row_counts = deletion_vector_info.deletion_vector_row_counts;
   auto const& row_group_offsets          = deletion_vector_info.row_group_offsets;
@@ -248,9 +255,7 @@ size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info
   CUDF_EXPECTS(
     row_group_offsets.size() == row_group_num_rows.size(),
     "Encountered a mismatch in the number of row group offsets and row group row counts");
-  CUDF_EXPECTS(max_chunk_rows > 0 and
-                 std::cmp_less_equal(max_chunk_rows, std::numeric_limits<cudf::size_type>::max()),
-               "max_chunk_rows must be in range (0, size_type max]");
+  CUDF_EXPECTS(max_chunk_rows > 0, "Encountered an invalid chunk size");
 
   auto const is_row_group_data_unspecified = row_group_offsets.empty();
 
@@ -292,7 +297,7 @@ size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info
       compute_partial_row_index_column(rg_offsets_queue,
                                        rg_counts_queue,
                                        start_row,
-                                       chunk_rows,
+                                       static_cast<size_type>(chunk_rows),
                                        is_row_group_data_unspecified,
                                        stream,
                                        cudf::get_current_device_resource_ref());
