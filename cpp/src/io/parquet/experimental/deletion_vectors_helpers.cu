@@ -28,6 +28,17 @@
 
 namespace cudf::io::parquet::experimental {
 
+void chunked_parquet_reader::roaring_bitmap_impl::construct_roaring_bitmap(
+  rmm::mr::polymorphic_allocator<char> const& allocator, rmm::cuda_stream_view stream)
+{
+  if (roaring_bitmap == nullptr) {
+    CUDF_EXPECTS(not roaring_bitmap_data.empty(),
+                 "Encountered empty data while constructing roaring bitmap");
+    roaring_bitmap = std::make_unique<roaring_bitmap_type>(
+      static_cast<cuda::std::byte const*>(roaring_bitmap_data.data()), allocator, stream);
+  }
+}
+
 void prepend_index_column_to_table_metadata(table_metadata& metadata)
 {
   auto updated_schema_info = std::vector<cudf::io::column_name_info>{};

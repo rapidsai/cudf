@@ -47,21 +47,13 @@ struct chunked_parquet_reader::roaring_bitmap_impl {
   roaring_bitmap_impl(roaring_bitmap_impl const&) = delete;
 
   /**
-   * @brief Constructs a roaring bitmap from the serialized data
+   * @brief Constructs a roaring bitmap from the serialized data if not already constructed
    *
    * @param allocator Memory allocator
    * @param stream CUDA stream to launch the query kernel
    */
   void construct_roaring_bitmap(rmm::mr::polymorphic_allocator<char> const& allocator,
-                                rmm::cuda_stream_view stream)
-  {
-    if (roaring_bitmap == nullptr) {
-      CUDF_EXPECTS(not roaring_bitmap_data.empty(),
-                   "Encountered empty data while constructing roaring bitmap");
-      roaring_bitmap = std::make_unique<roaring_bitmap_type>(
-        static_cast<cuda::std::byte const*>(roaring_bitmap_data.data()), allocator, stream);
-    }
-  }
+                                rmm::cuda_stream_view stream);
 };
 
 /**
