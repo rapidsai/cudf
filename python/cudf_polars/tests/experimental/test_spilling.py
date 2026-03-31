@@ -37,7 +37,7 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 
 @pytest.mark.parametrize(
     "engine",
-    [{"rapidsmpf_options": {"pinned_memory": str(v)} for v in [False, True]],
+    [{"rapidsmpf_options": {"pinned_memory": str(v)}} for v in [False, True]],
     indirect=True,
 )
 def test_make_spill_function(engine: SPMDEngine) -> None:
@@ -45,10 +45,10 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
     context = engine.context
 
     # if pinned memory is available, data will be spilled to pinned memory else to host memory
-    spilled_host_mem_type = (
-        MemoryType.HOST
+    spilled_host_mem_type, other_host_mem_type = (
+        (MemoryType.HOST, MemoryType.PINNED_HOST)
         if engine.context.br().pinned_mr is None
-        else MemoryType.PINNED_HOST
+        else (MemoryType.PINNED_HOST, MemoryType.HOST)
     )
 
     # Create 3 spillable message containers simulating fanout buffers
@@ -95,6 +95,7 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
             desc = buffer_1_descs[mid]
             # Should be in HOST memory (spilled)
             assert desc.content_sizes[spilled_host_mem_type] > 0
+            assert desc.content_sizes[other_host_mem_type] == 0
             assert desc.content_sizes[MemoryType.DEVICE] == 0
 
         # Buffer 1: oldest messages should still be in device
@@ -104,6 +105,7 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
             # Should still be in DEVICE memory
             assert desc.content_sizes[MemoryType.DEVICE] > 0
             assert desc.content_sizes[spilled_host_mem_type] == 0
+            assert desc.content_sizes[other_host_mem_type] == 0
 
         # Buffer 0 (shortest queue): all messages should still be on device
         buffer_0_descs = buffers[0].get_content_descriptions()
@@ -111,6 +113,7 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
             desc = buffer_0_descs[mid]
             assert desc.content_sizes[MemoryType.DEVICE] > 0
             assert desc.content_sizes[spilled_host_mem_type] == 0
+            assert desc.content_sizes[other_host_mem_type] == 0
 
         # Verify we can extract and make available a spilled message
         spilled_mid = message_ids[1][4]  # Newest message from longest queue
