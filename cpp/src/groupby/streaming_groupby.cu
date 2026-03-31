@@ -16,6 +16,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
@@ -34,6 +35,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
 #include <cuda/iterator>
 #include <cuda/std/type_traits>
 #include <thrust/for_each.h>
@@ -63,6 +65,7 @@ struct compute_target_indices_fn {
   SetRef set_ref;
   bitmask_type const* row_bitmask;
   size_type staging_offset;
+  size_type* new_insertion_count;  // Optional: atomic counter for new insertions (may be nullptr).
 
   __device__ size_type operator()(size_type batch_idx) const
   {
@@ -70,8 +73,13 @@ struct compute_target_indices_fn {
     if (row_bitmask && !cudf::bit_is_set(row_bitmask, global_idx)) {
       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
     }
-    auto ref_copy = set_ref;
-    return *ref_copy.insert_and_find(global_idx).first;
+    auto ref_copy               = set_ref;
+    auto const [iter, inserted] = ref_copy.insert_and_find(global_idx);
+    if (new_insertion_count && inserted) {
+      cuda::atomic_ref<size_type, cuda::thread_scope_device>{*new_insertion_count}.fetch_add(
+        1, cuda::memory_order_relaxed);
+    }
+    return *iter;
   }
 };
 
@@ -392,7 +400,7 @@ struct streaming_groupby::impl {
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(count),
                       discard.begin(),
-                      compute_target_indices_fn<decltype(set_ref)>{set_ref, row_bitmask, 0});
+                      compute_target_indices_fn{set_ref, row_bitmask, 0, nullptr});
   }
 
   void copy_keys_to_staging(table_view const& batch_keys,
@@ -445,12 +453,17 @@ struct streaming_groupby::impl {
   }
 
   // Compute target indices for a batch of rows by inserting into the hash set.
-  // Returns the target indices and the row bitmask buffer (to keep it alive).
-  std::pair<rmm::device_uvector<size_type>, rmm::device_buffer> compute_batch_target_indices(
-    size_type batch_size,
-    size_type staging_offset,
-    table_view const& full_key_view,
-    rmm::cuda_stream_view stream)
+  // Returns the target indices, new insertion count, and the row bitmask buffer (kept alive).
+  struct batch_insert_result {
+    rmm::device_uvector<size_type> target_indices;
+    size_type new_insertions;
+    rmm::device_buffer bitmask_buffer;
+  };
+
+  batch_insert_result compute_batch_target_indices(size_type batch_size,
+                                                   size_type staging_offset,
+                                                   table_view const& full_key_view,
+                                                   rmm::cuda_stream_view stream)
   {
     auto preprocessed_keys =
       cudf::detail::row::hash::preprocessed_table::create(full_key_view, stream);
@@ -467,6 +480,10 @@ struct streaming_groupby::impl {
       skip_rows_with_nulls ? static_cast<bitmask_type const*>(row_bitmask_buffer.data()) : nullptr;
 
     rmm::device_uvector<size_type> target_indices(batch_size, stream);
+
+    // Device counter for new insertions — avoids expensive post-hoc hash set scan.
+    auto d_counter = cudf::detail::device_scalar<size_type>(0, stream);
+
     auto const hasher      = detail::hash::row_hasher_with_cache_t{d_row_hash};
     auto const d_row_equal = comparator.equal_to<false>(has_null, null_equality::EQUAL);
     auto set_ref           = _key_set->ref(cuco::op::insert_and_find)
@@ -477,17 +494,14 @@ struct streaming_groupby::impl {
       cuda::counting_iterator<size_type>(0),
       cuda::counting_iterator<size_type>(batch_size),
       target_indices.begin(),
-      compute_target_indices_fn<decltype(set_ref)>{set_ref, row_bitmask, staging_offset});
+      compute_target_indices_fn{set_ref, row_bitmask, staging_offset, d_counter.data()});
 
-    return {std::move(target_indices), std::move(row_bitmask_buffer)};
+    auto const new_insertions = d_counter.value(stream);
+    return {std::move(target_indices), new_insertions, std::move(row_bitmask_buffer)};
   }
 
-  void update_unique_key_count(size_type visible_rows, rmm::cuda_stream_view stream)
+  void check_unique_key_count()
   {
-    auto const populated = detail::hash::extract_populated_keys(
-      *_key_set, visible_rows, stream, cudf::get_current_device_resource_ref());
-    _num_unique_keys = static_cast<size_type>(populated.size());
-
     CUDF_EXPECTS(_num_unique_keys <= _max_groups,
                  "Unique keys (" + std::to_string(_num_unique_keys) + ") exceeded max_groups (" +
                    std::to_string(_max_groups) + ").");
@@ -537,8 +551,8 @@ struct streaming_groupby::impl {
       reinsert_existing_keys(staging_offset, full_key_view, bitmask, stream);
     }
 
-    auto [target_indices, bitmask_buf] =
-      compute_batch_target_indices(batch_size, staging_offset, full_key_view, stream);
+    auto result = compute_batch_target_indices(batch_size, staging_offset, full_key_view, stream);
+    _num_unique_keys += result.new_insertions;
 
     auto agg_requests         = build_aggregation_requests(_requests_clone, data);
     auto [values_view,
@@ -553,13 +567,14 @@ struct streaming_groupby::impl {
       _agg_kinds, stream, cudf::get_current_device_resource_ref());
 
     auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       cuda::counting_iterator<int64_t>(0),
-                       static_cast<int64_t>(batch_size) * num_agg_cols,
-                       detail::hash::compute_single_pass_aggs_dense_output_fn{
-                         target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream),
+      cuda::counting_iterator<int64_t>(0),
+      static_cast<int64_t>(batch_size) * num_agg_cols,
+      detail::hash::compute_single_pass_aggs_dense_output_fn{
+        result.target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
 
-    update_unique_key_count(visible_rows, stream);
+    check_unique_key_count();
   }
 
   [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> do_finalize(
@@ -690,8 +705,9 @@ struct streaming_groupby::impl {
       reinsert_existing_keys(staging_offset, full_key_view, bitmask, stream);
     }
 
-    auto [target_indices, bitmask_buf] =
+    auto result =
       compute_batch_target_indices(num_other_groups, staging_offset, full_key_view, stream);
+    _num_unique_keys += result.new_insertions;
 
     // Merge intermediates using merge-aware aggregation (adds counts, doesn't re-square, etc.)
     auto const d_source    = table_device_view::create(other_aggs->view(), stream);
@@ -700,13 +716,13 @@ struct streaming_groupby::impl {
       _agg_kinds, stream, cudf::get_current_device_resource_ref());
 
     auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
-    thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(int64_t{0}),
-      static_cast<int64_t>(num_other_groups) * num_agg_cols,
-      merge_single_pass_aggs_fn{target_indices.begin(), d_agg_kinds.data(), *d_source, *d_target});
+    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                       cuda::counting_iterator<int64_t>(0),
+                       static_cast<int64_t>(num_other_groups) * num_agg_cols,
+                       merge_single_pass_aggs_fn{
+                         result.target_indices.begin(), d_agg_kinds.data(), *d_source, *d_target});
 
-    update_unique_key_count(visible_rows, stream);
+    check_unique_key_count();
   }
 };
 
