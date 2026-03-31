@@ -515,10 +515,14 @@ def test_serialize_query():
 
 @pytest.mark.parametrize("predicate", [None, pl.col("a") > 1])
 def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
-    pl.DataFrame({"a": [1, 2, 3]}).write_parquet(tmp_path / "test.parquet")
+    root = tmp_path.joinpath("test.parquet")
+    root.mkdir(parents=True, exist_ok=True)
+    for path in ["a", "b", "c"]:
+        pl.DataFrame({"a": [1, 2, 3]}).write_parquet(root / path)
 
     q = pl.scan_parquet(tmp_path / "test.parquet")
     expected_properties: dict[str, Any] = {
+        "prefix": f"{root}/",
         "typ": "parquet",
         "predicate": None,
     }

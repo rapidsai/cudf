@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import functools
+import os.path
 from collections.abc import Mapping, Sequence
 from itertools import groupby
 from typing import TYPE_CHECKING, Any, Self, TypeAlias
@@ -273,6 +274,7 @@ def _serialize_properties(ir: IR) -> dict[str, Serializable]:
 def _(ir: Scan) -> dict[str, Serializable]:
     return {
         "typ": ir.typ,
+        "prefix": os.path.commonprefix(ir.paths),
         "predicate": _serialize_expr(ir.predicate) if ir.predicate else None,
     }
 
