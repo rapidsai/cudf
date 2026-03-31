@@ -214,7 +214,7 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Build a simple row index column if the row group offsets and counts are unspecified
+  // Build a simple row index column if the row group data are unspecified
   if (is_unspecified_row_group_data) {
     return compute_row_index_column({}, {}, start_row, num_rows, stream, mr);
   }
@@ -355,19 +355,19 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
 }
 
 /**
- * @brief Computes the number of deleted rows from the row index column and deletion vectors
+ * @brief Computes the number of rows deleted by the deletion vectors
  *
  * @param row_index_column View of the row index column
  * @param deletion_vector_refs Host span of cuco roaring bitmap references
- * @param rows_per_deletion_vector Host span of number of rows per deletion vector
+ * @param rows_per_dv Host span of number of rows per deletion vector
  * @param stream CUDA stream for kernel launches and data transfers
  *
  * @return Number of rows deleted by the specified deletion vectors
  */
-size_t compute_deleted_num_rows(
+size_t compute_deleted_row_count(
   cudf::column_view const& row_index_column,
   cudf::host_span<std::reference_wrapper<roaring_bitmap_type> const> deletion_vector_refs,
-  cudf::host_span<size_type const> rows_per_deletion_vector,
+  cudf::host_span<size_type const> deletion_vector_row_counts,
   rmm::cuda_stream_view stream)
 {
   auto const num_rows = row_index_column.size();
@@ -377,7 +377,7 @@ size_t compute_deleted_num_rows(
   auto row_mask_iter = static_cast<bool*>(row_mask.data());
 
   query_deletion_vectors(
-    row_index_column, deletion_vector_refs, rows_per_deletion_vector, row_mask_iter, stream);
+    row_index_column, deletion_vector_refs, deletion_vector_row_counts, row_mask_iter, stream);
 
   return static_cast<size_t>(
     thrust::count(rmm::exec_policy_nosync(stream), row_mask_iter, row_mask_iter + num_rows, true));
@@ -473,7 +473,7 @@ std::unique_ptr<cudf::column> compute_partial_row_mask_column(
  *
  * @return Number of rows deleted by the applicable deletion vectors in this chunk
  */
-size_t compute_partial_deleted_num_rows(
+size_t compute_partial_deleted_row_count(
   cudf::column_view const& row_index_column,
   std::queue<chunked_parquet_reader::roaring_bitmap_impl>& deletion_vectors,
   std::queue<size_type>& deletion_vector_row_counts,
@@ -481,7 +481,7 @@ size_t compute_partial_deleted_num_rows(
 {
   auto [impls, refs, row_counts] = consume_deletion_vectors(
     row_index_column.size(), deletion_vectors, deletion_vector_row_counts, stream);
-  return compute_deleted_num_rows(row_index_column, refs, row_counts, stream);
+  return compute_deleted_row_count(row_index_column, refs, row_counts, stream);
 }
 
 }  // namespace
@@ -702,7 +702,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
  * @copydoc cudf::io::parquet::experimental::compute_num_deleted_rows
  */
 size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info,
-                                cudf::size_type chunk_max_rows,
+                                cudf::size_type max_chunk_rows,
                                 rmm::cuda_stream_view stream)
 {
   auto const& serialized_roaring_bitmaps = deletion_vector_info.serialized_roaring_bitmaps;
@@ -710,17 +710,36 @@ size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info
   auto const& row_group_offsets          = deletion_vector_info.row_group_offsets;
   auto const& row_group_num_rows         = deletion_vector_info.row_group_num_rows;
 
+  // Return early if no deletion vectors are present
   if (serialized_roaring_bitmaps.empty()) { return 0; }
 
-  auto const num_rows =
-    std::accumulate(row_group_num_rows.begin(), row_group_num_rows.end(), size_t{0});
+  CUDF_EXPECTS(
+    row_group_offsets.size() == row_group_num_rows.size(),
+    "Encountered a mismatch in the number of row group offsets and row group row counts");
 
-  CUDF_EXPECTS(chunk_max_rows > 0 and
-                 std::cmp_less_equal(chunk_max_rows, std::numeric_limits<cudf::size_type>::max()),
-               "chunk_max_rows must be in range (0, size_type max]");
+  // Validate max_chunk_rows
+  CUDF_EXPECTS(max_chunk_rows > 0 and
+                 std::cmp_less_equal(max_chunk_rows, std::numeric_limits<cudf::size_type>::max()),
+               "max_chunk_rows must be in range (0, size_type max]");
 
-  auto const temp_mr                = rmm::mr::get_current_device_resource_ref();
-  auto const is_unspecified_rg_data = row_group_offsets.empty();
+  // Check if row group data are unspecified
+  auto const is_row_group_data_unspecified = row_group_offsets.empty();
+
+  // Total number of rows
+  auto const num_rows = [&]() {
+    auto const rows_in_dvs = std::accumulate(
+      deletion_vector_row_counts.begin(), deletion_vector_row_counts.end(), size_t{0});
+
+    // Validate number of rows across deletion vectors and row groups
+    if (not is_row_group_data_unspecified) {
+      auto const rows_in_rgs =
+        std::accumulate(row_group_num_rows.begin(), row_group_num_rows.end(), size_t{0});
+      CUDF_EXPECTS(std::cmp_equal(rows_in_dvs, rows_in_rgs),
+                   "Encountered a mismatch in the number of rows across deletion vectors and the "
+                   "number of rows across row groups");
+    }
+    return rows_in_dvs;
+  }();
 
   // Build queues of row group offsets and counts
   std::queue<size_t> rg_offsets_queue;
@@ -732,35 +751,36 @@ size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info
 
   // Build queue of roaring bitmap impls and their row counts
   std::queue<chunked_parquet_reader::roaring_bitmap_impl> dv_queue;
-  std::queue<size_type> dv_row_counts_queue;
+  std::queue<cudf::size_type> dv_row_counts_queue;
   for (size_t i = 0; i < serialized_roaring_bitmaps.size(); ++i) {
     dv_queue.emplace(serialized_roaring_bitmaps[i]);
     dv_row_counts_queue.push(deletion_vector_row_counts[i]);
   }
 
-  size_t total_deleted  = 0;
+  size_t rows_deleted   = 0;
   size_t rows_remaining = num_rows;
   size_t start_row      = 0;
 
   while (rows_remaining > 0) {
-    auto const chunk_rows = std::min<size_type>(rows_remaining, chunk_max_rows);
+    auto const chunk_rows = std::min<cudf::size_type>(rows_remaining, max_chunk_rows);
 
-    auto row_index_column = compute_partial_row_index_column(rg_offsets_queue,
-                                                             rg_counts_queue,
-                                                             start_row,
-                                                             chunk_rows,
-                                                             is_unspecified_rg_data,
-                                                             stream,
-                                                             temp_mr);
+    auto row_index_column =
+      compute_partial_row_index_column(rg_offsets_queue,
+                                       rg_counts_queue,
+                                       start_row,
+                                       chunk_rows,
+                                       is_row_group_data_unspecified,
+                                       stream,
+                                       rmm::mr::get_current_device_resource_ref());
 
-    total_deleted += compute_partial_deleted_num_rows(
+    rows_deleted += compute_partial_deleted_row_count(
       row_index_column->view(), dv_queue, dv_row_counts_queue, stream);
 
     start_row += chunk_rows;
     rows_remaining -= chunk_rows;
   }
 
-  return total_deleted;
+  return rows_deleted;
 }
 
 }  // namespace cudf::io::parquet::experimental

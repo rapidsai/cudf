@@ -182,17 +182,14 @@ table_with_metadata read_parquet(
  * @brief Computes the number of rows deleted by the serialized 64-bit roaring bitmap deletion
  * vectors
  *
- * When the total number of rows exceeds @p chunk_max_rows, the computation is split into
- * chunks of at most @p chunk_max_rows rows each, allowing datasets larger than 2 billion rows.
- *
  * @param deletion_vector_info Information about the deletion vectors and the index column
- * @param chunk_max_rows Maximum number of rows per chunk. Defaults to `size_type` max
+ * @param max_chunk_rows Maximum number of rows to process at a time
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Number of rows deleted by the specified 64-bit roaring bitmap deletion vectors
  */
 size_t compute_num_deleted_rows(
   deletion_vector_info const& deletion_vector_info,
-  cudf::size_type chunk_max_rows = std::numeric_limits<size_type>::max(),
+  cudf::size_type max_chunk_rows = std::numeric_limits<size_type>::max(),
   rmm::cuda_stream_view stream   = cudf::get_default_stream());
 
 /** @} */  // end of group
