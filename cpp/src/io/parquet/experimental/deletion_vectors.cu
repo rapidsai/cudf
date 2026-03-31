@@ -4,7 +4,7 @@
  */
 
 #include "deletion_vectors_helpers.hpp"
-#
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/stream_compaction.hpp>
