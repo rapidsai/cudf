@@ -22,7 +22,6 @@
 #include <cuda/std/tuple>
 #include <thrust/count.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
@@ -297,8 +296,8 @@ void query_deletion_vectors(
   constexpr auto stream_fork_threshold = 8;
   if (num_deletion_vectors >= stream_fork_threshold) {
     auto streams = cudf::detail::fork_streams(stream, num_deletion_vectors);
-    std::for_each(thrust::counting_iterator(0),
-                  thrust::counting_iterator(num_deletion_vectors),
+    std::for_each(cuda::counting_iterator(0),
+                  cuda::counting_iterator(num_deletion_vectors),
                   [&](auto const dv_idx) {
                     deletion_vector_refs[dv_idx].get().contains_async(
                       row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
@@ -308,8 +307,8 @@ void query_deletion_vectors(
                   });
     cudf::detail::join_streams(streams, stream);
   } else {
-    std::for_each(thrust::counting_iterator(0),
-                  thrust::counting_iterator(num_deletion_vectors),
+    std::for_each(cuda::counting_iterator(0),
+                  cuda::counting_iterator(num_deletion_vectors),
                   [&](auto const dv_idx) {
                     deletion_vector_refs[dv_idx].get().contains_async(
                       row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
@@ -342,7 +341,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
   auto const num_rows = row_index_column.size();
   auto row_mask       = rmm::device_buffer(num_rows * sizeof(bool), stream, mr);
 
-  auto row_mask_iter = thrust::make_transform_output_iterator(
+  auto row_mask_iter = cuda::make_transform_output_iterator(
     static_cast<bool*>(row_mask.data()), [] __device__(auto b) { return not b; });
 
   query_deletion_vectors(
