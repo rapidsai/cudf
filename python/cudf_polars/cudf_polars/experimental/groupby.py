@@ -12,9 +12,20 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataType
-from cudf_polars.dsl.expr import Agg, BinOp, Cast, Col, Len, NamedExpr
-from cudf_polars.dsl.expressions.base import ExecutionContext
+from cudf_polars.containers import Column, DataType
+from cudf_polars.dsl.expr import (
+    Agg,
+    BinOp,
+    Cast,
+    Col,
+    Len,
+    Literal,
+    NamedExpr,
+    StructFunction,
+    Ternary,
+    UnaryFunction,
+)
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
@@ -31,13 +42,39 @@ from cudf_polars.experimental.utils import (
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
 
-    from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
 
 
 # Supported multi-partition aggregations
-_GB_AGG_SUPPORTED = ("sum", "count", "mean", "min", "max", "n_unique")
+_GB_AGG_SUPPORTED = ("sum", "count", "mean", "min", "max", "n_unique", "std", "var")
+
+
+class _StructCreate(Expr):
+    """Make a struct column from N child column expressions."""
+
+    _non_child = ("dtype",)
+
+    def __init__(self, dtype: DataType, *children: Expr) -> None:
+        self.dtype = dtype
+        self.children = children
+        self.is_pointwise = True
+
+    def do_evaluate(
+        self, df, *, context: ExecutionContext = ExecutionContext.FRAME
+    ) -> Column:
+        """Evaluate this expression given a dataframe for context."""
+        child_columns = [child.evaluate(df, context=context) for child in self.children]
+        # struct_from_children requires all children to have equal null counts.
+        # Strip null masks from all children: the only nullable field is mean
+        # (null when count=0), and MERGE_M2 skips count=0 rows before reading
+        # MEAN or M2, so the underlying values at those positions are never used.
+        return Column(
+            plc.Column.struct_from_children(
+                [c.obj.with_mask(None, 0) for c in child_columns]
+            ),
+            dtype=self.dtype,
+        )
 
 
 def combine(
@@ -166,6 +203,110 @@ def decompose(
                 BinOp(dtype, plc.binaryop.BinaryOperator.DIV, sum.value, count.value),
             )
             return selection, aggregations, reductions, need_preshuffle
+        elif expr.name in {"std", "var"}:
+            ddof = expr.options
+            (child,) = expr.children
+            f64 = DataType(pl.Float64())
+            i64 = DataType(pl.Int64())
+            struct_dtype = DataType(
+                pl.Struct(
+                    [
+                        pl.Field("count", pl.Int64()),
+                        pl.Field("mean", pl.Float64()),
+                        pl.Field("m2", pl.Float64()),
+                    ]
+                )
+            )
+            count_name = f"{next(names)}__m2_count"
+            mean_name = f"{next(names)}__m2_mean"
+            m2_name = f"{next(names)}__m2_val"
+            struct_name = f"{next(names)}__m2_struct"
+            aggregations = [
+                NamedExpr(
+                    count_name,
+                    Agg(i64, "count", False, ExecutionContext.GROUPBY, child),  # noqa: FBT003
+                ),
+                NamedExpr(
+                    mean_name,
+                    Agg(f64, "mean", None, ExecutionContext.GROUPBY, child),
+                ),
+                NamedExpr(
+                    m2_name,
+                    Agg(f64, "m2", None, ExecutionContext.GROUPBY, child),
+                ),
+            ]
+            struct_expr = _StructCreate(
+                struct_dtype,
+                Cast(i64, False, Col(i64, count_name)),  # noqa: FBT003
+                Col(f64, mean_name),
+                Col(f64, m2_name),
+            )
+            reductions = [
+                NamedExpr(
+                    struct_name,
+                    Agg(
+                        struct_dtype,
+                        "merge_m2",
+                        None,
+                        ExecutionContext.GROUPBY,
+                        struct_expr,
+                    ),
+                ),
+            ]
+            merged_count = StructFunction(
+                i64,
+                StructFunction.Name.FieldByName,
+                ("count",),
+                Col(struct_dtype, struct_name),
+            )
+            merged_m2 = StructFunction(
+                f64,
+                StructFunction.Name.FieldByName,
+                ("m2",),
+                Col(struct_dtype, struct_name),
+            )
+            count_minus_ddof = BinOp(
+                f64,
+                plc.binaryop.BinaryOperator.SUB,
+                Cast(f64, False, merged_count),  # noqa: FBT003
+                Literal(f64, float(ddof)),
+            )
+            # When n <= ddof the result is invalid: variance is negative (n < ddof)
+            # or inf (n == ddof, non-zero population variance). Adding 0 * sqrt(variance)
+            # converts both to NaN using IEEE 754 rules: sqrt(negative) = NaN and 0 * inf = NaN,
+            # so any invalid variance becomes NaN before mask_nans converts it to null.
+            sanitized = Ternary(
+                f64,
+                BinOp(
+                    DataType(pl.Boolean()),
+                    plc.binaryop.BinaryOperator.GREATER,
+                    count_minus_ddof,
+                    Literal(f64, 0.0),
+                ),
+                count_minus_ddof,
+                Literal(f64, float("nan")),
+            )
+            variance = BinOp(
+                f64,
+                plc.binaryop.BinaryOperator.DIV,
+                merged_m2,
+                sanitized,
+            )
+            # mask_nans converts NaN -> null to match Polars semantics.
+            selection = NamedExpr(
+                name,
+                UnaryFunction(
+                    dtype,
+                    "mask_nans",
+                    (),
+                    (
+                        UnaryFunction(f64, "sqrt", (), variance)
+                        if expr.name == "std"
+                        else variance
+                    ),
+                ),
+            )
+            return selection, aggregations, reductions, False
         else:
             raise NotImplementedError(
                 "group_by does not support multiple partitions "
