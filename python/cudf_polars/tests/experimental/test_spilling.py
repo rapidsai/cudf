@@ -37,7 +37,7 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 
 @pytest.mark.parametrize(
     "engine",
-    [{"rapidsmpf_options": {"pinned_memory": f"{v}"}} for v in [False, True]],
+    [{"rapidsmpf_options": {"pinned_memory": str(v)} for v in [False, True]],
     indirect=True,
 )
 def test_make_spill_function(engine: SPMDEngine) -> None:
