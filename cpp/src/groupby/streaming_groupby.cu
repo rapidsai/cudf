@@ -570,7 +570,7 @@ struct streaming_groupby::impl {
     return {std::move(keys_gathered), std::move(results)};
   }
 
-  void do_merge(impl const& other, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+  void do_merge(impl const& other, rmm::cuda_stream_view stream)
   {
     if (!other._initialized || !other.has_state()) { return; }
     CUDF_EXPECTS(_initialized,
@@ -670,7 +670,7 @@ void streaming_groupby::merge(streaming_groupby const& other,
                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  _impl->do_merge(*other._impl, stream, mr);
+  _impl->do_merge(*other._impl, stream);
 }
 
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> streaming_groupby::finalize(
