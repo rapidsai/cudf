@@ -156,7 +156,7 @@ async def shutdown_on_error(
             yield tracer
         except BaseException:
             await run_tasks_without_outputs(
-                itertools.chain(
+                itertools.chain.from_iterable(
                     (ch.shutdown(context), ch.shutdown_metadata(context))
                     for ch in channels
                 )
