@@ -423,23 +423,26 @@ struct streaming_aggregation_request {
 };
 
 /**
- * @brief Stateful streaming groupby that accumulates partial aggregates across batches.
+ * @brief Stateful streaming groupby that accumulates partial aggregates across batches
+ * using a persistent hash table.
  *
  * Unlike `groupby`, which is stateless and computes results in a single pass,
- * `streaming_groupby` maintains internal partial aggregation state. Data can be fed
- * in batches via `aggregate()`, partial states can be merged from distributed workers
- * via `merge()`, and final results are produced via `finalize()`.
+ * `streaming_groupby` maintains a persistent hash table and aggregation state. Data is
+ * fed in batches via `aggregate()`, with each batch doing O(batch_size) work regardless
+ * of accumulated state size. Partial states from distributed workers can be combined via
+ * `merge()`, and final results are produced via `finalize()`.
  *
- * The partial state can be extracted for serialization via `release()` and restored
- * via the deserialization constructor.
+ * The `max_groups` parameter sets the upper bound on distinct key combinations. The
+ * persistent hash table and aggregation columns are pre-allocated to this capacity.
+ * Only hash-based aggregation kinds are supported.
  *
  * Supported aggregation kinds:
  *   SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, MEAN,
- *   SUM_OF_SQUARES, M2, VARIANCE, STD,
- *   TDIGEST, MERGE_TDIGEST, HISTOGRAM, MERGE_HISTOGRAM,
- *   COLLECT_LIST, COLLECT_SET, MERGE_LISTS, MERGE_SETS
+ *   SUM_OF_SQUARES, M2, VARIANCE, STD
  *
- * @throws cudf::invalid_argument for unsupported aggregation kinds
+ * @throws std::invalid_argument for unsupported aggregation kinds
+ * @throws std::invalid_argument if a batch exceeds `max_groups` rows
+ * @throws cudf::logic_error if cumulative unique keys exceed `max_groups`
  */
 class streaming_groupby {
  public:
@@ -458,40 +461,17 @@ class streaming_groupby {
   streaming_groupby& operator=(streaming_groupby&&) noexcept;
 
   /**
-   * @brief Construct a streaming groupby object.
+   * @brief Construct a streaming groupby object with a persistent hash table.
    *
    * @param key_indices Indices of columns in the data table that serve as groupby keys
    * @param requests The aggregations to perform and which columns to aggregate
+   * @param max_groups Upper bound on distinct key combinations
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
-   * @param keys_are_sorted Indicates whether rows in keys are already sorted
-   * @param column_order If `keys_are_sorted == YES`, indicates each column's sort order
-   * @param null_precedence If `keys_are_sorted == YES`, indicates null ordering per column
    */
   explicit streaming_groupby(host_span<size_type const> key_indices,
                              host_span<streaming_aggregation_request const> requests,
-                             null_policy null_handling                      = null_policy::EXCLUDE,
-                             sorted keys_are_sorted                         = sorted::NO,
-                             std::vector<order> const& column_order         = {},
-                             std::vector<null_order> const& null_precedence = {});
-
-  /**
-   * @brief Construct a streaming groupby object from previously released partial state.
-   *
-   * @param partial_state Columns previously obtained via `release()`
-   * @param key_indices Indices of columns in the data table that serve as groupby keys
-   * @param requests The aggregations to perform (must match the original configuration)
-   * @param null_handling Indicates whether rows in keys that contain NULL values should be included
-   * @param keys_are_sorted Indicates whether rows in keys are already sorted
-   * @param column_order If `keys_are_sorted == YES`, indicates each column's sort order
-   * @param null_precedence If `keys_are_sorted == YES`, indicates null ordering per column
-   */
-  explicit streaming_groupby(std::vector<std::unique_ptr<column>>&& partial_state,
-                             host_span<size_type const> key_indices,
-                             host_span<streaming_aggregation_request const> requests,
-                             null_policy null_handling                      = null_policy::EXCLUDE,
-                             sorted keys_are_sorted                         = sorted::NO,
-                             std::vector<order> const& column_order         = {},
-                             std::vector<null_order> const& null_precedence = {});
+                             size_type max_groups,
+                             null_policy null_handling = null_policy::EXCLUDE);
 
   /**
    * @brief Feed a batch of data into the streaming aggregation.
@@ -499,12 +479,12 @@ class streaming_groupby {
    * The columns at positions specified by `key_indices` (from construction) are used as keys.
    * The columns at positions specified in each `streaming_aggregation_request` are aggregated.
    *
-   * @note This object does *not* maintain the lifetime of `data`. The caller must ensure `data`
-   * remains valid until this call returns (or the stream is synchronized).
-   *
    * @param data Table containing both key and value columns
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for allocations
+   *
+   * @throws std::invalid_argument if `data.num_rows() > max_groups`
+   * @throws cudf::logic_error if unique keys exceed `max_groups`
    */
   void aggregate(table_view const& data,
                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -513,8 +493,8 @@ class streaming_groupby {
   /**
    * @brief Merge another streaming_groupby's accumulated partial state into this one.
    *
-   * The other object must have been constructed with the same key_indices, aggregation
-   * requests, and null_handling configuration.
+   * Finalizes the other object and feeds its keys+results as a batch into this object.
+   * The other object must have been constructed with compatible aggregation requests.
    *
    * @param other The streaming_groupby whose partial state to merge
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -539,17 +519,7 @@ class streaming_groupby {
    */
   [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> finalize(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-  /**
-   * @brief Release the internal partial state columns for serialization.
-   *
-   * After calling this, the object's internal state is empty. The returned columns can be
-   * passed to the deserialization constructor to restore state.
-   *
-   * @return The internal partial state as a vector of columns
-   */
-  [[nodiscard]] std::vector<std::unique_ptr<column>> release();
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
  private:
   struct impl;
