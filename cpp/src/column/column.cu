@@ -265,7 +265,7 @@ std::unique_ptr<column> rebind_stream(column&& col, rmm::cuda_stream_view stream
   auto const dtype      = col.type();
   auto const sz         = col.size();
   auto const null_count = col.null_count();
-  auto contents         = std::move(col).release();
+  auto contents         = col.release();
   contents.data->set_stream(stream);
   contents.null_mask->set_stream(stream);
   for (auto& child : contents.children) {
