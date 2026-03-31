@@ -461,7 +461,12 @@ def test_assert_tpch_result_equal_sort_keys_raises_not_sorted() -> None:
         }
     )
     sort_keys = [
-        (pl.when(pl.col("lochierarchy") == 0).then(pl.col("i_category")), False)
+        (
+            pl.when(pl.col("lochierarchy") == 0)
+            .then(pl.col("i_category"))
+            .otherwise(pl.lit("foo")),
+            False,
+        )
     ]
     with pytest.raises(
         ValidationError, match="left dataframe is not sorted by sort_keys expressions"
