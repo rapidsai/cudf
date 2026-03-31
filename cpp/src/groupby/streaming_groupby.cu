@@ -42,7 +42,6 @@
 #include <thrust/transform.h>
 
 #include <algorithm>
-#include <limits>
 #include <memory>
 #include <vector>
 
@@ -215,36 +214,46 @@ rmm::device_buffer compute_row_bitmask(table_view const& keys, rmm::cuda_stream_
 }  // namespace
 
 struct streaming_groupby::impl {
-  std::vector<size_type> _key_indices;
-  std::vector<streaming_aggregation_request> _requests_clone;
-  std::vector<size_type> _aggs_per_request;
-  size_type _max_groups;
-  null_policy _null_handling;
+  std::vector<size_type> _key_indices;  ///< Column indices in each batch that form the grouping key
+  std::vector<streaming_aggregation_request>
+    _requests_clone;                         ///< Deep copy of user-supplied aggregation requests
+  std::vector<size_type> _aggs_per_request;  ///< Number of user-facing aggs per request (for
+                                             ///< splitting results in finalize)
+  size_type _max_groups;       ///< Upper bound on distinct groups the hash set is sized for
+  null_policy _null_handling;  ///< Whether rows with null keys are excluded from aggregation
 
-  bool _initialized{false};
-  size_type _num_unique_keys{0};
-  size_type _staging_end{0};
-  size_type _staging_capacity{0};
-  bool _has_nullable_keys{false};
+  bool _initialized{false};  ///< Whether initialize() has been called (deferred until first batch
+                             ///< for type inference)
+  size_type _num_unique_keys{0};   ///< Running count of distinct keys inserted into the hash set
+  size_type _staging_end{0};       ///< Write cursor into staging key buffer; next batch starts here
+  bool _has_nullable_keys{false};  ///< Sticky flag; set once any batch has a nullable key column
 
+  ///< Fixed-capacity key table (`_max_groups` rows) storing all key rows from all batches
+  ///< (including duplicates). Backs the hash set's row equality comparator — stored indices
+  ///< reference rows in this table, so duplicate slots cannot be reclaimed.
   std::vector<std::unique_ptr<column>> _key_columns;
-  std::vector<size_type> _request_first_agg_offset;
 
-  std::vector<aggregation::Kind> _agg_kinds;
-  std::vector<std::unique_ptr<aggregation>> _agg_objects;
-  std::vector<int8_t> _is_agg_intermediate;
-  bool _has_compound_aggs{false};
+  std::vector<size_type> _request_first_agg_offset;  ///< Per-request column offset into flattened
+                                                     ///< agg results (for compound finalization)
+  std::vector<aggregation::Kind> _agg_kinds;         ///< Expanded simple agg kinds after compound
+                                                     ///< expansion/dedup (one per results column)
+  std::vector<std::unique_ptr<aggregation>>
+    _agg_objects;  ///< Owning copies of expanded simple agg objects, parallel to `_agg_kinds`
+  std::vector<int8_t> _is_agg_intermediate;  ///< 1 if agg is an intermediate from compound
+                                             ///< expansion, 0 if user-requested
+  bool _has_compound_aggs{
+    false};  ///< Whether any user-facing agg is compound (requires finalization)
 
-  std::unique_ptr<table> _agg_results;
+  std::unique_ptr<table> _agg_results;  ///< Pre-allocated `_max_groups`-row table accumulating
+                                        ///< intermediate agg results across batches
+  std::vector<size_type>
+    _value_col_indices;  ///< Cached expanded-agg-column to data-column-index mapping (avoids
+                         ///< per-batch extract_single_pass_aggs)
 
-  // Cached mapping: for each column in the expanded single-pass agg values table,
-  // stores the corresponding data column index. Built once during initialize() to
-  // avoid re-calling build_aggregation_requests + extract_single_pass_aggs per batch.
-  std::vector<size_type> _value_col_indices;
-
-  // Only the non-nullable set is used since streaming_groupby requires fixed-width keys
-  // (no nested columns). The equality comparator is rebound per-batch with correct null
-  // awareness, so flat nullable columns are handled correctly.
+  ///< Persistent cuco::static_set mapping key rows (by key table index) to group indices.
+  ///< Sized for `_max_groups` entries (with load-factor headroom). Created once on the first
+  ///< batch; the stored comparator/hasher become stale but are never used directly — device
+  ///< refs are rebound with fresh row operators before every operation.
   std::unique_ptr<detail::hash::global_set_t> _key_set;
 
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
@@ -277,17 +286,13 @@ struct streaming_groupby::impl {
                   rmm::cuda_stream_view stream,
                   rmm::device_async_resource_ref mr)
   {
-    _staging_capacity =
-      static_cast<size_type>(std::min(static_cast<int64_t>(_max_groups) * 2,
-                                      static_cast<int64_t>(std::numeric_limits<size_type>::max())));
-
     for (auto idx : _key_indices) {
       auto const& key_col = data.column(idx);
       CUDF_EXPECTS(cudf::is_fixed_width(key_col.type()),
                    "Streaming groupby only supports fixed-width key columns.",
                    std::invalid_argument);
-      _key_columns.push_back(make_fixed_width_column(
-        key_col.type(), _staging_capacity, mask_state::ALL_NULL, stream, mr));
+      _key_columns.push_back(
+        make_fixed_width_column(key_col.type(), _max_groups, mask_state::ALL_NULL, stream, mr));
     }
 
     auto agg_requests = build_aggregation_requests(_requests_clone, data);
@@ -331,46 +336,6 @@ struct streaming_groupby::impl {
     _initialized = true;
   }
 
-  void ensure_staging_capacity(size_type additional_rows,
-                               rmm::cuda_stream_view stream,
-                               rmm::device_async_resource_ref mr)
-  {
-    auto const needed64 = static_cast<int64_t>(_staging_end) + additional_rows;
-    if (needed64 <= _staging_capacity) { return; }
-
-    auto const new_cap64    = std::max(static_cast<int64_t>(_staging_capacity) * 2, needed64);
-    auto const new_capacity = static_cast<size_type>(
-      std::min(new_cap64, static_cast<int64_t>(std::numeric_limits<size_type>::max())));
-
-    for (auto& col : _key_columns) {
-      auto new_col =
-        make_fixed_width_column(col->type(), new_capacity, mask_state::ALL_NULL, stream, mr);
-      auto new_view       = new_col->mutable_view();
-      auto const old_view = col->view();
-
-      // Copy existing data.
-      auto const elem_size = cudf::size_of(col->type());
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-        new_view.head(), old_view.head(), elem_size * _staging_end, stream));
-
-      // Copy existing null mask bits.
-      if (_staging_end > 0) {
-        auto const mask_bytes =
-          static_cast<size_t>(num_bitmask_words(_staging_end)) * sizeof(bitmask_type);
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          new_view.null_mask(), old_view.null_mask(), mask_bytes, stream));
-      }
-
-      col = std::move(new_col);
-    }
-
-    _staging_capacity = new_capacity;
-
-    // The hash set's stored comparator references the old preprocessed_table which points
-    // to the old column buffers. Destroy and let do_aggregate recreate it.
-    if (_key_set) { _key_set.reset(); }
-  }
-
   void create_key_set(table_view const& key_table, rmm::cuda_stream_view stream)
   {
     auto preprocessed_keys = cudf::detail::row::hash::preprocessed_table::create(key_table, stream);
@@ -390,35 +355,6 @@ struct streaming_groupby::impl {
       cuco::storage<detail::hash::GROUPBY_BUCKET_SIZE>{},
       rmm::mr::polymorphic_allocator<char>{},
       stream.value());
-  }
-
-  // Re-insert existing staging rows [0, count) into a freshly created key set.
-  void reinsert_existing_keys(size_type count,
-                              table_view const& full_key_view,
-                              bitmask_type const* row_bitmask,
-                              rmm::cuda_stream_view stream)
-  {
-    auto preprocessed_keys =
-      cudf::detail::row::hash::preprocessed_table::create(full_key_view, stream);
-    auto const comparator  = cudf::detail::row::equality::self_comparator{preprocessed_keys};
-    auto const row_hash    = cudf::detail::row::hash::row_hasher{std::move(preprocessed_keys)};
-    auto const has_null    = cudf::nullate::DYNAMIC{cudf::has_nested_nulls(full_key_view)};
-    auto const d_row_hash  = row_hash.device_hasher(has_null);
-    auto const d_row_equal = comparator.equal_to<false>(has_null, null_equality::EQUAL);
-    auto const hasher      = detail::hash::row_hasher_with_cache_t{d_row_hash};
-
-    auto set_ref = _key_set->ref(cuco::op::insert_and_find)
-                     .rebind_key_eq(d_row_equal)
-                     .rebind_hash_function(hasher);
-
-    // Insert all existing rows; the target indices are discarded (we only care about
-    // repopulating the set). Reuse compute_target_indices_fn with staging_offset=0.
-    rmm::device_uvector<size_type> discard(count, stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator<size_type>(0),
-                      cuda::counting_iterator<size_type>(count),
-                      discard.begin(),
-                      compute_target_indices_fn{set_ref, row_bitmask, 0, nullptr});
   }
 
   void copy_keys_to_staging(table_view const& batch_keys,
@@ -537,6 +473,12 @@ struct streaming_groupby::impl {
                    std::to_string(_max_groups) + ").",
                  std::invalid_argument);
 
+    CUDF_EXPECTS(static_cast<int64_t>(_staging_end) + batch_size <= _max_groups,
+                 "Key table capacity exceeded: staging_end (" + std::to_string(_staging_end) +
+                   ") + batch_size (" + std::to_string(batch_size) + ") > max_groups (" +
+                   std::to_string(_max_groups) + ").",
+                 std::overflow_error);
+
     if (!_initialized) { initialize(data, stream, mr); }
 
     std::vector<column_view> batch_key_cols;
@@ -546,8 +488,6 @@ struct streaming_groupby::impl {
     }
     auto const batch_keys = table_view{batch_key_cols};
 
-    ensure_staging_capacity(batch_size, stream, mr);
-
     auto const staging_offset = _staging_end;
     copy_keys_to_staging(batch_keys, staging_offset, stream);
     _staging_end += batch_size;
@@ -555,19 +495,7 @@ struct streaming_groupby::impl {
     auto const visible_rows  = _staging_end;
     auto const full_key_view = key_table_view(visible_rows);
 
-    bool const set_was_reset = !_key_set;
     if (!_key_set) { create_key_set(full_key_view, stream); }
-
-    // If the set was recreated (e.g., after staging buffer growth), re-insert old keys.
-    if (set_was_reset && staging_offset > 0) {
-      auto const skip_rows_with_nulls =
-        cudf::has_nulls(full_key_view) && _null_handling == null_policy::EXCLUDE;
-      auto const bitmask_buf =
-        skip_rows_with_nulls ? compute_row_bitmask(full_key_view, stream) : rmm::device_buffer{};
-      auto const* bitmask =
-        skip_rows_with_nulls ? static_cast<bitmask_type const*>(bitmask_buf.data()) : nullptr;
-      reinsert_existing_keys(staging_offset, full_key_view, bitmask, stream);
-    }
 
     auto result = compute_batch_target_indices(batch_size, staging_offset, full_key_view, stream);
     _num_unique_keys += result.new_insertions;
@@ -707,8 +635,12 @@ struct streaming_groupby::impl {
                                            stream,
                                            mr);
 
-    // Copy other's keys into our staging buffer and insert into hash set.
-    ensure_staging_capacity(num_other_groups, stream, mr);
+    CUDF_EXPECTS(static_cast<int64_t>(_staging_end) + num_other_groups <= _max_groups,
+                 "Key table capacity exceeded during merge: staging_end (" +
+                   std::to_string(_staging_end) + ") + merge groups (" +
+                   std::to_string(num_other_groups) + ") > max_groups (" +
+                   std::to_string(_max_groups) + ").",
+                 std::overflow_error);
 
     auto const staging_offset = _staging_end;
     copy_keys_to_staging(other_keys->view(), staging_offset, stream);
@@ -717,18 +649,7 @@ struct streaming_groupby::impl {
     auto const visible_rows  = _staging_end;
     auto const full_key_view = key_table_view(visible_rows);
 
-    bool const set_was_reset = !_key_set;
     if (!_key_set) { create_key_set(full_key_view, stream); }
-
-    if (set_was_reset && staging_offset > 0) {
-      auto const skip_nulls =
-        cudf::has_nulls(full_key_view) && _null_handling == null_policy::EXCLUDE;
-      auto const bitmask_buf =
-        skip_nulls ? compute_row_bitmask(full_key_view, stream) : rmm::device_buffer{};
-      auto const* bitmask =
-        skip_nulls ? static_cast<bitmask_type const*>(bitmask_buf.data()) : nullptr;
-      reinsert_existing_keys(staging_offset, full_key_view, bitmask, stream);
-    }
 
     auto result =
       compute_batch_target_indices(num_other_groups, staging_offset, full_key_view, stream);
