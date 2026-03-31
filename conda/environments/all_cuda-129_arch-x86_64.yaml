@@ -12,7 +12,6 @@ dependencies:
 - breathe>=4.35.0
 - c-compiler
 - cachetools
-- certifi
 - clang-tools==20.1.4
 - clang==20.1.4
 - cmake>=3.30.4
@@ -37,6 +36,7 @@ dependencies:
 - hypothesis>=6.131.7
 - identify>=2.5.20
 - include-what-you-use==0.24.0
+- ipykernel
 - ipython
 - jupyter_client
 - libcufile-dev
@@ -44,7 +44,7 @@ dependencies:
 - libkvikio==26.6.*,>=0.0.0a0
 - libnvcomp-dev==5.1.0.21
 - libnvjitlink-dev
-- librdkafka>=2.8.0,<2.9.0
+- librdkafka>=2.11.1,<2.12.0
 - librmm==26.6.*,>=0.0.0a0
 - make
 - mmh3

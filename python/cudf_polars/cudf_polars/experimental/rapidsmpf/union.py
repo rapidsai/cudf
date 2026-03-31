@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.message import Message
@@ -62,8 +63,10 @@ async def union_node(
         # TODO: Warn users that Union does NOT preserve order?
         total_local_count = 0
         duplicated = True
-        for ch_in in chs_in:
-            metadata = await recv_metadata(ch_in, context)
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(recv_metadata(ch, context)) for ch in chs_in]
+        for task in tasks:
+            metadata = task.result()
             total_local_count += metadata.local_count
             duplicated = duplicated and metadata.duplicated
         await send_metadata(
