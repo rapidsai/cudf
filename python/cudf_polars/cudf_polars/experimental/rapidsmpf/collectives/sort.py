@@ -8,7 +8,6 @@ import asyncio
 from collections import deque
 from typing import TYPE_CHECKING
 
-from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
@@ -35,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     names_to_indices,
     recv_metadata,
+    replay_buffered_channel,
     send_metadata,
 )
 from cudf_polars.experimental.sort import (
@@ -164,7 +164,7 @@ async def _sample_chunks_for_size_estimate(
     Sample chunks and estimate total data size to derive num_partitions dynamically.
 
     The sampled chunks are returned keyed by sequence number. The caller is
-    responsible for replaying them into a channel (see sort_actor / _replay_into_channel).
+    responsible for replaying them into a channel via replay_buffered_channel.
     """
     if executor.dynamic_planning is None:
         return {}, num_partitions
@@ -182,7 +182,7 @@ async def _sample_chunks_for_size_estimate(
         chunk = TableChunk.from_message(msg).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
-        sampled_bytes += chunk.data_alloc_size(MemoryType.DEVICE)
+        sampled_bytes += chunk.data_alloc_size()
         sampled_chunks[msg.sequence_number] = chunk
         if sampled_bytes >= target_partition_size:
             break
@@ -205,20 +205,6 @@ async def _sample_chunks_for_size_estimate(
     return sampled_chunks, num_partitions
 
 
-async def _replay_into_channel(
-    context: Context,
-    ch_out: Channel[TableChunk],
-    ch_in: Channel[TableChunk],
-    buffered_chunks: dict[int, TableChunk],
-) -> None:
-    """Replay buffered chunks then forward remaining messages from ch_in into ch_out."""
-    for seq_num, chunk in buffered_chunks.items():
-        await ch_out.send(context, Message(seq_num, chunk))
-    while (msg := await ch_in.recv(context)) is not None:
-        await ch_out.send(context, msg)
-    await ch_out.drain(context)
-
-
 async def _receive_and_buffer_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -229,18 +215,23 @@ async def _receive_and_buffer_chunks(
     comm: Communicator,
 ) -> list[TableChunk]:
     """Receive input chunks, collect local split candidates, and buffer chunks for later insert."""
+    await recv_metadata(ch_in, context)
     local_candidates_list: list[TableChunk] = []
     local_row_offset = 0
 
-    def _buffer_df(seq_num: int, df: DataFrame) -> None:
-        nonlocal local_row_offset
+    while (msg := await ch_in.recv(context)) is not None:
+        seq_num = msg.sequence_number
+        df = await asyncio.to_thread(
+            chunk_to_frame,
+            TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            ),
+            sort_ir,
+        )
         local_candidates_list.append(
             TableChunk.from_pylibcudf_table(
                 _select_local_split_candidates(
-                    df.select(by),
-                    by,
-                    num_partitions,
-                    seq_num,
+                    df.select(by), by, num_partitions, seq_num
                 ).table,
                 df.stream,
                 exclusive_view=True,
@@ -269,17 +260,6 @@ async def _receive_and_buffer_chunks(
                 TableChunk.from_pylibcudf_table(tbl, df.stream, exclusive_view=True),
             )
         )
-
-    while (msg := await ch_in.recv(context)) is not None:
-        seq_num = msg.sequence_number
-        df = await asyncio.to_thread(
-            chunk_to_frame,
-            TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            ),
-            sort_ir,
-        )
-        _buffer_df(seq_num, df)
         del df
 
     return local_candidates_list
@@ -424,7 +404,6 @@ async def sort_actor(
     ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
 
-        # Sample chunks to estimate total data size and derive num_partitions
         sampled_chunks, num_partitions = await _sample_chunks_for_size_estimate(
             context, comm, ch_in, num_partitions, metadata_in, executor, collective_ids
         )
@@ -437,7 +416,9 @@ async def sort_actor(
 
         chunk_store = ChunkStore(context)
         _, local_candidates_list = await asyncio.gather(
-            _replay_into_channel(context, ch_replay, ch_in, sampled_chunks),
+            replay_buffered_channel(
+                context, ch_replay, ch_in, sampled_chunks, metadata_in, trace_ir=ir
+            ),
             _receive_and_buffer_chunks(
                 context,
                 ch_replay,
