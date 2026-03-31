@@ -2952,10 +2952,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 raise ValueError("Duplicate column names are not allowed")
             rangeindex = isinstance(pd_columns, pd.RangeIndex)
             level_names = (pd_columns.name,)
-            if not rangeindex and len(pd_columns) == 0:
-                label_dtype = self._data.label_dtype
-            else:
-                label_dtype = pd_columns.dtype
+            # if not rangeindex and len(pd_columns) == 0:
+            #     label_dtype = self._data.label_dtype
+            # else:
+            label_dtype = pd_columns.dtype
 
         if len(pd_columns) != self._num_columns:
             raise ValueError(

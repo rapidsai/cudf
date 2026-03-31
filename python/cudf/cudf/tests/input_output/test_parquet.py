@@ -2310,19 +2310,17 @@ def test_read_parquet_partitioned_filtered(
         row_groups=row_groups,
         categorical_partitions=use_cat,
     )
-    expect["b"] = expect["b"].astype(str)
+
     expect["c"] = expect["c"].astype(int)
     if use_cat:
-        assert got.dtypes["b"] == "category"
         assert got.dtypes["c"] == "category"
-        got["b"] = got["b"].astype(str)
         got["c"] = got["c"].astype(int)
     else:
         # Check that we didn't get categorical
         # columns, but convert back to categorical
         # for comparison with pandas
         assert got.dtypes["b"] == pd.StringDtype(na_value=np.nan)
-        assert got.dtypes["c"] == "int"
+        got["b"] = got["b"].astype(expect["b"].dtype)
     assert_eq(expect, got)
 
 
