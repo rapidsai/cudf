@@ -218,6 +218,8 @@ struct streaming_groupby::impl {
                              ///< for type inference)
   size_type _num_unique_keys{0};  ///< Running count of distinct keys inserted into the hash set
   size_type _staging_end{0};      ///< Write cursor into key table; next batch starts here
+  bool _has_nullable_keys{
+    false};  ///< Whether any input batch had nullable key columns (for output)
 
   ///< Fixed-capacity key table (`_max_groups` rows) storing all key rows from all batches
   ///< (including duplicates). Backs the hash set's row equality comparator — stored indices
@@ -358,21 +360,35 @@ struct streaming_groupby::impl {
                             rmm::cuda_stream_view stream)
   {
     for (size_type c = 0; c < num_keys(); ++c) {
+      if (batch_keys.column(c).nullable()) { _has_nullable_keys = true; }
       auto dst = _key_columns[c]->mutable_view();
       cudf::copy_range_in_place(
         batch_keys.column(c), dst, 0, batch_keys.column(c).size(), staging_offset, stream);
     }
   }
 
+  /// Key table view that always includes null masks (for row operators).
   [[nodiscard]] table_view key_table_view(size_type num_rows) const
   {
     std::vector<column_view> views;
     views.reserve(_key_columns.size());
     for (auto const& col : _key_columns) {
-      // Always include the null mask — columns are created with mask_state::ALL_NULL so the
-      // mask always exists. This ensures the row comparator handles nulls correctly even if
-      // only later batches introduce null keys.
       views.push_back(cudf::slice(col->view(), {0, num_rows})[0]);
+    }
+    return table_view{views};
+  }
+
+  /// Key table view that only includes null masks if input data was actually nullable (for output).
+  [[nodiscard]] table_view key_table_output_view(size_type num_rows) const
+  {
+    std::vector<column_view> views;
+    views.reserve(_key_columns.size());
+    for (auto const& col : _key_columns) {
+      if (_has_nullable_keys) {
+        views.push_back(cudf::slice(col->view(), {0, num_rows})[0]);
+      } else {
+        views.push_back(column_view{col->type(), num_rows, col->view().head(), nullptr, 0});
+      }
     }
     return table_view{views};
   }
@@ -500,13 +516,12 @@ struct streaming_groupby::impl {
   {
     CUDF_EXPECTS(_initialized, "Cannot finalize streaming_groupby with no accumulated data.");
 
-    auto const visible_rows  = _staging_end;
-    auto const full_key_view = key_table_view(visible_rows);
+    auto const visible_rows = _staging_end;
 
     auto populated = detail::hash::extract_populated_keys(
       *_key_set, visible_rows, stream, cudf::get_current_device_resource_ref());
 
-    auto keys_gathered = cudf::detail::gather(full_key_view,
+    auto keys_gathered = cudf::detail::gather(key_table_output_view(visible_rows),
                                               populated,
                                               out_of_bounds_policy::DONT_CHECK,
                                               cudf::negative_index_policy::NOT_ALLOWED,
@@ -583,7 +598,7 @@ struct streaming_groupby::impl {
 
     // Gather other's populated keys and raw intermediate agg results.
     auto const other_visible  = other._staging_end;
-    auto const other_key_view = other.key_table_view(other_visible);
+    auto const other_key_view = other.key_table_output_view(other_visible);
 
     auto const default_mr = cudf::get_current_device_resource_ref();
     auto other_populated =
