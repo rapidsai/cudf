@@ -761,6 +761,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
             "rmm_async": args.rmm_async,
             "rmm_release_threshold": args.rmm_release_threshold,
             "threads_per_worker": run_config.threads,
+            "memory_limit": args.worker_memory_limit,
         }
 
         client = Client(LocalCUDACluster(**kwargs))
@@ -1099,6 +1100,16 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Passed to dask_cuda.LocalCUDACluster or CudaAsyncMemoryResource
             to control the release threshold for RMM pool memory.
             Default: None (no release threshold)"""),
+    )
+    parser.add_argument(
+        "--worker-memory-limit",
+        default="auto",
+        type=str,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the memory limit
+            of each Dask worker. Use 'auto' to let Dask determine the limit
+            automatically, or '0' for unlimited.
+            Default: auto"""),
     )
     parser.add_argument(
         "--rmm-async",
