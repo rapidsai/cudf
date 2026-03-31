@@ -200,9 +200,9 @@ void query_deletion_vectors(
   auto const num_deletion_vectors = static_cast<cudf::size_type>(deletion_vector_refs.size());
 
   if (num_deletion_vectors == 1) {
-    CUDF_EXPECTS(rows_per_deletion_vector.front() == num_rows,
-                 "Encountered a mismatch in the number of rows in the row index column and the "
-                 "number of rows in the deletion vector");
+    CUDF_EXPECTS(
+      std::cmp_greater_equal(rows_per_deletion_vector.front(), num_rows),
+      "Encountered insufficient deletion vector size to query the entire row index column");
     deletion_vector_refs.front().get().contains(
       row_index_column.begin<size_t>(), row_index_column.end<size_t>(), output, stream);
     return;
