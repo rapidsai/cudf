@@ -273,17 +273,18 @@ struct streaming_groupby::impl {
     }
   }
 
-  void initialize(table_view const& data,
-                  rmm::cuda_stream_view stream,
-                  rmm::device_async_resource_ref mr)
+  void initialize(table_view const& data, rmm::cuda_stream_view stream)
   {
     for (auto idx : _key_indices) {
       auto const& key_col = data.column(idx);
       CUDF_EXPECTS(cudf::is_fixed_width(key_col.type()),
                    "Streaming groupby only supports fixed-width key columns.",
                    std::invalid_argument);
-      _key_columns.push_back(
-        make_fixed_width_column(key_col.type(), _max_groups, mask_state::ALL_NULL, stream, mr));
+      _key_columns.push_back(make_fixed_width_column(key_col.type(),
+                                                     _max_groups,
+                                                     mask_state::ALL_NULL,
+                                                     stream,
+                                                     cudf::get_current_device_resource_ref()));
     }
 
     auto agg_requests = build_aggregation_requests(_requests_clone, data);
@@ -295,8 +296,12 @@ struct streaming_groupby::impl {
     _is_agg_intermediate = std::move(is_intermediate);
     _has_compound_aggs   = has_compound;
 
-    _agg_results = detail::hash::create_results_table(
-      _max_groups, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
+    _agg_results = detail::hash::create_results_table(_max_groups,
+                                                      values_view,
+                                                      _agg_kinds,
+                                                      _is_agg_intermediate,
+                                                      stream,
+                                                      cudf::get_current_device_resource_ref());
 
     // Build the cached mapping from each expanded agg column to its source data column index.
     // This avoids re-calling build_aggregation_requests + extract_single_pass_aggs per batch.
@@ -427,9 +432,7 @@ struct streaming_groupby::impl {
                    std::to_string(_max_groups) + ").");
   }
 
-  void do_aggregate(table_view const& data,
-                    rmm::cuda_stream_view stream,
-                    rmm::device_async_resource_ref mr)
+  void do_aggregate(table_view const& data, rmm::cuda_stream_view stream)
   {
     auto const batch_size = data.num_rows();
     if (batch_size == 0) { return; }
@@ -445,7 +448,7 @@ struct streaming_groupby::impl {
                    std::to_string(_max_groups) + ").",
                  std::overflow_error);
 
-    if (!_initialized) { initialize(data, stream, mr); }
+    if (!_initialized) { initialize(data, stream); }
 
     std::vector<column_view> batch_key_cols;
     batch_key_cols.reserve(num_keys());
@@ -500,7 +503,8 @@ struct streaming_groupby::impl {
     auto const visible_rows  = _staging_end;
     auto const full_key_view = key_table_view(visible_rows);
 
-    auto populated = detail::hash::extract_populated_keys(*_key_set, visible_rows, stream, mr);
+    auto populated = detail::hash::extract_populated_keys(
+      *_key_set, visible_rows, stream, cudf::get_current_device_resource_ref());
 
     auto keys_gathered = cudf::detail::gather(full_key_view,
                                               populated,
@@ -581,8 +585,9 @@ struct streaming_groupby::impl {
     auto const other_visible  = other._staging_end;
     auto const other_key_view = other.key_table_view(other_visible);
 
+    auto const default_mr = cudf::get_current_device_resource_ref();
     auto other_populated =
-      detail::hash::extract_populated_keys(*other._key_set, other_visible, stream, mr);
+      detail::hash::extract_populated_keys(*other._key_set, other_visible, stream, default_mr);
 
     auto const num_other_groups = static_cast<size_type>(other_populated.size());
     if (num_other_groups == 0) { return; }
@@ -592,14 +597,14 @@ struct streaming_groupby::impl {
                                            out_of_bounds_policy::DONT_CHECK,
                                            cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
-                                           mr);
+                                           default_mr);
 
     auto other_aggs = cudf::detail::gather(other._agg_results->view(),
                                            other_populated,
                                            out_of_bounds_policy::DONT_CHECK,
                                            cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
-                                           mr);
+                                           default_mr);
 
     CUDF_EXPECTS(static_cast<int64_t>(_staging_end) + num_other_groups <= _max_groups,
                  "Key table capacity exceeded during merge: staging_end (" +
@@ -657,7 +662,7 @@ void streaming_groupby::aggregate(table_view const& data,
                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  _impl->do_aggregate(data, stream, mr);
+  _impl->do_aggregate(data, stream);
 }
 
 void streaming_groupby::merge(streaming_groupby const& other,
