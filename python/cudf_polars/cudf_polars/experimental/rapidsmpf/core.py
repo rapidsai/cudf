@@ -319,61 +319,66 @@ def evaluate_pipeline(
             metadata_collector=metadata_collector,
         )
 
-        # Run the network
-        with ThreadPoolExecutor(
-            max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
-            thread_name_prefix="cpse",
-        ) as executor:
-            run_actor_network(actors=nodes, py_executor=executor)
+        try:
+            # Run the network
+            with ThreadPoolExecutor(
+                max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
+                thread_name_prefix="cpse",
+            ) as executor:
+                run_actor_network(actors=nodes, py_executor=executor)
 
-        # Extract/return the concatenated result.
-        # Keep chunks alive until after concatenation to prevent
-        # use-after-free with stream-ordered allocations
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg).make_available_and_spill(
-                br, allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        dfs: list[DataFrame] = []
-        if chunks:
-            col_names = list(ir.schema.keys())
-            col_dtypes = list(ir.schema.values())
-            dfs = [
-                DataFrame.from_table(
-                    chunk.table_view(), col_names, col_dtypes, chunk.stream
+            # Extract/return the concatenated result.
+            # Keep chunks alive until after concatenation to prevent
+            # use-after-free with stream-ordered allocations
+            messages = output.release()
+            chunks = [
+                TableChunk.from_message(msg).make_available_and_spill(
+                    br, allow_overbooking=True
                 )
-                for chunk in chunks
+                for msg in messages
             ]
-            if len(dfs) == 1:
-                df = dfs[0]
-            else:
-                with ir_context.stream_ordered_after(*dfs) as stream:
-                    df = DataFrame.from_table(
-                        plc.concatenate.concatenate(
-                            [d.table for d in dfs], stream=stream
-                        ),
-                        col_names,
-                        col_dtypes,
-                        stream,
+            dfs: list[DataFrame] = []
+            if chunks:
+                col_names = list(ir.schema.keys())
+                col_dtypes = list(ir.schema.values())
+                dfs = [
+                    DataFrame.from_table(
+                        chunk.table_view(), col_names, col_dtypes, chunk.stream
                     )
-        else:
-            # No chunks received - create an empty DataFrame with correct schema
-            stream = ir_context.get_cuda_stream()
-            chunk = empty_table_chunk(ir, rmpf_context, stream)
-            df = DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                stream,
-            )
+                    for chunk in chunks
+                ]
+                if len(dfs) == 1:
+                    df = dfs[0]
+                else:
+                    with ir_context.stream_ordered_after(*dfs) as stream:
+                        df = DataFrame.from_table(
+                            plc.concatenate.concatenate(
+                                [d.table for d in dfs], stream=stream
+                            ),
+                            col_names,
+                            col_dtypes,
+                            stream,
+                        )
+            else:
+                # No chunks received - create an empty DataFrame with correct schema
+                stream = ir_context.get_cuda_stream()
+                chunk = empty_table_chunk(ir, rmpf_context, stream)
+                df = DataFrame.from_table(
+                    chunk.table_view(),
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    stream,
+                )
 
-        result = df.to_polars()
+            result = df.to_polars()
 
-        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-        # before the Context, which ultimately contains the rmm MR, goes out of scope.
-        del nodes, output, messages, chunks, dfs, df
+            # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+            # before the Context, which ultimately contains the rmm MR, goes out of scope.
+            del messages, chunks, dfs, df
+        finally:
+            # Ensure these are dropped even if a node raises
+            # an exception in run_actor_network
+            del nodes, output
 
         # Restore the initial RMM memory resource
         if _initial_mr is not None:
