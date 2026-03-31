@@ -730,7 +730,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
  * @copydoc cudf::io::parquet::experimental::compute_num_deleted_rows
  */
 size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info,
-                                size_t chunk_max_rows,
+                                cudf::size_type chunk_max_rows,
                                 rmm::cuda_stream_view stream)
 {
   auto const& serialized_roaring_bitmaps = deletion_vector_info.serialized_roaring_bitmaps;
@@ -744,7 +744,7 @@ size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info
     std::accumulate(row_group_num_rows.begin(), row_group_num_rows.end(), size_t{0});
 
   CUDF_EXPECTS(chunk_max_rows > 0 and
-                 std::cmp_less_equal(chunk_max_rows, std::numeric_limits<size_type>::max()),
+                 std::cmp_less_equal(chunk_max_rows, std::numeric_limits<cudf::size_type>::max()),
                "chunk_max_rows must be in range (0, size_type max]");
 
   auto const temp_mr                = rmm::mr::get_current_device_resource_ref();
@@ -771,7 +771,7 @@ size_t compute_num_deleted_rows(deletion_vector_info const& deletion_vector_info
   size_t start_row      = 0;
 
   while (rows_remaining > 0) {
-    auto const chunk_rows = static_cast<size_type>(std::min(rows_remaining, chunk_max_rows));
+    auto const chunk_rows = std::min<size_type>(rows_remaining, chunk_max_rows);
 
     auto row_index_column = compute_partial_row_index_column(rg_offsets_queue,
                                                              rg_counts_queue,

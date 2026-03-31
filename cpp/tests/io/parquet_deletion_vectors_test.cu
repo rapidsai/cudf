@@ -17,7 +17,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuco/roaring_bitmap.cuh>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/sequence.h>
 
 #include <roaring/roaring.h>
@@ -88,14 +89,13 @@ auto build_expected_row_indices(cudf::host_span<size_t const> row_group_offsets,
                   expected_row_indices.begin());
 
   // Inclusive scan to compute the rest of the row indices
-  std::for_each(
-    thrust::counting_iterator(0), thrust::counting_iterator(num_row_groups), [&](auto i) {
-      auto start_row_index = row_group_span_offsets[i];
-      auto end_row_index   = row_group_span_offsets[i + 1];
-      std::inclusive_scan(expected_row_indices.begin() + start_row_index,
-                          expected_row_indices.begin() + end_row_index,
-                          expected_row_indices.begin() + start_row_index);
-    });
+  std::for_each(cuda::counting_iterator(0), cuda::counting_iterator(num_row_groups), [&](auto i) {
+    auto start_row_index = row_group_span_offsets[i];
+    auto end_row_index   = row_group_span_offsets[i + 1];
+    std::inclusive_scan(expected_row_indices.begin() + start_row_index,
+                        expected_row_indices.begin() + end_row_index,
+                        expected_row_indices.begin() + start_row_index);
+  });
 
   return expected_row_indices;
 }
@@ -154,8 +154,8 @@ auto build_deletion_vector_and_expected_row_mask(cudf::size_type num_rows,
   auto roaring64_context =
     roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator<size_t>(num_rows),
+  std::for_each(cuda::counting_iterator<size_t>(0),
+                cuda::counting_iterator<size_t>(num_rows),
                 [&](auto row_idx) {
                   // Insert provided host row index if the row is deleted in the row mask
                   if (not expected_row_mask[row_idx]) {
@@ -201,8 +201,8 @@ std::unique_ptr<cudf::table> build_expected_table(
   auto index_and_columns = std::vector<cudf::column_view>{};
   index_and_columns.reserve(input_table_view.num_columns() + 1);
   index_and_columns.push_back(expected_row_index_column);
-  std::transform(thrust::counting_iterator(0),
-                 thrust::counting_iterator(input_table_view.num_columns()),
+  std::transform(cuda::counting_iterator(0),
+                 cuda::counting_iterator(input_table_view.num_columns()),
                  std::back_inserter(index_and_columns),
                  [&](auto col_idx) { return input_table_view.column(col_idx); });
   return cudf::apply_boolean_mask(cudf::table_view{index_and_columns}, row_mask_column, stream, mr);
@@ -382,7 +382,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
       roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
     std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
+      cuda::counting_iterator<Key>(0), cuda::counting_iterator<Key>(num_keys), [&](auto key) {
         if (is_even[key]) {
           roaring::api::roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, key);
         }
@@ -405,7 +405,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
     auto roaring_context = roaring::api::roaring_bulk_context_t{};
 
     std::for_each(
-      thrust::counting_iterator<Key>(0), thrust::counting_iterator<Key>(num_keys), [&](auto key) {
+      cuda::counting_iterator<Key>(0), cuda::counting_iterator<Key>(num_keys), [&](auto key) {
         if (is_even[key]) {
           roaring::api::roaring_bitmap_add_bulk(roaring_bitmap, &roaring_context, key);
         }
@@ -435,16 +435,16 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
 
   // Query the roaring bitmap
   auto contained = rmm::device_uvector<bool>(num_keys, stream, mr);
-  roaring_bitmap.contains_async(thrust::counting_iterator<Key>(0),
-                                thrust::counting_iterator<Key>(num_keys),
+  roaring_bitmap.contains_async(cuda::counting_iterator<Key>(0),
+                                cuda::counting_iterator<Key>(num_keys),
                                 contained.data(),
                                 stream);
   auto results = cudf::detail::make_host_vector_async(contained, stream);
 
   // Validate
   stream.synchronize();
-  EXPECT_TRUE(std::all_of(thrust::counting_iterator<Key>(0),
-                          thrust::counting_iterator<Key>(num_keys),
+  EXPECT_TRUE(std::all_of(cuda::counting_iterator<Key>(0),
+                          cuda::counting_iterator<Key>(num_keys),
                           [&](auto key) { return results[key] == is_even[key]; }));
 }
 
@@ -545,8 +545,8 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
   auto row_group_offsets = std::vector<size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<size_t>(std::llround(1e9));
   std::transform(
-    thrust::counting_iterator(1),
-    thrust::counting_iterator(num_row_groups),
+    cuda::counting_iterator(1),
+    cuda::counting_iterator(num_row_groups),
     row_group_offsets.begin() + 1,
     [&](auto i) { return static_cast<size_t>(std::llround(row_group_offsets[i - 1] + 0.5e9)); });
 
@@ -691,8 +691,8 @@ TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsCustomRowIndex)
   auto row_group_offsets = std::vector<size_t>(num_row_groups);
   row_group_offsets[0]   = static_cast<size_t>(std::llround(1e9));
   std::transform(
-    thrust::counting_iterator(1),
-    thrust::counting_iterator(num_row_groups),
+    cuda::counting_iterator(1),
+    cuda::counting_iterator(num_row_groups),
     row_group_offsets.begin() + 1,
     [&](auto i) { return static_cast<size_t>(std::llround(row_group_offsets[i - 1] + 0.5e9)); });
 
@@ -740,6 +740,12 @@ TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsCustomRowIndex)
   auto const result = cudf::io::parquet::experimental::compute_num_deleted_rows(
     deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
   EXPECT_EQ(result, static_cast<size_t>(expected_deleted));
+
+  auto const result_chunked = cudf::io::parquet::experimental::compute_num_deleted_rows(
+    deletion_vector_info,
+    static_cast<cudf::size_type>(std::llround(row_group_splits.front() * 1.2)),
+    stream);
+  EXPECT_EQ(result_chunked, static_cast<size_t>(expected_deleted));
 }
 
 TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsMultipleDeletionVectors)
@@ -794,70 +800,12 @@ TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsMultipleDeletionVectors)
     .row_group_offsets          = row_group_offsets,
     .row_group_num_rows         = row_group_num_rows};
 
-  auto const result = cudf::io::parquet::experimental::compute_num_deleted_rows(
-    deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
-  EXPECT_EQ(result, total_expected_deleted);
-}
-
-TEST_F(ParquetDeletionVectorsTest, ComputeNumDeletedRowsChunked)
-{
-  auto constexpr num_rows_per_dv      = 10'000;
-  auto constexpr num_deletion_vectors = 5;
-  auto constexpr total_rows           = num_rows_per_dv * num_deletion_vectors;
-  auto constexpr deletion_probability = 0.35;
-  // Force the chunking path by using a small chunk size
-  auto constexpr chunk_max_rows = size_t{15'000};
-
-  auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
-
-  // No custom row indices — row_group_offsets is empty, row_group_num_rows provides the counts
-  auto row_group_num_rows = std::vector<cudf::size_type>(num_deletion_vectors, num_rows_per_dv);
-
-  // Build row indices as a simple 0..total_rows sequence (no custom offsets)
-  auto row_indices = thrust::host_vector<size_t>(total_rows);
-  std::iota(row_indices.begin(), row_indices.end(), size_t{0});
-
-  size_t total_expected_deleted = 0;
-  auto serialized_bitmaps       = std::vector<std::vector<cuda::std::byte>>{};
-  auto bitmap_spans             = std::vector<cudf::host_span<cuda::std::byte const>>{};
-  auto dv_row_counts            = std::vector<cudf::size_type>{};
-
-  for (int i = 0; i < num_deletion_vectors; ++i) {
-    auto span_start = i * num_rows_per_dv;
-    auto local_indices =
-      cudf::host_span<size_t const>(row_indices.data() + span_start, num_rows_per_dv);
-
-    auto [dv, mask_col] = build_deletion_vector_and_expected_row_mask(
-      num_rows_per_dv, deletion_probability, local_indices, stream, mr);
-
-    auto const host_mask = cudf::detail::make_host_vector(
-      cudf::device_span<bool const>(mask_col->view().data<bool>(), num_rows_per_dv), stream);
-    total_expected_deleted += std::count(host_mask.begin(), host_mask.end(), false);
-
-    serialized_bitmaps.emplace_back(std::move(dv));
-    dv_row_counts.push_back(num_rows_per_dv);
-  }
-
-  bitmap_spans.reserve(num_deletion_vectors);
-  for (auto const& bm : serialized_bitmaps) {
-    bitmap_spans.emplace_back(bm);
-  }
-
-  auto deletion_vector_info = cudf::io::parquet::experimental::deletion_vector_info{
-    .serialized_roaring_bitmaps = bitmap_spans,
-    .deletion_vector_row_counts = dv_row_counts,
-    .row_group_offsets          = {},
-    .row_group_num_rows         = row_group_num_rows};
-
-  // With default chunk_max_rows (small-path): verify baseline
+  auto chunk_max_rows       = std::numeric_limits<cudf::size_type>::max();
   auto const result_default = cudf::io::parquet::experimental::compute_num_deleted_rows(
-    deletion_vector_info, std::numeric_limits<cudf::size_type>::max(), stream);
+    deletion_vector_info, chunk_max_rows, stream);
   EXPECT_EQ(result_default, total_expected_deleted);
 
-  // With small chunk_max_rows: forces the chunking path and splits across deletion vector
-  // boundaries (chunk_max_rows=15000 with 5 DVs of 10000 rows each = 50000 total rows,
-  // so we get chunks of 15000, 15000, 15000, 5000 rows)
+  chunk_max_rows            = static_cast<cudf::size_type>(std::llround(num_rows_per_dv * 1.5));
   auto const result_chunked = cudf::io::parquet::experimental::compute_num_deleted_rows(
     deletion_vector_info, chunk_max_rows, stream);
   EXPECT_EQ(result_chunked, total_expected_deleted);

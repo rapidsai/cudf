@@ -192,8 +192,8 @@ table_with_metadata read_parquet(
  */
 size_t compute_num_deleted_rows(
   deletion_vector_info const& deletion_vector_info,
-  size_t chunk_max_rows        = static_cast<size_t>(std::numeric_limits<size_type>::max()),
-  rmm::cuda_stream_view stream = cudf::get_default_stream());
+  cudf::size_type chunk_max_rows = std::numeric_limits<size_type>::max(),
+  rmm::cuda_stream_view stream   = cudf::get_default_stream());
 
 /** @} */  // end of group
 
