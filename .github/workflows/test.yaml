@@ -43,7 +43,7 @@ jobs:
       matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-cpp-benchmark-tests:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@python-3.14
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
