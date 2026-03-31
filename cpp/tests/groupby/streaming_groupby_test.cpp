@@ -803,15 +803,15 @@ TEST_F(StreamingGroupbyTest, SumAndMeanOnSameColumn)
   verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
 }
 
-// Regression test: staging buffer must grow when more than 2 batches are fed.
-TEST_F(StreamingGroupbyTest, ManyBatchesGrowsStaging)
+// Test that many small batches accumulate correctly within the fixed-capacity key table.
+TEST_F(StreamingGroupbyTest, ManySmallBatches)
 {
   using K = int32_t;
   using V = int32_t;
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  // max_groups=16, initial staging capacity=32. Feed 10 batches of 4 rows → _staging_end=40.
-  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 16);
+  // 10 batches of 4 rows = 40 total rows; set max_groups=40 to fit all rows.
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 40);
 
   std::vector<cudf::table_view> batches;
   std::vector<std::unique_ptr<cudf::column>> key_owners;
@@ -831,6 +831,28 @@ TEST_F(StreamingGroupbyTest, ManyBatchesGrowsStaging)
 
   auto [keys, results] = streaming_agg.finalize();
   verify_against_groupby(keys, results, batches, KEY_COL, reqs);
+}
+
+// Test that exceeding key table capacity throws std::overflow_error.
+TEST_F(StreamingGroupbyTest, ExceedsKeyTableCapacityThrows)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 8);
+
+  // First batch of 4 rows succeeds.
+  fixed_width_column_wrapper<K> k1{0, 1, 2, 3};
+  fixed_width_column_wrapper<V> v1{10, 20, 30, 40};
+  cudf::table_view batch1{{k1, v1}};
+  streaming_agg.aggregate(batch1);
+
+  // Second batch of 5 rows would make staging_end=9 > max_groups=8.
+  fixed_width_column_wrapper<K> k2{0, 1, 2, 3, 4};
+  fixed_width_column_wrapper<V> v2{50, 60, 70, 80, 90};
+  cudf::table_view batch2{{k2, v2}};
+  EXPECT_THROW(streaming_agg.aggregate(batch2), std::overflow_error);
 }
 
 // Test that sliced input columns with non-zero offsets work correctly.
