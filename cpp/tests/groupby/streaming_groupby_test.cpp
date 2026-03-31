@@ -9,9 +9,9 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -294,7 +294,7 @@ TEST_F(StreamingGroupbyTest, MergeTwoObjects)
 {
   using K = int32_t;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   fixed_width_column_wrapper<K> keys1{1, 2, 1};
   fixed_width_column_wrapper<V> vals1{10, 20, 30};
@@ -322,7 +322,7 @@ TEST_F(StreamingGroupbyTest, EmptyBatch)
 {
   using K = int32_t;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   fixed_width_column_wrapper<K> keys1{1, 2};
   fixed_width_column_wrapper<V> vals1{10, 20};
@@ -429,7 +429,7 @@ TEST_F(StreamingGroupbyTest, FinalizeDoesNotModifyState)
 {
   using K = int32_t;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   fixed_width_column_wrapper<K> keys1{1, 2};
   fixed_width_column_wrapper<V> vals1{10, 20};
@@ -484,7 +484,7 @@ TEST_F(StreamingGroupbyTest, NullKeysIncluded)
 {
   using K = int32_t;
   using V = int32_t;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R = int64_t;
 
   fixed_width_column_wrapper<K> keys1{{1, 2, 3}, {true, false, true}};
   fixed_width_column_wrapper<V> vals1{10, 20, 30};
