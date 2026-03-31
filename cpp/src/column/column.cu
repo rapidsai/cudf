@@ -260,20 +260,16 @@ column::column(column_view view, rmm::cuda_stream_view stream, rmm::device_async
 {
 }
 
-namespace {
-
-[[nodiscard]] std::unique_ptr<column> rebind_column_streams(std::unique_ptr<column> col,
-                                                            rmm::cuda_stream_view stream)
+std::unique_ptr<column> rebind_stream(column&& col, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(col != nullptr, "rebind_stream requires a non-null column");
-  auto const dtype      = col->type();
-  auto const sz         = col->size();
-  auto const null_count = col->null_count();
-  auto contents         = col->release();
+  auto const dtype      = col.type();
+  auto const sz         = col.size();
+  auto const null_count = col.null_count();
+  auto contents         = std::move(col).release();
   contents.data->set_stream(stream);
   contents.null_mask->set_stream(stream);
   for (auto& child : contents.children) {
-    child = rebind_column_streams(std::move(child), stream);
+    child = rebind_stream(std::move(*child), stream);
   }
   return std::make_unique<column>(dtype,
                                   sz,
@@ -281,13 +277,6 @@ namespace {
                                   std::move(*contents.null_mask),
                                   null_count,
                                   std::move(contents.children));
-}
-
-}  // namespace
-
-std::unique_ptr<column> rebind_stream(std::unique_ptr<column> col, rmm::cuda_stream_view stream)
-{
-  return rebind_column_streams(std::move(col), stream);
 }
 
 }  // namespace cudf

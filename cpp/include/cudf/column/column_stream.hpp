@@ -29,12 +29,11 @@ namespace CUDF_EXPORT cudf {
  * this column's device memory to @p stream (for example `cudf::detail::join_streams` after
  * parallel work on a stream pool, or explicit events / synchronization).
  *
- * @param col Column to rebind; ownership is transferred from this `unique_ptr`
+ * @param col Column to rebind; ownership is transferred from this rvalue
  * @param stream Stream used for future asynchronous deallocation of the buffers
  * @return Column with equivalent contents and rebinding applied
  */
-[[nodiscard]] std::unique_ptr<column> rebind_stream(std::unique_ptr<column> col,
-                                                    rmm::cuda_stream_view stream);
+[[nodiscard]] std::unique_ptr<column> rebind_stream(column&& col, rmm::cuda_stream_view stream);
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf

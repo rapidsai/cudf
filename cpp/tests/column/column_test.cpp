@@ -671,7 +671,7 @@ TEST_F(RebindStreamColumnTest, RebindStreamPreservesNestedStructData)
 
   auto const expected = std::make_unique<cudf::column>(col->view(), cudf::get_default_stream());
 
-  auto rebound = cudf::rebind_stream(std::move(col), stream_b);
+  auto rebound = cudf::rebind_stream(std::move(*col), stream_b);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), rebound->view());
 
@@ -680,7 +680,7 @@ TEST_F(RebindStreamColumnTest, RebindStreamPreservesNestedStructData)
   auto const idempotent_expected =
     std::make_unique<cudf::column>(idempotent_col->view(), cudf::get_default_stream());
   auto idempotent_rebound =
-    cudf::rebind_stream(std::move(idempotent_col), cudf::get_default_stream());
+    cudf::rebind_stream(std::move(*idempotent_col), cudf::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(idempotent_expected->view(), idempotent_rebound->view());
 }
 
