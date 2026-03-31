@@ -237,6 +237,11 @@ struct streaming_groupby::impl {
 
   std::unique_ptr<table> _agg_results;
 
+  // Cached mapping: for each column in the expanded single-pass agg values table,
+  // stores the corresponding data column index. Built once during initialize() to
+  // avoid re-calling build_aggregation_requests + extract_single_pass_aggs per batch.
+  std::vector<size_type> _value_col_indices;
+
   // Only the non-nullable set is used since streaming_groupby requires fixed-width keys
   // (no nested columns). The equality comparator is rebound per-batch with correct null
   // awareness, so flat nullable columns are handled correctly.
@@ -296,6 +301,19 @@ struct streaming_groupby::impl {
 
     _agg_results = detail::hash::create_results_table(
       _max_groups, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
+
+    // Build the cached mapping from each expanded agg column to its source data column index.
+    // This avoids re-calling build_aggregation_requests + extract_single_pass_aggs per batch.
+    _value_col_indices.reserve(values_view.num_columns());
+    for (size_type c = 0; c < values_view.num_columns(); ++c) {
+      auto const* col_head = values_view.column(c).head();
+      for (size_type j = 0; j < static_cast<size_type>(agg_requests.size()); ++j) {
+        if (agg_requests[j].values.head() == col_head) {
+          _value_col_indices.push_back(_requests_clone[j].column_index);
+          break;
+        }
+      }
+    }
 
     // Compute per-request first-column offset into the flattened single-pass agg table,
     // needed to retrieve the correct intermediate column for compound agg finalization.
@@ -554,12 +572,14 @@ struct streaming_groupby::impl {
     auto result = compute_batch_target_indices(batch_size, staging_offset, full_key_view, stream);
     _num_unique_keys += result.new_insertions;
 
-    auto agg_requests         = build_aggregation_requests(_requests_clone, data);
-    auto [values_view,
-          agg_kinds_batch,
-          agg_objects_batch,
-          is_intermediate_batch,
-          has_compound_batch] = detail::hash::extract_single_pass_aggs(agg_requests, stream);
+    // Build values_view using cached column index mapping (avoids per-batch
+    // build_aggregation_requests + extract_single_pass_aggs overhead).
+    std::vector<column_view> value_cols;
+    value_cols.reserve(_value_col_indices.size());
+    for (auto idx : _value_col_indices) {
+      value_cols.push_back(data.column(idx));
+    }
+    auto const values_view = table_view{value_cols};
 
     auto const d_values    = table_device_view::create(values_view, stream);
     auto d_results_ptr     = mutable_table_device_view::create(*_agg_results, stream);
@@ -574,6 +594,7 @@ struct streaming_groupby::impl {
       detail::hash::compute_single_pass_aggs_dense_output_fn{
         result.target_indices.begin(), d_agg_kinds.data(), *d_values, *d_results_ptr});
 
+    // Check after aggregation so internal state remains consistent if this throws.
     check_unique_key_count();
   }
 
@@ -657,6 +678,10 @@ struct streaming_groupby::impl {
     CUDF_EXPECTS(_initialized,
                  "Cannot merge into an uninitialized streaming_groupby. "
                  "Call aggregate() at least once before merge().");
+    CUDF_EXPECTS(other._num_unique_keys <= _max_groups,
+                 "Merge source unique keys (" + std::to_string(other._num_unique_keys) +
+                   ") exceeds max_groups (" + std::to_string(_max_groups) + ").",
+                 std::invalid_argument);
 
     // Gather other's populated keys and raw intermediate agg results.
     auto const other_visible  = other._staging_end;
@@ -709,7 +734,6 @@ struct streaming_groupby::impl {
       compute_batch_target_indices(num_other_groups, staging_offset, full_key_view, stream);
     _num_unique_keys += result.new_insertions;
 
-    // Merge intermediates using merge-aware aggregation (adds counts, doesn't re-square, etc.)
     auto const d_source    = table_device_view::create(other_aggs->view(), stream);
     auto d_target          = mutable_table_device_view::create(*_agg_results, stream);
     auto const d_agg_kinds = cudf::detail::make_device_uvector_async(
@@ -722,6 +746,7 @@ struct streaming_groupby::impl {
                        merge_single_pass_aggs_fn{
                          result.target_indices.begin(), d_agg_kinds.data(), *d_source, *d_target});
 
+    // Check after merge aggregation so internal state remains consistent if this throws.
     check_unique_key_count();
   }
 };
