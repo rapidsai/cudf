@@ -166,9 +166,12 @@ class IRExecutionContext:
         that the inputs are valid long enough for the stream-ordered operations to
         complete.
         """
-        result_stream = get_joined_cuda_stream(
-            self.get_cuda_stream, upstreams=[df.stream for df in dfs]
-        )
+        if len(dfs) == 1:
+            result_stream = dfs[0].stream
+        else:
+            result_stream = get_joined_cuda_stream(
+                self.get_cuda_stream, upstreams=[df.stream for df in dfs]
+            )
 
         yield result_stream
 

@@ -30,7 +30,8 @@ import os
 import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
-from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
+from rmm.pylibrmm import CudaStreamPool
+from rmm.pylibrmm.cuda_stream import CudaStreamFlags
 
 if TYPE_CHECKING:
     from collections.abc import Callable
