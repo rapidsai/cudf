@@ -26,7 +26,6 @@
 
 #include <cuda/functional>
 #include <cuda/std/optional>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
 namespace cudf {

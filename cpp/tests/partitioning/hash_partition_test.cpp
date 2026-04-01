@@ -20,7 +20,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/devices>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <numeric>
@@ -160,7 +160,7 @@ TEST_F(HashPartition, LargePartitionCountCorrectness)
 {
   cudf::size_type const num_rows       = 1000;
   cudf::size_type const num_partitions = partitions_exceeding_shared_memory();
-  auto const iter                      = thrust::make_counting_iterator(0);
+  auto const iter                      = cuda::counting_iterator<int32_t>{0};
   fixed_width_column_wrapper<int32_t> col(iter, iter + num_rows);
   auto const input = cudf::table_view({col});
 
@@ -182,7 +182,7 @@ TEST_F(HashPartition, LargePartitionCountMixedTypes)
 {
   cudf::size_type const num_rows       = 100;
   cudf::size_type const num_partitions = partitions_exceeding_shared_memory();
-  auto const iter                      = thrust::make_counting_iterator(0);
+  auto const iter                      = cuda::counting_iterator<int32_t>{0};
 
   fixed_width_column_wrapper<float> floats(iter, iter + num_rows);
   fixed_width_column_wrapper<int16_t> integers(iter, iter + num_rows);
@@ -207,7 +207,7 @@ TEST_F(HashPartition, LargePartitionCountWithNulls)
 {
   cudf::size_type const num_rows       = 200;
   cudf::size_type const num_partitions = partitions_exceeding_shared_memory();
-  auto const iter                      = thrust::make_counting_iterator(0);
+  auto const iter                      = cuda::counting_iterator<int32_t>{0};
   auto const valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
 
   fixed_width_column_wrapper<int32_t> ints(iter, iter + num_rows, valids);
@@ -365,13 +365,13 @@ void run_fixed_width_test(size_t cols,
   columns.reserve(cols);
   if (has_nulls) {
     std::generate_n(std::back_inserter(columns), cols, [rows]() {
-      auto iter   = thrust::make_counting_iterator(0);
+      auto iter   = cuda::counting_iterator<int32_t>{0};
       auto valids = thrust::make_transform_iterator(iter, [](auto i) { return i % 4 != 0; });
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows, valids);
     });
   } else {
     std::generate_n(std::back_inserter(columns), cols, [rows]() {
-      auto iter = thrust::make_counting_iterator(0);
+      auto iter = cuda::counting_iterator<int32_t>{0};
       return fixed_width_column_wrapper<T, int32_t>(iter, iter + rows);
     });
   }
