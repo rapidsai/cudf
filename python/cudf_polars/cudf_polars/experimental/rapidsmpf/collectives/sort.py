@@ -221,8 +221,7 @@ async def _receive_and_buffer_chunks(
 
     while (msg := await ch_in.recv(context)) is not None:
         seq_num = msg.sequence_number
-        df = await asyncio.to_thread(
-            chunk_to_frame,
+        df = chunk_to_frame(
             TableChunk.from_message(msg).make_available_and_spill(
                 context.br(), allow_overbooking=True
             ),
