@@ -1,14 +1,15 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import inspect
-from functools import partial
+from functools import cache, partial
 from io import StringIO
 
 import numpy as np
 import pytest
 
+import cudf.pandas.fast_slow_proxy
 from cudf.pandas.fast_slow_proxy import (
     _fast_arg,
     _FunctionProxy,
@@ -18,6 +19,33 @@ from cudf.pandas.fast_slow_proxy import (
     make_final_proxy_type,
     make_intermediate_proxy_type,
 )
+
+
+@pytest.fixture(autouse=True)
+def ensure_temp_proxy_maps(monkeypatch):
+    # Ensure these tests do not pollute the global, cached final/intermediate type maps
+    @cache
+    def mock_get_final_type_map():
+        return {}
+
+    @cache
+    def mock_get_intermediate_type_map():
+        return {}
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            cudf.pandas.fast_slow_proxy,
+            "get_final_type_map",
+            mock_get_final_type_map,
+        )
+        m.setattr(
+            cudf.pandas.fast_slow_proxy,
+            "get_intermediate_type_map",
+            mock_get_intermediate_type_map,
+        )
+        yield
+    mock_get_final_type_map.cache_clear()
+    mock_get_intermediate_type_map.cache_clear()
 
 
 @pytest.fixture
