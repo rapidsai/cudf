@@ -23,7 +23,6 @@ def engine():
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
     )
@@ -38,7 +37,6 @@ def engine_large():
             "max_rows_per_partition": 2_100,
             "cluster": DEFAULT_CLUSTER,
             "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": "tasks",
             "fallback_mode": "raise",
         },
     )
