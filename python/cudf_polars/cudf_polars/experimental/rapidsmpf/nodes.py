@@ -345,12 +345,9 @@ async def fanout_node_unbounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        task_references = set()
-        async with asyncio.TaskGroup() as tg:
-            for ch in chs_out:
-                task = tg.create_task(send_metadata(ch, context, metadata))
-                task_references.add(task)
-                task.add_done_callback(task_references.discard)
+        await run_tasks_without_outputs(
+            send_metadata(ch, context, metadata) for ch in chs_out
+        )
 
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]

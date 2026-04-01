@@ -91,10 +91,10 @@ async def run_tasks_without_outputs(coroutines: Iterable[Any]) -> None:
 
     Notes
     -----
-    From https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task:
+    From https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
 
     > A task that isn't referenced elsewhere may get garbage collected at any time,
-    even before it's done"
+    even before it's done
     """
     task_references = set()
     async with asyncio.TaskGroup() as tg:
