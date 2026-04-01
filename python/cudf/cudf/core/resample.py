@@ -164,6 +164,7 @@ class _ResampleGrouping(_Grouping):
         return out
 
     def _handle_frequency_grouper(self, by):
+        from pandas.tseries.offsets import Day
         # if `by` is a time frequency grouper, we bin the key column
         # using bin intervals specified by `by.freq`, then use *that*
         # as the groupby key
@@ -281,7 +282,6 @@ class _ResampleGrouping(_Grouping):
         # (natural_end == max_date), include one trailing empty bin to match
         # pandas behavior. This only applies to Day offsets; sub-day Tick
         # offsets (e.g. Second) do not exhibit this behaviour.
-        from pandas.tseries.offsets import Day
 
         nbins = bin_numbers.max() + 1
         if (
