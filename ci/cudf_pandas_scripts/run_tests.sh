@@ -83,21 +83,31 @@ python -m pytest -p cudf.pandas \
 available_pandas_versions=$(python -m pip index versions pandas --json | jq '.versions')
 output=$(python ci/utils/filter_package_versions.py dependencies.yaml run_common pandas "$available_pandas_versions")
 
-# Convert the space-separated list into an array
 read -r -a versions <<< "${output}"
 
-version_lte() {
-  [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
-}
+if [[ "${RAPIDS_PY_VERSION}" < "3.13" ]]; then
+    for VERSION in "${versions[@]}"; do
+        echo "Running tests for pandas==${VERSION}"
 
-if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
-    for version in "${versions[@]}"; do
-        echo "Installing pandas version: ${version}"
-        # This loop tests cudf.pandas compatibility with older pandas-numpy versions,
-        # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
-        # downgrade cupy here to avoid an import failure when cupy tries
-        # to load against the older numpy.
-        rapids-pip-retry install "numpy>=1.26,<2.0a0" "pandas==${version}" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+        # Create isolated environment
+        python -m venv venv_${VERSION}
+        source venv_${VERSION}/bin/activate
+        unset PIP_CONSTRAINT
+
+        pip install --upgrade pip
+
+        # Install cudf + dependencies (reuse wheel install logic)
+        rapids-pip-retry install \
+            --constraint ./constraints.txt \
+            --constraint "${PIP_CONSTRAINT}" \
+            "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
+            "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+            "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
+
+        # Install pandas version + compatibility deps
+        pip install "numpy>=1.26,<2.0a0" "pandas==${VERSION}" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+
+        # Run parallel tests
         python -m pytest -p cudf.pandas \
             --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
             --numprocesses=8 \
@@ -111,15 +121,16 @@ if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
             --cov-report=term \
             ./python/cudf/cudf_pandas_tests/
 
-        # NOTE: We don't currently run serial tests (only 1 as of 2025-07-25)
-        # with multiple versions of pandas.
-
+        # Run profiler tests
         python -m pytest -p cudf.pandas \
             --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
             --numprocesses=0 \
             -k "profiler" \
             ./python/cudf/cudf_pandas_tests/
+
+        deactivate
+        rm -rf venv_${VERSION}
     done
 else
-    rapids-logger "Python ${RAPIDS_PY_VERSION} detected (>= 3.13). Skipping cudf.pandas compatibility tests with numpy<2"
+    rapids-logger "Python ${RAPIDS_PY_VERSION} detected (>= 3.13). Skipping cudf.pandas compatibility tests"
 fi
