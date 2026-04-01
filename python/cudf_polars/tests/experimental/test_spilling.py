@@ -9,9 +9,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-from rapidsmpf.config import Options
 from rapidsmpf.memory.buffer import MemoryType
-from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
+from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -26,10 +25,6 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-_pinned_memory_supported = (
-    PinnedMemoryResource.from_options(Options({"pinned_memory": "true"})) is not None
-)
 
 
 def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
@@ -48,7 +43,7 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
             {"rapidsmpf_options": {"pinned_memory": "true"}},
             MemoryType.PINNED_HOST,
             marks=pytest.mark.skipif(
-                not _pinned_memory_supported,
+                not is_pinned_memory_resources_supported(),
                 reason="Pinned memory requires CUDA 12.6+ driver and runtime",
             ),
         ),
@@ -63,8 +58,10 @@ def test_make_spill_function(
     context = engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:
+        assert engine.context.br().pinned_mr is not None
         other_host_mem_type = MemoryType.HOST
     else:
+        assert engine.context.br().pinned_mr is None
         other_host_mem_type = MemoryType.PINNED_HOST
 
     # Create 3 spillable message containers simulating fanout buffers
