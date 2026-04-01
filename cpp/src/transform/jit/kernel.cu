@@ -26,7 +26,7 @@
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
-// This header is an inlined header that defines the GENERIC_FILTER_OP function. It is placed here
+// This header is an inlined header that defines the GENERIC_TRANSFORM_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
@@ -64,12 +64,12 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       if constexpr (has_user_data) {
         auto args =
           cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, out_ptrs, inputs);
-        cuda::std::apply(GENERIC_TRANSFORM_OP, args);
+        cuda::std::apply([](auto&&... a) { GENERIC_TRANSFORM_OP(a...); }, args);
 
       } else {
         // TODO: static assert invocable
         auto args = cuda::std::tuple_cat(out_ptrs, inputs);
-        cuda::std::apply(GENERIC_TRANSFORM_OP, args);
+        cuda::std::apply([](auto&&... a) { GENERIC_TRANSFORM_OP(a...); }, args);
       }
 
       Outs::map([&]<typename... A>() {
@@ -92,11 +92,11 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       if constexpr (has_user_data) {
         auto args =
           cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, out_ptrs, inputs);
-        cuda::std::apply(GENERIC_TRANSFORM_OP, args);
+        cuda::std::apply([](auto&&... a) { GENERIC_TRANSFORM_OP(a...); }, args);
 
       } else {
         auto args = cuda::std::tuple_cat(out_ptrs, inputs);
-        cuda::std::apply(GENERIC_TRANSFORM_OP, args);
+        cuda::std::apply([](auto&&... a) { GENERIC_TRANSFORM_OP(a...); }, args);
       }
 
       Outs::map([&]<typename... A>() {
