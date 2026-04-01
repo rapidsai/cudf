@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
@@ -741,7 +741,7 @@ void struct_from_scalar(bool is_valid)
 
   // generate a column of size num_rows
   std::vector<cudf::column_view> cols;
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<int>{0};
   std::transform(iter, iter + num_rows, std::back_inserter(cols), [&](int i) {
     return static_cast<cudf::column_view>(struct_col);
   });

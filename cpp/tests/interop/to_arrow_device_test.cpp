@@ -17,8 +17,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, generated_test_data>
 get_nanoarrow_cudf_table(cudf::size_type length)
 {

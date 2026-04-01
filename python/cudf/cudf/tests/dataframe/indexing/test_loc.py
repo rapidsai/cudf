@@ -790,7 +790,13 @@ def test_sliced_indexing():
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
-    sli = slice(pd.to_datetime(sli.start), pd.to_datetime(sli.stop))
+    # Preserve None as None (not NaT) so pandas treats it as an open bound.
+    # pd.to_datetime(None) returns NaT, which pandas rejects as a slice
+    # bound on a non-monotonic datetime index.
+    sli = slice(
+        pd.to_datetime(sli.start) if sli.start is not None else None,
+        pd.to_datetime(sli.stop) if sli.stop is not None else None,
+    )
 
     if is_dataframe is True:
         pd_data = pd.DataFrame(
@@ -890,7 +896,9 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe():
 
 
 def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
-    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    # Use float columns so both cudf and pandas can hold NaN when aligning
+    # RHS columns that don't match the loc selection (int64 can't hold NaN).
+    gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]})
     pdf = gdf.to_pandas()
 
     actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
