@@ -14,7 +14,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <iostream>

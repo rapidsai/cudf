@@ -38,6 +38,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
+    gather_in_task_group,
     maybe_remap_partitioning,
     names_to_indices,
     process_children,
@@ -296,7 +297,7 @@ async def _broadcast_join(
     into a single DataFrame, then joined with each chunk from the large side.
     Pops one collective ID from collective_ids for allgather when needed.
     """
-    left_metadata, right_metadata = await asyncio.gather(
+    left_metadata, right_metadata = await gather_in_task_group(
         recv_metadata(ch_left, context),
         recv_metadata(ch_right, context),
     )
@@ -411,14 +412,14 @@ async def _join_chunks(
     tracer: ActorTracer | None,
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
-    await asyncio.gather(
+    await gather_in_task_group(
         recv_metadata(ch_left, context),
         recv_metadata(ch_right, context),
     )
 
     left, right = ir.children
     while True:
-        left_msg, right_msg = await asyncio.gather(
+        left_msg, right_msg = await gather_in_task_group(
             ch_left.recv(context), ch_right.recv(context)
         )
         if left_msg is None or right_msg is None:
@@ -578,7 +579,7 @@ async def _shuffle_join(
                 tracer=tracer,
             ),
         ]
-        await asyncio.gather(*actor_tasks)
+        await gather_in_task_group(*actor_tasks)
 
 
 def _make_shuffle_strategy(
@@ -970,7 +971,7 @@ async def join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
-        left_metadata, right_metadata = await asyncio.gather(
+        left_metadata, right_metadata = await gather_in_task_group(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
         )
@@ -990,59 +991,66 @@ async def join_actor(
 
         ch_left_replay = context.create_channel()
         ch_right_replay = context.create_channel()
-        actor_tasks = [
-            replay_buffered_channel(
-                context,
-                ch_left_replay,
-                ch_left,
-                left_sample.chunks,
-                left_metadata,
-                trace_ir=ir,
-            ),
-            replay_buffered_channel(
-                context,
-                ch_right_replay,
-                ch_right,
-                right_sample.chunks,
-                right_metadata,
-                trace_ir=ir,
-            ),
-        ]
-        ch_left = ch_left_replay
-        ch_right = ch_right_replay
+        async with shutdown_on_error(
+            context,
+            ch_left_replay,
+            ch_right_replay,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ):
+            actor_tasks = [
+                replay_buffered_channel(
+                    context,
+                    ch_left_replay,
+                    ch_left,
+                    left_sample.chunks,
+                    left_metadata,
+                    trace_ir=ir,
+                ),
+                replay_buffered_channel(
+                    context,
+                    ch_right_replay,
+                    ch_right,
+                    right_sample.chunks,
+                    right_metadata,
+                    trace_ir=ir,
+                ),
+            ]
+            ch_left = ch_left_replay
+            ch_right = ch_right_replay
 
-        if strategy.broadcast_side is not None:
-            actor_tasks.append(
-                _broadcast_join(
-                    context,
-                    comm,
-                    ir,
-                    ir_context,
-                    ch_out,
-                    ch_left,
-                    ch_right,
-                    strategy,
-                    collective_ids,
-                    executor.target_partition_size,
-                    tracer=tracer,
+            if strategy.broadcast_side is not None:
+                actor_tasks.append(
+                    _broadcast_join(
+                        context,
+                        comm,
+                        ir,
+                        ir_context,
+                        ch_out,
+                        ch_left,
+                        ch_right,
+                        strategy,
+                        collective_ids,
+                        executor.target_partition_size,
+                        tracer=tracer,
+                    )
                 )
-            )
-        else:
-            actor_tasks.append(
-                _shuffle_join(
-                    context,
-                    comm,
-                    ir,
-                    ir_context,
-                    ch_out,
-                    ch_left,
-                    ch_right,
-                    strategy,
-                    collective_ids,
-                    tracer=tracer,
+            else:
+                actor_tasks.append(
+                    _shuffle_join(
+                        context,
+                        comm,
+                        ir,
+                        ir_context,
+                        ch_out,
+                        ch_left,
+                        ch_right,
+                        strategy,
+                        collective_ids,
+                        tracer=tracer,
+                    )
                 )
-            )
-        await asyncio.gather(*actor_tasks)
+            await gather_in_task_group(*actor_tasks)
 
 
 @generate_ir_sub_network.register(Join)

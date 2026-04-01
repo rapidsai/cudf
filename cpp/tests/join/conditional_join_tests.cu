@@ -19,7 +19,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 
