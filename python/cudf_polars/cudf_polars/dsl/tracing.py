@@ -39,9 +39,6 @@ LOG_MEMORY = LOG_TRACES and _bool_converter(
 LOG_DATAFRAMES = LOG_TRACES and _bool_converter(
     os.environ.get("CUDF_POLARS_LOG_TRACES_DATAFRAMES", "1")
 )
-# Records CUDA events on ``IRExecutionContext.get_cuda_stream()``; separate
-# ``Execute IR GPU`` line is logged asynchronously (no tracing-only sync). Work
-# ordered only on other streams may not be fully reflected (see stream ordering).
 LOG_TRACES_GPU = LOG_TRACES and _bool_converter(
     os.environ.get("CUDF_POLARS_LOG_TRACES_GPU", "0")
 )
@@ -65,7 +62,6 @@ class Scope(str, enum.Enum):
     PLAN = "plan"
     ACTOR = "actor"
     EVALUATE_IR_NODE = "evaluate_ir_node"
-    # Separate line emitted when CUDF_POLARS_LOG_TRACES_GPU=1 (GPU duration, async).
     EVALUATE_IR_NODE_GPU = "evaluate_ir_node_gpu"
 
 
