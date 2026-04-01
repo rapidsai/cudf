@@ -8,7 +8,6 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
@@ -178,16 +177,8 @@ async def _collect_small_side_for_broadcast(
     chunks: list[TableChunk] = []
     while (msg := await ch.recv(context)) is not None:
         chunks.append(TableChunk.from_message(msg))
-        size += chunks[-1].data_alloc_size(MemoryType.DEVICE)
-    # TODO: We only need to spill the chunks here, because
-    # we don't track row-count metadata yet.
-    chunks, _ = await make_table_chunks_available_or_wait(
-        context,
-        chunks,
-        reserve_extra=0,
-        net_memory_delta=0,
-    )
-    row_count = sum(c.table_view().num_rows() for c in chunks)
+        size += chunks[-1].data_alloc_size()
+    row_count = sum(c.shape[0] for c in chunks)
 
     if (can_concatenate := row_count < CUDF_ROW_LIMIT) and concat_size_limit:
         can_concatenate = size <= concat_size_limit
@@ -223,6 +214,9 @@ async def _collect_small_side_for_broadcast(
                     )
                 ]
         else:
+            chunks, _ = await make_table_chunks_available_or_wait(
+                context, chunks, reserve_extra=0, net_memory_delta=0
+            )
             dfs = [chunk_to_frame(c, ir) for c in chunks]
 
     return dfs, size
@@ -245,7 +239,7 @@ async def _broadcast_join_large_chunk(
 ) -> None:
     """Join one large-side chunk with the small DataFrame(s) and send the result."""
     large_df = chunk_to_frame(large_chunk, large_child)
-    large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
+    large_chunk_size = large_chunk.data_alloc_size()
 
     dfs_to_join = small_dfs
     if not dfs_to_join:
@@ -841,8 +835,8 @@ async def _sample_chunks(
             context.br(), allow_overbooking=True
         )
         sampled_chunks[msg.sequence_number] = chunk
-        total_size += chunk.data_alloc_size(MemoryType.DEVICE)
-        total_rows += chunk.table_view().num_rows()
+        total_size += chunk.data_alloc_size()
+        total_rows += chunk.shape[0]
         if total_size >= max_sample_bytes:
             break
     if sampled_chunks:
