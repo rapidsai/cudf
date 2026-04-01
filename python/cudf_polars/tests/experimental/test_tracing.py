@@ -19,11 +19,11 @@ def test_structlog_streaming_node_events():
     import polars as pl
 
     rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
     df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
     q = df.lazy().filter(pl.col("x") > 50).group_by("y").agg(pl.col("x").sum())
-    with spmd_execution(executor_options={"max_rows_per_partition": 10}) as engine:
+    with SPMDEngine(executor_options={"max_rows_per_partition": 10}) as engine:
         q.collect(engine=engine)
     """)
 
@@ -53,11 +53,11 @@ def test_structlog_contains_expected_ir_types():
     import polars as pl
 
     rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
     df = pl.DataFrame({"x": range(100), "y": ["a", "b"] * 50})
     q = df.lazy().filter(pl.col("x") > 50).group_by("y").agg(pl.col("x").sum())
-    with spmd_execution(executor_options={"max_rows_per_partition": 10}) as engine:
+    with SPMDEngine(executor_options={"max_rows_per_partition": 10}) as engine:
         q.collect(engine=engine)
     """)
 
@@ -85,11 +85,11 @@ def test_structlog_disabled_by_default():
     import polars as pl
 
     rmm.mr.set_current_device_resource(rmm.mr.ManagedMemoryResource())
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
     df = pl.DataFrame({"x": range(10), "y": ["a", "b"] * 5})
     q = df.lazy().filter(pl.col("x") > 5)
-    with spmd_execution(executor_options={"max_rows_per_partition": 5}) as engine:
+    with SPMDEngine(executor_options={"max_rows_per_partition": 5}) as engine:
         q.collect(engine=engine)
     """)
 
