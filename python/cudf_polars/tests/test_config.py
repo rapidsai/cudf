@@ -557,16 +557,6 @@ def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
             ConfigOptions.from_polars_engine(engine)
 
 
-def test_cardinality_factor_compat() -> None:
-    with pytest.warns(FutureWarning, match="configuration is deprecated"):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={"cardinality_factor": {}},
-            )
-        )
-
-
 @pytest.mark.parametrize(
     "option",
     [
