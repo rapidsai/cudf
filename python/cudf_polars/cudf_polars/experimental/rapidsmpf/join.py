@@ -418,7 +418,7 @@ async def _join_chunks(
     tracer: ActorTracer | None,
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
-    left_metadata, right_metadata = await gather_in_task_group(
+    await gather_in_task_group(
         recv_metadata(ch_left, context), recv_metadata(ch_right, context)
     )
 
@@ -427,7 +427,6 @@ async def _join_chunks(
         left_msg, right_msg = await gather_in_task_group(
             ch_left.recv(context), ch_right.recv(context)
         )
-
         if left_msg is None or right_msg is None:
             assert left_msg is None, (
                 "Mismatched chunk counts in shuffle join: left has unmatched chunk. "
@@ -981,6 +980,7 @@ async def join_actor(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
         )
+
         left_sample, right_sample, strategy = await _choose_strategy(
             context,
             comm,

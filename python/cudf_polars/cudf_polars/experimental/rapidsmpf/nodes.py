@@ -133,10 +133,9 @@ async def default_node_multi(
         local_count = 1
         duplicated = True
         partitioning = None
-        metadata = await gather_in_task_group(
-            *(recv_metadata(ch, context) for ch in chs_in)
-        )
-        for idx, md_child in enumerate(metadata):
+        for idx, md_child in enumerate(
+            await gather_in_task_group(*(recv_metadata(ch, context) for ch in chs_in))
+        ):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
             # Set "duplicated" to False as soon as we
