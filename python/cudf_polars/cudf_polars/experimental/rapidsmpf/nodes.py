@@ -27,11 +27,11 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunkwise_evaluate,
     empty_table_chunk,
+    gather_in_task_group,
     make_spill_function,
     maybe_remap_partitioning,
     process_children,
     recv_metadata,
-    run_tasks_without_outputs,
     send_metadata,
     shutdown_on_error,
 )
@@ -133,9 +133,10 @@ async def default_node_multi(
         local_count = 1
         duplicated = True
         partitioning = None
-        async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(recv_metadata(ch, context)) for ch in chs_in]
-        for idx, md_child in enumerate(task.result() for task in tasks):
+        metadata = await gather_in_task_group(
+            *(recv_metadata(ch, context) for ch in chs_in)
+        )
+        for idx, md_child in enumerate(metadata):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
             # Set "duplicated" to False as soon as we
@@ -275,8 +276,8 @@ async def fanout_node_bounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await run_tasks_without_outputs(
-            send_metadata(ch, context, metadata) for ch in chs_out
+        await gather_in_task_group(
+            *(send_metadata(ch, context, metadata) for ch in chs_out)
         )
 
         while (msg := await ch_in.recv(context)) is not None:
@@ -299,7 +300,7 @@ async def fanout_node_bounded(
                 )
             del table_chunk
 
-        await run_tasks_without_outputs(ch.drain(context) for ch in chs_out)
+        await gather_in_task_group(*(ch.drain(context) for ch in chs_out))
 
 
 @define_actor()
@@ -345,8 +346,8 @@ async def fanout_node_unbounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await run_tasks_without_outputs(
-            send_metadata(ch, context, metadata) for ch in chs_out
+        await gather_in_task_group(
+            *(send_metadata(ch, context, metadata) for ch in chs_out)
         )
 
         # Spillable FIFO buffer for each output channel
