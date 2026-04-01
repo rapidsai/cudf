@@ -782,8 +782,10 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
                         "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
+                    | get_environment_variables()
                 ),
             )
+
             # Setting this globally makes the peak statistics not meaningful
             # across queries / iterations. But doing it per query isn't worth
             # the effort right now.
@@ -1248,7 +1250,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=textwrap.dedent("""\
             Whether RapidsMPF should spill to pinned host memory when available,
             or use regular pageable host memory."""),
