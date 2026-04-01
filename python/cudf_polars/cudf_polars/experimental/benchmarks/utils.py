@@ -41,7 +41,7 @@ HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
 COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
 
 try:
-    import duckdb
+    import duckdbaaaaa as duckdb
 
     duckdb_err = None
 except ImportError as e:

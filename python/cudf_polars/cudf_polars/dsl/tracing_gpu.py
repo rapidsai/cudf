@@ -2,28 +2,38 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Asynchronous GPU timing for IR tracing using CUDA events (no logging-only sync).
+Asynchronous GPU timing for IR tracing using CUDA events.
 
-CUDA host functions enqueued via :func:`cudaLaunchHostFunc` must not call the CUDA API.
-This module queues completion tokens from that host callback and processes them on a
-worker thread, which may call :func:`cudaEventElapsedTime` and destroy events after the
-GPU work (and event records) have completed.
+To expose *device* side timing in trace events, we use CUDA Events to record the
+start and end times of work done on some CUDA stream.
+
+See https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html#timing-operations-in-cuda-streams
+for details. This is all well and good, but we also need to
+
+1. Extract the timing information from the CUDA Events *after*
+   the work has completed (asynchronously with respect to the host program).
+2. Get the timing information back to Python for logging.
+
+`cudaLaunchHostFunc` is the typical solution to step 1. We'll schedule a
+callback to run once the work on the IR channel is done. However, cudf-polars
+being in Python massively complicates things.
 """
 
 from __future__ import annotations
 
 import ctypes
+import functools
 import itertools
 import queue
 import threading
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import Any, TypedDict
 
 from cuda.bindings import runtime
 
-from cudf_polars.dsl.tracing import Scope as _TracingScope
+import rmm.pylibrmm.stream
 
-if TYPE_CHECKING:
-    import rmm.pylibrmm.stream
+from cudf_polars.dsl.tracing import Scope as _TracingScope
+from cudf_polars.utils.cuda_stream import join_cuda_streams
 
 
 class _GpuTracePending(TypedDict):
@@ -60,6 +70,19 @@ def _raw_host_fn(userdata: ctypes.c_void_p) -> None:
 
 _REGISTERED_HOST_FN = _HOST_CB_TYPE(_raw_host_fn)
 _HOST_FN = runtime.cudaHostFn_t(ctypes.cast(_REGISTERED_HOST_FN, ctypes.c_void_p).value)
+
+
+@functools.cache
+def get_host_notify_stream() -> rmm.pylibrmm.stream.Stream:
+    """
+    Return a process-wide CUDA stream used only for GPU-trace ``cudaLaunchHostFunc``.
+
+    The stream is created once (non-blocking) and reused so we do not enqueue Python
+    host callbacks on ``result.stream`` (which can deadlock with GIL + stream sync).
+    """
+    return rmm.pylibrmm.stream.Stream(
+        flags=rmm.pylibrmm.stream.CudaStreamFlags.NON_BLOCKING
+    )
 
 
 def rmm_stream_to_cuda_stream_t(
@@ -136,10 +159,12 @@ def begin_gpu_interval(
     """
     Create two events and record the start event on ``stream``.
 
-    The caller must record the end event on the same stream after IR work is queued
-    and call :func:`enqueue_gpu_trace_completion`, or :func:`destroy_event_pair` on
-    failure.
+    The end event is recorded on ``interval_end_stream`` passed to
+    :func:`enqueue_gpu_trace_completion` (typically ``result.stream``).
+    On failure before enqueue, call :func:`destroy_event_pair`.
     """
+    c_stream = rmm_stream_to_cuda_stream_t(stream)
+
     err, ev_start = runtime.cudaEventCreate()
     if err != runtime.cudaError_t.cudaSuccess:
         return None
@@ -147,7 +172,6 @@ def begin_gpu_interval(
     if err != runtime.cudaError_t.cudaSuccess:
         runtime.cudaEventDestroy(ev_start)
         return None
-    c_stream = rmm_stream_to_cuda_stream_t(stream)
     (rerr,) = runtime.cudaEventRecord(ev_start, c_stream)
     if rerr != runtime.cudaError_t.cudaSuccess:
         runtime.cudaEventDestroy(ev_start)
@@ -158,7 +182,8 @@ def begin_gpu_interval(
 
 def enqueue_gpu_trace_completion(
     *,
-    stream: rmm.pylibrmm.stream.Stream,
+    interval_end_stream: rmm.pylibrmm.stream.Stream,
+    host_notify_stream: rmm.pylibrmm.stream.Stream,
     ev_start: runtime.cudaEvent_t,
     ev_end: runtime.cudaEvent_t,
     trace_event_id: str,
@@ -167,17 +192,28 @@ def enqueue_gpu_trace_completion(
     log: Any,
 ) -> tuple[bool, str | None]:
     """
-    Record ``ev_end`` on ``stream``, register pending metadata, and enqueue ``cudaLaunchHostFunc``.
+    Finish the GPU interval and schedule the trace host callback.
+
+    Records ``ev_end`` on ``interval_end_stream`` (which must be downstream of
+    the work in IR.do_evaluate), then joins ``host_notify_stream`` downstream of
+    ``interval_end_stream`` so ``cudaLaunchHostFunc`` runs only after that work
+    (and the end event record) without enqueueing the callback on the result
+    stream.
 
     Returns (success, error_message).
     """
     _ensure_worker(log)
-    c_stream = rmm_stream_to_cuda_stream_t(stream)
-    (rerr,) = runtime.cudaEventRecord(ev_end, c_stream)
+    end_c = rmm_stream_to_cuda_stream_t(interval_end_stream)
+    (rerr,) = runtime.cudaEventRecord(ev_end, end_c)
     if rerr != runtime.cudaError_t.cudaSuccess:
         runtime.cudaEventDestroy(ev_start)
         runtime.cudaEventDestroy(ev_end)
         return False, f"cudaEventRecord(end): {rerr}"
+
+    join_cuda_streams(
+        downstreams=(host_notify_stream,),
+        upstreams=(interval_end_stream,),
+    )
 
     with _LOCK:
         token = next(_IDS)
@@ -189,7 +225,8 @@ def enqueue_gpu_trace_completion(
             "ir_type": ir_type,
         }
 
-    (herr,) = runtime.cudaLaunchHostFunc(c_stream, _HOST_FN, token)
+    notify_c = rmm_stream_to_cuda_stream_t(host_notify_stream)
+    (herr,) = runtime.cudaLaunchHostFunc(notify_c, _HOST_FN, token)
     if herr != runtime.cudaError_t.cudaSuccess:
         with _LOCK:
             _PENDING.pop(token, None)
