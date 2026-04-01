@@ -214,9 +214,6 @@ sha256 sha256_context::finalize()
   DO_IT(GetErrorString)                 \
   DO_IT(GetErrorName)                   \
   DO_IT(Init)                           \
-  DO_IT(DeviceGet)                      \
-  DO_IT(DeviceGetCount)                 \
-  DO_IT(DeviceGetName)                  \
   DO_IT(OccupancyMaxPotentialBlockSize) \
   DO_IT(LaunchKernel)                   \
   DO_IT(LaunchKernelEx)                 \
@@ -226,8 +223,6 @@ sha256 sha256_context::finalize()
   DO_IT(LibraryLoadData)                \
   DO_IT(LibraryLoadFromFile)            \
   DO_IT(LibraryGetKernel)               \
-  DO_IT(LibraryGetKernelCount)          \
-  DO_IT(LibraryEnumerateKernels)        \
   DO_IT(LibraryUnload)
 
 #define FOR_EACH_NVRTC_FUNC(DO_IT) \
@@ -890,24 +885,6 @@ kernel_ref library_t::get_kernel(char const* name) const
   CUkernel kernel;
   RTCX_CHECK_CUDA(cu->LibraryGetKernel(&kernel, handle_, name));
   return kernel_ref{kernel};
-}
-
-std::vector<kernel_ref> library_t::enumerate_kernels() const
-{
-  std::uint32_t num_kernels;
-  RTCX_CHECK_CUDA(cu->LibraryGetKernelCount(&num_kernels, handle_));
-
-  std::vector<CUkernel> kernels;
-  kernels.resize(num_kernels);
-
-  RTCX_CHECK_CUDA(cu->LibraryEnumerateKernels(kernels.data(), num_kernels, handle_));
-
-  std::vector<kernel_ref> result;
-  for (CUkernel k : kernels) {
-    result.emplace_back(k);
-  }
-
-  return result;
 }
 
 std::string demangle_cuda_symbol(char const* mangled_name)

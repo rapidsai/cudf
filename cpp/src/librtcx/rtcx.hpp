@@ -487,12 +487,6 @@ struct [[nodiscard]] library_t {
    * @brief Retrieve a kernel from the library by name
    */
   [[nodiscard]] kernel_ref get_kernel(char const* name) const;
-
-  /**
-   * @brief Enumerate all kernels contained in the library, returning a vector of kernel references
-   * @return A vector of kernel_ref objects representing all kernels contained in the library
-   */
-  [[nodiscard]] std::vector<kernel_ref> enumerate_kernels() const;
 };
 
 using library = std::shared_ptr<library_t>;
