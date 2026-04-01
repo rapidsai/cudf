@@ -142,19 +142,19 @@ std::string join_strings(std::span<StringType> strings, std::string_view separat
 
 void log_warning(std::string_view message)
 {
-  std::fprintf(
+  ::fprintf(
     stdout, "[RTCX WARNING] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
 }
 
 void log_error(std::string_view message)
 {
-  std::fprintf(
+  ::fprintf(
     stderr, "[RTCX ERROR] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
 }
 
 void log_trace(std::string_view message)
 {
-  std::fprintf(
+  ::fprintf(
     stdout, "[RTCX TRACE] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
 }
 
@@ -373,7 +373,7 @@ struct LibNVJitLink {
   LibNVJitLink(LibNVJitLink&&)                 = delete;
   LibNVJitLink& operator=(LibNVJitLink const&) = delete;
   LibNVJitLink& operator=(LibNVJitLink&&)      = delete;
-  ~LibNVJitLink() { dlclose(_handle); }
+  ~LibNVJitLink() { ::dlclose(_handle); }
 
   static void* _load()
   {
@@ -922,7 +922,7 @@ std::string demangle_cuda_symbol(char const* mangled_name)
   RTCX_EXPECTS(demangled_name != nullptr, "Demangling CUDA symbol name failed", std::runtime_error);
 
   RTCX_DEFER([&] {
-    if (demangled_name != nullptr) free(demangled_name);
+    if (demangled_name != nullptr) ::free(demangled_name);
   });
 
   std::string result{demangled_name};
@@ -965,7 +965,7 @@ std::string const& cache_t::get_tmp_dir() { return tmp_dir_; }
 
 std::optional<blob_t> blob_t::from_file(char const* path)
 {
-  std::int32_t fd = open(path, O_RDONLY);
+  std::int32_t fd = ::open(path, O_RDONLY);
 
   if (fd == -1) {
     if (errno == ENOENT) {
@@ -975,19 +975,19 @@ std::optional<blob_t> blob_t::from_file(char const* path)
     }
   }
 
-  auto file_size = lseek(fd, 0, SEEK_END);
+  auto file_size = ::lseek(fd, 0, SEEK_END);
   if (file_size == -1) { throw_posix("Failed to determine size of RTCX cache file", "lseek"); }
 
-  void* map = mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
+  void* map = ::mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
 
   if (map == MAP_FAILED) { throw_posix("Failed to memory-map RTCX cache file", "mmap"); }
 
-  if (close(fd) == -1) {
+  if (::close(fd) == -1) {
     throw_posix("Failed to close RTCX cache file after memory-mapping", "close");
   }
 
   auto deleter = +[](std::uint8_t const* buffer, std::size_t size) {
-    if (munmap(static_cast<void*>(const_cast<std::uint8_t*>(buffer)), size) == -1) {
+    if (::munmap(static_cast<void*>(const_cast<std::uint8_t*>(buffer)), size) == -1) {
       throw_posix("Failed to unmap RTCX cache file from memory", "munmap");
     }
   };
@@ -1034,11 +1034,11 @@ std::optional<library> get_disk_library(std::string const& cache_dir, sha256 con
 std::pair<std::vector<std::string>, std::vector<std::chrono::nanoseconds>> get_disk_entries(
   std::string const& cache_dir)
 {
-  std::int32_t dir = open(cache_dir.c_str(), O_RDONLY | O_DIRECTORY);
+  std::int32_t dir = ::open(cache_dir.c_str(), O_RDONLY | O_DIRECTORY);
 
   if (dir == -1) { throw_posix("Failed to open RTCX cache directory for evicting", "open"); }
 
-  RTCX_DEFER([&] { close(dir); });
+  RTCX_DEFER([&] { ::close(dir); });
 
   std::vector<char> buffer;
   buffer.resize(8192);
@@ -1048,13 +1048,13 @@ std::pair<std::vector<std::string>, std::vector<std::chrono::nanoseconds>> get_d
 
   std::ptrdiff_t num_read = 0;
 
-  while ((num_read = syscall(SYS_getdents64, dir, buffer.data(), buffer.size())) > 0) {
+  while ((num_read = ::syscall(SYS_getdents64, dir, buffer.data(), buffer.size())) > 0) {
     std::ptrdiff_t byte_pos = 0;
 
     while (byte_pos < num_read) {
       auto* ent = reinterpret_cast<struct dirent64 const*>(buffer.data() + byte_pos);
 
-      if (memcmp(ent->d_name, ".", 2) != 0 && memcmp(ent->d_name, "..", 3) != 0) {
+      if (::memcmp(ent->d_name, ".", 2) != 0 && ::memcmp(ent->d_name, "..", 3) != 0) {
         RTCX_EXPECTS(ent->d_type != DT_UNKNOWN,
                      "Found unknown directory entry type in RTCX cache dir",
                      std::runtime_error);
@@ -1062,7 +1062,7 @@ std::pair<std::vector<std::string>, std::vector<std::chrono::nanoseconds>> get_d
         if (ent->d_type == DT_REG) {
           auto path = std::format("{}/{}", cache_dir, ent->d_name);
           struct stat st;
-          if (stat(path.c_str(), &st) == -1 && errno != ENOENT) {
+          if (::stat(path.c_str(), &st) == -1 && errno != ENOENT) {
             throw_posix("Failed to get RTCX cache file stats", "stat");
           }
 
@@ -1104,7 +1104,7 @@ void evict_disk_entries(std::string const& cache_dir, std::uint32_t limit)
   auto num_evict = (limit == 0) ? paths.size() : ((limit + 1) / 2);
 
   for (auto index : std::span{ranking_indices}.subspan(0, num_evict)) {
-    if (unlink(paths[index].c_str()) == -1 && errno != ENOENT) {
+    if (::unlink(paths[index].c_str()) == -1 && errno != ENOENT) {
       throw_posix("Failed to evict RTCX cache file", "unlink");
     }
   }
@@ -1125,14 +1125,16 @@ void cache_blob_to_disk(std::string const& cache_dir,
     (void)tmp_path.c_str();  // to ensure null-termination for mkstemp
 
     {
-      std::int32_t fd = mkstemp(tmp_path.data());
+      std::int32_t fd = ::mkstemp(tmp_path.data());
       if (fd == -1) { throw_posix("Failed to create temporary file for RTCX cache", "mkstemp"); }
 
       RTCX_DEFER([&] {
-        if (close(fd) == -1) { throw_posix("Failed to close temporary RTCX cache file", "close"); }
+        if (::close(fd) == -1) {
+          throw_posix("Failed to close temporary RTCX cache file", "close");
+        }
       });
 
-      if (write(fd, binary.data(), binary.size()) == -1) {
+      if (::write(fd, binary.data(), binary.size()) == -1) {
         throw_posix("Failed to write RTCX cache to temporary file", "write");
       }
     }
@@ -1143,10 +1145,10 @@ void cache_blob_to_disk(std::string const& cache_dir,
     std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
 
     // rename is atomic, even if another process is performing the same operation
-    if (rename(tmp_path.c_str(), final_path.c_str()) == -1) {
+    if (::rename(tmp_path.c_str(), final_path.c_str()) == -1) {
       if (errno == EEXIST) {
         // another process has already created the file, so just remove our temp file
-        if (remove(tmp_path.c_str()) == -1) {
+        if (::remove(tmp_path.c_str()) == -1) {
           throw_posix("Failed to remove temporary RTCX cache file", "remove");
         }
         return;
