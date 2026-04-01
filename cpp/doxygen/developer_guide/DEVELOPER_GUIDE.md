@@ -169,6 +169,23 @@ Additional style guidelines for libcudf code:
 
 Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
 
+### Device Code and `constexpr` Functions
+
+libcudf does **not** enable `--expt-relaxed-constexpr`. This means the CUDA compiler will reject
+calls to `constexpr` host functions from `__device__` or `__global__` code. Follow these rules:
+
+ * Every `constexpr` function that may be called from device code **must** be explicitly annotated
+   with `__device__` or `CUDF_HOST_DEVICE`. A bare `constexpr` without an execution-space
+   annotation is host-only.
+ * In `__device__` and `CUDF_HOST_DEVICE` functions, use `cuda::std::`
+   utilities (type traits, algorithms, math functions) instead of `std::`. The `std::` counterparts
+   are host-only and will cause compilation errors in device code. For example:
+   - `cuda::std::is_void_v<T>` instead of `std::is_void_v<T>`
+   - `cuda::std::min` / `cuda::std::max` instead of `std::min` / `std::max`
+   - `cuda::std::numeric_limits<T>` instead of `std::numeric_limits<T>`
+ * Prefer `cuda::std::` type traits and constexpr functions over `std::` in templates that may be
+   instantiated in device code, even if the template itself is not annotated with `__device__`.
+
 ### Includes
 
 The following guidelines apply to organizing `#include` lines.
