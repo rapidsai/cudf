@@ -21,7 +21,12 @@ from cudf_polars.experimental.base import PartitionInfo, get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import _simple_shuffle_graph
-from cudf_polars.experimental.utils import _concat, _fallback_inform, _lower_ir_fallback
+from cudf_polars.experimental.utils import (
+    _concat,
+    _dynamic_planning_on,
+    _fallback_inform,
+    _lower_ir_fallback,
+)
 from cudf_polars.utils.config import ShuffleMethod
 from cudf_polars.utils.cuda_stream import (
     get_dask_cuda_stream,
@@ -47,14 +52,15 @@ def find_sort_splits(
     column_order: Sequence[plc.types.Order],
     null_order: Sequence[plc.types.NullOrder],
     stream: Stream,
+    *,
+    chunk_relative: bool = False,
 ) -> list[int]:
     """
     Find local sort splits given all (global) split candidates.
 
-    The reason for much of the complexity is to get the result sizes as
-    precise as possible even when e.g. all values are equal.
-    In other words, this goes through extra effort to split the data at the
-    precise boundaries (which includes part_id and local_row_number).
+    When multiple rows share a boundary value, they go to the later partition.
+    The ``part_id`` and ``local_row`` columns in ``sort_boundaries`` are used
+    for tiebreaking when ``chunk_relative=False``.
 
     Parameters
     ----------
@@ -73,6 +79,11 @@ def find_sort_splits(
         CUDA stream used for device memory operations and kernel launches.
         The values in both ``tbl`` and ``sort_boundaries`` must be valid on
         ``stream``.
+    chunk_relative
+        If True, when the boundary belongs to this partition (part_id == my_part_id)
+        use the position of the boundary value in ``tbl`` (``first``) instead of
+        ``local_row``. Use True when ``tbl`` is a chunk of the partition (e.g.
+        multiple chunks per rank); False when ``tbl`` is the full partition.
 
     Returns
     -------
@@ -81,12 +92,8 @@ def find_sort_splits(
     column_order = list(column_order)
     null_order = list(null_order)
 
-    # We now need to find the local split points.  To do this, first split out
-    # the partition id and the local row number of the final split values
     *boundary_cols, split_part_id, split_local_row = sort_boundaries.columns()
     sort_boundaries = plc.Table(boundary_cols)
-    # Now we find the first and last row in the local table corresponding to the split value
-    # (first and last, because there may be multiple rows with the same split value)
     split_first_col = plc.search.lower_bound(
         tbl,
         sort_boundaries,
@@ -94,45 +101,24 @@ def find_sort_splits(
         null_order,
         stream=stream,
     )
-    split_last_col = plc.search.upper_bound(
-        tbl,
-        sort_boundaries,
-        column_order,
-        null_order,
+    # Use DataFrame.to_polars() for a stream-aware D→H transfer.
+    # lower_bound returns size_type (INT32); part_id/local_row are UInt32.
+    _u32 = DataType(pl.UInt32())
+    df = DataFrame.from_table(
+        plc.Table([split_first_col, split_part_id, split_local_row]),
+        ["first", "part_id", "local_row"],
+        [DataType(pl.Int32()), _u32, _u32],
         stream=stream,
+    ).to_polars()
+    out = (
+        pl.col("first")
+        if chunk_relative
+        else pl.when(pl.col("part_id") == my_part_id)
+        .then(pl.col("local_row"))
+        .otherwise(pl.col("first"))
     )
-    # And convert to list for final processing
-    # The type ignores are for cross-library boundaries: plc.Column -> pl.Series
-    # These work at runtime via the Arrow C Data Interface protocol
-    # TODO: Find a way for pylibcudf types to show they export the Arrow protocol
-    # (mypy wasn't happy with a custom protocol)
-    split_first_list = pl.Series(split_first_col).to_list()
-    split_last_list = pl.Series(split_last_col).to_list()
-    split_part_id_list = pl.Series(split_part_id).to_list()
-    split_local_row_list = pl.Series(split_local_row).to_list()
-
-    # Find the final split points.  This is slightly tricky because of the possibility
-    # of equal values, which is why we need the part_id and local_row.
-    # Consider for example the case when all data is equal.
-    split_points = []
-    for first, last, part_id, local_row in zip(
-        split_first_list,
-        split_last_list,
-        split_part_id_list,
-        split_local_row_list,
-        strict=False,
-    ):
-        if part_id < my_part_id:
-            # Local data is globally later so split at first valid row.
-            split_points.append(first)
-        elif part_id > my_part_id:
-            # Local data is globally earlier so split after last valid row.
-            split_points.append(last)
-        else:
-            # The split point is within our chunk, so use original local row
-            split_points.append(local_row)
-
-    return split_points
+    cap = tbl.num_rows()
+    return df.select(out.clip(0, cap).sort()).to_series().to_list()
 
 
 def _select_local_split_candidates(
@@ -215,14 +201,25 @@ def _get_final_sort_boundaries(
     num_partitions
         The number of partitions to split the data into.
 
+    Returns
+    -------
+    sort_boundaries
+        Same schema as input (sort keys plus ``partition_id``,
+        ``local_row_number``). Empty when ``num_partitions <= 1``
+        or the candidate list is empty. Otherwise, the DataFrame
+        will contain ``num_partitions - 1`` rows of split
+        boundaries in global sort order.
     """
     column_order = list(column_order)
     null_order = list(null_order)
 
+    if num_partitions <= 1 or sort_boundaries_candidates.table.num_rows() == 0:
+        return sort_boundaries_candidates.slice((0, 0))  # pragma: no cover
+
     # The global split candidates need to be stable sorted to find the correct
     # final split points.
     # NOTE: This could be a merge if done earlier (but it should be small data).
-    sorted_candidates = plc.sorting.sort(
+    sorted_candidates = plc.sorting.stable_sort(
         sort_boundaries_candidates.table,
         # split candidates has the additional partition_id and row_number columns
         column_order + [plc.types.Order.ASCENDING] * 2,
@@ -558,9 +555,13 @@ def _(
 
     # Extract shuffle method
     config_options = rec.state["config_options"]
+    executor = config_options.executor
+
     # Avoid rapidsmpf shuffle with maintain_order=True (for now)
     shuffle_method = (
-        ShuffleMethod("tasks") if ir.stable else config_options.executor.shuffle_method
+        ShuffleMethod("tasks")
+        if (ir.stable and executor.runtime == "tasks")
+        else config_options.executor.shuffle_method
     )
     if (
         shuffle_method != config_options.executor.shuffle_method
@@ -571,22 +572,7 @@ def _(
             config_options,
         )
 
-    # RapidsMPF runtime: ShuffleSorted not supported, fall back to single partition.
-    # We always use fallback for rapidsmpf because dynamic planning may produce
-    # more partitions than expected at planning time.
-    if (
-        config_options.executor.runtime == "rapidsmpf"
-    ):  # pragma: no cover; Requires rapidsmpf runtime
-        return _lower_ir_fallback(
-            ir,
-            rec,
-            msg="Sort does not support multiple partitions with rapidsmpf runtime."
-            if partition_info[child].count > 1
-            else None,  # Don't warn if we expect single partition
-        )
-
-    # Handle single-partition case
-    elif partition_info[child].count == 1:
+    if partition_info[child].count == 1 and not _dynamic_planning_on(config_options):
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
@@ -610,29 +596,6 @@ def _(
     partition_info[final_sort_node] = partition_info[shuffle]
 
     return final_sort_node, partition_info
-
-
-@lower_ir_node.register(ShuffleSorted)
-def _(
-    ir: ShuffleSorted, rec: LowerIRTransformer
-) -> tuple[
-    IR, MutableMapping[IR, PartitionInfo]
-]:  # pragma: no cover; Requires rapidsmpf runtime
-    from cudf_polars.experimental.parallel import _lower_ir_pwise
-
-    config_options = rec.state["config_options"]
-
-    # RapidsMPF runtime: ShuffleSorted not supported, fall back to single partition
-    if (
-        config_options.executor.name == "streaming"
-        and config_options.executor.runtime == "rapidsmpf"
-    ):
-        return _lower_ir_fallback(
-            ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
-        )
-
-    # Default: partition-wise lowering
-    return _lower_ir_pwise(ir, rec)
 
 
 @generate_ir_tasks.register(ShuffleSorted)

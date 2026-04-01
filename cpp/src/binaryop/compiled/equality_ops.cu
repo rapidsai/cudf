@@ -1,9 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "binary_ops.cuh"
+
+#include <cuda/iterator>
 
 namespace cudf::binops::compiled {
 void dispatch_equality_op(mutable_column_view& out,
@@ -24,13 +26,13 @@ void dispatch_equality_op(mutable_column_view& out,
   if (common_dtype) {
     if (op == binary_operator::EQUAL) {
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         thrust::counting_iterator<size_type>(0),
+                         cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_device_dispatcher<ops::Equal>{
                            *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         thrust::counting_iterator<size_type>(0),
+                         cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_device_dispatcher<ops::NotEqual>{
                            *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
@@ -38,13 +40,13 @@ void dispatch_equality_op(mutable_column_view& out,
   } else {
     if (op == binary_operator::EQUAL) {
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         thrust::counting_iterator<size_type>(0),
+                         cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_double_device_dispatcher<ops::Equal>{
                            *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         thrust::counting_iterator<size_type>(0),
+                         cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_double_device_dispatcher<ops::NotEqual>{
                            *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
