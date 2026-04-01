@@ -429,15 +429,15 @@ async def _shuffle_reduce(
         shuffle_context,
         shuffle_comm,
         modulus,
-        decomposed.shuffle_indices,
         collective_id,
     )
 
-    shuffle.insert_chunk(
+    shuffle.insert_hash(
         _enforce_schema(
             aggregated,
             decomposed.reduction_ir.schema,
-        )
+        ),
+        decomposed.shuffle_indices,
     )
     del aggregated
 
@@ -449,8 +449,9 @@ async def _shuffle_reduce(
             ch_in,
             target_partition_size,
         )
-        shuffle.insert_chunk(
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema)
+        shuffle.insert_hash(
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema),
+            decomposed.shuffle_indices,
         )
         del aggregated
 
