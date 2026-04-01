@@ -264,6 +264,64 @@ sha256 sha256_context::finalize()
 
 namespace {
 
+char const* get_nvJitLinkResultString(nvJitLinkResult result)
+{
+  switch (result) {
+    case NVJITLINK_SUCCESS: return "NVJITLINK_SUCCESS";
+    case NVJITLINK_ERROR_UNRECOGNIZED_OPTION: return "NVJITLINK_ERROR_UNRECOGNIZED_OPTION";
+    case NVJITLINK_ERROR_MISSING_ARCH: return "NVJITLINK_ERROR_MISSING_ARCH";
+    case NVJITLINK_ERROR_INVALID_INPUT: return "NVJITLINK_ERROR_INVALID_INPUT";
+    case NVJITLINK_ERROR_PTX_COMPILE: return "NVJITLINK_ERROR_PTX_COMPILE";
+    case NVJITLINK_ERROR_NVVM_COMPILE: return "NVJITLINK_ERROR_NVVM_COMPILE";
+    case NVJITLINK_ERROR_INTERNAL: return "NVJITLINK_ERROR_INTERNAL";
+    case NVJITLINK_ERROR_THREADPOOL: return "NVJITLINK_ERROR_THREADPOOL";
+    case NVJITLINK_ERROR_UNRECOGNIZED_INPUT: return "NVJITLINK_ERROR_UNRECOGNIZED_INPUT";
+    case NVJITLINK_ERROR_FINALIZE: return "NVJITLINK_ERROR_FINALIZE";
+#if CUDA_VERSION >= 13000
+    case NVJITLINK_ERROR_NULL_INPUT: return "NVJITLINK_ERROR_NULL_INPUT";
+    case NVJITLINK_ERROR_INCOMPATIBLE_OPTIONS: return "NVJITLINK_ERROR_INCOMPATIBLE_OPTIONS";
+    case NVJITLINK_ERROR_INCORRECT_INPUT_TYPE: return "NVJITLINK_ERROR_INCORRECT_INPUT_TYPE";
+    case NVJITLINK_ERROR_ARCH_MISMATCH: return "NVJITLINK_ERROR_ARCH_MISMATCH";
+    case NVJITLINK_ERROR_OUTDATED_LIBRARY: return "NVJITLINK_ERROR_OUTDATED_LIBRARY";
+    case NVJITLINK_ERROR_MISSING_FATBIN: return "NVJITLINK_ERROR_MISSING_FATBIN";
+    case NVJITLINK_ERROR_UNRECOGNIZED_ARCH: return "NVJITLINK_ERROR_UNRECOGNIZED_ARCH";
+    case NVJITLINK_ERROR_UNSUPPORTED_ARCH: return "NVJITLINK_ERROR_UNSUPPORTED_ARCH";
+    case NVJITLINK_ERROR_LTO_NOT_ENABLED: return "NVJITLINK_ERROR_LTO_NOT_ENABLED";
+#endif
+    default:
+      RTCX_FAIL(
+        std::format("Unrecognized nvJitLinkResult type: ({})", static_cast<std::int64_t>(result)),
+        std::runtime_error);
+  }
+}
+
+char const* binary_type_string(binary_type type)
+{
+  switch (type) {
+    case binary_type::LTO_IR: return "LTO_IR";
+    case binary_type::CUBIN: return "CUBIN";
+    case binary_type::FATBIN: return "FATBIN";
+    case binary_type::PTX: return "PTX";
+    default:
+      RTCX_FAIL(std::format("Unrecognized binary_type: ({})", static_cast<std::int64_t>(type)),
+                std::runtime_error);
+  }
+}
+
+nvJitLinkInputType to_nvjitlink_input_type(binary_type bin_type)
+{
+  switch (bin_type) {
+    case binary_type::LTO_IR: return NVJITLINK_INPUT_LTOIR;
+    case binary_type::CUBIN: return NVJITLINK_INPUT_CUBIN;
+    case binary_type::FATBIN: return NVJITLINK_INPUT_FATBIN;
+    case binary_type::PTX: return NVJITLINK_INPUT_PTX;
+    default:
+      RTCX_FAIL(std::format("Unrecognized binary type for linking: ({}) ",
+                            static_cast<std::int64_t>(bin_type)),
+                std::logic_error);
+  }
+}
+
 void* load_dll(std::string_view base_name, std::span<std::string const> names)
 {
   for (auto& name : names) {
@@ -430,66 +488,22 @@ void teardown()
   });
 }
 
+blob_t blob_t::from_buffer(byte_buffer&& buffer)
+{
+  auto size = buffer.size();
+  auto data = buffer.release();
+  return blob_t::from_parts(
+    data, size, +[](std::uint8_t const* data, std::size_t) {
+      free(const_cast<std::uint8_t*>(data));
+    });
+}
+
+blob_t blob_t::from_static_data(std::span<std::uint8_t const> data)
+{
+  return blob_t::from_parts(data.data(), data.size(), blob_t::noop_deallocator);
+}
+
 namespace {
-
-char const* get_nvJitLinkResultString(nvJitLinkResult result)
-{
-  switch (result) {
-    case NVJITLINK_SUCCESS: return "NVJITLINK_SUCCESS";
-    case NVJITLINK_ERROR_UNRECOGNIZED_OPTION: return "NVJITLINK_ERROR_UNRECOGNIZED_OPTION";
-    case NVJITLINK_ERROR_MISSING_ARCH: return "NVJITLINK_ERROR_MISSING_ARCH";
-    case NVJITLINK_ERROR_INVALID_INPUT: return "NVJITLINK_ERROR_INVALID_INPUT";
-    case NVJITLINK_ERROR_PTX_COMPILE: return "NVJITLINK_ERROR_PTX_COMPILE";
-    case NVJITLINK_ERROR_NVVM_COMPILE: return "NVJITLINK_ERROR_NVVM_COMPILE";
-    case NVJITLINK_ERROR_INTERNAL: return "NVJITLINK_ERROR_INTERNAL";
-    case NVJITLINK_ERROR_THREADPOOL: return "NVJITLINK_ERROR_THREADPOOL";
-    case NVJITLINK_ERROR_UNRECOGNIZED_INPUT: return "NVJITLINK_ERROR_UNRECOGNIZED_INPUT";
-    case NVJITLINK_ERROR_FINALIZE: return "NVJITLINK_ERROR_FINALIZE";
-#if CUDA_VERSION >= 13000
-    case NVJITLINK_ERROR_NULL_INPUT: return "NVJITLINK_ERROR_NULL_INPUT";
-    case NVJITLINK_ERROR_INCOMPATIBLE_OPTIONS: return "NVJITLINK_ERROR_INCOMPATIBLE_OPTIONS";
-    case NVJITLINK_ERROR_INCORRECT_INPUT_TYPE: return "NVJITLINK_ERROR_INCORRECT_INPUT_TYPE";
-    case NVJITLINK_ERROR_ARCH_MISMATCH: return "NVJITLINK_ERROR_ARCH_MISMATCH";
-    case NVJITLINK_ERROR_OUTDATED_LIBRARY: return "NVJITLINK_ERROR_OUTDATED_LIBRARY";
-    case NVJITLINK_ERROR_MISSING_FATBIN: return "NVJITLINK_ERROR_MISSING_FATBIN";
-    case NVJITLINK_ERROR_UNRECOGNIZED_ARCH: return "NVJITLINK_ERROR_UNRECOGNIZED_ARCH";
-    case NVJITLINK_ERROR_UNSUPPORTED_ARCH: return "NVJITLINK_ERROR_UNSUPPORTED_ARCH";
-    case NVJITLINK_ERROR_LTO_NOT_ENABLED: return "NVJITLINK_ERROR_LTO_NOT_ENABLED";
-#endif
-    default:
-      RTCX_FAIL(
-        std::format("Unrecognized nvJitLinkResult type: ({})", static_cast<std::int64_t>(result)),
-        std::runtime_error);
-  }
-}
-
-char const* binary_type_string(binary_type type)
-{
-  switch (type) {
-    case binary_type::LTO_IR: return "LTO_IR";
-    case binary_type::CUBIN: return "CUBIN";
-    case binary_type::FATBIN: return "FATBIN";
-    case binary_type::PTX: return "PTX";
-    default:
-      RTCX_FAIL(std::format("Unrecognized binary_type: ({})", static_cast<std::int64_t>(type)),
-                std::runtime_error);
-  }
-}
-
-nvJitLinkInputType to_nvjitlink_input_type(binary_type bin_type)
-{
-  switch (bin_type) {
-    case binary_type::LTO_IR: return NVJITLINK_INPUT_LTOIR;
-    case binary_type::CUBIN: return NVJITLINK_INPUT_CUBIN;
-    case binary_type::FATBIN: return NVJITLINK_INPUT_FATBIN;
-    case binary_type::PTX: return NVJITLINK_INPUT_PTX;
-    default:
-      RTCX_FAIL(std::format("Unrecognized binary type for linking: ({}) ",
-                            static_cast<std::int64_t>(bin_type)),
-                std::logic_error);
-  }
-}
-
 void log_nvrtc_result(compile_params const& params,
                       nvrtcProgram program,
                       nvrtcResult compile_result)
@@ -636,22 +650,6 @@ void log_nvJitLink_result(link_params const& params,
 }
 
 }  // namespace
-
-blob_t blob_t::from_buffer(byte_buffer&& buffer)
-{
-  auto size = buffer.size();
-  auto data = buffer.release();
-  return blob_t::from_parts(
-    data, size, +[](std::uint8_t const* data, std::size_t) {
-      free(const_cast<std::uint8_t*>(data));
-    });
-}
-
-blob_t blob_t::from_static_data(std::span<std::uint8_t const> data)
-{
-  return blob_t::from_parts(data.data(), data.size(), blob_t::noop_deallocator);
-}
-
 byte_buffer compile(compile_params const& params)
 {
   RTCX_EXPECTS(params.name != nullptr, "Fragment name must not be null", std::logic_error);
