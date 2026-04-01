@@ -357,18 +357,19 @@ async def fanout_node_unbounded(
             make_spill_function(output_buffers, context), priority=0
         )
 
+        # Track active send/drain tasks for each output
+        active_tasks: dict[int, asyncio.Task] = {}
+
+        # Track which outputs need to be drained (set when no more input)
+        needs_drain: set[int] = set()
+
+        # Receive task
+        recv_task: asyncio.Task | None = asyncio.create_task(ch_in.recv(context))
+
+        # Flag to indicate we should start a new receive (for backpressure)
+        can_receive: bool = True
+
         try:
-            # Track active send/drain tasks for each output
-            active_tasks: dict[int, asyncio.Task] = {}
-
-            # Track which outputs need to be drained (set when no more input)
-            needs_drain: set[int] = set()
-
-            # Receive task
-            recv_task: asyncio.Task | None = asyncio.create_task(ch_in.recv(context))
-
-            # Flag to indicate we should start a new receive (for backpressure)
-            can_receive: bool = True
 
             async def send_one_from_buffer(idx: int) -> None:
                 """
@@ -437,24 +438,20 @@ async def fanout_node_unbounded(
                             device_size = content_desc.content_sizes.get(
                                 MemoryType.DEVICE, 0
                             )
-                            copy_cost = msg.copy_cost()
 
                             # Check if we have enough device memory for all copies
                             # We need (num_outputs - 1) copies since last one reuses original
                             num_copies = num_outputs - 1
-                            total_copy_cost = copy_cost * num_copies
+                            total_copy_cost = msg.copy_cost() * num_copies
                             available_device_mem = context.br().memory_available(
                                 MemoryType.DEVICE
                             )
 
                             # Decide target memory:
                             # Use device ONLY if message is in device AND we have sufficient headroom.
-                            # TODO: Use further information about the downstream operations to make
-                            # a more informed decision.
-                            required_headroom = total_copy_cost * 2
                             if (
                                 device_size > 0
-                                and available_device_mem >= required_headroom
+                                and available_device_mem >= total_copy_cost
                             ):
                                 # Use reserve_device_memory_and_spill to automatically trigger spilling
                                 # if needed to make room for the copy
@@ -467,10 +464,9 @@ async def fanout_node_unbounded(
                             else:
                                 # Use host memory for buffering - much safer
                                 # Downstream consumers will make_available() when they need device memory
-                                memory_reservation, _ = context.br().reserve(
-                                    MemoryType.HOST,
+                                memory_reservation = context.br().reserve_or_fail(
                                     total_copy_cost,
-                                    allow_overbooking=True,
+                                    [MemoryType.PINNED_HOST, MemoryType.HOST],
                                 )
 
                             # Copy message for each output buffer
@@ -499,6 +495,12 @@ async def fanout_node_unbounded(
                                 break
 
         finally:
+            # Cancel any outstanding tasks
+            if recv_task is not None and not recv_task.done():
+                recv_task.cancel()
+            for task in active_tasks.values():
+                if not task.done():
+                    task.cancel()
             # Clean up spill function registration
             context.br().spill_manager.remove_spill_function(spill_func_id)
 
