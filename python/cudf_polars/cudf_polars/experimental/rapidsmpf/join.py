@@ -419,7 +419,8 @@ async def _join_chunks(
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
     await gather_in_task_group(
-        recv_metadata(ch_left, context), recv_metadata(ch_right, context)
+        recv_metadata(ch_left, context),
+        recv_metadata(ch_right, context),
     )
 
     left, right = ir.children
