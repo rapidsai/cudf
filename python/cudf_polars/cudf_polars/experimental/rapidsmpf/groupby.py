@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
@@ -222,7 +221,7 @@ async def _local_aggregation(
             ir_context=ir_context,
         )
         chunk = _enforce_schema(chunk, decomposed.piecewise_ir.schema)
-        total_size += chunk.data_alloc_size(MemoryType.DEVICE)
+        total_size += chunk.data_alloc_size()
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
             evaluated_chunks = [
@@ -233,7 +232,7 @@ async def _local_aggregation(
                     ir_context=ir_context,
                 )
             ]
-            total_size = evaluated_chunks[0].data_alloc_size(MemoryType.DEVICE)
+            total_size = evaluated_chunks[0].data_alloc_size()
         if total_size > target_partition_size and allow_early_exit:
             break
 
@@ -578,7 +577,7 @@ async def _choose_strategy(
     -------
     The output count.
     """
-    aggregated_size = aggregated.data_alloc_size(MemoryType.DEVICE)
+    aggregated_size = aggregated.data_alloc_size()
     local_estimated_size = (aggregated_size // max(1, chunks_received)) * local_count
 
     if skip_global_comm:
