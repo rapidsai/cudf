@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from rapidsmpf.bootstrap import get_nranks, is_running_with_rrun
+from rapidsmpf.config import Options
 
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
@@ -55,7 +56,15 @@ def engine(
         "target_partition_size": 1_000_000,
         **params.get("executor_options", {}),
     }
+
+    rapidsmpf_options = (
+        Options(params.get("rapidsmpf_options"))
+        if "rapidsmpf_options" in params
+        else None
+    )
+
     with SPMDEngine(
+        rapidsmpf_options=rapidsmpf_options,
         executor_options=executor_options,
         engine_options=params.get("engine_options", {}),
     ) as engine:
