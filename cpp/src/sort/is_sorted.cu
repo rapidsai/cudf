@@ -16,8 +16,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 
@@ -40,8 +40,8 @@ bool is_sorted(cudf::table_view const& in,
     // in thrust::is_sorted.
     auto d_results = rmm::device_uvector<bool>(in.num_rows(), stream);
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(in.num_rows()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{in.num_rows()},
                       d_results.begin(),
                       [device_comparator] __device__(auto idx) -> bool {
                         return (idx == 0) || device_comparator(idx - 1, idx);
@@ -53,8 +53,8 @@ bool is_sorted(cudf::table_view const& in,
     auto const device_comparator = comparator.less<false>(has_nested_nulls(in));
 
     return thrust::is_sorted(rmm::exec_policy_nosync(stream),
-                             thrust::counting_iterator<size_type>(0),
-                             thrust::counting_iterator<size_type>(in.num_rows()),
+                             cuda::counting_iterator<size_type>{0},
+                             cuda::counting_iterator<size_type>{in.num_rows()},
                              device_comparator);
   }
 }

@@ -151,7 +151,7 @@ void build_hash_join(
     if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
       hash_table.insert(iter, iter + build.num_rows(), stream.value());
     } else {
-      auto const stencil = thrust::counting_iterator<size_type>{0};
+      auto const stencil = cuda::counting_iterator<size_type>{0};
       auto const pred    = row_is_valid{bitmask};
 
       // insert valid rows

@@ -26,8 +26,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
@@ -197,7 +197,7 @@ struct group_scan_functor<K,
     thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
                                   group_labels.begin(),
                                   group_labels.end(),
-                                  thrust::make_counting_iterator<size_type>(0),
+                                  cuda::counting_iterator<size_type>{0},
                                   gather_map.begin(),
                                   cuda::std::equal_to{},
                                   binop_generator.binop());

@@ -24,7 +24,8 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 
 #include <algorithm>
 #include <iterator>
@@ -60,7 +61,7 @@ struct unique_keys_dispatch_fn {
       all_keys.size(), 0.5, empty_key, d_equal, probe, {}, {}, allocator, stream.value()};
 
     // use a static_set to find the unique elements of all_keys
-    auto const iter = thrust::counting_iterator<cudf::size_type>{0};
+    auto const iter = cuda::counting_iterator<cudf::size_type>{0};
     set.insert_async(iter, iter + all_keys.size(), stream.value());
 
     // retrieve the indices of all the unique keys
