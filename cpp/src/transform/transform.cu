@@ -19,6 +19,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
+
 #include <jit/cache.hpp>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
@@ -556,8 +558,8 @@ void perform_checks(udf_source_type source_type,
                "for each non-string column)",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::none_of(thrust::make_counting_iterator(size_t{0}),
-                            thrust::make_counting_iterator(string_offsets.size()),
+  CUDF_EXPECTS(std::none_of(cuda::counting_iterator(size_t{0}),
+                            cuda::counting_iterator(string_offsets.size()),
                             [&](auto i) {
                               if (outputs[i].type.id() == type_id::STRING) { return false; }
                               return !string_offsets.empty() && string_offsets[i] == nullptr;
