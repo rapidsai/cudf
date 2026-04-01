@@ -16,8 +16,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace io {
@@ -47,7 +47,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
                                                             stream);
   auto leaf_columns = cudf::device_span<column_device_view>{leaf_column_views};
 
-  auto iter = thrust::make_counting_iterator<size_type>(0);
+  auto iter = cuda::counting_iterator<size_type>{0};
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
     iter,

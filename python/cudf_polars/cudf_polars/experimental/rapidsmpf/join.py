@@ -38,12 +38,12 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
+    gather_in_task_group,
     maybe_remap_partitioning,
     names_to_indices,
     process_children,
     recv_metadata,
     replay_buffered_channel,
-    run_tasks_without_outputs,
     send_metadata,
     shutdown_on_error,
 )
@@ -297,12 +297,10 @@ async def _broadcast_join(
     into a single DataFrame, then joined with each chunk from the large side.
     Pops one collective ID from collective_ids for allgather when needed.
     """
-    async with asyncio.TaskGroup() as tg:
-        left_metadata_task = tg.create_task(recv_metadata(ch_left, context))
-        right_metadata_task = tg.create_task(recv_metadata(ch_right, context))
-
-    left_metadata = left_metadata_task.result()
-    right_metadata = right_metadata_task.result()
+    left_metadata, right_metadata = await gather_in_task_group(
+        recv_metadata(ch_left, context),
+        recv_metadata(ch_right, context),
+    )
 
     collective_id = collective_ids.pop(0) if collective_ids else 0
     broadcast_side = strategy.broadcast_side
@@ -414,19 +412,16 @@ async def _join_chunks(
     tracer: ActorTracer | None,
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
-    await run_tasks_without_outputs(
-        (recv_metadata(ch_left, context), recv_metadata(ch_right, context))
+    await gather_in_task_group(
+        recv_metadata(ch_left, context),
+        recv_metadata(ch_right, context),
     )
 
     left, right = ir.children
     while True:
-        async with asyncio.TaskGroup() as tg:
-            left_msg_task = tg.create_task(ch_left.recv(context))
-            right_msg_task = tg.create_task(ch_right.recv(context))
-
-        left_msg = left_msg_task.result()
-        right_msg = right_msg_task.result()
-
+        left_msg, right_msg = await gather_in_task_group(
+            ch_left.recv(context), ch_right.recv(context)
+        )
         if left_msg is None or right_msg is None:
             assert left_msg is None, (
                 "Mismatched chunk counts in shuffle join: left has unmatched chunk. "
@@ -584,7 +579,7 @@ async def _shuffle_join(
                 tracer=tracer,
             ),
         ]
-        await run_tasks_without_outputs(actor_tasks)
+        await gather_in_task_group(*actor_tasks)
 
 
 def _make_shuffle_strategy(
@@ -979,12 +974,11 @@ async def join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
-        async with asyncio.TaskGroup() as tg:
-            left_metadata_task = tg.create_task(recv_metadata(ch_left, context))
-            right_metadata_task = tg.create_task(recv_metadata(ch_right, context))
+        left_metadata, right_metadata = await gather_in_task_group(
+            recv_metadata(ch_left, context),
+            recv_metadata(ch_right, context),
+        )
 
-        left_metadata = left_metadata_task.result()
-        right_metadata = right_metadata_task.result()
         left_sample, right_sample, strategy = await _choose_strategy(
             context,
             comm,
@@ -1059,7 +1053,7 @@ async def join_actor(
                         tracer=tracer,
                     )
                 )
-            await run_tasks_without_outputs(actor_tasks)
+            await gather_in_task_group(*actor_tasks)
 
 
 @generate_ir_sub_network.register(Join)

@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import itertools
 import math
 from typing import TYPE_CHECKING, Any
 
@@ -52,9 +51,9 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunk_to_frame,
     empty_table_chunk,
+    gather_in_task_group,
     process_children,
     recv_metadata,
-    run_tasks_without_outputs,
     send_metadata,
 )
 from cudf_polars.experimental.utils import _dynamic_planning_on
@@ -278,14 +277,12 @@ async def dataframescan_node(
         async with (
             shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
         ):
-            await run_tasks_without_outputs(
-                itertools.chain(
-                    [lineariser.drain()],
-                    (
-                        _producer(i, ch_in)
-                        for i, ch_in in enumerate(lineariser.input_channels)
-                    ),
-                )
+            await gather_in_task_group(
+                lineariser.drain(),
+                *(
+                    _producer(i, ch_in)
+                    for i, ch_in in enumerate(lineariser.input_channels)
+                ),
             )
 
 
@@ -570,14 +567,12 @@ async def scan_node(
         async with (
             shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
         ):
-            await run_tasks_without_outputs(
-                itertools.chain(
-                    [lineariser.drain()],
-                    (
-                        _producer(i, ch_in)
-                        for i, ch_in in enumerate(lineariser.input_channels)
-                    ),
-                )
+            await gather_in_task_group(
+                lineariser.drain(),
+                *(
+                    _producer(i, ch_in)
+                    for i, ch_in in enumerate(lineariser.input_channels)
+                ),
             )
 
 

@@ -40,7 +40,7 @@ from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterable, Iterator
+    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -76,32 +76,23 @@ def set_memory_resource(mr: rmm.mr.DeviceMemoryResource) -> Iterator[None]:
         rmm.mr.set_current_device_resource(old)
 
 
-async def run_tasks_without_outputs(coroutines: Iterable[Any]) -> None:
+async def gather_in_task_group(*coroutines: Coroutine[Any, Any, Any]) -> list[Any]:
     """
-    Run tasks without outputs in a TaskGroup while preserving references.
+    asyncio.gather-like API for running tasks in a asyncio.TaskGroup.
 
     Parameters
     ----------
     coroutines
-        An iterable of coroutines to execute.
+        Tasks to execute.
 
     Returns
     -------
-    None
-
-    Notes
-    -----
-    From https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task
-
-    > A task that isn't referenced elsewhere may get garbage collected at any time,
-    even before it's done
+    list[Any]
+        The results of the coroutines.
     """
-    task_references = set()
     async with asyncio.TaskGroup() as tg:
-        for coro in coroutines:
-            task = tg.create_task(coro)
-            task_references.add(task)
-            task.add_done_callback(task_references.discard)
+        tasks = [tg.create_task(coro) for coro in coroutines]
+    return [task.result() for task in tasks]
 
 
 @asynccontextmanager
@@ -155,8 +146,8 @@ async def shutdown_on_error(
         try:
             yield tracer
         except BaseException:
-            await run_tasks_without_outputs(
-                itertools.chain.from_iterable(
+            await gather_in_task_group(
+                *itertools.chain.from_iterable(
                     (ch.shutdown(context), ch.shutdown_metadata(context))
                     for ch in channels
                 )
