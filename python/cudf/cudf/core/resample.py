@@ -164,6 +164,7 @@ class _ResampleGrouping(_Grouping):
         return out
 
     def _handle_frequency_grouper(self, by):
+        from pandas.tseries.offsets import Day
         # if `by` is a time frequency grouper, we bin the key column
         # using bin intervals specified by `by.freq`, then use *that*
         # as the groupby key
@@ -221,6 +222,13 @@ class _ResampleGrouping(_Grouping):
             closed=closed,
         )
 
+        # Track the natural end before adding the safety margin.
+        # When closed='right' and max_date falls exactly on a bin right
+        # boundary, _get_timestamp_range_edges returns end == max_date
+        # (the "already the end of the road" case in _adjust_dates_anchored).
+        # In that case pandas includes one trailing empty bin, so we must too.
+        natural_end = end
+
         # in some cases, an extra time stamp is required in order to
         # bin all the values. It's OK if we generate more labels than
         # we need, as we remove any unused labels below
@@ -269,8 +277,19 @@ class _ResampleGrouping(_Grouping):
         else:
             cast_bin_labels = cast_bin_labels[:-1]
 
-        # if we have more labels than bins, remove the extras labels:
+        # if we have more labels than bins, remove the extra labels.
+        # When closed='right' and max_date was exactly on a bin right boundary
+        # (natural_end == max_date), include one trailing empty bin to match
+        # pandas behavior. This only applies to Day offsets; sub-day Tick
+        # offsets (e.g. Second) do not exhibit this behaviour.
+
         nbins = bin_numbers.max() + 1
+        if (
+            isinstance(offset, Day)
+            and closed == "right"
+            and natural_end == pd.Timestamp(max_date)
+        ):
+            nbins = min(nbins + 1, len(cast_bin_labels))
         if len(cast_bin_labels) > nbins:
             cast_bin_labels = cast_bin_labels[:nbins]
 
@@ -329,7 +348,7 @@ def _get_timestamp_range_edges(
     """
     from pandas.tseries.offsets import Day, Tick
 
-    if isinstance(freq, Tick):
+    if isinstance(freq, (Tick, Day)):
         index_tz = first.tz
         if isinstance(origin, pd.Timestamp) and (origin.tz is None) != (
             index_tz is None
