@@ -53,7 +53,8 @@ Hint: Check if `GH_TOKEN` (or GitHub CLI auth) is already configured in the envi
 - Stream ordering preserved across the API flow. **(guide: "Streams")**
 - Discourage implicit use of CUDA default stream to enable asynchronous execution. **(guide: "Streams")**
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
-- No use of relaxed constexpr functions in device code. i.e., Use `cuda::std::` type traits and constexpr functions instead of `std::` in device code and templates (e.g., `cuda::std::is_numeric_v<T>` not `std::is_numeric_v<T>`, `cuda::std::clamp` not `std::clamp`, `cuda::std::min` not `std::min` and so on).
+- No use of relaxed constexpr in device code. `--expt-relaxed-constexpr` is **not** enabled. Every `constexpr` function callable from device code must be explicitly annotated `__device__` or `CUDF_HOST_DEVICE`. A bare `constexpr` is host-only. **(guide: "Device Code and `constexpr` Functions")**
+- Use `cuda::std::` type traits, algorithms, and constexpr functions instead of `std::` in `__device__` / `CUDF_HOST_DEVICE` code and in templates instantiated in device code (e.g., `cuda::std::is_void_v<T>` not `std::is_void_v<T>`, `cuda::std::min` not `std::min`, `cuda::std::numeric_limits<T>` not `std::numeric_limits<T>`). **(guide: "Device Code and `constexpr` Functions")**
 
 ### Performance Optimization
 

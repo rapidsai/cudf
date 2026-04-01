@@ -275,3 +275,12 @@ def test_inline_hstack_false_non_select_hstack_parent_unchanged():
     )
     proj = Projection(inner.schema, inner)
     assert _inline_hstack_false(proj) is proj
+
+
+def test_select_with_mixed_fusable_non_fusable_exprs(df, engine):
+    q = df.select(
+        foo=pl.col("a").n_unique(),
+        bar=pl.col("b").sum(),
+        baz=pl.col("c").sum(),
+    )
+    assert_gpu_result_equal(q, engine=engine)
