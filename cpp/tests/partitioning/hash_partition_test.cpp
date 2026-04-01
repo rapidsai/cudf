@@ -18,6 +18,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <cuda/devices>
 #include <thrust/iterator/counting_iterator.h>
@@ -115,6 +116,25 @@ TEST_F(HashPartition, ZeroColumns)
   auto [output, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect empty table with same number of columns and same number of partitions
+  EXPECT_EQ(input.num_columns(), output->num_columns());
+  EXPECT_EQ(0, output->num_rows());
+  EXPECT_EQ(std::size_t{num_partitions + 1}, offsets.size());
+}
+
+TEST_F(HashPartition, ZeroColumnsNonEmptyTable)
+{
+  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
+  auto input = cudf::table_view({floats, integers, strings});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({});
+
+  cudf::size_type const num_partitions = 3;
+  auto [output, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
+
+  // Expect empty table with same number of columns and same number of partitions
+  EXPECT_TRUE(cudf::have_same_types(input, output->view()));
   EXPECT_EQ(input.num_columns(), output->num_columns());
   EXPECT_EQ(0, output->num_rows());
   EXPECT_EQ(std::size_t{num_partitions + 1}, offsets.size());
