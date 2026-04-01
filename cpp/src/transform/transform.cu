@@ -327,7 +327,7 @@ auto to_args(std::span<input_column_view const> inputs,
 
   // ensure the device buffer copy is complete before `h_args` goes out of scope and its destructors
   // are called
-  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
+  stream.synchronize();
 
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
