@@ -46,6 +46,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
     shutdown_on_error,
 )
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
@@ -718,20 +719,6 @@ async def _choose_strategy_from_samples(
         "Anti",
     )
 
-    # When maintain_order is set, we must perform a broadcast join.
-    # TODO: Optionally preserve order in a shuffle join.
-    maintain_order = ir.options[5]
-    if maintain_order in ("left", "left_right"):
-        # Must stream left → broadcast right (regardless of size)
-        can_broadcast_left = False
-        if ir.options[0] in ("Inner", "Left", "Semi", "Anti", "Full"):
-            can_broadcast_right = True
-    elif maintain_order in ("right", "right_left"):
-        # Must stream right → broadcast left (regardless of size)
-        can_broadcast_right = False
-        if ir.options[0] in ("Inner", "Right", "Full"):
-            can_broadcast_left = True
-
     broadcast_side: Literal["left", "right"] | None = None
     if can_broadcast_left and can_broadcast_right:
         # Choose side that is already duplicated.
@@ -1072,14 +1059,22 @@ def _use_pwise_join(
     ir: Join,
 ) -> bool:
     """Whether to use a static-planning partition-wise join."""
+    left, right = ir.children
+    output_count = partition_info[ir].count
+    if (
+        output_count == 1
+        and isinstance(left, Repartition)
+        and isinstance(right, Repartition)
+    ):
+        # We fell back to single-partition behavior at lowering time
+        return True
+
     if (
         isinstance(executor, StreamingExecutor)
         and executor.dynamic_planning is not None
     ):
         return False
 
-    left, right = ir.children
-    output_count = partition_info[ir].count
     left_count = partition_info[left].count
     right_count = partition_info[right].count
     left_partitioned = (
@@ -1089,7 +1084,7 @@ def _use_pwise_join(
         partition_info[right].partitioned_on == ir.right_on
         and right_count == output_count
     )
-    return output_count == 1 or (left_partitioned and right_partitioned)
+    return left_partitioned and right_partitioned
 
 
 @generate_ir_sub_network.register(Join)
