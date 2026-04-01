@@ -438,24 +438,20 @@ async def fanout_node_unbounded(
                             device_size = content_desc.content_sizes.get(
                                 MemoryType.DEVICE, 0
                             )
-                            copy_cost = msg.copy_cost()
 
                             # Check if we have enough device memory for all copies
                             # We need (num_outputs - 1) copies since last one reuses original
                             num_copies = num_outputs - 1
-                            total_copy_cost = copy_cost * num_copies
+                            total_copy_cost = msg.copy_cost() * num_copies
                             available_device_mem = context.br().memory_available(
                                 MemoryType.DEVICE
                             )
 
                             # Decide target memory:
                             # Use device ONLY if message is in device AND we have sufficient headroom.
-                            # TODO: Use further information about the downstream operations to make
-                            # a more informed decision.
-                            required_headroom = total_copy_cost * 2
                             if (
                                 device_size > 0
-                                and available_device_mem >= required_headroom
+                                and available_device_mem >= total_copy_cost
                             ):
                                 # Use reserve_device_memory_and_spill to automatically trigger spilling
                                 # if needed to make room for the copy
@@ -468,10 +464,9 @@ async def fanout_node_unbounded(
                             else:
                                 # Use host memory for buffering - much safer
                                 # Downstream consumers will make_available() when they need device memory
-                                memory_reservation, _ = context.br().reserve(
-                                    MemoryType.HOST,
+                                memory_reservation = context.br().reserve_or_fail(
                                     total_copy_cost,
-                                    allow_overbooking=True,
+                                    [MemoryType.PINNED_HOST, MemoryType.HOST],
                                 )
 
                             # Copy message for each output buffer
