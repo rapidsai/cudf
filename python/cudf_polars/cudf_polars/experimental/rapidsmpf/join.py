@@ -357,7 +357,11 @@ async def _broadcast_join(
         need_allgather=need_allgather,
         collective_id=collective_id,
         ir_context=ir_context,
-        concat_size_limit=(target_partition_size if ir.options[0] == "Inner" else None),
+        concat_size_limit=(
+            target_partition_size
+            if ir.options[0] == "Inner" and ir.options[5] == "none"
+            else None
+        ),
     )
 
     while (msg := await large_ch.recv(context)) is not None:
@@ -713,6 +717,20 @@ async def _choose_strategy_from_samples(
         "Semi",
         "Anti",
     )
+
+    # When maintain_order is set, we must perform a broadcast join.
+    # TODO: Optionally preserve order in a shuffle join.
+    maintain_order = ir.options[5]
+    if maintain_order in ("left", "left_right"):
+        # Must stream left → broadcast right (regardless of size)
+        can_broadcast_left = False
+        if ir.options[0] in ("Inner", "Left", "Semi", "Anti", "Full"):
+            can_broadcast_right = True
+    elif maintain_order in ("right", "right_left"):
+        # Must stream right → broadcast left (regardless of size)
+        can_broadcast_right = False
+        if ir.options[0] in ("Inner", "Right", "Full"):
+            can_broadcast_left = True
 
     broadcast_side: Literal["left", "right"] | None = None
     if can_broadcast_left and can_broadcast_right:
