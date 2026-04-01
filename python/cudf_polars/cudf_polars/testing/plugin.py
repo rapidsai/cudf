@@ -262,9 +262,9 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH: Mapping[str, str] = {
-    "tests/benchmark/test_io.py": "Extra long running tests",
-    "tests/benchmark/test_join_where.py": "Extra long running tests",
-    "tests/benchmark/test_group_by.py": "Extra long running tests",
+    # "tests/benchmark/test_io.py": "Extra long running tests",
+    # "tests/benchmark/test_join_where.py": "Extra long running tests",
+    # "tests/benchmark/test_group_by.py": "Extra long running tests",
     "tests/unit/io/test_hive.py": "Crashes pytest worker",
     "tests/unit/io/test_lazy_parquet.py": "Crashes pytest worker",
     "tests/unit/io/test_partition.py": "Extra long running tests",
