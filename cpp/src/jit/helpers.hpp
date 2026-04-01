@@ -8,6 +8,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/scalar_column_view.hpp>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -66,14 +67,15 @@ column_views_to_device(std::span<ColumnView const> views,
     return DeviceView::create(view, stream);
   });
 
-  std::vector<DeviceView> host_array;
+  // Use pinned host memory so cuda_memcpy_async takes the device-accessible
+  // path instead of cudaMemcpyBatchAsync with deferred source reads.
+  auto host_array = detail::make_empty_pinned_vector<DeviceView>(handles.size(), stream);
+  for (auto const& h : handles) {
+    host_array.push_back(*h);
+  }
 
-  std::transform(
-    handles.begin(), handles.end(), std::back_inserter(host_array), [](auto const& handle) {
-      return *handle;
-    });
-
-  auto device_array = to_device_vector(host_array, stream, mr);
+  rmm::device_uvector<DeviceView> device_array{handles.size(), stream, mr};
+  cudf::detail::cuda_memcpy_async<DeviceView>(device_array, host_array, stream);
 
   return std::make_tuple(std::move(handles), std::move(device_array));
 }

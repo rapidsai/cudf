@@ -220,7 +220,7 @@ def evaluate_pipeline(
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    _initial_mr: Any = None
+    _original_mr: Any = None
     use_stream_pool = False
     if rmpf_context is not None:
         # Using "distributed" mode.
@@ -302,55 +302,60 @@ def evaluate_pipeline(
             metadata_collector=metadata_collector,
         )
 
-        # Run the network
-        with ThreadPoolExecutor(
-            max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
-            thread_name_prefix="cpse",
-        ) as executor:
-            run_actor_network(actors=nodes, py_executor=executor)
+        try:
+            # Run the network
+            with ThreadPoolExecutor(
+                max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
+                thread_name_prefix="cpse",
+            ) as executor:
+                run_actor_network(actors=nodes, py_executor=executor)
 
-        # Extract/return the concatenated result.
-        # Keep chunks alive until after concatenation to prevent
-        # use-after-free with stream-ordered allocations
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg).make_available_and_spill(
-                br, allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        dfs: list[DataFrame] = []
-        if chunks:
-            dfs = [
-                DataFrame.from_table(
+            # Extract/return the concatenated result.
+            # Keep chunks alive until after concatenation to prevent
+            # use-after-free with stream-ordered allocations
+            messages = output.release()
+            chunks = [
+                TableChunk.from_message(msg).make_available_and_spill(
+                    br, allow_overbooking=True
+                )
+                for msg in messages
+            ]
+            dfs: list[DataFrame] = []
+            if chunks:
+                dfs = [
+                    DataFrame.from_table(
+                        chunk.table_view(),
+                        list(ir.schema.keys()),
+                        list(ir.schema.values()),
+                        chunk.stream,
+                    )
+                    for chunk in chunks
+                ]
+                df = _concat(*dfs, context=ir_context)
+            else:
+                # No chunks received - create an empty DataFrame with correct schema
+                stream = ir_context.get_cuda_stream()
+                chunk = empty_table_chunk(ir, rmpf_context, stream)
+                df = DataFrame.from_table(
                     chunk.table_view(),
                     list(ir.schema.keys()),
                     list(ir.schema.values()),
-                    chunk.stream,
+                    stream,
                 )
-                for chunk in chunks
-            ]
-            df = _concat(*dfs, context=ir_context)
-        else:
-            # No chunks received - create an empty DataFrame with correct schema
-            stream = ir_context.get_cuda_stream()
-            chunk = empty_table_chunk(ir, rmpf_context, stream)
-            df = DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                stream,
-            )
 
-        result = df.to_polars()
+            result = df.to_polars()
 
-        # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-        # before the Context, which ultimately contains the rmm MR, goes out of scope.
-        del nodes, output, messages, chunks, dfs, df
+            # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
+            # before the Context, which ultimately contains the rmm MR, goes out of scope.
+            del messages, chunks, dfs, df
+        finally:
+            # Ensure these are dropped even if a node raises
+            # an exception in run_actor_network
+            del nodes, output
 
-        # Restore the initial RMM memory resource
-        if _initial_mr is not None:
-            rmm.mr.set_current_device_resource(_original_mr)
+            # Restore the initial RMM memory resource
+            if _original_mr is not None:
+                rmm.mr.set_current_device_resource(_original_mr)
 
         return result, metadata_collector
 
