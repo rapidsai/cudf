@@ -389,7 +389,7 @@ def _get_key_indices(
     n_keys = (
         n_partitioned_keys if n_partitioned_keys is not None else len(left_key_indices)
     )
-    if ir.options == "Right":
+    if ir.options[0] == "Right":
         join_keys_for_output = ir.right_on
     else:
         join_keys_for_output = ir.left_on
@@ -1065,15 +1065,22 @@ def _(
 
     left_count = partition_info[left].count
     right_count = partition_info[right].count
-    left_partitioned = (
-        partition_info[left].partitioned_on == ir.left_on and left_count == output_count
-    )
-    right_partitioned = (
-        partition_info[right].partitioned_on == ir.right_on
-        and right_count == output_count
-    )
 
-    pwise_join = output_count == 1 or (left_partitioned and right_partitioned)
+    if (
+        isinstance(executor, StreamingExecutor)
+        and executor.dynamic_planning is not None
+    ):
+        pwise_join = False
+    else:
+        left_partitioned = (
+            partition_info[left].partitioned_on == ir.left_on
+            and left_count == output_count
+        )
+        right_partitioned = (
+            partition_info[right].partitioned_on == ir.right_on
+            and right_count == output_count
+        )
+        pwise_join = output_count == 1 or (left_partitioned and right_partitioned)
 
     # Process children
     actors, channels = process_children(ir, rec)
