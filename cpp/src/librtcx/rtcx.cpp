@@ -219,7 +219,6 @@ sha256 sha256_context::finalize()
   DO_IT(LaunchKernelEx)                 \
   DO_IT(LaunchCooperativeKernel)        \
   DO_IT(KernelGetFunction)              \
-  DO_IT(KernelGetName)                  \
   DO_IT(LibraryLoadData)                \
   DO_IT(LibraryLoadFromFile)            \
   DO_IT(LibraryGetKernel)               \
@@ -763,13 +762,6 @@ void kernel_ref::launch_cooperative(cuda_dim3 grid_dim,
                                               shared_mem_bytes,
                                               stream,
                                               kernel_params));
-}
-
-std::string_view kernel_ref::get_name() const
-{
-  char const* name;
-  RTCX_CHECK_CUDA(cu->KernelGetName(&name, handle_));
-  return std::string_view{name == nullptr ? "" : name};
 }
 
 library_t::~library_t()
