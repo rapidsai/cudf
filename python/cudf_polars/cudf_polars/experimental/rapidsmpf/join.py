@@ -359,11 +359,7 @@ async def _broadcast_join(
         need_allgather=need_allgather,
         collective_id=collective_id,
         ir_context=ir_context,
-        concat_size_limit=(
-            target_partition_size
-            if ir.options[0] == "Inner" and ir.options[5] == "none"
-            else None
-        ),
+        concat_size_limit=(target_partition_size if ir.options[0] == "Inner" else None),
     )
 
     while (msg := await large_ch.recv(context)) is not None:
