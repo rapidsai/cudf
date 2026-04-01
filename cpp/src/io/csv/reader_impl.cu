@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -1055,6 +1056,12 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       }
 
       cudf::detail::join_streams(streams, stream);
+
+      for (auto const col_idx : string_col_indices) {
+        if (out_columns[col_idx]) {
+          out_columns[col_idx] = cudf::rebind_stream(std::move(*out_columns[col_idx]), stream);
+        }
+      }
     }
 
     // Create output columns for the columns that were not processed in the parallel loop
