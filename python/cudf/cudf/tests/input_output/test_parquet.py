@@ -2546,7 +2546,8 @@ def test_parquet_nullable_boolean(tmp_path, engine):
         result = cudf.read_parquet(pandas_path, engine=engine)
     if engine == "cudf":
         # TODO: Preserve BooleanDtype from the parquet metadata?
-        expected["a"] = expected["a"].astype("object")
+        result["a"] = result["a"].astype(pd.BooleanDtype())
+
     assert_eq(result, expected)
 
 
@@ -2837,6 +2838,15 @@ def test_parquet_writer_nested(tmp_path, data):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
+
+    # Normalize expect via a pandas parquet round-trip so that nested
+    # nullable integer lists (stored as Python lists with None) match
+    # the representation pyarrow produces when reading parquet back
+    # (numpy float arrays with NaN, since numpy int can't hold NaN).
+    pd_fname = tmp_path / "test_parquet_writer_nested_pd.parquet"
+    expect.to_parquet(pd_fname)
+    expect = pd.read_parquet(pd_fname)
+
     assert_eq(expect, got)
 
 

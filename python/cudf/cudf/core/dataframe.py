@@ -2947,15 +2947,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             pd_columns = pd.Index(columns.to_pandas())
             label_dtype = pd_columns.dtype
         else:
+            has_dtype = isinstance(columns, (np.ndarray, pd.Series, pd.Index))
             pd_columns = pd.Index(columns)
             if pd_columns.nunique(dropna=False) != len(pd_columns):
                 raise ValueError("Duplicate column names are not allowed")
             rangeindex = isinstance(pd_columns, pd.RangeIndex)
             level_names = (pd_columns.name,)
-            # if not rangeindex and len(pd_columns) == 0:
-            #     label_dtype = self._data.label_dtype
-            # else:
-            label_dtype = pd_columns.dtype
+            if not has_dtype and not rangeindex and len(pd_columns) == 0:
+                label_dtype = self._data.label_dtype
+            else:
+                label_dtype = pd_columns.dtype
 
         if len(pd_columns) != self._num_columns:
             raise ValueError(
