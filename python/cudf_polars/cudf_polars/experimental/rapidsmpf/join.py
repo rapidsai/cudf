@@ -50,11 +50,14 @@ from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
 
@@ -1045,6 +1048,32 @@ async def join_actor(
         await asyncio.gather(*actor_tasks)
 
 
+def _use_pwise_join(
+    executor: StreamingExecutor,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    ir: Join,
+) -> bool:
+    """Whether to use a static-planning partition-wise join."""
+    if (
+        isinstance(executor, StreamingExecutor)
+        and executor.dynamic_planning is not None
+    ):
+        return False
+
+    left, right = ir.children
+    output_count = partition_info[ir].count
+    left_count = partition_info[left].count
+    right_count = partition_info[right].count
+    left_partitioned = (
+        partition_info[left].partitioned_on == ir.left_on and left_count == output_count
+    )
+    right_partitioned = (
+        partition_info[right].partitioned_on == ir.right_on
+        and right_count == output_count
+    )
+    return output_count == 1 or (left_partitioned and right_partitioned)
+
+
 @generate_ir_sub_network.register(Join)
 def _(
     ir: Join, rec: SubNetGenerator
@@ -1052,35 +1081,10 @@ def _(
     # Join operation.
     left, right = ir.children
     partition_info = rec.state["partition_info"]
-    output_count = partition_info[ir].count
-    executor = rec.state["config_options"].executor
-
-    # Check for dynamic planning
-    join_type = ir.options[0]
-    use_dynamic = (
-        isinstance(executor, StreamingExecutor)
-        and executor.dynamic_planning is not None
-        and join_type in ("Inner", "Left", "Right", "Full", "Semi", "Anti")
-    )
-
     left_count = partition_info[left].count
     right_count = partition_info[right].count
-
-    if (
-        isinstance(executor, StreamingExecutor)
-        and executor.dynamic_planning is not None
-    ):
-        pwise_join = False
-    else:
-        left_partitioned = (
-            partition_info[left].partitioned_on == ir.left_on
-            and left_count == output_count
-        )
-        right_partitioned = (
-            partition_info[right].partitioned_on == ir.right_on
-            and right_count == output_count
-        )
-        pwise_join = output_count == 1 or (left_partitioned and right_partitioned)
+    executor = rec.state["config_options"].executor
+    pwise_join = _use_pwise_join(executor, partition_info, ir)
 
     # Process children
     actors, channels = process_children(ir, rec)
@@ -1106,9 +1110,12 @@ def _(
         ]
         return actors, channels
 
-    elif use_dynamic:
+    elif (
+        isinstance(executor, StreamingExecutor)
+        and executor.dynamic_planning is not None
+        and ir.options[0] in ("Inner", "Left", "Right", "Full", "Semi", "Anti")
+    ):
         # Dynamic join - decide strategy at runtime
-        assert executor.dynamic_planning is not None  # Checked in use_dynamic
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
         # Join uses up to 3 collective IDs: 1 allgather + up to 2 (left/right shuffle)
         if len(collective_ids) < 3:
