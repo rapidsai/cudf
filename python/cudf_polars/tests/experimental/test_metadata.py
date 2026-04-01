@@ -21,10 +21,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     NormalizedPartitioning,
     maybe_remap_partitioning,
 )
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
-)
 from cudf_polars.utils.config import ConfigOptions
 
 
@@ -50,28 +46,33 @@ def right() -> pl.LazyFrame:
     )
 
 
-@pytest.mark.skipif(
-    DEFAULT_RUNTIME != "rapidsmpf", reason="Requires 'rapidsmpf' runtime."
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {
+                "max_rows_per_partition": 1,
+                "broadcast_join_limit": 2,
+                "dynamic_planning": None,
+            }
+        },
+        {
+            "executor_options": {
+                "max_rows_per_partition": 1,
+                "broadcast_join_limit": 10,
+                "dynamic_planning": None,
+            }
+        },
+    ],
+    indirect=True,
 )
-@pytest.mark.skipif(DEFAULT_CLUSTER != "single", reason="Requires 'single' cluster.")
-@pytest.mark.parametrize("broadcast_join_limit", [2, 10])
 def test_rapidsmpf_join_metadata(
     left: pl.LazyFrame,
     right: pl.LazyFrame,
-    broadcast_join_limit: int,
+    engine,
 ) -> None:
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        executor_options={
-            "max_rows_per_partition": 1,
-            "broadcast_join_limit": broadcast_join_limit,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "dynamic_planning": None,  # Requires static planning
-        },
-    )
     config_options = ConfigOptions.from_polars_engine(engine)
+    broadcast_join_limit = config_options.executor.broadcast_join_limit
     q = left.join(
         right,
         on="y",
@@ -257,13 +258,11 @@ def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
     return Select(out_schema, exprs, should_broadcast=False, df=child)
 
 
-def test_remap_partitioning_select_none_input() -> None:
-    engine = pl.GPUEngine(executor="streaming")
+def test_remap_partitioning_select_none_input(engine) -> None:
     assert maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), None) is None
 
 
-def test_remap_partitioning_select_preserves_keys() -> None:
-    engine = pl.GPUEngine(executor="streaming")
+def test_remap_partitioning_select_preserves_keys(engine) -> None:
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
     result = maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), part)
     assert result is not None
@@ -273,8 +272,7 @@ def test_remap_partitioning_select_preserves_keys() -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_select_drops_key() -> None:
-    engine = pl.GPUEngine(executor="streaming")
+def test_remap_partitioning_select_drops_key(engine) -> None:
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
     result = maybe_remap_partitioning(_make_select_ir(engine, ("a",)), part)
     assert result is not None
@@ -282,8 +280,7 @@ def test_remap_partitioning_select_drops_key() -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_select_renamed_key() -> None:
-    engine = pl.GPUEngine(executor="streaming")
+def test_remap_partitioning_select_renamed_key(engine) -> None:
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
     child = Translator(q._ldf.visit(), engine).translate_ir()
     # Output (a_renamed, b) where a_renamed is Col("a")
@@ -302,8 +299,7 @@ def test_remap_partitioning_select_renamed_key() -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_reorder_columns() -> None:
-    engine = pl.GPUEngine(executor="streaming")
+def test_remap_partitioning_reorder_columns(engine) -> None:
     # Select (b, a) from (a, b, c) -> partition keys (a,b) become indices (1, 0) in output
     select = _make_select_ir(engine, ("b", "a"))
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
@@ -314,8 +310,7 @@ def test_remap_partitioning_reorder_columns() -> None:
     assert result.inter_rank.modulus == 8
 
 
-def test_remap_partitioning_reorder_columns_projection() -> None:
-    engine = pl.GPUEngine(executor="streaming")
+def test_remap_partitioning_reorder_columns_projection(engine) -> None:
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
     child = Translator(q._ldf.visit(), engine).translate_ir()
     # Projection output (b, a) -> child has (a, b, c); partition keys (a,b) -> indices (1, 0)
