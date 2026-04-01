@@ -33,7 +33,7 @@ import polars as pl
 
 import rmm.statistics
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 # The dtype for count() aggregations depends on the presence
 # of the polars-runtime-64 package (`polars[rt64]`).
@@ -782,8 +782,10 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
                         "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
+                    | get_environment_variables()
                 ),
             )
+
             # Setting this globally makes the peak statistics not meaningful
             # across queries / iterations. But doing it per query isn't worth
             # the effort right now.
@@ -1248,7 +1250,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=textwrap.dedent("""\
             Whether RapidsMPF should spill to pinned host memory when available,
             or use regular pageable host memory."""),
@@ -1855,13 +1857,13 @@ def run_polars_spmd(
     if run_config.rmm_async:
         raise NotImplementedError("--rmm-async is not supported with --cluster spmd")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime" and "cluster" are reserved — spmd_execution sets them
+    # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
     rmm.mr.set_current_device_resource(
         rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
     )
-    with spmd_execution(
+    with SPMDEngine(
         rapidsmpf_options=Options(get_environment_variables()),
         executor_options=executor_options,
         engine_options={
@@ -1926,7 +1928,7 @@ def run_polars_ray(
     validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Ray actor-based distributed execution."""
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
     if run_config.collect_traces:
         raise NotImplementedError(
@@ -1935,18 +1937,18 @@ def run_polars_ray(
     if run_config.rmm_async:
         raise NotImplementedError("--rmm-async is not supported with --cluster ray.")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime", "cluster" are reserved — ray_execution sets them
+    # "runtime", "cluster" are reserved — RayEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
     engine_options: dict[str, Any] = {
         "cuda_stream_policy": run_config.stream_policy,
         "parquet_options": parquet_options,
     }
-    with ray_execution(
+    with RayEngine(
         executor_options=executor_options,
         engine_options=engine_options,
-    ) as (ray_client, engine):
-        run_config = dataclasses.replace(run_config, n_workers=ray_client.nranks)
+    ) as engine:
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
