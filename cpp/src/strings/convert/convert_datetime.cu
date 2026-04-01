@@ -25,11 +25,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/algorithm>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
@@ -409,8 +409,8 @@ struct dispatch_to_timestamps_fn {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(results_view.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{results_view.size()},
                       results_view.data<T>(),
                       pfn);
   }
@@ -689,8 +689,8 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
 
   format_compiler compiler(format, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings_count},
                     d_results,
                     check_datetime_format{*d_strings, compiler.format_items()});
 

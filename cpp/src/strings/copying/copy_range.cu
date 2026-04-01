@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,8 +16,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -69,8 +69,8 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
       return std::pair(rmm::device_buffer{}, 0);
     }
     return cudf::detail::valid_if(
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(target.size()),
+      cuda::counting_iterator<size_type>{0},
+      cuda::counting_iterator<size_type>{target.size()},
       [d_source, d_target, source_begin, target_begin, target_end] __device__(size_type idx) {
         return (idx >= target_begin && idx < target_end)
                  ? d_source.is_valid(source_begin + (idx - target_begin))
@@ -92,8 +92,8 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
   auto d_chars    = chars_data.data();
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(target.size()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{target.size()},
     [d_source, d_target, source_begin, target_begin, target_end, d_offsets, d_chars] __device__(
       size_type idx) {
       if (d_offsets[idx + 1] - d_offsets[idx] > 0) {

@@ -17,6 +17,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/type_traits>
 
 namespace cudf {
@@ -254,14 +255,14 @@ void apply_binary_op(mutable_column_view& out,
   if (common_dtype) {
     // Execute it on every element
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator<size_type>(0),
+                       cuda::counting_iterator<size_type>{0},
                        out.size(),
                        binary_op_device_dispatcher<BinaryOperator>{
                          *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   } else {
     // Execute it on every element
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator<size_type>(0),
+                       cuda::counting_iterator<size_type>{0},
                        out.size(),
                        binary_op_double_device_dispatcher<BinaryOperator>{
                          *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});

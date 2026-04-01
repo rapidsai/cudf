@@ -84,7 +84,7 @@ void reader_impl::build_string_dict_indices()
   pass.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
     total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
 
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<size_t>{0};
   thrust::for_each(
     rmm::exec_policy_nosync(_stream),
     iter,
@@ -108,14 +108,14 @@ void reader_impl::allocate_nesting_info()
 
   // generate the number of nesting info structs needed per-page, by column
   std::vector<int> per_page_nesting_info_size(num_columns);
-  auto iter = thrust::make_counting_iterator(size_type{0});
+  auto iter = cuda::counting_iterator{size_type{0}};
   std::transform(iter, iter + num_columns, per_page_nesting_info_size.begin(), [&](size_type i) {
     // Schema index of the current input column
     auto const schema_idx = _input_columns[i].schema_idx;
     // Get the max_definition_level of this column across all sources.
     auto max_definition_level = _metadata->get_schema(schema_idx).max_definition_level + 1;
-    std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
-                  thrust::make_counting_iterator(_num_sources),
+    std::for_each(cuda::counting_iterator{static_cast<size_t>(1)},
+                  cuda::counting_iterator{_num_sources},
                   [&](auto const src_file_idx) {
                     auto const& schema = _metadata->get_schema(
                       _metadata->map_schema_index(schema_idx, src_file_idx), src_file_idx);
@@ -128,7 +128,7 @@ void reader_impl::allocate_nesting_info()
 
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
-  auto counting_iter = thrust::make_counting_iterator(size_t{0});
+  auto counting_iter = cuda::counting_iterator{size_t{0}};
   size_t const total_page_nesting_infos =
     std::accumulate(counting_iter, counting_iter + num_columns, 0, [&](int total, size_t index) {
       return total + (per_page_nesting_info_size[index] * subpass.column_page_count[index]);
@@ -177,8 +177,8 @@ void reader_impl::allocate_nesting_info()
     std::map<std::pair<int, int>, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
     // if this column has lists, generate depth remapping
     std::for_each(
-      thrust::make_counting_iterator(static_cast<size_t>(0)),
-      thrust::make_counting_iterator(_num_sources),
+      cuda::counting_iterator{static_cast<size_t>(0)},
+      cuda::counting_iterator{_num_sources},
       [&](auto const src_file_idx) {
         auto const mapped_schema_idx = _metadata->map_schema_index(src_col_schema, src_file_idx);
         if (_metadata->get_schema(mapped_schema_idx, src_file_idx).max_repetition_level > 0) {
@@ -422,8 +422,8 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   rmm::device_uvector<size_t> d_page_offset_counts(num_pages, _stream);
 
   thrust::transform(rmm::exec_policy_nosync(_stream),
-                    thrust::counting_iterator<size_t>(0),
-                    thrust::counting_iterator<size_t>(num_pages),
+                    cuda::counting_iterator<size_t>{0},
+                    cuda::counting_iterator<size_t>{num_pages},
                     d_page_offset_counts.begin(),
                     compute_page_offset_count{subpass.pages, pass.chunks, skip_rows, num_rows});
 
@@ -677,7 +677,7 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
     // column chunk (each rowgroup) such that it ends on the real known row count. this is so that
     // as we march through the subpasses, we will find that every column cleanly ends up the
     // expected row count at the row group boundary and our split computations work correctly.
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<size_t>{0};
     thrust::for_each(rmm::exec_policy_nosync(_stream),
                      iter,
                      iter + pass.pages.size(),
@@ -686,8 +686,8 @@ void reader_impl::generate_list_column_row_counts(is_estimate_row_counts is_esti
     // If column indexes are available, we don't need to estimate PageInfo::num_rows for lists and
     // can instead translate known PageInfo::chunk_row to PageInfo::num_rows
     thrust::for_each(rmm::exec_policy_nosync(_stream),
-                     thrust::counting_iterator<size_t>(0),
-                     thrust::counting_iterator(pass.pages.size()),
+                     cuda::counting_iterator<size_t>{0},
+                     cuda::counting_iterator{pass.pages.size()},
                      compute_page_num_rows_from_chunk_rows{pass.pages, pass.chunks});
   }
 
@@ -762,7 +762,7 @@ void reader_impl::preprocess_subpass_pages(read_mode mode, size_t chunk_read_lim
                        _stream);
   }
 
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<size_t>{0};
 
   // copy our now-correct row counts  back to the base pages stored in the pass.
   // only need to do this if we are not processing the whole pass in one subpass
@@ -996,16 +996,15 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
       auto const num_keys_this_iter = std::min<size_t>(num_keys_per_iter, num_keys - key_start);
       thrust::transform(
         rmm::exec_policy_nosync(_stream),
-        thrust::make_counting_iterator<size_t>(key_start),
-        thrust::make_counting_iterator<size_t>(key_start + num_keys_this_iter),
+        cuda::counting_iterator<size_t>{key_start},
+        cuda::counting_iterator<size_t>{key_start + num_keys_this_iter},
         size_input.begin(),
         get_page_nesting_size{
           d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
 
       // Manually create a size_t `key_start` compatible counting_transform_iterator.
-      auto const reduction_keys =
-        thrust::make_transform_iterator(thrust::make_counting_iterator<std::size_t>(key_start),
-                                        get_reduction_key{subpass.pages.size()});
+      auto const reduction_keys = thrust::make_transform_iterator(
+        cuda::counting_iterator<std::size_t>{key_start}, get_reduction_key{subpass.pages.size()});
 
       // Find the size of each column
       cudf::detail::reduce_by_key(reduction_keys,
