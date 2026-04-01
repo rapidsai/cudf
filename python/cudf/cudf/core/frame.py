@@ -740,6 +740,10 @@ class Frame(BinaryOperand, Scannable, Serializable):
                     to_dtype = np.dtype(object)
             if isinstance(to_dtype, cudf.CategoricalDtype):
                 to_dtype = to_dtype.categories.dtype
+                # In pandas 3.0+ string categories have StringDtype, which is
+                # not a numpy dtype. Map it to object so numpy can hold it.
+                if is_dtype_obj_string(to_dtype):
+                    to_dtype = np.dtype(object)
 
             if not isinstance(to_dtype, np.dtype):
                 raise NotImplementedError(

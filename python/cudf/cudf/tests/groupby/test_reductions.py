@@ -436,7 +436,7 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert res.index.dtype == cudf.dtype("object")
+    assert res.index.dtype == cudf.dtype("str")
 
 
 @pytest.mark.parametrize(
