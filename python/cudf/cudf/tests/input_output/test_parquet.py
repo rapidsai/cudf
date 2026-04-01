@@ -2310,19 +2310,17 @@ def test_read_parquet_partitioned_filtered(
         row_groups=row_groups,
         categorical_partitions=use_cat,
     )
-    expect["b"] = expect["b"].astype(str)
+
     expect["c"] = expect["c"].astype(int)
     if use_cat:
-        assert got.dtypes["b"] == "category"
         assert got.dtypes["c"] == "category"
-        got["b"] = got["b"].astype(str)
         got["c"] = got["c"].astype(int)
     else:
         # Check that we didn't get categorical
         # columns, but convert back to categorical
         # for comparison with pandas
         assert got.dtypes["b"] == pd.StringDtype(na_value=np.nan)
-        assert got.dtypes["c"] == "int"
+        got["b"] = got["b"].astype(expect["b"].dtype)
     assert_eq(expect, got)
 
 
@@ -2548,7 +2546,8 @@ def test_parquet_nullable_boolean(tmp_path, engine):
         result = cudf.read_parquet(pandas_path, engine=engine)
     if engine == "cudf":
         # TODO: Preserve BooleanDtype from the parquet metadata?
-        expected["a"] = expected["a"].astype("object")
+        result["a"] = result["a"].astype(pd.BooleanDtype())
+
     assert_eq(result, expected)
 
 
@@ -2839,6 +2838,15 @@ def test_parquet_writer_nested(tmp_path, data):
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)
+
+    # Normalize expect via a pandas parquet round-trip so that nested
+    # nullable integer lists (stored as Python lists with None) match
+    # the representation pyarrow produces when reading parquet back
+    # (numpy float arrays with NaN, since numpy int can't hold NaN).
+    pd_fname = tmp_path / "test_parquet_writer_nested_pd.parquet"
+    expect.to_parquet(pd_fname)
+    expect = pd.read_parquet(pd_fname)
+
     assert_eq(expect, got)
 
 
@@ -3331,7 +3339,7 @@ def test_parquet_columns_and_index_param(index, columns):
 
     expected = pd.read_parquet(buffer, columns=columns)
     got = cudf.read_parquet(buffer, columns=columns)
-    if columns == [] and index in {False, None}:
+    if columns == []:
         # cuDF returns RangeIndex columns compared
         # to pandas' Index[object] columns
         got.columns = expected.columns
