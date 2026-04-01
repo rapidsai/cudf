@@ -31,7 +31,6 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -466,8 +465,8 @@ std::unique_ptr<table> boolean_mask_scatter(
                cudf::data_type_error);
 
   // Count valid pair of input and columns as per type at each column/scalar index i
-  CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(target.num_columns()),
+  CUDF_EXPECTS(std::all_of(cuda::counting_iterator<size_type>{0},
+                           cuda::counting_iterator<size_type>{target.num_columns()},
                            [&input, &target](auto index) {
                              return cudf::have_same_types(target.column(index), input[index].get());
                            }),

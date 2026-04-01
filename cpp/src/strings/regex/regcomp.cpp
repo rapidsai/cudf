@@ -8,7 +8,7 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <array>
@@ -367,7 +367,7 @@ class regex_parser {
     }
 
     // transform pairs of literals to ranges
-    auto const counter = thrust::make_counting_iterator(0);
+    auto const counter = cuda::counting_iterator<std::size_t>{0};
     std::transform(
       counter, counter + (literals.size() / 2), std::back_inserter(ranges), [&literals](auto idx) {
         return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
@@ -1241,7 +1241,7 @@ void reprog::print(regex_flags const flags)
   printf("startinst_id=%d\n", _startinst_id);
   if (_startinst_ids.size() > 0) {
     printf("startinst_ids: [");
-    for (size_t i = 0; i < _startinst_ids.size(); i++) {
+    for (std::size_t i = 0; i < _startinst_ids.size(); i++) {
       printf(" %d", _startinst_ids[i]);
     }
     printf("]\n");

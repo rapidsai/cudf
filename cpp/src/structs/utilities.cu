@@ -5,6 +5,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -16,9 +17,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <functional>
 #include <numeric>
@@ -457,7 +455,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   };
 
   auto const child_begin =
-    thrust::make_transform_iterator(thrust::make_counting_iterator(0), child_with_new_mask);
+    cudf::detail::make_counting_transform_iterator(cudf::size_type{0}, child_with_new_mask);
   auto const child_end = child_begin + structs_view.num_children();
   auto ret_children    = std::vector<column_view>{};
 
