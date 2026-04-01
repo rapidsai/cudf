@@ -202,9 +202,14 @@ def log_do_evaluate(
             query_id_str: str | None = None
             gpu_events = None
             if LOG_TRACES_GPU:
-                trace_event_id = uuid.uuid4().hex
                 # By convention, kwargs["context"] is an IRExecutionContext
                 exec_ctx: ir.IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
+
+                # The GPU trace is emitted on a different Python thread at some point in
+                # the future, so the context setting actor IDs, etc. might not be available.
+                # We can link GPU traces to a host task through this UUID, and from there
+                # to things like the actor ID.
+                trace_event_id = uuid.uuid4().hex
                 query_id_str = str(exec_ctx.query_id)
                 timing_stream = get_joined_cuda_stream(
                     exec_ctx.get_cuda_stream,
@@ -221,11 +226,14 @@ def log_do_evaluate(
                     _tracing_gpu.destroy_event_pair(ev_s, ev_e)
                 raise
             stop = time.monotonic_ns()
+            snapshot_extra: dict[str, Any] = {"start": start, "stop": stop}
 
-            if LOG_TRACES_GPU and gpu_events is not None:
-                ev_s, ev_e = gpu_events
+            if LOG_TRACES_GPU:
+                assert gpu_events is not None
                 assert trace_event_id is not None
                 assert query_id_str is not None
+
+                ev_s, ev_e = gpu_events
                 # Record end on ``result.stream`` after IR work, then join a dedicated
                 # notify stream downstream before ``cudaLaunchHostFunc`` (see tracing_gpu).
                 ok, gpu_err = _tracing_gpu.enqueue_gpu_trace_completion(
@@ -248,8 +256,6 @@ def log_do_evaluate(
                         error=gpu_err,
                     )
 
-            snapshot_extra: dict[str, Any] = {"start": start, "stop": stop}
-            if LOG_TRACES_GPU and trace_event_id is not None:
                 snapshot_extra["trace_event_id"] = trace_event_id
                 snapshot_extra["query_id"] = query_id_str
 

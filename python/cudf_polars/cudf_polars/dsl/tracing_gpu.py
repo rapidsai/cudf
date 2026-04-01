@@ -5,18 +5,22 @@
 Asynchronous GPU timing for IR tracing using CUDA events.
 
 To expose *device* side timing in trace events, we use CUDA Events to record the
-start and end times of work done on some CUDA stream.
+start and end times of work done on some CUDA stream. See
+https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html#timing-operations-in-cuda-streams
+for details.
 
-See https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html#timing-operations-in-cuda-streams
-for details. This is all well and good, but we also need to
+To extract the timing information and get it back to Python for logging,
+we use `cudaLaunchHostFunc` to schedule a callback to run once the work on the
+stream is done. There are some restrictions on this callback:
 
-1. Extract the timing information from the CUDA Events *after*
-   the work has completed (asynchronously with respect to the host program).
-2. Get the timing information back to Python for logging.
+1. It must not call the CUDA API (a requirement of the CUDA runtime).
+2. It should do as little work as possible (to avoid deadlocks).
 
-`cudaLaunchHostFunc` is the typical solution to step 1. We'll schedule a
-callback to run once the work on the IR channel is done. However, cudf-polars
-being in Python massively complicates things.
+The callback passed to `cudaLaunchHostFunc` is a C function pointer, but
+we need to get the actual logs all the way back to Python. We use ctypes
+to register the callback function. It simply forwards the token identifying
+the task on to our actual worker thread, which extracts the timing information
+from the CUDA runtime and logs it.
 """
 
 from __future__ import annotations
