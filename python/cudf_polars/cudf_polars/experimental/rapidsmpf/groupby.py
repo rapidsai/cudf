@@ -221,6 +221,7 @@ async def _local_aggregation(
             decomposed.piecewise_ir,
             ir_context=ir_context,
         )
+        chunk = _enforce_schema(chunk, decomposed.piecewise_ir.schema)
         total_size += chunk.data_alloc_size(MemoryType.DEVICE)
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
@@ -656,7 +657,9 @@ async def groupby_actor(
     collective_ids
         The collective IDs.
     """
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks

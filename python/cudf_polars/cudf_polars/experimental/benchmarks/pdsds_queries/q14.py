@@ -278,61 +278,6 @@ def build_average_sales(  # noqa: D103
     )
 
 
-def build_channel_result(  # noqa: D103
-    sales: pl.LazyFrame,
-    item: pl.LazyFrame,
-    date_dim: pl.LazyFrame,
-    cross_items: pl.LazyFrame,
-    *,
-    item_key: str,
-    date_key: str,
-    qty_col: str,
-    price_col: str,
-    channel_label: str,
-    year: int,
-    moy: int,
-    dom: int,
-    average_sales: pl.LazyFrame,
-) -> pl.LazyFrame:
-    # DuckDB uses d_week_seq to filter, which includes all days in the target week.
-    # Find the d_week_seq for the specific date, then join on that week.
-    target_week = (
-        date_dim.filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == moy)
-            & (pl.col("d_dom") == dom)
-        )
-        .select("d_week_seq")
-        .unique()
-    )
-    week_dates = date_dim.join(target_week, on="d_week_seq").select("d_date_sk")
-    return (
-        sales.join(cross_items, left_on=item_key, right_on="ss_item_sk")
-        .join(item, left_on=item_key, right_on="i_item_sk")
-        .join(week_dates, left_on=date_key, right_on="d_date_sk")
-        .group_by(["i_brand_id", "i_class_id", "i_category_id"])
-        .agg(
-            [
-                (pl.col(qty_col) * pl.col(price_col)).sum().alias("sales"),
-                pl.len().alias("number_sales"),
-            ]
-        )
-        .join(average_sales, how="cross")
-        .filter(pl.col("sales") > pl.col("average_sales"))
-        .with_columns(pl.lit(channel_label).alias("channel"))
-        .select(
-            [
-                "channel",
-                "i_brand_id",
-                "i_class_id",
-                "i_category_id",
-                "sales",
-                "number_sales",
-            ]
-        )
-    )
-
-
 def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:  # noqa: D103
     if group_cols:
         lf = y.group_by(group_cols).agg(
@@ -390,6 +335,38 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    all_sales = pl.concat(
+        [
+            store_sales.select(
+                [
+                    pl.lit("store").alias("channel"),
+                    pl.col("ss_item_sk").alias("item_sk"),
+                    pl.col("ss_quantity").alias("quantity"),
+                    pl.col("ss_list_price").alias("list_price"),
+                    pl.col("ss_sold_date_sk").alias("date_sk"),
+                ]
+            ),
+            catalog_sales.select(
+                [
+                    pl.lit("catalog").alias("channel"),
+                    pl.col("cs_item_sk").alias("item_sk"),
+                    pl.col("cs_quantity").alias("quantity"),
+                    pl.col("cs_list_price").alias("list_price"),
+                    pl.col("cs_sold_date_sk").alias("date_sk"),
+                ]
+            ),
+            web_sales.select(
+                [
+                    pl.lit("web").alias("channel"),
+                    pl.col("ws_item_sk").alias("item_sk"),
+                    pl.col("ws_quantity").alias("quantity"),
+                    pl.col("ws_list_price").alias("list_price"),
+                    pl.col("ws_sold_date_sk").alias("date_sk"),
+                ]
+            ),
+        ]
+    )
+
     cross_items = build_cross_items(
         store_sales, catalog_sales, web_sales, item, date_dim, year=year
     )
@@ -397,53 +374,46 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         store_sales, catalog_sales, web_sales, date_dim, year=year
     )
 
-    y_store = build_channel_result(
-        store_sales,
-        item,
-        date_dim,
-        cross_items,
-        item_key="ss_item_sk",
-        date_key="ss_sold_date_sk",
-        qty_col="ss_quantity",
-        price_col="ss_list_price",
-        channel_label="store",
-        year=year + 1,
-        moy=12,
-        dom=day,
-        average_sales=average_sales,
+    # d_week_seq target is the same for all 3 channels; compute it once.
+    target_week = (
+        date_dim.filter(
+            (pl.col("d_year") == year + 1)
+            & (pl.col("d_moy") == 12)
+            & (pl.col("d_dom") == day)
+        )
+        .select("d_week_seq")
+        .unique()
     )
-    y_catalog = build_channel_result(
-        catalog_sales,
-        item,
-        date_dim,
-        cross_items,
-        item_key="cs_item_sk",
-        date_key="cs_sold_date_sk",
-        qty_col="cs_quantity",
-        price_col="cs_list_price",
-        channel_label="catalog",
-        year=year + 1,
-        moy=12,
-        dom=day,
-        average_sales=average_sales,
-    )
-    y_web = build_channel_result(
-        web_sales,
-        item,
-        date_dim,
-        cross_items,
-        item_key="ws_item_sk",
-        date_key="ws_sold_date_sk",
-        qty_col="ws_quantity",
-        price_col="ws_list_price",
-        channel_label="web",
-        year=year + 1,
-        moy=12,
-        dom=day,
-        average_sales=average_sales,
-    )
+    week_dates = date_dim.join(target_week, on="d_week_seq").select("d_date_sk")
 
-    y = pl.concat([y_store, y_catalog, y_web])
+    # Build y: all 3 channels in a single pipeline.
+    # cross_items and average_sales each appear once — no CSE needed.
+    # After group_by the frame is tiny, so the cross join with the 1-row
+    # average_sales frame is negligible even if Polars fuses it into an IEJoin.
+    y = (
+        all_sales.join(cross_items, left_on="item_sk", right_on="ss_item_sk")
+        .join(item, left_on="item_sk", right_on="i_item_sk")
+        .join(week_dates, left_on="date_sk", right_on="d_date_sk")
+        .group_by(["channel", "i_brand_id", "i_class_id", "i_category_id"])
+        .agg(
+            [
+                (pl.col("quantity") * pl.col("list_price")).sum().alias("sales"),
+                pl.len().alias("number_sales"),
+            ]
+        )
+        .join(average_sales, how="cross")
+        .filter(pl.col("sales") > pl.col("average_sales"))
+        .select(
+            [
+                "channel",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sales",
+                "number_sales",
+            ]
+        )
+    )
 
     level1 = rollup_level(y, ["channel", "i_brand_id", "i_class_id", "i_category_id"])
     level2 = rollup_level(y, ["channel", "i_brand_id", "i_class_id"])
