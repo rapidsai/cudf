@@ -27,6 +27,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunkwise_evaluate,
     empty_table_chunk,
+    gather_in_task_group,
     make_spill_function,
     maybe_remap_partitioning,
     process_children,
@@ -133,7 +134,7 @@ async def default_node_multi(
         duplicated = True
         partitioning = None
         for idx, md_child in enumerate(
-            await asyncio.gather(*(recv_metadata(ch, context) for ch in chs_in))
+            await gather_in_task_group(*(recv_metadata(ch, context) for ch in chs_in))
         ):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
@@ -274,7 +275,9 @@ async def fanout_node_bounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        await gather_in_task_group(
+            *(send_metadata(ch, context, metadata) for ch in chs_out)
+        )
 
         while (msg := await ch_in.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg).make_available_and_spill(
@@ -296,7 +299,7 @@ async def fanout_node_bounded(
                 )
             del table_chunk
 
-        await asyncio.gather(*(ch.drain(context) for ch in chs_out))
+        await gather_in_task_group(*(ch.drain(context) for ch in chs_out))
 
 
 @define_actor()
@@ -342,7 +345,9 @@ async def fanout_node_unbounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        await gather_in_task_group(
+            *(send_metadata(ch, context, metadata) for ch in chs_out)
+        )
 
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
