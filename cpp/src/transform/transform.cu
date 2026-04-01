@@ -384,9 +384,6 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
     return 0;
   }
 
-  auto num_words = num_bitmask_words(row_size);
-  auto num_bytes = num_words * sizeof(bitmask_type);
-
   auto has_scalars = std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
     return std::holds_alternative<scalar_column_view>(in);
   });
@@ -433,6 +430,9 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
     set_null_mask(null_mask, 0, row_size, true, stream);
     return 0;
   }
+
+  auto num_words = num_bitmask_words(row_size);
+  auto num_bytes = num_words * sizeof(bitmask_type);
 
   if (nullable_masks.size() == 1) {
     // only 1 mask provided, copy it directly to the output
