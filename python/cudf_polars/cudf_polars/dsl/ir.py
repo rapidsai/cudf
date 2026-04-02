@@ -1841,7 +1841,9 @@ class GroupBy(IR):
                 isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
                 for child in expr.children
             ):
-                raise NotImplementedError("value_counts is not supported in groupby")
+                raise NotImplementedError(
+                    "value_counts is not supported in groupby"
+                )  # pragma: no cover
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
