@@ -25,7 +25,6 @@ from cudf.api.types import (
     is_integer,
     is_list_like,
     is_scalar,
-    is_string_dtype,
 )
 from cudf.core._internals import copying, sorting
 from cudf.core.accessors import StringMethods
