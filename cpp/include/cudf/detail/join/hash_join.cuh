@@ -7,7 +7,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/join/join.hpp>
 #include <cudf/hashing.hpp>
-#include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -222,10 +221,6 @@ struct hash_join {
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr) const;
 };
-
-// Prevent accidental implicit instantiation in other TUs.
-// The explicit instantiation is split across the .cu files in src/join/hash_join/.
-extern template struct hash_join<cudf::hashing::detail::MurmurHash3_x86_32<hash_value_type>>;
 
 }  // namespace detail
 }  // namespace cudf
