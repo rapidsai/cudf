@@ -886,7 +886,7 @@ async def _choose_strategy(
         assert executor.dynamic_planning is not None
         sample_chunk_count = executor.dynamic_planning.sample_chunk_count
         target_partition_size = executor.target_partition_size
-        left_sample, right_sample = await asyncio.gather(
+        left_sample, right_sample = await gather_in_task_group(
             _sample_chunks(
                 context,
                 ch_left,
