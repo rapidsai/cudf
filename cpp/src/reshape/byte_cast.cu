@@ -21,7 +21,6 @@
 #include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <type_traits>
 
@@ -74,8 +73,8 @@ struct byte_list_conversion_fn<T, std::enable_if_t<cudf::is_numeric<T>()>> {
 
     if (configuration == flip_endianness::YES) {
       thrust::for_each(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(0),
-                       thrust::make_counting_iterator(num_bytes),
+                       cuda::counting_iterator<cudf::size_type>{0},
+                       cuda::counting_iterator{num_bytes},
                        [d_inp, d_out] __device__(auto index) {
                          constexpr auto mask = static_cast<size_type>(sizeof(T) - 1);
                          d_out[index]        = d_inp[index + mask - ((index & mask) << 1)];

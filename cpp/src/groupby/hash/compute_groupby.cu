@@ -19,6 +19,8 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/tabulate.h>
 
 namespace cudf::groupby::detail::hash {
@@ -114,7 +116,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     return cudf::detail::gather(keys,
                                 gather_map,
                                 out_of_bounds_policy::DONT_CHECK,
-                                cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                cudf::negative_index_policy::NOT_ALLOWED,
                                 stream,
                                 mr);
   };
@@ -123,7 +125,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   if (requests.empty()) {
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
+      cuda::counting_iterator<cudf::size_type>{0},
       num_keys,
       [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {
         if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) { set_ref.insert(idx); }

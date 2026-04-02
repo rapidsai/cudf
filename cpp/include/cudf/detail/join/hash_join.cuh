@@ -30,7 +30,7 @@ namespace cudf::detail::row::equality {
 class preprocessed_table;
 }
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 /**
  * @brief Hash join that builds hash table in creation and probes results in subsequent `*_join`
@@ -222,4 +222,4 @@ struct hash_join {
                                       rmm::device_async_resource_ref mr) const;
 };
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

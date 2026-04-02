@@ -20,7 +20,6 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
@@ -99,10 +98,10 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
     }();
     // gather the valid index == n
     thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       thrust::make_counting_iterator<size_type>(values.size()),
-                       group_labels.begin(),                          // map
-                       thrust::make_counting_iterator<size_type>(0),  // stencil
+                       cuda::counting_iterator<size_type>{0},
+                       cuda::counting_iterator<size_type>{values.size()},
+                       group_labels.begin(),                   // map
+                       cuda::counting_iterator<size_type>{0},  // stencil
                        nth_index.begin(),
                        [n,
                         bitmask_iterator,
@@ -117,7 +116,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
   auto output_table = cudf::detail::gather(table_view{{values}},
                                            nth_index,
                                            out_of_bounds_policy::NULLIFY,
-                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                           cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);

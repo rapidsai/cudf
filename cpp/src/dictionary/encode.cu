@@ -30,6 +30,8 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
@@ -97,8 +99,8 @@ std::unique_ptr<column> encode(column_view const& input,
   auto d_indices = rmm::device_uvector<size_type>(input.size(), stream);
   auto d_input   = column_device_view::create(input, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(input.size()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     d_indices.begin(),
                     encode_fn{set_ref, *d_input});
 
@@ -111,7 +113,7 @@ std::unique_ptr<column> encode(column_view const& input,
 
   // use keys_indices to retrieve the keys
   auto const oob_policy   = cudf::out_of_bounds_policy::DONT_CHECK;
-  auto const index_policy = cudf::detail::negative_index_policy::NOT_ALLOWED;
+  auto const index_policy = cudf::negative_index_policy::NOT_ALLOWED;
   auto keys_column =
     std::move(cudf::detail::gather(tv, keys_indices, oob_policy, index_policy, stream, mr)
                 ->release()

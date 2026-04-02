@@ -16,8 +16,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/extrema.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
@@ -104,8 +104,8 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
     data_type{type_to_id<size_type>()}, per_row_mapping.size(), mask_state::UNALLOCATED, stream);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{per_row_mapping.size()},
     gather_map->mutable_view().template begin<size_type>(),
     cuda::proclaim_return_type<size_type>(
       [d_offsets =
@@ -181,13 +181,13 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
   auto gather_output = cudf::detail::gather(table_view{std::vector<column_view>{input}},
                                             gather_map->view(),
                                             cudf::out_of_bounds_policy::DONT_CHECK,
-                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            cudf::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr);
 
   auto [null_mask, null_count] = valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(input.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{input.size()},
     [preceding_begin, following_begin, min_periods] __device__(auto i) {
       return (preceding_begin[i] + following_begin[i]) >= min_periods;
     },
