@@ -14,10 +14,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <memory>
@@ -60,13 +60,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
 
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_groups),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{num_groups},
     null_purged_sizes.begin(),
     [d_offsets = offsets.template begin<size_type>(), not_null_pred] __device__(auto i) {
       return thrust::count_if(thrust::seq,
-                              thrust::make_counting_iterator<size_type>(d_offsets[i]),
-                              thrust::make_counting_iterator<size_type>(d_offsets[i + 1]),
+                              cuda::counting_iterator<size_type>{d_offsets[i]},
+                              cuda::counting_iterator<size_type>{d_offsets[i + 1]},
                               not_null_pred);
     });
 

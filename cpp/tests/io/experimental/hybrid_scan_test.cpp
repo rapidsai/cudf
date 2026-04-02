@@ -26,6 +26,8 @@
 #include <rmm/aligned.hpp>
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
+#include <cuda/iterator>
+
 namespace {
 
 /**
@@ -508,7 +510,7 @@ TEST_F(HybridScanTest, MaterializeStructs)
     0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
 
   // struct<list<str(nullable)>(nullable), int(nullable), float(non-nullable)>(nullable)
-  auto values    = thrust::make_counting_iterator(0);
+  auto values    = cuda::counting_iterator<int>{0};
   auto col1_list = make_list_str_column(gen, true, true);
   cudf::test::fixed_width_column_wrapper<int> col1_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> col1_floats(values, values + num_rows);
@@ -558,7 +560,7 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   // list<struct<list<str(nullable)>(nullable), int(nullable),
   // float(non-nullable)>(nullable)>(nullable)
   auto struct1_list = make_list_str_column(gen, true, true);
-  auto values       = thrust::make_counting_iterator(0);
+  auto values       = cuda::counting_iterator<int>{0};
   cudf::test::fixed_width_column_wrapper<float> struct1_floats(values, values + num_rows, valids);
   std::vector<std::unique_ptr<cudf::column>> struct1_children;
   struct1_children.push_back(std::move(struct1_list));
@@ -566,7 +568,7 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   cudf::test::structs_column_wrapper _struct1(std::move(struct1_children), struct_valids);
   auto struct1 = cudf::purge_nonempty_nulls(_struct1);
 
-  auto col1_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col1_offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto col1_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
     col1_offsets_iter, col1_offsets_iter + num_rows + 1);
   auto [null_mask, null_count] =
@@ -595,7 +597,7 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   cudf::test::structs_column_wrapper _struct2(std::move(struct2_children));
   auto struct2 = cudf::purge_nonempty_nulls(_struct2);
 
-  auto col2_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col2_offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto col2_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
     col2_offsets_iter, col2_offsets_iter + num_rows + 1);
   std::tie(null_mask, null_count) =
@@ -639,7 +641,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto bools_iter = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto bools_col =
     cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
-  auto offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto offsets_col =
     cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
   auto [null_mask, null_count] =
@@ -680,7 +682,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto col6 = make_list_str_column(true);
 
   // struct<list<str(nullable)>(nullable), int(nullable), float(nullable)>(nullable)
-  auto values    = thrust::make_counting_iterator(0);
+  auto values    = cuda::counting_iterator<int>{0};
   auto col7_list = make_list_str_column(true);
   cudf::test::fixed_width_column_wrapper<int> col7_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> col7_floats(values, values + num_rows, valids);
@@ -919,4 +921,86 @@ TEST_F(HybridScanTest, StructChildFilterColumn)
     std::ignore = reader->materialize_filter_columns(
       row_groups, filter_data, row_mask_mutable, use_data_page_mask::NO, options, stream, mr),
     std::invalid_argument);
+}
+
+TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
+{
+  auto constexpr num_rg      = 10;
+  auto constexpr rows_per_rg = 1'000;
+
+  // Create a per-row-group table (each write() call produces one row group)
+  auto values = cuda::counting_iterator(0);
+  cudf::test::fixed_width_column_wrapper<int32_t> col0(values, values + rows_per_rg);
+  cudf::test::fixed_width_column_wrapper<float> col1(values, values + rows_per_rg);
+  auto chunk_table = cudf::table_view{{col0, col1}};
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  std::string parquet_filepath =
+    temp_env->get_temp_filepath("RowGroupPassesMatchesChunkedReader.parquet");
+  {
+    auto opts =
+      cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath})
+        .build();
+    auto writer = cudf::io::chunked_parquet_writer(opts, stream);
+    for (int i = 0; i < num_rg; ++i) {
+      writer.write(chunk_table);
+    }
+    writer.close();
+    stream.synchronize();
+  }
+
+  // Pick a pass_read_limit that forces multiple passes but groups some row groups together
+  std::size_t const pass_read_limit = 2'048;
+
+  // Table chunks from hybrid scan passes
+  std::vector<std::unique_ptr<cudf::table>> hybrid_scan_tables;
+  {
+    auto options    = cudf::io::parquet_reader_options::builder().build();
+    auto datasource = cudf::io::datasource::create(parquet_filepath);
+
+    auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+    auto reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      *footer_buffer, options);
+
+    auto const all_row_groups = reader->all_row_groups(options);
+    auto const passes         = reader->construct_row_group_passes(all_row_groups, pass_read_limit);
+
+    for (auto const& pass_row_groups : passes) {
+      auto const chunk_byte_ranges =
+        reader->all_column_chunks_byte_ranges(pass_row_groups, options);
+      auto [buffers, col_data, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        *datasource, chunk_byte_ranges, stream, mr);
+      tasks.get();
+
+      reader->setup_chunking_for_all_columns(
+        0, pass_read_limit, pass_row_groups, col_data, options, stream, mr);
+
+      while (reader->has_next_table_chunk()) {
+        auto chunk = reader->materialize_all_columns_chunk();
+        hybrid_scan_tables.push_back(std::move(chunk.tbl));
+      }
+    }
+  }
+
+  // Read with the chunked parquet reader using the same pass_read_limit and chunk_read_limit == 0
+  std::vector<std::unique_ptr<cudf::table>> chunked_reader_tables;
+  {
+    auto opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(parquet_filepath)).build();
+    auto chunked_reader = cudf::io::chunked_parquet_reader(0, pass_read_limit, opts, stream, mr);
+    while (chunked_reader.has_next()) {
+      auto chunk = chunked_reader.read_chunk();
+      chunked_reader_tables.push_back(std::move(chunk.tbl));
+    }
+  }
+
+  // Check
+  EXPECT_EQ(hybrid_scan_tables.size(), chunked_reader_tables.size());
+  auto iter = cuda::make_zip_iterator(hybrid_scan_tables.begin(), chunked_reader_tables.begin());
+  std::for_each(iter, iter + hybrid_scan_tables.size(), [&](auto const& iter) {
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cuda::std::get<0>(iter)->view(),
+                                       cuda::std::get<1>(iter)->view());
+  });
 }

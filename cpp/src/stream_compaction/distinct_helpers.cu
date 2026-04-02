@@ -8,6 +8,7 @@
 #include <cudf/detail/algorithms/copy_if.cuh>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/atomic>
 #include <cuda/std/iterator>
 
@@ -24,7 +25,7 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
 
   // If we don't care about order, just gather indices of distinct keys taken from set.
   if (keep == duplicate_keep_option::KEEP_ANY) {
-    auto const iter = thrust::counting_iterator<cudf::size_type>{0};
+    auto const iter = cuda::counting_iterator<cudf::size_type>{0};
     set.insert_async(iter, iter + num_rows, stream.value());
     auto const output_end = set.retrieve_all(output_indices.begin(), stream.value());
     output_indices.resize(cuda::std::distance(output_indices.begin(), output_end), stream);
@@ -40,8 +41,8 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
   auto set_ref = set.ref(cuco::op::insert_and_find);
 
   thrust::for_each(rmm::exec_policy_nosync(stream),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(num_rows),
+                   cuda::counting_iterator<cudf::size_type>{0},
+                   cuda::counting_iterator{num_rows},
                    [set_ref, keep, reduction_results = reduction_results.begin()] __device__(
                      size_type const idx) mutable {
                      auto const [inserted_idx_ptr, _] = set_ref.insert_and_find(idx);
@@ -65,8 +66,8 @@ rmm::device_uvector<size_type> reduce_by_row(distinct_set_t<RowEqual>& set,
       // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
       // Thus, we only output index of the rows in the groups having group size of `1`.
       return cudf::detail::copy_if(
-        thrust::counting_iterator<size_type>(0),
-        thrust::counting_iterator<size_type>(num_rows),
+        cuda::counting_iterator<size_type>{0},
+        cuda::counting_iterator<size_type>{num_rows},
         output_indices.begin(),
         cuda::proclaim_return_type<bool>(
           [reduction_results = reduction_results.begin()] __device__(auto const idx) {
