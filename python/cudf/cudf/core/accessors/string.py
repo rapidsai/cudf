@@ -654,7 +654,7 @@ class StringMethods(BaseAccessor):
         These are unnecessary (and unexpected) by the pylibcudf for non-extract regex calls.
         """
         if len(re.compile(pat).groupindex.keys()) > 0:
-            pat = re.sub(r"\(\?P<([A-Za-z_][A-Za-z0-9_]*)>", "(", pat)
+            pat = re.sub(r"\(\?P<[A-Za-z_][A-Za-z0-9_]*>", "(", pat)
         return pat
 
     def contains(
