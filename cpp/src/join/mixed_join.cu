@@ -27,9 +27,9 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
 #include <memory>
@@ -72,7 +72,7 @@ void build_join_hash_table(
     if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
       hash_table.insert_async(iter, iter + build.num_rows(), stream.value());
     } else {
-      auto const stencil = thrust::counting_iterator<size_type>{0};
+      auto const stencil = cuda::counting_iterator<size_type>{0};
       auto const pred    = row_is_valid{bitmask};
 
       hash_table.insert_if_async(iter, iter + build.num_rows(), stencil, pred, stream.value());
@@ -153,8 +153,8 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
   // Single transform to fill both arrays using zip iterator
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(probe_table_num_rows),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{probe_table_num_rows},
     thrust::make_zip_iterator(cuda::std::make_tuple(input_pairs.begin(), hash_indices.begin())),
     precompute_fn);
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
 
 #include <cudf/interop.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
@@ -81,8 +81,8 @@ void BM_from_arrow_device(nvbench::state& state, nvbench::type_list<nvbench::enu
 
   std::vector<cudf::column_metadata> table_metadata;
 
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(num_columns),
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                 cuda::counting_iterator{num_columns},
                  std::back_inserter(table_metadata),
                  [&](auto const column) {
                    cudf::column_metadata column_metadata{""};
@@ -123,8 +123,8 @@ void BM_from_arrow_host(nvbench::state& state, nvbench::type_list<nvbench::enum_
 
   std::vector<cudf::column_metadata> table_metadata;
 
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(num_columns),
+  std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                 cuda::counting_iterator{num_columns},
                  std::back_inserter(table_metadata),
                  [&](auto const column) {
                    cudf::column_metadata column_metadata{""};

@@ -761,6 +761,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
             "rmm_async": args.rmm_async,
             "rmm_release_threshold": args.rmm_release_threshold,
             "threads_per_worker": run_config.threads,
+            "memory_limit": args.worker_memory_limit,
         }
 
         client = Client(LocalCUDACluster(**kwargs))
@@ -782,8 +783,10 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
                         "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
+                    | get_environment_variables()
                 ),
             )
+
             # Setting this globally makes the peak statistics not meaningful
             # across queries / iterations. But doing it per query isn't worth
             # the effort right now.
@@ -1101,6 +1104,16 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Default: None (no release threshold)"""),
     )
     parser.add_argument(
+        "--worker-memory-limit",
+        default="auto",
+        type=str,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the memory limit
+            of each Dask worker. Use 'auto' to let Dask determine the limit
+            automatically, or '0' for unlimited.
+            Default: auto"""),
+    )
+    parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1248,7 +1261,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=textwrap.dedent("""\
             Whether RapidsMPF should spill to pinned host memory when available,
             or use regular pageable host memory."""),
