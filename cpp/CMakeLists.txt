@@ -593,6 +593,7 @@ add_library(
   src/join/hash_join/full_join_match_context.cu
   src/join/hash_join/full_join_retrieve.cu
   src/join/hash_join/full_join_size.cu
+  src/join/hash_join/full_join_size_impl.cu
   src/join/hash_join/left_join_complement_size.cu
   src/join/hash_join/inner_join_match_context.cu
   src/join/hash_join/inner_join_retrieve.cu

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "common.cuh"
+#include "dispatch.cuh"
 #include "join/join_common_utils.cuh"
 #include "join/join_common_utils.hpp"
 #include "size_impl.cuh"

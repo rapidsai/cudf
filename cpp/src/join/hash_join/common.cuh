@@ -5,8 +5,6 @@
 #pragma once
 
 #include <cudf/detail/join/hash_join.cuh>
-#include <cudf/detail/row_operator/equality.cuh>
-#include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/join/join.hpp>
 #include <cudf/utilities/error.hpp>
@@ -38,52 +36,6 @@ inline bool is_trivial_join(table_view const& left, table_view const& right, joi
   }
   return false;
 }
-
-template <typename Equal>
-class pair_equal {
- public:
-  pair_equal(Equal check_row_equality) : _check_row_equality{std::move(check_row_equality)} {}
-
-  __device__ __forceinline__ bool operator()(
-    cuco::pair<hash_value_type, size_type> const& lhs,
-    cuco::pair<hash_value_type, size_type> const& rhs) const noexcept
-  {
-    using detail::row::lhs_index_type;
-    using detail::row::rhs_index_type;
-
-    return lhs.first == rhs.first and
-           _check_row_equality(lhs_index_type{lhs.second}, rhs_index_type{rhs.second});
-  }
-
- private:
-  Equal _check_row_equality;
-};
-
-struct output_fn {
-  __device__ constexpr cudf::size_type operator()(
-    cuco::pair<hash_value_type, cudf::size_type> const& slot) const
-  {
-    return slot.second;
-  }
-};
-
-class primitive_pair_equal {
- public:
-  primitive_pair_equal(cudf::detail::row::primitive::row_equality_comparator check_row_equality)
-    : _check_row_equality{std::move(check_row_equality)}
-  {
-  }
-
-  __device__ __forceinline__ bool operator()(
-    cuco::pair<hash_value_type, size_type> const& lhs,
-    cuco::pair<hash_value_type, size_type> const& rhs) const noexcept
-  {
-    return lhs.first == rhs.first and _check_row_equality(lhs.second, rhs.second);
-  }
-
- private:
-  cudf::detail::row::primitive::row_equality_comparator _check_row_equality;
-};
 
 void build_hash_join(
   cudf::table_view const& build,
