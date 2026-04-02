@@ -3201,7 +3201,7 @@ class DatetimeIndex(Index):
             elif not isinstance(data.dtype, pd.DatetimeTZDtype):
                 data = data.astype(dtype)
         elif data.dtype.kind != "M":
-            if is_string_dtype(data.dtype):
+            if is_dtype_obj_string(data.dtype):
                 data = data.astype(np.dtype("datetime64[us]"))
             else:
                 data = data.astype(np.dtype("datetime64[ns]"))
@@ -4300,7 +4300,7 @@ class TimedeltaIndex(Index):
                 raise TypeError("dtype must be a timedelta type")
             col = col.astype(dtype)
         elif col.dtype.kind != "m":
-            if is_string_dtype(col.dtype):
+            if is_dtype_obj_string(col.dtype):
                 col = col.astype(np.dtype("timedelta64[us]"))
             else:
                 col = col.astype(np.dtype("timedelta64[ns]"))
