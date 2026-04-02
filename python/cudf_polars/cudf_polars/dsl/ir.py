@@ -1912,9 +1912,7 @@ class GroupBy(IR):
             names.append(name)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
         results = [
-            Column(column, name=name, dtype=schema[name]).astype(
-                schema[name], stream=df.stream
-            )
+            Column(column, name=name, dtype=schema[name])
             for name, column, request in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
