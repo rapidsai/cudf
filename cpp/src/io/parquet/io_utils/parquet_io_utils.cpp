@@ -6,12 +6,12 @@
 #include "io/comp/common.hpp"
 #include "io/parquet/parquet_common.hpp"
 
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
-#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -135,8 +135,8 @@ fetch_byte_ranges_to_device_async(
           datasource.device_read_async(io_offset, io_size, dest, stream));
       } else {
         // Read the column chunk data to the host buffer copy it to the device buffer
-        host_read_tasks.emplace_back(
-          cudf::detail::host_worker_pool().submit_task([&datasource, io_offset, io_size, dest, stream]() {
+        host_read_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
+          [&datasource, io_offset, io_size, dest, stream]() {
             auto host_buffer = datasource.host_read(io_offset, io_size);
             cudf::detail::cuda_memcpy_async(
               cudf::device_span<uint8_t>{dest, io_size},
