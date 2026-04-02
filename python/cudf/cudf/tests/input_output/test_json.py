@@ -845,8 +845,8 @@ def test_json_empty_types():
         dtype_backend="pyarrow",
     )
 
-    # Need this workaround since `dtype_backend='pyarrow'` in
-    # pandas read_json results in not all arrow dtypes
+    # TODO: Remove this workaround after
+    # https://github.com/pandas-dev/pandas/issues/65034 is fixed.
     pdf = pdf.astype(df.dtypes)
     assert_eq(df, pdf)
 
@@ -1381,8 +1381,8 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
     if """[{"0": 123}, {}]""" not in jsonl_string:
         # {} in pandas is represented as {"0": None} in cudf
         actual_gdf = gdf.to_pandas(arrow_type=True)
-        # Need this workaround since `dtype_backend='pyarrow'` in
-        # pandas read_json results in not all arrow dtypes
+        # TODO: Remove this workaround after
+        # https://github.com/pandas-dev/pandas/issues/65034 is fixed.
         pdf = pdf.astype(actual_gdf.dtypes)
         assert_eq(actual_gdf, pdf)
 
