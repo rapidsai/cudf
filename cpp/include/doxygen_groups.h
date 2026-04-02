@@ -25,6 +25,7 @@
  *   @defgroup column_classes Column
  *   @{
  *      @defgroup column_factories Factories
+ *      @defgroup column_stream Column stream
  *      @defgroup strings_classes Strings
  *      @defgroup dictionary_classes Dictionary
  *      @defgroup timestamp_classes Timestamp

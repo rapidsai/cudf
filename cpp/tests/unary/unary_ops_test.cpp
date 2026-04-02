@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/unary.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,
@@ -304,7 +304,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbsLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto a = thrust::make_counting_iterator(-2000);
+  auto a = cuda::counting_iterator{-2000};
   auto b =
     cudf::detail::make_counting_transform_iterator(-2000, [](auto e) { return std::abs(e); });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
@@ -335,7 +335,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryCeilLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto a = thrust::make_counting_iterator(-5000);
+  auto a = cuda::counting_iterator{-5000};
   auto b =
     cudf::detail::make_counting_transform_iterator(-5000, [](int e) { return (e / 10) * 10; });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
@@ -366,7 +366,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloorLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto a = thrust::make_counting_iterator(100);
+  auto a = cudf::detail::make_counting_transform_iterator(100, [](int i) { return RepType{i}; });
   auto b =
     cudf::detail::make_counting_transform_iterator(100, [](auto e) { return (e / 10) * 10; });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
