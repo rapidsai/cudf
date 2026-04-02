@@ -911,6 +911,29 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   return cudf::type_dispatcher(
     partition_map.type(), dispatch_map_type{}, t, partition_map, num_partitions, stream, mr);
 }
+
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
+  table_view const& input,
+  table_view const& keys,
+  int num_partitions,
+  hash_id hash_function,
+  uint32_t seed,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(
+    keys.num_columns() == 0 || input.num_rows() == keys.num_rows(),
+    "Input table and key table must have same number of rows, or key table should have no columns.",
+    std::invalid_argument);
+  switch (hash_function) {
+    case (hash_id::HASH_IDENTITY):
+      return hash_partition<detail::IdentityHash>(input, keys, num_partitions, seed, stream, mr);
+    case (hash_id::HASH_MURMUR3):
+      return hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
+        input, keys, num_partitions, seed, stream, mr);
+    default: CUDF_FAIL("Unsupported hash function in hash_partition");
+  }
+}
 }  // namespace detail
 
 // Partition based on hash values
@@ -923,7 +946,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  return hash_partition(
+  CUDF_FUNC_RANGE();
+  return detail::hash_partition(
     input, input.select(columns_to_hash), num_partitions, hash_function, seed, stream, mr);
 }
 
@@ -937,19 +961,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(
-    keys.num_columns() == 0 || input.num_rows() == keys.num_rows(),
-    "Input table and key table must have same number of rows, or key table should have no columns.",
-    std::invalid_argument);
-  switch (hash_function) {
-    case (hash_id::HASH_IDENTITY):
-      return detail::hash_partition<cudf::detail::IdentityHash>(
-        input, keys, num_partitions, seed, stream, mr);
-    case (hash_id::HASH_MURMUR3):
-      return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
-        input, keys, num_partitions, seed, stream, mr);
-    default: CUDF_FAIL("Unsupported hash function in hash_partition");
-  }
+  return detail::hash_partition(input, keys, num_partitions, hash_function, seed, stream, mr);
 }
 
 // Partition based on an explicit partition map
