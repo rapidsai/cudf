@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,7 +33,7 @@
 
 #include <optional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 namespace rolling {
 
@@ -503,6 +503,8 @@ struct range_window_clamper {
    * @tparam OrderbyT element type of the orderby column (dispatched on)
    * @tparam ScalarT Concrete scalar type of the scalar row delta
    * @param orderby Column used to define windows.
+   * @param direction The window direction
+   * @param order The sort order of the orderby column
    * @param grouping optional pre-processed group information.
    * @param nulls_at_start If the orderby column contains nulls, are they are the start or the end?
    * @param row_delta the delta applied to each row, will be null if the window is of type
@@ -682,4 +684,4 @@ struct range_window_clamper {
 };
 }  // namespace rolling
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

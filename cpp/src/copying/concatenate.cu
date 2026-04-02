@@ -30,12 +30,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
@@ -414,7 +414,7 @@ void traverse_children::operator()<cudf::struct_view>(host_span<column_view cons
                                                       rmm::cuda_stream_view stream)
 {
   // march each child
-  auto child_iter         = thrust::make_counting_iterator(0);
+  auto child_iter         = cuda::counting_iterator<cudf::size_type>{0};
   auto const num_children = cols.front().num_children();
   std::vector<column_view> nth_children;
   nth_children.reserve(cols.size());
@@ -454,7 +454,8 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  * @brief Verifies that the sum of the sizes of all the columns to be concatenated
  * will not exceed the max value of size_type, and verifies all column types match
  *
- * @param columns_to_concat Span of columns to check
+ * @param cols Span of columns to check
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @throws cudf::logic_error if the total length of the concatenated columns would
  * exceed the max value of size_type

@@ -15,8 +15,18 @@ PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-package-name "wheel
 
 rapids-logger "Installing cudf_polars and its dependencies (including rapidsmpf)"
 
+# generate constraints (possibly pinning to oldest support versions of dependencies)
+rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
+
+# notes:
+#
+#   * echo to expand wildcard before adding `[test]` requires for pip
+#   * just providing --constraint="${PIP_CONSTRAINT}" to be explicit, and because
+#     that environment variable is ignored if any other --constraint are passed via the CLI
+#
 rapids-pip-retry install \
     -v \
+    --prefer-binary \
     --constraint "${PIP_CONSTRAINT}" \
     "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,experimental,rapidsmpf]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
@@ -25,10 +35,11 @@ rapids-pip-retry install \
 rapids-logger "Run cudf_polars tests with rapidsmpf"
 
 # Get the latest polars version for testing
-POLARS_VERSION=$(python ci/utils/fetch_polars_versions.py --latest-patch-only dependencies.yaml | awk '{print $NF}')
+available_polars_versions=$(python -m pip index versions polars --json | jq '.versions')
+POLARS_VERSION=$(python ci/utils/filter_package_versions.py dependencies.yaml run_cudf_polars polars "$available_polars_versions" | awk '{print $NF}')
 
 rapids-logger "Installing polars==${POLARS_VERSION}"
-pip install -U "polars==${POLARS_VERSION}"
+rapids-pip-retry install -U "polars==${POLARS_VERSION}"
 
 # shellcheck disable=SC2317
 function set_exitcode()
@@ -39,10 +50,8 @@ EXITCODE=0
 trap set_exitcode ERR
 set +e
 
-rapids-logger "Running cudf_polars tests with rapidsmpf"
-
-# Run cudf_polars tests with rapidsmpf using dedicated test runner
-timeout 15m ./ci/run_cudf_polars_with_rapidsmpf_pytests.sh \
+rapids-logger "Running cudf_polars experimental tests (non-ci-blocking)"
+timeout 15m ./ci/run_cudf_polars_experimental_pytests.sh \
     --no-cov \
     --numprocesses=8 \
     --dist=worksteal \

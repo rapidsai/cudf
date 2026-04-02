@@ -29,7 +29,6 @@
 #include <cuda/atomic>
 #include <cuda/devices>
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
@@ -98,7 +97,7 @@ class bitwise_partitioner {
    Records the size of each partition for each thread block as well as the
  global size of each partition across all thread blocks.
  *
- * @param[in] the_table The table whose rows will be partitioned
+ * @param[in] the_hasher The hasher whose rows will be partitioned
  * @param[in] num_rows The number of rows in the table
  * @param[in] num_partitions The number of partitions to divide the rows into
  * @param[in] the_partitioner The functor that maps a rows hash value to a
@@ -237,7 +236,7 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
 /**
  * @brief Move one column from the input table to the hashed table.
  *
- * @param[in] input_buf Data buffer of the column in the input table
+ * @param[in] input_iter Iterator over the input column data
  * @param[out] output_buf Preallocated data buffer of the column in the output
  * table
  * @param[in] num_rows The number of rows in each column
@@ -376,7 +375,7 @@ rmm::device_uvector<size_type> compute_gather_map(size_type num_rows,
                                                   size_type grid_size,
                                                   rmm::cuda_stream_view stream)
 {
-  auto sequence = thrust::make_counting_iterator(0);
+  auto sequence = cuda::counting_iterator<cudf::size_type>{0};
   rmm::device_uvector<size_type> gather_map(num_rows, stream);
 
   copy_block_partitions_impl(sequence,
@@ -454,7 +453,7 @@ struct copy_block_partitions_dispatcher {
     auto gather_table = cudf::detail::gather(cudf::table_view({input}),
                                              gather_map,
                                              out_of_bounds_policy::DONT_CHECK,
-                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                             cudf::negative_index_policy::NOT_ALLOWED,
                                              stream,
                                              mr);
     return std::move(gather_table->release().front());
@@ -844,20 +843,20 @@ namespace {
  */
 template <typename Key>
 struct IdentityHash {
-  using result_type        = uint32_t;
-  constexpr IdentityHash() = default;
-  constexpr IdentityHash(uint32_t) {}
+  using result_type                         = uint32_t;
+  CUDF_HOST_DEVICE constexpr IdentityHash() = default;
+  CUDF_HOST_DEVICE constexpr IdentityHash(uint32_t) {}
 
   template <typename return_type = result_type>
-  constexpr return_type operator()(Key const& key) const
-    requires(!std::is_arithmetic_v<Key>)
+  CUDF_HOST_DEVICE constexpr return_type operator()(Key const& key) const
+    requires(!cuda::std::is_arithmetic_v<Key>)
   {
     CUDF_UNREACHABLE("IdentityHash does not support this data type");
   }
 
   template <typename return_type = result_type>
-  constexpr return_type operator()(Key const& key) const
-    requires(std::is_arithmetic_v<Key>)
+  CUDF_HOST_DEVICE constexpr return_type operator()(Key const& key) const
+    requires(cuda::std::is_arithmetic_v<Key>)
   {
     return static_cast<result_type>(key);
   }
@@ -866,19 +865,22 @@ struct IdentityHash {
 template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
-  std::vector<size_type> const& columns_to_hash,
+  table_view const& table_to_hash,
   int num_partitions,
   uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto table_to_hash = input.select(columns_to_hash);
-
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
     return std::pair{empty_like(input), std::vector<size_type>(num_partitions + 1, 0)};
   }
 
+  if constexpr (std::is_same_v<hash_function<void>, cudf::detail::IdentityHash<void>>) {
+    for (auto const& c : table_to_hash) {
+      CUDF_EXPECTS(is_numeric(c.type()), "IdentityHash does not support this data type");
+    }
+  }
   if (has_nested_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
       input, table_to_hash, num_partitions, seed, stream, mr);
@@ -908,6 +910,29 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   return cudf::type_dispatcher(
     partition_map.type(), dispatch_map_type{}, t, partition_map, num_partitions, stream, mr);
 }
+
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
+  table_view const& input,
+  table_view const& keys,
+  int num_partitions,
+  hash_id hash_function,
+  uint32_t seed,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_EXPECTS(
+    keys.num_columns() == 0 || input.num_rows() == keys.num_rows(),
+    "Input table and key table must have same number of rows, or key table should have no columns.",
+    std::invalid_argument);
+  switch (hash_function) {
+    case (hash_id::HASH_IDENTITY):
+      return hash_partition<detail::IdentityHash>(input, keys, num_partitions, seed, stream, mr);
+    case (hash_id::HASH_MURMUR3):
+      return hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
+        input, keys, num_partitions, seed, stream, mr);
+    default: CUDF_FAIL("Unsupported hash function in hash_partition");
+  }
+}
 }  // namespace detail
 
 // Partition based on hash values
@@ -921,20 +946,21 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
+  return detail::hash_partition(
+    input, input.select(columns_to_hash), num_partitions, hash_function, seed, stream, mr);
+}
 
-  switch (hash_function) {
-    case (hash_id::HASH_IDENTITY):
-      for (size_type const& column_id : columns_to_hash) {
-        if (!is_numeric(input.column(column_id).type()))
-          CUDF_FAIL("IdentityHash does not support this data type");
-      }
-      return detail::hash_partition<cudf::detail::IdentityHash>(
-        input, columns_to_hash, num_partitions, seed, stream, mr);
-    case (hash_id::HASH_MURMUR3):
-      return detail::hash_partition<cudf::hashing::detail::MurmurHash3_x86_32>(
-        input, columns_to_hash, num_partitions, seed, stream, mr);
-    default: CUDF_FAIL("Unsupported hash function in hash_partition");
-  }
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
+  table_view const& input,
+  table_view const& keys,
+  int num_partitions,
+  hash_id hash_function,
+  uint32_t seed,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::hash_partition(input, keys, num_partitions, hash_function, seed, stream, mr);
 }
 
 // Partition based on an explicit partition map

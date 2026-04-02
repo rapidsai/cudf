@@ -24,10 +24,11 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/cmath>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -122,7 +123,7 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
     double const diff = weighted_q + c.weight / 2 - cumulative_weight[centroid_index];
 
     // if we're completely within a centroid of weight 1, just return that.
-    if (c.weight == 1 && std::abs(diff) <= 0.5) { return c.mean; }
+    if (c.weight == 1 && cuda::std::abs(diff) <= 0.5) { return c.mean; }
 
     // otherwise, interpolate between two centroids.
 
@@ -134,13 +135,13 @@ CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest
         auto const first_centroid = centroid_index == 0;
         auto const lhs = first_centroid ? centroid{*min_val, 0} : centroids[centroid_index - 1];
         auto const rhs = c;
-        return std::pair<centroid, centroid>{lhs, rhs};
+        return cuda::std::pair<centroid, centroid>{lhs, rhs};
       } else {
         // if we're at the last centroid, "right" of us is the max value
         auto const last_centroid = (centroid_index == tdigest_size - 1);
         auto const lhs           = c;
         auto const rhs = last_centroid ? centroid{*max_val, 0} : centroids[centroid_index + 1];
-        return std::pair<centroid, centroid>{lhs, rhs};
+        return cuda::std::pair<centroid, centroid>{lhs, rhs};
       }
     }();
 
@@ -213,8 +214,8 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   auto [null_mask, null_count] = [&]() {
     return percentiles.null_count() != 0
              ? cudf::detail::valid_if(
-                 thrust::make_counting_iterator<size_type>(0),
-                 thrust::make_counting_iterator<size_type>(0) + num_output_values,
+                 cuda::counting_iterator<size_type>{0},
+                 cuda::counting_iterator<size_type>{0} + num_output_values,
                  [percentiles = *percentiles_cdv] __device__(size_type i) {
                    return percentiles.is_valid(i % percentiles.size());
                  },

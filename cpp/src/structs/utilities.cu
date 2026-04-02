@@ -5,6 +5,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -16,9 +17,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <functional>
 #include <numeric>
@@ -293,8 +291,8 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
  *  2. Applying the nulls in a segmented batch operation
  *  3. Then updating all the columns with their new null masks
  *
- * @param null_mask Vector of null masks to be applied to the input column
- * @param input Vector of input column to apply the null mask to
+ * @param null_masks Vector of null masks to be applied to the input column
+ * @param inputs Vector of input column to apply the null mask to
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate new device memory
  * @return A new column with potentially new null mask
@@ -457,7 +455,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   };
 
   auto const child_begin =
-    thrust::make_transform_iterator(thrust::make_counting_iterator(0), child_with_new_mask);
+    cudf::detail::make_counting_transform_iterator(cudf::size_type{0}, child_with_new_mask);
   auto const child_end = child_begin + structs_view.num_children();
   auto ret_children    = std::vector<column_view>{};
 

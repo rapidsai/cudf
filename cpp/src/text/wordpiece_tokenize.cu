@@ -32,6 +32,8 @@
 #include <cooperative_groups/scan.h>
 #include <cub/cub.cuh>
 #include <cuco/static_map.cuh>
+#include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
@@ -232,16 +234,16 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
   // the row index is the token id (data value for each key in the map)
   auto iter = cudf::detail::make_counting_transform_iterator(0, key_pair{});
   vocab_map->insert_async(iter, iter + vocabulary->size(), stream.value());
-  auto const zero_itr = thrust::counting_iterator<cudf::size_type>(0);
+  auto const zero_itr = cuda::counting_iterator<cudf::size_type>{0};
 
   // get the indices of all the ## prefixed entries
   auto sub_map_indices = rmm::device_uvector<cudf::size_type>(vocabulary->size(), stream);
-  auto const end =
-    cudf::detail::copy_if(zero_itr,
-                          thrust::counting_iterator<cudf::size_type>(sub_map_indices.size()),
-                          sub_map_indices.begin(),
-                          copy_pieces_fn{*d_vocabulary},
-                          stream);
+  auto const end       = cudf::detail::copy_if(
+    zero_itr,
+    cuda::counting_iterator{static_cast<cudf::size_type>(sub_map_indices.size())},
+    sub_map_indices.begin(),
+    copy_pieces_fn{*d_vocabulary},
+    stream);
   sub_map_indices.resize(cuda::std::distance(sub_map_indices.begin(), end), stream);
 
   // build a 2nd map with just the ## prefixed items
@@ -415,7 +417,6 @@ __device__ cudf::size_type wp_tokenize_fn(cudf::string_view word,
  *
  * @param d_edges The offset to the beginning of each word
  * @param d_chars Pointer to the characters of the input column
- * @param offset Maybe non-zero if the input column has been sliced
  * @param d_map Lookup table for the wp_tokenize_fn utility
  * @param d_sub_map 2nd lookup table for the wp_tokenize_fn utility
  * @param unk_id Unknown token id when a token cannot be resolved
@@ -493,7 +494,7 @@ rmm::device_uvector<cudf::size_type> count_tokens(cudf::size_type const* d_token
  *
  * @param input Input strings column
  * @param first_offset Offset to first row in chars for `input`
- * @param last_offset Offset just past the last row in chars for `input`
+ * @param chars_size Size of the character data for `input`
  * @param vocabulary Vocabulary data needed by the tokenizer
  * @param stream Stream used for device allocations and kernel launches
  * @return The tokens (and non-tokens) for the input
@@ -511,8 +512,8 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
   auto d_edges = rmm::device_uvector<int64_t>(chars_size / 2L, stream);
   // beginning of a word is a non-space preceded by a space
   auto edges_end = cudf::detail::copy_if(
-    thrust::counting_iterator<int64_t>(0),
-    thrust::counting_iterator<int64_t>(chars_size),
+    cuda::counting_iterator<int64_t>{0},
+    cuda::counting_iterator<int64_t>{chars_size},
     d_edges.begin(),
     [d_input_chars] __device__(auto idx) {
       if (idx == 0) { return d_input_chars[idx] == ' '; }
@@ -742,7 +743,7 @@ CUDF_KERNEL void tokenize_kernel(cudf::device_span<int64_t const> d_starts,
  *
  * @param input Input strings column
  * @param first_offset Offset to first row in chars for `input`
- * @param last_offset Offset just past the last row in chars for `input`
+ * @param chars_size Size of the character data for `input`
  * @param max_words_per_row Maximum number of words to tokenize in each row
  * @param vocabulary Vocabulary data needed by the tokenizer
  * @param stream Stream used for device allocations and kernel launches
@@ -763,8 +764,8 @@ rmm::device_uvector<cudf::size_type> compute_some_tokens(
 
   // compute max word counts for each row
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::counting_iterator<cudf::size_type>(input.size()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{input.size()},
                     max_word_offsets.begin(),
                     cuda::proclaim_return_type<cudf::size_type>(
                       [d_strings = *d_strings, max_words_per_row] __device__(auto idx) {

@@ -35,12 +35,16 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
+import polars as pl
+
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
@@ -59,7 +63,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import ColumnStat, ColumnStats
     from cudf_polars.typing import GenericTransformer, Schema
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
@@ -78,18 +81,12 @@ class State(TypedDict):
         GPUEngine configuration options.
     unique_names
         Generator of unique names for temporaries.
-    row_count_estimate
-        row-count estimate for the input IR.
-    column_stats
-        Column statistics for the input IR.
     """
 
     input_ir: IR
     input_partition_info: PartitionInfo
     config_options: ConfigOptions
     unique_names: Generator[str, None, None]
-    row_count_estimate: ColumnStat[int]
-    column_stats: dict[str, ColumnStats]
 
 
 ExprDecomposer: TypeAlias = "GenericTransformer[Expr, tuple[Expr, IR, MutableMapping[IR, PartitionInfo]], State]"
@@ -158,8 +155,6 @@ def _decompose_unique(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    row_count_estimate: ColumnStat[int],
-    column_stats: dict[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -177,10 +172,6 @@ def _decompose_unique(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    row_count_estimate
-        row-count estimate for the input IR.
-    column_stats
-        Column statistics for the input IR.
     names
         Generator of unique names for temporaries.
 
@@ -209,8 +200,6 @@ def _decompose_unique(
     unique_fraction_dict = _get_unique_fractions(
         _leaf_column_names(child),
         config_options.executor.unique_fraction,
-        row_count=row_count_estimate,
-        column_stats=column_stats,
     )
 
     unique_fraction = (
@@ -306,14 +295,24 @@ def _decompose_agg_node(
         )
 
         # Combined stage
+        sum_col, count_col = columns
+        total_count = Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, count_col)
         exprs = [
-            BinOp(
+            Ternary(
                 agg.dtype,
-                plc.binaryop.BinaryOperator.DIV,
-                *(
-                    Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)
-                    for column in columns
+                BinOp(
+                    DataType(pl.Boolean()),
+                    plc.binaryop.BinaryOperator.GREATER,
+                    total_count,
+                    Literal(agg.dtype, 0),
                 ),
+                BinOp(
+                    agg.dtype,
+                    plc.binaryop.BinaryOperator.DIV,
+                    Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, sum_col),
+                    total_count,
+                ),
+                Literal(agg.dtype, None),
             )
         ]
         columns, input_ir, partition_info = select(
@@ -402,8 +401,6 @@ def _decompose_expr_node(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    row_count_estimate: ColumnStat[int],
-    column_stats: dict[str, ColumnStats],
     *,
     names: Generator[str, None, None],
 ) -> tuple[Expr, IR, MutableMapping[IR, PartitionInfo]]:
@@ -421,10 +418,6 @@ def _decompose_expr_node(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    row_count_estimate
-        row-count estimate for the input IR.
-    column_stats
-        Column statistics for the input IR.
     names
         Generator of unique names for temporaries.
 
@@ -460,14 +453,14 @@ def _decompose_expr_node(
         return _decompose_agg_node(
             expr, input_ir, partition_info, config_options, names=names
         )
+    elif isinstance(expr, UnaryFunction) and expr.name == "drop_nulls":
+        return expr, input_ir, partition_info
     elif isinstance(expr, UnaryFunction) and expr.name == "unique":
         return _decompose_unique(
             expr,
             input_ir,
             partition_info,
             config_options,
-            row_count_estimate,
-            column_stats,
             names=names,
         )
     else:
@@ -489,8 +482,6 @@ def _decompose(
             rec.state["input_ir"],
             {rec.state["input_ir"]: rec.state["input_partition_info"]},
             rec.state["config_options"],
-            rec.state["row_count_estimate"],
-            rec.state["column_stats"],
             names=rec.state["unique_names"],
         )
 
@@ -535,8 +526,6 @@ def _decompose(
         input_ir,
         partition_info,
         rec.state["config_options"],
-        rec.state["row_count_estimate"],
-        rec.state["column_stats"],
         names=rec.state["unique_names"],
     )
 
@@ -546,8 +535,6 @@ def decompose_expr_graph(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
-    row_count_estimate: ColumnStat[int],
-    column_stats: dict[str, ColumnStats],
     unique_names: Generator[str, None, None],
 ) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
     """
@@ -565,10 +552,6 @@ def decompose_expr_graph(
         associated partitioning information.
     config_options
         GPUEngine configuration options.
-    row_count_estimate
-        Row-count estimate for the input IR.
-    column_stats
-        Column statistics for the input IR.
     unique_names
         Generator of unique names for temporaries.
 
@@ -596,8 +579,6 @@ def decompose_expr_graph(
             "input_partition_info": partition_info[input_ir],
             "config_options": config_options,
             "unique_names": unique_names,
-            "row_count_estimate": row_count_estimate,
-            "column_stats": column_stats,
         },
     )
     expr, input_ir, partition_info = mapper(named_expr.value)

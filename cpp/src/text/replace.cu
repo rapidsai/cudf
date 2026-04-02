@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,6 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
@@ -292,7 +293,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
   auto tmp_offsets = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
-    auto const count_itr = thrust::make_counting_iterator<int64_t>(0);
+    auto const count_itr = cuda::counting_iterator<int64_t>{0};
     thrust::transform(rmm::exec_policy_nosync(stream),
                       count_itr,
                       count_itr + sub_count,
