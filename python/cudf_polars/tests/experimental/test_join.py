@@ -5,16 +5,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.containers.datatype import DataType
-from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.dsl.ir import Cache
+from cudf_polars.dsl.ir import Cache, Join
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.parallel import lower_ir_graph
@@ -368,17 +364,20 @@ def test_cache_preserves_partitioning_join():
 
 
 def test_dynamic_planning_skips_compile_time_partition_wise_join():
-    y = NamedExpr("y", Col(DataType(pl.Int64()), "y"))
-    left_ir = MagicMock()
-    right_ir = MagicMock()
-    join_ir = MagicMock()
-    join_ir.children = (left_ir, right_ir)
-    join_ir.left_on = (y,)
-    join_ir.right_on = (y,)
+    lf = pl.LazyFrame({"y": [1, 2, 3]})
+    q = lf.join(lf, on="y", how="inner")
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"dynamic_planning": {}},
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    join_ir = next(n for n in traversal([ir]) if isinstance(n, Join))
+    left_ir, right_ir = join_ir.children
     executor = StreamingExecutor(dynamic_planning={})
     partition_info = {
         join_ir: PartitionInfo(1, partitioned_on=()),
-        left_ir: PartitionInfo(1, partitioned_on=(y,)),
-        right_ir: PartitionInfo(1, partitioned_on=(y,)),
+        left_ir: PartitionInfo(1, partitioned_on=()),
+        right_ir: PartitionInfo(1, partitioned_on=()),
     }
     assert not _use_pwise_join(executor, partition_info, join_ir)
