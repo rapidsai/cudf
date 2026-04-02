@@ -34,6 +34,26 @@ grep -E "<FLAG1>|<FLAG2>|.." cpp/build/latest/CMakeCache.txt
 
 If any flag is missing, reconfigure and rebuild libcudf following the `build-test-cudf` skill, passing the flags from the README. Ignore any flags that CMake reports as unused.
 
+## Environment setup
+
+Before any `mvn` command, export these variables from the `cudf/java` directory. All subsequent build and test commands assume these are set.
+
+```bash
+export CUDF_CPP_BUILD_DIR=$(readlink -f ../cpp/build/latest)
+```
+
+Export `MAVEN_OPTS` based on the JDK version. `--add-opens` flags are **required for every `mvn` invocation** on JDK 17+ (strong encapsulation). Without them, `gmaven-plugin:1.5` fails. On JDK 9-16 the flags are accepted but optional. On JDK 8 or below, **do not set them** — the JVM does not recognize `--add-opens` and will fail with `Unrecognized option`.
+
+```bash
+export MAVEN_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED"
+```
+
+Export `MVN_COMMON_OPTS` to match the CI build configuration in `java/ci/build-in-docker.sh`. For example:
+
+```bash
+export MVN_COMMON_OPTS="-DCUDF_CPP_BUILD_DIR=$CUDF_CPP_BUILD_DIR -DBUILD_SHARED_LIBS=OFF -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON -DCUDA_STATIC_CUFILE=ON -DCUDA_STATIC_RUNTIME=ON -DCUDF_JNI_LIBCUDF_STATIC=ON" 
+```
+
 ## Building cudf-java
 
 The Java JNI native code must be compiled for the same CUDA architectures as libcudf. Detect what libcudf was built with:
@@ -42,23 +62,18 @@ The Java JNI native code must be compiled for the same CUDA architectures as lib
 grep CMAKE_CUDA_ARCHITECTURES cpp/build/latest/CMakeCache.txt
 ```
 
-Use that value for `-DCMAKE_CUDA_ARCHITECTURES` below.
+Update `MVN_COMMON_OPTS` to use that value for `-DCMAKE_CUDA_ARCHITECTURES` (by default use `NATIVE`).
 
 ```bash
-cd java
+export MVN_COMMON_OPTS=$MVN_COMMON_OPTS -DCMAKE_CUDA_ARCHITECTURES=<VALUE>
+```
+
+```bash
 rm -rf target/cmake-build  # only needed if changing CMAKE_CUDA_ARCHITECTURES from a previous build
-export MAVEN_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED"
-export CUDF_CPP_BUILD_DIR=$(readlink -f ../cpp/build/latest)
-export CMAKE_POLICY_VERSION_MINIMUM=3.5
-mvn install \
-  -DCUDF_CPP_BUILD_DIR=$CUDF_CPP_BUILD_DIR \
-  -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
-  -DskipTests
+mvn install $MVN_COMMON_OPTS -DskipTests
 ```
 
 Notes:
-- `MAVEN_OPTS` `--add-opens` flags are required for JDK 17+ compatibility with `gmaven-plugin:1.5`.
-- `CMAKE_POLICY_VERSION_MINIMUM=3.5` works around Arrow's bundled RapidJSON requiring older CMake policy.
 - Omit `rm -rf target/cmake-build` on incremental rebuilds when architectures haven't changed.
 - The native compilation is the slow step. Subsequent runs reuse cached artifacts if `target/cmake-build` is preserved.
 
@@ -69,13 +84,7 @@ Notes:
 ### All tests
 
 ```bash
-cd java
-export MAVEN_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.util.regex=ALL-UNNAMED"
-export CUDF_CPP_BUILD_DIR=$(readlink -f ../cpp/build/latest)
-export CMAKE_POLICY_VERSION_MINIMUM=3.5
-mvn test \
-  -DCUDF_CPP_BUILD_DIR=$CUDF_CPP_BUILD_DIR \
-  -DCMAKE_CUDA_ARCHITECTURES=NATIVE
+mvn test $MVN_COMMON_OPTS
 ```
 
 ### Discovering tests
@@ -89,9 +98,7 @@ find java/src/test/java -name "*Test.java" | head -20
 ### Specific test class
 
 ```bash
-mvn test \
-  -DCUDF_CPP_BUILD_DIR=$CUDF_CPP_BUILD_DIR \
-  -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
+mvn test $MVN_COMMON_OPTS \
   -Dtest="ai.rapids.cudf.ast.<ClassName>" \
   -pl .
 ```
@@ -99,9 +106,7 @@ mvn test \
 ### Specific test method
 
 ```bash
-mvn test \
-  -DCUDF_CPP_BUILD_DIR=$CUDF_CPP_BUILD_DIR \
-  -DCMAKE_CUDA_ARCHITECTURES=NATIVE \
+mvn test $MVN_COMMON_OPTS \
   -Dtest="ai.rapids.cudf.ast.<ClassName>#<testName>" \
   -pl .
 ```
