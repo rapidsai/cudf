@@ -653,8 +653,9 @@ class StringMethods(BaseAccessor):
         Named capture groups are expected in the format "(?P<name>)" only.
         These are unnecessary (and unexpected) by the pylibcudf for non-extract regex calls.
         """
-        if len(re.compile(pat).groupindex.keys()) > 0:
-            pat = re.sub(r"\(\?P<[A-Za-z_][A-Za-z0-9_]*>", "(", pat)
+        to_remove = "|".join(re.compile(pat).groupindex.keys())
+        if to_remove:
+            pat = re.sub(rf"\(\?P<(?:{to_remove})>", "(", pat)
         return pat
 
     def contains(
