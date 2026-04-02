@@ -607,6 +607,70 @@ std::optional<std::pair<bitmask_type*, size_type>> make_stencil(
   return std::pair<bitmask_type*, size_type>{*stencil, stencil_null_count};
 }
 
+rmm::device_uvector<char> make_chars_buffer(column_view const& offsets_view,
+                                            int64_t chars_size,
+                                            string_view const* begin,
+                                            bitmask_type const* stencil,
+                                            size_type size,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  auto offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_view);
+  auto chars   = rmm::device_uvector<char>(chars_size, stream, mr);
+
+  auto srcs = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [begin] __device__(size_type idx) -> void const* { return begin[idx].data(); });
+
+  auto src_sizes = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [begin, stencil] __device__(size_type idx) -> size_type {
+      if (stencil != nullptr && !bit_is_set(stencil, idx)) { return 0; }
+      return static_cast<size_type>(begin[idx].size_bytes());
+    });
+
+  auto dsts = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [offsets, chars = chars.data()] __device__(size_type idx) -> void* {
+      return chars + offsets[idx];
+    });
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, srcs, dsts, src_sizes, size, stream.value()));
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    d_temp_storage.data(), temp_storage_bytes, srcs, dsts, src_sizes, size, stream.value()));
+
+  return chars;
+}
+
+std::unique_ptr<column> make_strings_column(device_span<string_view const> strings,
+                                            rmm::device_buffer null_mask,
+                                            size_type null_count,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  auto size = static_cast<size_type>(strings.size());
+  if (size == 0) return make_empty_column(type_id::STRING);
+
+  auto stencil = static_cast<bitmask_type const*>(null_mask.data());
+
+  // build offsets column from the strings sizes
+  auto sizes = cudf::detail::make_counting_transform_iterator(
+    cudf::size_type{0},
+    [stencil, strings = strings.data()] __device__(cudf::size_type index) -> size_type {
+      if (stencil != nullptr && !bit_is_set(stencil, index)) { return 0; }
+      return static_cast<size_type>(strings[index].size_bytes());
+    });
+
+  auto [offsets, bytes] =
+    cudf::strings::detail::make_offsets_child_column(sizes, sizes + size, stream, mr);
+
+  auto chars = make_chars_buffer(offsets->view(), bytes, strings.data(), stencil, size, stream, mr);
+
+  return make_strings_column(
+    size, std::move(offsets), chars.release(), null_count, std::move(null_mask));
+}
+
 auto make_outputs(null_aware is_null_aware,
                   size_type row_size,
                   std::span<transform_input const> inputs,
@@ -696,7 +760,7 @@ auto finalize_output(string_views_column&& c,
                      rmm::cuda_stream_view stream,
                      rmm::device_async_resource_ref mr)
 {
-  return strings::detail::make_strings_column(
+  return make_strings_column(
     device_span<string_view const>{static_cast<string_view const*>(c._data.data()),
                                    static_cast<size_t>(c._size)},
     std::move(c._null_mask),

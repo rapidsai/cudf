@@ -6,7 +6,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -77,35 +76,6 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
                              chars_data.release(),
                              null_count,
                              std::move(null_mask));
-}
-
-inline std::unique_ptr<column> make_strings_column(device_span<string_view const> strings,
-                                                   rmm::device_buffer null_mask,
-                                                   size_type null_count,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  auto size = static_cast<size_type>(strings.size());
-  if (size == 0) return make_empty_column(type_id::STRING);
-
-  auto stencil = static_cast<bitmask_type const*>(null_mask.data());
-
-  // build offsets column from the strings sizes
-  auto sizes = cudf::detail::make_counting_transform_iterator(
-    cudf::size_type{0},
-    [stencil, strings = strings.data()] __device__(cudf::size_type index) -> size_type {
-      if (stencil != nullptr && !bit_is_set(stencil, index)) { return 0; }
-      return static_cast<size_type>(strings[index].size_bytes());
-    });
-
-  auto [offsets, bytes] =
-    cudf::strings::detail::make_offsets_child_column(sizes, sizes + size, stream, mr);
-
-  auto chars = make_chars_buffer(offsets->view(), bytes, strings.data(), stencil, size, stream, mr);
-
-  return make_strings_column(
-    size, std::move(offsets), chars.release(), null_count, std::move(null_mask));
 }
 
 }  // namespace detail

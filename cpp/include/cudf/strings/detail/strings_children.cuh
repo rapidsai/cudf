@@ -102,41 +102,6 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
   return chars_data;
 }
 
-inline rmm::device_uvector<char> make_chars_buffer(column_view const& offsets_view,
-                                                   int64_t chars_size,
-                                                   string_view const* begin,
-                                                   bitmask_type const* stencil,
-                                                   size_type size,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::device_async_resource_ref mr)
-{
-  auto offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_view);
-  auto chars   = rmm::device_uvector<char>(chars_size, stream, mr);
-
-  auto srcs = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [begin] __device__(size_type idx) -> void const* { return begin[idx].data(); });
-
-  auto src_sizes = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [begin, stencil] __device__(size_type idx) -> size_type {
-      if (stencil != nullptr && !bit_is_set(stencil, idx)) { return 0; }
-      return static_cast<size_type>(begin[idx].size_bytes());
-    });
-
-  auto dsts = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [offsets, chars = chars.data()] __device__(size_type idx) -> void* {
-      return chars + offsets[idx];
-    });
-
-  size_t temp_storage_bytes = 0;
-  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
-    nullptr, temp_storage_bytes, srcs, dsts, src_sizes, size, stream.value()));
-  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
-  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
-    d_temp_storage.data(), temp_storage_bytes, srcs, dsts, src_sizes, size, stream.value()));
-
-  return chars;
-}
-
 /**
  * @brief Create an offsets column to be a child of a compound column
  *
