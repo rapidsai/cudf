@@ -37,10 +37,6 @@ namespace {
 //   even if that goes past the user-specified limit.
 constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 
-// Percentage of the total available input read limit that should be reserved for compressed
-// data vs uncompressed data.
-constexpr float input_limit_compression_reserve = 0.3f;
-
 }  // namespace
 
 void reader_impl::handle_chunking(read_mode mode)
