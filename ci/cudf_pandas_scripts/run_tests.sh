@@ -85,21 +85,21 @@ output=$(python ci/utils/filter_package_versions.py dependencies.yaml run_common
 
 read -r -a versions <<< "${output}"
 
-if [[ "${RAPIDS_PY_VERSION}" < "3.13" ]]; then
+if python -c "import sys; print(sys.version_info < (3, 13))" | grep -q True; then
     for VERSION in "${versions[@]}"; do
         echo "Running tests for pandas==${VERSION}"
 
         # Create isolated environment
         python -m venv venv_${VERSION}
+        # shellcheck disable=SC1090
         source venv_${VERSION}/bin/activate
-        unset PIP_CONSTRAINT
 
         pip install --upgrade pip
 
         # Install cudf + dependencies (reuse wheel install logic)
         rapids-pip-retry install \
             --constraint ./constraints.txt \
-            --constraint "${PIP_CONSTRAINT}" \
+            ${PIP_CONSTRAINT:+--constraint "${PIP_CONSTRAINT}"} \
             "$(echo "${CUDF_WHEELHOUSE}"/cudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,cudf-pandas-tests]" \
             "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
             "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
