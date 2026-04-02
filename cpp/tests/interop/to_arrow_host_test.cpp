@@ -18,7 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <numeric>
 
@@ -779,7 +779,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint32TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota  = thrust::make_counting_iterator(1);
+    auto const iota  = cuda::counting_iterator<int32_t>{1};
     auto const col   = fp_wrapper<int32_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input = cudf::table_view({col});
 
@@ -836,7 +836,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota  = thrust::make_counting_iterator(1);
+    auto const iota  = cuda::counting_iterator<int64_t>{1};
     auto const col   = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input = cudf::table_view({col});
 
@@ -893,7 +893,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint128TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota  = thrust::make_counting_iterator(1);
+    auto const iota  = cuda::counting_iterator<__int128_t>{1};
     auto const col   = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input = cudf::table_view({col});
 
