@@ -363,6 +363,8 @@ TEST_F(StringsContainsTests, Errors)
 
   EXPECT_THROW(cudf::strings::regex_program::create("aaaa{1234,5678}"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::regex_program::create("aaaa{123,5678}"), cudf::logic_error);
+
+  EXPECT_THROW(cudf::strings::regex_program::create("[a-C]"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, CountTest)

@@ -377,10 +377,17 @@ class regex_parser {
 
     // transform pairs of literals to ranges
     auto const counter = cuda::counting_iterator<std::size_t>{0};
-    std::transform(
-      counter, counter + (literals.size() / 2), std::back_inserter(ranges), [&literals](auto idx) {
-        return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
-      });
+    std::transform(counter,
+                   counter + (literals.size() / 2),
+                   std::back_inserter(ranges),
+                   [&literals, this](auto idx) {
+                     auto const lhs = literals[idx * 2];
+                     auto const rhs = literals[idx * 2 + 1];
+                     CUDF_EXPECTS(lhs <= rhs,
+                                  "invalid character range in class at " +
+                                    std::to_string(std::distance(_pattern_begin, _expr_ptr)));
+                     return reclass_range{lhs, rhs};
+                   });
     if (is_ignorecase(_flags)) {
       // add the swapped case ranges
       std::transform(counter,
