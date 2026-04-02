@@ -49,7 +49,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 )
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -62,6 +61,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 # cuDF column/concatenate row limit (int32)
@@ -1073,10 +1073,7 @@ def _use_pwise_join(
         # We fell back to single-partition behavior at lowering time
         return True
 
-    if (
-        isinstance(executor, StreamingExecutor)
-        and executor.dynamic_planning is not None
-    ):
+    if executor.name == "streaming" and executor.dynamic_planning is not None:
         return False
 
     left_count = partition_info[left].count
@@ -1128,7 +1125,7 @@ def _(
         return actors, channels
 
     elif (
-        isinstance(executor, StreamingExecutor)
+        executor.name == "streaming"
         and executor.dynamic_planning is not None
         and ir.options[0] in ("Inner", "Left", "Right", "Full", "Semi", "Anti")
     ):
