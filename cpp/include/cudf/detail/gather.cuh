@@ -658,9 +658,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
       gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
     } else {
       for (size_type i = 0; i < source_table.num_columns(); ++i) {
-        if (source_table.column(i).nullable()) {
-          set_all_valid_null_masks(source_table.column(i), *destination_columns[i], stream, mr);
-        }
+        set_all_valid_null_masks(source_table.column(i), *destination_columns[i], stream, mr);
       }
     }
   }
