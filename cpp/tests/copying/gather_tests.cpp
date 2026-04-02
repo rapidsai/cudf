@@ -238,11 +238,10 @@ TYPED_TEST(GatherTest, MultiColNulls)
   }
 }
 
-TYPED_TEST(GatherTest, NullableNoNulls)
+TEST_F(GatherTest, NullableNoNulls)
 {
   constexpr cudf::size_type source_size{1000};
-
-  auto source_zero                            = cudf::make_fixed_width_scalar<TypeParam>(0);
+  auto source_zero                            = cudf::make_fixed_width_scalar<int32_t>(0);
   std::unique_ptr<cudf::column> source_column = cudf::sequence(source_size, *source_zero);
 
   auto valid_mask = cudf::create_null_mask(source_size, cudf::mask_state::ALL_VALID);
