@@ -53,7 +53,8 @@ Hint: Check if `GH_TOKEN` (or GitHub CLI auth) is already configured in the envi
 - Stream ordering preserved across the API flow. **(guide: "Streams")**
 - Discourage implicit use of CUDA default stream to enable asynchronous execution. **(guide: "Streams")**
 - Use `cudf::have_same_types()` for data type comparison, not `a.type() == b.type()`. **(guide: "Comparing Data Types")**
-- No use of relaxed constexpr functions in device code. i.e., Use `cuda::std::` type traits and constexpr functions instead of `std::` in device code and templates (e.g., `cuda::std::is_numeric_v<T>` not `std::is_numeric_v<T>`, `cuda::std::clamp` not `std::clamp`, `cuda::std::min` not `std::min` and so on).
+- No use of relaxed constexpr in device code. `--expt-relaxed-constexpr` is **not** enabled. Every `constexpr` function callable from device code must be explicitly annotated `__device__` or `CUDF_HOST_DEVICE`. A bare `constexpr` is host-only. **(guide: "Device Code and `constexpr` Functions")**
+- Use `cuda::std::` type traits, algorithms, and constexpr functions instead of `std::` in `__device__` / `CUDF_HOST_DEVICE` code and in templates instantiated in device code (e.g., `cuda::std::is_void_v<T>` not `std::is_void_v<T>`, `cuda::std::min` not `std::min`, `cuda::std::numeric_limits<T>` not `std::numeric_limits<T>`). **(guide: "Device Code and `constexpr` Functions")**
 
 ### Performance Optimization
 
@@ -99,12 +100,12 @@ Additional key checks not in the guide:
 - No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
 - Prefer pinned memory/vectors for small H2D/D2H transfers via `cudf::detail::make_pinned_vector{,_async}` instead of `cudf::detail::make_host_vector{,_async}` and `cudf::detail::make_std_vector{}`.
 - Prefer `span` versions of constructors for `cudf::detail::make_pinned_vector{,_async}` and `cudf::detail::make_host_vector{,_async}`.
-- Functions defined in headers (e.g. templates) must be `inline`.
 - Anonymous namespaces for single-TU helpers; never in headers.
 - Use `host_span`/`device_span` ; no owning vectors passed around by copy/reference unless explicitly moved (transferring ownership).
 - Use modern C++20 primitives such as `concepts`, `std::ranges`, `std::transform` over manual implementations and raw loops; Range-for loops are fine.
 - Use `static_assert` with a clear message to prevent accidental template misuse.
 - Use `[[nodiscard]]` when a function with no side effects returns a non-void result.
+- No functions defined in headers unless they are templated or `inline` device functions
 
 ### Memory Allocation & Management
 

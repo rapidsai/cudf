@@ -26,6 +26,8 @@
 #include <rmm/aligned.hpp>
 #include <rmm/mr/aligned_resource_adaptor.hpp>
 
+#include <cuda/iterator>
+
 namespace {
 
 /**
@@ -508,7 +510,7 @@ TEST_F(HybridScanTest, MaterializeStructs)
     0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
 
   // struct<list<str(nullable)>(nullable), int(nullable), float(non-nullable)>(nullable)
-  auto values    = thrust::make_counting_iterator(0);
+  auto values    = cuda::counting_iterator<int>{0};
   auto col1_list = make_list_str_column(gen, true, true);
   cudf::test::fixed_width_column_wrapper<int> col1_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> col1_floats(values, values + num_rows);
@@ -558,7 +560,7 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   // list<struct<list<str(nullable)>(nullable), int(nullable),
   // float(non-nullable)>(nullable)>(nullable)
   auto struct1_list = make_list_str_column(gen, true, true);
-  auto values       = thrust::make_counting_iterator(0);
+  auto values       = cuda::counting_iterator<int>{0};
   cudf::test::fixed_width_column_wrapper<float> struct1_floats(values, values + num_rows, valids);
   std::vector<std::unique_ptr<cudf::column>> struct1_children;
   struct1_children.push_back(std::move(struct1_list));
@@ -566,7 +568,7 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   cudf::test::structs_column_wrapper _struct1(std::move(struct1_children), struct_valids);
   auto struct1 = cudf::purge_nonempty_nulls(_struct1);
 
-  auto col1_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col1_offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto col1_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
     col1_offsets_iter, col1_offsets_iter + num_rows + 1);
   auto [null_mask, null_count] =
@@ -595,7 +597,7 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   cudf::test::structs_column_wrapper _struct2(std::move(struct2_children));
   auto struct2 = cudf::purge_nonempty_nulls(_struct2);
 
-  auto col2_offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto col2_offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto col2_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
     col2_offsets_iter, col2_offsets_iter + num_rows + 1);
   std::tie(null_mask, null_count) =
@@ -639,7 +641,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto bools_iter = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto bools_col =
     cudf::test::fixed_width_column_wrapper<bool>(bools_iter, bools_iter + num_rows, valids);
-  auto offsets_iter = thrust::counting_iterator<int32_t>(0);
+  auto offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto offsets_col =
     cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
   auto [null_mask, null_count] =
@@ -680,7 +682,7 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto col6 = make_list_str_column(true);
 
   // struct<list<str(nullable)>(nullable), int(nullable), float(nullable)>(nullable)
-  auto values    = thrust::make_counting_iterator(0);
+  auto values    = cuda::counting_iterator<int>{0};
   auto col7_list = make_list_str_column(true);
   cudf::test::fixed_width_column_wrapper<int> col7_ints(values, values + num_rows, valids);
   cudf::test::fixed_width_column_wrapper<float> col7_floats(values, values + num_rows, valids);
