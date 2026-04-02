@@ -835,8 +835,19 @@ def test_json_empty_types():
     {"c": {"d": []}}
     {"e": [{}]}
     """
-    df = cudf.read_json(StringIO(json_str), orient="records", lines=True)
-    pdf = pd.read_json(StringIO(json_str), orient="records", lines=True)
+    df = cudf.read_json(
+        StringIO(json_str), orient="records", lines=True
+    ).to_pandas(arrow_type=True)
+    pdf = pd.read_json(
+        StringIO(json_str),
+        orient="records",
+        lines=True,
+        dtype_backend="pyarrow",
+    )
+
+    # TODO: Remove this workaround after
+    # https://github.com/pandas-dev/pandas/issues/65034 is fixed.
+    pdf = pdf.astype(df.dtypes)
     assert_eq(df, pdf)
 
 
@@ -1339,8 +1350,18 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
 
     # both json lines and json string tested.
     json_string = "[" + jsonl_string.replace("\n", ",") + "]"
-    pdf = pd.read_json(StringIO(jsonl_string), orient="records", lines=True)
-    pdf2 = pd.read_json(StringIO(json_string), orient="records", lines=False)
+    pdf = pd.read_json(
+        StringIO(jsonl_string),
+        orient="records",
+        lines=True,
+        dtype_backend="pyarrow",
+    )
+    pdf2 = pd.read_json(
+        StringIO(json_string),
+        orient="records",
+        lines=False,
+        dtype_backend="pyarrow",
+    )
     assert_eq(pdf, pdf2)
     # replace list elements with None if it has dict and non-dict
     # in above test cases, these items are mixed with dict/list items
@@ -1359,8 +1380,14 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
     )
     if """[{"0": 123}, {}]""" not in jsonl_string:
         # {} in pandas is represented as {"0": None} in cudf
-        assert_eq(gdf, pdf)
-        assert_eq(gdf2, pdf)
+        actual_gdf = gdf.to_pandas(arrow_type=True)
+        # TODO: Remove this workaround after
+        # https://github.com/pandas-dev/pandas/issues/65034 is fixed.
+        pdf = pdf.astype(actual_gdf.dtypes)
+        assert_eq(actual_gdf, pdf)
+
+        actual_gdf2 = gdf2.to_pandas(arrow_type=True)
+        assert_eq(actual_gdf2, pdf)
     pa_table_pdf = pa.Table.from_pandas(
         pdf, schema=gdf.to_arrow().schema, safe=False
     )
