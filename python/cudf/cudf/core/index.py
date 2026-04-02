@@ -3200,8 +3200,10 @@ class DatetimeIndex(Index):
             elif not isinstance(data.dtype, pd.DatetimeTZDtype):
                 data = data.astype(dtype)
         elif data.dtype.kind != "M":
-            # nanosecond default matches pandas
-            data = data.astype(np.dtype("datetime64[ns]"))
+            if is_dtype_obj_string(data.dtype):
+                data = data.astype(np.dtype("datetime64[us]"))
+            else:
+                data = data.astype(np.dtype("datetime64[ns]"))
 
         if copy:
             data = data.copy()
@@ -4050,7 +4052,7 @@ class DatetimeIndex(Index):
         ...     "1999-12-31 18:40:30",
         ... ])
         >>> gIndex.ceil("min")
-        DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
+        DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[us]')
         """
         return type(self)._from_column(self._column.ceil(freq), name=self.name)
 
@@ -4081,7 +4083,7 @@ class DatetimeIndex(Index):
         ...     "1999-12-31 18:44:59",
         ... ])
         >>> gIndex.floor("min")
-        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[us]')
         """
         return type(self)._from_column(
             self._column.floor(freq), name=self.name
@@ -4297,8 +4299,10 @@ class TimedeltaIndex(Index):
                 raise TypeError("dtype must be a timedelta type")
             col = col.astype(dtype)
         elif col.dtype.kind != "m":
-            # nanosecond default matches pandas
-            col = col.astype(np.dtype("timedelta64[ns]"))
+            if is_dtype_obj_string(col.dtype):
+                col = col.astype(np.dtype("timedelta64[us]"))
+            else:
+                col = col.astype(np.dtype("timedelta64[ns]"))
 
         if copy:
             col = col.copy()
