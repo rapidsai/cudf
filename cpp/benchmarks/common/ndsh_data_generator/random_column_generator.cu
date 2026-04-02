@@ -16,8 +16,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/transform.h>
 
@@ -116,8 +116,8 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
   cudf::size_type begin = 0;
   cudf::size_type end   = num_rows;
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator(begin),
-                    thrust::make_counting_iterator(end),
+                    cuda::counting_iterator{begin},
+                    cuda::counting_iterator{end},
                     col->mutable_view().begin<T>(),
                     random_number_generator<T>(lower, upper));
   return col;

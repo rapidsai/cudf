@@ -27,6 +27,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunkwise_evaluate,
     empty_table_chunk,
+    gather_in_task_group,
     make_spill_function,
     maybe_remap_partitioning,
     process_children,
@@ -133,7 +134,7 @@ async def default_node_multi(
         duplicated = True
         partitioning = None
         for idx, md_child in enumerate(
-            await asyncio.gather(*(recv_metadata(ch, context) for ch in chs_in))
+            await gather_in_task_group(*(recv_metadata(ch, context) for ch in chs_in))
         ):
             # Use simple "max" rule to determine counts.
             local_count = max(md_child.local_count, local_count)
@@ -274,7 +275,9 @@ async def fanout_node_bounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        await gather_in_task_group(
+            *(send_metadata(ch, context, metadata) for ch in chs_out)
+        )
 
         while (msg := await ch_in.recv(context)) is not None:
             table_chunk = TableChunk.from_message(msg).make_available_and_spill(
@@ -296,7 +299,7 @@ async def fanout_node_bounded(
                 )
             del table_chunk
 
-        await asyncio.gather(*(ch.drain(context) for ch in chs_out))
+        await gather_in_task_group(*(ch.drain(context) for ch in chs_out))
 
 
 @define_actor()
@@ -342,7 +345,9 @@ async def fanout_node_unbounded(
     ):
         # Forward metadata to all outputs.
         metadata = await recv_metadata(ch_in, context)
-        await asyncio.gather(*(send_metadata(ch, context, metadata) for ch in chs_out))
+        await gather_in_task_group(
+            *(send_metadata(ch, context, metadata) for ch in chs_out)
+        )
 
         # Spillable FIFO buffer for each output channel
         output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
@@ -438,24 +443,20 @@ async def fanout_node_unbounded(
                             device_size = content_desc.content_sizes.get(
                                 MemoryType.DEVICE, 0
                             )
-                            copy_cost = msg.copy_cost()
 
                             # Check if we have enough device memory for all copies
                             # We need (num_outputs - 1) copies since last one reuses original
                             num_copies = num_outputs - 1
-                            total_copy_cost = copy_cost * num_copies
+                            total_copy_cost = msg.copy_cost() * num_copies
                             available_device_mem = context.br().memory_available(
                                 MemoryType.DEVICE
                             )
 
                             # Decide target memory:
                             # Use device ONLY if message is in device AND we have sufficient headroom.
-                            # TODO: Use further information about the downstream operations to make
-                            # a more informed decision.
-                            required_headroom = total_copy_cost * 2
                             if (
                                 device_size > 0
-                                and available_device_mem >= required_headroom
+                                and available_device_mem >= total_copy_cost
                             ):
                                 # Use reserve_device_memory_and_spill to automatically trigger spilling
                                 # if needed to make room for the copy
@@ -468,10 +469,9 @@ async def fanout_node_unbounded(
                             else:
                                 # Use host memory for buffering - much safer
                                 # Downstream consumers will make_available() when they need device memory
-                                memory_reservation, _ = context.br().reserve(
-                                    MemoryType.HOST,
+                                memory_reservation = context.br().reserve_or_fail(
                                     total_copy_cost,
-                                    allow_overbooking=True,
+                                    [MemoryType.PINNED_HOST, MemoryType.HOST],
                                 )
 
                             # Copy message for each output buffer

@@ -13,6 +13,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
+#include <cuco/roaring_bitmap.cuh>
+#include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 
