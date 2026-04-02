@@ -19,7 +19,8 @@ RAPIDS_BRANCH="$(cat "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../RAPIDS_BR
 rapids-logger "Cloning cuml at branch ${RAPIDS_BRANCH}"
 git clone https://github.com/rapidsai/cuml.git --branch "${RAPIDS_BRANCH}" --depth 1 /tmp/cuml
 
-CUML_TESTS_DIR=/tmp/cuml/python/cuml/cuml/tests
+
+CUML_TESTS_DIR=/tmp/cuml/python/cuml/tests
 
 rapids-logger "pytest cuml cuDF-compat subset"
 timeout 10m python -m pytest --cache-clear \
