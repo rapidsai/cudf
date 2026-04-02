@@ -4646,8 +4646,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             #   [key_cols (k), self_non_key_cols, right_non_key_cols]
             # Reorder using integer positions to avoid issues with None/NaN
             # column names: new positions = [0..k-1, N_r..n-1, k..N_r-1]
-            N_r = len(right._column_names)
-            n_result = len(result._column_names)
+            N_r = right._num_columns
+            n_result = result._num_columns
             if orig_on is not None:
                 # `on` names data columns shared by both sides; they appear once.
                 k = 1 if isinstance(orig_on, str) else len(orig_on)
