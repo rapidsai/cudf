@@ -16,11 +16,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/cmath>
 #include <cuda/std/type_traits>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -69,8 +69,8 @@ cudf::size_type unique_count(column_view const& input,
 
   return thrust::count_if(
     rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(num_rows),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator<cudf::size_type>{num_rows},
     [count_nulls, nan_is_null, should_check_nan, device_view, comp] __device__(cudf::size_type i) {
       auto const is_null = device_view.is_null(i);
       auto const is_nan  = nan_is_null and should_check_nan and

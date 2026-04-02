@@ -23,7 +23,6 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -176,8 +175,8 @@ std::unique_ptr<column> scatter(column_view const& source,
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
-                            thrust::make_counting_iterator<size_type>(0),
-                            thrust::make_counting_iterator<size_type>(scatter_map_size),
+                            cuda::counting_iterator<size_type>{0},
+                            cuda::counting_iterator{static_cast<size_type>(scatter_map_size)},
                             stream,
                             mr);
 
@@ -185,8 +184,8 @@ std::unique_ptr<column> scatter(column_view const& source,
   auto target_vector =
     list_vector_from_column(unbound_list_view::label_type::TARGET,
                             cudf::detail::lists_column_device_view(*target_device_view),
-                            thrust::make_counting_iterator<size_type>(0),
-                            thrust::make_counting_iterator<size_type>(num_rows),
+                            cuda::counting_iterator<size_type>{0},
+                            cuda::counting_iterator<size_type>{num_rows},
                             stream,
                             mr);
 
@@ -261,8 +260,8 @@ std::unique_ptr<column> scatter(scalar const& slr,
   auto target_vector =
     list_vector_from_column(unbound_list_view::label_type::TARGET,
                             cudf::detail::lists_column_device_view(*target_device_view),
-                            thrust::make_counting_iterator<size_type>(0),
-                            thrust::make_counting_iterator<size_type>(num_rows),
+                            cuda::counting_iterator<size_type>{0},
+                            cuda::counting_iterator<size_type>{num_rows},
                             stream,
                             mr);
 

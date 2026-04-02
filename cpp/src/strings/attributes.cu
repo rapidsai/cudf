@@ -25,11 +25,11 @@
 
 #include <cub/warp/warp_reduce.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -81,8 +81,8 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   auto d_strings      = *strings_column;
   // fill in the lengths
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(strings.size()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{strings.size()},
                     d_lengths,
                     cuda::proclaim_return_type<int32_t>([d_strings, ufn] __device__(size_type idx) {
                       return d_strings.is_null(idx)
@@ -220,8 +220,8 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
   rmm::device_uvector<size_type> offsets(input.size() + 1, stream);
   thrust::transform_inclusive_scan(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(input.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{input.size()},
     offsets.begin() + 1,
     cuda::proclaim_return_type<size_type>([d_column] __device__(size_type idx) {
       size_type length = 0;
@@ -242,7 +242,7 @@ std::unique_ptr<column> code_points(strings_column_view const& input,
   auto d_results = results_view.data<int32_t>();
   // now set the ranges from each strings' character values
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+                     cuda::counting_iterator<size_type>{0},
                      input.size(),
                      code_points_fn{d_column, offsets.data(), d_results});
 
