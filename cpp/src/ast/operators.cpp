@@ -9,6 +9,7 @@
 
 #include <cuda/std/type_traits>
 
+#include <optional>
 #include <vector>
 
 namespace cudf {
@@ -30,7 +31,7 @@ struct arity_functor {
  */
 struct return_type_functor {
   cudf::data_type lhs_type;
-  cudf::data_type rhs_type;
+  std::optional<cudf::data_type> rhs_type;  // not needed for unary
   /**
    * @brief Callable for binary operators to determine return type.
    *
@@ -47,7 +48,8 @@ struct return_type_functor {
     auto const out_id = cudf::type_to_id<Out>();
     if constexpr (cudf::is_fixed_point<Out>()) {
       result = cudf::data_type(
-        out_id, OperatorFunctor::fixed_point_result_scale(lhs_type.scale(), rhs_type.scale()));
+        out_id,
+        OperatorFunctor::fixed_point_result_scale(lhs_type.scale(), rhs_type.value().scale()));
     } else {
       result = cudf::data_type{out_id};
     }
@@ -257,19 +259,18 @@ cudf::data_type ast_operator_return_type(ast_operator op,
 {
   cudf::data_type result{cudf::type_id::EMPTY};
   switch (operand_types.size()) {
-    case 1:
-      unary_operator_dispatcher(op,
-                                operand_types[0],
-                                detail::return_type_functor{operand_types[0], operand_types[0]},
-                                result);
+    case 1: {
+      auto const op_type = operand_types[0];
+      unary_operator_dispatcher(op, op_type, detail::return_type_functor{op_type}, result);
       break;
-    case 2:
-      binary_operator_dispatcher(op,
-                                 operand_types[0],
-                                 operand_types[1],
-                                 detail::return_type_functor{operand_types[0], operand_types[1]},
-                                 result);
+    }
+    case 2: {
+      auto const lhs_type = operand_types[0];
+      auto const rhs_type = operand_types[1];
+      binary_operator_dispatcher(
+        op, lhs_type, rhs_type, detail::return_type_functor{lhs_type, rhs_type}, result);
       break;
+    }
     default: CUDF_FAIL("Unsupported operator return type."); break;
   }
   return result;
