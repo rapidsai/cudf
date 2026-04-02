@@ -11,6 +11,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/parquet_schema.hpp>
+#include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -128,16 +129,14 @@ fetch_byte_ranges_to_device_async(
       auto const io_size   = cuda::std::get<1>(tuple);
       auto const dest      = cuda::std::get<2>(tuple);
 
-      // Directly read the column chunk data to the device
-      // buffer if supported
+      // Directly read the column chunk data to the device buffer if supported
       if (datasource.supports_device_read() and datasource.is_device_read_preferred(io_size)) {
         device_read_tasks.emplace_back(
           datasource.device_read_async(io_offset, io_size, dest, stream));
       } else {
-        // Read the column chunk data to the host buffer and
-        // copy it to the device buffer
+        // Read the column chunk data to the host buffer copy it to the device buffer
         host_read_tasks.emplace_back(
-          std::async(std::launch::deferred, [&datasource, io_offset, io_size, dest, stream]() {
+          cudf::detail::host_worker_pool().submit_task([&datasource, io_offset, io_size, dest, stream]() {
             auto host_buffer = datasource.host_read(io_offset, io_size);
             cudf::detail::cuda_memcpy_async(
               cudf::device_span<uint8_t>{dest, io_size},
