@@ -18,7 +18,7 @@
 #include <rmm/mr/device_memory_resource.hpp>
 
 #include <cuda/std/tuple>
-#include <thrust/iterator/zip_iterator.h>
+#include <cuda/iterator>
 
 #include <numeric>
 
@@ -120,7 +120,7 @@ fetch_byte_ranges_to_device_async(
 
   {
     auto iter =
-      thrust::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
+      cuda::make_zip_iterator(io_offsets.begin(), io_sizes.begin(), destinations.begin());
 
     std::lock_guard<std::mutex> lock(mutex);
 
