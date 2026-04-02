@@ -20,7 +20,7 @@
 
 #include <rmm/cuda_stream.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <limits>
@@ -275,7 +275,7 @@ TYPED_TEST(TransformTest, BasicAdditionLarge)
 {
   using Executor = TypeParam;
 
-  auto a     = thrust::make_counting_iterator(0);
+  auto a     = cuda::counting_iterator<int32_t>{0};
   auto col   = column_wrapper<int32_t>(a, a + 2000);
   auto table = cudf::table_view{{col, col}};
 
@@ -310,7 +310,7 @@ TYPED_TEST(TransformTest, LessComparator)
 TYPED_TEST(TransformTest, LessComparatorLarge)
 {
   auto a         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto b         = thrust::make_counting_iterator(500);
+  auto b         = cuda::counting_iterator<int32_t>{500};
   using Executor = TypeParam;
   auto c_0       = column_wrapper<int32_t>(a, a + 2000);
   auto c_1       = column_wrapper<int32_t>(b, b + 2000);
@@ -357,7 +357,7 @@ TYPED_TEST(TransformTest, MultiLevelTreeArithmetic)
 
 TYPED_TEST(TransformTest, MultiLevelTreeArithmeticLarge)
 {
-  auto a         = thrust::make_counting_iterator(0);
+  auto a         = cuda::counting_iterator<int32_t>{0};
   auto b         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 1; });
   auto c         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
   using Executor = TypeParam;
@@ -910,7 +910,7 @@ TYPED_TEST(TransformTest, BasicAdditionLargeNulls)
   using Executor = TypeParam;
 
   auto N = 2000;
-  auto a = thrust::make_counting_iterator(0);
+  auto a = cuda::counting_iterator<int32_t>{0};
 
   auto validities = std::vector<int32_t>(N);
   std::fill(validities.begin(), validities.begin() + N / 2, 0);
@@ -1046,6 +1046,131 @@ TYPED_TEST(DecimalComparisonTest, DecimalComparison)
   auto result        = cudf::compute_column(table, expression);
 
   auto expected = column_wrapper<bool>({false, true, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, FloorDivIntegerEqualComparison)
+{
+  auto col   = column_wrapper<int64_t>{300'964, 300'972, 500'000, 26};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref       = cudf::ast::column_reference(0);
+  auto divisor_value = cudf::numeric_scalar<int64_t>(100'000);
+  auto divisor       = cudf::ast::literal(divisor_value);
+  auto floor_div     = cudf::ast::operation(cudf::ast::ast_operator::FLOOR_DIV, col_ref, divisor);
+
+  auto zero_value = cudf::numeric_scalar<int64_t>(0);
+  auto zero       = cudf::ast::literal(zero_value);
+  auto eq_expr    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, floor_div, zero);
+
+  auto result   = cudf::compute_column(table, eq_expr);
+  auto expected = column_wrapper<bool>{false, false, false, true};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, TrueDivIntegerEqualComparison)
+{
+  auto col   = column_wrapper<int64_t>{10, 8, 7, 4};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref       = cudf::ast::column_reference(0);
+  auto divisor_value = cudf::numeric_scalar<int64_t>(4);
+  auto divisor       = cudf::ast::literal(divisor_value);
+  auto true_div      = cudf::ast::operation(cudf::ast::ast_operator::TRUE_DIV, col_ref, divisor);
+
+  auto two_value = cudf::numeric_scalar<double>(2.0);
+  auto two       = cudf::ast::literal(two_value);
+  auto eq_expr   = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, true_div, two);
+
+  auto result   = cudf::compute_column(table, eq_expr);
+  auto expected = column_wrapper<bool>{false, true, false, false};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, FloorDivIntegerNegativeOperands)
+{
+  auto col   = column_wrapper<int64_t>{-7, 7, -6, 6};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref           = cudf::ast::column_reference(0);
+  auto divisor_value_pos = cudf::numeric_scalar<int64_t>(2);
+  auto divisor_pos       = cudf::ast::literal(divisor_value_pos);
+  auto floor_div_pos =
+    cudf::ast::operation(cudf::ast::ast_operator::FLOOR_DIV, col_ref, divisor_pos);
+  auto result_pos   = cudf::compute_column(table, floor_div_pos);
+  auto expected_pos = column_wrapper<int64_t>{-4, 3, -3, 3};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_pos, result_pos->view(), verbosity);
+
+  auto divisor_value_neg = cudf::numeric_scalar<int64_t>(-2);
+  auto divisor_neg       = cudf::ast::literal(divisor_value_neg);
+  auto floor_div_neg =
+    cudf::ast::operation(cudf::ast::ast_operator::FLOOR_DIV, col_ref, divisor_neg);
+  auto result_neg   = cudf::compute_column(table, floor_div_neg);
+  auto expected_neg = column_wrapper<int64_t>{3, -4, 3, -3};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_neg, result_neg->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, PowIntegerEqualComparison)
+{
+  auto col   = column_wrapper<int64_t>{2, 3, 4, 2};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref    = cudf::ast::column_reference(0);
+  auto exp_value  = cudf::numeric_scalar<int64_t>(2);
+  auto exp_scalar = cudf::ast::literal(exp_value);
+  auto pow_expr   = cudf::ast::operation(cudf::ast::ast_operator::POW, col_ref, exp_scalar);
+
+  auto sixteen_value = cudf::numeric_scalar<int64_t>(16);
+  auto sixteen       = cudf::ast::literal(sixteen_value);
+  auto eq_expr       = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, pow_expr, sixteen);
+
+  auto result   = cudf::compute_column(table, eq_expr);
+  auto expected = column_wrapper<bool>{false, false, true, false};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, PowIntegerZeroExponent)
+{
+  auto col   = column_wrapper<int64_t>{2, 3, 4, 5};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref    = cudf::ast::column_reference(0);
+  auto exp_value  = cudf::numeric_scalar<int64_t>(0);
+  auto exp_scalar = cudf::ast::literal(exp_value);
+  auto pow_expr   = cudf::ast::operation(cudf::ast::ast_operator::POW, col_ref, exp_scalar);
+
+  auto result   = cudf::compute_column(table, pow_expr);
+  auto expected = column_wrapper<int64_t>{1, 1, 1, 1};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, PowIntegerZeroBase)
+{
+  auto col   = column_wrapper<int64_t>{0, 0, 0, 0};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref    = cudf::ast::column_reference(0);
+  auto exp_value  = cudf::numeric_scalar<int64_t>(3);
+  auto exp_scalar = cudf::ast::literal(exp_value);
+  auto pow_expr   = cudf::ast::operation(cudf::ast::ast_operator::POW, col_ref, exp_scalar);
+
+  auto result   = cudf::compute_column(table, pow_expr);
+  auto expected = column_wrapper<int64_t>{0, 0, 0, 0};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, PowIntegerNegativeExponent)
+{
+  auto col   = column_wrapper<int64_t>{2, 3, 4, 5};
+  auto table = cudf::table_view{{col}};
+
+  auto col_ref    = cudf::ast::column_reference(0);
+  auto exp_value  = cudf::numeric_scalar<int64_t>(-1);
+  auto exp_scalar = cudf::ast::literal(exp_value);
+  auto pow_expr   = cudf::ast::operation(cudf::ast::ast_operator::POW, col_ref, exp_scalar);
+
+  auto result   = cudf::compute_column(table, pow_expr);
+  auto expected = column_wrapper<int64_t>{0, 0, 0, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 

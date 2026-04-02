@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 template <typename T>
 struct FixedPointCompiledTest : public cudf::test::BaseFixture {};
@@ -746,7 +746,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpMod)
   auto constexpr N = 1000;
 
   for (auto scale : {-1, -2, -3}) {
-    auto const iota = thrust::make_counting_iterator(-500);
+    auto const iota = cuda::counting_iterator{-500};
     auto const lhs  = fp_wrapper<RepType>{iota, iota + N, scale_type{-1}};
     auto const rhs  = cudf::make_fixed_point_scalar<decimalXX>(7, scale_type{scale});
 
@@ -771,7 +771,7 @@ TYPED_TEST(FixedPointCompiledTest, FixedPointBinaryOpPModAndPyMod)
   auto constexpr N = 1000;
 
   for (auto const scale : {-1, -2, -3}) {
-    auto const iota = thrust::make_counting_iterator(-500);
+    auto const iota = cuda::counting_iterator{-500};
     auto const lhs  = fp_wrapper<RepType>{iota, iota + N, scale_type{-1}};
     auto const rhs  = cudf::make_fixed_point_scalar<decimalXX>(7, scale_type{scale});
 

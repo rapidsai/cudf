@@ -16,6 +16,8 @@
 #include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
+#include <cuda/iterator>
+
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -116,7 +118,7 @@ std::vector<table_t> read_parquet_multithreaded(std::vector<io_source> const& in
 
   // Create the read tasks
   std::for_each(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(thread_count), [&](auto tid) {
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator{thread_count}, [&](auto tid) {
       read_tasks.emplace_back(
         read_fn<read_mode>{input_sources, tables, tid, thread_count, stream_pool.get_stream()});
     });
@@ -191,7 +193,7 @@ void write_parquet_multithreaded(std::string const& output_path,
   std::vector<write_fn> write_tasks;
   write_tasks.reserve(thread_count);
   std::for_each(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(thread_count), [&](auto tid) {
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator{thread_count}, [&](auto tid) {
       write_tasks.emplace_back(write_fn{output_path, tables, tid, stream_pool.get_stream()});
     });
 
@@ -290,13 +292,11 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
   parquet_files.reserve(std::max<size_t>(thread_count, input_multiplier * parquet_files.size()));
 
   // Append the input files by input_multiplier times
-  std::for_each(thrust::make_counting_iterator(1),
-                thrust::make_counting_iterator(input_multiplier),
-                [&](auto i) {
-                  parquet_files.insert(parquet_files.end(),
-                                       parquet_files.begin(),
-                                       parquet_files.begin() + initial_size);
-                });
+  std::for_each(
+    cuda::counting_iterator<int32_t>{1}, cuda::counting_iterator{input_multiplier}, [&](auto i) {
+      parquet_files.insert(
+        parquet_files.end(), parquet_files.begin(), parquet_files.begin() + initial_size);
+    });
 
   if (parquet_files.size() < thread_count) {
     // Cycle append parquet files from the existing ones if less than the thread_count
@@ -386,8 +386,8 @@ int32_t main(int argc, char const** argv)
     }
 
     timer timer;
-    std::for_each(thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(num_reads),
+    std::for_each(cuda::counting_iterator<int32_t>{0},
+                  cuda::counting_iterator{num_reads},
                   [&](auto i) {  // Read parquet files and discard the tables
                     std::ignore = read_parquet_multithreaded<read_mode::NO_CONCATENATE>(
                       input_sources, thread_count, stream_pool);
