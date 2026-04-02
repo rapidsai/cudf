@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,9 +14,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf::strings::detail {
@@ -48,7 +48,7 @@ std::unique_ptr<column> create_offsets_from_positions(strings_column_view const&
   auto d_indices = indices.data();
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<int64_t>(0),
+    cuda::counting_iterator<int64_t>{0},
     positions.size(),
     [d_indices, d_counts] __device__(int64_t idx) {
       auto const str_idx = d_indices[idx] - 1;

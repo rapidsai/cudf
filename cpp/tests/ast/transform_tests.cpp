@@ -20,7 +20,7 @@
 
 #include <rmm/cuda_stream.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <limits>
@@ -275,7 +275,7 @@ TYPED_TEST(TransformTest, BasicAdditionLarge)
 {
   using Executor = TypeParam;
 
-  auto a     = thrust::make_counting_iterator(0);
+  auto a     = cuda::counting_iterator<int32_t>{0};
   auto col   = column_wrapper<int32_t>(a, a + 2000);
   auto table = cudf::table_view{{col, col}};
 
@@ -310,7 +310,7 @@ TYPED_TEST(TransformTest, LessComparator)
 TYPED_TEST(TransformTest, LessComparatorLarge)
 {
   auto a         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto b         = thrust::make_counting_iterator(500);
+  auto b         = cuda::counting_iterator<int32_t>{500};
   using Executor = TypeParam;
   auto c_0       = column_wrapper<int32_t>(a, a + 2000);
   auto c_1       = column_wrapper<int32_t>(b, b + 2000);
@@ -357,7 +357,7 @@ TYPED_TEST(TransformTest, MultiLevelTreeArithmetic)
 
 TYPED_TEST(TransformTest, MultiLevelTreeArithmeticLarge)
 {
-  auto a         = thrust::make_counting_iterator(0);
+  auto a         = cuda::counting_iterator<int32_t>{0};
   auto b         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 1; });
   auto c         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
   using Executor = TypeParam;
@@ -910,7 +910,7 @@ TYPED_TEST(TransformTest, BasicAdditionLargeNulls)
   using Executor = TypeParam;
 
   auto N = 2000;
-  auto a = thrust::make_counting_iterator(0);
+  auto a = cuda::counting_iterator<int32_t>{0};
 
   auto validities = std::vector<int32_t>(N);
   std::fill(validities.begin(), validities.begin() + N / 2, 0);
