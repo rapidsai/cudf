@@ -27,7 +27,6 @@ import functools
 import importlib.util
 import json
 import os
-import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
@@ -56,7 +55,6 @@ __all__ = [
     "RayContext",
     "Runtime",
     "SPMDContext",
-    "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -176,20 +174,6 @@ class Cluster(enum.StrEnum):
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
     RAY = "ray"
-
-
-class Scheduler(enum.StrEnum):
-    """
-    **Deprecated**: Use :class:`Cluster` instead.
-
-    The scheduler to use for the task-based streaming executor.
-
-    * ``Scheduler.SYNCHRONOUS`` : Single-GPU execution (use ``Cluster.SINGLE`` instead)
-    * ``Scheduler.DISTRIBUTED`` : Multi-GPU execution (use ``Cluster.DISTRIBUTED`` instead)
-    """
-
-    SYNCHRONOUS = "synchronous"
-    DISTRIBUTED = "distributed"
 
 
 class ShuffleMethod(enum.StrEnum):
@@ -591,12 +575,6 @@ class StreamingExecutor:
         * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
           an active Dask cluster)
 
-    scheduler
-        **Deprecated**: Use ``cluster`` instead.
-
-        For backward compatibility:
-        * ``Scheduler.SYNCHRONOUS`` maps to ``Cluster.SINGLE``
-        * ``Scheduler.DISTRIBUTED`` maps to ``Cluster.DISTRIBUTED``
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
@@ -707,13 +685,6 @@ class StreamingExecutor:
             default=None,
         )
     )
-    scheduler: Scheduler | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SCHEDULER",
-            Scheduler.__call__,
-            default=None,
-        )
-    )
     fallback_mode: StreamingFallbackMode = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__FALLBACK_MODE",
@@ -796,30 +767,7 @@ class StreamingExecutor:
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
 
-        # Handle backward compatibility for deprecated scheduler parameter
-        if self.scheduler is not None:
-            if self.cluster is not None:
-                raise ValueError(
-                    "Cannot specify both 'scheduler' and 'cluster'. "
-                    "The 'scheduler' parameter is deprecated. "
-                    "Please use only 'cluster' instead."
-                )
-            else:
-                warnings.warn(
-                    """The 'scheduler' parameter is deprecated. Please use 'cluster' instead.
-                    Use 'cluster="single"' instead of 'scheduler="synchronous"' and "
-                    'cluster="distributed"' instead of 'scheduler="distributed"'.""",
-                    FutureWarning,
-                    stacklevel=2,
-                )
-            # Map old scheduler values to new cluster values
-            if self.scheduler == "synchronous":
-                object.__setattr__(self, "cluster", Cluster.SINGLE)
-            elif self.scheduler == "distributed":
-                object.__setattr__(self, "cluster", Cluster.DISTRIBUTED)
-            # Clear scheduler to avoid confusion
-            object.__setattr__(self, "scheduler", None)
-        elif self.cluster is None:
+        if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
