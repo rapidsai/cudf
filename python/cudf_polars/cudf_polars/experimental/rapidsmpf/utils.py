@@ -343,7 +343,7 @@ def _evaluate_chunk_sync(
         DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
         context=ir_context,
     )
-    return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
 
 
 async def _to_thread(executor: Any, func: Any, /, *args: Any, **kwargs: Any) -> Any:
