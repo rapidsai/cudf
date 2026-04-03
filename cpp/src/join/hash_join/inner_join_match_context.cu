@@ -6,6 +6,7 @@
 #include "common.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/join/join.hpp>
 
 namespace cudf::detail {
 

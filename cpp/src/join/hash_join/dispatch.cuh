@@ -10,8 +10,10 @@
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/row_operator/hashing.cuh>
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
-#include <cudf/detail/structs/utilities.hpp>
 
+#include <cuco/pair.cuh>
+
+#include <memory>
 #include <utility>
 
 namespace cudf::detail {

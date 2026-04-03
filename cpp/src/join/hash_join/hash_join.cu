@@ -16,7 +16,6 @@
 #include <cudf/join/hash_join.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
-#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/mr/polymorphic_allocator.hpp>
 

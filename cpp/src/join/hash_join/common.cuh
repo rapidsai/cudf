@@ -7,6 +7,7 @@
 #include <cudf/detail/join/hash_join.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/join/join.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
