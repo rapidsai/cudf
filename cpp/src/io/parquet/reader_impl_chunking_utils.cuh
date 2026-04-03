@@ -21,6 +21,10 @@
 
 namespace cudf::io::parquet::detail {
 
+// Percentage of the total available input read limit that should be reserved for compressed
+// data vs uncompressed data.
+constexpr float input_limit_compression_reserve = 0.3f;
+
 using cudf::io::detail::codec_exec_result;
 using cudf::io::detail::codec_status;
 using cudf::io::detail::decompression_info;

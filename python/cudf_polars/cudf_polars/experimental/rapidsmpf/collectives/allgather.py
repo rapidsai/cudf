@@ -49,14 +49,21 @@ class AllGatherManager:
         sequence_number: int
             The sequence number of the chunk to insert.
         chunk: TableChunk
-            The table chunk to insert.
+            The table chunk to insert. Need not be GPU-resident; if spilled,
+            it will be made available internally.
         """
+        chunk = chunk.make_available_and_spill(
+            self.context.br(), allow_overbooking=True
+        )
         self.allgather.insert(
             sequence_number,
+            # TODO: Avoid unnecessary copies.
+            # See https://github.com/rapidsai/rapidsmpf/issues/933
             PackedData.from_cudf_packed_columns(
                 pack(
                     chunk.table_view(),
                     chunk.stream,
+                    mr=self.context.br().device_mr,
                 ),
                 chunk.stream,
                 self.context.br(),

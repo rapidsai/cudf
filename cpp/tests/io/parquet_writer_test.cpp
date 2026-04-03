@@ -652,7 +652,7 @@ TEST_F(ParquetWriterTest, EmptyListWithStruct)
 
 TEST_F(ParquetWriterTest, CheckPageRows)
 {
-  auto sequence = thrust::make_counting_iterator(0);
+  auto sequence = cuda::counting_iterator<int>{0};
 
   constexpr auto page_rows = 5000;
   constexpr auto num_rows  = 2 * page_rows;

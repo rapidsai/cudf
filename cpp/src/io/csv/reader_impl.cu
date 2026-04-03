@@ -43,9 +43,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/count.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <future>
@@ -793,14 +793,14 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   if (not opts_have_all_col_names) {
     std::vector<size_t> col_loop_order(column_names.size());
     auto unnamed_it = std::copy_if(
-      thrust::make_counting_iterator<size_t>(0),
-      thrust::make_counting_iterator<size_t>(column_names.size()),
+      cuda::counting_iterator<size_t>{0},
+      cuda::counting_iterator<size_t>{column_names.size()},
       col_loop_order.begin(),
       [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
 
     // Rename empty column names to "Unnamed: col_index"
-    std::copy_if(thrust::make_counting_iterator<size_t>(0),
-                 thrust::make_counting_iterator<size_t>(column_names.size()),
+    std::copy_if(cuda::counting_iterator<size_t>{0},
+                 cuda::counting_iterator<size_t>{column_names.size()},
                  unnamed_it,
                  [&column_names](auto col_idx) -> bool {
                    auto is_empty = column_names[col_idx].empty();
@@ -1014,7 +1014,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
             auto const* original_pairs = buffer->_strings->data();
             auto const original_iter   = thrust::make_transform_iterator(
-              thrust::make_counting_iterator<size_type>(0),
+              cuda::counting_iterator<size_type>{0},
               cuda::proclaim_return_type<cuda::std::optional<cudf::string_view>>(
                 [original_pairs] __device__(
                   size_type idx) -> cuda::std::optional<cudf::string_view> {
