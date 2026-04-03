@@ -49,13 +49,13 @@ OutputType reduce(InputIterator begin,
 
   // Device scalar to store the result
   auto result =
-    cudf::detail::device_scalar<OutputType>(stream, cudf::get_current_device_resource_ref());
+    cudf::detail::device_scalar<OutputType>(stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Build environment with stream and memory resource for cub::DeviceReduce::Reduce
   auto env = cuda::std::execution::env{
     cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
     cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
-                               cudf::get_current_device_resource_ref()}};
+                               cudf::get_current_device_resource_ref_unsafe()}};
   CUDF_CUDA_TRY(cub::DeviceReduce::Reduce(begin, result.data(), num_items, binary_op, init, env));
 
   // Copy result back to host via pinned memory
@@ -103,8 +103,8 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
   auto const num_items = cuda::std::distance(keys_begin, keys_end);
 
   // Device scalar to store the number of runs (unique keys)
-  auto d_num_runs =
-    cudf::detail::device_scalar<cuda::std::size_t>(stream, cudf::get_current_device_resource_ref());
+  auto d_num_runs = cudf::detail::device_scalar<cuda::std::size_t>(
+    stream, cudf::get_current_device_resource_ref_unsafe());
 
   // First call to get temporary storage size
   size_t temp_storage_bytes = 0;
@@ -121,7 +121,7 @@ cuda::std::pair<KeysOutputIterator, ValuesOutputIterator> reduce_by_key(
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Run reduce-by-key
   CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(d_temp_storage.data(),
@@ -177,7 +177,7 @@ void reduce_by_key_async(KeysInputIterator keys_begin,
                                                stream.value()));
 
   rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref_unsafe());
 
   CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(d_temp_storage.data(),
                                                temp_storage_bytes,
@@ -227,7 +227,7 @@ OutputType transform_reduce(InputIterator begin,
 
   // Device scalar to store the result
   auto result =
-    cudf::detail::device_scalar<OutputType>(stream, cudf::get_current_device_resource_ref());
+    cudf::detail::device_scalar<OutputType>(stream, cudf::get_current_device_resource_ref_unsafe());
 
   size_t temp_storage_bytes = 0;
   CUDF_CUDA_TRY(cub::DeviceReduce::TransformReduce(nullptr,
@@ -241,7 +241,7 @@ OutputType transform_reduce(InputIterator begin,
                                                    stream.value()));
 
   rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref_unsafe());
   CUDF_CUDA_TRY(cub::DeviceReduce::TransformReduce(d_temp_storage.data(),
                                                    temp_storage_bytes,
                                                    begin,

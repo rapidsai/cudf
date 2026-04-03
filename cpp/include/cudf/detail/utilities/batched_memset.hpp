@@ -40,7 +40,7 @@ void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
 
   // Copy buffer spans into device memory and then get sizes
   auto buffers = cudf::detail::make_device_uvector_async(
-    host_buffers, stream, cudf::get_current_device_resource_ref());
+    host_buffers, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Vector of sizes of all buffer spans
   auto sizes = thrust::make_transform_iterator(
@@ -65,7 +65,7 @@ void batched_memset(cudf::host_span<cudf::device_span<T> const> host_buffers,
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref_unsafe());
 
   cub::DeviceCopy::Batched(
     d_temp_storage.data(), temp_storage_bytes, iter_in, iter_out, sizes, num_buffers, stream);

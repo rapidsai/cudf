@@ -283,18 +283,19 @@ segmented_bitmask_binop(Binop op,
       static_cast<bitmask_type*>(h_destination_masks.back()->data()));
   }
   auto destination_masks = cudf::detail::make_device_uvector_async(
-    h_destination_masks_ptrs, stream, cudf::get_current_device_resource_ref());
+    h_destination_masks_ptrs, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // for destination size, pass number of words in each destination buffer instead of number of bits
-  auto null_counts = inplace_segmented_bitmask_binop(op,
-                                                     destination_masks,
-                                                     num_bitmask_words(mask_size_bits),
-                                                     masks,
-                                                     masks_begin_bits,
-                                                     mask_size_bits,
-                                                     segment_offsets,
-                                                     stream,
-                                                     cudf::get_current_device_resource_ref());
+  auto null_counts =
+    inplace_segmented_bitmask_binop(op,
+                                    destination_masks,
+                                    num_bitmask_words(mask_size_bits),
+                                    masks,
+                                    masks_begin_bits,
+                                    mask_size_bits,
+                                    segment_offsets,
+                                    stream,
+                                    cudf::get_current_device_resource_ref_unsafe());
 
   return std::pair(std::move(h_destination_masks),
                    cudf::detail::make_std_vector<size_type>(null_counts, stream));
@@ -327,7 +328,7 @@ size_type inplace_bitmask_binop(Binop op,
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref_unsafe();
   cudf::detail::device_scalar<size_type> d_counter{0, stream, mr};
 
   auto d_masks      = cudf::detail::make_device_uvector_async(masks, stream, mr);
@@ -384,7 +385,7 @@ rmm::device_uvector<size_type> inplace_segmented_bitmask_binop(
                "At least one segment needs to be passed for bitwise operations");
 
   rmm::device_uvector<size_type> d_null_counts(segment_offsets.size() - 1, stream, mr);
-  auto temp_mr      = cudf::get_current_device_resource_ref();
+  auto temp_mr      = cudf::get_current_device_resource_ref_unsafe();
   auto d_masks      = cudf::detail::make_device_uvector_async(masks, stream, temp_mr);
   auto d_begin_bits = cudf::detail::make_device_uvector_async(masks_begin_bits, stream, temp_mr);
   auto d_segment_offsets =
@@ -661,7 +662,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     std::distance(indices_begin, indices_end), stream);
   std::copy(indices_begin, indices_end, std::back_inserter(h_indices));
   auto const d_indices =
-    make_device_uvector_async(h_indices, stream, cudf::get_current_device_resource_ref());
+    make_device_uvector_async(h_indices, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Compute the bit counts over each segment.
   auto first_bit_indices_begin = thrust::make_transform_iterator(
@@ -676,7 +677,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        last_bit_indices_begin,
                                        count_bits,
                                        stream,
-                                       cudf::get_current_device_resource_ref());
+                                       cudf::get_current_device_resource_ref_unsafe());
 
   // Copy the results back to the host.
   return make_std_vector(d_bit_counts, stream);
@@ -805,7 +806,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
                                        last_bit_indices_begin,
                                        cudf::detail::count_bits_policy::SET_BITS,
                                        stream,
-                                       cudf::get_current_device_resource_ref());
+                                       cudf::get_current_device_resource_ref_unsafe());
   auto const length_and_valid_count =
     thrust::make_zip_iterator(segment_length_iterator, segment_valid_counts.begin());
   return cudf::detail::valid_if(
