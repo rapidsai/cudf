@@ -56,7 +56,7 @@ std::unique_ptr<table> stable_sort_by_key(table_view const& values,
                "Mismatch in number of rows for values and keys");
 
   auto sorted_order = detail::stable_sorted_order(
-    keys, column_order, null_precedence, stream, cudf::get_current_device_resource_ref());
+    keys, column_order, null_precedence, stream, cudf::get_current_device_resource_ref_unsafe());
 
   return detail::gather(values,
                         sorted_order->view(),

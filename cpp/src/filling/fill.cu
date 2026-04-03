@@ -163,7 +163,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 
   // get the index of the key just added
   auto index_of_value = cudf::dictionary::detail::get_index(
-    target_matched->view(), value, stream, cudf::get_current_device_resource_ref());
+    target_matched->view(), value, stream, cudf::get_current_device_resource_ref_unsafe());
   // now call fill using just the indices column and the new index
   auto new_indices =
     cudf::type_dispatcher(target_indices.type(),

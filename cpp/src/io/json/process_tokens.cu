@@ -81,7 +81,7 @@ void validate_token_stream(device_span<char const> d_input,
   if (!options.is_strict_validation()) { return; }
 
   rmm::device_uvector<bool> d_invalid = cudf::detail::make_zeroed_device_uvector_async<bool>(
-    tokens.size(), stream, cudf::get_current_device_resource_ref());
+    tokens.size(), stream, cudf::get_current_device_resource_ref_unsafe());
 
   using token_t = cudf::io::json::token_t;
   auto literals = options.get_na_values();

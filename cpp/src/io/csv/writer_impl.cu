@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -403,8 +403,12 @@ void write_csv(data_sink* out_sink,
   //
   CUDF_FUNC_RANGE();
 
-  write_chunked_begin(
-    out_sink, table, user_column_names, options, stream, cudf::get_current_device_resource_ref());
+  write_chunked_begin(out_sink,
+                      table,
+                      user_column_names,
+                      options,
+                      stream,
+                      cudf::get_current_device_resource_ref_unsafe());
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
@@ -438,7 +442,7 @@ void write_csv(data_sink* out_sink,
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options, stream, cudf::get_current_device_resource_ref()};
+    column_to_strings_fn converter{options, stream, cudf::get_current_device_resource_ref_unsafe()};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;
@@ -473,13 +477,18 @@ void write_csv(data_sink* out_sink,
                                                     options_narep,
                                                     strings::separator_on_nulls::YES,
                                                     stream,
-                                                    cudf::get_current_device_resource_ref());
-        return cudf::strings::detail::replace_nulls(
-          str_table_view.column(0), options_narep, stream, cudf::get_current_device_resource_ref());
+                                                    cudf::get_current_device_resource_ref_unsafe());
+        return cudf::strings::detail::replace_nulls(str_table_view.column(0),
+                                                    options_narep,
+                                                    stream,
+                                                    cudf::get_current_device_resource_ref_unsafe());
       }();
 
-      write_chunked(
-        out_sink, str_concat_col->view(), options, stream, cudf::get_current_device_resource_ref());
+      write_chunked(out_sink,
+                    str_concat_col->view(),
+                    options,
+                    stream,
+                    cudf::get_current_device_resource_ref_unsafe());
     }
   }
 }

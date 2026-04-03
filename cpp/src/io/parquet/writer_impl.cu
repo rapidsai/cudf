@@ -1078,7 +1078,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a separate async H2D copy for each column.
   _d_nullability = cudf::detail::make_device_uvector_async(
-    _nullability, stream, cudf::get_current_device_resource_ref());
+    _nullability, stream, cudf::get_current_device_resource_ref_unsafe());
 
   _is_list = (_max_rep_level > 0);
 
@@ -1150,7 +1150,7 @@ void init_row_group_fragments(cudf::detail::hostdevice_2dvector<PageFragment>& f
                               rmm::cuda_stream_view stream)
 {
   auto d_partitions = cudf::detail::make_device_uvector_async(
-    partitions, stream, cudf::get_current_device_resource_ref());
+    partitions, stream, cudf::get_current_device_resource_ref_unsafe());
   InitRowGroupFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host(stream);
 }
@@ -1170,7 +1170,7 @@ void calculate_page_fragments(device_span<PageFragment> frag,
                               rmm::cuda_stream_view stream)
 {
   auto d_frag_sz = cudf::detail::make_device_uvector_async(
-    frag_sizes, stream, cudf::get_current_device_resource_ref());
+    frag_sizes, stream, cudf::get_current_device_resource_ref_unsafe());
   CalculatePageFragments(frag, d_frag_sz, stream);
 }
 
@@ -1776,7 +1776,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
 
   auto d_part_frag_offset = cudf::detail::make_device_uvector_async(
-    part_frag_offset, stream, cudf::get_current_device_resource_ref());
+    part_frag_offset, stream, cudf::get_current_device_resource_ref_unsafe());
   cudf::detail::hostdevice_2dvector<PageFragment> row_group_fragments(
     num_columns, num_fragments, stream);
 

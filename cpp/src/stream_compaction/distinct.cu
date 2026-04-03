@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -123,7 +123,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                                    nulls_equal,
                                                    nans_equal,
                                                    stream,
-                                                   cudf::get_current_device_resource_ref());
+                                                   cudf::get_current_device_resource_ref_unsafe());
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,

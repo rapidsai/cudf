@@ -141,7 +141,8 @@ struct page_stats_caster : public stats_caster_base {
       has_is_null_operator,
       "The filter expression must have an IS_NULL operator to build is_null device column");
     auto const dtype = cudf::data_type{cudf::type_id::BOOL8};
-    auto is_nullcol  = is_null.to_device(dtype, stream, cudf::get_current_device_resource_ref());
+    auto is_nullcol =
+      is_null.to_device(dtype, stream, cudf::get_current_device_resource_ref_unsafe());
     auto [is_null_data, is_null_nullmask] =
       build_data_and_nullmask<bool>(is_nullcol->mutable_view(),
                                     is_null.null_mask.data(),
@@ -190,7 +191,7 @@ struct page_stats_caster : public stats_caster_base {
     // Construct device vectors containing page-level (input) string data, and offsets and sizes
     auto [page_str_chars, page_str_offsets, page_str_sizes] =
       host_column<cudf::string_view>::make_strings_children(
-        host_strings, host_chars, stream, cudf::get_current_device_resource_ref());
+        host_strings, host_chars, stream, cudf::get_current_device_resource_ref_unsafe());
 
     // Buffer for row-level string sizes (output).
     auto row_str_sizes = rmm::device_uvector<std::size_t>(total_rows, stream, mr);
@@ -409,18 +410,19 @@ struct page_stats_caster : public stats_caster_base {
         compute_host_data<T>(schema_idx, dtype, stream);
 
       // Construct a row indices mapping based on page row counts and offsets
-      auto const page_indices = compute_page_indices_async(page_row_counts,
-                                                           page_row_offsets,
-                                                           total_rows,
-                                                           stream,
-                                                           cudf::get_current_device_resource_ref());
+      auto const page_indices =
+        compute_page_indices_async(page_row_counts,
+                                   page_row_offsets,
+                                   total_rows,
+                                   stream,
+                                   cudf::get_current_device_resource_ref_unsafe());
 
       // For non-strings columns, directly gather the page-level column data and bitmask to the
       // row-level.
       if constexpr (not cuda::std::is_same_v<T, cudf::string_view>) {
         // Move host min/max columns to device
-        auto mincol = min.to_device(dtype, stream, cudf::get_current_device_resource_ref());
-        auto maxcol = max.to_device(dtype, stream, cudf::get_current_device_resource_ref());
+        auto mincol = min.to_device(dtype, stream, cudf::get_current_device_resource_ref_unsafe());
+        auto maxcol = max.to_device(dtype, stream, cudf::get_current_device_resource_ref_unsafe());
 
         // Convert page-level min and max columns to row-level min and max columns by gathering
         // values based on page-level row offsets
@@ -549,11 +551,14 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
         compute_host_data<T>(schema_idx, dtype, stream);
 
       std::vector<std::unique_ptr<column>> columns;
-      columns.emplace_back(min.to_device(dtype, stream, cudf::get_current_device_resource_ref()));
-      columns.emplace_back(max.to_device(dtype, stream, cudf::get_current_device_resource_ref()));
+      columns.emplace_back(
+        min.to_device(dtype, stream, cudf::get_current_device_resource_ref_unsafe()));
+      columns.emplace_back(
+        max.to_device(dtype, stream, cudf::get_current_device_resource_ref_unsafe()));
       if (has_is_null_operator) {
-        columns.emplace_back(is_null->to_device(
-          cudf::data_type{cudf::type_id::BOOL8}, stream, cudf::get_current_device_resource_ref()));
+        columns.emplace_back(is_null->to_device(cudf::data_type{cudf::type_id::BOOL8},
+                                                stream,
+                                                cudf::get_current_device_resource_ref_unsafe()));
       }
 
       auto page_stats_table = cudf::table(std::move(columns));
@@ -563,16 +568,18 @@ struct page_stats_to_row_mask_converter : public page_stats_caster {
         filter.get(), num_columns, has_is_null_operator, stream};
 
       // Filter the input table using AST expression and return the (BOOL8) predicate column.
-      auto const page_mask = cudf::detail::compute_column(page_stats_table,
-                                                          stats_expr.get_stats_expr().get(),
-                                                          stream,
-                                                          cudf::get_current_device_resource_ref());
+      auto const page_mask =
+        cudf::detail::compute_column(page_stats_table,
+                                     stats_expr.get_stats_expr().get(),
+                                     stream,
+                                     cudf::get_current_device_resource_ref_unsafe());
 
-      auto const page_indices = compute_page_indices_async(page_row_counts,
-                                                           page_row_offsets,
-                                                           total_rows,
-                                                           stream,
-                                                           cudf::get_current_device_resource_ref());
+      auto const page_indices =
+        compute_page_indices_async(page_row_counts,
+                                   page_row_offsets,
+                                   total_rows,
+                                   stream,
+                                   cudf::get_current_device_resource_ref_unsafe());
 
       auto const page_mask_nullmask =
         page_mask->null_count()
@@ -922,30 +929,35 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
         page_stats_columns.push_back(cudf::make_numeric_column(
           data_type{cudf::type_id::BOOL8},
           total_rows,
-          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref_unsafe()},
           0,
           stream,
-          cudf::get_current_device_resource_ref()));
+          cudf::get_current_device_resource_ref_unsafe()));
         page_stats_columns.push_back(cudf::make_numeric_column(
           data_type{cudf::type_id::BOOL8},
           total_rows,
-          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref_unsafe()},
           0,
           stream,
-          cudf::get_current_device_resource_ref()));
+          cudf::get_current_device_resource_ref_unsafe()));
         if (has_is_null_operator) {
           page_stats_columns.push_back(cudf::make_numeric_column(
             data_type{cudf::type_id::BOOL8},
             total_rows,
-            rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+            rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref_unsafe()},
             0,
             stream,
-            cudf::get_current_device_resource_ref()));
+            cudf::get_current_device_resource_ref_unsafe()));
         }
         return;
       }
       auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
-        dtype, stats_col, schema_idx, dtype, stream, cudf::get_current_device_resource_ref());
+        dtype,
+        stats_col,
+        schema_idx,
+        dtype,
+        stream,
+        cudf::get_current_device_resource_ref_unsafe());
       page_stats_columns.push_back(std::move(min_col));
       page_stats_columns.push_back(std::move(max_col));
       if (has_is_null_operator) {
@@ -1088,7 +1100,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
                  "Row mask must not contain nulls for payload columns");
   }
 
-  auto const mr = cudf::get_current_device_resource_ref();
+  auto const mr = cudf::get_current_device_resource_ref_unsafe();
 
   // Compute fenwick tree level offsets and total size (level 1 and higher)
   auto const tree_level_offsets = compute_fenwick_tree_level_offsets(total_rows, max_page_size);

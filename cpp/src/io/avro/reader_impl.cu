@@ -419,7 +419,7 @@ std::vector<column_buffer> decode_data(metadata& meta,
   }
 
   auto block_list = cudf::detail::make_device_uvector_async(
-    meta.block_list, stream, cudf::get_current_device_resource_ref());
+    meta.block_list, stream, cudf::get_current_device_resource_ref_unsafe());
 
   schema_desc.host_to_device_async(stream);
 
@@ -551,9 +551,9 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
         }
 
         d_global_dict = cudf::detail::make_device_uvector_async(
-          h_global_dict, stream, cudf::get_current_device_resource_ref());
+          h_global_dict, stream, cudf::get_current_device_resource_ref_unsafe());
         d_global_dict_data = cudf::detail::make_device_uvector_async(
-          h_global_dict_data, stream, cudf::get_current_device_resource_ref());
+          h_global_dict_data, stream, cudf::get_current_device_resource_ref_unsafe());
 
         stream.synchronize();
       }

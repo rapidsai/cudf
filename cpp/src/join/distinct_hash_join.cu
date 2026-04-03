@@ -132,7 +132,8 @@ void find_matches_in_hash_table(HashTableType const& hash_table,
   } else {
     auto stencil = cuda::counting_iterator<size_type>{0};
     auto const row_bitmask =
-      cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref()).first;
+      cudf::detail::bitmask_and(probe, stream, cudf::get_current_device_resource_ref_unsafe())
+        .first;
     auto const pred =
       cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 
@@ -191,7 +192,8 @@ distinct_hash_join::distinct_hash_join(cudf::table_view const& build,
     } else {
       auto stencil = cuda::counting_iterator<size_type>{0};
       auto const row_bitmask =
-        cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first;
+        cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref_unsafe())
+          .first;
       auto const pred =
         cudf::detail::row_is_valid{reinterpret_cast<bitmask_type const*>(row_bitmask.data())};
 

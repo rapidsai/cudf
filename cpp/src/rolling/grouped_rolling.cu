@@ -261,7 +261,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                        preceding,
                        following,
                        stream,
-                       cudf::get_current_device_resource_ref());
+                       cudf::get_current_device_resource_ref_unsafe());
   auto const& preceding_view = preceding_column->view();
   auto const& following_view = following_column->view();
   std::transform(
@@ -408,7 +408,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                   null_order,
                                   get_window_type(preceding),
                                   stream,
-                                  cudf::get_current_device_resource_ref()),
+                                  cudf::get_current_device_resource_ref_unsafe()),
         detail::make_range_window(order_by_column,
                                   grouping,
                                   rolling::direction::FOLLOWING,
@@ -417,7 +417,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                   null_order,
                                   get_window_type(following),
                                   stream,
-                                  cudf::get_current_device_resource_ref()),
+                                  cudf::get_current_device_resource_ref_unsafe()),
       };
     } else {
       auto null_order =
@@ -436,7 +436,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                 get_window_type(preceding),
                                 get_window_type(following),
                                 stream,
-                                cudf::get_current_device_resource_ref());
+                                cudf::get_current_device_resource_ref_unsafe());
     }
   }();
 

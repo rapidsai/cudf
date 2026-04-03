@@ -184,7 +184,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
       variadic_ptrs.push_back(reinterpret_cast<char const*>(variadic_buf->data));
     }
     auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
-      variadic_ptrs, stream, cudf::get_current_device_resource_ref());
+      variadic_ptrs, stream, cudf::get_current_device_resource_ref_unsafe());
     auto d_ptrs       = d_variadic_ptrs.data();
     auto const d_mask = reinterpret_cast<bitmask_type const*>(input->buffers[validity_buffer_idx]);
     // build strings into gather input form

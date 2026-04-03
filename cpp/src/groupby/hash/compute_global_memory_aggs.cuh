@@ -89,9 +89,9 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
       compute_matching_keys(row_bitmask, key_set.ref(cuco::op::insert_and_find), num_rows, stream);
     auto unique_keys       = extract_populated_keys(key_set, num_rows, stream, mr);
     auto key_transform_map = compute_key_transform_map(
-      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref_unsafe());
     auto target_indices = compute_target_indices(
-      matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref());
+      matching_keys, key_transform_map, stream, cudf::get_current_device_resource_ref_unsafe());
     return std::pair{std::move(unique_keys), std::move(target_indices)};
   }();
 

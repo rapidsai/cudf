@@ -596,7 +596,7 @@ void infer_column_types(parse_options const& parse_opts,
   auto const column_stats = cudf::io::csv::gpu::detect_column_types(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref_unsafe()),
     row_offsets,
     num_inferred_columns,
     stream);
@@ -683,18 +683,19 @@ decode_result decode_data(parse_options const& parse_opts,
   }
 
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_active_columns, stream, cudf::get_current_device_resource_ref());
+    num_active_columns, stream, cudf::get_current_device_resource_ref_unsafe());
 
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref_unsafe()),
     row_offsets,
-    make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref()),
-    make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
-    make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref_unsafe()),
+    make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref_unsafe()),
+    make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref_unsafe()),
     d_valid_counts,
-    make_device_uvector_async(h_is_quoted_flags, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(
+      h_is_quoted_flags, stream, cudf::get_current_device_resource_ref_unsafe()),
     stream);
 
   auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);

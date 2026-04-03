@@ -112,7 +112,7 @@ std::unique_ptr<column> top_k(column_view const& col,
   if (k >= col.size()) { return std::make_unique<column>(col, stream, mr); }
 
   auto const indices = [&] {
-    auto const temp_mr = cudf::get_current_device_resource_ref();
+    auto const temp_mr = cudf::get_current_device_resource_ref_unsafe();
     if (is_fast_path(col)) {
       return type_dispatcher<dispatch_storage_type>(
         col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, temp_mr});
@@ -143,7 +143,7 @@ std::unique_ptr<column> top_k_order(column_view const& col,
       col.size(), numeric_scalar<size_type>(0, true, stream), stream, mr);
   }
 
-  auto const temp_mr = cudf::get_current_device_resource_ref();
+  auto const temp_mr = cudf::get_current_device_resource_ref_unsafe();
   if (is_fast_path(col)) {
     return type_dispatcher<dispatch_storage_type>(
       col.type(), dispatch_topk_fn<true>{col, k, topk_order, stream, temp_mr});

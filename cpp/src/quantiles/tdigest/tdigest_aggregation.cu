@@ -738,7 +738,7 @@ cluster_info generate_group_cluster_info(int delta,
   // buffers
   rmm::device_async_resource_ref temp_mr =
     use_cpu ? rmm::device_async_resource_ref{cudf::get_pinned_memory_resource()}
-            : cudf::get_current_device_resource_ref();
+            : cudf::get_current_device_resource_ref_unsafe();
 
   // output from the function
   cluster_info cinfo;
@@ -811,10 +811,10 @@ cluster_info generate_group_cluster_info(int delta,
   if (use_cpu) {
     auto p_cluster_wl = std::move(cinfo.cluster_wl);
     cinfo.cluster_wl =
-      rmm::device_uvector(p_cluster_wl, stream, cudf::get_current_device_resource_ref());
+      rmm::device_uvector(p_cluster_wl, stream, cudf::get_current_device_resource_ref_unsafe());
     auto p_num_clusters = std::move(cinfo.num_clusters);
     cinfo.num_clusters =
-      rmm::device_uvector(p_num_clusters, stream, cudf::get_current_device_resource_ref());
+      rmm::device_uvector(p_num_clusters, stream, cudf::get_current_device_resource_ref_unsafe());
     auto p_cluster_start = std::move(cinfo.cluster_start);
     // cluster_start is returned as part of the output, so make sure to use the user supplied mr
     // instead of the current resource.
@@ -1341,7 +1341,7 @@ std::pair<rmm::device_uvector<double>, rmm::device_uvector<double>> generate_mer
 {
   CUDF_FUNC_RANGE();
 
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = cudf::get_current_device_resource_ref_unsafe();
 
   auto const total_merged_centroids = tdv.means().size();
 
@@ -1484,7 +1484,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
                      group_num_clusters,
                      group_is_empty{},
                      0);
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = cudf::get_current_device_resource_ref_unsafe();
 
   // merge the centroids
   auto [merged_means, merged_weights] =
@@ -1618,8 +1618,11 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& col,
   // since this isn't coming out of a groupby, we need to sort the inputs in ascending
   // order with nulls at the end.
   table_view t({col});
-  auto sorted = cudf::detail::sort(
-    t, {order::ASCENDING}, {null_order::AFTER}, stream, cudf::get_current_device_resource_ref());
+  auto sorted = cudf::detail::sort(t,
+                                   {order::ASCENDING},
+                                   {null_order::AFTER},
+                                   stream,
+                                   cudf::get_current_device_resource_ref_unsafe());
 
   auto const delta = max_centroids;
   return cudf::type_dispatcher(

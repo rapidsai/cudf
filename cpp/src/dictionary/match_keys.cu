@@ -97,7 +97,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
 {
   CUDF_EXPECTS(not input.empty(), "expect at least one dictionary", std::invalid_argument);
 
-  auto temp_mr = cudf::get_current_device_resource_ref();
+  auto temp_mr = cudf::get_current_device_resource_ref_unsafe();
   std::vector<cudf::column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
   auto all_keys = cudf::detail::concatenate(keys, stream, temp_mr);

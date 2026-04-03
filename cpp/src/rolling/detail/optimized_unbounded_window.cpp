@@ -103,7 +103,7 @@ std::unique_ptr<column> reduction_based_rolling_window(column_view const& input,
                                              return_dtype,
                                              std::nullopt,
                                              stream,
-                                             cudf::get_current_device_resource_ref());
+                                             cudf::get_current_device_resource_ref_unsafe());
     }
   }();
   // Blow up results into separate column.

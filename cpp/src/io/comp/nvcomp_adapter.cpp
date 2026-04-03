@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -812,7 +812,7 @@ void load_nvcomp_library()
 
   std::call_once(nvcomp_initialized_flag, []() {
     auto const stream = cudf::get_default_stream();
-    auto const mr     = cudf::get_current_device_resource_ref();
+    auto const mr     = cudf::get_current_device_resource_ref_unsafe();
 
     // Allocate dummy input buffer and output buffer
     auto const d_input             = rmm::device_uvector<uint8_t>(1, stream, mr);

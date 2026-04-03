@@ -771,8 +771,8 @@ void decompress(compression_type compression,
   if (inputs.empty()) { return; }
 
   // sort inputs by size, largest first
-  auto const [sorted_inputs, sorted_outputs, order] =
-    sort_decompression_tasks(inputs, outputs, stream, cudf::get_current_device_resource_ref());
+  auto const [sorted_inputs, sorted_outputs, order] = sort_decompression_tasks(
+    inputs, outputs, stream, cudf::get_current_device_resource_ref_unsafe());
   device_span<device_span<uint8_t const> const> inputs_view = sorted_inputs;
   device_span<device_span<uint8_t> const> outputs_view      = sorted_outputs;
 
@@ -785,7 +785,7 @@ void decompress(compression_type compression,
     stream);
 
   auto tmp_results = cudf::detail::make_device_uvector_async<detail::codec_exec_result>(
-    results, stream, cudf::get_current_device_resource_ref());
+    results, stream, cudf::get_current_device_resource_ref_unsafe());
   device_span<codec_exec_result> results_view = tmp_results;
 
   auto const streams = cudf::detail::fork_streams(stream, 2);

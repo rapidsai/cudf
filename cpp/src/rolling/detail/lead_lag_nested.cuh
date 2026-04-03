@@ -180,7 +180,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::negative_index_policy::NOT_ALLOWED,
                          stream,
-                         cudf::get_current_device_resource_ref());
+                         cudf::get_current_device_resource_ref_unsafe());
 
   // Scatter defaults into locations where LEAD/LAG computed nulls.
   auto scattered_results = cudf::detail::scatter(

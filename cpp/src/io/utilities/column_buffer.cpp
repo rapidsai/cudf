@@ -35,7 +35,7 @@ void gather_column_buffer::allocate_strings_data(bool memset_data, rmm::cuda_str
   // default rmm memory resource.
   _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
     cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
-      size, stream, cudf::get_current_device_resource_ref()));
+      size, stream, cudf::get_current_device_resource_ref_unsafe()));
 }
 
 std::unique_ptr<column> gather_column_buffer::make_string_column_impl(rmm::cuda_stream_view stream)

@@ -1978,11 +1978,12 @@ struct contiguous_split_state {
     if (user_buffer_size == 0) {
       out_buffers.reserve(num_partitions);
       auto h_buf_sizes = partition_buf_size_and_dst_buf_info->h_buf_sizes;
-      std::transform(h_buf_sizes,
-                     h_buf_sizes + num_partitions,
-                     std::back_inserter(out_buffers),
-                     [stream = stream, mr = mr.value_or(cudf::get_current_device_resource_ref())](
-                       std::size_t bytes) { return rmm::device_buffer{bytes, stream, mr}; });
+      std::transform(
+        h_buf_sizes,
+        h_buf_sizes + num_partitions,
+        std::back_inserter(out_buffers),
+        [stream = stream, mr = mr.value_or(cudf::get_current_device_resource_ref_unsafe())](
+          std::size_t bytes) { return rmm::device_buffer{bytes, stream, mr}; });
     }
 
     src_and_dst_pointers = std::move(setup_src_and_dst_pointers(

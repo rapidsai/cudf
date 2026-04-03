@@ -1083,7 +1083,7 @@ struct dictionary_caster {
       });
 
     // Get the default device resource ref for temporary memory allocations
-    auto const default_mr = cudf::get_current_device_resource_ref();
+    auto const default_mr = cudf::get_current_device_resource_ref_unsafe();
 
     // Device vectors to store the running number of hash set slots and decoded values for all
     // dictionaries
@@ -1237,7 +1237,7 @@ struct dictionary_caster {
     auto const total_num_literals = static_cast<cudf::size_type>(literals.size());
 
     // Get the default device resource ref for temporary memory allocations
-    auto const default_mr = cudf::get_current_device_resource_ref();
+    auto const default_mr = cudf::get_current_device_resource_ref_unsafe();
 
     // Host vector of scalar device views from all literals
     std::vector<ast::generic_scalar_device_view> host_scalars;
@@ -1334,12 +1334,12 @@ struct dictionary_caster {
       // Make sure all literals have the same type as the predicate column
       std::for_each(literals.begin(), literals.end(), [&](auto const& literal) {
         // Check if the literal has the same type as the predicate column
-        CUDF_EXPECTS(
-          dtype == literal->get_data_type() and
-            cudf::have_same_types(
-              cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
-              cudf::scalar_type_t<T>(T{}, false, stream, cudf::get_current_device_resource_ref())),
-          "Mismatched predicate column and literal types");
+        CUDF_EXPECTS(dtype == literal->get_data_type() and
+                       cudf::have_same_types(
+                         cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
+                         cudf::scalar_type_t<T>(
+                           T{}, false, stream, cudf::get_current_device_resource_ref_unsafe())),
+                     "Mismatched predicate column and literal types");
       });
 
       // If there are only a few literals, just evaluate expression while decoding dictionary data
@@ -1509,7 +1509,7 @@ aggregate_reader_metadata::apply_dictionary_filter(
   std::vector<std::unique_ptr<cudf::column>> dictionary_membership_columns;
 
   // Memory resource to allocate dictionary membership columns with
-  auto const mr = cudf::get_current_device_resource_ref();
+  auto const mr = cudf::get_current_device_resource_ref_unsafe();
 
   // Dictionary column index currently being processed
   cudf::size_type dictionary_col_idx = 0;

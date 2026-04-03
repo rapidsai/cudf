@@ -62,17 +62,18 @@ struct bloom_filter_caster {
     using word_type         = typename policy_type::word_type;
 
     // Check if the literal has the same type as the predicate column
-    CUDF_EXPECTS(
-      dtype == literal->get_data_type() and
-        cudf::have_same_types(
-          cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
-          cudf::scalar_type_t<T>(T{}, false, stream, cudf::get_current_device_resource_ref())),
-      "Mismatched predicate column and literal types");
+    CUDF_EXPECTS(dtype == literal->get_data_type() and
+                   cudf::have_same_types(
+                     cudf::column_view{dtype, 0, {}, {}, 0, 0, {}},
+                     cudf::scalar_type_t<T>(
+                       T{}, false, stream, cudf::get_current_device_resource_ref_unsafe())),
+                 "Mismatched predicate column and literal types");
 
     // Filter properties
     auto constexpr bytes_per_block = sizeof(word_type) * policy_type::words_per_block;
 
-    rmm::device_buffer results{total_row_groups, stream, cudf::get_current_device_resource_ref()};
+    rmm::device_buffer results{
+      total_row_groups, stream, cudf::get_current_device_resource_ref_unsafe()};
     cudf::device_span<bool> results_span{static_cast<bool*>(results.data()), total_row_groups};
 
     // Query literal in bloom filters from each column chunk (row group).
@@ -121,7 +122,7 @@ struct bloom_filter_caster {
       cudf::data_type{cudf::type_id::BOOL8},
       static_cast<cudf::size_type>(total_row_groups),
       std::move(results),
-      rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()},
+      rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref_unsafe()},
       0);
   }
 
@@ -501,7 +502,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 
   // Copy bloom filter bitset spans to device
   auto const device_bloom_filter_data = cudf::detail::make_device_uvector_async(
-    bloom_filter_data, stream, cudf::get_current_device_resource_ref());
+    bloom_filter_data, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Create a bloom filter query table caster
   bloom_filter_caster const bloom_filter_col{device_bloom_filter_data,

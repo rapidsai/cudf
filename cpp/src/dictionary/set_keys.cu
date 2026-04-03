@@ -76,7 +76,7 @@ struct set_keys_dispatch_fn {
   {
     // compute sorted-order so the new_keys can be searched more quickly
     auto sorted_indices = cudf::detail::sorted_order(
-      table_view({new_keys}), {}, {}, stream, cudf::get_current_device_resource_ref());
+      table_view({new_keys}), {}, {}, stream, cudf::get_current_device_resource_ref_unsafe());
     auto d_sorted_indices = sorted_indices->view().data<size_type>();
 
     auto const old_keys   = input.keys();

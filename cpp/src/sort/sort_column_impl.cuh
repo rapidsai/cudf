@@ -126,7 +126,7 @@ struct column_sorted_order_fn {
     // For the keys we do an arg-sort of arg-sort to get the rank and use that as a map
     // to sort the indices in rank order.
     // First, get sorted-order of just the keys (slow but expect keys.size <<< indices.size)
-    auto temp_mr = cudf::get_current_device_resource_ref();
+    auto temp_mr = cudf::get_current_device_resource_ref_unsafe();
     auto ordered_indices =
       cudf::detail::sorted_order<method>(keys, order::ASCENDING, null_precedence, stream, temp_mr);
     // Now, sort the ordered indices to get their ordered positions (very fast integer sort)

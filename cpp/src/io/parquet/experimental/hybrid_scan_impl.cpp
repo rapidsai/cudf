@@ -339,7 +339,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
     row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
 
   // Decompress dictionary pages if needed and store uncompressed buffers here
-  auto const mr                          = cudf::get_current_device_resource_ref();
+  auto const mr                          = cudf::get_current_device_resource_ref_unsafe();
   auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
   if (has_compressed_data) {
     // Use the `decompress_page_data` utility to decompress dictionary pages (passed as pass_pages)
@@ -854,7 +854,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _strings_to_categorical       = false;
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
-  _mr        = cudf::get_current_device_resource_ref();
+  _mr        = cudf::get_current_device_resource_ref_unsafe();
 }
 
 void hybrid_scan_reader_impl::initialize_column_selection_options(
@@ -1093,7 +1093,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
       cudf::detail::compute_column(*read_table,
                                    _expr_conv.get_converted_expr().value().get(),
                                    _stream,
-                                   cudf::get_current_device_resource_ref());
+                                   cudf::get_current_device_resource_ref_unsafe());
     CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
 

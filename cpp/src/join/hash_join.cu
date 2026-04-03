@@ -552,7 +552,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   if (_is_empty) { return; }
 
   auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref_unsafe()).first;
   cudf::detail::build_hash_join(_build,
                                 _preprocessed_build,
                                 _hash_table,

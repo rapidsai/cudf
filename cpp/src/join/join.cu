@@ -37,7 +37,7 @@ inner_join(table_view const& left_input,
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left_input, right_input},
     stream,
-    cudf::get_current_device_resource_ref());  // temporary objects returned
+    cudf::get_current_device_resource_ref_unsafe());  // temporary objects returned
 
   // now rebuild the table views with the updated ones
   auto const left      = matched.second.front();
@@ -72,7 +72,7 @@ left_join(table_view const& left_input,
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left_input, right_input},  // these should match
     stream,
-    cudf::get_current_device_resource_ref());  // temporary objects returned
+    cudf::get_current_device_resource_ref_unsafe());  // temporary objects returned
   // now rebuild the table views with the updated ones
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
@@ -97,7 +97,7 @@ full_join(table_view const& left_input,
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left_input, right_input},  // these should match
     stream,
-    cudf::get_current_device_resource_ref());  // temporary objects returned
+    cudf::get_current_device_resource_ref_unsafe());  // temporary objects returned
   // now rebuild the table views with the updated ones
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();

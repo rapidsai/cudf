@@ -408,7 +408,7 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
     normalize_single_quotes(owning_buffers.first,
                             reader_opts.get_delimiter(),
                             stream,
-                            cudf::get_current_device_resource_ref());
+                            cudf::get_current_device_resource_ref_unsafe());
     stream.synchronize();
   }
 
@@ -423,7 +423,7 @@ std::pair<table_with_metadata, std::optional<table_with_metadata>> read_batch(
     normalize_single_quotes(owning_buffers.second.value(),
                             reader_opts.get_delimiter(),
                             stream,
-                            cudf::get_current_device_resource_ref());
+                            cudf::get_current_device_resource_ref_unsafe());
     stream.synchronize();
   }
   buffer = cudf::device_span<char const>(
@@ -574,8 +574,8 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
 
   if (batch_offsets.size() <= 2) {
     // single batch
-    auto has_inserted = insert_partial_tables(
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+    auto has_inserted = insert_partial_tables(read_batch(
+      sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref_unsafe()));
     if (!has_inserted) {
       return table_with_metadata{std::make_unique<table>(std::vector<std::unique_ptr<column>>{}),
                                  {std::vector<column_name_info>{}}};
@@ -584,8 +584,8 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
     // multiple batches
     batched_reader_opts.set_byte_range_offset(batch_offsets[0]);
     batched_reader_opts.set_byte_range_size(batch_offsets[1] - batch_offsets[0]);
-    insert_partial_tables(
-      read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+    insert_partial_tables(read_batch(
+      sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref_unsafe()));
 
     auto& tbl = partial_tables.back().tbl;
     std::vector<column_view> children;
@@ -604,8 +604,8 @@ table_with_metadata read_json_impl(host_span<std::unique_ptr<datasource>> source
       batched_reader_opts.set_byte_range_offset(batch_offsets[batch_offset_pos]);
       batched_reader_opts.set_byte_range_size(batch_offsets[batch_offset_pos + 1] -
                                               batch_offsets[batch_offset_pos]);
-      auto has_inserted = insert_partial_tables(
-        read_batch(sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref()));
+      auto has_inserted = insert_partial_tables(read_batch(
+        sources, batched_reader_opts, stream, cudf::get_current_device_resource_ref_unsafe()));
 
       if (!has_inserted) {
         CUDF_EXPECTS(batch_offset_pos == batch_offsets.size() - 2,
@@ -709,7 +709,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
                   "Currently only single-character delimiters are supported");
     auto const delimiter_source = cuda::make_constant_iterator(delimiter);
     auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
-      delimiter_map, stream, cudf::get_current_device_resource_ref());
+      delimiter_map, stream, cudf::get_current_device_resource_ref_unsafe());
     thrust::scatter(rmm::exec_policy_nosync(stream),
                     delimiter_source,
                     delimiter_source + d_delimiter_map.size(),

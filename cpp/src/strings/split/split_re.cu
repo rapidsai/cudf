@@ -140,7 +140,7 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   auto const end   = begin + strings_count;
 
   auto [offsets, total_tokens] = cudf::detail::make_offsets_child_column(
-    begin, end, stream, cudf::get_current_device_resource_ref());
+    begin, end, stream, cudf::get_current_device_resource_ref_unsafe());
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // build a vector of tokens
@@ -199,7 +199,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   // count the number of delimiters matched in each string
   auto const counts =
-    count_matches(*d_strings, *d_prog, stream, cudf::get_current_device_resource_ref());
+    count_matches(*d_strings, *d_prog, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =

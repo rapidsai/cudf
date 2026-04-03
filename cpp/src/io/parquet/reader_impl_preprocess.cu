@@ -82,7 +82,7 @@ void reader_impl::build_string_dict_indices()
 
   // allocate and distribute pointers
   pass.str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
-    total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref());
+    total_str_dict_indexes, _stream, cudf::get_current_device_resource_ref_unsafe());
 
   auto iter = cuda::counting_iterator<size_t>{0};
   thrust::for_each(
@@ -299,7 +299,7 @@ void reader_impl::allocate_level_decode_space()
 
   // Allocate the total buffer
   subpass.level_decode_data =
-    rmm::device_buffer(total_memory_size, _stream, cudf::get_current_device_resource_ref());
+    rmm::device_buffer(total_memory_size, _stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Set buffer pointers and decoded count for each page using running offsets
   auto* current_ptr = static_cast<uint8_t*>(subpass.level_decode_data.data());
@@ -963,7 +963,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
         .nesting_depth;
 
     auto const d_cols_info = cudf::detail::make_device_uvector_async(
-      h_cols_info, _stream, cudf::get_current_device_resource_ref());
+      h_cols_info, _stream, cudf::get_current_device_resource_ref_unsafe());
 
     // Vector to store page sizes for each column at each depth
     cudf::detail::hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};

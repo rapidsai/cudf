@@ -342,7 +342,7 @@ std::
     5. Return updated buffer, segment lengths and updated segment offsets
    */
   auto inbuf_lengths = cudf::detail::make_device_uvector_async(
-    col_lengths, stream, cudf::get_current_device_resource_ref());
+    col_lengths, stream, cudf::get_current_device_resource_ref_unsafe());
   std::size_t inbuf_lengths_size = inbuf_lengths.size();
   size_type inbuf_size =
     thrust::reduce(rmm::exec_policy_nosync(stream), inbuf_lengths.begin(), inbuf_lengths.end());
@@ -422,7 +422,7 @@ std::
     });
 
   auto stencil = cudf::detail::make_zeroed_device_uvector_async<bool>(
-    static_cast<std::size_t>(inbuf_size), stream, cudf::get_current_device_resource_ref());
+    static_cast<std::size_t>(inbuf_size), stream, cudf::get_current_device_resource_ref_unsafe());
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   cuda::make_constant_iterator(true),
                   cuda::make_constant_iterator(true) + num_deletions,

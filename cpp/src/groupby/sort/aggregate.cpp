@@ -454,7 +454,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
                                                     helper.num_groups(stream),
                                                     null_handling,
                                                     stream,
-                                                    cudf::get_current_device_resource_ref());
+                                                    cudf::get_current_device_resource_ref_unsafe());
   auto const nulls_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
@@ -525,11 +525,12 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
 {
   if (cache.has_result(values, agg)) { return; }
 
-  auto const merged_result   = detail::group_merge_lists(get_grouped_values(),
-                                                       helper.group_offsets(stream),
-                                                       helper.num_groups(stream),
-                                                       stream,
-                                                       cudf::get_current_device_resource_ref());
+  auto const merged_result =
+    detail::group_merge_lists(get_grouped_values(),
+                              helper.group_offsets(stream),
+                              helper.num_groups(stream),
+                              stream,
+                              cudf::get_current_device_resource_ref_unsafe());
   auto const& merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
   cache.add_result(values,
                    agg,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -149,7 +149,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
       return cudf::detail::sequence(group_labels.size(),
                                     *cudf::make_fixed_width_scalar(size_type{0}, stream),
                                     stream,
-                                    cudf::get_current_device_resource_ref());
+                                    cudf::get_current_device_resource_ref_unsafe());
     } else {
       auto sort_order = (rank_agg._method == rank_method::FIRST ? cudf::detail::stable_sorted_order
                                                                        : cudf::detail::sorted_order);
@@ -157,7 +157,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                                {order::ASCENDING, rank_agg._column_order},
                                {null_order::AFTER, rank_agg._null_precedence},
                         stream,
-                        cudf::get_current_device_resource_ref());
+                        cudf::get_current_device_resource_ref_unsafe());
     }
   }();
 
@@ -176,18 +176,18 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                           helper.group_labels(stream),
                           helper.group_offsets(stream),
                           stream,
-                          cudf::get_current_device_resource_ref());
+                          cudf::get_current_device_resource_ref_unsafe());
   if (rank_agg._percentage != rank_percentage::NONE) {
     auto count = get_grouped_values().nullable() and rank_agg._null_handling == null_policy::EXCLUDE
                    ? detail::group_count_valid(get_grouped_values(),
                                                helper.group_labels(stream),
                                                helper.num_groups(stream),
                                                stream,
-                                               cudf::get_current_device_resource_ref())
+                                               cudf::get_current_device_resource_ref_unsafe())
                    : detail::group_count_all(helper.group_offsets(stream),
                                              helper.num_groups(stream),
                                              stream,
-                                             cudf::get_current_device_resource_ref());
+                                             cudf::get_current_device_resource_ref_unsafe());
     result     = detail::group_rank_to_percentage(rank_agg._method,
                                               rank_agg._percentage,
                                               *result,

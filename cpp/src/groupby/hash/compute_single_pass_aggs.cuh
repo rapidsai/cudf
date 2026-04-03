@@ -42,7 +42,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   auto const [values, agg_kinds, aggs, is_agg_intermediate, has_compound_aggs] =
     extract_single_pass_aggs(requests, stream);
   auto const d_agg_kinds = cudf::detail::make_device_uvector_async(
-    agg_kinds, stream, cudf::get_current_device_resource_ref());
+    agg_kinds, stream, cudf::get_current_device_resource_ref_unsafe());
   auto const num_rows = values.num_rows();
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
@@ -125,7 +125,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
   // Now, update the target indices for computing aggregations using the shared memory kernel.
   {
     auto key_transform_map = compute_key_transform_map(
-      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref());
+      num_rows, unique_keys, stream, cudf::get_current_device_resource_ref_unsafe());
     thrust::for_each_n(
       rmm::exec_policy_nosync(stream),
       cuda::counting_iterator<cudf::size_type>{0},

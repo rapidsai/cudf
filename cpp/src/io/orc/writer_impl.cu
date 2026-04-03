@@ -710,7 +710,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
                                            aligned_rgs.count() * sizeof(rowgroup_rows),
                                            stream));
   auto const d_stripes = cudf::detail::make_device_uvector_async(
-    segmentation.stripes, stream, cudf::get_current_device_resource_ref());
+    segmentation.stripes, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // One thread per column, per stripe
   thrust::for_each_n(
@@ -1365,7 +1365,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     }
     //  Copy to device
     auto const d_stat_chunks = cudf::detail::make_device_uvector_async<statistics_chunk>(
-      h_stat_chunks, stream, cudf::get_current_device_resource_ref());
+      h_stat_chunks, stream, cudf::get_current_device_resource_ref_unsafe());
     stats_merge.host_to_device_async(stream);
 
     // Encode and return
@@ -1415,7 +1415,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     num_entries_seen += stripes_per_col;
   }
 
-  auto const& mr    = cudf::get_current_device_resource_ref();
+  auto const& mr    = cudf::get_current_device_resource_ref_unsafe();
   auto const d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, mr);
   auto const d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, mr);
   auto const d_lens = cudf::detail::make_device_uvector_async(h_lens, stream, mr);
@@ -1774,7 +1774,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
 
   // Attach null masks to device column views (async)
   auto const d_mask_ptrs = cudf::detail::make_device_uvector_async(
-    mask_ptrs, stream, cudf::get_current_device_resource_ref());
+    mask_ptrs, stream, cudf::get_current_device_resource_ref_unsafe());
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator<size_t>{0},
@@ -1863,7 +1863,7 @@ orc_table_view make_orc_table_view(table_view const& table,
       return orc_column.orc_kind();
     });
   auto const d_type_kinds = cudf::detail::make_device_uvector_async(
-    type_kinds, stream, cudf::get_current_device_resource_ref());
+    type_kinds, stream, cudf::get_current_device_resource_ref_unsafe());
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
   using stack_value_type =
@@ -1912,7 +1912,7 @@ orc_table_view make_orc_table_view(table_view const& table,
           std::move(d_orc_columns),
           str_col_indexes,
           cudf::detail::make_device_uvector(
-            str_col_indexes, stream, cudf::get_current_device_resource_ref())};
+            str_col_indexes, stream, cudf::get_current_device_resource_ref_unsafe())};
 }
 
 hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view const& orc_table,
@@ -2275,7 +2275,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
       // Create the inverse permutation - i.e. the mapping from the original order to the sorted
       auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
-        sd.data_order, current_stream, cudf::get_current_device_resource_ref());
+        sd.data_order, current_stream, cudf::get_current_device_resource_ref_unsafe());
       thrust::scatter(rmm::exec_policy_nosync(current_stream),
                       cuda::counting_iterator<uint32_t>{0},
                       cuda::counting_iterator{static_cast<uint32_t>(sd.data_order.size())},

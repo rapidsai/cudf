@@ -73,7 +73,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  [](auto const& col) { return *col; });
 
   auto d_views =
-    make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref());
+    make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Compute the partition offsets
   auto offsets = cudf::detail::make_pinned_vector_async<size_t>(views.size() + 1, stream);
@@ -85,7 +85,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     [](auto const& col) { return col.size(); },
     cuda::std::plus{});
   auto d_offsets =
-    make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
+    make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref_unsafe());
   auto const output_size = offsets.back();
 
   return std::make_tuple(

@@ -34,7 +34,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
   // The labels are also a map from each list element to its corresponding zero-based list index.
   auto const labels =
-    generate_labels(input, child.size(), stream, cudf::get_current_device_resource_ref());
+    generate_labels(input, child.size(), stream, cudf::get_current_device_resource_ref_unsafe());
 
   // The offsets of the output lists column.
   auto out_offsets = get_normalized_offsets(input, stream, mr);

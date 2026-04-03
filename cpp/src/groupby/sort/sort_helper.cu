@@ -90,7 +90,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
                                                numeric_scalar<size_type>(0, true, stream),
                                                numeric_scalar<size_type>(1, true, stream),
                                                stream,
-                                               cudf::get_current_device_resource_ref());
+                                               cudf::get_current_device_resource_ref_unsafe());
     return sliced_key_sorted_order();
   }
 
@@ -99,7 +99,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
                               ? std::vector(_keys.num_columns(), null_order::AFTER)
                               : _null_precedence;
     _key_sorted_order     = cudf::detail::stable_sorted_order(
-      _keys, {}, precedence, stream, cudf::get_current_device_resource_ref());
+      _keys, {}, precedence, stream, cudf::get_current_device_resource_ref_unsafe());
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
@@ -115,7 +115,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     }();
 
     _key_sorted_order = cudf::detail::stable_sorted_order(
-      augmented_keys, {}, precedence, stream, cudf::get_current_device_resource_ref());
+      augmented_keys, {}, precedence, stream, cudf::get_current_device_resource_ref_unsafe());
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
@@ -209,7 +209,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
                           scatter_map,
                           table_view({temp_labels->view()}),
                           stream,
-                          cudf::get_current_device_resource_ref());
+                          cudf::get_current_device_resource_ref_unsafe());
 
   _unsorted_keys_labels = std::move(t_unsorted_keys_labels->release()[0]);
 
@@ -221,13 +221,13 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
   auto [row_bitmask, null_count] =
-    cudf::detail::bitmask_and(_keys, stream, cudf::get_current_device_resource_ref());
+    cudf::detail::bitmask_and(_keys, stream, cudf::get_current_device_resource_ref_unsafe());
 
   auto const zero = numeric_scalar<int8_t>(0, true, stream);
   // Create a temporary variable and only set _keys_bitmask_column right before the return.
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto keys_bitmask_column = cudf::detail::sequence(
-    _keys.num_rows(), zero, zero, stream, cudf::get_current_device_resource_ref());
+    _keys.num_rows(), zero, zero, stream, cudf::get_current_device_resource_ref_unsafe());
   keys_bitmask_column->set_null_mask(std::move(row_bitmask), null_count);
 
   _keys_bitmask_column = std::move(keys_bitmask_column);

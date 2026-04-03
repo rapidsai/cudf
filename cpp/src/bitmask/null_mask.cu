@@ -482,7 +482,7 @@ std::vector<size_type> batch_count_set_bits(host_span<bitmask_type const* const>
     std::any_of(bitmasks.begin(), bitmasks.end(), [](auto p) { return p != nullptr; });
   if (!has_bitmask) { return output; }
 
-  auto const tmp_mr     = cudf::get_current_device_resource_ref();
+  auto const tmp_mr     = cudf::get_current_device_resource_ref_unsafe();
   auto const d_bitmasks = cudf::detail::make_device_uvector_async(bitmasks, stream, tmp_mr);
   auto const num_words  = num_bitmask_words(num_bits_to_count);
   auto d_non_zero_count =
@@ -800,7 +800,7 @@ size_type index_of_first_set_bit(bitmask_type const* bitmask,
   auto const mask_words = num_bitmask_words(bit_count);
 
   auto d_index =
-    cudf::detail::device_scalar<size_type>(stream, cudf::get_current_device_resource_ref());
+    cudf::detail::device_scalar<size_type>(stream, cudf::get_current_device_resource_ref_unsafe());
   d_index.set_value_async(bit_count, stream);  // init to no set bits found
 
   constexpr size_type block_size = 256;

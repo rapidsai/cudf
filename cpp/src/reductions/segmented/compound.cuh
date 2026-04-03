@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -61,7 +61,7 @@ std::unique_ptr<column> compound_segmented_reduction(column_view const& col,
                                               offsets,
                                               null_handling,
                                               stream,
-                                              cudf::get_current_device_resource_ref());
+                                              cudf::get_current_device_resource_ref_unsafe());
 
   // Run segmented reduction
   if (col.has_nulls()) {

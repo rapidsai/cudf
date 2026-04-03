@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,7 +24,7 @@ std::unique_ptr<cudf::scalar> quantile(column_view const& col,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
-  auto current_mr = cudf::get_current_device_resource_ref();
+  auto current_mr = cudf::get_current_device_resource_ref_unsafe();
   auto sorted_indices =
     cudf::detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, current_mr);
   auto valid_sorted_indices =

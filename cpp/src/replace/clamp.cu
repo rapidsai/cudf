@@ -142,7 +142,7 @@ std::unique_ptr<cudf::column> clamp_dictionary_column(dictionary_column_view con
     return result;
   }();
   auto matched_view = dictionary_column_view(matched_column->view());
-  auto default_mr   = cudf::get_current_device_resource_ref();
+  auto default_mr   = cudf::get_current_device_resource_ref_unsafe();
 
   // get the indexes for lo_replace and for hi_replace
   auto lo_replace_index =

@@ -233,7 +233,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
                                                   offsets,
                                                   null_policy::EXCLUDE,  // do not count nulls
                                                   stream,
-                                                  cudf::get_current_device_resource_ref());
+                                                  cudf::get_current_device_resource_ref_unsafe());
 
       auto const max_count = thrust::reduce(rmm::exec_policy_nosync(stream),
                                             counts.begin(),

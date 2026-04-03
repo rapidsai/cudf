@@ -307,7 +307,7 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                       search_key,
                                       duplicate_find_option::FIND_FIRST,
                                       stream,
-                                      cudf::get_current_device_resource_ref());
+                                      cudf::get_current_device_resource_ref_unsafe());
   return to_contains(std::move(key_indices), stream, mr);
 }
 
@@ -323,7 +323,7 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                       search_keys,
                                       duplicate_find_option::FIND_FIRST,
                                       stream,
-                                      cudf::get_current_device_resource_ref());
+                                      cudf::get_current_device_resource_ref_unsafe());
   return to_contains(std::move(key_indices), stream, mr);
 }
 

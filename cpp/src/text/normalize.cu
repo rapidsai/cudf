@@ -235,7 +235,9 @@ character_normalizer::character_normalizer(bool do_lower_case,
   }
 
   auto tokens_view = cudf::strings::detail::create_string_vector_from_column(
-    cudf::strings_column_view(sorted->view()), stream, cudf::get_current_device_resource_ref());
+    cudf::strings_column_view(sorted->view()),
+    stream,
+    cudf::get_current_device_resource_ref_unsafe());
 
   _impl = std::make_unique<character_normalizer_impl>(std::move(cp_metadata),
                                                       std::move(aux_table),

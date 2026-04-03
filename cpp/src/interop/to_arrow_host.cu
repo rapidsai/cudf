@@ -460,7 +460,7 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
                    : cudf::strings::detail::string_index_pair{"", 0};
         }));
     auto longer_strings = cudf::strings::detail::make_strings_column(
-      indices, indices + col.size(), stream, cudf::get_current_device_resource_ref());
+      indices, indices + col.size(), stream, cudf::get_current_device_resource_ref_unsafe());
     stream.synchronize();
     auto const sv = cudf::strings_column_view(longer_strings->view());
     return std::pair{std::move(longer_strings), sv};
