@@ -324,7 +324,15 @@ def evaluate_pipeline(
                     collective_id_map=collective_id_map,
                     metadata_collector=metadata_collector,
                 )
-                run_actor_network(actors=nodes, py_executor=executor)
+                # run_actor_network(actors=nodes, py_executor=executor)
+                import gc
+
+                gc.collect()
+                gc.disable()
+                try:
+                    run_actor_network(actors=nodes, py_executor=executor)
+                finally:
+                    gc.enable()
 
             # Extract/return the concatenated result.
             # Keep chunks alive until after concatenation to prevent
