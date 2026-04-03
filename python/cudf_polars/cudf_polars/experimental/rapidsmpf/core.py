@@ -324,15 +324,22 @@ def evaluate_pipeline(
                     collective_id_map=collective_id_map,
                     metadata_collector=metadata_collector,
                 )
+
+                import gc
+
+                # Disable the cyclic GC for the entire actor-network execution
+                # and GPU-data extraction window.  GC can be triggered by any
+                # Python allocation—including allocations deep inside asyncio's
+                # event loop while run_actor_network is executing on a background
+                # thread—and may call __del__ on GPU-adjacent objects from
+                # previous evaluations at an unsafe moment (e.g. while the
+                # rapidsmpf BufferResource is being accessed from a C++ callback,
+                # causing a re-entrancy crash).  After run_actor_network we
+                # explicitly flush accumulated cycles at a provably safe point.
+                gc.disable()
                 run_actor_network(actors=nodes, py_executor=executor)
+                gc.collect()
 
-            import gc
-
-            # Disable the cyclic GC for the entire GPU-data extraction window.
-            # Any Python allocation here can trigger GC, which may collect GPU-backed
-            # objects via __del__ and race with in-flight stream-ordered frees.
-            # We re-enable GC only after all GPU references have been explicitly dropped.
-            gc.disable()
             try:
                 # Extract/return the concatenated result.
                 # Keep chunks alive until after concatenation to prevent
@@ -389,6 +396,12 @@ def evaluate_pipeline(
             # Ensure these are dropped even if a node raises
             # an exception in run_actor_network
             del nodes, output
+
+            # Ensure GC is always re-enabled even if run_actor_network raised
+            # before the extraction try/finally could call gc.enable().
+            import gc
+
+            gc.enable()
 
             # Restore the initial RMM memory resource
             if _original_mr is not None:

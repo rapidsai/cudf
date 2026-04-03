@@ -123,46 +123,50 @@ def evaluate_pipeline_spmd_mode(
         metadata_collector=metadata_collector,
     )
 
-    run_actor_network(actors=nodes, py_executor=py_executor)
+    import gc
 
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        for msg in messages
-    ]
-    dfs: list[DataFrame]
-    if chunks:
-        dfs = [
-            DataFrame.from_table(
+    # Disable the cyclic GC for the entire actor-network execution and
+    # GPU-data extraction window.  See the analogous comment in
+    # evaluate_pipeline for a full explanation.
+    gc.disable()
+    try:
+        run_actor_network(actors=nodes, py_executor=py_executor)
+        gc.collect()  # flush cycles from previous calls at a provably safe point
+
+        messages = output.release()
+        chunks = [
+            TableChunk.from_message(msg).make_available_and_spill(
+                context.br(), allow_overbooking=True
+            )
+            for msg in messages
+        ]
+        dfs: list[DataFrame]
+        if chunks:
+            dfs = [
+                DataFrame.from_table(
+                    chunk.table_view(),
+                    list(ir.schema.keys()),
+                    list(ir.schema.values()),
+                    chunk.stream,
+                )
+                for chunk in chunks
+            ]
+            df = _concat(*dfs, context=ir_context)
+        else:
+            # No chunks received - create an empty DataFrame with correct schema
+            stream = ir_context.get_cuda_stream()
+            chunk = empty_table_chunk(ir, context, stream)
+            df = DataFrame.from_table(
                 chunk.table_view(),
                 list(ir.schema.keys()),
                 list(ir.schema.values()),
-                chunk.stream,
+                stream,
             )
-            for chunk in chunks
-        ]
-        df = _concat(*dfs, context=ir_context)
-    else:
-        # No chunks received - create an empty DataFrame with correct schema
-        stream = ir_context.get_cuda_stream()
-        chunk = empty_table_chunk(ir, context, stream)
-        df = DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            stream,
-        )
 
-    result = df.to_polars()
-
-    # Explicitly drop actor-network objects before returning so that any
-    # GPU-adjacent handles (channel objects, TableChunk references held in
-    # actor coroutine closures, etc.) are freed via refcounting while the
-    # rapidsmpf Context is still live, rather than being deferred to the
-    # next GC cycle at an unpredictable time.
-    del nodes, output
+        result = df.to_polars()
+        del nodes, output
+    finally:
+        gc.enable()
 
     return result, metadata_collector
 
