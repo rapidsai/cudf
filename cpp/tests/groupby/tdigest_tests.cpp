@@ -9,7 +9,7 @@
 #include <cudf_test/tdigest_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/tdigest/tdigest_column_view.hpp>
