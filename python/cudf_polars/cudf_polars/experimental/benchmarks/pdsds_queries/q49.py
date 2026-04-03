@@ -221,8 +221,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 (
                     pl.when(pl.col("ws_net_paid").drop_nulls().count() > 0)
                     .then(
-                        pl.col("wr_return_amt").fill_null(0).sum().cast(pl.Float64)
-                        / pl.col("ws_net_paid").fill_null(0).sum().cast(pl.Float64)
+                        pl.col("wr_return_amt").fill_null(0).sum().round(4)
+                        / pl.col("ws_net_paid").fill_null(0).sum().round(4)
                     )
                     .otherwise(None)
                 ).alias("currency_ratio"),
@@ -272,11 +272,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 (
                     pl.when(pl.col("cs_net_paid").drop_nulls().count() > 0)
                     .then(
-                        pl.col("cr_return_amount")
-                        .fill_null(0)
-                        .sum()
-                        .cast(pl.Float64)  # Note: "amount" not "amt"
-                        / pl.col("cs_net_paid").fill_null(0).sum().cast(pl.Float64)
+                        pl.col("cr_return_amount").fill_null(0).sum().round(4)
+                        / pl.col("cs_net_paid").fill_null(0).sum().round(4)
                     )
                     .otherwise(None)
                 ).alias("currency_ratio"),
@@ -326,8 +323,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 (
                     pl.when(pl.col("ss_net_paid").drop_nulls().count() > 0)
                     .then(
-                        pl.col("sr_return_amt").fill_null(0).sum().cast(pl.Float64)
-                        / pl.col("ss_net_paid").fill_null(0).sum().cast(pl.Float64)
+                        pl.col("sr_return_amt").fill_null(0).sum().round(4)
+                        / pl.col("ss_net_paid").fill_null(0).sum().round(4)
                     )
                     .otherwise(None)
                 ).alias("currency_ratio"),
