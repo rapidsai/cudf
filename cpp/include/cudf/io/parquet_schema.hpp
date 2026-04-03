@@ -253,9 +253,14 @@ struct LogicalType {
     TIMESTAMP,
     // 9 is reserved
     INTEGER = 10,
-    UNKNOWN,
-    JSON,
-    BSON
+    UNKNOWN   = 11,
+    JSON      = 12,
+    BSON      = 13,
+    UUID      = 14,
+    FLOAT16   = 15,
+    VARIANT   = 16,
+    GEOMETRY  = 17,
+    GEOGRAPHY = 18,
   };
 
   /// Logical type

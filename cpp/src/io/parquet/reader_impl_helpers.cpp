@@ -6,6 +6,7 @@
 #include "reader_impl_helpers.hpp"
 
 #include "compact_protocol_reader.hpp"
+#include "parquet_common.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
 #include "ipc/Message_generated.h"
@@ -212,6 +213,8 @@ type_id to_type_id(SchemaElement const& schema,
       // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
       case LogicalType::UNKNOWN: return type_id::STRING;
 
+      case LogicalType::VARIANT: return type_id::STRUCT;
+
       default: break;
     }
   }
@@ -271,8 +274,12 @@ void metadata::sanitize_schema()
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
-      auto const parent_type = schema[schema_elem.parent_idx].converted_type;
-      if (schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
+      auto const& parent_schema = schema[schema_elem.parent_idx];
+      auto const parent_is_variant =
+        parent_schema.logical_type.has_value() &&
+        parent_schema.logical_type->type == LogicalType::VARIANT;
+      auto const parent_type = parent_schema.converted_type;
+      if (not parent_is_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
           schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
         // This is a list of structs, so we need to mark this as a list, but also
@@ -1743,6 +1750,17 @@ aggregate_reader_metadata::select_columns(
         if (one_level_list) { nesting.pop_back(); }
 
         path_is_valid = true;  // If we're able to reach leaf then path is valid
+      }
+
+      if (schema_elem.num_children == 0 and schema_elem.parent_idx >= 0 and
+          schema_elem.type == Type::BYTE_ARRAY) {
+        auto const& parent = get_schema(schema_elem.parent_idx);
+        if (parent.logical_type.has_value() and
+            parent.logical_type->type == LogicalType::VARIANT and
+            (are_column_paths_equal(schema_elem.name, "metadata", false) or
+             are_column_paths_equal(schema_elem.name, "value", false))) {
+          output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY;
+        }
       }
 
       if (path_is_valid) { out_col_array.push_back(std::move(output_col)); }
