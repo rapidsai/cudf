@@ -339,8 +339,14 @@ ConfigureTest(
   io/parquet_test.cpp
   io/parquet_v2_test.cpp
   io/parquet_writer_test.cpp
+  io/parquet_variant_roundtrip_test.cpp
+  io/variant_extract_test.cpp
   GPUS 1
   PERCENT 100
+)
+
+target_compile_definitions(
+  PARQUET_TEST PRIVATE "VARIANT_PARQUET_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data/parquet\""
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
