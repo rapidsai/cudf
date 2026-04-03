@@ -242,19 +242,26 @@ class FixedSizeRollingWindow(Expr):
         self.children = (child,)
         self.is_pointwise = False
 
+    @property
+    def _ddof(self) -> int:
+        return self.fn_params[1] if self.fn_params is not None else 1
+
     def _make_agg_request(self) -> plc.aggregation.Aggregation:
         if self.agg_name == "var":
-            ddof = self.fn_params[1] if self.fn_params is not None else 1
-            return plc.aggregation.variance(ddof=ddof)
+            return plc.aggregation.variance(ddof=self._ddof)
         elif self.agg_name == "std":
-            ddof = self.fn_params[1] if self.fn_params is not None else 1
-            return plc.aggregation.std(ddof=ddof)
-        return {
+            return plc.aggregation.std(ddof=self._ddof)
+        agg_fn = {
             "sum": plc.aggregation.sum,
             "min": plc.aggregation.min,
             "max": plc.aggregation.max,
             "mean": plc.aggregation.mean,
-        }[self.agg_name]()
+        }.get(self.agg_name)
+        if agg_fn is None:
+            raise NotImplementedError(
+                f"Unsupported fixed-size rolling aggregation: {self.agg_name}"
+            )
+        return agg_fn()
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -278,8 +285,7 @@ class FixedSizeRollingWindow(Expr):
         # returns null instead.
         min_periods = self.min_periods
         if self.agg_name in ("var", "std"):
-            ddof = self.fn_params[1] if self.fn_params is not None else 1
-            min_periods = max(min_periods, ddof + 1)
+            min_periods = max(min_periods, self._ddof + 1)
 
         agg_request = self._make_agg_request()
 
