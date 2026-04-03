@@ -297,9 +297,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
         return (
             # Start with the most selective filters: item filter + cs_ui
-            store_sales.join(
-                filtered_items, left_on="ss_item_sk", right_on="i_item_sk"
-            )
+            store_sales.join(filtered_items, left_on="ss_item_sk", right_on="i_item_sk")
             .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
             # date_dim is the next most selective filter
             .join(d1, left_on="ss_sold_date_sk", right_on="d_date_sk")

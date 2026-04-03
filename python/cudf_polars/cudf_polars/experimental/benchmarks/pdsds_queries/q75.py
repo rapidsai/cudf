@@ -140,7 +140,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         date_yr = date_dim.filter(pl.col("d_year") == target_year)
 
         cat = (
-            catalog_sales.join(filtered_items, left_on="cs_item_sk", right_on="i_item_sk")
+            catalog_sales.join(
+                filtered_items, left_on="cs_item_sk", right_on="i_item_sk"
+            )
             .join(date_yr, left_on="cs_sold_date_sk", right_on="d_date_sk")
             .join(
                 catalog_returns,
@@ -150,11 +152,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .with_columns(
                 [
-                    (pl.col("cs_quantity") - pl.col("cr_return_quantity").fill_null(0)).alias("sales_cnt"),
-                    (pl.col("cs_ext_sales_price") - pl.col("cr_return_amount").fill_null(0.0)).alias("sales_amt"),
+                    (
+                        pl.col("cs_quantity")
+                        - pl.col("cr_return_quantity").fill_null(0)
+                    ).alias("sales_cnt"),
+                    (
+                        pl.col("cs_ext_sales_price")
+                        - pl.col("cr_return_amount").fill_null(0.0)
+                    ).alias("sales_amt"),
                 ]
             )
-            .select(["i_brand_id", "i_class_id", "i_category_id", "i_manufact_id", "sales_cnt", "sales_amt"])
+            .select(
+                [
+                    "i_brand_id",
+                    "i_class_id",
+                    "i_category_id",
+                    "i_manufact_id",
+                    "sales_cnt",
+                    "sales_amt",
+                ]
+            )
         )
 
         sto = (
@@ -168,11 +185,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .with_columns(
                 [
-                    (pl.col("ss_quantity") - pl.col("sr_return_quantity").fill_null(0)).alias("sales_cnt"),
-                    (pl.col("ss_ext_sales_price") - pl.col("sr_return_amt").fill_null(0.0)).alias("sales_amt"),
+                    (
+                        pl.col("ss_quantity")
+                        - pl.col("sr_return_quantity").fill_null(0)
+                    ).alias("sales_cnt"),
+                    (
+                        pl.col("ss_ext_sales_price")
+                        - pl.col("sr_return_amt").fill_null(0.0)
+                    ).alias("sales_amt"),
                 ]
             )
-            .select(["i_brand_id", "i_class_id", "i_category_id", "i_manufact_id", "sales_cnt", "sales_amt"])
+            .select(
+                [
+                    "i_brand_id",
+                    "i_class_id",
+                    "i_category_id",
+                    "i_manufact_id",
+                    "sales_cnt",
+                    "sales_amt",
+                ]
+            )
         )
 
         web = (
@@ -186,11 +218,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .with_columns(
                 [
-                    (pl.col("ws_quantity") - pl.col("wr_return_quantity").fill_null(0)).alias("sales_cnt"),
-                    (pl.col("ws_ext_sales_price") - pl.col("wr_return_amt").fill_null(0.0)).alias("sales_amt"),
+                    (
+                        pl.col("ws_quantity")
+                        - pl.col("wr_return_quantity").fill_null(0)
+                    ).alias("sales_cnt"),
+                    (
+                        pl.col("ws_ext_sales_price")
+                        - pl.col("wr_return_amt").fill_null(0.0)
+                    ).alias("sales_amt"),
                 ]
             )
-            .select(["i_brand_id", "i_class_id", "i_category_id", "i_manufact_id", "sales_cnt", "sales_amt"])
+            .select(
+                [
+                    "i_brand_id",
+                    "i_class_id",
+                    "i_category_id",
+                    "i_manufact_id",
+                    "sales_cnt",
+                    "sales_amt",
+                ]
+            )
         )
 
         return (
@@ -205,32 +252,36 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
         )
 
-    curr_yr = build_year_sales(year).with_columns(
-        pl.lit(year, dtype=pl.Int64).alias("curr_d_year")
-    ).select(
-        [
-            pl.col("curr_d_year"),
-            pl.col("i_brand_id").alias("curr_brand_id"),
-            pl.col("i_class_id").alias("curr_class_id"),
-            pl.col("i_category_id").alias("curr_category_id"),
-            pl.col("i_manufact_id").alias("curr_manufact_id"),
-            pl.col("sales_cnt").alias("curr_yr_cnt"),
-            pl.col("sales_amt").alias("curr_yr_amt"),
-        ]
+    curr_yr = (
+        build_year_sales(year)
+        .with_columns(pl.lit(year, dtype=pl.Int64).alias("curr_d_year"))
+        .select(
+            [
+                pl.col("curr_d_year"),
+                pl.col("i_brand_id").alias("curr_brand_id"),
+                pl.col("i_class_id").alias("curr_class_id"),
+                pl.col("i_category_id").alias("curr_category_id"),
+                pl.col("i_manufact_id").alias("curr_manufact_id"),
+                pl.col("sales_cnt").alias("curr_yr_cnt"),
+                pl.col("sales_amt").alias("curr_yr_amt"),
+            ]
+        )
     )
 
-    prev_yr = build_year_sales(year - 1).with_columns(
-        pl.lit(year - 1, dtype=pl.Int64).alias("prev_d_year")
-    ).select(
-        [
-            pl.col("prev_d_year"),
-            pl.col("i_brand_id").alias("prev_brand_id"),
-            pl.col("i_class_id").alias("prev_class_id"),
-            pl.col("i_category_id").alias("prev_category_id"),
-            pl.col("i_manufact_id").alias("prev_manufact_id"),
-            pl.col("sales_cnt").alias("prev_yr_cnt"),
-            pl.col("sales_amt").alias("prev_yr_amt"),
-        ]
+    prev_yr = (
+        build_year_sales(year - 1)
+        .with_columns(pl.lit(year - 1, dtype=pl.Int64).alias("prev_d_year"))
+        .select(
+            [
+                pl.col("prev_d_year"),
+                pl.col("i_brand_id").alias("prev_brand_id"),
+                pl.col("i_class_id").alias("prev_class_id"),
+                pl.col("i_category_id").alias("prev_category_id"),
+                pl.col("i_manufact_id").alias("prev_manufact_id"),
+                pl.col("sales_cnt").alias("prev_yr_cnt"),
+                pl.col("sales_amt").alias("prev_yr_amt"),
+            ]
+        )
     )
 
     sort_by = {"sales_cnt_diff": False, "sales_amt_diff": False}

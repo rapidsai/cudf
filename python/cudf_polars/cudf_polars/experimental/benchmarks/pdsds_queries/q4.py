@@ -321,7 +321,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("c_customer_id").alias("customer_id"),
                     pl.col("c_first_name").alias("customer_first_name"),
                     pl.col("c_last_name").alias("customer_last_name"),
-                pl.col("c_preferred_cust_flag").alias("customer_preferred_cust_flag"),
+                    pl.col("c_preferred_cust_flag").alias(
+                        "customer_preferred_cust_flag"
+                    ),
                 ]
             )
             .sort(sort_cols)
