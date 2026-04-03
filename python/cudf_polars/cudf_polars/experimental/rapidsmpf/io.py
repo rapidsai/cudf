@@ -584,6 +584,7 @@ def make_rapidsmpf_read_parquet_node(
     ch_out: Channel[TableChunk],
     stats: StatsCollector,
     partition_info: PartitionInfo,
+    parquet_options: ParquetOptions,
 ) -> Any | None:
     """
     Make a RapidsMPF read parquet node.
@@ -604,6 +605,8 @@ def make_rapidsmpf_read_parquet_node(
         The statistics collector.
     partition_info
         The partition information.
+    parquet_options
+        The Parquet options.
 
     Returns
     -------
@@ -615,11 +618,14 @@ def make_rapidsmpf_read_parquet_node(
     # Build ParquetReaderOptions
     try:
         stream = context.get_stream_from_pool()
-        parquet_reader_options = (
-            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
-            .decimal_width(plc.TypeId.DECIMAL128)
-            .build()
+        builder = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(ir.paths)
         )
+        if (
+            ir.predicate is not None and parquet_options.use_jit_filter
+        ):  # pragma: no cover; no test yet
+            builder.use_jit_filter(use_jit_filter=True)
+        parquet_reader_options = builder.decimal_width(plc.TypeId.DECIMAL128).build()
 
         if ir.with_columns is not None:
             parquet_reader_options.set_column_names(ir.with_columns)
@@ -722,6 +728,7 @@ def _(
             ch_in,
             rec.state["stats"],
             partition_info,
+            parquet_options,
         )
 
     if native_node is not None and ch_in is not None:
