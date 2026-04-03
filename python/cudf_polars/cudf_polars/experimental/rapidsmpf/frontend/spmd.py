@@ -156,6 +156,14 @@ def evaluate_pipeline_spmd_mode(
         )
 
     result = df.to_polars()
+
+    # Explicitly drop actor-network objects before returning so that any
+    # GPU-adjacent handles (channel objects, TableChunk references held in
+    # actor coroutine closures, etc.) are freed via refcounting while the
+    # rapidsmpf Context is still live, rather than being deferred to the
+    # next GC cycle at an unpredictable time.
+    del nodes, output
+
     return result, metadata_collector
 
 
