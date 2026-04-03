@@ -1537,7 +1537,7 @@ or STRING data_type. The indices represent the corresponding positions of each
 element's value in the keys. The indices child column can have any signed integer type
 (`INT8`, `INT16`, `INT32`, or `INT64`).
 
-The `cudf::dictionary::encode()` API is non-determinant. That is, calling this encode twice on the same
+The `cudf::dictionary::encode()` API is non-deterministic. That is, calling this encode twice on the same
 input column will produce equivalent dictionary columns but the keys may be in a different order
 and therefore the indices will not match as well. Using `cudf::dictionary::decode()` on both dictionary
 columns should produce the same result.
