@@ -42,6 +42,7 @@ from cudf_polars.experimental.utils import (
 if TYPE_CHECKING:
     from collections.abc import Generator, MutableMapping
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.parallel import LowerIRTransformer
 
@@ -61,7 +62,7 @@ class _StructCreate(Expr):
         self.is_pointwise = True
 
     def do_evaluate(
-        self, df, *, context: ExecutionContext = ExecutionContext.FRAME
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         child_columns = [child.evaluate(df, context=context) for child in self.children]
