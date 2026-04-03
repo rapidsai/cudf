@@ -1531,7 +1531,7 @@ the null masks of both struct fields.
 ## Dictionary columns
 
 Dictionaries provide an efficient way to represent low-cardinality data by storing a single copy
-of each value. A dictionary comprises a column of unique keys and a column containing an index into
+of each value. A dictionary comprises a column of distinct keys and a column containing an index into
 the keys column for each row of the parent column. The keys column may have any fixed-width data_type
 or STRING data_type. The indices represent the corresponding positions of each
 element's value in the keys. The indices child column can have any signed integer type
