@@ -49,6 +49,9 @@ option(
          stream to external libraries."
   OFF
 )
+option(CUDF_CATCH_DEFAULT_MR
+       "Error on implicit use of default memory resource in cudf API calls (GCC only)" OFF
+)
 option(DISABLE_DEPRECATION_WARNINGS "Disable warnings generated from deprecated declarations." OFF)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
@@ -101,6 +104,7 @@ message(VERBOSE "CUDF: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}"
 message(VERBOSE
         "CUDF: Build with remote IO (e.g. AWS S3) support through KvikIO: ${CUDF_KVIKIO_REMOTE_IO}"
 )
+message(VERBOSE "CUDF: Error on implicit use of default memory resource: ${CUDF_CATCH_DEFAULT_MR}")
 
 # Set a default build type if none was specified
 rapids_cmake_build_type("Release")
@@ -963,6 +967,11 @@ endif()
 # Disable NVTX if necessary
 if(NOT USE_NVTX)
   target_compile_definitions(cudf PUBLIC NVTX_DISABLE)
+endif()
+
+# Catch implicit use of default memory resource
+if(CUDF_CATCH_DEFAULT_MR)
+  target_compile_definitions(cudf PUBLIC CUDF_CATCH_DEFAULT_MR)
 endif()
 
 # Disable large strings support
