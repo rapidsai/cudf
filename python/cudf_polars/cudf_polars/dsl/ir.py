@@ -60,6 +60,7 @@ from cudf_polars.utils.versions import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
+    from concurrent.futures import Executor
     from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
@@ -116,6 +117,7 @@ class IRExecutionContext:
 
     get_cuda_stream: Callable[[], Stream]
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    executor: Executor | None = field(default=None)
 
     @classmethod
     def from_config_options(

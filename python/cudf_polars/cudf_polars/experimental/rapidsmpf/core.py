@@ -292,39 +292,38 @@ def evaluate_pipeline(
         rmpf_context_manager = Context(comm.logger, br, options)
 
     with rmpf_context_manager as rmpf_context:
-        # Create the IR execution context
-        if use_stream_pool:
-            ir_context = IRExecutionContext(
-                get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
-            )
-        else:
-            ir_context = IRExecutionContext.from_config_options(
-                config_options, query_id=query_id
-            )
-
-        # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
         metadata_collector: list[ChannelMetadata] | None = (
             [] if collect_metadata else None
         )
-        nodes, output = generate_network(
-            rmpf_context,
-            comm,
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            ir_context=ir_context,
-            collective_id_map=collective_id_map,
-            metadata_collector=metadata_collector,
-        )
+        nodes = output = None
 
         try:
-            # Run the network
             with ThreadPoolExecutor(
                 max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
                 thread_name_prefix="cpse",
             ) as executor:
+                if use_stream_pool:
+                    ir_context = IRExecutionContext(
+                        get_cuda_stream=rmpf_context.get_stream_from_pool,
+                        query_id=query_id,
+                        executor=executor,
+                    )
+                else:
+                    ir_context = IRExecutionContext.from_config_options(
+                        config_options, query_id=query_id
+                    )
+                nodes, output = generate_network(
+                    rmpf_context,
+                    comm,
+                    ir,
+                    partition_info,
+                    config_options,
+                    stats,
+                    ir_context=ir_context,
+                    collective_id_map=collective_id_map,
+                    metadata_collector=metadata_collector,
+                )
                 run_actor_network(actors=nodes, py_executor=executor)
 
             # Extract/return the concatenated result.

@@ -25,6 +25,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    _to_thread,
     chunkwise_evaluate,
     empty_table_chunk,
     gather_in_task_group,
@@ -212,7 +213,8 @@ async def default_node_multi(
                 for chunk, child in zip(ready_chunks, ir.children, strict=True)
             ]
             with opaque_memory_usage(extra):
-                df = await asyncio.to_thread(
+                df = await _to_thread(
+                    ir_context.executor,
                     ir.do_evaluate,
                     *ir._non_child_args,
                     *dfs,

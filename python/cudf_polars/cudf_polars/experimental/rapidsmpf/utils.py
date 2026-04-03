@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import itertools
 import operator
 import struct
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from functools import reduce
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
@@ -345,6 +346,14 @@ def _evaluate_chunk_sync(
     return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
 
 
+async def _to_thread(executor: Any, func: Any, /, *args: Any, **kwargs: Any) -> Any:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        executor,
+        partial(contextvars.copy_context().run, func, *args, **kwargs),
+    )
+
+
 async def evaluate_chunk(
     context: Context,
     chunk: TableChunk,
@@ -379,8 +388,8 @@ async def evaluate_chunk(
     )
     with opaque_memory_usage(extra):
         for single_ir in irs:
-            chunk = await asyncio.to_thread(
-                _evaluate_chunk_sync, chunk, single_ir, ir_context
+            chunk = await _to_thread(
+                ir_context.executor, _evaluate_chunk_sync, chunk, single_ir, ir_context
             )
         return chunk
 
@@ -416,7 +425,8 @@ async def concat_batch(
         net_memory_delta=0,
     )
     with opaque_memory_usage(extra):
-        df = await asyncio.to_thread(
+        df = await _to_thread(
+            ir_context.executor,
             _concat,
             *[
                 DataFrame.from_table(

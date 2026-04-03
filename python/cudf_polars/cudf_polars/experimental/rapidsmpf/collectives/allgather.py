@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+import contextvars
+from functools import partial
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
@@ -76,7 +78,7 @@ class AllGatherManager:
         self.allgather.insert_finished()
 
     async def extract_concatenated(
-        self, stream: Stream, *, ordered: bool = True
+        self, stream: Stream, *, ordered: bool = True, executor: Any = None
     ) -> plc.Table:
         """
         Extract the concatenated result.
@@ -87,14 +89,23 @@ class AllGatherManager:
             The stream to use for chunk extraction.
         ordered: bool
             Whether to extract the data in ordered or unordered fashion.
+        executor
+            Thread pool executor to use; None uses the default loop executor.
 
         Returns
         -------
         The concatenated AllGather result.
         """
-        return await asyncio.to_thread(
-            unpack_and_concat,
-            partitions=await self.allgather.extract_all(self.context, ordered=ordered),
-            stream=stream,
-            br=self.context.br(),
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            executor,
+            partial(
+                contextvars.copy_context().run,
+                unpack_and_concat,
+                partitions=await self.allgather.extract_all(
+                    self.context, ordered=ordered
+                ),
+                stream=stream,
+                br=self.context.br(),
+            ),
         )

@@ -135,7 +135,9 @@ async def _compute_sort_boundaries(
         )
         allgather.insert(comm.rank, chunk)
         allgather.insert_finished()
-        concat_table = await allgather.extract_concatenated(stream, ordered=True)
+        concat_table = await allgather.extract_concatenated(
+            stream, ordered=True, executor=ir_context.executor
+        )
         return _get_final_sort_boundaries(
             DataFrame.from_table(
                 concat_table,

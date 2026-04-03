@@ -153,7 +153,9 @@ async def concatenate_node(
             allgather.insert_finished()
 
             # Extract concatenated result
-            result_table = await allgather.extract_concatenated(stream)
+            result_table = await allgather.extract_concatenated(
+                stream, executor=ir_context.executor
+            )
             if tracer is not None:
                 tracer.add_chunk(table=result_table)
 

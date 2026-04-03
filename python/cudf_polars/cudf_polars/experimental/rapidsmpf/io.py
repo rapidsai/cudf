@@ -49,6 +49,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 )
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    _to_thread,
     chunk_to_frame,
     empty_table_chunk,
     gather_in_task_group,
@@ -383,7 +384,8 @@ async def read_chunk(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     ):
-        df = await asyncio.to_thread(
+        df = await _to_thread(
+            ir_context.executor,
             scan.do_evaluate,
             *scan._non_child_args,
             context=ir_context,
@@ -825,7 +827,8 @@ async def sink_node(
                 )
                 df = chunk_to_frame(chunk, child_ir)
                 part_path = f"{path_root}.{str(i).zfill(count_width)}.{suffix}"
-                await asyncio.to_thread(
+                await _to_thread(
+                    ir_context.executor,
                     Sink.do_evaluate,
                     ir.sink.schema,
                     ir.sink.kind,
@@ -845,7 +848,8 @@ async def sink_node(
                 )
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
-                writer_state = await asyncio.to_thread(
+                writer_state = await _to_thread(
+                    ir_context.executor,
                     _sink_to_file,
                     ir.sink.kind,
                     ir.sink.path,
@@ -858,7 +862,7 @@ async def sink_node(
             if writer_state and ir.sink.kind == "Parquet":
                 # We know that with ir.sink.kind == "Parquet", writer_state being truthy
                 # means that it's a ChunkedParquetWriter.
-                await asyncio.to_thread(writer_state.close, [])  # type: ignore[attr-defined]
+                await _to_thread(ir_context.executor, writer_state.close, [])
 
         # Signal completion on the metadata and data channels with empty results
         stream = ir_context.get_cuda_stream()

@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -35,6 +34,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import default_node_multi
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
+    _to_thread,
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
@@ -192,7 +192,9 @@ async def _collect_small_side_for_broadcast(
         stream = ir_context.get_cuda_stream()
         dfs = [
             DataFrame.from_table(
-                await allgather.extract_concatenated(stream),
+                await allgather.extract_concatenated(
+                    stream, executor=ir_context.executor
+                ),
                 list(ir.schema.keys()),
                 list(ir.schema.values()),
                 stream,
@@ -253,7 +255,8 @@ async def _broadcast_join_large_chunk(
         await reserve_memory(context, size=input_bytes, net_memory_delta=0)
     ):
         for sdf in dfs_to_join:
-            result = await asyncio.to_thread(
+            result = await _to_thread(
+                ir_context.executor,
                 ir.do_evaluate,
                 *ir._non_child_args,
                 *([large_df, sdf] if broadcast_side == "right" else [sdf, large_df]),
@@ -454,7 +457,8 @@ async def _join_chunks(
         with opaque_memory_usage(
             await reserve_memory(context, size=input_bytes, net_memory_delta=0)
         ):
-            df = await asyncio.to_thread(
+            df = await _to_thread(
+                ir_context.executor,
                 ir.do_evaluate,
                 *ir._non_child_args,
                 chunk_to_frame(left_chunk, left),
