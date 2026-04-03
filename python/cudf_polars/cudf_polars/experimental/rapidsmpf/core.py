@@ -324,64 +324,67 @@ def evaluate_pipeline(
                     collective_id_map=collective_id_map,
                     metadata_collector=metadata_collector,
                 )
-                # run_actor_network(actors=nodes, py_executor=executor)
-                import gc
+                run_actor_network(actors=nodes, py_executor=executor)
 
-                gc.collect()
-                gc.disable()
-                try:
-                    run_actor_network(actors=nodes, py_executor=executor)
-                finally:
-                    gc.enable()
+            import gc
 
-            # Extract/return the concatenated result.
-            # Keep chunks alive until after concatenation to prevent
-            # use-after-free with stream-ordered allocations
-            messages = output.release()
-            chunks = [
-                TableChunk.from_message(msg).make_available_and_spill(
-                    br, allow_overbooking=True
-                )
-                for msg in messages
-            ]
-            dfs: list[DataFrame] = []
-            if chunks:
-                col_names = list(ir.schema.keys())
-                col_dtypes = list(ir.schema.values())
-                dfs = [
-                    DataFrame.from_table(
-                        chunk.table_view(), col_names, col_dtypes, chunk.stream
+            # Disable the cyclic GC for the entire GPU-data extraction window.
+            # Any Python allocation here can trigger GC, which may collect GPU-backed
+            # objects via __del__ and race with in-flight stream-ordered frees.
+            # We re-enable GC only after all GPU references have been explicitly dropped.
+            gc.disable()
+            try:
+                # Extract/return the concatenated result.
+                # Keep chunks alive until after concatenation to prevent
+                # use-after-free with stream-ordered allocations
+                messages = output.release()
+                chunks = [
+                    TableChunk.from_message(msg).make_available_and_spill(
+                        br, allow_overbooking=True
                     )
-                    for chunk in chunks
+                    for msg in messages
                 ]
-                if len(dfs) == 1:
-                    df = dfs[0]
-                else:
-                    with ir_context.stream_ordered_after(*dfs) as stream:
-                        df = DataFrame.from_table(
-                            plc.concatenate.concatenate(
-                                [d.table for d in dfs], stream=stream
-                            ),
-                            col_names,
-                            col_dtypes,
-                            stream,
+                dfs: list[DataFrame] = []
+                if chunks:
+                    col_names = list(ir.schema.keys())
+                    col_dtypes = list(ir.schema.values())
+                    dfs = [
+                        DataFrame.from_table(
+                            chunk.table_view(), col_names, col_dtypes, chunk.stream
                         )
-            else:
-                # No chunks received - create an empty DataFrame with correct schema
-                stream = ir_context.get_cuda_stream()
-                chunk = empty_table_chunk(ir, rmpf_context, stream)
-                df = DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    stream,
-                )
+                        for chunk in chunks
+                    ]
+                    if len(dfs) == 1:
+                        df = dfs[0]
+                    else:
+                        with ir_context.stream_ordered_after(*dfs) as stream:
+                            df = DataFrame.from_table(
+                                plc.concatenate.concatenate(
+                                    [d.table for d in dfs], stream=stream
+                                ),
+                                col_names,
+                                col_dtypes,
+                                stream,
+                            )
+                else:
+                    # No chunks received - create an empty DataFrame with correct schema
+                    stream = ir_context.get_cuda_stream()
+                    chunk = empty_table_chunk(ir, rmpf_context, stream)
+                    df = DataFrame.from_table(
+                        chunk.table_view(),
+                        list(ir.schema.keys()),
+                        list(ir.schema.values()),
+                        stream,
+                    )
 
-            result = df.to_polars()
+                result = df.to_polars()
 
-            # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync runs
-            # before the Context, which ultimately contains the rmm MR, goes out of scope.
-            del messages, chunks, dfs, df
+                # Now we need to drop *all* GPU data. This ensures that no cudaFreeAsync
+                # runs before the Context, which ultimately contains the rmm MR, goes
+                # out of scope.
+                del messages, chunks, dfs, df
+            finally:
+                gc.enable()
         finally:
             # Ensure these are dropped even if a node raises
             # an exception in run_actor_network
