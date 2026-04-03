@@ -1,10 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -38,45 +40,8 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    return (cudf::is_fixed_width<T>() and
-            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
-             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
-             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
-             k == aggregation::SUM_OF_SQUARES or k == aggregation::M2 or k == aggregation::STD or
-             k == aggregation::VARIANCE or
-             (k == aggregation::PRODUCT and is_product_supported<T>()))) or
+    return is_identity_supported<T, k>() or
            (k == aggregation::SUM_WITH_OVERFLOW and std::is_same_v<T, cudf::struct_view>);
-  }
-
-  template <typename T, aggregation::Kind k>
-  T identity_from_operator()
-    requires(not std::is_same_v<corresponding_operator_t<k>, void>)
-  {
-    using DeviceType = device_storage_type_t<T>;
-    return corresponding_operator_t<k>::template identity<DeviceType>();
-  }
-
-  template <typename T, aggregation::Kind k>
-  T identity_from_operator()
-    requires(std::is_same_v<corresponding_operator_t<k>, void>)
-  {
-    CUDF_FAIL("Unable to get identity/sentinel from device operator");
-  }
-
-  template <typename T, aggregation::Kind k>
-  T get_identity()
-  {
-    if (k == aggregation::ARGMAX || k == aggregation::ARGMIN) {
-      if constexpr (cudf::is_timestamp<T>())
-        return k == aggregation::ARGMAX ? T{typename T::duration(ARGMAX_SENTINEL)}
-                                        : T{typename T::duration(ARGMIN_SENTINEL)};
-      else {
-        using DeviceType = device_storage_type_t<T>;
-        return k == aggregation::ARGMAX ? static_cast<DeviceType>(ARGMAX_SENTINEL)
-                                        : static_cast<DeviceType>(ARGMIN_SENTINEL);
-      }
-    }
-    return identity_from_operator<T, k>();
   }
 
  public:
