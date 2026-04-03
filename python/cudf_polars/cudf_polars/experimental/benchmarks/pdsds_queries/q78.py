@@ -139,7 +139,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["d_year", "ws_item_sk", "ws_bill_customer_sk"])
         .agg(
             [
-                pl.col("d_year").first().alias("ws_sold_year"),
                 pl.when(pl.col("ws_quantity").count() > 0)
                 .then(pl.col("ws_quantity").sum())
                 .otherwise(None)
@@ -154,6 +153,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .alias("ws_sp"),
             ]
         )
+        .rename({"d_year": "ws_sold_year"})
         .select(
             [
                 "ws_sold_year",
@@ -177,7 +177,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["d_year", "cs_item_sk", "cs_bill_customer_sk"])
         .agg(
             [
-                pl.col("d_year").first().alias("cs_sold_year"),
                 pl.when(pl.col("cs_quantity").count() > 0)
                 .then(pl.col("cs_quantity").sum())
                 .otherwise(None)
@@ -192,6 +191,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .alias("cs_sp"),
             ]
         )
+        .rename({"d_year": "cs_sold_year"})
         .select(
             [
                 "cs_sold_year",
@@ -215,7 +215,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["d_year", "ss_item_sk", "ss_customer_sk"])
         .agg(
             [
-                pl.col("d_year").first().alias("ss_sold_year"),
                 pl.when(pl.col("ss_quantity").count() > 0)
                 .then(pl.col("ss_quantity").sum())
                 .otherwise(None)
@@ -230,6 +229,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .alias("ss_sp"),
             ]
         )
+        .rename({"d_year": "ss_sold_year"})
     )
     result = (
         ss.join(
