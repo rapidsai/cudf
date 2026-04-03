@@ -35,7 +35,7 @@ TEST_F(ValidIfTest, EmptyRange)
                                        cuda::counting_iterator<cudf::size_type>{0},
                                        odds_valid{},
                                        cudf::get_default_stream(),
-                                       cudf::get_current_device_resource_ref());
+                                       cudf::get_current_device_resource_ref_unsafe());
   auto const& buffer = actual.first;
   EXPECT_EQ(0u, buffer.size());
   EXPECT_EQ(nullptr, buffer.data());
@@ -48,7 +48,7 @@ TEST_F(ValidIfTest, InvalidRange)
                                       cuda::counting_iterator<cudf::size_type>{0},
                                       odds_valid{},
                                       cudf::get_default_stream(),
-                                      cudf::get_current_device_resource_ref()),
+                                      cudf::get_current_device_resource_ref_unsafe()),
                cudf::logic_error);
 }
 
@@ -60,7 +60,7 @@ TEST_F(ValidIfTest, OddsValid)
                                        cuda::counting_iterator<cudf::size_type>{10000},
                                        odds_valid{},
                                        cudf::get_default_stream(),
-                                       cudf::get_current_device_resource_ref());
+                                       cudf::get_current_device_resource_ref_unsafe());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(5000, actual.second);
   EXPECT_EQ(expected.second, actual.second);
@@ -74,7 +74,7 @@ TEST_F(ValidIfTest, AllValid)
                                        cuda::counting_iterator<cudf::size_type>{10000},
                                        all_valid{},
                                        cudf::get_default_stream(),
-                                       cudf::get_current_device_resource_ref());
+                                       cudf::get_current_device_resource_ref_unsafe());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(0, actual.second);
   EXPECT_EQ(expected.second, actual.second);
@@ -88,7 +88,7 @@ TEST_F(ValidIfTest, AllNull)
                                        cuda::counting_iterator<cudf::size_type>{10000},
                                        all_null{},
                                        cudf::get_default_stream(),
-                                       cudf::get_current_device_resource_ref());
+                                       cudf::get_current_device_resource_ref_unsafe());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.first.data(), actual.first.data(), expected.first.size());
   EXPECT_EQ(10000, actual.second);
   EXPECT_EQ(expected.second, actual.second);

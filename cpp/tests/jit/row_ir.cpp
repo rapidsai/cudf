@@ -258,7 +258,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
                                           add_op,
                                           args,
                                           cudf::get_default_stream(),
-                                          cudf::get_current_device_resource_ref());
+                                          cudf::get_current_device_resource_ref_unsafe());
 
   ASSERT_EQ(transform_args.scalar_columns.size(), 1);
   ASSERT_EQ(transform_args.scalar_columns[0]->view().size(), 1);

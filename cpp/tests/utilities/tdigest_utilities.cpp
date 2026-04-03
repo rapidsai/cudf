@@ -45,11 +45,11 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
     });
 
   auto d_expected_src = cudf::detail::make_device_uvector_async(
-    h_expected_src, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    h_expected_src, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
   auto d_expected_mean = cudf::detail::make_device_uvector_async(
-    h_expected_mean, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    h_expected_mean, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
   auto d_expected_weight = cudf::detail::make_device_uvector_async(
-    h_expected_weight, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    h_expected_weight, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
 
   auto map = cudf::device_span<cudf::size_type const>(d_expected_src);
   auto sampled_result_mean =

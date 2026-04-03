@@ -130,7 +130,7 @@ void run_test(std::string const& input, bool enable_lines = true)
 
   // Parse the JSON and get the token stream
   auto const [tokens_gpu, token_indices_gpu] = cudf::io::json::detail::get_token_stream(
-    d_input, options, stream, cudf::get_current_device_resource_ref());
+    d_input, options, stream, cudf::get_current_device_resource_ref_unsafe());
 
   // Get the JSON's tree representation
   auto gpu_tree =
@@ -138,7 +138,7 @@ void run_test(std::string const& input, bool enable_lines = true)
                                                token_indices_gpu,
                                                options.is_enabled_mixed_types_as_string(),
                                                stream,
-                                               cudf::get_current_device_resource_ref());
+                                               cudf::get_current_device_resource_ref_unsafe());
 
   bool const is_array_of_arrays = [&]() {
     std::array<cuio_json::node_t, 2> h_node_categories = {cuio_json::NC_ERR, cuio_json::NC_ERR};
@@ -154,14 +154,14 @@ void run_test(std::string const& input, bool enable_lines = true)
            h_node_categories[1] == cuio_json::NC_LIST;
   }();
 
-  auto tup =
-    cuio_json::detail::records_orient_tree_traversal(d_input,
-                                                     gpu_tree,
-                                                     is_array_of_arrays,
-                                                     options.is_enabled_lines(),
-                                                     false,
-                                                     stream,
-                                                     cudf::get_current_device_resource_ref());
+  auto tup = cuio_json::detail::records_orient_tree_traversal(
+    d_input,
+    gpu_tree,
+    is_array_of_arrays,
+    options.is_enabled_lines(),
+    false,
+    stream,
+    cudf::get_current_device_resource_ref_unsafe());
   auto& gpu_col_id      = std::get<0>(tup);
   auto& gpu_row_offsets = std::get<1>(tup);
 

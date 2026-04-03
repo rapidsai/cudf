@@ -123,7 +123,7 @@ TEST_F(StringScalarDeviceViewTest, Value)
   cudf::detail::device_scalar<bool> result{cudf::get_default_stream()};
   auto value_v = cudf::detail::make_device_uvector(cudf::host_span<char const>{value},
                                                    cudf::get_default_stream(),
-                                                   cudf::get_current_device_resource_ref());
+                                                   cudf::get_current_device_resource_ref_unsafe());
 
   test_string_value<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     scalar_device_view, value_v.data(), value.size(), result.data());

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -341,7 +341,7 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
   std::fill_n(h_input.begin(), 4, 0);
   std::fill(h_input.begin() + 3533, h_input.end(), 10000);
   auto d_input = cudf::detail::make_device_uvector(
-    h_input, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    h_input, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
   auto input    = cudf::column_view(cudf::device_span<int64_t const>(d_input));
   auto segments = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 3533, 3535});
   // full sort should match handcrafted input data here

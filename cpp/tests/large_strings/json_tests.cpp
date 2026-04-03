@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -117,7 +117,7 @@ TEST_P(JsonLargeReaderTest, MultiBatch)
                                              cjson_lines_options,
                                              chunk_size,
                                              cudf::get_default_stream(),
-                                             cudf::get_current_device_resource_ref());
+                                             cudf::get_current_device_resource_ref_unsafe());
 
     auto table_views = std::vector<cudf::table_view>(tables.size());
     std::transform(tables.begin(), tables.end(), table_views.begin(), [](auto& table) {

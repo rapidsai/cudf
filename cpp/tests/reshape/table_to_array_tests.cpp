@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -51,7 +51,7 @@ TYPED_TEST(TableToDeviceArrayTypedTest, SupportedTypes)
 {
   using T     = TypeParam;
   auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  auto mr     = cudf::get_current_device_resource_ref_unsafe();
 
   int nrows = 3;
   int ncols = 4;
@@ -103,7 +103,7 @@ TYPED_TEST(FixedPointTableToDeviceArrayTest, SupportedFixedPointTypes)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  auto mr     = cudf::get_current_device_resource_ref_unsafe();
   auto scale  = numeric::scale_type{-2};
 
   fp_wrapper col0({123, 456, 789}, scale);

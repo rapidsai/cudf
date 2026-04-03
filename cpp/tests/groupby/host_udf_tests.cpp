@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -138,7 +138,7 @@ TEST_F(HostUDFTest, GroupbyBuiltinInput)
   cudf::groupby::groupby gb_obj(
     cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
   [[maybe_unused]] auto const grp_result = gb_obj.aggregate(
-    requests, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
+    requests, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
   EXPECT_TRUE(test_run);
 }
 
@@ -161,7 +161,7 @@ TEST_F(HostUDFTest, GroupbyWithCallingOtherAggregations)
     cudf::groupby::groupby gb_obj(
       cudf::table_view({keys}), cudf::null_policy::INCLUDE, cudf::sorted::NO, {}, {});
     [[maybe_unused]] auto const grp_result = gb_obj.aggregate(
-      requests, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
+      requests, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
     EXPECT_TRUE(test_run);
   }
 }

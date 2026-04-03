@@ -128,9 +128,9 @@ void test_hybrid_scan(std::vector<cudf::column_view> const& columns,
     cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
 
   auto stream     = cudf::get_default_stream();
-  auto mr         = cudf::get_current_device_resource_ref();
+  auto mr         = cudf::get_current_device_resource_ref_unsafe();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref_unsafe(), bloom_filter_alignment);
 
   auto datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
@@ -302,9 +302,9 @@ TEST_F(HybridScanTest, FilterRowGroupsOnlyAndScanSelectColumns)
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   auto stream     = cudf::get_default_stream();
-  auto mr         = cudf::get_current_device_resource_ref();
+  auto mr         = cudf::get_current_device_resource_ref_unsafe();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref_unsafe(), bloom_filter_alignment);
   auto constexpr case_sensitive_names = false;
 
   // No column selection (all columns)
@@ -370,9 +370,9 @@ TEST_F(HybridScanTest, FilterDataPagesOnlyAndScanAllColumns)
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   auto stream     = cudf::get_default_stream();
-  auto mr         = cudf::get_current_device_resource_ref();
+  auto mr         = cudf::get_current_device_resource_ref_unsafe();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref_unsafe(), bloom_filter_alignment);
   auto constexpr case_sensitive_names = false;
 
   auto const payload_column_indices = std::vector<cudf::size_type>{1, 2};
@@ -746,9 +746,9 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
   auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
 
   auto stream     = cudf::get_default_stream();
-  auto mr         = cudf::get_current_device_resource_ref();
+  auto mr         = cudf::get_current_device_resource_ref_unsafe();
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+    cudf::get_current_device_resource_ref_unsafe(), bloom_filter_alignment);
 
   // Create datasource from buffer
   auto const datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
@@ -834,7 +834,7 @@ TEST_F(HybridScanTest, DecimalTypeOption)
   }
 
   auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
+  auto const mr     = cudf::get_current_device_resource_ref_unsafe();
   auto datasource   = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
 
@@ -891,7 +891,7 @@ TEST_F(HybridScanTest, StructChildFilterColumn)
   }
 
   auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  auto mr     = cudf::get_current_device_resource_ref_unsafe();
 
   auto const col_ref = cudf::ast::column_name_reference("struct.a");
   auto scalar_val    = cudf::numeric_scalar<int32_t>(3);
@@ -935,7 +935,7 @@ TEST_F(HybridScanTest, RowGroupPassesMatchesChunkedReader)
   auto chunk_table = cudf::table_view{{col0, col1}};
 
   auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
+  auto const mr     = cudf::get_current_device_resource_ref_unsafe();
 
   std::string parquet_filepath =
     temp_env->get_temp_filepath("RowGroupPassesMatchesChunkedReader.parquet");

@@ -33,7 +33,7 @@ TEST(BatchedMemcpyTest, BasicTest)
 
   // Device init
   auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref();
+  auto mr     = cudf::get_current_device_resource_ref_unsafe();
 
   // Buffer lengths (in number of elements)
   std::vector<std::size_t> const h_lens{

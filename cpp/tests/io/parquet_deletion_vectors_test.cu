@@ -427,7 +427,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
   }
 
   auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
+  auto const mr     = cudf::get_current_device_resource_ref_unsafe();
 
   // cuCollections roaring bitmap from the serialized roaring64 bitmap bytes
   auto roaring_bitmap =
@@ -462,7 +462,7 @@ TEST_F(ParquetDeletionVectorsTest, NoRowIndexColumn)
   static_assert(num_rows % num_row_groups == 0, "num_rows must be a multiple of num_row_groups");
 
   auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
+  auto const mr     = cudf::get_current_device_resource_ref_unsafe();
 
   auto input_table = create_random_fixed_table<float>(num_columns, num_rows, include_validity);
 
@@ -527,7 +527,7 @@ TEST_F(ParquetDeletionVectorsTest, CustomRowIndexColumn)
   static_assert(num_rows % num_row_groups == 0, "num_rows must be a multiple of num_row_groups");
 
   auto const stream = cudf::get_default_stream();
-  auto const mr     = cudf::get_current_device_resource_ref();
+  auto const mr     = cudf::get_current_device_resource_ref_unsafe();
 
   auto input_table = create_random_fixed_table<float>(num_columns, num_rows, include_validity);
 
