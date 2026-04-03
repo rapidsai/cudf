@@ -18,8 +18,8 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <cmath>
@@ -719,8 +719,8 @@ void aggregate_reader_metadata::initialize_internals(bool use_arrow_schema,
     // the input sources. This avoids recomputing this within build_column() and
     // populate_metadata().
     std::for_each(
-      thrust::make_counting_iterator(static_cast<size_t>(1)),
-      thrust::make_counting_iterator(schema.size()),
+      cuda::counting_iterator{static_cast<size_t>(1)},
+      cuda::counting_iterator{schema.size()},
       [&](auto const schema_idx) {
         if (schema[schema_idx].repetition_type == FieldRepetitionType::REQUIRED and
             std::any_of(
@@ -808,12 +808,11 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
       if (field_children != nullptr) {
         auto schema_children = std::vector<arrow_schema_data_types>(field->children()->size());
 
-        if (not std::all_of(
-              thrust::make_counting_iterator(0),
-              thrust::make_counting_iterator(static_cast<int32_t>(field_children->size())),
-              [&](auto const& idx) {
-                return walk_field((*field_children)[idx], schema_children[idx]);
-              })) {
+        if (not std::all_of(cuda::counting_iterator<int32_t>{0},
+                            cuda::counting_iterator{static_cast<int32_t>(field_children->size())},
+                            [&](auto const& idx) {
+                              return walk_field((*field_children)[idx], schema_children[idx]);
+                            })) {
           return false;
         }
         // arrow and parquet schemas are structured slightly differently for list type fields. list
@@ -897,8 +896,8 @@ arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
     schema.children = std::vector<arrow_schema_data_types>(fields->size());
 
     if (not std::all_of(
-          thrust::make_counting_iterator(0),
-          thrust::make_counting_iterator(static_cast<int32_t>(fields->size())),
+          cuda::counting_iterator<int32_t>{0},
+          cuda::counting_iterator{static_cast<int32_t>(fields->size())},
           [&](auto const& idx) { return walk_field((*fields)[idx], schema.children[idx]); })) {
       return {};
     }
@@ -1130,13 +1129,13 @@ aggregate_reader_metadata::get_column_chunk_metadata() const
       auto total_uncompressed_sizes = std::vector<int64_t>{};
       total_uncompressed_sizes.reserve(num_row_groups);
       // For each input source
-      std::for_each(thrust::counting_iterator<size_t>(0),
-                    thrust::counting_iterator(per_file_metadata.size()),
+      std::for_each(cuda::counting_iterator<size_t>{0},
+                    cuda::counting_iterator{per_file_metadata.size()},
                     [&](auto const& src_idx) {
                       auto const& file_metadata = per_file_metadata[src_idx];
                       // For each row group in this source
-                      std::transform(thrust::counting_iterator<size_t>(0),
-                                     thrust::counting_iterator(file_metadata.row_groups.size()),
+                      std::transform(cuda::counting_iterator<size_t>{0},
+                                     cuda::counting_iterator{file_metadata.row_groups.size()},
                                      std::back_inserter(total_uncompressed_sizes),
                                      [&](auto const& row_group_idx) {
                                        // Return `total_uncompressed_size` of this column's chunk
@@ -1296,8 +1295,8 @@ aggregate_reader_metadata::apply_row_bounds_filter(
 
   // For each data source
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(num_sources),
+    cuda::counting_iterator<size_t>{0},
+    cuda::counting_iterator{num_sources},
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
       auto const num_row_groups = input_row_group_indices[src_idx].size();
@@ -1584,8 +1583,8 @@ aggregate_reader_metadata::select_row_groups(
 
   // For each data source
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(current_row_group_indices.size()),
+    cuda::counting_iterator<size_t>{0},
+    cuda::counting_iterator{current_row_group_indices.size()},
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
 
@@ -1841,8 +1840,8 @@ aggregate_reader_metadata::select_columns(
                      "column in the selected path",
                      std::out_of_range);
 
-        std::for_each(thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(src_schema_elem.num_children),
+        std::for_each(cuda::counting_iterator<int32_t>{0},
+                      cuda::counting_iterator{src_schema_elem.num_children},
                       [&](auto const child_idx) {
                         map_column(nullptr,
                                    src_schema_elem.children_idx[child_idx],
@@ -2017,8 +2016,8 @@ aggregate_reader_metadata::select_columns(
 
         // Map the column's schema_idx across the rest of the data sources if required.
         if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
-          std::for_each(thrust::make_counting_iterator(static_cast<size_t>(1)),
-                        thrust::make_counting_iterator(per_file_metadata.size()),
+          std::for_each(cuda::counting_iterator{static_cast<size_t>(1)},
+                        cuda::counting_iterator{per_file_metadata.size()},
                         [&](auto const pfm_idx) {
                           auto const& dst_root = get_schema(0, pfm_idx);
                           // Ensure that each top level column exists in the destination schema
