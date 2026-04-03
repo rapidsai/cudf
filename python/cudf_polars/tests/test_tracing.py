@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import textwrap
@@ -111,9 +112,73 @@ def test_log_query_plan() -> None:
         [sys.executable, "-c", code], env=env, stderr=subprocess.STDOUT
     )
 
-    # Check for Query Plan event
+    # Check for Query Plan event generated from SerializablePlan
     assert b"Query Plan" in result
     assert b"scope=plan" in result or b"'scope': 'plan'" in result
-    assert b"ir_id" in result
-    assert b"ir_type" in result
-    assert b"children_ir_ids" in result
+    assert b"actor_ir_id" in result
+    assert b"actor_ir_type" in result
+    assert b"children" in result
+
+
+@pytest.mark.skipif(
+    os.environ.get("CUDF_POLARS_LOG_TRACES") != "1",
+    reason="Requires CUDF_POLARS_LOG_TRACES=1.",
+)
+def test_sets_cudf_polars_query_id():
+    pytest.importorskip("rapidsmpf")
+    left = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    right = pl.LazyFrame({"a": [1, 2, 3], "c": [7, 8, 9]})
+
+    q = left.join(right, on="a", how="inner").select(
+        pl.col("b") + pl.col("c").alias("d")
+    )
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"runtime": "rapidsmpf"},
+    )
+
+    with structlog.testing.capture_logs(
+        processors=[structlog.contextvars.merge_contextvars]
+    ) as cap:
+        q.collect(engine=engine)
+
+    assert len(cap) > 0
+    plan_log = cap[0]
+    assert "scope" in plan_log
+    assert plan_log["scope"] == "plan"
+    assert "cudf_polars_query_id" in plan_log
+    query_id = plan_log["cudf_polars_query_id"]
+
+    for log in cap:
+        assert "scope" in log
+        assert "cudf_polars_query_id" in log
+        assert log["cudf_polars_query_id"] == query_id
+
+        match log["scope"]:
+            case "plan":
+                assert "plan" in log
+            case "actor":
+                keys = set(log.keys())
+                assert keys >= {
+                    "actor_ir_id",
+                    "actor_ir_type",
+                    "cudf_polars_query_id",
+                    "duplicated",
+                    "scope",
+                    "start",
+                    "stop",
+                }
+            case "evaluate_ir_node":
+                keys = set(log.keys())
+                assert keys >= {
+                    "start",
+                    "stop",
+                    "cudf_polars_query_id",
+                    "type",
+                    "overhead_duration",
+                    "scope",
+                    "actor_ir_id",
+                }
+            case _:
+                pytest.fail(f"Unexpected scope: {log['scope']}")

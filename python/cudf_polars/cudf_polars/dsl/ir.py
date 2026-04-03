@@ -18,7 +18,8 @@ import itertools
 import json
 import random
 import time
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, overload
@@ -114,15 +115,19 @@ class IRExecutionContext:
     """
 
     get_cuda_stream: Callable[[], Stream]
+    query_id: uuid.UUID = field(default_factory=uuid.uuid4)
 
     @classmethod
-    def from_config_options(cls, config_options: ConfigOptions) -> IRExecutionContext:
+    def from_config_options(
+        cls, config_options: ConfigOptions, query_id: uuid.UUID | None = None
+    ) -> IRExecutionContext:
         """Create an IRExecutionContext from ConfigOptions."""
+        query_id = query_id or uuid.uuid4()
         match config_options.cuda_stream_policy:
             case CUDAStreamPolicy.DEFAULT:
-                return cls(get_cuda_stream=get_cuda_stream)
+                return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
             case CUDAStreamPolicy.NEW:
-                return cls(get_cuda_stream=get_new_cuda_stream)
+                return cls(get_cuda_stream=get_new_cuda_stream, query_id=query_id)
             case _:  # pragma: no cover
                 raise ValueError(
                     f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
@@ -1869,7 +1874,7 @@ class GroupBy(IR):
             target_length=df.num_rows,
             stream=df.stream,
         )
-        sorted = (
+        keys_are_sorted = (
             plc.types.Sorted.YES
             if all(k.is_sorted for k in keys)
             else plc.types.Sorted.NO
@@ -1877,7 +1882,7 @@ class GroupBy(IR):
         grouper = plc.groupby.GroupBy(
             plc.Table([k.obj for k in keys]),
             null_handling=plc.types.NullPolicy.INCLUDE,
-            keys_are_sorted=sorted,
+            keys_are_sorted=keys_are_sorted,
             column_order=[k.order for k in keys],
             null_precedence=[k.null_order for k in keys],
         )
@@ -1919,9 +1924,13 @@ class GroupBy(IR):
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
+        if keys_are_sorted:
+            result_keys = [
+                col.sorted_like(key) for col, key in zip(result_keys, keys, strict=True)
+            ]
         broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
-        if maintain_order and not sorted:
+        if maintain_order and not keys_are_sorted:
             # The order we want
             want = plc.stream_compaction.stable_distinct(
                 plc.Table([k.obj for k in keys]),
@@ -2312,7 +2321,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        assert_never(how)  # pragma: no cover
+        assert_never(how)
 
     @staticmethod
     def _reorder_maps(

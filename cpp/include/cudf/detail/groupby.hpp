@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -14,7 +14,7 @@
 #include <memory>
 #include <utility>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace groupby::detail::hash {
 /**
  * @brief Indicates if a set of aggregation requests can be satisfied with a
@@ -35,4 +35,4 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 }  // namespace groupby::detail::hash
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

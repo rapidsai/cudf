@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <stdexcept>
 
@@ -505,13 +505,14 @@ struct ListGetStructValueTest : public cudf::test::BaseFixture {
     auto d_null_mask           = cudf::create_null_mask(
       num_lists, null_count == 0 ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL);
     if (null_count > 0) {
-      std::for_each(
-        thrust::make_counting_iterator(0), thrust::make_counting_iterator(num_lists), [&](auto i) {
-          if (*(null_mask.begin() + i)) {
-            cudf::set_null_mask(
-              static_cast<cudf::bitmask_type*>(d_null_mask.data()), i, i + 1, true);
-          }
-        });
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{num_lists},
+                    [&](auto i) {
+                      if (*(null_mask.begin() + i)) {
+                        cudf::set_null_mask(
+                          static_cast<cudf::bitmask_type*>(d_null_mask.data()), i, i + 1, true);
+                      }
+                    });
     }
     return cudf::make_lists_column(
       num_lists, offsets.release(), std::move(child), null_count, std::move(d_null_mask));
@@ -806,7 +807,11 @@ TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
   cudf::test::dictionary_column_wrapper<TypeParam, int32_t> ef3{24};
   LCW ef4{LCW{10}};
 
-  cudf::table_view expect_data{{ef1, ef2, ef3, ef4}};
+  // keys need to match so dictionaries can be compared
+  auto def3 = cudf::dictionary::set_keys(cudf::dictionary_column_view(ef3),
+                                         cudf::dictionary_column_view(f3).keys());
+
+  cudf::table_view expect_data{{ef1, ef2, def3->view(), ef4}};
 
   EXPECT_TRUE(typed_s->is_valid());
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expect_data, typed_s->view());

@@ -16,9 +16,14 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/utility>
 #include <thrust/binary_search.h>
 
 namespace cudf::io::parquet::detail {
+
+// Percentage of the total available input read limit that should be reserved for compressed
+// data vs uncompressed data.
+constexpr float input_limit_compression_reserve = 0.3f;
 
 using cudf::io::detail::codec_exec_result;
 using cudf::io::detail::codec_status;
@@ -600,7 +605,7 @@ struct page_total_size {
   {
     // sum sizes for each input column at this row
     size_t sum = 0;
-    for (auto idx = 0; std::cmp_less(idx, num_keys); idx++) {
+    for (auto idx = 0; cuda::std::cmp_less(idx, num_keys); idx++) {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(

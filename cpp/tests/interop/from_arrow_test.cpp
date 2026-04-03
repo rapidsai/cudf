@@ -16,13 +16,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <arrow/c/bridge.h>
 
@@ -36,9 +36,11 @@ std::unique_ptr<cudf::table> get_cudf_table()
   columns.emplace_back(cudf::test::strings_column_wrapper({"fff", "aaa", "", "fff", "ccc"},
                                                           {true, true, true, false, true})
                          .release());
-  auto col4 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 2, 7},
-                                                              {true, false, true, true, true});
-  columns.emplace_back(cudf::dictionary::encode(col4));
+
+  auto keys    = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 7});
+  auto indices = cudf::test::fixed_width_column_wrapper<int32_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+  columns.emplace_back(cudf::make_dictionary_column(keys, indices));
+
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          {true, false, true, false, true}, {true, false, true, true, false})
                          .release());
@@ -317,12 +319,16 @@ TEST_F(FromArrowTest, StructColumn)
 
 TEST_F(FromArrowTest, DictionaryIndicesType)
 {
-  auto array1 =
-    get_arrow_dict_array<int64_t, int8_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-  auto array2 =
-    get_arrow_dict_array<int64_t, int16_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
-  auto array3 =
-    get_arrow_dict_array<int64_t, int64_t>({1, 2, 5, 7}, {0, 1, 2, 1, 3}, {1, 0, 1, 1, 1});
+  auto keys     = std::initializer_list<int64_t>{1, 2, 5, 7};
+  auto indices1 = std::initializer_list<int8_t>{0, 1, 2, 1, 3};
+  auto indices2 = std::initializer_list<int16_t>{0, 1, 2, 1, 3};
+  auto indices3 = std::initializer_list<int64_t>{0, 1, 2, 1, 3};
+  auto valids   = std::initializer_list<uint8_t>{1, 0, 1, 1, 1};
+  auto bvalids  = std::initializer_list<bool>{true, false, true, true, true};
+
+  auto array1 = get_arrow_dict_array<int64_t, int8_t>(keys, indices1, valids);
+  auto array2 = get_arrow_dict_array<int64_t, int16_t>(keys, indices2, valids);
+  auto array3 = get_arrow_dict_array<int64_t, int64_t>(keys, indices3, valids);
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", array1->type()),
                                                             arrow::field("b", array2->type()),
@@ -332,11 +338,13 @@ TEST_F(FromArrowTest, DictionaryIndicesType)
   auto arrow_table = arrow::Table::Make(schema, {array1, array2, array3});
 
   std::vector<std::unique_ptr<cudf::column>> columns;
-  auto col = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 5, 2, 7},
-                                                             {true, false, true, true, true});
-  columns.emplace_back(cudf::dictionary::encode(col));
-  columns.emplace_back(cudf::dictionary::encode(col));
-  columns.emplace_back(cudf::dictionary::encode(col));
+  auto keys_cw     = cudf::test::fixed_width_column_wrapper<int64_t>(keys);
+  auto indices1_cw = cudf::test::fixed_width_column_wrapper<int8_t>(indices1, bvalids);
+  auto indices2_cw = cudf::test::fixed_width_column_wrapper<int16_t>(indices2, bvalids);
+  auto indices3_cw = cudf::test::fixed_width_column_wrapper<int64_t>(indices3, bvalids);
+  columns.emplace_back(cudf::make_dictionary_column(keys_cw, indices1_cw));
+  columns.emplace_back(cudf::make_dictionary_column(keys_cw, indices2_cw));
+  columns.emplace_back(cudf::make_dictionary_column(keys_cw, indices3_cw));
 
   cudf::table expected_table(std::move(columns));
 
@@ -474,9 +482,9 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto iota           = thrust::make_counting_iterator(1);
-    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto iota       = cudf::detail::make_counting_transform_iterator(1, [](int i) { return T{i}; });
+    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col  = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = get_decimal_arrow_array(data, std::nullopt, precision, scale);
@@ -530,11 +538,11 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNullsLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto every_other    = [](auto i) { return i % 2 ? 0 : 1; };
-    auto validity       = cudf::detail::make_counting_transform_iterator(0, every_other);
-    auto iota           = thrust::make_counting_iterator(1);
-    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
+    auto every_other = [](auto i) { return i % 2 ? 0 : 1; };
+    auto validity    = cudf::detail::make_counting_transform_iterator(0, every_other);
+    auto iota       = cudf::detail::make_counting_transform_iterator(1, [](int i) { return T{i}; });
+    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col  = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = get_decimal_arrow_array(

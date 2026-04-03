@@ -26,11 +26,11 @@
 #include <cooperative_groups/reduce.h>
 #include <cuda/atomic>
 #include <cuda/iterator>
+#include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -135,7 +135,7 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
   }();
 
   // each thread compares the target with the thread's individual starting byte
-  size_type position = forward ? std::numeric_limits<size_type>::max() : -1;
+  size_type position = forward ? cuda::std::numeric_limits<size_type>::max() : -1;
   for (auto itr = begin + lane_idx; itr + d_target.size_bytes() <= end;
        itr += cudf::detail::warp_size) {
     if (d_target.compare(d_str.data() + itr, d_target.size_bytes()) == 0) {
@@ -152,7 +152,7 @@ CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
     // the final result needs to be fixed up convert max() to -1
     // and a byte position to a character position
     d_results[str_idx] =
-      ((result < std::numeric_limits<size_type>::max()) && (result >= begin))
+      ((result < cuda::std::numeric_limits<size_type>::max()) && (result >= begin))
         ? start_char_pos + characters_in_string(d_str.data() + begin, result - begin)
         : -1;
   }
@@ -179,8 +179,8 @@ void find_utility(strings_column_view const& input,
   } else {
     // string-per-thread function
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(input.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       d_results,
                       finder_fn<TargetIterator, forward>{*d_strings, target_itr, start, stop});
   }
@@ -215,8 +215,8 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
     auto d_strings = column_device_view::create(input.parent(), stream);
     auto d_results = results->mutable_view().data<size_type>();
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(input.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       d_results,
                       empty_target_fn<forward>{*d_strings, start, stop});
     return results;
@@ -448,8 +448,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings_count},
                     d_results,
                     [d_strings, pfn, d_target] __device__(size_type idx) {
                       return !d_strings.is_null(idx) &&
@@ -502,8 +502,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   // set the bool values by evaluating the passed function
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings.size()},
     d_results,
     [d_strings, pfn, d_targets] __device__(size_type idx) {
       // empty target string returns true

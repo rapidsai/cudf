@@ -221,10 +221,10 @@ def assert_tpch_result_equal(
         # (e.g. for ROLLUP queries with conditional sort expressions like
         # CASE WHEN lochierarchy = 0 THEN i_category END). Otherwise fall back to sort_by.
         if sort_keys is not None:
-            exprs, check_desc = zip(*sort_keys, strict=False)
+            exprs, check_desc = zip(*sort_keys, strict=True)
             check_cols = [f"_sk{i}" for i in range(len(exprs))]
             check_select = [
-                e.alias(col) for e, col in zip(exprs, check_cols, strict=False)
+                e.alias(col) for e, col in zip(exprs, check_cols, strict=True)
             ]
             check_msg = "sort_keys expressions"
         else:
