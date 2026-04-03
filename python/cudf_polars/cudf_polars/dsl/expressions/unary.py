@@ -145,6 +145,7 @@ class UnaryFunction(Expr):
             "cum_prod",
             "cum_sum",
             "drop_nulls",
+            "null_count",
             "rank",
             "shift",
             "shift_and_fill",
