@@ -177,8 +177,7 @@ std::vector<cudf::size_type> apply_row_group_filters(
       bloom_filter_byte_ranges.size()) {
     // Fetch 32-byte aligned bloom filter data buffers from the input file buffer
     auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-      temp_mr, bloom_filter_alignment);
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor(temp_mr, bloom_filter_alignment);
     if (verbose) { std::cout << "READER: Filter row groups with bloom filters...\n"; }
     timer.reset();
     nvtxRangePush("fetch_bloom_filter_byte_ranges");

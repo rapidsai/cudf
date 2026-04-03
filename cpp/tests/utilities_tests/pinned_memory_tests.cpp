@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,41 @@
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
+
+#include <cuda/memory_resource>
+
+namespace {
+struct pinned_pool_wrapper {
+  rmm::mr::pool_memory_resource* pool;
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return pool->allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
+  }
+  void deallocate_sync(void* p,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    pool->deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, p, bytes, alignment);
+  }
+  void* allocate(cuda::stream_ref s,
+                 std::size_t bytes,
+                 std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return pool->allocate(s, bytes, a);
+  }
+  void deallocate(cuda::stream_ref s,
+                  void* p,
+                  std::size_t bytes,
+                  std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    pool->deallocate(s, p, bytes, a);
+  }
+  bool operator==(pinned_pool_wrapper const& o) const noexcept { return pool == o.pool; }
+  bool operator!=(pinned_pool_wrapper const& o) const noexcept { return pool != o.pool; }
+  friend void get_property(pinned_pool_wrapper const&, cuda::mr::device_accessible) noexcept {}
+  friend void get_property(pinned_pool_wrapper const&, cuda::mr::host_accessible) noexcept {}
+};
+}  // namespace
 
 using cudf::host_span;
 using cudf::detail::host_2dspan;
@@ -48,9 +83,9 @@ TEST_F(PinnedMemoryTest, MemoryResourceGetAndSet)
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
   // pinned/pooled host memory resource
-  using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  auto pinned_mr       = std::make_shared<rmm::mr::pinned_host_memory_resource>();
-  host_pooled_mr mr{pinned_mr.get(), 4 * 1024 * 1024};
+  rmm::mr::pinned_host_memory_resource pinned_mr;
+  rmm::mr::pool_memory_resource pool_mr{rmm::device_async_resource_ref{pinned_mr}, 4 * 1024 * 1024};
+  pinned_pool_wrapper mr{&pool_mr};
 
   // set new resource
   auto last_mr = cudf::get_pinned_memory_resource();

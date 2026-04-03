@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -81,21 +81,21 @@ cpdef Column slice_strings(
                 start.view(),
                 stop.view(),
                 stream.view(),
-                mr.get_mr()
+                mr.c_ref.value()
             )
 
     elif ColumnOrScalar is Scalar:
         if start is None:
             start = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0, stream.view(), mr.get_mr())
+                cpp_make_fixed_width_scalar(0, stream.view(), mr.c_ref.value())
             )
         if stop is None:
             stop = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0, stream.view(), mr.get_mr())
+                cpp_make_fixed_width_scalar(0, stream.view(), mr.c_ref.value())
             )
         if step is None:
             step = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(1, stream.view(), mr.get_mr())
+                cpp_make_fixed_width_scalar(1, stream.view(), mr.c_ref.value())
             )
 
         cpp_start = <numeric_scalar[size_type]*>start.c_obj.get()
@@ -109,7 +109,7 @@ cpdef Column slice_strings(
                 dereference(cpp_stop),
                 dereference(cpp_step),
                 stream.view(),
-                mr.get_mr()
+                mr.c_ref.value()
             )
     else:
         raise ValueError("start, stop, and step must be either Column or Scalar")

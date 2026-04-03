@@ -21,9 +21,11 @@
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/managed_memory_resource.hpp>
-#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/memory_resource>
 
 #include <iostream>
 
@@ -37,32 +39,33 @@ struct config {
 };
 
 /// MR factory functions
-inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+inline auto make_cuda() { return rmm::mr::cuda_memory_resource{}; }
 
-inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
+inline auto make_async() { return rmm::mr::cuda_async_memory_resource{}; }
 
-inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
+inline auto make_managed() { return rmm::mr::managed_memory_resource{}; }
 
 inline auto make_pool()
 {
   auto const [free, total] = rmm::available_device_memory();
   auto const min_alloc =
     rmm::align_down(std::min(free, total / 10), rmm::CUDA_ALLOCATION_ALIGNMENT);
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda(), min_alloc);
+  static rmm::mr::cuda_memory_resource cuda_mr{};
+  return rmm::mr::pool_memory_resource{cuda_mr, min_alloc};
 }
 
 inline auto make_arena()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
+  static rmm::mr::cuda_memory_resource cuda_mr{};
+  return rmm::mr::arena_memory_resource{cuda_mr};
 }
 
 inline auto make_binning()
 {
-  auto pool = make_pool();
+  static auto pool = make_pool();
   // Add a binning_memory_resource with fixed-size bins of sizes 256, 512, 1024, 2048 and 4096KiB
   // Larger allocations will use the pool resource
-  auto mr = rmm::mr::make_owning_wrapper<rmm::mr::binning_memory_resource>(pool, 18, 22);
-  return mr;
+  return rmm::mr::binning_memory_resource{rmm::device_async_resource_ref{pool}, 18, 22};
 }
 
 /**
@@ -77,18 +80,24 @@ inline auto make_binning()
  * @throw cudf::logic_error if the `allocation_mode` is unsupported.
  *
  * @param allocation_mode String identifies which resource type.
- *        Accepted types are "pool", "cuda", and "managed" only.
- * @return Memory resource instance
+ *        Accepted types are "pool", "cuda", "async", "arena", "binning", and "managed".
+ * @return Memory resource stored as any_resource
  */
-inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+inline cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(
   std::string const& allocation_mode)
 {
-  if (allocation_mode == "binning") return make_binning();
-  if (allocation_mode == "cuda") return make_cuda();
-  if (allocation_mode == "async") return make_async();
-  if (allocation_mode == "pool") return make_pool();
-  if (allocation_mode == "arena") return make_arena();
-  if (allocation_mode == "managed") return make_managed();
+  if (allocation_mode == "binning")
+    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_binning()};
+  if (allocation_mode == "cuda")
+    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_cuda()};
+  if (allocation_mode == "async")
+    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_async()};
+  if (allocation_mode == "pool")
+    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_pool()};
+  if (allocation_mode == "arena")
+    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_arena()};
+  if (allocation_mode == "managed")
+    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_managed()};
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
@@ -147,20 +156,17 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
 }
 
 /**
- * @brief Sets up stream mode memory resource adaptor
- *
- * The resource adaptor is only set as the current device resource if the
- * stream mode is enabled.
+ * @brief Sets up the memory resource for the test run.
  *
  * The caller must keep the return object alive for the life of the test runs.
  *
  * @param config Command line options returned by parse_cudf_test_opts
- * @return Memory resource adaptor
+ * @return The owning any_resource for the test memory resource
  */
 inline auto make_memory_resource_adaptor(cudf::test::config const& config)
 {
   auto resource = cudf::test::create_memory_resource(config.rmm_mode);
-  cudf::set_current_device_resource(resource.get());
+  cudf::set_current_device_resource_ref(resource);
   return resource;
 }
 
@@ -183,7 +189,7 @@ inline auto make_stream_mode_adaptor(cudf::test::config const& config)
   auto adaptor                       = cudf::test::stream_checking_resource_adaptor(
     resource, error_on_invalid_stream, check_default_stream);
   if ((config.stream_mode == "new_cudf_default") || (config.stream_mode == "new_testing_default")) {
-    cudf::set_current_device_resource(&adaptor);
+    cudf::set_current_device_resource_ref(adaptor);
   }
   return adaptor;
 }
@@ -226,9 +232,8 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
     ::testing::InitGoogleTest(&argc, argv);                                                      \
     init_cudf_test(argc, argv);                                                                  \
     if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {                                                 \
-      auto mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(           \
-        cudf::get_current_device_resource_ref());                                                \
-      cudf::set_current_device_resource(&mr);                                                    \
+      auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());   \
+      cudf::set_current_device_resource_ref(mr);                                                 \
       auto rc = RUN_ALL_TESTS();                                                                 \
       std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
       cudf::teardown();                                                                          \

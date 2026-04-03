@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -46,7 +46,9 @@ cdef class TokenizeVocabulary:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_vocabulary(c_vocab, stream.view(), mr.get_mr()))
+            self.c_obj = move(
+                cpp_load_vocabulary(c_vocab, stream.view(), mr.c_ref.value())
+            )
 
     __hash__ = None
 
@@ -82,7 +84,7 @@ cpdef Column tokenize_scalar(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
         )
 
     with nogil:
@@ -90,7 +92,7 @@ cpdef Column tokenize_scalar(
             input.view(),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -127,7 +129,7 @@ cpdef Column tokenize_column(
             input.view(),
             delimiters.view(),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -164,7 +166,7 @@ cpdef Column count_tokens_scalar(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
         )
 
     with nogil:
@@ -172,7 +174,7 @@ cpdef Column count_tokens_scalar(
             input.view(),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -209,7 +211,7 @@ cpdef Column count_tokens_column(
             input.view(),
             delimiters.view(),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -239,7 +241,7 @@ cpdef Column character_tokenize(
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_character_tokenize(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_character_tokenize(input.view(), stream.view(), mr.c_ref.value())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -278,7 +280,7 @@ cpdef Column detokenize(
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar(" ".encode(), stream.view(), mr.c_ref.value())
         )
 
     with nogil:
@@ -287,7 +289,7 @@ cpdef Column detokenize(
             row_indices.view(),
             dereference(<const string_scalar*>separator.c_obj.get()),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -335,7 +337,7 @@ cpdef Column tokenize_with_vocabulary(
             dereference(<const string_scalar*>delimiter.c_obj.get()),
             default_id,
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

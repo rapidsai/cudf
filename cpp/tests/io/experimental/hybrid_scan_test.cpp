@@ -127,8 +127,8 @@ void test_hybrid_scan(std::vector<cudf::column_view> const& columns,
 
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
+                                                      bloom_filter_alignment);
 
   auto datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
@@ -208,7 +208,7 @@ std::unique_ptr<cudf::table> test_hybrid_scan_column_selection(
   bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
-  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
+  rmm::mr::aligned_resource_adaptor& aligned_mr)
 {
   auto datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
@@ -301,8 +301,8 @@ TEST_F(HybridScanTest, FilterRowGroupsOnlyAndScanSelectColumns)
 
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
+                                                      bloom_filter_alignment);
   auto constexpr case_sensitive_names = false;
 
   // No column selection (all columns)
@@ -369,8 +369,8 @@ TEST_F(HybridScanTest, FilterDataPagesOnlyAndScanAllColumns)
 
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
+                                                      bloom_filter_alignment);
   auto constexpr case_sensitive_names = false;
 
   auto const payload_column_indices = std::vector<cudf::size_type>{1, 2};
@@ -745,8 +745,8 @@ TEST_F(HybridScanTest, ExtendedFilterExpressions)
 
   auto stream     = cudf::get_default_stream();
   auto mr         = cudf::get_current_device_resource_ref();
-  auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>(
-    cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+  auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
+                                                      bloom_filter_alignment);
 
   // Create datasource from buffer
   auto const datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(

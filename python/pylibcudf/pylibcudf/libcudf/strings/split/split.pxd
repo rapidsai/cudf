@@ -10,7 +10,7 @@ from pylibcudf.libcudf.strings.regex_program cimport regex_program
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport size_type
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "cudf/strings/split/split.hpp" namespace \
@@ -21,35 +21,35 @@ cdef extern from "cudf/strings/split/split.hpp" namespace \
         string_scalar delimiter,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[table] rsplit(
         column_view strings_column,
         string_scalar delimiter,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] split_record(
         column_view strings,
         string_scalar delimiter,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rsplit_record(
         column_view strings,
         string_scalar delimiter,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] split_part(
         column_view strings,
         string_scalar delimiter,
         size_type index,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
 
 cdef extern from "cudf/strings/split/split_re.hpp" namespace \
@@ -60,25 +60,25 @@ cdef extern from "cudf/strings/split/split_re.hpp" namespace \
         regex_program prog,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[table] rsplit_re(
         const column_view& input,
         regex_program prog,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] split_record_re(
         const column_view& input,
         regex_program prog,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rsplit_record_re(
         const column_view& input,
         regex_program prog,
         size_type maxsplit,
         cuda_stream_view stream,
-        device_memory_resource* mr) except +libcudf_exception_handler
+        device_async_resource_ref mr) except +libcudf_exception_handler

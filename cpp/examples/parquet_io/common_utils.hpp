@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,10 +9,11 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
-#include <memory>
 #include <string>
+#include <variant>
 
 /**
  * @file common_utils.hpp
@@ -26,7 +27,9 @@
  * @param pool Whether to use a pool memory resource.
  * @return Memory resource instance
  */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used);
+using memory_resource_type =
+  std::variant<rmm::mr::cuda_memory_resource, rmm::mr::pool_memory_resource>;
+memory_resource_type create_memory_resource(bool is_pool_used);
 
 /**
  * @brief Get encoding type from the keyword

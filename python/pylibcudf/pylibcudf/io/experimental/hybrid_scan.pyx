@@ -409,7 +409,7 @@ cdef class HybridScanReader:
                 host_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 stream.view(),
-                mr.get_mr()
+                mr.c_ref.value()
             )
         return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -493,7 +493,7 @@ cdef class HybridScanReader:
                 mask_data_pages,
                 options.c_obj,
                 stream.view(),
-                mr.get_mr()
+                mr.c_ref.value()
             )
         return TableWithMetadata.from_libcudf(c_result, stream, mr)
 
@@ -577,7 +577,7 @@ cdef class HybridScanReader:
                 mask_data_pages,
                 options.c_obj,
                 stream.view(),
-                mr.get_mr()
+                mr.c_ref.value()
             )
         return TableWithMetadata.from_libcudf(c_result, stream, mr)
 
@@ -651,7 +651,7 @@ cdef class HybridScanReader:
                 ),
                 options.c_obj,
                 stream.view(),
-                mr.get_mr()
+                mr.c_ref.value()
             )
         return TableWithMetadata.from_libcudf(c_result, stream, mr)
 
@@ -711,7 +711,7 @@ cdef class HybridScanReader:
             ),
             options.c_obj,
             self.stream.view(),
-            self.mr.get_mr()
+            self.mr.c_ref.value()
         )
 
     def materialize_filter_columns_chunk(
@@ -794,7 +794,7 @@ cdef class HybridScanReader:
             ),
             options.c_obj,
             self.stream.view(),
-            self.mr.get_mr()
+            self.mr.c_ref.value()
         )
 
     def materialize_payload_columns_chunk(

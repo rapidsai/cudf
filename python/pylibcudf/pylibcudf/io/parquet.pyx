@@ -521,7 +521,7 @@ cdef class ChunkedParquetReader:
                     pass_read_limit,
                     options.c_obj,
                     self.stream.view(),
-                    self.mr.get_mr()
+                    self.mr.c_ref.value()
                 )
             )
 
@@ -586,7 +586,7 @@ cpdef read_parquet(
     cdef Stream s = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_parquet(options.c_obj, s.view(), mr.c_ref.value()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 

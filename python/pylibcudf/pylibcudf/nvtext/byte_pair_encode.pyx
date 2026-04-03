@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -37,7 +37,9 @@ cdef class BPEMergePairs:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_merge_pairs(c_pairs, stream.view(), mr.get_mr()))
+            self.c_obj = move(
+                cpp_load_merge_pairs(c_pairs, stream.view(), mr.c_ref.value())
+            )
 
     __hash__ = None
 
@@ -75,7 +77,7 @@ cpdef Column byte_pair_encoding(
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar(" ".encode(), stream.view(), mr.c_ref.value())
         )
 
     with nogil:
@@ -85,7 +87,7 @@ cpdef Column byte_pair_encoding(
                 dereference(merge_pairs.c_obj.get()),
                 dereference(<const string_scalar*>separator.c_obj.get()),
                 stream.view(),
-                mr.get_mr()
+                mr.c_ref.value()
             )
         )
 

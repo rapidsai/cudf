@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -50,7 +50,7 @@ cpdef Column capitalize(
 
     if delimiters is None:
         delimiters = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
         )
 
     cdef const string_scalar* cpp_delimiters = <const string_scalar*>(
@@ -62,7 +62,7 @@ cpdef Column capitalize(
             input.view(),
             dereference(cpp_delimiters),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -96,7 +96,7 @@ cpdef Column title(
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_capitalize.title(
-            input.view(), sequence_type, stream.view(), mr.get_mr()
+            input.view(), sequence_type, stream.view(), mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -121,6 +121,8 @@ cpdef Column is_title(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_capitalize.is_title(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_capitalize.is_title(
+            input.view(), stream.view(), mr.c_ref.value()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -67,7 +67,9 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.nans_to_nulls(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_transform.nans_to_nulls(
+            input.view(), stream.view(), mr.c_ref.value()
+        )
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream, mr)),
@@ -105,7 +107,7 @@ cpdef Column column_nans_to_nulls(
 
     with nogil:
         c_result = cpp_transform.column_nans_to_nulls(
-            input.view(), stream.view(), mr.get_mr()
+            input.view(), stream.view(), mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -140,7 +142,7 @@ cpdef Column compute_column(
 
     with nogil:
         c_result = cpp_transform.compute_column(
-            input.view(), dereference(expr.c_obj.get()), stream.view(), mr.get_mr()
+            input.view(), dereference(expr.c_obj.get()), stream.view(), mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -177,7 +179,7 @@ cpdef Column compute_column_jit(
 
     with nogil:
         c_result = cpp_transform.compute_column_jit(
-            input.view(), dereference(expr.c_obj.get()), stream.view(), mr.get_mr()
+            input.view(), dereference(expr.c_obj.get()), stream.view(), mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -210,7 +212,9 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.bools_to_mask(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_transform.bools_to_mask(
+            input.view(), stream.view(), mr.c_ref.value()
+        )
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream, mr)),
@@ -257,7 +261,7 @@ cpdef Column mask_to_bools(
             begin_bit,
             end_bit,
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -328,7 +332,7 @@ cpdef Column transform(
             c_is_null_aware,
             c_null_policy,
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -359,7 +363,7 @@ cpdef tuple[Table, Column] encode(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.encode(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_transform.encode(input.view(), stream.view(), mr.c_ref.value())
 
     return (
         Table.from_libcudf(move(c_result.first), stream, mr),
@@ -403,7 +407,7 @@ cpdef Table one_hot_encode(
             input.view(),
             categories.view(),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     owner_table = Table(

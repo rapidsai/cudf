@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace test {
@@ -30,9 +30,9 @@ class BaseFixture : public ::testing::Test {
 
  public:
   /**
-   * @brief Returns pointer to `device_memory_resource` that should be used for
+   * @brief Returns reference to `device_async_resource_ref` that should be used for
    * all tests inheriting from this fixture
-   * @return pointer to memory resource
+   * @return reference to memory resource
    */
   rmm::device_async_resource_ref mr() { return _mr; }
 };
@@ -51,9 +51,9 @@ class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
 
  public:
   /**
-   * @brief Returns pointer to `device_memory_resource` that should be used for
+   * @brief Returns reference to `device_async_resource_ref` that should be used for
    * all tests inheriting from this fixture
-   * @return pointer to memory resource
+   * @return reference to memory resource
    */
   [[nodiscard]] rmm::device_async_resource_ref mr() const { return _mr; }
 };

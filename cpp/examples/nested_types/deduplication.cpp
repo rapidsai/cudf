@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,12 +17,11 @@
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
-#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
 #include <iostream>
 #include <string>
+#include <variant>
 
 /**
  * @file deduplication.cpp
@@ -44,14 +43,14 @@
  * @param pool Whether to use a pool memory resource.
  * @return Memory resource instance
  */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool pool)
+auto create_memory_resource(bool pool)
 {
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
+  rmm::mr::cuda_memory_resource cuda_mr{};
   if (pool) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
+    return std::variant<rmm::mr::cuda_memory_resource, rmm::mr::pool_memory_resource>{
+      rmm::mr::pool_memory_resource{cuda_mr, rmm::percent_of_free_device_memory(50)}};
   }
-  return cuda_mr;
+  return std::variant<rmm::mr::cuda_memory_resource, rmm::mr::pool_memory_resource>{cuda_mr};
 }
 
 /**
@@ -181,7 +180,7 @@ int main(int argc, char const** argv)
 
   auto pool     = mr_name == "pool";
   auto resource = create_memory_resource(pool);
-  cudf::set_current_device_resource(resource.get());
+  std::visit([](auto& mr) { cudf::set_current_device_resource_ref(mr); }, resource);
 
   std::cout << "Reading " << input_filepath << "..." << std::endl;
   // read input file

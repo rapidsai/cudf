@@ -67,7 +67,7 @@ cpdef DeviceBuffer copy_bitmask(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        db = cpp_null_mask.copy_bitmask(col.view(), stream.view(), mr.get_mr())
+        db = cpp_null_mask.copy_bitmask(col.view(), stream.view(), mr.c_ref.value())
 
     return buffer_to_python(move(db), stream, mr)
 
@@ -118,7 +118,7 @@ cpdef DeviceBuffer copy_bitmask_from_bitmask(
             begin_bit,
             end_bit,
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return buffer_to_python(move(db), stream, mr)
@@ -180,7 +180,9 @@ cpdef DeviceBuffer create_null_mask(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        db = cpp_null_mask.create_null_mask(size, state, stream.view(), mr.get_mr())
+        db = cpp_null_mask.create_null_mask(
+            size, state, stream.view(), mr.c_ref.value()
+        )
 
     return buffer_to_python(move(db), stream, mr)
 
@@ -210,7 +212,9 @@ cpdef tuple bitmask_and(list columns, Stream stream=None, DeviceMemoryResource m
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_null_mask.bitmask_and(c_table.view(), stream.view(), mr.get_mr())
+        c_result = cpp_null_mask.bitmask_and(
+            c_table.view(), stream.view(), mr.c_ref.value()
+        )
 
     return buffer_to_python(move(c_result.first), stream, mr), c_result.second
 
@@ -240,7 +244,9 @@ cpdef tuple bitmask_or(list columns, Stream stream=None, DeviceMemoryResource mr
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_null_mask.bitmask_or(c_table.view(), stream.view(), mr.get_mr())
+        c_result = cpp_null_mask.bitmask_or(
+            c_table.view(), stream.view(), mr.c_ref.value()
+        )
 
     return buffer_to_python(move(c_result.first), stream, mr), c_result.second
 

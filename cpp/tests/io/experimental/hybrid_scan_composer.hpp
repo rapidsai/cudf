@@ -34,7 +34,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
   bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
-  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
+  rmm::mr::aligned_resource_adaptor& aligned_mr);
 
 /**
  * @brief Read parquet file with the hybrid scan reader
@@ -56,7 +56,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
   bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
-  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
+  rmm::mr::aligned_resource_adaptor& aligned_mr);
 
 /**
  * @brief Read parquet file with the hybrid scan reader in a single step

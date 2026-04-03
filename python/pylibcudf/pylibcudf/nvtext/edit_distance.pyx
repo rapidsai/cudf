@@ -52,7 +52,9 @@ cpdef Column edit_distance(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_edit_distance(c_strings, c_targets, stream.view(), mr.get_mr())
+        c_result = cpp_edit_distance(
+            c_strings, c_targets, stream.view(), mr.c_ref.value()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -92,6 +94,6 @@ cpdef Column edit_distance_matrix(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_edit_distance_matrix(c_strings, stream.view(), mr.get_mr())
+        c_result = cpp_edit_distance_matrix(c_strings, stream.view(), mr.c_ref.value())
 
     return Column.from_libcudf(move(c_result), stream, mr)

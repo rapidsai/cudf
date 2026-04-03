@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -52,7 +52,7 @@ cpdef Column to_floats(
             strings.view(),
             output_type.c_obj,
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -86,7 +86,7 @@ cpdef Column from_floats(
 
     with nogil:
         c_result = cpp_convert_floats.from_floats(
-            floats.view(), stream.view(), mr.get_mr()
+            floats.view(), stream.view(), mr.c_ref.value()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -117,6 +117,8 @@ cpdef Column is_float(Column input, Stream stream=None, DeviceMemoryResource mr=
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_floats.is_float(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_convert_floats.is_float(
+            input.view(), stream.view(), mr.c_ref.value()
+        )
 
     return Column.from_libcudf(move(c_result), stream, mr)

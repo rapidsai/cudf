@@ -97,7 +97,7 @@ cpdef Scalar reduce(
             data_type.c_obj,
             c_init,
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
     return Scalar.from_libcudf(move(result))
 
@@ -144,7 +144,7 @@ cpdef Column scan(
             inclusive,
             null_policy.EXCLUDE,
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -177,7 +177,7 @@ cpdef tuple minmax(Column col, Stream stream=None, DeviceMemoryResource mr=None)
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_minmax(col.view(), stream.view(), mr.get_mr())
+        result = cpp_minmax(col.view(), stream.view(), mr.c_ref.value())
 
     min_scalar = Scalar.from_libcudf(move(result.first))
     max_scalar = Scalar.from_libcudf(move(result.second))

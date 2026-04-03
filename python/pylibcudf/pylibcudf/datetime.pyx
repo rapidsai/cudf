@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -78,7 +78,7 @@ cpdef Column extract_datetime_component(
 
     with nogil:
         result = cpp_extract_datetime_component(
-            input.view(), component, stream.view(), mr.get_mr()
+            input.view(), component, stream.view(), mr.c_ref.value()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -113,7 +113,7 @@ cpdef Column ceil_datetimes(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_ceil_datetimes(input.view(), freq, stream.view(), mr.get_mr())
+        result = cpp_ceil_datetimes(input.view(), freq, stream.view(), mr.c_ref.value())
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column floor_datetimes(
@@ -147,7 +147,9 @@ cpdef Column floor_datetimes(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_floor_datetimes(input.view(), freq, stream.view(), mr.get_mr())
+        result = cpp_floor_datetimes(
+            input.view(), freq, stream.view(), mr.c_ref.value()
+        )
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column round_datetimes(
@@ -181,7 +183,9 @@ cpdef Column round_datetimes(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_round_datetimes(input.view(), freq, stream.view(), mr.get_mr())
+        result = cpp_round_datetimes(
+            input.view(), freq, stream.view(), mr.c_ref.value()
+        )
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column add_calendrical_months(
@@ -225,7 +229,7 @@ cpdef Column add_calendrical_months(
             months.view() if ColumnOrScalar is Column else
             dereference(months.get()),
             stream.view(),
-            mr.get_mr()
+            mr.c_ref.value()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -257,7 +261,7 @@ cpdef Column day_of_year(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_day_of_year(input.view(), stream.view(), mr.get_mr())
+        result = cpp_day_of_year(input.view(), stream.view(), mr.c_ref.value())
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column is_leap_year(
@@ -287,7 +291,7 @@ cpdef Column is_leap_year(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_is_leap_year(input.view(), stream.view(), mr.get_mr())
+        result = cpp_is_leap_year(input.view(), stream.view(), mr.c_ref.value())
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column last_day_of_month(
@@ -317,7 +321,7 @@ cpdef Column last_day_of_month(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_last_day_of_month(input.view(), stream.view(), mr.get_mr())
+        result = cpp_last_day_of_month(input.view(), stream.view(), mr.c_ref.value())
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column extract_quarter(
@@ -347,7 +351,7 @@ cpdef Column extract_quarter(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_extract_quarter(input.view(), stream.view(), mr.get_mr())
+        result = cpp_extract_quarter(input.view(), stream.view(), mr.c_ref.value())
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column days_in_month(
@@ -376,7 +380,7 @@ cpdef Column days_in_month(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_days_in_month(input.view(), stream.view(), mr.get_mr())
+        result = cpp_days_in_month(input.view(), stream.view(), mr.c_ref.value())
     return Column.from_libcudf(move(result), stream, mr)
 
 DatetimeComponent.__str__ = DatetimeComponent.__repr__
