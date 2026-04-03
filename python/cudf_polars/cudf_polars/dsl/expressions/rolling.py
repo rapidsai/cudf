@@ -216,8 +216,8 @@ class FixedSizeRollingWindow(Expr):
     Fixed-size integer-based rolling window aggregation.
 
     Handles expressions like ``pl.col("x").rolling_sum(window_size=3)``.
-    Uses a synthetic sequential orderby column with the range-based
-    rolling window API to implement row-count-based windows.
+    Uses ``pylibcudf.rolling.rolling_window`` with integer preceding
+    and following window sizes.
     """
 
     __slots__ = ("agg_name", "center", "fn_params", "min_periods", "window_size")
@@ -264,29 +264,14 @@ class FixedSizeRollingWindow(Expr):
         col = child.evaluate(df, context=context)
         stream = df.stream
 
-        n = col.size
-        int64_type = plc.DataType(plc.TypeId.INT64)
-
-        orderby = plc.filling.sequence(
-            n,
-            plc.Scalar.from_py(0, int64_type, stream=stream),
-            plc.Scalar.from_py(1, int64_type, stream=stream),
-            stream=stream,
-        )
-
+        # libcudf rolling_window semantics: element i uses elements
+        # [i - preceding + 1, i + following].
         if self.center:
-            half_after = (self.window_size - 1) // 2
-            half_before = self.window_size - 1 - half_after
+            following = (self.window_size - 1) // 2
+            preceding = self.window_size - following
         else:
-            half_before = self.window_size - 1
-            half_after = 0
-
-        preceding = plc.rolling.BoundedClosed(
-            plc.Scalar.from_py(half_before, int64_type, stream=stream)
-        )
-        following = plc.rolling.BoundedClosed(
-            plc.Scalar.from_py(half_after, int64_type, stream=stream)
-        )
+            preceding = self.window_size
+            following = 0
 
         # Polars produces null when count <= ddof for var/std, but
         # libcudf produces NaN. Raise min_periods so that libcudf
@@ -297,18 +282,15 @@ class FixedSizeRollingWindow(Expr):
             min_periods = max(min_periods, ddof + 1)
 
         agg_request = self._make_agg_request()
-        request = plc.rolling.RollingRequest(col.obj, min_periods, agg_request)
 
-        (result,) = plc.rolling.grouped_range_rolling_window(
-            plc.Table([]),
-            orderby,
-            plc.types.Order.ASCENDING,
-            plc.types.NullOrder.BEFORE,
+        result = plc.rolling.rolling_window(
+            col.obj,
             preceding,
             following,
-            [request],
+            min_periods,
+            agg_request,
             stream=stream,
-        ).columns()
+        )
 
         return Column(result, dtype=self.dtype)
 
