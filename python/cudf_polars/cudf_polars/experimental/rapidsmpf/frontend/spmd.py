@@ -131,7 +131,6 @@ def evaluate_pipeline_spmd_mode(
     gc.disable()
     try:
         run_actor_network(actors=nodes, py_executor=py_executor)
-        gc.collect()  # flush cycles from previous calls at a provably safe point
 
         messages = output.release()
         chunks = [
@@ -165,6 +164,11 @@ def evaluate_pipeline_spmd_mode(
 
         result = df.to_polars()
         del nodes, output
+        # Flush accumulated cycles now that the current call's GPU objects are
+        # released.  Safer than flushing before del nodes/output, which would
+        # collect stale cycles from previous calls whose __del__ may conflict
+        # with the progress thread.
+        gc.collect()
     finally:
         gc.enable()
 

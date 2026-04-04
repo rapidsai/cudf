@@ -334,11 +334,9 @@ def evaluate_pipeline(
                 # thread—and may call __del__ on GPU-adjacent objects from
                 # previous evaluations at an unsafe moment (e.g. while the
                 # rapidsmpf BufferResource is being accessed from a C++ callback,
-                # causing a re-entrancy crash).  After run_actor_network we
-                # explicitly flush accumulated cycles at a provably safe point.
+                # causing a re-entrancy crash).
                 gc.disable()
                 run_actor_network(actors=nodes, py_executor=executor)
-                gc.collect()
 
             try:
                 # Extract/return the concatenated result.
@@ -397,10 +395,15 @@ def evaluate_pipeline(
             # an exception in run_actor_network
             del nodes, output
 
-            # Ensure GC is always re-enabled even if run_actor_network raised
-            # before the extraction try/finally could call gc.enable().
+            # Flush any cycles accumulated during the GC-disabled window now
+            # that the current call's GPU objects have been released.  This is
+            # safer than calling gc.collect() immediately after run_actor_network
+            # (before del nodes/output) because at that earlier point we would
+            # collect cycles from *previous* calls whose __del__ methods may
+            # conflict with the progress thread.
             import gc
 
+            gc.collect()
             gc.enable()
 
             # Restore the initial RMM memory resource
