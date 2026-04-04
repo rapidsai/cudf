@@ -15,7 +15,7 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
-namespace CUDF_EXPORT numeric {
+namespace numeric {
 namespace detail {
 
 /**
@@ -1120,4 +1120,4 @@ CUDF_HOST_DEVICE inline FloatingType convert_integral_to_floating(Rep const& val
 }
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT numeric
+}  // namespace numeric

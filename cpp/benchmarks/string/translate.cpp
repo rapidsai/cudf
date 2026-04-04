@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,7 +9,7 @@
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -31,8 +31,8 @@ static void bench_translate(nvbench::state& state)
   auto const input  = cudf::strings_column_view(column->view());
 
   std::vector<entry_type> entries(entry_count);
-  std::transform(thrust::counting_iterator<int>(0),
-                 thrust::counting_iterator<int>(entry_count),
+  std::transform(cuda::counting_iterator<int>{0},
+                 cuda::counting_iterator<int>{entry_count},
                  entries.begin(),
                  [](auto idx) -> entry_type { return entry_type{'!' + idx, '~' - idx}; });
 

@@ -17,6 +17,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
+
 #include <jit/helpers.hpp>
 #include <jit/jit.hpp>
 #include <jit/parser.hpp>
@@ -48,24 +50,24 @@ auto build_jit_template_params(null_aware is_null_aware,
   tparams.emplace_back(rtcx::reflect_bool(may_evaluate_null));
   tparams.emplace_back(rtcx::reflect_bool(has_user_data));
 
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(span_outputs.size()),
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator{span_outputs.size()},
                  std::back_inserter(tparams),
                  [&](auto i) {
                    return rtcx::reflect_template(
                      "cudf::jit::span_accessor", span_outputs[i], std::to_string(i));
                  });
 
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(column_outputs.size()),
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator{column_outputs.size()},
                  std::back_inserter(tparams),
                  [&](auto i) {
                    return rtcx::reflect_template(
                      "cudf::jit::column_accessor", column_outputs[i], std::to_string(i));
                  });
 
-  std::transform(thrust::counting_iterator<size_t>(0),
-                 thrust::counting_iterator(inputs.size()),
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator{inputs.size()},
                  std::back_inserter(tparams),
                  [&](auto i) { return inputs[i].accessor(i); });
 

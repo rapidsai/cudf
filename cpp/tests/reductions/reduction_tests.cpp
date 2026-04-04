@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,7 +20,7 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <iterator>
@@ -1354,8 +1354,8 @@ TEST_P(StringReductionTest, MinMax)
   // data and valid arrays
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
-  std::transform(thrust::counting_iterator<std::size_t>(0),
-                 thrust::counting_iterator<std::size_t>(host_strings.size()),
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator<std::size_t>{host_strings.size()},
                  host_strings.begin(),
                  [host_strings, host_bools](auto idx) {
                    return host_bools[idx] ? host_strings[idx] : std::string{};
@@ -1440,8 +1440,8 @@ TEST_P(StringReductionTest, ArgMinMax)
   // Data and valid arrays.
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({true, false, true, true, true, true, false, false, true});
-  std::transform(thrust::counting_iterator<std::size_t>(0),
-                 thrust::counting_iterator<std::size_t>(host_strings.size()),
+  std::transform(cuda::counting_iterator<std::size_t>{0},
+                 cuda::counting_iterator<std::size_t>{host_strings.size()},
                  host_strings.begin(),
                  [host_strings, host_bools](auto idx) {
                    return host_bools[idx] ? host_strings[idx] : std::string{};
@@ -2000,8 +2000,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   for (auto const i : {0, -1, -2}) {
-    auto const scale          = scale_type{i};
-    auto f                    = thrust::make_counting_iterator(0);
+    auto const scale = scale_type{i};
+    auto f = cudf::detail::make_counting_transform_iterator(0, [](int i) { return RepType{i}; });
     auto const values         = std::vector<RepType>(f, f + 1000);
     auto const column         = fp_wrapper{values.cbegin(), values.cend(), scale};
     auto const out_type       = static_cast<cudf::column_view>(column).type();

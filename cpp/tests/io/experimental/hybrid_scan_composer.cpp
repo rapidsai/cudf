@@ -166,13 +166,15 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& payload_column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
   rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names);
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
@@ -233,13 +235,15 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& payload_column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
   rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names);
 
   // Set payload column names if provided
   if (payload_column_names.has_value()) { options.set_column_names(payload_column_names.value()); }
@@ -287,11 +291,9 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
 
   if (current_row_group_indices.size() > 1) {
     auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_filter_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_filter_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
+    materialize_filter_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_filter_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
   } else {
     materialize_filter_columns(current_row_group_indices);
   }
@@ -332,11 +334,9 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
 
   if (current_row_group_indices.size() > 1) {
     auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_payload_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_payload_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
+    materialize_payload_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_payload_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
   } else {
     materialize_payload_columns(current_row_group_indices);
   }
@@ -350,12 +350,15 @@ std::unique_ptr<cudf::table> hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names)
+                                               .build();
 
   if (column_names.has_value()) { options.set_column_names(column_names.value()); }
 
@@ -387,12 +390,15 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(case_sensitive_names)
+                                               .build();
 
   if (column_names.has_value()) { options.set_column_names(column_names.value()); }
 
@@ -430,11 +436,9 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
 
   if (current_row_group_indices.size() > 1) {
     auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_all_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_all_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
+    materialize_all_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_all_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
   } else {
     materialize_all_columns(current_row_group_indices);
   }

@@ -51,6 +51,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     chunk_to_frame,
     empty_table_chunk,
+    gather_in_task_group,
     process_children,
     recv_metadata,
     send_metadata,
@@ -65,7 +66,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
-    from cudf_polars.experimental.base import ColumnStat, StatsCollector
+    from cudf_polars.experimental.base import StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
@@ -273,11 +274,16 @@ async def dataframescan_node(
                 )
             await ch_out.drain(context)
 
-        tasks = [lineariser.drain()]
-        tasks.extend(
-            _producer(i, ch_in) for i, ch_in in enumerate(lineariser.input_channels)
-        )
-        await asyncio.gather(*tasks)
+        async with (
+            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+        ):
+            await gather_in_task_group(
+                lineariser.drain(),
+                *(
+                    _producer(i, ch_in)
+                    for i, ch_in in enumerate(lineariser.input_channels)
+                ),
+            )
 
 
 @generate_ir_sub_network.register(DataFrameScan)
@@ -560,11 +566,14 @@ async def scan_node(
 
         async with (
             shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
-            asyncio.TaskGroup() as tg,
         ):
-            tg.create_task(lineariser.drain())
-            for i, ch_in in enumerate(lineariser.input_channels):
-                tg.create_task(_producer(i, ch_in))
+            await gather_in_task_group(
+                lineariser.drain(),
+                *(
+                    _producer(i, ch_in)
+                    for i, ch_in in enumerate(lineariser.input_channels)
+                ),
+            )
 
 
 def make_rapidsmpf_read_parquet_node(
@@ -634,16 +643,10 @@ def make_rapidsmpf_read_parquet_node(
 
     # Calculate num_rows_per_chunk from statistics
     # Default to a reasonable chunk size if statistics are unavailable
-    estimated_row_count: ColumnStat[int] | None = stats.row_count.get(ir)
-    if estimated_row_count is None:
-        for cs in stats.column_stats.get(ir, {}).values():
-            if cs.source_info.row_count.value is not None:
-                estimated_row_count = cs.source_info.row_count
-                break
-    if estimated_row_count is not None and estimated_row_count.value is not None:
-        num_rows_per_chunk = int(
-            max(1, estimated_row_count.value // partition_info.count)
-        )
+    source = stats.scan_stats.get(ir)
+    estimated_row_count = source.row_count if source is not None else None
+    if estimated_row_count is not None:
+        num_rows_per_chunk = int(max(1, estimated_row_count // partition_info.count))
     else:
         # Fallback: use a default chunk size if statistics are not available
         num_rows_per_chunk = 1_000_000  # 1 million rows as default

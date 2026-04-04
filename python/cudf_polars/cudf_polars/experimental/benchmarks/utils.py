@@ -27,13 +27,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
+from rapidsmpf.config import Options, get_environment_variables
 
 import polars as pl
-import polars.testing
 
 import rmm.statistics
 
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import spmd_execution
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 # The dtype for count() aggregations depends on the presence
 # of the polars-runtime-64 package (`polars[rt64]`).
@@ -389,7 +389,6 @@ class RunConfig:
     spill_device: float
     query_set: str
     collect_traces: bool = False
-    stats_planning: bool
     dynamic_planning: bool | None = None
     max_io_threads: int
     native_parquet: bool
@@ -542,7 +541,6 @@ class RunConfig:
             max_rows_per_partition=args.max_rows_per_partition,
             query_set=args.query_set,
             collect_traces=args.collect_traces,
-            stats_planning=args.stats_planning,
             dynamic_planning=args.dynamic_planning,
             max_io_threads=args.max_io_threads,
             native_parquet=args.native_parquet,
@@ -580,7 +578,6 @@ class RunConfig:
                 print(f"blocksize: {self.blocksize}")
                 print(f"shuffle_method: {self.shuffle}")
                 print(f"broadcast_join_limit: {self.broadcast_join_limit}")
-                print(f"stats_planning: {self.stats_planning}")
                 if self.runtime == "rapidsmpf":
                     print(f"native_parquet: {self.native_parquet}")
                     print(f"dynamic_planning: {self.dynamic_planning}")
@@ -644,13 +641,6 @@ def get_executor_options(
             executor_options["fallback_mode"] = run_config.fallback_mode
         if run_config.cluster == "distributed":
             executor_options["cluster"] = "distributed"
-        executor_options["stats_planning"] = {
-            "use_reduction_planning": run_config.stats_planning,
-            "use_sampling": (
-                # Always allow row-group sampling for rapidsmpf runtime
-                run_config.stats_planning or run_config.runtime == "rapidsmpf"
-            ),
-        }
         executor_options["client_device_threshold"] = run_config.spill_device
         executor_options["runtime"] = run_config.runtime
         executor_options["max_io_threads"] = run_config.max_io_threads
@@ -663,8 +653,6 @@ def get_executor_options(
         benchmark
         and benchmark.__name__ == "PDSHQueries"
         and run_config.executor == "streaming"
-        # Only use the unique_fraction config if stats_planning is disabled
-        and not run_config.stats_planning
         and not run_config.dynamic_planning
     ):
         executor_options["unique_fraction"] = {
@@ -773,6 +761,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
             "rmm_async": args.rmm_async,
             "rmm_release_threshold": args.rmm_release_threshold,
             "threads_per_worker": run_config.threads,
+            "memory_limit": args.worker_memory_limit,
         }
 
         client = Client(LocalCUDACluster(**kwargs))
@@ -780,7 +769,6 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if run_config.shuffle != "tasks":
         try:
-            from rapidsmpf.config import Options
             from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
             bootstrap_dask_cluster(
@@ -795,8 +783,10 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
                         "dask_print_statistics": str(args.rapidsmpf_print_statistics),
                         "dask_oom_protection": str(args.rapidsmpf_oom_protection),
                     }
+                    | get_environment_variables()
                 ),
             )
+
             # Setting this globally makes the peak statistics not meaningful
             # across queries / iterations. But doing it per query isn't worth
             # the effort right now.
@@ -1114,6 +1104,16 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Default: None (no release threshold)"""),
     )
     parser.add_argument(
+        "--worker-memory-limit",
+        default="auto",
+        type=str,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the memory limit
+            of each Dask worker. Use 'auto' to let Dask determine the limit
+            automatically, or '0' for unlimited.
+            Default: auto"""),
+    )
+    parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1213,12 +1213,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--stats-planning",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Enable statistics planning.",
-    )
-    parser.add_argument(
         "--dynamic-planning",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1267,7 +1261,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--spill-to-pinned-memory",
         action=argparse.BooleanOptionalAction,
-        default=False,
+        default=True,
         help=textwrap.dedent("""\
             Whether RapidsMPF should spill to pinned host memory when available,
             or use regular pageable host memory."""),
@@ -1332,7 +1326,11 @@ def parse_args(
     ):
         raise ValueError("Must specify --validate to use --output-expected-directory.")
 
-    if parsed_args.suffix and not parsed_args.suffix.startswith("."):
+    if (
+        parsed_args.suffix
+        and not parsed_args.suffix.startswith(".")
+        and not parsed_args.suffix.startswith("/")
+    ):
         parsed_args.suffix = f".{parsed_args.suffix}"
 
     return parsed_args
@@ -1354,6 +1352,7 @@ def validate_result(
     expected: pl.DataFrame,
     sort_by: list[tuple[str, bool]],
     limit: int | None = None,
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None,
     **kwargs: Any,
 ) -> ValidationResult:
     """
@@ -1368,7 +1367,12 @@ def validate_result(
     """
     try:
         assert_tpch_result_equal(
-            result, expected, sort_by=sort_by, limit=limit, **kwargs
+            result,
+            expected,
+            sort_by=sort_by,
+            limit=limit,
+            sort_keys=sort_keys,
+            **kwargs,
         )
     except Exception as e:
         return ValidationResult.from_error(e)
@@ -1387,6 +1391,13 @@ class QueryResult:
         The result of the query.
     sort_by: list[tuple[str, bool]]
         The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
+        Used for the ties/limit boundary logic in validation.
+    sort_keys: list[tuple[pl.Expr, bool]] | None
+        Optional Polars expressions for the sortedness check. Use this when the query
+        sorts by a conditional expression (e.g. ``CASE WHEN lochierarchy = 0 THEN i_category END``)
+        that cannot be represented as a plain column name in ``sort_by``. When provided,
+        these expressions are evaluated against the output and used only for the sortedness
+        check; ``sort_by`` still drives the ties/limit boundary logic.
     limit: int | None
         The limit of the query, if any.
 
@@ -1396,6 +1407,7 @@ class QueryResult:
     sort_by: list[tuple[str, bool]]
     limit: int | None = None
     nulls_last: bool = True
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
 def check_input_data_type(
@@ -1417,7 +1429,7 @@ def check_input_data_type(
         table, col = "item", "i_current_price"
     else:
         table, col = "customer", "c_acctbal"
-    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    path = f"{run_config.dataset_path}/{table}{run_config.suffix}"
     t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
 
     num_type: Literal["decimal", "float"]
@@ -1430,7 +1442,7 @@ def check_input_data_type(
     if run_config.query_set == "pdsds":
         date_type = "date"
     else:
-        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        path = f"{run_config.dataset_path}/orders{run_config.suffix}"
         t = (
             pl.scan_parquet(path)
             .select(pl.col("o_orderdate"))
@@ -1481,6 +1493,7 @@ def run_polars_query_iteration(
             query_result.sort_by,
             limit=query_result.limit,
             nulls_last=query_result.nulls_last,
+            sort_keys=query_result.sort_keys,
             **get_validation_options(args),
         )
     else:
@@ -1779,7 +1792,7 @@ def run_polars(
                 date_type,
                 validation_files,
             )
-        case "single" | "distributed":
+        case "single" | "distributed" | None:
             run_polars_single_or_dask(
                 benchmark,
                 args,
@@ -1874,19 +1887,20 @@ def run_polars_spmd(
     if run_config.rmm_async:
         raise NotImplementedError("--rmm-async is not supported with --cluster spmd")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime" and "cluster" are reserved — spmd_execution sets them
+    # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
     rmm.mr.set_current_device_resource(
         rmm.mr.CudaAsyncMemoryResource(release_threshold=args.rmm_release_threshold)
     )
-    with spmd_execution(
+    with SPMDEngine(
+        rapidsmpf_options=Options(get_environment_variables()),
         executor_options=executor_options,
         engine_options={
             "parquet_options": parquet_options,
             "cuda_stream_policy": run_config.stream_policy,
         },
-    ) as (comm, ctx, engine):
+    ) as engine:
         from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
         from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
             allgather_polars_dataframe,
@@ -1895,14 +1909,13 @@ def run_polars_spmd(
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
                 return allgather_polars_dataframe(
-                    comm=comm,
-                    ctx=ctx,
+                    engine=engine,
                     local_df=df,
                     op_id=op_id,
                 )
 
-        rank = comm.rank
-        run_config = dataclasses.replace(run_config, n_workers=comm.nranks)
+        rank = engine.rank
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
@@ -1945,7 +1958,7 @@ def run_polars_ray(
     validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Ray actor-based distributed execution."""
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
     if run_config.collect_traces:
         raise NotImplementedError(
@@ -1954,18 +1967,18 @@ def run_polars_ray(
     if run_config.rmm_async:
         raise NotImplementedError("--rmm-async is not supported with --cluster ray.")
     executor_options = get_executor_options(run_config, benchmark=benchmark)
-    # "runtime", "cluster" are reserved — ray_execution sets them
+    # "runtime", "cluster" are reserved — RayEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
     engine_options: dict[str, Any] = {
         "cuda_stream_policy": run_config.stream_policy,
         "parquet_options": parquet_options,
     }
-    with ray_execution(
+    with RayEngine(
         executor_options=executor_options,
         engine_options=engine_options,
-    ) as (ray_client, engine):
-        run_config = dataclasses.replace(run_config, n_workers=ray_client.nranks)
+    ) as engine:
+        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
             args,
@@ -2128,7 +2141,7 @@ def print_duckdb_plan(
 
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
@@ -2164,7 +2177,7 @@ def execute_duckdb_query(
         tbl_names = PDSH_TABLE_NAMES
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"

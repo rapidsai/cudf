@@ -22,7 +22,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/logger.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -37,8 +36,8 @@
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/climits>
-#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
@@ -46,7 +45,6 @@
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -578,8 +576,8 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
     auto RLE_column_size = [&](TypeKind type_kind) {
       return std::accumulate(
-        thrust::make_counting_iterator(0ul),
-        thrust::make_counting_iterator(segmentation.num_rowgroups()),
+        cuda::counting_iterator<size_t>{0},
+        cuda::counting_iterator{segmentation.num_rowgroups()},
         0ul,
         [&](auto data_size, auto rg_idx) {
           return data_size +
@@ -716,7 +714,7 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
   // One thread per column, per stripe
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<size_t>{0},
     orc_table.num_columns() * segmentation.num_stripes(),
     [columns = device_span<orc_column_device_view const>{orc_table.d_columns},
      stripes = device_span<stripe_rowgroups const>{d_stripes},
@@ -833,8 +831,8 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
   std::vector<std::vector<rowgroup_rows>> h_aligned_rgs;
   h_aligned_rgs.reserve(segmentation.num_rowgroups());
-  std::transform(thrust::make_counting_iterator(0ul),
-                 thrust::make_counting_iterator(segmentation.num_rowgroups()),
+  std::transform(cuda::counting_iterator<size_t>{0},
+                 cuda::counting_iterator{segmentation.num_rowgroups()},
                  std::back_inserter(h_aligned_rgs),
                  [&](auto idx) -> std::vector<rowgroup_rows> {
                    return {aligned_rgs[idx].begin(), aligned_rgs[idx].end()};
@@ -891,7 +889,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   // and remove info from chunks that is common for the entire column
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0ul),
+    cuda::counting_iterator<size_t>{0},
     chunks.count(),
     [chunks = chunks.device_view(),
      cols = device_span<orc_column_device_view const>{orc_table.d_columns}] __device__(auto& idx) {
@@ -1150,8 +1148,8 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                              rmm::cuda_stream_view stream)
 {
   thrust::for_each(rmm::exec_policy_nosync(stream),
-                   thrust::make_counting_iterator(0ul),
-                   thrust::make_counting_iterator(stat_desc.size()),
+                   cuda::counting_iterator<size_t>{0},
+                   cuda::counting_iterator{stat_desc.size()},
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
@@ -1695,7 +1693,7 @@ void pushdown_lists_null_mask(orc_column_view const& col,
   // Reset bits where a null list element has rows in the child column
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0u),
+    cuda::counting_iterator<uint32_t>{0},
     col.size(),
     [d_columns, col_idx = col.index(), parent_pd_mask, out_mask] __device__(auto& idx) {
       auto const d_col        = d_columns[col_idx];
@@ -1778,7 +1776,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
     mask_ptrs, stream, cudf::get_current_device_resource_ref());
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0ul),
+    cuda::counting_iterator<size_t>{0},
     orc_table.num_columns(),
     [cols = device_span<orc_column_device_view>{orc_table.d_columns},
      ptrs = device_span<bitmask_type const* const>{d_mask_ptrs}] __device__(auto& idx) {
@@ -1927,7 +1925,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
     num_rowgroups, orc_table.num_columns(), stream);
   thrust::for_each_n(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0ul),
+    cuda::counting_iterator<size_t>{0},
     num_rowgroups,
     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
      rg_bounds = rowgroup_bounds.device_view(),
@@ -2203,8 +2201,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       auto const str_col_idx       = str_column.str_index();
       auto& sd                     = stripe_dicts[str_col_idx][stripe_idx];
       auto const direct_char_count = std::accumulate(
-        thrust::make_counting_iterator(stripe.first),
-        thrust::make_counting_iterator(stripe.first + stripe.size),
+        cuda::counting_iterator{stripe.first},
+        cuda::counting_iterator{stripe.first + stripe.size},
         0,
         [&](auto total, auto const& rg) { return total + str_column.rowgroup_char_count(rg); });
       // Enable dictionary encoding if the dictionary size is smaller than the direct encode size
@@ -2278,8 +2276,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
         sd.data_order, current_stream, cudf::get_current_device_resource_ref());
       thrust::scatter(rmm::exec_policy_nosync(current_stream),
-                      thrust::counting_iterator<uint32_t>(0),
-                      thrust::counting_iterator<uint32_t>(sd.data_order.size()),
+                      cuda::counting_iterator<uint32_t>{0},
+                      cuda::counting_iterator{static_cast<uint32_t>(sd.data_order.size())},
                       order_copy.begin(),
                       sd.data_order.begin());
 
@@ -2556,28 +2554,20 @@ void writer::impl::write(table_view const& input)
                          streams,
                          stripes,
                          stripe_dicts, /* unused, but its data will be accessed via pointer later */
-                         bounce_buffer] = [&] {
-    try {
-      return convert_table_to_orc_data(input,
-                                       *_table_meta,
-                                       _max_stripe_size,
-                                       _row_index_stride,
-                                       _enable_dictionary,
-                                       _sort_dictionaries,
-                                       _compression,
-                                       _compression_blocksize,
-                                       _stats_freq,
-                                       _compression_statistics != nullptr,
-                                       _single_write_mode,
-                                       *_out_sink,
-                                       _stream);
-    } catch (...) {  // catch any exception type
-      CUDF_LOG_ERROR(
-        "ORC writer encountered exception during processing. "
-        "No data has been written to the sink.");
-      throw;  // this throws the same exception
-    }
-  }();
+                         bounce_buffer] =
+    convert_table_to_orc_data(input,
+                              *_table_meta,
+                              _max_stripe_size,
+                              _row_index_stride,
+                              _enable_dictionary,
+                              _sort_dictionaries,
+                              _compression,
+                              _compression_blocksize,
+                              _stats_freq,
+                              _compression_statistics != nullptr,
+                              _single_write_mode,
+                              *_out_sink,
+                              _stream);
 
   if (_state == writer_state::NO_DATA_WRITTEN) {
     // Write the ORC file header if this is the first write
