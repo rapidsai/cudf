@@ -12,6 +12,17 @@
 
 namespace cudf::detail {
 
+std::size_t get_full_join_size(
+  cudf::table_view const& build_table,
+  cudf::table_view const& probe_table,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_build,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_probe,
+  cudf::detail::hash_table_t const& hash_table,
+  bool has_nulls,
+  null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
 template <join_kind Join>
 std::size_t compute_join_output_size(
   table_view const& build_table,

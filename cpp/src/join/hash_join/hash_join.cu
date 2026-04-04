@@ -14,8 +14,10 @@
 #include <cudf/detail/row_operator/primitive_row_operators.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/join/hash_join.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/mr/polymorphic_allocator.hpp>
 
@@ -26,6 +28,36 @@
 
 namespace cudf::detail {
 
+bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
+{
+  if (left.is_empty() || right.is_empty()) { return true; }
+  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }
+  if ((join_kind::INNER_JOIN == join_type) && ((0 == left.num_rows()) || (0 == right.num_rows()))) {
+    return true;
+  }
+  if ((join_kind::LEFT_SEMI_JOIN == join_type) && (0 == right.num_rows())) { return true; }
+  if ((join_kind::LEFT_SEMI_JOIN == join_type || join_kind::LEFT_ANTI_JOIN == join_type) &&
+      (0 == left.num_rows())) {
+    return true;
+  }
+  return false;
+}
+
+void validate_hash_join_probe(table_view const& build, table_view const& probe, bool has_nulls)
+{
+  CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty", std::invalid_argument);
+  CUDF_EXPECTS(build.num_columns() == probe.num_columns(),
+               "Mismatch in number of columns to be joined on",
+               std::invalid_argument);
+  CUDF_EXPECTS(has_nulls || !cudf::has_nested_nulls(probe),
+               "Probe table has nulls while build table was not hashed with null check.",
+               std::invalid_argument);
+  CUDF_EXPECTS(cudf::have_same_types(build, probe),
+               "Mismatch in joining column data types",
+               cudf::data_type_error);
+}
+
+namespace {
 void build_hash_join(
   cudf::table_view const& build,
   std::shared_ptr<detail::row::equality::preprocessed_table> const& preprocessed_build,
@@ -64,6 +96,7 @@ void build_hash_join(
     insert_rows(build, d_hasher);
   }
 }
+}  // namespace
 
 template <typename Hasher>
 hash_join<Hasher>::hash_join(cudf::table_view const& build,
@@ -115,18 +148,16 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                                 stream);
 }
 
-using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>;
+template hash_join<hash_join_hasher>::hash_join(cudf::table_view const& build,
+                                                bool has_nulls,
+                                                cudf::null_equality compare_nulls,
+                                                rmm::cuda_stream_view stream);
 
-template hash_join<hasher_type>::hash_join(cudf::table_view const& build,
-                                           bool has_nulls,
-                                           cudf::null_equality compare_nulls,
-                                           rmm::cuda_stream_view stream);
-
-template hash_join<hasher_type>::hash_join(cudf::table_view const& build,
-                                           bool has_nulls,
-                                           cudf::null_equality compare_nulls,
-                                           double load_factor,
-                                           rmm::cuda_stream_view stream);
+template hash_join<hash_join_hasher>::hash_join(cudf::table_view const& build,
+                                                bool has_nulls,
+                                                cudf::null_equality compare_nulls,
+                                                double load_factor,
+                                                rmm::cuda_stream_view stream);
 
 }  // namespace cudf::detail
 
