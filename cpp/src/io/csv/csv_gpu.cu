@@ -556,6 +556,22 @@ __device__ __inline__ bool try_fused_float_parse(char const* begin,
 }
 
 /**
+ * @brief Convert civil date (year, month, day) to days since Unix epoch (1970-01-01).
+ *
+ * Uses the Hinnant civil_from_days algorithm expressed as raw integer math,
+ * avoiding cuda::std::chrono types to minimize register pressure.
+ */
+__device__ __forceinline__ int64_t civil_to_days(int32_t y, int32_t m, int32_t d)
+{
+  y -= (m <= 2);
+  int32_t const era = (y >= 0 ? y : y - 399) / 400;
+  int32_t const yoe = y - era * 400;
+  int32_t const doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  int32_t const doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return static_cast<int64_t>(era) * 146097 + doe - 719468;
+}
+
+/**
  * @brief Parse 1-4 digits from the current position, advancing the pointer.
  * Returns the parsed value, or -1 if no digit found.
  */
@@ -649,11 +665,10 @@ __device__ __inline__ bool try_fused_timestamp_parse(char const* begin,
   // Check for date-only (YYYY-MM)
   if (cur >= end || *cur == delim || *cur == term ||
       (*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
-    auto ymd = cuda::std::chrono::year_month_day{
-      cuda::std::chrono::year{year_val},
-      cuda::std::chrono::month{static_cast<unsigned>(month_val)},
-      cuda::std::chrono::day{1}};
-    *out_value     = timestamp_type{cuda::std::chrono::sys_days{ymd}};
+    using duration_type = typename timestamp_type::duration;
+    auto const epoch_days = civil_to_days(year_val, month_val, 1);
+    auto const ns = epoch_days * int64_t{86400} * 1000000000LL;
+    *out_value     = timestamp_type{duration_type{ns / (1000000000LL / duration_type::period::den)}};
     *out_delimiter = cur;
     return true;
   }
@@ -672,79 +687,64 @@ __device__ __inline__ bool try_fused_timestamp_parse(char const* begin,
     return false;
   }
 
-  auto ymd = cuda::std::chrono::year_month_day{
-    cuda::std::chrono::year{year_val},
-    cuda::std::chrono::month{static_cast<unsigned>(month_val)},
-    cuda::std::chrono::day{static_cast<unsigned>(day_val)}};
-  timestamp_type answer{cuda::std::chrono::sys_days{ymd}};
+  // Convert to nanoseconds since epoch using raw integer math (avoids chrono register overhead)
+  using duration_type = typename timestamp_type::duration;
+  auto const epoch_days = civil_to_days(year_val, month_val, day_val);
+  int64_t total_ns = epoch_days * int64_t{86400} * 1000000000LL;
 
   // Check for date-only (YYYY-MM-DD)
   if (cur >= end || *cur == delim || *cur == term ||
       (*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
-    *out_value     = answer;
+    constexpr int64_t ns_per_tick = 1000000000LL / duration_type::period::den;
+    *out_value     = timestamp_type{duration_type{total_ns / ns_per_tick}};
     *out_delimiter = cur;
     return true;
   }
 
   // Expect date-time separator: 'T' or ' '
   if (*cur != 'T' && *cur != ' ') {
-    // Skip trailing characters we don't understand (like 'Z')
     while (cur < end && *cur != delim && *cur != term &&
            !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
       ++cur;
     }
-    *out_value     = answer;
+    constexpr int64_t ns_per_tick = 1000000000LL / duration_type::period::den;
+    *out_value     = timestamp_type{duration_type{total_ns / ns_per_tick}};
     *out_delimiter = cur;
     return true;
   }
   ++cur;
 
-  // Parse hours
+  // Parse time components using raw integer nanosecond accumulation (avoids chrono overhead)
   int32_t hours = parse_digits(cur, end, 2);
-  if (hours < 0) { hours = 0; }
+  if (hours >= 0) { total_ns += static_cast<int64_t>(hours) * 3600LL * 1000000000LL; }
 
-  auto time_dur = cuda::std::chrono::duration_cast<duration_type>(cuda::std::chrono::hours{hours});
-
-  // Parse minutes
   if (cur < end && *cur == ':') {
     ++cur;
     int32_t minutes = parse_digits(cur, end, 2);
-    if (minutes >= 0) {
-      time_dur +=
-        cuda::std::chrono::duration_cast<duration_type>(cuda::std::chrono::minutes{minutes});
-    }
+    if (minutes >= 0) { total_ns += static_cast<int64_t>(minutes) * 60LL * 1000000000LL; }
 
-    // Parse seconds
     if (cur < end && *cur == ':') {
       ++cur;
       int32_t seconds = parse_digits(cur, end, 2);
-      if (seconds >= 0) {
-        time_dur +=
-          cuda::std::chrono::duration_cast<duration_type>(cuda::std::chrono::seconds{seconds});
-      }
+      if (seconds >= 0) { total_ns += static_cast<int64_t>(seconds) * 1000000000LL; }
 
-      // Parse subsecond fraction
       if (cur < end && *cur == '.') {
         ++cur;
-        int64_t frac       = 0;
-        int frac_digits    = 0;
+        int64_t frac    = 0;
+        int frac_digits = 0;
         while (cur < end && *cur >= '0' && *cur <= '9' && frac_digits < 9) {
           frac = frac * 10 + (*cur - '0');
           ++frac_digits;
           ++cur;
         }
-        // Scale fraction to nanoseconds
         while (frac_digits < 9) {
           frac *= 10;
           ++frac_digits;
         }
-        time_dur += cuda::std::chrono::duration_cast<duration_type>(
-          cuda::std::chrono::nanoseconds{frac});
+        total_ns += frac;
       }
     }
   }
-
-  answer += time_dur;
 
   // Skip trailing 'Z' or other timezone indicator
   while (cur < end && *cur != delim && *cur != term &&
@@ -752,7 +752,9 @@ __device__ __inline__ bool try_fused_timestamp_parse(char const* begin,
     ++cur;
   }
 
-  *out_value     = answer;
+  // Convert accumulated nanoseconds to target timestamp type
+  constexpr int64_t ns_per_tick = 1000000000LL / duration_type::period::den;
+  *out_value     = timestamp_type{duration_type{total_ns / ns_per_tick}};
   *out_delimiter = cur;
   return true;
 }

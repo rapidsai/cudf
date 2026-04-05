@@ -19,3 +19,11 @@ Exp16	9618ca0	-	+0.0	discard	csv_read_data_type	SWAR 8-byte string scan
 Exp17	5923dd2	-	+0.0	discard	csv_read_data_type	ctxtree buffer reuse
 Exp18	19f6ce0	-	-5.3	discard	csv_read_data_type	SWAR 8-digit int parse (regression)
 Exp19	c39e0cc	3.77 GiB/s	+74.5	keep	csv_read_io	re-baseline on csv_read_io (current code, all session 1 optimizations)
+Exp25	f1ceb49	2.17 GiB/s	-60.6	discard	csv_read_io	__noinline__ fused parsers (CATASTROPHIC regression — function call overhead 64x/row)
+Exp20	bd63efc	5.35 GiB/s	+147.6	keep	csv_read_io	single-shot data loading (eliminate chunked loop overhead)
+Exp21	d4d3b51	5.51 GiB/s	+155.3	keep	csv_read_io	skip doublequote processing when no fields quoted
+Exp22	7e48dd1	5.38 GiB/s	+0.0	discard	csv_read_io	count_blank_rows check (too small)
+Exp23	-	-	0.0	idea	csv_read_io	FST single-pass row offsets (cancelled — too complex)
+Exp24	d90ab1c	3.64 GiB/s	-33.9	discard	csv_read_io	register limit min_blocks=8 (increased spill)
+Exp25	f1ceb49	2.17 GiB/s	-60.6	discard	csv_read_io	__noinline__ fused parsers (function call overhead)
+Exp26	-	-	0.0	idea	csv_read_io	column-oriented split conversion (cancelled — type_dispatcher fallback inflates all instantiations)

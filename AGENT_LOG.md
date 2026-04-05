@@ -33,3 +33,51 @@ Key previous discoveries:
 3. Row offset kernel optimization (39% of time in single-type, likely even more in multi-type)
 4. Mixed-type warp efficiency — are threads efficiently utilizing compute in the mixed case?
 
+
+## Experiment 25: __noinline__ fused parsers
+
+**Hypothesis:** Making fused parser functions __noinline__ would reduce register pressure from 80→56, allowing more warps per SM. Spilling would decrease, improving performance.
+
+**Result:** DISCARD — catastrophic regression (5.51 → 2.17 GiB/s, -61%). The function call overhead (save/restore registers, stack frame) is called 64 times per row (once per column), dominating execution time.
+
+**What was learned:**
+1. __noinline__ is unsuitable for hot inner-loop functions called many times per thread. The save/restore overhead is enormous.
+2. The compiler's choice to inline the fused parsers (80 registers + 72 bytes spill) IS the optimal tradeoff. Inlining avoids function call overhead at the cost of register pressure.
+3. The only way to reduce register pressure without __noinline__ is to reduce code complexity — i.e., fewer fused parser branches. But that means losing the per-type optimization that gave the +75% single-type improvement.
+4. **Conclusion: The current register/spill balance is locally optimal given the fused parsing architecture.** Further kernel improvement requires a fundamentally different approach (like column-oriented processing instead of row-oriented).
+
+## Circuit Breaker — Deep Research Mode (after Exp22, 24, 25 failures)
+
+Three consecutive discards:
+- Exp22: skip blank row removal (0.1ms too small to detect)
+- Exp24: register limit (increased spill → -34%)
+- Exp25: __noinline__ (function call overhead → -61%)
+
+**Root cause**: All three targeted symptoms of the same underlying issue — the conversion kernel is at its local optimum for the current row-oriented, fused-parsing architecture. Register pressure, spilling, and code footprint are intrinsically coupled by the large switch statement.
+
+**What NOT to try next:**
+- Any register/occupancy tuning (Exp24/25 proved this is counterproductive)
+- Micro-optimizations to individual fused parsers (diminishing returns since Exp12)
+- Per-kernel parameter changes (block size, shared memory, etc.)
+
+**What MIGHT work:**
+- Column-oriented processing (ParPaRaw's approach): assign threads to columns instead of rows, so each thread only has one type's code path → minimal register pressure, no warp divergence
+- Host-side optimization: reduce the 11ms of non-GPU overhead
+- Multi-stream pipelining: overlap H2D with compute
+- Writer optimization: completely untouched
+
+Spawning research agents for fresh ideas before the next experiment.
+
+## Experiment 26: Column-oriented split conversion (cancelled)
+
+**Hypothesis:** Split the monolithic conversion kernel into per-type sub-kernels to reduce register pressure from 80 to ~30 per sub-kernel.
+
+**Analysis:** Even with `if constexpr` gating the fused parser branches, the `type_dispatcher` fallback path (which handles all types) is compiled in every instantiation. This means every sub-kernel still has ALL type paths in its binary, keeping register pressure high. True column-oriented conversion requires replacing the entire kernel architecture (field index + per-type kernels without type_dispatcher fallback), which is a multi-day engineering effort.
+
+**Decision:** Deferred. The column-oriented approach is the theoretically correct solution but requires too much refactoring for one experiment cycle. Need to find a smaller incremental step.
+
+## Note: Benchmark variability across sessions
+
+The csv_read_io HOST_BUFFER result dropped from 5.51 GiB/s (earlier in this session) to 3.92 GiB/s (current). The code hasn't changed (same commit d4d3b515). GPU SM clock verified at 2405 MHz (near max 3003 MHz). The likely cause is system-level variability (thermal, power management, background processes). 
+
+**Going forward:** Use RELATIVE improvements between consecutive runs (same session conditions) rather than absolute numbers for experiment decisions. Run back-to-back comparisons on the same session for reliable results.
