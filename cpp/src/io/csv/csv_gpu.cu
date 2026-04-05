@@ -407,6 +407,139 @@ __device__ __inline__ bool try_fused_int_parse(char const* begin,
 }
 
 /**
+ * @brief Scan to the next delimiter/terminator, used when a fused parse fails
+ *        and we need to find the field boundary for the fallback path.
+ */
+__device__ __inline__ char const* scan_to_delimiter(char const* cur,
+                                                    char const* end,
+                                                    char delim,
+                                                    char term)
+{
+  while (cur < end && *cur != delim && *cur != term &&
+         !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    ++cur;
+  }
+  return cur;
+}
+
+/**
+ * @brief Try to parse a floating-point field inline while scanning for the delimiter.
+ *
+ * Fuses seek_field_end + NA check + trim + parse_numeric into a single pass
+ * for standard floating-point values (digits, decimal point, exponent).
+ * Falls back on: infinity, NaN, non-standard formats, quoted fields.
+ */
+template <typename T>
+__device__ __inline__ bool try_fused_float_parse(char const* begin,
+                                                 char const* end,
+                                                 char delim,
+                                                 char term,
+                                                 char decimal_char,
+                                                 char thousands_char,
+                                                 T* out_value,
+                                                 char const** out_delimiter)
+{
+  auto cur = begin;
+
+  // Skip leading whitespace
+  while (cur < end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  // Empty field → NA
+  if (cur >= end || *cur == delim || *cur == term) {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;
+  }
+
+  // Parse sign
+  T sign = 1;
+  if (*cur == '-') {
+    sign = -1;
+    ++cur;
+  } else if (*cur == '+') {
+    ++cur;
+  }
+
+  // Must start with digit or decimal point
+  if (cur >= end || ((*cur < '0' || *cur > '9') && *cur != decimal_char)) {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;  // Could be "inf", "nan", etc.
+  }
+
+  // Parse integer part
+  T value = 0;
+  while (cur < end) {
+    char const c = *cur;
+    if (c >= '0' && c <= '9') {
+      value = value * T{10} + T(c - '0');
+      ++cur;
+    } else if (c == thousands_char) {
+      ++cur;  // skip thousands separator
+    } else {
+      break;
+    }
+  }
+
+  // Parse fractional part
+  if (cur < end && *cur == decimal_char) {
+    ++cur;
+    T frac_divisor = T{0.1};
+    while (cur < end) {
+      char const c = *cur;
+      if (c >= '0' && c <= '9') {
+        value += T(c - '0') * frac_divisor;
+        frac_divisor *= T{0.1};
+        ++cur;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Parse exponent
+  if (cur < end && (*cur == 'e' || *cur == 'E')) {
+    ++cur;
+    int32_t exp_sign = 1;
+    if (cur < end) {
+      if (*cur == '-') {
+        exp_sign = -1;
+        ++cur;
+      } else if (*cur == '+') {
+        ++cur;
+      }
+    }
+    int32_t exponent = 0;
+    while (cur < end) {
+      char const c = *cur;
+      if (c >= '0' && c <= '9') {
+        exponent = exponent * 10 + (c - '0');
+        ++cur;
+      } else {
+        break;
+      }
+    }
+    if (exponent != 0) { value *= static_cast<T>(exp10(static_cast<double>(exponent * exp_sign))); }
+  }
+
+  // Skip trailing whitespace
+  while (cur < end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  // Must end at delimiter/terminator
+  if (cur < end && *cur != delim && *cur != term &&
+      !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return false;
+  }
+
+  *out_value     = value * sign;
+  *out_delimiter = cur;
+  return true;
+}
+
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -520,6 +653,22 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
           fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
                                          options.terminator, &val, &fused_delim);
           if (fused_ok) { static_cast<uint64_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::FLOAT32: {
+          float val;
+          fused_ok = try_fused_float_parse(field_start, row_end, options.delimiter,
+                                           options.terminator, options.decimal, options.thousands,
+                                           &val, &fused_delim);
+          if (fused_ok) { static_cast<float*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::FLOAT64: {
+          double val;
+          fused_ok = try_fused_float_parse(field_start, row_end, options.delimiter,
+                                           options.terminator, options.decimal, options.thousands,
+                                           &val, &fused_delim);
+          if (fused_ok) { static_cast<double*>(columns[actual_col])[rec_id] = val; }
           break;
         }
         default: break;

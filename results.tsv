@@ -3,3 +3,4 @@ commit	metric	improvement_pct	status	benchmark	description
 25c0006	4.70 GiB/s INT, 4.48 GiB/s FLT, 2.90 GiB/s TS	+9.8	keep	csv_reader	shared memory valid_counts reduction (shmem atomics instead of global)
 0f1f370	4.73 GiB/s INT, 4.51 GiB/s FLT, 2.89 GiB/s TS	+0.0	keep	csv_reader	shared memory histogram in type detection (same pattern, helps inference path)
 24803fa	4.78 GiB/s INT, 4.50 GiB/s FLT, 2.90 GiB/s TS	+0.0	discard	csv_reader	fast-path seek_field_end for non-quoted fields (within noise, nvcc already optimizes)
+9ab2d0e	6.59 GiB/s INT, 4.86 GiB/s FLT, 3.55 GiB/s TS	+32.0	keep	csv_reader	fused delimiter scan + integer conversion (single-pass for int fields)
