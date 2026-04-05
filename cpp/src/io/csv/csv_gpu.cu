@@ -742,6 +742,168 @@ __device__ __inline__ bool try_fused_timestamp_parse(char const* begin,
 }
 
 /**
+ * @brief Try to parse a duration field inline while scanning for the delimiter.
+ *
+ * Handles formats: "N days [+]HH:MM:SS.nnn", "HH:MM:SS.nnn", digits-only.
+ * Fuses seek_field_end + NA check + trim + to_duration into a single pass.
+ */
+template <typename duration_type>
+__device__ __inline__ bool try_fused_duration_parse(char const* begin,
+                                                    char const* end,
+                                                    char delim,
+                                                    char term,
+                                                    duration_type* out_value,
+                                                    char const** out_delimiter)
+{
+  using cuda::std::chrono::duration_cast;
+  using rep_type = typename duration_type::rep;
+  auto cur       = begin;
+
+  // Skip leading whitespace
+  while (cur < end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  // Empty field → NA
+  if (cur >= end || *cur == delim || *cur == term) {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;
+  }
+
+  // Parse first integer (could be days value, hours value, or epoch value)
+  bool const is_negative = (*cur == '-');
+  if (is_negative) { ++cur; }
+
+  if (cur >= end || *cur < '0' || *cur > '9') {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;
+  }
+
+  int64_t first_val = 0;
+  while (cur < end && *cur >= '0' && *cur <= '9') {
+    first_val = first_val * 10 + (*cur - '0');
+    ++cur;
+  }
+
+  if (is_negative) { first_val = -first_val; }
+
+  // Skip spaces after first number
+  while (cur < end && *cur == ' ') {
+    ++cur;
+  }
+
+  // Check for end of field (digits-only duration)
+  if (cur >= end || *cur == delim || *cur == term ||
+      (*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    if constexpr (cuda::std::is_same_v<duration_type, cudf::duration_D>) {
+      *out_value = duration_type{static_cast<rep_type>(first_val)};
+    } else {
+      *out_value = duration_type{static_cast<rep_type>(first_val)};
+    }
+    *out_delimiter = cur;
+    return true;
+  }
+
+  // For duration_D (days), the value is just the integer — no time components.
+  // Early return avoids overflow when converting extreme day values to finer types.
+  if constexpr (cuda::std::is_same_v<duration_type, cudf::duration_D>) {
+    // Skip past remaining field content to find the delimiter
+    *out_value     = duration_type{static_cast<rep_type>(first_val)};
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return true;
+  }
+
+  // Check for "days" keyword
+  cudf::duration_D d_d{0};
+  cudf::duration_h d_h{0};
+
+  if (cur + 3 < end && cur[0] == 'd' && cur[1] == 'a' && cur[2] == 'y' && cur[3] == 's') {
+    d_d = cudf::duration_D{static_cast<int32_t>(first_val)};
+    cur += 4;
+    // Skip spaces and optional '+'
+    while (cur < end && *cur == ' ') {
+      ++cur;
+    }
+    if (cur < end && *cur == '+') { ++cur; }
+
+    // Parse hours
+    int32_t hours = 0;
+    while (cur < end && *cur >= '0' && *cur <= '9') {
+      hours = hours * 10 + (*cur - '0');
+      ++cur;
+    }
+    d_h = cudf::duration_h{hours};
+  } else if (*cur == ':') {
+    // No "days" keyword — first_val is hours
+    d_h = cudf::duration_h{static_cast<int32_t>(first_val)};
+  } else {
+    // Unknown format — fall back
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return false;
+  }
+
+  // Parse :minutes
+  cudf::duration_m d_m{0};
+  if (cur < end && *cur == ':') {
+    ++cur;
+    int32_t minutes = 0;
+    while (cur < end && *cur >= '0' && *cur <= '9') {
+      minutes = minutes * 10 + (*cur - '0');
+      ++cur;
+    }
+    d_m = cudf::duration_m{minutes};
+  }
+
+  // Parse :seconds
+  cudf::duration_s d_s{0};
+  if (cur < end && *cur == ':') {
+    ++cur;
+    int64_t seconds = 0;
+    while (cur < end && *cur >= '0' && *cur <= '9') {
+      seconds = seconds * 10 + (*cur - '0');
+      ++cur;
+    }
+    d_s = cudf::duration_s{seconds};
+  }
+
+  auto output_d = duration_cast<duration_type>(d_d + d_h + d_m + d_s);
+
+  // Parse .nanoseconds
+  if constexpr (!cuda::std::is_same_v<duration_type, cudf::duration_s>) {
+    if (cur < end && *cur == '.') {
+      ++cur;
+      auto const frac_start = cur;
+      int64_t frac          = 0;
+      while (cur < end && *cur >= '0' && *cur <= '9') {
+        frac = frac * 10 + (*cur - '0');
+        ++cur;
+      }
+      int frac_digits = static_cast<int>(cur - frac_start);
+      // Scale to nanoseconds
+      while (frac_digits < 9) {
+        frac *= 10;
+        ++frac_digits;
+      }
+      while (frac_digits > 9) {
+        frac /= 10;
+        --frac_digits;
+      }
+      output_d += duration_cast<duration_type>(cudf::duration_ns{frac});
+    }
+  }
+
+  // Skip to delimiter
+  while (cur < end && *cur != delim && *cur != term &&
+         !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    ++cur;
+  }
+
+  *out_value     = output_d;
+  *out_delimiter = cur;
+  return true;
+}
+
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -911,6 +1073,41 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
             field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
             &val, &fused_delim);
           if (fused_ok) { static_cast<cudf::timestamp_ns::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
+          break;
+        }
+        case cudf::type_id::DURATION_DAYS: {
+          cudf::duration_D val;
+          fused_ok = try_fused_duration_parse(
+            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::duration_D::rep*>(columns[actual_col])[rec_id] = val.count(); }
+          break;
+        }
+        case cudf::type_id::DURATION_SECONDS: {
+          cudf::duration_s val;
+          fused_ok = try_fused_duration_parse(
+            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::duration_s::rep*>(columns[actual_col])[rec_id] = val.count(); }
+          break;
+        }
+        case cudf::type_id::DURATION_MILLISECONDS: {
+          cudf::duration_ms val;
+          fused_ok = try_fused_duration_parse(
+            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::duration_ms::rep*>(columns[actual_col])[rec_id] = val.count(); }
+          break;
+        }
+        case cudf::type_id::DURATION_MICROSECONDS: {
+          cudf::duration_us val;
+          fused_ok = try_fused_duration_parse(
+            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::duration_us::rep*>(columns[actual_col])[rec_id] = val.count(); }
+          break;
+        }
+        case cudf::type_id::DURATION_NANOSECONDS: {
+          cudf::duration_ns val;
+          fused_ok = try_fused_duration_parse(
+            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::duration_ns::rep*>(columns[actual_col])[rec_id] = val.count(); }
           break;
         }
         default: break;
