@@ -50,7 +50,7 @@ rtcx::sha256 hash_strings(std::span<char const* const> inputs)
   auto error_code = errno;
   auto error_str  = std::format(
     "{}. `{}` failed with {} ({})", message, syscall_name, error_code, std::strerror(error_code));
-  CUDF_FAIL(+error_str, std::runtime_error);
+  CUDF_FAIL(error_str, std::runtime_error);
 }
 
 void install_file(char const* dst_path, std::span<std::uint8_t const> contents)
@@ -114,7 +114,7 @@ rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
                                   std::string_view compression)
 {
   CUDF_EXPECTS(compression == "none" || compression == "zstd",
-               +std::format("Unsupported compression type specified: {}", compression),
+               std::format("Unsupported compression type specified: {}", compression),
                std::runtime_error);
   auto decompressed = rtcx::byte_buffer::make(uncompressed_size);
 
@@ -124,9 +124,9 @@ rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
 
     CUDF_EXPECTS(
       !ZSTD_isError(errc) && errc == uncompressed_size,
-      +std::format("Failed to decompress embedded RTC source files with ZSTD, error code {} : ",
-                   errc,
-                   ZSTD_getErrorName(errc)),
+      std::format("Failed to decompress embedded RTC source files with ZSTD, error code {} : ",
+                  errc,
+                  ZSTD_getErrorName(errc)),
       std::runtime_error);
   } else {
     // compression is "none", so just copy the data
@@ -214,14 +214,14 @@ void jit_bundle_t::ensure_installed() const
       throw_posix(std::format("Failed to get stat for directory ({})", expected_path), "lstat");
     } else {
       // ensure base install directory exists
-      CUDF_LOG_INFO("Creating JIT install directory at ({})", expected_path);
+      CUDF_LOG_INFO("Creating JIT install directory at (%s)", expected_path.c_str());
       std::filesystem::create_directories(install_dir_);
       install_cudf_jit_files(expected_path.c_str(), cache_->get_tmp_dir());
     }
   } else {
     // directory exists, perform minor sanity check
     CUDF_EXPECTS(S_ISDIR(path_info.st_mode),
-                 +std::format("JIT install path ({}) exists but is not a directory", expected_path),
+                 std::format("JIT install path ({}) exists but is not a directory", expected_path),
                  std::runtime_error);
   }
 }
@@ -281,6 +281,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   char const* cuda_code,
   std::span<char const* const> extra_header_include_names,
   std::span<char const* const> extra_headers,
+  std::span<char const* const> extra_options,
   std::span<char const* const> name_expressions,
   bool use_pch,
   bool log_pch)
@@ -338,6 +339,9 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   for (auto const& option : options) {
     options_cstr.emplace_back(option.c_str());
   }
+  for (auto const& option : extra_options) {
+    options_cstr.emplace_back(option);
+  }
 
   auto params = rtcx::compile_params{.name                 = name,
                                      .source               = cuda_code,
@@ -367,23 +371,11 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
 
 }  // namespace
 
-static rtcx::kernel_ref get_kernel(rtcx::library const& lib)
-{
-  auto kernels = lib->enumerate_kernels();
-  CUDF_EXPECTS(
-    kernels.size() == 1,
-    +std::format("Expected exactly one kernel in compiled library, but found {}", kernels.size()),
-    std::runtime_error);
-  return kernels[0];
-}
-
-kernel::kernel(rtcx::library lib) : _library(std::move(lib)), _kernel(get_kernel(_library)) {}
-
 kernel get_kernel(std::string const& name,
                   std::string const& source_file,
                   std::span<char const* const> header_include_names,
                   std::span<char const* const> headers,
-                  std::string const& name_expression,
+                  std::string const& kernel_instance,
                   bool use_cache,
                   bool use_pch,
                   bool log_pch)
@@ -409,7 +401,7 @@ bundle={}
 source_file={}
 header_include_names={}
 headers={}
-name_expression={}
+kernel_instance={}
 )***",
                                runtime,
                                driver,
@@ -418,33 +410,40 @@ name_expression={}
                                source_file,
                                header_include_names_hash.view(),
                                headers_hash.view(),
-                               name_expression);
+                               kernel_instance);
 
   auto cache_key_sha256 = hash_string(cache_key);
 
   auto compile = [&] {
-    auto bundle_dir          = cudf::get_context().jit_bundle().get_directory();
-    auto source_file_path    = std::format("{}/{}", bundle_dir, source_file);
-    auto source              = read_blob_cstring(source_file_path.c_str());
-    char const* name_exprs[] = {name_expression.c_str()};
+    auto bundle_dir                = cudf::get_context().jit_bundle().get_directory();
+    auto source_file_path          = std::format("{}/{}", bundle_dir, source_file);
+    auto source                    = read_blob_cstring(source_file_path.c_str());
+    char const* name_expressions[] = {kernel_instance.c_str()};
+
     return compile_library_uncached(name.c_str(),
                                     reinterpret_cast<char const*>(source.data()),
                                     header_include_names,
                                     headers,
-                                    name_exprs,
+                                    {},
+                                    name_expressions,
                                     use_pch,
                                     log_pch);
   };
 
   if (!use_cache) {
     auto [lib, blob] = compile();
-    return lib;
+    auto kernels     = lib->enumerate_kernels();
+    CUDF_EXPECTS(kernels.size() == 1, "Unexpected kernel count", std::logic_error);
+    return kernel{lib, kernels[0]};
   }
 
   auto fut =
     cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
 
-  return fut.get();
+  auto lib     = fut.get();
+  auto kernels = lib->enumerate_kernels();
+  CUDF_EXPECTS(kernels.size() == 1, "Unexpected kernel count", std::logic_error);
+  return kernel{lib, kernels[0]};
 }
 
 }  // namespace CUDF_EXPORT cudf
