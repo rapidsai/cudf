@@ -1,2 +1,3 @@
 commit	metric	improvement_pct	status	benchmark	description
 246f6d2	3.77 GiB/s INT, 4.00 GiB/s FLT, 2.72 GiB/s TS	0.0	keep	csv_reader	baseline (noise floor: ~2-5% per dtype, ~9% mixed-type)
+25c0006	4.70 GiB/s INT, 4.48 GiB/s FLT, 2.90 GiB/s TS	+9.8	keep	csv_reader	shared memory valid_counts reduction (shmem atomics instead of global)

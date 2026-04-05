@@ -166,6 +166,19 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<uint64_t const> const row_offsets,
                       device_span<column_type_histogram> d_column_data)
 {
+  // Shared memory for block-level histogram accumulation.
+  // Reduces global atomicAdd calls from (num_rows * num_cols * num_types) to
+  // (num_blocks * num_cols * num_types).
+  extern __shared__ column_type_histogram s_column_data[];
+  auto const num_active_cols = d_column_data.size();
+  // Zero-initialize shared memory histograms
+  auto* const s_raw = reinterpret_cast<cudf::size_type*>(s_column_data);
+  auto const num_ints = num_active_cols * (sizeof(column_type_histogram) / sizeof(cudf::size_type));
+  for (int i = threadIdx.x; i < num_ints; i += blockDim.x) {
+    s_raw[i] = 0;
+  }
+  __syncthreads();
+
   auto const raw_csv = csv_text.data();
 
   // ThreadIds range per block, so also need the blockId
@@ -174,7 +187,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   auto const rec_id_next = rec_id + 1;
 
   // we can have more threads than data, make sure we are not past the end of the data
-  if (rec_id_next >= row_offsets.size()) { return; }
+  if (rec_id_next < row_offsets.size()) {
 
   auto field_start   = raw_csv + row_offsets[rec_id];
   auto const row_end = raw_csv + row_offsets[rec_id_next];
@@ -192,12 +205,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
       // points to last character in the field
       auto const field_len = static_cast<size_t>(next_delimiter - field_start);
       if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
-        atomicAdd(&d_column_data[actual_col].null_count, 1);
+        atomicAdd(&s_column_data[actual_col].null_count, 1);
       } else if (serialized_trie_contains(opts.trie_true, {field_start, field_len}) ||
                  serialized_trie_contains(opts.trie_false, {field_start, field_len})) {
-        atomicAdd(&d_column_data[actual_col].bool_count, 1);
+        atomicAdd(&s_column_data[actual_col].bool_count, 1);
       } else if (cudf::io::is_infinity(field_start, next_delimiter)) {
-        atomicAdd(&d_column_data[actual_col].float_count, 1);
+        atomicAdd(&s_column_data[actual_col].float_count, 1);
       } else {
         long count_number    = 0;
         long count_decimal   = 0;
@@ -252,16 +265,16 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
           if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
-            atomicAdd(&d_column_data[actual_col].datetime_count, 1);
+            atomicAdd(&s_column_data[actual_col].datetime_count, 1);
           } else {
-            atomicAdd(&d_column_data[actual_col].string_count, 1);
+            atomicAdd(&s_column_data[actual_col].string_count, 1);
           }
         } else if (count_number == int_req_number_cnt) {
           auto const is_negative = (*trimmed_field_range.first == '-');
           auto const data_begin =
             trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
           cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
-            data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
+            data_begin, data_begin + count_number, is_negative, s_column_data[actual_col]);
           atomicAdd(ptr, 1);
         } else if (is_floatingpoint(trimmed_field_len,
                                     count_number,
@@ -269,9 +282,9 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                     count_thousands,
                                     count_dash + count_plus,
                                     count_exponent)) {
-          atomicAdd(&d_column_data[actual_col].float_count, 1);
+          atomicAdd(&s_column_data[actual_col].float_count, 1);
         } else {
-          atomicAdd(&d_column_data[actual_col].string_count, 1);
+          atomicAdd(&s_column_data[actual_col].string_count, 1);
         }
       }
       actual_col++;
@@ -279,6 +292,16 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
     next_field  = next_delimiter + 1;
     field_start = next_field;
     col++;
+  }
+
+  }  // end if (rec_id_next < row_offsets.size())
+
+  // Flush shared memory histograms to global memory (one atomicAdd per counter per block)
+  __syncthreads();
+  for (int i = threadIdx.x; i < num_ints; i += blockDim.x) {
+    if (s_raw[i] != 0) {
+      atomicAdd(reinterpret_cast<cudf::size_type*>(d_column_data.data()) + i, s_raw[i]);
+    }
   }
 }
 
@@ -842,7 +865,9 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   auto d_stats = cudf::detail::make_zeroed_device_uvector_async<column_type_histogram>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
-  data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
+  // Shared memory for block-level histogram accumulation
+  auto const shmem_size = num_active_columns * sizeof(column_type_histogram);
+  data_type_detection<<<grid_size, block_size, shmem_size, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
   return cudf::detail::make_host_vector(d_stats, stream);
