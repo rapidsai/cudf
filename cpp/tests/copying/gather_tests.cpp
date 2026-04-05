@@ -238,7 +238,9 @@ TYPED_TEST(GatherTest, MultiColNulls)
   }
 }
 
-TEST_F(GatherTest, NullableNoNulls)
+class GatherNullableTest : public cudf::test::BaseFixture {};
+
+TEST_F(GatherNullableTest, NullableNoNulls)
 {
   constexpr cudf::size_type source_size{1000};
   auto source_zero                            = cudf::make_fixed_width_scalar<int32_t>(0);
@@ -254,7 +256,5 @@ TEST_F(GatherTest, NullableNoNulls)
   std::unique_ptr<cudf::table> result =
     cudf::gather(source_table, gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK);
 
-  for (auto i = 0; i < source_table.num_columns(); ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
-  }
+  CUDF_TEST_EXPECT_TABLES_EQUAL(source_table, result->view());
 }
