@@ -540,6 +540,208 @@ __device__ __inline__ bool try_fused_float_parse(char const* begin,
 }
 
 /**
+ * @brief Parse 1-4 digits from the current position, advancing the pointer.
+ * Returns the parsed value, or -1 if no digit found.
+ */
+__device__ __inline__ int32_t parse_digits(char const*& cur, char const* end, int max_digits)
+{
+  if (cur >= end || *cur < '0' || *cur > '9') { return -1; }
+  int32_t val = 0;
+  int count   = 0;
+  while (cur < end && *cur >= '0' && *cur <= '9' && count < max_digits) {
+    val = val * 10 + (*cur - '0');
+    ++cur;
+    ++count;
+  }
+  return val;
+}
+
+/**
+ * @brief Try to parse a timestamp field inline while scanning for the delimiter.
+ *
+ * Handles common date/time formats in a single pass:
+ * - YYYY-MM-DD, YYYY-MM-DDThh:mm:ss, YYYY-MM-DDThh:mm:ss.fff...
+ * - Also handles digits-only format (epoch value)
+ * Falls back for: non-standard formats, dayfirst, month/day first, etc.
+ */
+template <typename timestamp_type>
+__device__ __inline__ bool try_fused_timestamp_parse(char const* begin,
+                                                     char const* end,
+                                                     char delim,
+                                                     char term,
+                                                     bool dayfirst,
+                                                     timestamp_type* out_value,
+                                                     char const** out_delimiter)
+{
+  using duration_type = typename timestamp_type::duration;
+  using rep_type      = typename timestamp_type::rep;
+  auto cur            = begin;
+
+  // Skip leading whitespace
+  while (cur < end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  // Empty field → NA
+  if (cur >= end || *cur == delim || *cur == term) {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;
+  }
+
+  // First component must be digits
+  auto const first_start = cur;
+  int32_t first_val      = parse_digits(cur, end, 9);
+  if (first_val < 0) {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;
+  }
+  auto const first_len = cur - first_start;
+
+  // Check what follows the first number
+  if (cur >= end || *cur == delim || *cur == term ||
+      (*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    // Digits-only field: interpret as epoch value
+    *out_value     = timestamp_type{duration_type{static_cast<rep_type>(first_val)}};
+    *out_delimiter = cur;
+    return true;
+  }
+
+  // Expect date separator: '-' or '/'
+  char date_sep = *cur;
+  if (date_sep != '-' && date_sep != '/') {
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return false;
+  }
+  ++cur;
+
+  // Determine field order: if first_len == 4, it's year-first (YYYY-MM-DD)
+  // Otherwise fall back to the general parser which handles dayfirst/monthfirst
+  if (first_len != 4) {
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return false;
+  }
+
+  int32_t year_val = first_val;
+
+  // Parse month
+  int32_t month_val = parse_digits(cur, end, 2);
+  if (month_val < 0) {
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return false;
+  }
+
+  // Check for date-only (YYYY-MM)
+  if (cur >= end || *cur == delim || *cur == term ||
+      (*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    auto ymd = cuda::std::chrono::year_month_day{
+      cuda::std::chrono::year{year_val},
+      cuda::std::chrono::month{static_cast<unsigned>(month_val)},
+      cuda::std::chrono::day{1}};
+    *out_value     = timestamp_type{cuda::std::chrono::sys_days{ymd}};
+    *out_delimiter = cur;
+    return true;
+  }
+
+  // Expect second date separator
+  if (*cur != date_sep) {
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return false;
+  }
+  ++cur;
+
+  // Parse day
+  int32_t day_val = parse_digits(cur, end, 2);
+  if (day_val < 0) {
+    *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+    return false;
+  }
+
+  auto ymd = cuda::std::chrono::year_month_day{
+    cuda::std::chrono::year{year_val},
+    cuda::std::chrono::month{static_cast<unsigned>(month_val)},
+    cuda::std::chrono::day{static_cast<unsigned>(day_val)}};
+  timestamp_type answer{cuda::std::chrono::sys_days{ymd}};
+
+  // Check for date-only (YYYY-MM-DD)
+  if (cur >= end || *cur == delim || *cur == term ||
+      (*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    *out_value     = answer;
+    *out_delimiter = cur;
+    return true;
+  }
+
+  // Expect date-time separator: 'T' or ' '
+  if (*cur != 'T' && *cur != ' ') {
+    // Skip trailing characters we don't understand (like 'Z')
+    while (cur < end && *cur != delim && *cur != term &&
+           !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+      ++cur;
+    }
+    *out_value     = answer;
+    *out_delimiter = cur;
+    return true;
+  }
+  ++cur;
+
+  // Parse hours
+  int32_t hours = parse_digits(cur, end, 2);
+  if (hours < 0) { hours = 0; }
+
+  auto time_dur = cuda::std::chrono::duration_cast<duration_type>(cuda::std::chrono::hours{hours});
+
+  // Parse minutes
+  if (cur < end && *cur == ':') {
+    ++cur;
+    int32_t minutes = parse_digits(cur, end, 2);
+    if (minutes >= 0) {
+      time_dur +=
+        cuda::std::chrono::duration_cast<duration_type>(cuda::std::chrono::minutes{minutes});
+    }
+
+    // Parse seconds
+    if (cur < end && *cur == ':') {
+      ++cur;
+      int32_t seconds = parse_digits(cur, end, 2);
+      if (seconds >= 0) {
+        time_dur +=
+          cuda::std::chrono::duration_cast<duration_type>(cuda::std::chrono::seconds{seconds});
+      }
+
+      // Parse subsecond fraction
+      if (cur < end && *cur == '.') {
+        ++cur;
+        int64_t frac       = 0;
+        int frac_digits    = 0;
+        while (cur < end && *cur >= '0' && *cur <= '9' && frac_digits < 9) {
+          frac = frac * 10 + (*cur - '0');
+          ++frac_digits;
+          ++cur;
+        }
+        // Scale fraction to nanoseconds
+        while (frac_digits < 9) {
+          frac *= 10;
+          ++frac_digits;
+        }
+        time_dur += cuda::std::chrono::duration_cast<duration_type>(
+          cuda::std::chrono::nanoseconds{frac});
+      }
+    }
+  }
+
+  answer += time_dur;
+
+  // Skip trailing 'Z' or other timezone indicator
+  while (cur < end && *cur != delim && *cur != term &&
+         !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    ++cur;
+  }
+
+  *out_value     = answer;
+  *out_delimiter = cur;
+  return true;
+}
+
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -669,6 +871,46 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                            options.terminator, options.decimal, options.thousands,
                                            &val, &fused_delim);
           if (fused_ok) { static_cast<double*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::TIMESTAMP_DAYS: {
+          cudf::timestamp_D val;
+          fused_ok = try_fused_timestamp_parse(
+            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
+            &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::timestamp_D::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
+          break;
+        }
+        case cudf::type_id::TIMESTAMP_SECONDS: {
+          cudf::timestamp_s val;
+          fused_ok = try_fused_timestamp_parse(
+            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
+            &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::timestamp_s::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
+          break;
+        }
+        case cudf::type_id::TIMESTAMP_MILLISECONDS: {
+          cudf::timestamp_ms val;
+          fused_ok = try_fused_timestamp_parse(
+            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
+            &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::timestamp_ms::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
+          break;
+        }
+        case cudf::type_id::TIMESTAMP_MICROSECONDS: {
+          cudf::timestamp_us val;
+          fused_ok = try_fused_timestamp_parse(
+            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
+            &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::timestamp_us::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
+          break;
+        }
+        case cudf::type_id::TIMESTAMP_NANOSECONDS: {
+          cudf::timestamp_ns val;
+          fused_ok = try_fused_timestamp_parse(
+            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
+            &val, &fused_delim);
+          if (fused_ok) { static_cast<cudf::timestamp_ns::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
           break;
         }
         default: break;
