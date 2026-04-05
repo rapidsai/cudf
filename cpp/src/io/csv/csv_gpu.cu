@@ -1068,77 +1068,70 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
       bool fused_ok      = false;
       char const* fused_delim = nullptr;
 
+      // Consolidated switch: use widest types for int/uint/float/decimal to reduce
+      // template instantiations (8 int variants → 1, etc.), lowering register pressure.
+      // Timestamp and duration types keep separate instantiations (different digit-only semantics).
       switch (type_id) {
-        case cudf::type_id::INT8: {
-          int8_t val;
-          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
-                                         options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<int8_t*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
-        case cudf::type_id::INT16: {
-          int16_t val;
-          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
-                                         options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<int16_t*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
-        case cudf::type_id::INT32: {
-          int32_t val;
-          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
-                                         options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<int32_t*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
+        case cudf::type_id::INT8:
+        case cudf::type_id::INT16:
+        case cudf::type_id::INT32:
         case cudf::type_id::INT64: {
           int64_t val;
           fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
                                          options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<int64_t*>(columns[actual_col])[rec_id] = val; }
+          if (fused_ok) {
+            switch (type_id) {
+              case cudf::type_id::INT8:  static_cast<int8_t*>(columns[actual_col])[rec_id] = static_cast<int8_t>(val); break;
+              case cudf::type_id::INT16: static_cast<int16_t*>(columns[actual_col])[rec_id] = static_cast<int16_t>(val); break;
+              case cudf::type_id::INT32: static_cast<int32_t*>(columns[actual_col])[rec_id] = static_cast<int32_t>(val); break;
+              default:                   static_cast<int64_t*>(columns[actual_col])[rec_id] = val; break;
+            }
+          }
           break;
         }
-        case cudf::type_id::UINT8: {
-          uint8_t val;
-          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
-                                         options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<uint8_t*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
-        case cudf::type_id::UINT16: {
-          uint16_t val;
-          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
-                                         options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<uint16_t*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
-        case cudf::type_id::UINT32: {
-          uint32_t val;
-          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
-                                         options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<uint32_t*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
+        case cudf::type_id::UINT8:
+        case cudf::type_id::UINT16:
+        case cudf::type_id::UINT32:
         case cudf::type_id::UINT64: {
           uint64_t val;
           fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
                                          options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<uint64_t*>(columns[actual_col])[rec_id] = val; }
+          if (fused_ok) {
+            switch (type_id) {
+              case cudf::type_id::UINT8:  static_cast<uint8_t*>(columns[actual_col])[rec_id] = static_cast<uint8_t>(val); break;
+              case cudf::type_id::UINT16: static_cast<uint16_t*>(columns[actual_col])[rec_id] = static_cast<uint16_t>(val); break;
+              case cudf::type_id::UINT32: static_cast<uint32_t*>(columns[actual_col])[rec_id] = static_cast<uint32_t>(val); break;
+              default:                    static_cast<uint64_t*>(columns[actual_col])[rec_id] = val; break;
+            }
+          }
           break;
         }
-        case cudf::type_id::FLOAT32: {
-          float val;
-          fused_ok = try_fused_float_parse(field_start, row_end, options.delimiter,
-                                           options.terminator, options.decimal, options.thousands,
-                                           &val, &fused_delim);
-          if (fused_ok) { static_cast<float*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
+        case cudf::type_id::FLOAT32:
         case cudf::type_id::FLOAT64: {
           double val;
           fused_ok = try_fused_float_parse(field_start, row_end, options.delimiter,
                                            options.terminator, options.decimal, options.thousands,
                                            &val, &fused_delim);
-          if (fused_ok) { static_cast<double*>(columns[actual_col])[rec_id] = val; }
+          if (fused_ok) {
+            if (type_id == cudf::type_id::FLOAT32)
+              static_cast<float*>(columns[actual_col])[rec_id] = static_cast<float>(val);
+            else
+              static_cast<double*>(columns[actual_col])[rec_id] = val;
+          }
+          break;
+        }
+        case cudf::type_id::DECIMAL32:
+        case cudf::type_id::DECIMAL64: {
+          int64_t val;
+          fused_ok = try_fused_decimal_parse(field_start, row_end, options.delimiter,
+                                             options.terminator, dtypes[actual_col].scale(),
+                                             &val, &fused_delim);
+          if (fused_ok) {
+            if (type_id == cudf::type_id::DECIMAL32)
+              static_cast<int32_t*>(columns[actual_col])[rec_id] = static_cast<int32_t>(val);
+            else
+              static_cast<int64_t*>(columns[actual_col])[rec_id] = val;
+          }
           break;
         }
         case cudf::type_id::TIMESTAMP_DAYS: {
@@ -1214,22 +1207,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
           fused_ok = try_fused_duration_parse(
             field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
           if (fused_ok) { static_cast<cudf::duration_ns::rep*>(columns[actual_col])[rec_id] = val.count(); }
-          break;
-        }
-        case cudf::type_id::DECIMAL32: {
-          int32_t val;
-          fused_ok = try_fused_decimal_parse(field_start, row_end, options.delimiter,
-                                             options.terminator, dtypes[actual_col].scale(),
-                                             &val, &fused_delim);
-          if (fused_ok) { static_cast<int32_t*>(columns[actual_col])[rec_id] = val; }
-          break;
-        }
-        case cudf::type_id::DECIMAL64: {
-          int64_t val;
-          fused_ok = try_fused_decimal_parse(field_start, row_end, options.delimiter,
-                                             options.terminator, dtypes[actual_col].scale(),
-                                             &val, &fused_delim);
-          if (fused_ok) { static_cast<int64_t*>(columns[actual_col])[rec_id] = val; }
           break;
         }
         case cudf::type_id::STRING: {
