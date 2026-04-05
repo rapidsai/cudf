@@ -1,16 +1,21 @@
-commit	metric	improvement_pct	status	benchmark	description
-246f6d2	3.77 GiB/s INT, 4.00 GiB/s FLT, 2.72 GiB/s TS	0.0	keep	csv_reader	baseline (noise floor: ~2-5% per dtype, ~9% mixed-type)
-25c0006	4.70 GiB/s INT, 4.48 GiB/s FLT, 2.90 GiB/s TS	+9.8	keep	csv_reader	shared memory valid_counts reduction
-0f1f370	4.73 GiB/s INT, 4.51 GiB/s FLT, 2.89 GiB/s TS	+0.0	keep	csv_reader	shared memory histogram in type detection
-24803fa	4.78 GiB/s INT, 4.50 GiB/s FLT, 2.90 GiB/s TS	+0.0	discard	csv_reader	fast-path seek_field_end (within noise)
-9ab2d0e	6.59 GiB/s INT, 4.86 GiB/s FLT, 3.55 GiB/s TS	+32.0	keep	csv_reader	fused int conversion
-0db6f41	6.81 GiB/s INT, 6.19 GiB/s FLT, 3.64 GiB/s TS	+40.0	keep	csv_reader	fused float conversion
-9df4b96	6.83 GiB/s INT, 6.10 GiB/s FLT, 3.63 GiB/s TS	+0.0	discard	csv_reader	block size 128→256 (within noise)
-0085d79	7.31 GiB/s INT, 6.94 GiB/s FLT, 5.96 GiB/s TS	+69.4	keep	csv_reader	fused timestamp conversion
-81472b9	6.97 GiB/s INT, 6.82 GiB/s FLT, 5.45 GiB/s DUR	+68.5	keep	csv_reader	fused duration conversion
-de46a2b	7.18 GiB/s INT, 7.05 GiB/s FLT, 6.20 GiB/s DEC	+73.0	keep	csv_reader	fused decimal conversion
-e48ae84	7.02 GiB/s INT, 6.93 GiB/s FLT, 3.95 GiB/s STR	+72.8	keep	csv_reader	fused STRING scanning
-2458f08	0 (crash)	0.0	crash	csv_reader	full template consolidation (semantic mismatch)
-53c1024	7.11 GiB/s INT, 6.95 GiB/s FLT, 6.13 GiB/s TS	+74.2	keep	csv_reader	partial template consolidation
-737c062	7.16 GiB/s INT, 6.84 GiB/s FLT, 6.05 GiB/s TS	+0.0	discard	csv_reader	tighter digit loop (within noise)
-e846b1c	0 (crash)	0.0	crash	csv_reader	warp-cooperative bitmask writes (__ballot_sync unsafe with divergent control flow)
+experiment_num	commit	metric	improvement_pct	status	benchmark	description
+Exp0	246f6d2	2.16 GiB/s	0.0	keep	csv_read_io	baseline (original main, estimated from session 1 data)
+Exp1	25c0006	- (single-type only)	+9.8	keep	csv_read_data_type	shared memory valid_counts reduction
+Exp2	0f1f370	- (single-type only)	+0.0	keep	csv_read_data_type	shared memory histogram in type detection
+Exp3	24803fa	-	+0.0	discard	csv_read_data_type	fast-path seek_field_end
+Exp4	9ab2d0e	- (single-type only)	+32.0	keep	csv_read_data_type	fused int conversion
+Exp5	0db6f41	- (single-type only)	+40.0	keep	csv_read_data_type	fused float conversion
+Exp6	9df4b96	-	+0.0	discard	csv_read_data_type	block size 128→256
+Exp7	0085d79	- (single-type only)	+69.4	keep	csv_read_data_type	fused timestamp conversion
+Exp8	81472b9	- (single-type only)	+68.5	keep	csv_read_data_type	fused duration conversion
+Exp9	de46a2b	- (single-type only)	+73.0	keep	csv_read_data_type	fused decimal conversion
+Exp10	e48ae84	- (single-type only)	+72.8	keep	csv_read_data_type	fused STRING scanning
+Exp11	2458f08	0	0.0	crash	csv_read_data_type	full template consolidation
+Exp12	53c1024	- (single-type only)	+74.2	keep	csv_read_data_type	partial template consolidation
+Exp13	737c062	-	+0.0	discard	csv_read_data_type	tighter digit loop
+Exp14	e846b1c	0	0.0	crash	csv_read_data_type	warp-cooperative bitmask writes
+Exp15	c39e0cc	- (single-type only)	+75.2	keep	csv_read_data_type	NA trie length pre-filter
+Exp16	9618ca0	-	+0.0	discard	csv_read_data_type	SWAR 8-byte string scan
+Exp17	5923dd2	-	+0.0	discard	csv_read_data_type	ctxtree buffer reuse
+Exp18	19f6ce0	-	-5.3	discard	csv_read_data_type	SWAR 8-digit int parse (regression)
+Exp19	c39e0cc	3.77 GiB/s	+74.5	keep	csv_read_io	re-baseline on csv_read_io (current code, all session 1 optimizations)

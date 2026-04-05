@@ -34,8 +34,13 @@ build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON
 # Run CSV tests
 cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc)
 
-# Run CSV benchmarks
-./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0
+# PRIMARY benchmark (multi-datatype — the optimization target)
+./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_io --devices 0
+
+# Diagnostic: single-type benchmarks (for investigating per-type regressions)
+./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_data_type --devices 0
+
+# Writer benchmark
 ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0
 
 # Extract benchmark metrics
@@ -49,7 +54,9 @@ grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run.log
 - `cpp/benchmarks/io/csv/` — CSV benchmarks (READ-ONLY)
 - `cpp/tests/io/csv_test.cpp` — CSV tests (READ-ONLY)
 - `program.md` — the full autoresearch protocol (source of truth)
-- `results.tsv` — experiment log (untracked)
+- `results.tsv` — experiment log with numbered experiments (untracked)
+- `AGENT_LOG.md` — append-only experiment journal: hypothesis, result, learnings (untracked)
+- `MCP_SETUP_NEEDED.md` — MCP/plugin setup notes requiring user action (created on demand)
 
 ## Critical Rules
 

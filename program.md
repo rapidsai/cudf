@@ -43,16 +43,18 @@ To set up a new experiment (decide everything autonomously — never ask the use
    While they run, read the source code yourself. When all return, merge ideas into a ranked backlog.
 5. **Build baseline**: `build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1`
 6. **Run baseline tests**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
-7. **Establish noise floor** — run both benchmarks **3 times** without code changes:
+7. **Establish noise floor** — run benchmarks **3 times** without code changes. The primary target is `csv_read_io` (multi-datatype):
    ```bash
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run1.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run2.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run3.log 2>&1
+   # Primary: multi-datatype benchmark (optimization target)
+   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_io --devices 0 > baseline_io_run1.log 2>&1
+   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_io --devices 0 > baseline_io_run2.log 2>&1
+   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_io --devices 0 > baseline_io_run3.log 2>&1
+   # Diagnostic: single-type benchmarks (for per-type baseline)
+   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_data_type --devices 0 > baseline_types_run1.log 2>&1
+   # Writer
    ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run1.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run2.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run3.log 2>&1
    ```
-   Extract key metrics from all 3 runs of each. Record the average AND variance. Any future improvement must exceed this noise floor to count as real.
+   Extract key metrics from all 3 runs of `csv_read_io`. Record the average AND variance. Any future improvement must exceed this noise floor to count as real.
 8. **Initialize results.tsv** with the header row and baseline entry.
 9. **Begin the loop**: Setup is done — immediately start the experiment loop. Do not pause or ask for confirmation.
 
@@ -73,6 +75,10 @@ To set up a new experiment (decide everything autonomously — never ask the use
 ## The Goal
 
 **Get the highest throughput / lowest time for the CSV reader and writer as measured by `CSV_READER_NVBENCH` and `CSV_WRITER_NVBENCH`.** Everything is fair game: change parsing algorithms, GPU kernel implementations, memory access patterns, thread configurations, data type conversion. The only constraint is that all tests pass.
+
+**Primary optimization target: `csv_read_io` benchmark.** This benchmark (`BM_csv_read_io` in `csv_reader_input.cpp`) parses INTEGRAL + FLOAT + DECIMAL + TIMESTAMP + DURATION + STRING columns all in a single CSV reader call — the real-world scenario. This is what we optimize for. Every experiment MUST measure and report the `csv_read_io` number.
+
+**Single-type benchmarks (`csv_read_data_type`) are diagnostic tools**, not the optimization target. Use them to understand regressions or gains in specific data types, but the holistic multi-type benchmark is the metric that matters. An optimization that improves INT but regresses FLOAT is only good if the net `csv_read_io` number improves.
 
 **Primary focus: CSV reader.** The reader (`reader_impl.cu`, `csv_gpu.cu`) is the performance-critical path — CSV writing is simpler and less commonly benchmarked. Prioritize reader optimizations, but don't ignore writer wins if they're easy.
 
@@ -95,30 +101,76 @@ grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run.log
 
 When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated).
 
-The TSV has a header row and 6 columns:
+The TSV has a header row and 7 columns:
 
 ```
-commit	metric	improvement_pct	status	benchmark	description
+experiment_num	commit	metric	improvement_pct	status	benchmark	description
 ```
 
-1. commit: short git hash (7 chars)
-2. metric: primary benchmark number (e.g. `1234 Elem/s` or `5.6 GiB/s`)
-3. improvement_pct: vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes
-4. status: `keep`, `discard`, `crash`, or `idea`
-5. benchmark: which benchmark (`csv_reader` or `csv_writer`)
-6. description: short text of what was tried
+1. experiment_num: sequential experiment number (`Exp1`, `Exp2`, ..., `ExpN`)
+2. commit: short git hash (7 chars)
+3. metric: primary benchmark number — **always report `csv_read_io` GiB/s** as the primary metric, with per-type breakdown in parentheses if useful (e.g. `5.2 GiB/s (INT:7.1 FLT:6.9 TS:6.0)`)
+4. improvement_pct: vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes
+5. status: `keep`, `discard`, `crash`, or `idea`
+6. benchmark: which benchmark (`csv_read_io`, `csv_read_data_type`, or `csv_writer`)
+7. description: short text of what was tried
 
 Example:
 
 ```
-commit	metric	improvement_pct	status	benchmark	description
-a1b2c3d	1234 Elem/s	0.0	keep	csv_reader	baseline
-b2c3d4e	1358 Elem/s	+10.0	keep	csv_reader	vectorized field delimiter scanning with shared memory
-c3d4e5f	1180 Elem/s	-4.4	discard	csv_reader	warp-per-row parsing (too much divergence)
-d4e5f6g	0	0.0	crash	csv_reader	custom SIMD-style parser (compile error)
+experiment_num	commit	metric	improvement_pct	status	benchmark	description
+Exp0	a1b2c3d	3.8 GiB/s (INT:3.8 FLT:4.0 TS:2.7)	0.0	keep	csv_read_io	baseline
+Exp1	b2c3d4e	4.5 GiB/s (INT:4.7 FLT:4.5 TS:2.9)	+18.4	keep	csv_read_io	shared memory valid_counts reduction
+Exp2	c3d4e5f	3.5 GiB/s	-7.9	discard	csv_read_io	warp-per-row parsing (too much divergence)
+Exp3	d4e5f6g	0	0.0	crash	csv_read_io	custom SIMD-style parser (compile error)
 ```
 
 Do NOT commit results.tsv — leave it untracked.
+
+## AGENT_LOG.md — Append-Only Experiment Journal
+
+After every experiment (keep, discard, or crash), append a section to `AGENT_LOG.md`. This is a persistent, append-only record of what was tried and what was learned. **Never edit or delete previous entries.**
+
+Format:
+
+```markdown
+## Experiment N: <short title>
+
+**Hypothesis:** What you expected to happen and why.
+
+**Result:** keep / discard / crash — metric achieved vs baseline.
+
+**What worked:** Specific technique or insight that proved valuable.
+
+**What didn't work:** What failed or underperformed, and why.
+
+**What was learned:** Key takeaway for future experiments (bottleneck insight, architectural constraint, etc.).
+```
+
+Do NOT commit AGENT_LOG.md — leave it untracked. This journal complements results.tsv: the TSV is a concise metrics table; the journal captures reasoning and learning.
+
+## Research Head Strategy
+
+Before each experiment cycle, **think like a research head** — not just an implementer executing the next idea on the list.
+
+1. **Assess the portfolio**: Review results.tsv, AGENT_LOG.md, and memory. Which optimization directions have yielded the most gains? Which are showing diminishing returns? Where is the remaining performance budget?
+
+2. **Identify the current bottleneck**: Profile the `csv_read_io` benchmark mentally. Is parsing the bottleneck? Type conversion? Memory bandwidth? Data movement? The next experiment should target whatever is currently the #1 bottleneck for the multi-type benchmark.
+
+3. **Spin up focused researchers**: For each experiment, spawn 2-3 researcher agents with specific research questions related to the optimization direction. Don't wait until the idea backlog is empty — proactive research produces better ideas than reactive scrambling.
+
+4. **Evaluate trajectory**: Are we in a phase of rapid gains (keep pushing this direction) or diminishing returns (time to pivot to a new bottleneck)? Document this strategic reasoning in AGENT_LOG.md.
+
+5. **Holistic optimization**: An optimization that speeds up INT parsing by 20% but the `csv_read_io` benchmark only improves 3% because other types dominate the runtime is a low-value experiment. Always reason about impact on the multi-type workload.
+
+## MCP & Plugin Installation Policy
+
+The agent may install MCP servers or CLI plugins on the fly if they genuinely help with research, profiling, benchmarking, or analysis (e.g., a profiling MCP, a documentation lookup tool).
+
+**Rules:**
+- Only install well-known, trusted tools — no random repos or unverified code
+- If an MCP server or plugin requires **user authentication or manual setup** (OAuth tokens, API keys, SSH keys, etc.), write the setup instructions to `MCP_SETUP_NEEDED.md` so the user can configure it before the next session
+- The read-only web research rule still applies — installing a tool for analysis is fine, but don't use it to download and execute external optimization code
 
 ## The experiment loop
 
@@ -142,19 +194,23 @@ LOOP FOREVER:
    Check: `tail -n 30 test.log` and `grep -c "FAILED\|PASSED" test.log`
    All tests must pass — non-negotiable.
 
-6. **Benchmark**: Run whichever benchmark is relevant to the change:
+6. **Benchmark**: Always run the multi-type benchmark. Run single-type or writer benchmarks as needed for diagnostics:
    ```bash
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > run.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > run.log 2>&1
+   # PRIMARY — always run this (multi-datatype optimization target)
+   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_io --devices 0 > run_io.log 2>&1
+   # DIAGNOSTIC — run when investigating specific type regressions
+   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH -b csv_read_data_type --devices 0 > run_types.log 2>&1
+   # WRITER — run when writer code was changed
+   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > run_writer.log 2>&1
    ```
-   Extract: `grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run.log`
+   Extract: `grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run_io.log`
 
 7. **Validate results**:
    - Is the improvement larger than the noise floor? If not, it's noise — discard.
    - Is the improvement >20% from a minor change? Re-run twice to confirm it's real.
    - Does it hold across ALL benchmark configs (different data types, row counts, column counts), or only one?
 
-8. **Record** in results.tsv.
+8. **Record** in results.tsv (with sequential experiment number) AND append to AGENT_LOG.md.
 
 9. **Save to memory** — after each significant discovery, use `/memory` to persist insights that will be valuable in future sessions:
    - Which optimization approaches worked and why (with specific speedup numbers)
@@ -172,10 +228,10 @@ LOOP FOREVER:
 11. **Clean up**: `rm -f build.log test.log run.log`
 
 12. **Discipline checks** (before next iteration):
-    - **Circuit breaker**: 3 consecutive `discard` or `crash` results? You're going down the wrong path. STOP. Re-read the source code from disk, re-read results.tsv, do fresh web research, and pick a fundamentally different approach.
+    - **Circuit breaker — deep research mode**: 3 consecutive `discard` or `crash` results? You're going down the wrong path. STOP coding. Enter **deep research mode**: spawn 2-3 researcher agents with the full experiment history (results.tsv + AGENT_LOG.md), and do NOT proceed to the next experiment until you have a genuinely solid idea with clear theoretical justification. Spend significantly more time researching than you normally would. The goal is quality over quantity — one well-researched experiment is worth more than five speculative shots.
     - **Force diversity**: 3+ variations of the same technique (e.g. different thread block sizes, different shared memory tile configs)? You're stuck in a local optimum. Try a completely different algorithm. The biggest gains come from algorithmic changes, not parameter sweeps.
-    - **Re-anchor every 5 experiments**: Re-read results.tsv end-to-end, check `/memory` for past discoveries, re-state your objective, summarize what worked and what failed, only THEN propose your next hypothesis. Long sessions cause context rot — memory is your hedge against it.
-    - **Idea backlog low** (fewer than 2-3 ideas)? Respawn 2-3 researcher agents with the current results.tsv so they know what's been tried and search in new directions.
+    - **Re-anchor every 5 experiments**: Re-read results.tsv and AGENT_LOG.md end-to-end, check `/memory` for past discoveries, re-state your objective, summarize what worked and what failed, only THEN propose your next hypothesis. Long sessions cause context rot — memory is your hedge against it.
+    - **Proactive research**: Before each experiment, spin up 2-3 focused researcher agents with specific research questions (not just when the backlog is low). Each researcher should know the full experiment history so they don't suggest already-tried approaches. Think like a research head — allocate research effort strategically.
 
 13. **Repeat.**
 
@@ -224,15 +280,52 @@ As an example, a user might leave you running while they sleep. Each experiment 
 
 **Unlimited.** Cost is not a concern — the only goal is maximizing performance improvements. Always use Opus 4.6 (1M context) at maximum effort for all work including subagents. Do unlimited web searches. Context auto-compacts as needed — don't worry about window limits.
 
+## WARNING: Micro-benchmark tunnel vision
+
+**The single-type benchmarks (`csv_read_data_type`) can mislead optimization direction.** Each single-type benchmark measures one data type in isolation with clean, pre-typed, large data — essentially the best case. This can cause the agent to:
+
+1. **Write specialized per-type kernels** instead of optimizing the common mixed-type path
+2. **Tunnel-vision on one technique** (e.g. "fused delimiter scan + type conversion" for every type)
+3. **Miss cross-type interactions** — warp divergence when threads in the same warp process different column types, register pressure from multiple type-specific code paths, etc.
+
+**The `csv_read_io` benchmark is the ground truth** because real CSV files have mixed types. An optimization that looks great on single-type benchmarks may not help (or may hurt) the mixed-type case due to instruction cache pressure, register spilling, or warp divergence.
+
+**If you find yourself applying the same technique (e.g. fused parsing) to each type one by one, STOP.** You are optimizing micro-benchmarks, not real-world performance. Step back and think about what matters for the mixed-type workload.
+
+## Research: competing implementations and real-world CSV characteristics
+
+During research phases, actively search for **GPU-accelerated CSV/text parsing papers and implementations**. Compare cuDF's approach to what others do — especially how they handle mixed types, type inference, and quoted fields on GPU. Look for published benchmarks that compare CSV parsers on real-world datasets.
+
+**Real-world CSVs differ from synthetic benchmarks.** The NVBench suite uses clean, pre-typed, uniform data. Real CSV files have:
+- Mixed types in the same file (the common case)
+- Type inference overhead (not pre-typed)
+- Quoted fields with special characters
+- Variable-length string columns
+- NULL/NA values scattered throughout
+- Headers, comments, BOM markers
+
+Keep this gap in mind when evaluating optimization ideas — a technique that wins on clean synthetic data may not help on messy real data.
+
 ## CSV parser optimization areas to consider
 
 When researching, look for opportunities in these CSV-specific areas:
+
+**Architecture-level (highest impact, explore these FIRST):**
+- **Mixed-type warp divergence**: When threads in a warp process columns of different types, divergence kills throughput. Can we reorganize work to reduce this?
+- **Multi-pass vs single-pass architecture**: Is the current multi-kernel approach (row detection → field detection → type conversion) optimal, or can phases be overlapped/fused at a higher level?
+- **Memory bandwidth utilization**: The raw CSV data is read multiple times across kernels. Can we reduce total memory traffic?
+- **Host-side overhead**: Memory allocation, column construction, metadata processing — what fraction of wall time is non-GPU?
+- **Multi-stream pipelining**: For large files, overlap H2D transfer with compute
+
+**Kernel-level (moderate impact):**
 - **Delimiter/newline scanning**: Parallel character scanning, SIMD-style operations on GPU, shared memory for scan state
 - **Field parsing**: Vectorized type conversion (string→int, string→float, string→datetime), reducing warp divergence across different column types
 - **Memory access patterns**: Coalesced reads of raw CSV text, minimizing scattered writes during column extraction
 - **Kernel fusion**: Combining delimiter detection + field extraction + type conversion to reduce memory round-trips
 - **Quote handling**: Efficient parallel handling of quoted fields with escaped characters
 - **Row/column decomposition**: Better strategies for splitting work across thread blocks when rows vary in length
+
+**Type-specific (lower impact, only after architecture is optimized):**
 - **Data type conversion**: Optimizing the hot path for common types (integers, floats, strings, dates)
 - **Duration/datetime parsing**: GPU-specific optimizations in `durations.cu` and `datetime.cuh`
 
