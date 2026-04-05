@@ -306,6 +306,107 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 }
 
 /**
+ * @brief Try to parse an integer field inline while scanning for the delimiter.
+ *
+ * Fuses seek_field_end + NA check + trim + parse_numeric into a single pass
+ * over the field characters. Returns the parsed value and delimiter position on success,
+ * or signals failure so the caller falls back to the general path.
+ *
+ * @param begin Start of the field data
+ * @param end End of the row data
+ * @param delim Column delimiter character
+ * @param term Line terminator character
+ * @param[out] out_value The parsed integer value (only valid on success)
+ * @param[out] out_delimiter Position of the delimiter/terminator after this field
+ * @return true if the field was successfully parsed as a simple integer
+ */
+template <typename T>
+__device__ __inline__ bool try_fused_int_parse(char const* begin,
+                                               char const* end,
+                                               char delim,
+                                               char term,
+                                               T* out_value,
+                                               char const** out_delimiter)
+{
+  auto cur = begin;
+
+  // Skip leading whitespace
+  while (cur < end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  // Empty field or field starts with delimiter/terminator → NA (not a valid int)
+  if (cur >= end || *cur == delim || *cur == term) {
+    // Scan to find delimiter for fallback path
+    while (cur < end && *cur != delim && *cur != term) {
+      ++cur;
+    }
+    *out_delimiter = cur;
+    return false;
+  }
+
+  // Parse optional sign
+  bool const is_negative = (*cur == '-');
+  if (is_negative || *cur == '+') { ++cur; }
+
+  // Must have at least one digit
+  if (cur >= end || *cur < '0' || *cur > '9') {
+    // Not a simple integer — scan to delimiter for fallback
+    auto scan = begin;
+    while (scan < end && *scan != delim && *scan != term &&
+           !(*scan == '\r' && scan + 1 < end && *(scan + 1) == '\n')) {
+      ++scan;
+    }
+    *out_delimiter = scan;
+    return false;
+  }
+
+  // Parse digits, checking for delimiter/terminator simultaneously
+  using unsigned_t = std::make_unsigned_t<T>;
+  unsigned_t value = 0;
+  while (cur < end) {
+    char const c = *cur;
+    if (c >= '0' && c <= '9') {
+      value = value * 10 + static_cast<unsigned_t>(c - '0');
+      ++cur;
+    } else if (c == delim || c == term) {
+      break;
+    } else if (c == '\r' && cur + 1 < end && *(cur + 1) == '\n') {
+      break;
+    } else if (c == ' ' || c == '\t') {
+      // Trailing whitespace — skip it, but verify only whitespace until delimiter
+      ++cur;
+      while (cur < end && (*cur == ' ' || *cur == '\t')) {
+        ++cur;
+      }
+      if (cur < end && *cur != delim && *cur != term &&
+          !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+        // Non-whitespace after digits — not a simple integer (e.g. "123abc")
+        while (cur < end && *cur != delim && *cur != term &&
+               !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+          ++cur;
+        }
+        *out_delimiter = cur;
+        return false;
+      }
+      break;
+    } else {
+      // Non-digit, non-whitespace character — not a simple integer
+      while (cur < end && *cur != delim && *cur != term &&
+             !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+        ++cur;
+      }
+      *out_delimiter = cur;
+      return false;
+    }
+  }
+
+  *out_value     = is_negative ? -static_cast<T>(value) : static_cast<T>(value);
+  *out_delimiter = cur;
+  return true;
+}
+
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -356,6 +457,129 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   int actual_col  = 0;
 
   while (col < column_flags.size() && field_start < row_end) {
+    // Fast path: fused delimiter scan + integer conversion for integral types.
+    // Avoids separate seek_field_end + trie_na check + trim + parse_numeric calls.
+    if ((column_flags[col] & column_parse::enabled) &&
+        !(column_flags[col] & column_parse::as_hexadecimal)) {
+      auto const type_id = dtypes[actual_col].id();
+      bool fused_ok      = false;
+      char const* fused_delim = nullptr;
+
+      switch (type_id) {
+        case cudf::type_id::INT8: {
+          int8_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<int8_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::INT16: {
+          int16_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<int16_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::INT32: {
+          int32_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<int32_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::INT64: {
+          int64_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<int64_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::UINT8: {
+          uint8_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<uint8_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::UINT16: {
+          uint16_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<uint16_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::UINT32: {
+          uint32_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<uint32_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::UINT64: {
+          uint64_t val;
+          fused_ok = try_fused_int_parse(field_start, row_end, options.delimiter,
+                                         options.terminator, &val, &fused_delim);
+          if (fused_ok) { static_cast<uint64_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        default: break;
+      }
+
+      if (fused_ok) {
+        set_bit(valids[actual_col], rec_id);
+        atomicAdd(&s_valid_counts[actual_col], 1);
+        // Advance past the delimiter
+        if (options.multi_delimiter && fused_delim < row_end && *fused_delim == options.delimiter) {
+          while (fused_delim + 1 < row_end && *(fused_delim + 1) == options.delimiter) {
+            ++fused_delim;
+          }
+        }
+        next_field  = fused_delim + 1;
+        field_start = next_field;
+        ++actual_col;
+        ++col;
+        continue;
+      }
+
+      // Fused parse failed — fall through to general path.
+      // If fused_delim is set, we already know the delimiter position.
+      if (fused_delim != nullptr) {
+        // Use the delimiter found by the fused parser
+        auto next_delimiter = fused_delim;
+        auto const is_valid = !serialized_trie_contains(
+          options.trie_na, {field_start, static_cast<size_t>(next_delimiter - field_start)});
+        auto field_end = next_delimiter;
+        if (is_valid && type_id != cudf::type_id::STRING) {
+          auto const trimmed_field =
+            trim_whitespaces_quotes(field_start, field_end, options.quotechar);
+          field_start = trimmed_field.first;
+          field_end   = trimmed_field.second;
+        }
+        bool* const is_quoted_output =
+          is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
+        if (is_valid) {
+          if (cudf::type_dispatcher(dtypes[actual_col],
+                                    ConvertFunctor{},
+                                    field_start,
+                                    field_end,
+                                    columns[actual_col],
+                                    rec_id,
+                                    dtypes[actual_col],
+                                    options,
+                                    column_flags[col] & column_parse::as_hexadecimal)) {
+            set_bit(valids[actual_col], rec_id);
+            atomicAdd(&s_valid_counts[actual_col], 1);
+          }
+        }
+        next_field  = next_delimiter + 1;
+        field_start = next_field;
+        ++actual_col;
+        ++col;
+        continue;
+      }
+    }
+
+    // General path: seek_field_end + trie check + type dispatch
     auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
 
     if (column_flags[col] & column_parse::enabled) {
