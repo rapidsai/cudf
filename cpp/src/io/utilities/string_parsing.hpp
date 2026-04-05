@@ -49,6 +49,7 @@ struct parse_options_view {
   cudf::detail::trie_view trie_false;
   cudf::detail::trie_view trie_na;
   bool multi_delimiter;
+  uint32_t na_length_mask{0xFFFFFFFF};  ///< Bitmask of valid NA string lengths (default: all match)
 };
 
 struct parse_options {
@@ -69,6 +70,7 @@ struct parse_options {
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
+  uint32_t na_length_mask{0xFFFFFFFF};  ///< Bitmask of valid NA string lengths (default: all match)
 
   [[nodiscard]] json_inference_options_view json_view() const
   {
@@ -96,7 +98,8 @@ struct parse_options {
             cudf::detail::make_trie_view(trie_true),
             cudf::detail::make_trie_view(trie_false),
             cudf::detail::make_trie_view(trie_na),
-            multi_delimiter};
+            multi_delimiter,
+            na_length_mask};
   }
 };
 

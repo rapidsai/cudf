@@ -1092,9 +1092,12 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 /**
  * @brief Create a serialized trie for N/A value matching, based on the options.
  */
-cudf::detail::trie create_na_trie(char quotechar,
-                                  csv_reader_options const& reader_opts,
-                                  rmm::cuda_stream_view stream)
+/**
+ * @brief Create a serialized trie for N/A value matching, and compute a
+ * length pre-filter bitmask for fast rejection of non-NA fields.
+ */
+std::pair<cudf::detail::trie, uint32_t> create_na_trie_with_mask(
+  char quotechar, csv_reader_options const& reader_opts, rmm::cuda_stream_view stream)
 {
   // Default values to recognize as null values
   static std::vector<std::string> const default_na_values{"",
@@ -1116,7 +1119,9 @@ cudf::detail::trie create_na_trie(char quotechar,
                                                           "nan",
                                                           "null"};
 
-  if (!reader_opts.is_enabled_na_filter()) { return cudf::detail::trie(0, stream); }
+  if (!reader_opts.is_enabled_na_filter()) {
+    return {cudf::detail::trie(0, stream), 0u};
+  }
 
   std::vector<std::string> na_values = reader_opts.get_na_values();
   if (reader_opts.is_enabled_keep_default_na()) {
@@ -1128,7 +1133,15 @@ cudf::detail::trie create_na_trie(char quotechar,
     na_values.emplace_back(2, quotechar);
   }
 
-  return cudf::detail::create_serialized_trie(na_values, stream);
+  // Compute length pre-filter bitmask: bit i is set if any NA value has length i
+  // For lengths >= 32, the mask allows them through (bit 31 acts as catch-all)
+  uint32_t length_mask = 0;
+  for (auto const& v : na_values) {
+    auto const len = v.size();
+    length_mask |= (1u << std::min<size_t>(len, 31u));
+  }
+
+  return {cudf::detail::create_serialized_trie(na_values, stream), length_mask};
 }
 
 parse_options make_parse_options(csv_reader_options const& reader_opts,
@@ -1184,7 +1197,9 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
   }
 
   // Handle user-defined N/A values, whereby field data is treated as null
-  parse_opts.trie_na = create_na_trie(parse_opts.quotechar, reader_opts, stream);
+  auto [na_trie, na_mask] = create_na_trie_with_mask(parse_opts.quotechar, reader_opts, stream);
+  parse_opts.trie_na        = std::move(na_trie);
+  parse_opts.na_length_mask = na_mask;
 
   return parse_opts;
 }

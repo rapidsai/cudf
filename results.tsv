@@ -1,11 +1,16 @@
 commit	metric	improvement_pct	status	benchmark	description
 246f6d2	3.77 GiB/s INT, 4.00 GiB/s FLT, 2.72 GiB/s TS	0.0	keep	csv_reader	baseline (noise floor: ~2-5% per dtype, ~9% mixed-type)
-25c0006	4.70 GiB/s INT, 4.48 GiB/s FLT, 2.90 GiB/s TS	+9.8	keep	csv_reader	shared memory valid_counts reduction (shmem atomics instead of global)
-0f1f370	4.73 GiB/s INT, 4.51 GiB/s FLT, 2.89 GiB/s TS	+0.0	keep	csv_reader	shared memory histogram in type detection (same pattern, helps inference path)
-24803fa	4.78 GiB/s INT, 4.50 GiB/s FLT, 2.90 GiB/s TS	+0.0	discard	csv_reader	fast-path seek_field_end for non-quoted fields (within noise, nvcc already optimizes)
-9ab2d0e	6.59 GiB/s INT, 4.86 GiB/s FLT, 3.55 GiB/s TS	+32.0	keep	csv_reader	fused delimiter scan + integer conversion (single-pass for int fields)
-0db6f41	6.81 GiB/s INT, 6.19 GiB/s FLT, 3.64 GiB/s TS	+40.0	keep	csv_reader	fused delimiter scan + float conversion for FLOAT32/FLOAT64
-9df4b96	6.83 GiB/s INT, 6.10 GiB/s FLT, 3.63 GiB/s TS	+0.0	discard	csv_reader	increase csvparse_block_dim 128→256 (within noise, occupancy not limiting)
-0085d79	7.31 GiB/s INT, 6.94 GiB/s FLT, 5.96 GiB/s TS	+69.4	keep	csv_reader	fused delimiter scan + timestamp conversion (single-pass date/time parsing)
-81472b9	6.97 GiB/s INT, 6.82 GiB/s FLT, 5.45 GiB/s DUR	+68.5	keep	csv_reader	fused delimiter scan + duration conversion (single-pass, +6% on DURATION)
-de46a2b	7.18 GiB/s INT, 7.05 GiB/s FLT, 6.20 GiB/s DEC	+73.0	keep	csv_reader	fused delimiter scan + fixed-point conversion for DECIMAL32/DECIMAL64
+25c0006	4.70 GiB/s INT, 4.48 GiB/s FLT, 2.90 GiB/s TS	+9.8	keep	csv_reader	shared memory valid_counts reduction
+0f1f370	4.73 GiB/s INT, 4.51 GiB/s FLT, 2.89 GiB/s TS	+0.0	keep	csv_reader	shared memory histogram in type detection
+24803fa	4.78 GiB/s INT, 4.50 GiB/s FLT, 2.90 GiB/s TS	+0.0	discard	csv_reader	fast-path seek_field_end (within noise)
+9ab2d0e	6.59 GiB/s INT, 4.86 GiB/s FLT, 3.55 GiB/s TS	+32.0	keep	csv_reader	fused int conversion
+0db6f41	6.81 GiB/s INT, 6.19 GiB/s FLT, 3.64 GiB/s TS	+40.0	keep	csv_reader	fused float conversion
+9df4b96	6.83 GiB/s INT, 6.10 GiB/s FLT, 3.63 GiB/s TS	+0.0	discard	csv_reader	block size 128→256 (within noise)
+0085d79	7.31 GiB/s INT, 6.94 GiB/s FLT, 5.96 GiB/s TS	+69.4	keep	csv_reader	fused timestamp conversion
+81472b9	6.97 GiB/s INT, 6.82 GiB/s FLT, 5.45 GiB/s DUR	+68.5	keep	csv_reader	fused duration conversion
+de46a2b	7.18 GiB/s INT, 7.05 GiB/s FLT, 6.20 GiB/s DEC	+73.0	keep	csv_reader	fused decimal conversion
+e48ae84	7.02 GiB/s INT, 6.93 GiB/s FLT, 3.95 GiB/s STR	+72.8	keep	csv_reader	fused STRING scanning
+2458f08	0 (crash)	0.0	crash	csv_reader	full template consolidation (semantic mismatch)
+53c1024	7.11 GiB/s INT, 6.95 GiB/s FLT, 6.13 GiB/s TS	+74.2	keep	csv_reader	partial template consolidation
+737c062	7.16 GiB/s INT, 6.84 GiB/s FLT, 6.05 GiB/s TS	+0.0	discard	csv_reader	tighter digit loop (within noise)
+e846b1c	0 (crash)	0.0	crash	csv_reader	warp-cooperative bitmask writes (__ballot_sync unsafe with divergent control flow)
