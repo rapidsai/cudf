@@ -308,6 +308,15 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<size_type> valid_counts,
                       device_span<bool* const> is_quoted_flags)
 {
+  // Shared memory for block-level valid count accumulation.
+  // Reduces global atomicAdd calls from (num_rows * num_cols) to (num_blocks * num_cols).
+  extern __shared__ size_type s_valid_counts[];
+  auto const num_active_cols = valid_counts.size();
+  for (int i = threadIdx.x; i < num_active_cols; i += blockDim.x) {
+    s_valid_counts[i] = 0;
+  }
+  __syncthreads();
+
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
   // this is entry into the field array - tid is an elements within the num_entries array
@@ -315,8 +324,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   auto const rec_id_next = rec_id + 1;
 
   // we can have more threads than data, make sure we are not past the end of the data
-  if (rec_id_next >= row_offsets.size()) return;
-
+  if (rec_id_next < row_offsets.size()) {
   auto field_start   = raw_csv + row_offsets[rec_id];
   auto const row_end = raw_csv + row_offsets[rec_id_next];
 
@@ -382,7 +390,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                     column_flags[col] & column_parse::as_hexadecimal)) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valids[actual_col], rec_id);
-            atomicAdd(&valid_counts[actual_col], 1);
+            atomicAdd(&s_valid_counts[actual_col], 1);
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
@@ -396,6 +404,15 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
     next_field  = next_delimiter + 1;
     field_start = next_field;
     ++col;
+  }
+  }  // end if (rec_id_next < row_offsets.size())
+
+  // Flush shared memory counts to global memory (one atomicAdd per column per block)
+  __syncthreads();
+  for (int i = threadIdx.x; i < num_active_cols; i += blockDim.x) {
+    if (s_valid_counts[i] > 0) {
+      atomicAdd(&valid_counts[i], s_valid_counts[i]);
+    }
   }
 }
 
@@ -847,15 +864,18 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
-                                                                    data,
-                                                                    column_flags,
-                                                                    row_offsets,
-                                                                    dtypes,
-                                                                    columns,
-                                                                    valids,
-                                                                    valid_counts,
-                                                                    is_quoted_flags);
+  // Shared memory for block-level valid count accumulation
+  auto const num_active_cols = valid_counts.size();
+  auto const shmem_size      = num_active_cols * sizeof(size_type);
+  convert_csv_to_cudf<<<grid_size, block_size, shmem_size, stream.value()>>>(options,
+                                                                              data,
+                                                                              column_flags,
+                                                                              row_offsets,
+                                                                              dtypes,
+                                                                              columns,
+                                                                              valids,
+                                                                              valid_counts,
+                                                                              is_quoted_flags);
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,
