@@ -1232,6 +1232,56 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
           if (fused_ok) { static_cast<int64_t*>(columns[actual_col])[rec_id] = val; }
           break;
         }
+        case cudf::type_id::STRING: {
+          // Fused string fast path: non-quoted, non-empty fields only.
+          // For quoted, empty, or whitespace-around-quotes fields, fall back to general path.
+          auto const qchar = options.quotechar;
+          bool const starts_with_quote = (field_start < row_end && *field_start == qchar);
+          bool const is_empty =
+            (field_start >= row_end || *field_start == options.delimiter ||
+             *field_start == options.terminator);
+
+          if (!starts_with_quote && !is_empty && !options.detect_whitespace_around_quotes) {
+            // Fast scan for delimiter
+            auto cur = field_start;
+            while (cur < row_end && *cur != options.delimiter && *cur != options.terminator &&
+                   !(*cur == '\r' && cur + 1 < row_end && *(cur + 1) == '\n')) {
+              ++cur;
+            }
+            fused_delim = cur;
+            // NA check
+            auto const field_len = static_cast<size_t>(fused_delim - field_start);
+            auto const is_na =
+              serialized_trie_contains(options.trie_na, {field_start, field_len});
+            auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
+            bool* const iq = is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
+            if (is_na) {
+              str_list[rec_id].first  = nullptr;
+              str_list[rec_id].second = 0;
+            } else {
+              str_list[rec_id].first  = field_start;
+              str_list[rec_id].second = field_len;
+              set_bit(valids[actual_col], rec_id);
+              atomicAdd(&s_valid_counts[actual_col], 1);
+            }
+            if (iq) { iq[rec_id] = false; }
+            // Advance
+            if (options.multi_delimiter && fused_delim < row_end &&
+                *fused_delim == options.delimiter) {
+              while (fused_delim + 1 < row_end && *(fused_delim + 1) == options.delimiter) {
+                ++fused_delim;
+              }
+            }
+            next_field  = fused_delim + 1;
+            field_start = next_field;
+            ++actual_col;
+            ++col;
+            continue;
+          }
+          // Fall through to general path for quoted/empty fields
+          fused_delim = nullptr;
+          break;
+        }
         default: break;
       }
 

@@ -8,3 +8,4 @@ commit	metric	improvement_pct	status	benchmark	description
 9df4b96	6.83 GiB/s INT, 6.10 GiB/s FLT, 3.63 GiB/s TS	+0.0	discard	csv_reader	increase csvparse_block_dim 128→256 (within noise, occupancy not limiting)
 0085d79	7.31 GiB/s INT, 6.94 GiB/s FLT, 5.96 GiB/s TS	+69.4	keep	csv_reader	fused delimiter scan + timestamp conversion (single-pass date/time parsing)
 81472b9	6.97 GiB/s INT, 6.82 GiB/s FLT, 5.45 GiB/s DUR	+68.5	keep	csv_reader	fused delimiter scan + duration conversion (single-pass, +6% on DURATION)
+de46a2b	7.18 GiB/s INT, 7.05 GiB/s FLT, 6.20 GiB/s DEC	+73.0	keep	csv_reader	fused delimiter scan + fixed-point conversion for DECIMAL32/DECIMAL64
