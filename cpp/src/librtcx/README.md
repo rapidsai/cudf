@@ -17,4 +17,3 @@ RTCX (runtime-compiler extended) is a wrapper around NVRTC and NVJitLink designe
 
 ## Runtime Requirements
 - CUDA >= 12.4.0
-
