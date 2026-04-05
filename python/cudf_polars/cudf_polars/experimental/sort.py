@@ -210,9 +210,6 @@ def _get_final_sort_boundaries(
         will contain ``num_partitions - 1`` rows of split
         boundaries in global sort order.
     """
-    if sort_boundaries_candidates.num_rows == 0:
-        return sort_boundaries_candidates
-
     column_order = list(column_order)
     null_order = list(null_order)
 
