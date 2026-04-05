@@ -638,6 +638,7 @@ void infer_column_types(parse_options const& parse_opts,
 struct decode_result {
   std::vector<column_buffer> buffers;
   std::vector<rmm::device_uvector<bool>> is_quoted_flags;
+  bool any_field_quoted;
 };
 
 decode_result decode_data(parse_options const& parse_opts,
@@ -687,6 +688,10 @@ decode_result decode_data(parse_options const& parse_opts,
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
+  // Track whether any field was quoted (allows skipping doublequote processing entirely)
+  auto d_any_quoted = cudf::detail::make_zeroed_device_uvector_async<size_type>(
+    1, stream, cudf::get_current_device_resource_ref());
+
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
@@ -697,14 +702,19 @@ decode_result decode_data(parse_options const& parse_opts,
     make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
     make_device_uvector_async(h_is_quoted_flags, stream, cudf::get_current_device_resource_ref()),
+    d_any_quoted.data(),
     stream);
 
+  // Copy valid counts and any_quoted flag to host (combined sync point)
   auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
+  size_type h_any_quoted = 0;
+  cudf::detail::cuda_memcpy(
+    host_span<size_type>{&h_any_quoted, 1}, device_span<size_type const>{d_any_quoted}, stream);
   for (int i = 0; i < num_active_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
   }
 
-  return {std::move(out_buffers), std::move(is_quoted_flags_storage)};
+  return {std::move(out_buffers), std::move(is_quoted_flags_storage), h_any_quoted > 0};
 }
 
 cudf::detail::host_vector<data_type> determine_column_types(
@@ -964,7 +974,10 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     auto& out_buffers     = decode_result.buffers;
     auto& is_quoted_flags = decode_result.is_quoted_flags;
 
-    bool const doublequote_enabled = (parse_opts.quotechar != '\0' && parse_opts.doublequote);
+    // Skip entire doublequote processing when no fields were actually quoted.
+    // The conversion kernel tracks this via the any_field_quoted flag.
+    bool const doublequote_enabled =
+      (parse_opts.quotechar != '\0' && parse_opts.doublequote && decode_result.any_field_quoted);
 
     // Identify string columns that need doublequote processing
     std::vector<size_t> string_col_indices;

@@ -1049,7 +1049,8 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
                       device_span<size_type> valid_counts,
-                      device_span<bool* const> is_quoted_flags)
+                      device_span<bool* const> is_quoted_flags,
+                      size_type* any_quoted_count)
 {
   // Shared memory for block-level valid count accumulation.
   // Reduces global atomicAdd calls from (num_rows * num_cols) to (num_blocks * num_cols).
@@ -1373,6 +1374,8 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
               }
             }
           }
+          // Signal that at least one field was quoted (allows skipping doublequote processing)
+          if (was_quoted && any_quoted_count) { atomicAdd(any_quoted_count, 1); }
           // Track whether this field was quoted (for doublequote unescaping)
           if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
@@ -1859,6 +1862,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
                             device_span<bool* const> is_quoted_flags,
+                            size_type* any_quoted_count,
                             rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
@@ -1877,7 +1881,8 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                                                                               columns,
                                                                               valids,
                                                                               valid_counts,
-                                                                              is_quoted_flags);
+                                                                              is_quoted_flags,
+                                                                              any_quoted_count);
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,
