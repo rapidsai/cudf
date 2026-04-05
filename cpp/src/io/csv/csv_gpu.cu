@@ -904,6 +904,112 @@ __device__ __inline__ bool try_fused_duration_parse(char const* begin,
 }
 
 /**
+ * @brief Try to parse a fixed-point (decimal) field inline while scanning for the delimiter.
+ *
+ * Fuses seek_field_end + NA check + trim + parse_decimal into a single pass.
+ * Accumulates digits, tracks decimal point position, then scales to match target scale.
+ */
+template <typename StorageType>
+__device__ __inline__ bool try_fused_decimal_parse(char const* begin,
+                                                   char const* end,
+                                                   char delim,
+                                                   char term,
+                                                   int32_t scale,
+                                                   StorageType* out_value,
+                                                   char const** out_delimiter)
+{
+  auto cur = begin;
+
+  // Skip leading whitespace
+  while (cur < end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  if (cur >= end || *cur == delim || *cur == term) {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;
+  }
+
+  // Sign
+  bool const neg = (*cur == '-');
+  if (neg || *cur == '+') { ++cur; }
+
+  if (cur >= end || ((*cur < '0' || *cur > '9') && *cur != '.')) {
+    *out_delimiter = scan_to_delimiter(begin, end, delim, term);
+    return false;
+  }
+
+  // Accumulate digits, track decimal point
+  // Use int64_t for accumulation to avoid overflow for decimal32
+  int64_t value      = 0;
+  int32_t exp_offset = 0;
+  bool seen_decimal  = false;
+
+  while (cur < end) {
+    char const c = *cur;
+    if (c >= '0' && c <= '9') {
+      value = value * 10 + (c - '0');
+      if (seen_decimal) { --exp_offset; }
+      ++cur;
+    } else if (c == '.' && !seen_decimal) {
+      seen_decimal = true;
+      ++cur;
+    } else if (c == 'e' || c == 'E') {
+      ++cur;
+      int32_t exp_sign = 1;
+      if (cur < end && *cur == '-') {
+        exp_sign = -1;
+        ++cur;
+      } else if (cur < end && *cur == '+') {
+        ++cur;
+      }
+      int32_t exponent = 0;
+      while (cur < end && *cur >= '0' && *cur <= '9') {
+        exponent = exponent * 10 + (*cur - '0');
+        ++cur;
+      }
+      exp_offset += exponent * exp_sign;
+      break;
+    } else if (c == delim || c == term) {
+      break;
+    } else if (c == '\r' && cur + 1 < end && *(cur + 1) == '\n') {
+      break;
+    } else if (c == ' ' || c == '\t') {
+      while (cur < end && (*cur == ' ' || *cur == '\t')) {
+        ++cur;
+      }
+      break;
+    } else {
+      *out_delimiter = scan_to_delimiter(cur, end, delim, term);
+      return false;
+    }
+  }
+
+  // Skip to delimiter
+  while (cur < end && *cur != delim && *cur != term &&
+         !(*cur == '\r' && cur + 1 < end && *(cur + 1) == '\n')) {
+    ++cur;
+  }
+
+  // Scale adjustment: value * 10^exp_offset needs to become value' * 10^scale
+  // So value' = value * 10^(exp_offset - scale)
+  int32_t shift = exp_offset - scale;
+  if (shift > 0) {
+    for (int32_t i = 0; i < shift && i < 18; ++i) {
+      value *= 10;
+    }
+  } else if (shift < 0) {
+    for (int32_t i = 0; i < -shift && i < 18; ++i) {
+      value /= 10;
+    }
+  }
+
+  *out_value     = neg ? static_cast<StorageType>(-value) : static_cast<StorageType>(value);
+  *out_delimiter = cur;
+  return true;
+}
+
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -1108,6 +1214,22 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
           fused_ok = try_fused_duration_parse(
             field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
           if (fused_ok) { static_cast<cudf::duration_ns::rep*>(columns[actual_col])[rec_id] = val.count(); }
+          break;
+        }
+        case cudf::type_id::DECIMAL32: {
+          int32_t val;
+          fused_ok = try_fused_decimal_parse(field_start, row_end, options.delimiter,
+                                             options.terminator, dtypes[actual_col].scale(),
+                                             &val, &fused_delim);
+          if (fused_ok) { static_cast<int32_t*>(columns[actual_col])[rec_id] = val; }
+          break;
+        }
+        case cudf::type_id::DECIMAL64: {
+          int64_t val;
+          fused_ok = try_fused_decimal_parse(field_start, row_end, options.delimiter,
+                                             options.terminator, dtypes[actual_col].scale(),
+                                             &val, &fused_delim);
+          if (fused_ok) { static_cast<int64_t*>(columns[actual_col])[rec_id] = val; }
           break;
         }
         default: break;
