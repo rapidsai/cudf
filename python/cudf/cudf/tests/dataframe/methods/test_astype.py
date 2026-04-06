@@ -281,4 +281,6 @@ def test_dataframe_astype_no_copy(copy):
     gdf = cudf.DataFrame({"a": [1, 2], "b": [3, 4]})
     result = gdf.astype("int64", copy=copy)
     assert_eq(result, gdf)
-    assert (result is gdf) is (not copy)
+    # Under CoW, copy=False returns a shallow copy (distinct object) rather
+    # than self; identity is not guaranteed regardless of copy parameter.
+    assert result is not gdf

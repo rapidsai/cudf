@@ -490,7 +490,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
                 dtype.get(col_name, col.dtype) == col.dtype
                 for col_name, col in self._column_labels_and_values
             ):
-                return self
+                return self.copy(deep=False)
         casted = (
             col.astype(dtype.get(col_name, col.dtype), copy=copy)
             for col_name, col in self._column_labels_and_values
