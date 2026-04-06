@@ -1227,7 +1227,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--native-parquet",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
     )
     parser.add_argument(
