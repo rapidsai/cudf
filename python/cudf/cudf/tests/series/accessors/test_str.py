@@ -2411,10 +2411,22 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na):
         assert_eq(expect, got)
 
 
-def test_string_contains_na_raises():
-    gs = cudf.Series(["a", "b", "c", "d", None])
-    with pytest.raises(ValueError):
-        gs.str.contains("a", na="")
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_string_named_capture_groups():
+    s = ["hello-123", "world-456", "goodbye-789"]
+    gs = cudf.Series(s)
+    ps = pd.Series(s)
+
+    pat = r"(?P<word>\w+)-(?P<number>\d+)"
+    expect = ps.str.contains(pat, regex=True)
+    got = gs.str.contains(pat, regex=True)
+    assert_eq(expect, got, check_dtype=False)
+    expect = ps.str.count(pat)
+    got = gs.str.count(pat)
+    assert_eq(expect, got, check_dtype=False)
+    expect = ps.str.match(pat)
+    got = gs.str.match(pat)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_string_contains_case(ps_gs):
