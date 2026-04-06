@@ -146,7 +146,11 @@ def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
         return cudf.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_timestamp(typ) and typ.tz is not None:
         return get_compatible_timezone(pd.DatetimeTZDtype(typ.unit, typ.tz))
-    elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
+    elif (
+        pa.types.is_large_string(typ)
+        or pa.types.is_string(typ)
+        or pa.types.is_string_view(typ)
+    ):
         return DEFAULT_STRING_DTYPE
     elif pa.types.is_date(typ):
         # typ.to_pandas_dtype() produces np.dtype("datetime64[ms]").
