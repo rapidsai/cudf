@@ -837,22 +837,13 @@ def test_string_std():
     assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
 
 
-def test_string_reduction_error():
+def test_string_reduction():
     s = cudf.Series([None, None], dtype="str")
     ps = s.to_pandas(nullable=True)
-    assert_exceptions_equal(
-        s.any,
-        ps.any,
-        lfunc_args_and_kwargs=([], {"skipna": False}),
-        rfunc_args_and_kwargs=([], {"skipna": False}),
-    )
-
-    assert_exceptions_equal(
-        s.all,
-        ps.all,
-        lfunc_args_and_kwargs=([], {"skipna": False}),
-        rfunc_args_and_kwargs=([], {"skipna": False}),
-    )
+    # pandas 3 treats the NaN null sentinel as truthy (numpy semantics), so
+    # any/all(skipna=False) return True (not TypeError) on null-only string series.
+    assert s.any(skipna=False) == ps.any(skipna=False)
+    assert s.all(skipna=False) == ps.all(skipna=False)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])

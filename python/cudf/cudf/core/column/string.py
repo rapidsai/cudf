@@ -170,7 +170,10 @@ class StringColumn(ColumnBase, Scannable):
     ) -> ScalarLike:
         """Check if any string value is truthy (non-empty)."""
         if not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
+            # pandas 3 treats the NaN null sentinel as truthy, matching
+            # numpy semantics, so any(skipna=False) returns True when nulls
+            # are present.
+            return True
         elif skipna and self.null_count == self.size:
             return False
         raise NotImplementedError("`any` not implemented for `StringColumn`")
@@ -182,7 +185,10 @@ class StringColumn(ColumnBase, Scannable):
         if skipna and self.null_count == self.size:
             return True
         elif not skipna and self.has_nulls():
-            raise TypeError("boolean value of NA is ambiguous")
+            # pandas 3 treats the NaN null sentinel as truthy, matching
+            # numpy semantics, so all(skipna=False) returns True when all
+            # values are null.
+            return True
         raise NotImplementedError("`all` not implemented for `StringColumn`")
 
     def _reduce(
