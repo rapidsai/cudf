@@ -321,21 +321,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   }
 }
 
-/**
- * @brief Try to parse an integer field inline while scanning for the delimiter.
- *
- * Fuses seek_field_end + NA check + trim + parse_numeric into a single pass
- * over the field characters. Returns the parsed value and delimiter position on success,
- * or signals failure so the caller falls back to the general path.
- *
- * @param begin Start of the field data
- * @param end End of the row data
- * @param delim Column delimiter character
- * @param term Line terminator character
- * @param[out] out_value The parsed integer value (only valid on success)
- * @param[out] out_delimiter Position of the delimiter/terminator after this field
- * @return true if the field was successfully parsed as a simple integer
- */
+// Fused single-pass integer parser: scans to delimiter while converting digits to value.
 template <typename T>
 __device__ __inline__ bool try_fused_int_parse(char const* begin,
                                                char const* end,
@@ -422,10 +408,7 @@ __device__ __inline__ bool try_fused_int_parse(char const* begin,
   return true;
 }
 
-/**
- * @brief Scan to the next delimiter/terminator, used when a fused parse fails
- *        and we need to find the field boundary for the fallback path.
- */
+// Scan to next delimiter (used by fused parser fallback paths).
 __device__ __inline__ char const* scan_to_delimiter(char const* cur,
                                                     char const* end,
                                                     char delim,
@@ -438,13 +421,7 @@ __device__ __inline__ char const* scan_to_delimiter(char const* cur,
   return cur;
 }
 
-/**
- * @brief Try to parse a floating-point field inline while scanning for the delimiter.
- *
- * Fuses seek_field_end + NA check + trim + parse_numeric into a single pass
- * for standard floating-point values (digits, decimal point, exponent).
- * Falls back on: infinity, NaN, non-standard formats, quoted fields.
- */
+// Fused single-pass float parser: scans to delimiter while converting to float value.
 template <typename T>
 __device__ __inline__ bool try_fused_float_parse(char const* begin,
                                                  char const* end,
@@ -555,12 +532,7 @@ __device__ __inline__ bool try_fused_float_parse(char const* begin,
   return true;
 }
 
-/**
- * @brief Convert civil date (year, month, day) to days since Unix epoch (1970-01-01).
- *
- * Uses the Hinnant civil_from_days algorithm expressed as raw integer math,
- * avoiding cuda::std::chrono types to minimize register pressure.
- */
+// Convert YYYY-MM-DD to days since epoch (Hinnant algorithm, raw integer math).
 __device__ __forceinline__ int64_t civil_to_days(int32_t y, int32_t m, int32_t d)
 {
   y -= (m <= 2);
@@ -571,10 +543,7 @@ __device__ __forceinline__ int64_t civil_to_days(int32_t y, int32_t m, int32_t d
   return static_cast<int64_t>(era) * 146097 + doe - 719468;
 }
 
-/**
- * @brief Parse 1-4 digits from the current position, advancing the pointer.
- * Returns the parsed value, or -1 if no digit found.
- */
+// Parse up to max_digits digits, advance pointer. Returns -1 if no digit found.
 __device__ __inline__ int32_t parse_digits(char const*& cur, char const* end, int max_digits)
 {
   if (cur >= end || *cur < '0' || *cur > '9') { return -1; }
@@ -588,14 +557,7 @@ __device__ __inline__ int32_t parse_digits(char const*& cur, char const* end, in
   return val;
 }
 
-/**
- * @brief Try to parse a timestamp field inline while scanning for the delimiter.
- *
- * Handles common date/time formats in a single pass:
- * - YYYY-MM-DD, YYYY-MM-DDThh:mm:ss, YYYY-MM-DDThh:mm:ss.fff...
- * - Also handles digits-only format (epoch value)
- * Falls back for: non-standard formats, dayfirst, month/day first, etc.
- */
+// Fused single-pass timestamp parser: YYYY-MM-DD[Thh:mm:ss[.fff]] or digits-only epoch.
 template <typename timestamp_type>
 __device__ __inline__ bool try_fused_timestamp_parse(char const* begin,
                                                      char const* end,
@@ -759,12 +721,7 @@ __device__ __inline__ bool try_fused_timestamp_parse(char const* begin,
   return true;
 }
 
-/**
- * @brief Try to parse a duration field inline while scanning for the delimiter.
- *
- * Handles formats: "N days [+]HH:MM:SS.nnn", "HH:MM:SS.nnn", digits-only.
- * Fuses seek_field_end + NA check + trim + to_duration into a single pass.
- */
+// Fused single-pass duration parser: "N days [+]HH:MM:SS.nnn" or digits-only.
 template <typename duration_type>
 __device__ __inline__ bool try_fused_duration_parse(char const* begin,
                                                     char const* end,
@@ -921,12 +878,7 @@ __device__ __inline__ bool try_fused_duration_parse(char const* begin,
   return true;
 }
 
-/**
- * @brief Try to parse a fixed-point (decimal) field inline while scanning for the delimiter.
- *
- * Fuses seek_field_end + NA check + trim + parse_decimal into a single pass.
- * Accumulates digits, tracks decimal point position, then scales to match target scale.
- */
+// Fused single-pass fixed-point parser: accumulates digits with decimal tracking + scale.
 template <typename StorageType>
 __device__ __inline__ bool try_fused_decimal_parse(char const* begin,
                                                    char const* end,
@@ -1153,81 +1105,38 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
           }
           break;
         }
-        case cudf::type_id::TIMESTAMP_DAYS: {
-          cudf::timestamp_D val;
-          fused_ok = try_fused_timestamp_parse(
-            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
-            &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::timestamp_D::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
-          break;
+// Timestamp/duration fused parsing: macro to avoid repeating 5 near-identical case blocks per group
+#define FUSED_TIMESTAMP_CASE(TYPE_ID, TS_T)                                       \
+        case cudf::type_id::TYPE_ID: {                                            \
+          TS_T val;                                                               \
+          fused_ok = try_fused_timestamp_parse(field_start, row_end,              \
+            options.delimiter, options.terminator, options.dayfirst,               \
+            &val, &fused_delim);                                                  \
+          if (fused_ok) static_cast<TS_T::rep*>(columns[actual_col])[rec_id]      \
+            = val.time_since_epoch().count();                                     \
+          break;                                                                  \
         }
-        case cudf::type_id::TIMESTAMP_SECONDS: {
-          cudf::timestamp_s val;
-          fused_ok = try_fused_timestamp_parse(
-            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
-            &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::timestamp_s::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
-          break;
+        FUSED_TIMESTAMP_CASE(TIMESTAMP_DAYS, cudf::timestamp_D)
+        FUSED_TIMESTAMP_CASE(TIMESTAMP_SECONDS, cudf::timestamp_s)
+        FUSED_TIMESTAMP_CASE(TIMESTAMP_MILLISECONDS, cudf::timestamp_ms)
+        FUSED_TIMESTAMP_CASE(TIMESTAMP_MICROSECONDS, cudf::timestamp_us)
+        FUSED_TIMESTAMP_CASE(TIMESTAMP_NANOSECONDS, cudf::timestamp_ns)
+#undef FUSED_TIMESTAMP_CASE
+#define FUSED_DURATION_CASE(TYPE_ID, DUR_T)                                       \
+        case cudf::type_id::TYPE_ID: {                                            \
+          DUR_T val;                                                              \
+          fused_ok = try_fused_duration_parse(field_start, row_end,               \
+            options.delimiter, options.terminator, &val, &fused_delim);            \
+          if (fused_ok) static_cast<DUR_T::rep*>(columns[actual_col])[rec_id]     \
+            = val.count();                                                        \
+          break;                                                                  \
         }
-        case cudf::type_id::TIMESTAMP_MILLISECONDS: {
-          cudf::timestamp_ms val;
-          fused_ok = try_fused_timestamp_parse(
-            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
-            &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::timestamp_ms::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
-          break;
-        }
-        case cudf::type_id::TIMESTAMP_MICROSECONDS: {
-          cudf::timestamp_us val;
-          fused_ok = try_fused_timestamp_parse(
-            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
-            &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::timestamp_us::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
-          break;
-        }
-        case cudf::type_id::TIMESTAMP_NANOSECONDS: {
-          cudf::timestamp_ns val;
-          fused_ok = try_fused_timestamp_parse(
-            field_start, row_end, options.delimiter, options.terminator, options.dayfirst,
-            &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::timestamp_ns::rep*>(columns[actual_col])[rec_id] = val.time_since_epoch().count(); }
-          break;
-        }
-        case cudf::type_id::DURATION_DAYS: {
-          cudf::duration_D val;
-          fused_ok = try_fused_duration_parse(
-            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::duration_D::rep*>(columns[actual_col])[rec_id] = val.count(); }
-          break;
-        }
-        case cudf::type_id::DURATION_SECONDS: {
-          cudf::duration_s val;
-          fused_ok = try_fused_duration_parse(
-            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::duration_s::rep*>(columns[actual_col])[rec_id] = val.count(); }
-          break;
-        }
-        case cudf::type_id::DURATION_MILLISECONDS: {
-          cudf::duration_ms val;
-          fused_ok = try_fused_duration_parse(
-            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::duration_ms::rep*>(columns[actual_col])[rec_id] = val.count(); }
-          break;
-        }
-        case cudf::type_id::DURATION_MICROSECONDS: {
-          cudf::duration_us val;
-          fused_ok = try_fused_duration_parse(
-            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::duration_us::rep*>(columns[actual_col])[rec_id] = val.count(); }
-          break;
-        }
-        case cudf::type_id::DURATION_NANOSECONDS: {
-          cudf::duration_ns val;
-          fused_ok = try_fused_duration_parse(
-            field_start, row_end, options.delimiter, options.terminator, &val, &fused_delim);
-          if (fused_ok) { static_cast<cudf::duration_ns::rep*>(columns[actual_col])[rec_id] = val.count(); }
-          break;
-        }
+        FUSED_DURATION_CASE(DURATION_DAYS, cudf::duration_D)
+        FUSED_DURATION_CASE(DURATION_SECONDS, cudf::duration_s)
+        FUSED_DURATION_CASE(DURATION_MILLISECONDS, cudf::duration_ms)
+        FUSED_DURATION_CASE(DURATION_MICROSECONDS, cudf::duration_us)
+        FUSED_DURATION_CASE(DURATION_NANOSECONDS, cudf::duration_ns)
+#undef FUSED_DURATION_CASE
         case cudf::type_id::STRING: {
           // Fused string fast path: non-quoted, non-empty fields only.
           // For quoted, empty, or whitespace-around-quotes fields, fall back to general path.
