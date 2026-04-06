@@ -257,15 +257,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     > 0.1
                 )
             )
-            .with_columns(
-                [
-                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")).alias(
-                        "sales_deviation"
-                    )
-                ]
-            )
             .sort(
-                ["sales_deviation", "d_moy"], nulls_last=True, descending=[False, False]
+                by=[
+                    pl.col("sum_sales") - pl.col("avg_monthly_sales"),
+                    pl.col("d_moy"),
+                ],
+                descending=[False, False],
+                nulls_last=True,
             )
             .select(
                 [
@@ -282,4 +280,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+        sort_keys=[
+            (pl.col("sum_sales") - pl.col("avg_monthly_sales"), False),
+            (pl.col("d_moy"), False),
+        ],
     )
