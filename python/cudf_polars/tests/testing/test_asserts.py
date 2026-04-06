@@ -453,13 +453,9 @@ def test_assert_tpch_result_equal_sort_keys_raises_not_sorted() -> None:
             "total_sales": [150, 200, 100, 300, 250],
         }
     )
-    right = pl.DataFrame(
-        {
-            "lochierarchy": [0, 0, 0, 1, 1],
-            "i_category": ["music", "electronics", "books", "sports", "toys"],
-            "total_sales": [150, 200, 100, 300, 250],
-        }
-    )
+    # It does not matter what right is as long as it has the
+    # same schema because we should fail before we compare them.
+    right = left.clone()
     sort_keys = [
         (
             pl.when(pl.col("lochierarchy") == 0)
