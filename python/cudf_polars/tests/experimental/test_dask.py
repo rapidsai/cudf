@@ -17,6 +17,7 @@ from cudf_polars.utils.config import DaskContext
 distributed = pytest.importorskip("distributed")
 
 from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine  # noqa: E402
+from cudf_polars.testing.asserts import assert_gpu_result_equal  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -110,17 +111,15 @@ def test_gather_cluster_info(engine: DaskEngine) -> None:
 def test_scan(engine: DaskEngine) -> None:
     """Input rows are partitioned across workers; total output equals input."""
     lf = pl.LazyFrame({"a": [1, 2, 3]})
-    result = lf.collect(engine=engine)
-    assert result.shape == (3, 1)
-    assert sorted(result["a"].to_list()) == [1, 2, 3]
+    assert_gpu_result_equal(lf, engine=engine, check_row_order=False)
 
 
 def test_filter(engine: DaskEngine) -> None:
     """Filter is applied correctly across all workers."""
     lf = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
-    result = lf.filter(pl.col("a") > 3).collect(engine=engine)
-    assert result.shape == (2, 1)
-    assert sorted(result["a"].to_list()) == [4, 5]
+    assert_gpu_result_equal(
+        lf.filter(pl.col("a") > 3), engine=engine, check_row_order=False
+    )
 
 
 def test_group_by(engine: DaskEngine) -> None:
@@ -131,19 +130,11 @@ def test_group_by(engine: DaskEngine) -> None:
     keys = [str(i % n_keys) for i in range(n)]
     vals = list(range(n))
     lf = pl.LazyFrame({"key": keys, "val": vals})
-    result = (
-        lf.group_by("key").agg(pl.col("val").sum()).collect(engine=engine).sort("key")
+    assert_gpu_result_equal(
+        lf.group_by("key").agg(pl.col("val").sum()),
+        engine=engine,
+        check_row_order=False,
     )
-    expected = (
-        pl.LazyFrame({"key": keys, "val": vals})
-        .group_by("key")
-        .agg(pl.col("val").sum())
-        .collect()
-        .sort("key")
-    )
-    assert result.shape == expected.shape
-    assert result["key"].to_list() == expected["key"].to_list()
-    assert result["val"].to_list() == expected["val"].to_list()
 
 
 def test_join(engine: DaskEngine) -> None:
@@ -155,10 +146,11 @@ def test_join(engine: DaskEngine) -> None:
     lf_right = pl.LazyFrame(
         {"key": list(range(n)), "val_right": [x * 2 for x in range(n)]}
     )
-    result = lf_left.join(lf_right, on="key").collect(engine=engine).sort("key")
-    assert result.shape == (n, 3)
-    assert result["val_left"].to_list() == list(range(n))
-    assert result["val_right"].to_list() == [x * 2 for x in range(n)]
+    assert_gpu_result_equal(
+        lf_left.join(lf_right, on="key"),
+        engine=engine,
+        check_row_order=False,
+    )
 
 
 def test_empty_dataframe(engine: DaskEngine) -> None:
@@ -166,7 +158,4 @@ def test_empty_dataframe(engine: DaskEngine) -> None:
     lf = pl.LazyFrame(
         {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
     )
-    result = lf.collect(engine=engine)
-    assert result.shape == (0, 2)
-    assert result.columns == ["a", "b"]
-    assert result.dtypes == [pl.Int32, pl.Float64]
+    assert_gpu_result_equal(lf, engine=engine)
