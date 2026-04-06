@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import operator
+import warnings
 
 import numpy as np
 import pytest
@@ -18,7 +19,9 @@ def run_masked_udf_series(func, data, args=(), nullable=True, **kwargs):
     expect = psr.apply(func, args=args)
     obtain = gsr.apply(func, args=args).to_pandas(nullable=nullable)
     if "check_dtype" in kwargs and not kwargs.get("check_dtype", True):
-        expect = expect.astype(obtain.dtype, errors="ignore")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            obtain = obtain.astype(expect.dtype, errors="ignore")
     assert_eq(expect, obtain, **kwargs)
 
 
