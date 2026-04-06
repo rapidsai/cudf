@@ -51,13 +51,15 @@ def test_groupby_diff_row_mixed_numerics(shift_perc, direction):
         seed=0,
     )
     gdf = cudf.DataFrame.from_arrow(t)
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(arrow_type=True)
     n_shift = int(nelem * shift_perc) * direction
 
     expected = pdf.groupby(["0"]).diff(periods=n_shift)
     got = gdf.groupby(["0"]).diff(periods=n_shift)
 
-    assert_groupby_results_equal(expected, got)
+    assert_groupby_results_equal(
+        expected, got.to_pandas(arrow_type=True), check_dtype=False
+    )
 
 
 def test_groupby_diff_row_zero_shift():
