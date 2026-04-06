@@ -768,9 +768,7 @@ void kernel_ref::launch_cooperative(cuda_dim3 grid_dim,
 
 library_t::~library_t()
 {
-  if (handle_ != nullptr) {
-    if (cu->LibraryUnload(handle_) != CUDA_SUCCESS) { std::terminate(); }
-  }
+  if (handle_ != nullptr) { cu->LibraryUnload(handle_); }
 }
 
 library load_library(std::span<std::uint8_t const> binary)
