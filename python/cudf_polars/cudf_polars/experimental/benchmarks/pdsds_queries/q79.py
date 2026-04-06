@@ -141,7 +141,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "profit",
                 ]
             )
-            .sort(list(sort_by.keys()))
+            .sort(list(sort_by.keys()), nulls_last=True)
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),
