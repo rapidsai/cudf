@@ -759,10 +759,10 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto all_valid        = cuda::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
     auto d_chars          = cudf::detail::make_device_uvector_async(
-      chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
+      chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
     auto d_offsets = std::make_unique<cudf::column>(
       cudf::detail::make_device_uvector(
-        offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
+        offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe()),
       rmm::device_buffer{},
       0);
     wrapped =
@@ -809,14 +809,14 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
     auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
     auto d_chars                 = cudf::detail::make_device_uvector_async(
-      chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
+      chars, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
     auto d_offsets = std::make_unique<cudf::column>(
       cudf::detail::make_device_uvector_async(
-        offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
+        offsets, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe()),
       rmm::device_buffer{},
       0);
     auto d_bitmask = cudf::detail::make_device_uvector(
-      null_mask, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
+      null_mask, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
     wrapped = cudf::make_strings_column(
       num_strings, std::move(d_offsets), d_chars.release(), null_count, d_bitmask.release());
   }
@@ -963,7 +963,8 @@ class dictionary_column_wrapper : public detail::column_wrapper {
     wrapped =
       cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end),
                                cudf::data_type{type_id::INT32},
-                               cudf::test::get_default_stream());
+                               cudf::test::get_default_stream(),
+                               cudf::get_current_device_resource_ref_unsafe());
   }
 
   /**
@@ -1162,7 +1163,8 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   {
     wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end),
                                        cudf::data_type{type_id::INT32},
-                                       cudf::test::get_default_stream());
+                                       cudf::test::get_default_stream(),
+                                       cudf::get_current_device_resource_ref_unsafe());
   }
 
   /**
@@ -1635,10 +1637,11 @@ class lists_column_wrapper : public detail::column_wrapper {
                     std::back_inserter(children),
                     cuda::std::identity{});
 
-    auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
-                                 : cudf::concatenate(children,
-                                                     cudf::test::get_default_stream(),
-                                                     cudf::get_current_device_resource_ref());
+    auto data = children.empty()
+                  ? cudf::empty_like(expected_hierarchy)
+                  : cudf::concatenate(children,
+                                      cudf::test::get_default_stream(),
+                                      cudf::get_current_device_resource_ref_unsafe());
 
     // increment depth
     depth = expected_depth + 1;
@@ -1735,7 +1738,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                        lists_column_view(expected_hierarchy).child()),
       col.null_count(),
       cudf::copy_bitmask(
-        col, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()));
+        col, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe()));
   }
 
   std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
@@ -1927,7 +1930,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                                         std::move(child_columns),
                                         null_count,
                                         std::move(null_mask),
-                                        cudf::test::get_default_stream());
+                                        cudf::test::get_default_stream(),
+                                        cudf::get_current_device_resource_ref_unsafe());
   }
 
   template <typename V>

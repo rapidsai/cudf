@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,7 @@ namespace test {
  * ```
  */
 class BaseFixture : public ::testing::Test {
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
+  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref_unsafe()};
 
  public:
   /**
@@ -47,7 +47,7 @@ class BaseFixture : public ::testing::Test {
  */
 template <typename T>
 class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
+  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref_unsafe()};
 
  public:
   /**

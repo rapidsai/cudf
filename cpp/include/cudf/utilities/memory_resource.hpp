@@ -90,8 +90,8 @@ inline rmm::device_async_resource_ref reset_current_device_resource_ref()
  * For intentional use of the current device resource, call
  * get_current_device_resource_ref_unsafe() instead.
  */
-__attribute__((error("cudf default memory resource argument used. Pass mr explicitly."),
-               noinline)) rmm::device_async_resource_ref
+__attribute__((error("cudf default memory resource argument used. Pass mr explicitly.")))
+rmm::device_async_resource_ref
 get_current_device_resource_ref();
 #endif  // __GNUC__ && !__clang__
 #endif  // CUDF_CATCH_DEFAULT_MR
