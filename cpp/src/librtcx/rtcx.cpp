@@ -335,9 +335,10 @@ void* get_symbol(char const* lib_name, void* handle, char const* sym_name)
 {
   void* sym = ::dlsym(handle, sym_name);
   if (sym == nullptr) {
-    RTCX_FAIL(std::format(
-                "Failed to load symbol `{}` from `{}`, error: `{}`", sym_name, lib_name, dlerror()),
-              std::runtime_error);
+    RTCX_FAIL(
+      std::format(
+        "Failed to load symbol `{}` from `{}`, error: `{}`", sym_name, lib_name, ::dlerror()),
+      std::runtime_error);
   }
   return sym;
 }
@@ -358,7 +359,7 @@ struct LibCuda {
   LibCuda(LibCuda&&)                 = delete;
   LibCuda& operator=(LibCuda const&) = delete;
   LibCuda& operator=(LibCuda&&)      = delete;
-  ~LibCuda() { dlclose(_handle); }
+  ~LibCuda() { ::dlclose(_handle); }
 
   static void* _load()
   {
@@ -490,7 +491,7 @@ blob_t blob_t::from_buffer(byte_buffer&& buffer)
   auto data = buffer.release();
   return blob_t::from_parts(
     data, size, +[](std::uint8_t const* data, std::size_t) {
-      free(const_cast<std::uint8_t*>(data));
+      ::free(const_cast<std::uint8_t*>(data));
     });
 }
 

@@ -544,10 +544,10 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
     void hit(std::uint64_t tick) { last_touched_tick = tick; }
   };
 
-  std::unordered_map<sha256, entry, sha256_hasher> entries_;
+  std::unordered_map<sha256, entry, sha256_hasher> entries_ = {};
   std::size_t limit_;
 
-  explicit lru_memory_cache(std::size_t limit) : entries_{}, limit_{limit}
+  explicit lru_memory_cache(std::size_t limit) : limit_{limit}
   {
     // reserve space to avoid rehashing
     entries_.reserve(limit * 2);
