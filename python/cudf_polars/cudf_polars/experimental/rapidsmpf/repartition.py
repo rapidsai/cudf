@@ -213,7 +213,9 @@ async def concatenate_node(
                             ),
                             context=ir_context,
                         )
-                        del chunks
+                        if len(chunks) > 1:
+                            # _concat reuses chunks[0] if len(chunks) == 1
+                            del chunks
                     if tracer is not None:
                         tracer.add_chunk(table=df.table)
                     await ch_out.send(
