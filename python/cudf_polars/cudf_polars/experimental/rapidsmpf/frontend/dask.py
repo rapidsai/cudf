@@ -337,7 +337,7 @@ def evaluate_pipeline_dask_mode(
     )
 
     result_map = dask_context.client.run(
-        functools.partial(_worker_evaluate, uid=dask_context.uid),
+        functools.partial(_worker_evaluate, uid=dask_context.rapidsmpf_id),
         ir,
         partition_info,
         worker_config,
@@ -482,7 +482,7 @@ class DaskEngine(StreamingEngine):
 
         dask_ctx = DaskContext(
             client=dask_client,
-            uid=uid,
+            rapidsmpf_id=uid,
             owned_client=owned_client,
             owned_cluster=owned_cluster,
         )
@@ -548,7 +548,7 @@ class DaskEngine(StreamingEngine):
         self._dask_context = None
         exceptions: list[Exception] = []
         try:
-            ctx.client.run(functools.partial(_teardown_worker, uid=ctx.uid))
+            ctx.client.run(functools.partial(_teardown_worker, uid=ctx.rapidsmpf_id))
         except Exception as e:
             exceptions.append(e)
         finally:

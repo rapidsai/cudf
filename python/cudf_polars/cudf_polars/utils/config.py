@@ -587,7 +587,7 @@ class DaskContext:
     ----------
     client
         Active :class:`~distributed.Client` connected to the cluster.
-    uid
+    rapidsmpf_id
         Unique identifier for this RapidsMPF bootstrap session.
     owned_client
         Client to close on shutdown, if created internally by
@@ -597,7 +597,7 @@ class DaskContext:
     """
 
     client: distributed.Client
-    uid: str
+    rapidsmpf_id: str
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
 
