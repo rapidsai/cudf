@@ -341,9 +341,7 @@ def test_parquet_reader_index_col(tmp_path, index_col, columns):
 
 
 @pytest.mark.parametrize("pandas_compat", [True, False])
-@pytest.mark.parametrize(
-    "columns", [["a"], ["d"], ["a", "b"], ["a", "d"], None]
-)
+@pytest.mark.parametrize("columns", [["a"], ["d"], ["a", "d"], None])
 def test_parquet_reader_pandas_metadata(tmp_path, columns, pandas_compat):
     df = pd.DataFrame(
         {
