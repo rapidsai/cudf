@@ -364,8 +364,8 @@ void write_json_uncompressed(data_sink* out_sink,
     }
 
     std::vector<column_name_info> names;
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(table.num_columns()),
+    std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                   cuda::counting_iterator{table.num_columns()},
                    std::back_inserter(names),
                    [](auto i) { return column_name_info{std::to_string(i)}; });
     return names;

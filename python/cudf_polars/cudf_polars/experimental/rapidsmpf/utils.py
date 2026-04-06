@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import itertools
 import operator
 import struct
 import time
@@ -39,7 +40,7 @@ from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator
+    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -73,6 +74,25 @@ def set_memory_resource(mr: rmm.mr.DeviceMemoryResource) -> Iterator[None]:
         yield
     finally:
         rmm.mr.set_current_device_resource(old)
+
+
+async def gather_in_task_group(*coroutines: Coroutine[Any, Any, Any]) -> list[Any]:
+    """
+    asyncio.gather-like API for running tasks in a asyncio.TaskGroup.
+
+    Parameters
+    ----------
+    coroutines
+        Tasks to execute.
+
+    Returns
+    -------
+    list[Any]
+        The results of the coroutines.
+    """
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(coro) for coro in coroutines]
+    return [task.result() for task in tasks]
 
 
 @asynccontextmanager
@@ -126,7 +146,12 @@ async def shutdown_on_error(
         try:
             yield tracer
         except BaseException:
-            await asyncio.gather(*(ch.shutdown(context) for ch in channels))
+            await gather_in_task_group(
+                *itertools.chain.from_iterable(
+                    (ch.shutdown(context), ch.shutdown_metadata(context))
+                    for ch in channels
+                )
+            )
             raise
         finally:
             stop = time.monotonic_ns()
@@ -317,7 +342,7 @@ def _evaluate_chunk_sync(
         DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
         context=ir_context,
     )
-    return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
 
 
 async def evaluate_chunk(

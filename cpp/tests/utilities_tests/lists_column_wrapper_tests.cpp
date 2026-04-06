@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,7 +16,7 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
@@ -1506,8 +1506,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
 
   // Creating Struct<Numeric, Bool>.
   auto numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_struct_rows),
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator{num_struct_rows},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 
   auto bool_iterator =
@@ -1540,8 +1540,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   // Verify that the child is unchanged.
 
   auto expected_numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_struct_rows),
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator{num_struct_rows},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 
   auto expected_bool_column =
