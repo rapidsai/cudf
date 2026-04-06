@@ -148,48 +148,40 @@ To profile a script being run from the command line, pass the
 python -m cudf.pandas --profile script.py
 ```
 
+To perform line-by-line profiling from the command line, pass the
+`--line-profile` argument:
+
+```bash
+python -m cudf.pandas --line-profile script.py
+```
+
 ### Using the Profiler in Python Scripts
 
-In addition to Jupyter magics and command-line usage, profiling can also be performed programmatically in Python scripts using the `Profiler` class.
-
-First, enable `cudf.pandas`:
+Profiling can also be performed programmatically in Python scripts using the
+`Profiler` class. This is useful when running scripts outside of Jupyter or
+when more control over profiling is needed.
 
 ```python
 import cudf.pandas
 cudf.pandas.install()
-```
-This approach is useful when running scripts outside of Jupyter or when more control over profiling is needed.
 
-Then, use the `Profiler` as a context manager:
-
-```python
 from cudf.pandas import Profiler
 import pandas as pd
 
 with Profiler() as profiler:
-    df = pd.DataFrame({"a": [0, 1, 2], "b": [3, 4, 3]})
-    df.min(axis=1)
-    df.groupby("a").filter(lambda group: len(group) > 1)
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    df.sum()
 
 print(profiler)
 ```
 
-Alternatively, the profiler can be started and stopped manually:
+Example output:
 
-```python
-from cudf.pandas import Profiler
-import pandas as pd
-
-profiler = Profiler()
-profiler.start()
-
-df = pd.DataFrame({"a": [0, 1, 2], "b": [3, 4, 3]})
-df.min(axis=1)
-
-profiler.stop()
-print(profiler)
+```text
+Operation                      Device
+-------------------------------------
+DataFrame.sum                 GPU
 ```
-This produces output similar to the Jupyter and CLI profiling tools, showing which operations executed on the GPU and which fell back to the CPU.
 
 ### cudf.pandas CLI Features
 
