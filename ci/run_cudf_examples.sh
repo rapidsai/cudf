@@ -14,14 +14,26 @@ pushd basic || exit
 compute-sanitizer --tool memcheck basic_example
 popd || exit
 
+GPU_COMPUTE_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n1 | tr -d '[:space:]')
+
 pushd hybrid_scan_io || exit
-compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001 PINNED_BUFFER
-compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 2
-compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 FILEPATH BYTE_RANGES 2
-compute-sanitizer --tool memcheck hybrid_scan_multifile_single_step example.parquet 10 2 YES DEVICE_BUFFER 2
-compute-sanitizer --tool memcheck hybrid_scan_multifile_single_step example.parquet 10 2 NO FILEPATH 1
-compute-sanitizer --tool memcheck hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 PINNED_BUFFER 2
-compute-sanitizer --tool memcheck hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 HOST_BUFFER 1
+if [[ "${GPU_COMPUTE_CAP}" == "12.0" ]]; then
+    hybrid_scan_io example.parquet string_col 0000001 PINNED_BUFFER
+    hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 2
+    hybrid_scan_pipeline example.parquet 2 FILEPATH BYTE_RANGES 2
+    hybrid_scan_multifile_single_step example.parquet 10 2 YES DEVICE_BUFFER 2
+    hybrid_scan_multifile_single_step example.parquet 10 2 NO FILEPATH 1
+    hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 PINNED_BUFFER 2
+    hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 HOST_BUFFER 1
+else
+    compute-sanitizer --tool memcheck hybrid_scan_io example.parquet string_col 0000001 PINNED_BUFFER
+    compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 HOST_BUFFER ROW_GROUPS 2
+    compute-sanitizer --tool memcheck hybrid_scan_pipeline example.parquet 2 FILEPATH BYTE_RANGES 2
+    compute-sanitizer --tool memcheck hybrid_scan_multifile_single_step example.parquet 10 2 YES DEVICE_BUFFER 2
+    compute-sanitizer --tool memcheck hybrid_scan_multifile_single_step example.parquet 10 2 NO FILEPATH 1
+    compute-sanitizer --tool memcheck hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 PINNED_BUFFER 2
+    compute-sanitizer --tool memcheck hybrid_scan_multifile_two_step example.parquet 10 2 string_col 0000001 HOST_BUFFER 1
+fi
 popd || exit
 
 pushd nested_types || exit
