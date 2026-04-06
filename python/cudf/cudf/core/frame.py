@@ -1617,6 +1617,8 @@ class Frame(BinaryOperand, Scannable, Serializable):
         else:
             to_sort = self._get_columns_by_label(list(by))._columns
 
+        to_sort = tuple(col.nans_to_nulls() for col in to_sort)
+
         if isinstance(ascending, bool):
             ascending_iter: Iterable[bool] = itertools.repeat(
                 ascending, times=len(to_sort)

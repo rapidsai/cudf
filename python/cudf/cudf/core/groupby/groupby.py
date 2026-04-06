@@ -425,8 +425,14 @@ class _GroupByContextManager:
         with access_columns(
             *grouping._key_columns, mode="read", scope="internal"
         ) as key_columns:
+            plc_keys = [
+                col.nans_to_nulls().plc_column
+                if isinstance(col.dtype, np.dtype) and col.dtype.kind == "f"
+                else col.plc_column
+                for col in key_columns
+            ]
             self._plc_groupby = plc.groupby.GroupBy(
-                plc.Table([col.plc_column for col in key_columns]),
+                plc.Table(plc_keys),
                 plc.types.NullPolicy.EXCLUDE
                 if dropna
                 else plc.types.NullPolicy.INCLUDE,
@@ -866,10 +872,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             included_aggregations.append(included_aggregations_i)
             result_columns.append([])
             if col_aggregations:
+                plc_col = (
+                    col.nans_to_nulls().plc_column
+                    if isinstance(col.dtype, np.dtype)
+                    and col.dtype.kind == "f"
+                    else col.plc_column
+                )
                 requests.append(
-                    plc.groupby.GroupByRequest(
-                        col.plc_column, col_aggregations
-                    )
+                    plc.groupby.GroupByRequest(plc_col, col_aggregations)
                 )
                 column_included.append(i)
 
