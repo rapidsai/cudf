@@ -457,7 +457,7 @@ class DaskEngine(StreamingEngine):
             owned_client = distributed.Client(owned_cluster)
             dask_client = owned_client
 
-        workers_info = dask_client.scheduler_info()["workers"]
+        workers_info = dask_client.scheduler_info(n_workers=-1)["workers"]
         nranks = len(workers_info)
         root_worker = next(iter(workers_info))
 
