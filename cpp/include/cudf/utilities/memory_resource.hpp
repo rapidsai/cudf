@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,6 +25,7 @@ namespace cudf {
  */
 inline rmm::device_async_resource_ref get_current_device_resource_ref()
 {
+  // For now, match current behavior which is to return current resource pointer
   return rmm::mr::get_current_device_resource();
 }
 

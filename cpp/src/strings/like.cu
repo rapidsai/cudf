@@ -370,8 +370,9 @@ std::unique_ptr<column> like(strings_column_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
-  auto const ptn = string_scalar(pattern, true, stream, mr);
-  auto const esc = string_scalar(escape_character, true, stream, mr);
+  auto const ptn = string_scalar(pattern, true, stream, cudf::get_current_device_resource_ref());
+  auto const esc =
+    string_scalar(escape_character, true, stream, cudf::get_current_device_resource_ref());
   return like(input, ptn, esc, stream, mr);
 }
 

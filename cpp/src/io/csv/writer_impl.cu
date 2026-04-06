@@ -361,7 +361,8 @@ void write_chunked(data_sink* out_sink,
       return cudf::strings::detail::join_strings(str_column_view, newline, empty_str, stream, mr)
         ->release();
     }
-    auto nl_col = cudf::make_column_from_scalar(newline, str_column_view.size(), stream, mr);
+    auto nl_col = cudf::make_column_from_scalar(
+      newline, str_column_view.size(), stream, cudf::get_current_device_resource_ref());
     // convert the last element into an empty string by resetting the last offset value
     auto& offsets     = nl_col->child(strings_column_view::offsets_column_index);
     auto offsets_view = offsets.mutable_view();
