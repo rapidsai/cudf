@@ -252,7 +252,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  auto temp_mr               = cudf::get_current_device_resource_ref_unsafe();
+  auto temp_mr               = cudf::get_current_device_resource_ref();
   auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
   auto const larger_numrows  = larger.num_rows();
   auto const smaller_numrows = smaller.num_rows();
@@ -279,7 +279,7 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
     cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
   // Use pinned memory as bounce buffer for efficient device-to-host transfer of the last element
   auto last_element =
-    cudf::detail::device_scalar<int64_t>(0, stream, cudf::get_current_device_resource_ref_unsafe());
+    cudf::detail::device_scalar<int64_t>(0, stream, cudf::get_current_device_resource_ref());
   auto output_itr = cudf::detail::make_sizes_to_offsets_iterator(
     match_offsets.begin(), match_offsets.end(), last_element.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
@@ -393,7 +393,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  auto temp_mr               = cudf::get_current_device_resource_ref_unsafe();
+  auto temp_mr               = cudf::get_current_device_resource_ref();
   auto const has_nulls       = has_nested_nulls(smaller) or has_nested_nulls(larger);
   auto const larger_numrows  = larger.num_rows();
   auto const smaller_numrows = smaller.num_rows();
@@ -533,7 +533,7 @@ namespace detail {
 void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stream_view stream)
 {
   auto table   = this->_table_view;
-  auto temp_mr = cudf::get_current_device_resource_ref_unsafe();
+  auto temp_mr = cudf::get_current_device_resource_ref();
   // remove rows that have nulls at any nesting level
   // step 1: identify nulls at root level
   auto [validity_mask, num_nulls] = cudf::bitmask_and(table, stream, temp_mr);
@@ -635,7 +635,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
 
 void sort_merge_join::preprocessed_table::apply_nonnull_filter(rmm::cuda_stream_view stream)
 {
-  auto temp_mr = cudf::get_current_device_resource_ref_unsafe();
+  auto temp_mr = cudf::get_current_device_resource_ref();
   // construct bool column to apply mask
   cudf::scalar_type_t<bool> true_scalar(true, true, stream, temp_mr);
   auto bool_mask =
@@ -656,7 +656,7 @@ void sort_merge_join::preprocessed_table::preprocess_unprocessed_table(rmm::cuda
 
 void sort_merge_join::preprocessed_table::compute_sorted_order(rmm::cuda_stream_view stream)
 {
-  auto temp_mr = cudf::get_current_device_resource_ref_unsafe();
+  auto temp_mr = cudf::get_current_device_resource_ref();
   std::vector<cudf::order> column_order(_null_processed_table_view.num_columns(),
                                         cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_precedence(_null_processed_table_view.num_columns(),
@@ -708,7 +708,7 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(_validity_mask.has_value() && _num_nulls.has_value(), "Mapping is not possible");
-  auto temp_mr                  = cudf::get_current_device_resource_ref_unsafe();
+  auto temp_mr                  = cudf::get_current_device_resource_ref();
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
   cudf::detail::copy_if_async(
@@ -947,8 +947,7 @@ std::unique_ptr<cudf::join_match_context> sort_merge_join::inner_join_match_cont
     preprocessed_right._null_processed_table_view,
     preprocessed_left._null_processed_table_view,
     [this, left, &preprocessed_left, stream, mr](auto& obj) mutable {
-      auto matches_per_row =
-        obj.matches_per_row(stream, cudf::get_current_device_resource_ref_unsafe());
+      auto matches_per_row = obj.matches_per_row(stream, cudf::get_current_device_resource_ref());
       matches_per_row->resize(matches_per_row->size() - 1, stream);
       if (compare_nulls == null_equality::UNEQUAL &&
           has_nested_nulls(preprocessed_left._table_view)) {

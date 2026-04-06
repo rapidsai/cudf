@@ -70,7 +70,7 @@ struct in_place_fill_range_dispatch {
     auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value(stream);
     using RepType = typename T::rep;
     auto s        = cudf::numeric_scalar<RepType>(
-      unscaled, value.is_valid(stream), stream, cudf::get_current_device_resource_ref_unsafe());
+      unscaled, value.is_valid(stream), stream, cudf::get_current_device_resource_ref());
     in_place_fill<RepType>(destination, begin, end, s, stream);
   }
 
@@ -157,7 +157,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 
   // add the scalar to get the output dictionary key-set
   auto scalar_column =
-    cudf::make_column_from_scalar(value, 1, stream, cudf::get_current_device_resource_ref_unsafe());
+    cudf::make_column_from_scalar(value, 1, stream, cudf::get_current_device_resource_ref());
   auto target_matched =
     cudf::dictionary::detail::add_keys(target, scalar_column->view(), stream, mr);
   cudf::column_view const target_indices =
@@ -165,7 +165,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 
   // get the index of the key just added
   auto index_of_value = cudf::dictionary::detail::get_index(
-    target_matched->view(), value, stream, cudf::get_current_device_resource_ref_unsafe());
+    target_matched->view(), value, stream, cudf::get_current_device_resource_ref());
   // now call fill using just the indices column and the new index
   auto new_indices =
     cudf::type_dispatcher(target_indices.type(),

@@ -136,7 +136,7 @@ TEST_F(HostUDFReductionExampleTest, SimpleInput)
                                     *agg,
                                     cudf::data_type{cudf::type_id::INT64},
                                     cudf::get_default_stream(),
-                                    cudf::get_current_device_resource_ref_unsafe());
+                                    cudf::get_current_device_resource_ref());
   EXPECT_TRUE(reduced->is_valid());
   EXPECT_EQ(cudf::type_id::INT64, reduced->type().id());
   auto const result =
@@ -154,7 +154,7 @@ TEST_F(HostUDFReductionExampleTest, EmptyInput)
                                     *agg,
                                     cudf::data_type{cudf::type_id::INT64},
                                     cudf::get_default_stream(),
-                                    cudf::get_current_device_resource_ref_unsafe());
+                                    cudf::get_current_device_resource_ref());
   EXPECT_FALSE(reduced->is_valid());
   EXPECT_EQ(cudf::type_id::INT64, reduced->type().id());
 }
@@ -326,7 +326,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
       cudf::null_policy::INCLUDE,
       std::nullopt,  // init value
       cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref_unsafe());
+      cudf::get_current_device_resource_ref());
 
     // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
     // Since init value is not given, it is set to 0.
@@ -346,7 +346,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
       cudf::null_policy::INCLUDE,
       *init_scalar,
       cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref_unsafe());
+      cudf::get_current_device_resource_ref());
 
     // When null_policy is set to `INCLUDE`, the null values are replaced with the init value.
     // [ 3 * (3 + 0^2 + 3^2 + 2^2), 2 * (3 + 3^2 + 3^2), 5 * (3 + 5^2 + 3^2 + 3^2 + 8^2 + 9^2) ]
@@ -365,7 +365,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, SimpleInput)
       cudf::null_policy::EXCLUDE,
       *init_scalar,
       cudf::get_default_stream(),
-      cudf::get_current_device_resource_ref_unsafe());
+      cudf::get_current_device_resource_ref());
 
     // [ 3 * (3 + 0^2 + 2^2), 2 * (3 + 3^2), 5 * (3 + 5^2 + 8^2 + 9^2) ]
     auto const expected = int64s_col{{21, 24, 865}, {true, true, true}};
@@ -387,7 +387,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, EmptySegments)
     cudf::null_policy::INCLUDE,
     std::nullopt,  // init value
     cudf::get_default_stream(),
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
   auto const expected = int64s_col{{0, 0, 0}, {false, false, false}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
@@ -406,7 +406,7 @@ TEST_F(HostUDFSegmentedReductionExampleTest, EmptyInput)
     cudf::null_policy::INCLUDE,
     std::nullopt,  // init value
     cudf::get_default_stream(),
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
   auto const expected = int64s_col{};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }

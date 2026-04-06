@@ -682,11 +682,10 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
   } while (op.type != path_operator_type::END);
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
-  return is_empty
-           ? std::pair(cuda::std::nullopt, 0)
-           : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector(
-                         h_operators, stream, cudf::get_current_device_resource_ref_unsafe())),
-                       max_stack_depth);
+  return is_empty ? std::pair(cuda::std::nullopt, 0)
+                  : std::pair(cuda::std::make_optional(cudf::detail::make_device_uvector(
+                                h_operators, stream, cudf::get_current_device_resource_ref())),
+                              max_stack_depth);
 }
 
 #define PARSE_TRY(_x)                                                       \
@@ -984,8 +983,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   if (!std::get<0>(preprocess).has_value()) {
     // Create a proper all-null strings column with valid structure (offsets + chars children)
     auto offsets = cudf::make_column_from_scalar(
-      cudf::numeric_scalar<int32_t>(
-        0, true, stream, cudf::get_current_device_resource_ref_unsafe()),
+      cudf::numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref()),
       col.size() + 1,
       stream,
       mr);
@@ -999,8 +997,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   }
 
   // compute output sizes
-  auto sizes = rmm::device_uvector<size_type>(
-    col.size(), stream, cudf::get_current_device_resource_ref_unsafe());
+  auto sizes =
+    rmm::device_uvector<size_type>(col.size(), stream, cudf::get_current_device_resource_ref());
   auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(col.offsets());
 
   constexpr int block_size = 512;
@@ -1033,7 +1031,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // compute results
   cudf::detail::device_scalar<size_type> d_valid_count{
-    0, stream, cudf::get_current_device_resource_ref_unsafe()};
+    0, stream, cudf::get_current_device_resource_ref()};
 
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(

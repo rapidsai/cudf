@@ -339,7 +339,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
     row_group_indices, dictionary_page_data, dictionary_col_schemas, options, stream);
 
   // Decompress dictionary pages if needed and store uncompressed buffers here
-  auto const mr                          = cudf::get_current_device_resource_ref_unsafe();
+  auto const mr                          = cudf::get_current_device_resource_ref();
   auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
   if (has_compressed_data) {
     // Use the `decompress_page_data` utility to decompress dictionary pages (passed as pass_pages)
@@ -388,7 +388,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_all_true_row_mask(
 
   auto const num_rows = total_rows_in_row_groups(row_group_indices);
   auto true_scalar =
-    cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref_unsafe());
+    cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
   return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
 }
 
@@ -855,7 +855,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _strings_to_categorical       = false;
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
-  _mr        = cudf::get_current_device_resource_ref_unsafe();
+  _mr        = cudf::get_current_device_resource_ref();
 }
 
 void hybrid_scan_reader_impl::initialize_column_selection_options(
@@ -1094,7 +1094,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
       cudf::detail::compute_column(*read_table,
                                    _expr_conv.get_converted_expr().value().get(),
                                    _stream,
-                                   cudf::get_current_device_resource_ref_unsafe());
+                                   cudf::get_current_device_resource_ref());
     CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
 

@@ -106,7 +106,7 @@ struct compute_children_offsets_fn {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
     return cudf::detail::make_device_uvector(
-      offsets, stream, cudf::get_current_device_resource_ref_unsafe());
+      offsets, stream, cudf::get_current_device_resource_ref());
   }
 
  private:
@@ -200,7 +200,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     return keys;
   });
   auto all_keys =
-    cudf::detail::concatenate(keys_views, stream, cudf::get_current_device_resource_ref_unsafe());
+    cudf::detail::concatenate(keys_views, stream, cudf::get_current_device_resource_ref());
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column

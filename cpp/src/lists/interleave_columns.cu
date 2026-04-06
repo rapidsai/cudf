@@ -91,8 +91,8 @@ std::unique_ptr<column> concatenate_and_gather_lists(host_span<column_view const
                                                      rmm::device_async_resource_ref mr)
 {
   // Concatenate all columns into a single (temporary) column.
-  auto const concatenated_col = cudf::detail::concatenate(
-    columns_to_concat, stream, cudf::get_current_device_resource_ref_unsafe());
+  auto const concatenated_col =
+    cudf::detail::concatenate(columns_to_concat, stream, cudf::get_current_device_resource_ref());
 
   // The number of input columns is known to be non-zero thus it's safe to call `front()` here.
   auto const num_cols       = columns_to_concat.size();

@@ -48,7 +48,7 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
                                        input_size,
                                        mask_state::UNALLOCATED,
                                        stream,
-                                       cudf::get_current_device_resource_ref_unsafe());
+                                       cudf::get_current_device_resource_ref());
   auto mutable_sizes                   = sizes->mutable_view();
 
   // Consider the following preceding/following values:
@@ -108,7 +108,7 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
                                             per_row_mapping.size(),
                                             mask_state::UNALLOCATED,
                                             stream,
-                                            cudf::get_current_device_resource_ref_unsafe());
+                                            cudf::get_current_device_resource_ref());
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator<size_type>{0},

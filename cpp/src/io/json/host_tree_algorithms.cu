@@ -113,7 +113,7 @@ std::vector<std::string> copy_strings_to_host_sync(
                                    0,
                                    options_view,
                                    stream,
-                                   cudf::get_current_device_resource_ref_unsafe());
+                                   cudf::get_current_device_resource_ref());
   auto to_host        = [stream](auto const& col) {
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
@@ -303,7 +303,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
   // make a copy
   auto sorted_col_ids = cudf::detail::make_device_uvector_async(
-    col_ids, stream, cudf::get_current_device_resource_ref_unsafe());
+    col_ids, stream, cudf::get_current_device_resource_ref());
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<NodeIndexT> node_ids(col_ids.size(), stream);
@@ -868,11 +868,11 @@ void scatter_offsets(tree_meta_t const& tree,
   }
 
   auto d_ignore_vals = cudf::detail::make_device_uvector_async(
-    ignore_vals, stream, cudf::get_current_device_resource_ref_unsafe());
+    ignore_vals, stream, cudf::get_current_device_resource_ref());
   auto d_is_mixed_pruned = cudf::detail::make_device_uvector_async(
-    is_mixed_pruned, stream, cudf::get_current_device_resource_ref_unsafe());
+    is_mixed_pruned, stream, cudf::get_current_device_resource_ref());
   auto d_columns_data = cudf::detail::make_device_uvector_async(
-    columns_data, stream, cudf::get_current_device_resource_ref_unsafe());
+    columns_data, stream, cudf::get_current_device_resource_ref());
 
   // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(

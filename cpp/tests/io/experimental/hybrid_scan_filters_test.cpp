@@ -721,7 +721,7 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
   auto input_row_group_indices = reader->all_row_groups(options);
 
   auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref_unsafe();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   // Helper function to test data page filteration using page index stats
   auto const test_filter_data_pages_with_stats = [&](
@@ -851,7 +851,7 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
   auto constexpr num_concat = 1;
   auto const buffer         = std::get<1>(create_parquet_with_stats<T, num_concat>());
   auto stream               = cudf::get_default_stream();
-  auto mr                   = cudf::get_current_device_resource_ref_unsafe();
+  auto mr                   = cudf::get_current_device_resource_ref();
 
   // Input datasource
   auto const datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
@@ -1239,7 +1239,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
   }();
 
   auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref_unsafe();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   // Input datasource
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
@@ -1363,7 +1363,7 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   }();
 
   auto stream = cudf::get_default_stream();
-  auto mr     = cudf::get_current_device_resource_ref_unsafe();
+  auto mr     = cudf::get_current_device_resource_ref();
 
   // Input datasource
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(

@@ -394,7 +394,7 @@ TEST_F(StreamCompactionTest, FilterASTJit)
   auto const col  = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto max_scalar = cudf::numeric_scalar<int32_t>(
-    10, true, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    10, true, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
   auto const max_literal = cudf::ast::literal(max_scalar);
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, max_literal);
   cudf::table_view input({col});

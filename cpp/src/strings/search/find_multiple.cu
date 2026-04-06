@@ -69,9 +69,8 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
 
   auto offsets = cudf::detail::sequence(
     strings_count + 1,
-    numeric_scalar<size_type>(0, true, stream, cudf::get_current_device_resource_ref_unsafe()),
-    numeric_scalar<size_type>(
-      targets_count, true, stream, cudf::get_current_device_resource_ref_unsafe()),
+    numeric_scalar<size_type>(0, true, stream, cudf::get_current_device_resource_ref()),
+    numeric_scalar<size_type>(targets_count, true, stream, cudf::get_current_device_resource_ref()),
     stream,
     mr);
   return make_lists_column(

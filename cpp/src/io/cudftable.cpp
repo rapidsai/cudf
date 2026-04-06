@@ -54,7 +54,7 @@ struct cudftable_header {
 
 void write_cudftable(data_sink* sink, table_view const& input, rmm::cuda_stream_view stream)
 {
-  auto const packed = cudf::pack(input, stream, cudf::get_current_device_resource_ref_unsafe());
+  auto const packed = cudf::pack(input, stream, cudf::get_current_device_resource_ref());
 
   auto const header = cudftable_header{packed.metadata->size(), packed.gpu_data->size()};
   sink->host_write(&header, sizeof(cudftable_header));

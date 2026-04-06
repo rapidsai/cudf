@@ -73,7 +73,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  [](auto const& col) { return *col; });
 
   auto d_views =
-    make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref_unsafe());
+    make_device_uvector_async(device_views, stream, cudf::get_current_device_resource_ref());
 
   // Compute the partition offsets
   auto offsets = cudf::detail::make_pinned_vector_async<size_t>(views.size() + 1, stream);
@@ -85,7 +85,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     [](auto const& col) { return col.size(); },
     cuda::std::plus{});
   auto d_offsets =
-    make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref_unsafe());
+    make_device_uvector_async(offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = offsets.back();
 
   return std::make_tuple(
@@ -154,7 +154,7 @@ size_type concatenate_masks(device_span<column_device_view const> d_views,
                             rmm::cuda_stream_view stream)
 {
   cudf::detail::device_scalar<size_type> d_valid_count(
-    0, stream, cudf::get_current_device_resource_ref_unsafe());
+    0, stream, cudf::get_current_device_resource_ref());
   constexpr size_type block_size{256};
   cudf::detail::grid_1d config(output_size, block_size);
   concatenate_masks_kernel<block_size>
@@ -258,7 +258,7 @@ std::unique_ptr<column> fused_concatenate(host_span<column_view const> views,
   auto d_out_view   = mutable_column_device_view::create(out_view, stream);
 
   cudf::detail::device_scalar<size_type> d_valid_count(
-    0, stream, cudf::get_current_device_resource_ref_unsafe());
+    0, stream, cudf::get_current_device_resource_ref());
 
   // Launch kernel
   constexpr size_type block_size{256};

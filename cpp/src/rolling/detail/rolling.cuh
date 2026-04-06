@@ -256,16 +256,15 @@ struct rolling_postprocessor {
     requires(k == aggregation::COLLECT_SET)
   std::unique_ptr<column> operator()(aggregation const& agg, std::unique_ptr<column>&) const
   {
-    auto const& collect_agg = dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg);
-    auto const collected_list =
-      rolling_collect_list(input,
-                           default_outputs,
-                           preceding_window_begin,
-                           following_window_begin,
-                           min_periods,
-                           collect_agg._null_handling,
-                           stream,
-                           cudf::get_current_device_resource_ref_unsafe());
+    auto const& collect_agg   = dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg);
+    auto const collected_list = rolling_collect_list(input,
+                                                     default_outputs,
+                                                     preceding_window_begin,
+                                                     following_window_begin,
+                                                     min_periods,
+                                                     collect_agg._null_handling,
+                                                     stream,
+                                                     cudf::get_current_device_resource_ref());
 
     return lists::detail::distinct(lists_column_view{collected_list->view()},
                                    collect_agg._nulls_equal,
@@ -450,8 +449,8 @@ struct rolling_window_launcher {
       auto const d_inp_ptr         = column_device_view::create(input, stream);
       auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
       auto const d_out_ptr = mutable_column_device_view::create(output->mutable_view(), stream);
-      auto d_valid_count   = cudf::detail::device_scalar<size_type>{
-        0, stream, cudf::get_current_device_resource_ref_unsafe()};
+      auto d_valid_count =
+        cudf::detail::device_scalar<size_type>{0, stream, cudf::get_current_device_resource_ref()};
 
       auto constexpr block_size = 256;
       auto const grid           = cudf::detail::grid_1d(input.size(), block_size);

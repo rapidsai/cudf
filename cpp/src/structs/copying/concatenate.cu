@@ -57,7 +57,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     create_null_mask(total_length,
                      has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
                      stream,
-                     cudf::get_current_device_resource_ref_unsafe());
+                     cudf::get_current_device_resource_ref());
   auto null_mask_data = static_cast<bitmask_type*>(null_mask.data());
   auto const null_count =
     has_nulls ? cudf::detail::concatenate_masks(columns, null_mask_data, stream) : size_type{0};

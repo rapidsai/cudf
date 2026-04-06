@@ -217,13 +217,13 @@ std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
                                 group_labels,
                                 group_offsets,
                                 stream,
-                                cudf::get_current_device_resource_ref_unsafe());
+                                cudf::get_current_device_resource_ref());
   auto min_rank = min_rank_scan(grouped_values,
                                 value_order,
                                 group_labels,
                                 group_offsets,
                                 stream,
-                                cudf::get_current_device_resource_ref_unsafe());
+                                cudf::get_current_device_resource_ref());
   auto ranks    = make_fixed_width_column(
     data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();

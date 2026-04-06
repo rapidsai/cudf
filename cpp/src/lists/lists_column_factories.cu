@@ -35,7 +35,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
       0,
       cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr));
   }
-  auto mr_final = size == 1 ? mr : cudf::get_current_device_resource_ref_unsafe();
+  auto mr_final = size == 1 ? mr : cudf::get_current_device_resource_ref();
 
   // Handcraft a 1-row column
   auto sizes_itr = cuda::constant_iterator<size_type>(value.view().size());

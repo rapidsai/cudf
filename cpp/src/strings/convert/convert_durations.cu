@@ -143,8 +143,8 @@ struct format_compiler {
     }
 
     // create program in device memory
-    d_items = cudf::detail::make_device_uvector(
-      items, stream, cudf::get_current_device_resource_ref_unsafe());
+    d_items =
+      cudf::detail::make_device_uvector(items, stream, cudf::get_current_device_resource_ref());
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }

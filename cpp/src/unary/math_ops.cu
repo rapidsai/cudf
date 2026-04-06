@@ -376,7 +376,7 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
 {
   auto dictionary_view = cudf::column_device_view::create(input.parent(), stream);
   auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
-  auto default_mr      = cudf::get_current_device_resource_ref_unsafe();
+  auto default_mr      = cudf::get_current_device_resource_ref();
   // call unary-op using temporary output buffer
   auto output = transform_fn<T, UFN>(dictionary_itr,
                                      dictionary_itr + input.size(),

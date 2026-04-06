@@ -64,7 +64,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                                    0,
                                                    rmm::device_buffer{0, stream},
                                                    stream,
-                                                   cudf::get_current_device_resource_ref_unsafe()),
+                                                   cudf::get_current_device_resource_ref()),
                                0,
                                rmm::device_buffer{0, stream});
     }
@@ -86,7 +86,7 @@ std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                  0,
                                  rmm::device_buffer{0, stream},
                                  stream,
-                                 cudf::get_current_device_resource_ref_unsafe());
+                                 cudf::get_current_device_resource_ref());
     }
 
     case DECIMAL: {

@@ -90,7 +90,7 @@ std::unique_ptr<column> from_arrow_stringview(ArrowSchemaView const* schema,
 
   // copy variadic device pointers to device
   auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
-    variadic_ptrs, stream, cudf::get_current_device_resource_ref_unsafe());
+    variadic_ptrs, stream, cudf::get_current_device_resource_ref());
   auto d_ptrs = d_variadic_ptrs.data();
   auto d_mask = static_cast<cudf::bitmask_type*>(mask->data());
 

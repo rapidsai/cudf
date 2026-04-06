@@ -53,7 +53,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries(
-    {haystack, needles}, stream, cudf::get_current_device_resource_ref_unsafe());
+    {haystack, needles}, stream, cudf::get_current_device_resource_ref());
   auto const& matched_haystack = matched.second.front();
   auto const& matched_needles  = matched.second.back();
 

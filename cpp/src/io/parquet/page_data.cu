@@ -589,7 +589,7 @@ void write_final_offsets(host_span<size_type const> offsets,
 {
   // Copy offsets to device and create an iterator
   auto d_src_data = cudf::detail::make_device_uvector_async(
-    offsets, stream, cudf::get_current_device_resource_ref_unsafe());
+    offsets, stream, cudf::get_current_device_resource_ref());
   // Iterator for the source (scalar) data
   auto src_iter = thrust::make_transform_iterator(
     cuda::counting_iterator<std::size_t>{0},
@@ -598,7 +598,7 @@ void write_final_offsets(host_span<size_type const> offsets,
 
   // Copy buffer addresses to device and create an iterator
   auto d_dst_addrs = cudf::detail::make_device_uvector_async(
-    buff_addrs, stream, cudf::get_current_device_resource_ref_unsafe());
+    buff_addrs, stream, cudf::get_current_device_resource_ref());
   // size_iter is simply a constant iterator of sizeof(size_type) bytes.
   auto size_iter = cuda::make_constant_iterator(sizeof(size_type));
 

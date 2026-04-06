@@ -320,7 +320,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
   }
 
   auto d_page_indexes = cudf::detail::make_device_uvector_async(
-    page_indexes, stream, cudf::get_current_device_resource_ref_unsafe());
+    page_indexes, stream, cudf::get_current_device_resource_ref());
 
   auto iter = cuda::counting_iterator<size_type>{0};
   thrust::for_each(
@@ -510,7 +510,7 @@ void decode_page_headers(pass_intermediate_data& pass,
 
     // Copy page data ptrs to device
     auto page_locations = cudf::detail::make_device_uvector_async(
-      host_page_locations, stream, cudf::get_current_device_resource_ref_unsafe());
+      host_page_locations, stream, cudf::get_current_device_resource_ref());
 
     // Accelerated decode page headers, one thread per page
     decode_page_headers_with_pgidx(

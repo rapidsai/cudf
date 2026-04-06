@@ -430,7 +430,7 @@ TEST_F(JsonNewlineDelimiterTest, TokenStream)
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, cudf::get_current_device_resource_ref_unsafe());
+    d_input, default_options, stream, cudf::get_current_device_resource_ref());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
@@ -565,7 +565,7 @@ TEST_F(JsonNewlineDelimiterTest, TokenStream2)
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, cudf::get_current_device_resource_ref_unsafe());
+    d_input, default_options, stream, cudf::get_current_device_resource_ref());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
@@ -624,7 +624,7 @@ TEST_F(JsonParserTest, ExtractColumn)
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
-  auto mr           = cudf::get_current_device_resource_ref_unsafe();
+  auto mr           = cudf::get_current_device_resource_ref();
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -633,7 +633,7 @@ TEST_F(JsonParserTest, ExtractColumn)
   auto const d_input      = cudf::detail::make_device_uvector_async(
     cudf::host_span<char const>{input.c_str(), input.size()},
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 
@@ -724,7 +724,7 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStream)
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, cudf::get_current_device_resource_ref_unsafe());
+    d_input, default_options, stream, cudf::get_current_device_resource_ref());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
@@ -841,9 +841,9 @@ TEST_F(JsonTest, PostProcessTokenStream)
   auto const d_offsets = cudf::detail::make_device_uvector_async(
     cudf::host_span<token_index_t const>{offsets.data(), offsets.size()},
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
   auto const d_tokens = cudf::detail::make_device_uvector_async(
-    tokens, stream, cudf::get_current_device_resource_ref_unsafe());
+    tokens, stream, cudf::get_current_device_resource_ref());
 
   // Run system-under-test
   auto [d_filtered_tokens, d_filtered_indices] =
@@ -869,7 +869,7 @@ TEST_P(JsonDelimiterParamTest, UTF_JSON)
 {
   // Prepare cuda stream for data transfers & kernels
   auto const stream    = cudf::get_default_stream();
-  auto mr              = cudf::get_current_device_resource_ref_unsafe();
+  auto mr              = cudf::get_current_device_resource_ref();
   auto json_parser     = cuio_json::detail::device_parse_nested_json;
   char const delimiter = GetParam();
 
@@ -890,7 +890,7 @@ TEST_P(JsonDelimiterParamTest, UTF_JSON)
   auto const d_ascii_pass = cudf::detail::make_device_uvector(
     cudf::host_span<char const>{ascii_pass.c_str(), ascii_pass.size()},
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
 
   CUDF_EXPECT_NO_THROW(json_parser(d_ascii_pass, default_options, stream, mr));
 
@@ -907,7 +907,7 @@ TEST_P(JsonDelimiterParamTest, UTF_JSON)
   auto const d_utf_failed = cudf::detail::make_device_uvector(
     cudf::host_span<char const>{utf_failed.c_str(), utf_failed.size()},
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_failed, default_options, stream, mr));
 
   // utf-8 string that passes parsing.
@@ -924,7 +924,7 @@ TEST_P(JsonDelimiterParamTest, UTF_JSON)
   auto const d_utf_pass = cudf::detail::make_device_uvector(
     cudf::host_span<char const>{utf_pass.c_str(), utf_pass.size()},
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
   CUDF_EXPECT_NO_THROW(json_parser(d_utf_pass, default_options, stream, mr));
 }
 
@@ -935,7 +935,7 @@ TEST_F(JsonParserTest, ExtractColumnWithQuotes)
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
-  auto mr           = cudf::get_current_device_resource_ref_unsafe();
+  auto mr           = cudf::get_current_device_resource_ref();
 
   // Default parsing options
   cudf::io::json_reader_options options{};
@@ -945,7 +945,7 @@ TEST_F(JsonParserTest, ExtractColumnWithQuotes)
   auto const d_input      = cudf::detail::make_device_uvector_async(
     cudf::host_span<char const>{input.c_str(), input.size()},
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, options, stream, mr);
 
@@ -968,7 +968,7 @@ TEST_F(JsonParserTest, ExpectFailMixStructAndList)
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
-  auto mr           = cudf::get_current_device_resource_ref_unsafe();
+  auto mr           = cudf::get_current_device_resource_ref();
 
   // Default parsing options
   cudf::io::json_reader_options options{};
@@ -988,7 +988,7 @@ TEST_F(JsonParserTest, ExpectFailMixStructAndList)
     auto const d_input = cudf::detail::make_device_uvector_async(
       cudf::host_span<char const>{input.c_str(), input.size()},
       stream,
-      cudf::get_current_device_resource_ref_unsafe());
+      cudf::get_current_device_resource_ref());
     EXPECT_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr),
                  cudf::logic_error);
   }
@@ -997,7 +997,7 @@ TEST_F(JsonParserTest, ExpectFailMixStructAndList)
     auto const d_input = cudf::detail::make_device_uvector_async(
       cudf::host_span<char const>{input.c_str(), input.size()},
       stream,
-      cudf::get_current_device_resource_ref_unsafe());
+      cudf::get_current_device_resource_ref());
     CUDF_EXPECT_NO_THROW(auto const cudf_table = json_parser(d_input, options, stream, mr));
   }
 }
@@ -1009,7 +1009,7 @@ TEST_F(JsonParserTest, EmptyString)
 
   // Prepare cuda stream for data transfers & kernels
   auto const stream = cudf::get_default_stream();
-  auto mr           = cudf::get_current_device_resource_ref_unsafe();
+  auto mr           = cudf::get_current_device_resource_ref();
 
   // Default parsing options
   cudf::io::json_reader_options default_options{};
@@ -1018,7 +1018,7 @@ TEST_F(JsonParserTest, EmptyString)
   auto const d_input =
     cudf::detail::make_device_uvector(cudf::host_span<char const>{input.c_str(), input.size()},
                                       stream,
-                                      cudf::get_current_device_resource_ref_unsafe());
+                                      cudf::get_current_device_resource_ref());
   // Get the JSON's tree representation
   auto const cudf_table = json_parser(d_input, default_options, stream, mr);
 
@@ -1163,7 +1163,7 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAndDelimiter)
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, default_options, stream, cudf::get_current_device_resource_ref_unsafe());
+    d_input, default_options, stream, cudf::get_current_device_resource_ref());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);
@@ -1340,7 +1340,7 @@ TEST_P(JsonDelimiterParamTest, RecoveringTokenStreamNewlineAsWSAndDelimiter)
 
   // Parse the JSON and get the token stream
   auto [d_tokens_gpu, d_token_indices_gpu] = cuio_json::detail::get_token_stream(
-    d_input, in_opts, stream, cudf::get_current_device_resource_ref_unsafe());
+    d_input, in_opts, stream, cudf::get_current_device_resource_ref());
   // Copy back the number of tokens that were written
   auto const tokens_gpu        = cudf::detail::make_std_vector_async(d_tokens_gpu, stream);
   auto const token_indices_gpu = cudf::detail::make_std_vector_async(d_token_indices_gpu, stream);

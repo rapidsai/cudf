@@ -171,7 +171,7 @@ std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
   return make_dictionary_column(
     make_column_from_scalar(s, 1, stream, mr),
     make_column_from_scalar(
-      numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref_unsafe()),
+      numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref()),
       size,
       stream,
       mr),

@@ -202,9 +202,7 @@ reduce_to_column_tree(tree_meta_t const& tree,
   {
     auto list_parents_children_max_row_offsets =
       cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
-        static_cast<std::size_t>(num_columns),
-        stream,
-        cudf::get_current_device_resource_ref_unsafe());
+        static_cast<std::size_t>(num_columns), stream, cudf::get_current_device_resource_ref());
     thrust::for_each(rmm::exec_policy_nosync(stream),
                      unique_col_ids.begin(),
                      unique_col_ids.end(),
@@ -513,7 +511,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
     const auto [tokens_gpu, token_indices_gpu] =
-      get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref_unsafe());
+      get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
     // gpu tree generation
     // Note that to normalize whitespaces in nested columns coerced to be string, we need the column
     // to either be of mixed type or we need to request the column to be returned as string by
@@ -523,7 +521,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
       token_indices_gpu,
       options.is_enabled_mixed_types_as_string() || options.is_enabled_prune_columns(),
       stream,
-      cudf::get_current_device_resource_ref_unsafe());
+      cudf::get_current_device_resource_ref());
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
@@ -548,7 +546,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   options.is_enabled_lines(),
                                   options.is_enabled_experimental(),
                                   stream,
-                                  cudf::get_current_device_resource_ref_unsafe());
+                                  cudf::get_current_device_resource_ref());
 
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;

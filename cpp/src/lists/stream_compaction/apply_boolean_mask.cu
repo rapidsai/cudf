@@ -62,7 +62,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                              null_policy::EXCLUDE,
                                              std::nullopt,
                                              stream,
-                                             cudf::get_current_device_resource_ref_unsafe());
+                                             cudf::get_current_device_resource_ref());
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, size_type{0});
     auto const sizes_end   = sizes_begin + sizes->size();

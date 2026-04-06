@@ -71,7 +71,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         null_count,
         std::move(col),
         cudf::get_default_stream(),
-        cudf::get_current_device_resource_ref_unsafe());
+        cudf::get_current_device_resource_ref());
 
       // Shift nulls of the next column by one position, to avoid having all nulls
       // in the same table rows.
@@ -113,7 +113,7 @@ auto chunked_read(std::string const& filepath,
 
   // TODO: remove this scope, when we get rid of mem stat in the reader.
   // This is to avoid use-after-free of memory resource created by the mem stat object.
-  auto mr = cudf::get_current_device_resource_ref_unsafe();
+  auto mr = cudf::get_current_device_resource_ref();
 
   do {
     auto chunk = reader.read_chunk();

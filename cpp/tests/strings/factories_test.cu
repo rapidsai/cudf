@@ -72,7 +72,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     h_offsets[idx + 1] = offset;
   }
   auto d_strings = cudf::detail::make_device_uvector(
-    strings, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    strings, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   CUDF_CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyDefault));
   auto column = cudf::make_strings_column(d_strings);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
@@ -133,14 +133,14 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
 
   std::vector<cudf::bitmask_type> h_nulls{h_null_mask};
   auto d_buffer = cudf::detail::make_device_uvector(
-    h_buffer, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    h_buffer, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
     cudf::detail::make_device_uvector(
-      h_offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe()),
+      h_offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
   auto d_nulls = cudf::detail::make_device_uvector(
-    h_nulls, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    h_nulls, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto column = cudf::make_strings_column(
     count, std::move(d_offsets), d_buffer.release(), null_count, d_nulls.release());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
@@ -184,7 +184,7 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
   auto d_chars   = rmm::device_uvector<char>(0, cudf::get_default_stream());
   auto d_offsets = std::make_unique<cudf::column>(
     cudf::detail::make_zeroed_device_uvector<cudf::size_type>(
-      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe()),
+      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
   rmm::device_uvector<cudf::bitmask_type> d_nulls{0, cudf::get_default_stream()};
@@ -288,7 +288,7 @@ TEST_F(StringsBatchConstructionTest, CreateColumnsFromPairs)
   auto constexpr num_columns  = 10;
   auto constexpr max_num_rows = 1000;
   auto const stream           = cudf::get_default_stream();
-  auto const mr               = cudf::get_current_device_resource_ref_unsafe();
+  auto const mr               = cudf::get_current_device_resource_ref();
 
   std::vector<char const*> h_test_strings{"the quick brown fox jumps over the lazy dog",
                                           "the fat cat lays next to the other accénted cat",
@@ -354,7 +354,7 @@ TEST_F(StringsBatchConstructionTest, DISABLED_CreateLongStringsColumns)
 {
   auto constexpr num_columns = 2;
   auto const stream          = cudf::get_default_stream();
-  auto const mr              = cudf::get_current_device_resource_ref_unsafe();
+  auto const mr              = cudf::get_current_device_resource_ref();
 
   std::vector<char const*> h_test_strings{"the quick brown fox jumps over the lazy dog",
                                           "the fat cat lays next to the other accénted cat",

@@ -238,7 +238,7 @@ void reader_impl::setup_next_subpass(read_mode mode)
     [&]() -> std::tuple<rmm::device_uvector<page_span>, size_t, size_t> {
     if (!pass.has_compressed_data || _input_pass_read_limit == 0) {
       rmm::device_uvector<page_span> page_indices(
-        num_columns, _stream, cudf::get_current_device_resource_ref_unsafe());
+        num_columns, _stream, cudf::get_current_device_resource_ref());
       auto iter = cuda::counting_iterator<size_t>{0};
       thrust::transform(rmm::exec_policy_nosync(_stream),
                         iter,

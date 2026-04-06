@@ -305,7 +305,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
     std::back_inserter(results),
     [&](auto i) {
       bool nullable       = values.column(i).nullable();
-      auto final_mr       = nullable ? cudf::get_current_device_resource_ref_unsafe() : mr;
+      auto final_mr       = nullable ? cudf::get_current_device_resource_ref() : mr;
       auto grouped_values = helper().grouped_values(values.column(i), stream, final_mr);
       return nullable ? detail::group_replace_nulls(
                           *grouped_values, group_labels, replace_policies[i], stream, mr)
@@ -351,8 +351,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
     cuda::counting_iterator{values.num_columns()},
     std::back_inserter(results),
     [&](size_type i) {
-      auto grouped_values = helper().grouped_values(
-        values.column(i), stream, cudf::get_current_device_resource_ref_unsafe());
+      auto grouped_values =
+        helper().grouped_values(values.column(i), stream, cudf::get_current_device_resource_ref());
       return cudf::detail::segmented_shift(
         grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
     });

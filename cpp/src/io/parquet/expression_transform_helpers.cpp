@@ -315,7 +315,7 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
 {
   // Filter the input table using AST expression
   auto predicate_col = cudf::detail::compute_column(
-    table, ast_expr.get(), stream, cudf::get_current_device_resource_ref_unsafe());
+    table, ast_expr.get(), stream, cudf::get_current_device_resource_ref());
   auto predicate = predicate_col->view();
   CUDF_EXPECTS(predicate.type().id() == cudf::type_id::BOOL8,
                "Filter expression must return a boolean column");

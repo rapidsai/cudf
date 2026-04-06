@@ -146,7 +146,7 @@ void copy_range(SourceValueIterator source_value_begin,
 
   if (target.nullable()) {
     cudf::detail::device_scalar<size_type> null_count(
-      target.null_count(), stream, cudf::get_current_device_resource_ref_unsafe());
+      target.null_count(), stream, cudf::get_current_device_resource_ref());
 
     auto kernel =
       copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator, T, true>;

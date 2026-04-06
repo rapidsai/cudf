@@ -177,7 +177,7 @@ inline auto make_memory_resource_adaptor(cudf::test::config const& config)
  */
 inline auto make_stream_mode_adaptor(cudf::test::config const& config)
 {
-  auto resource                      = cudf::get_current_device_resource_ref_unsafe();
+  auto resource                      = cudf::get_current_device_resource_ref();
   auto const error_on_invalid_stream = (config.stream_error_mode == "error");
   auto const check_default_stream    = (config.stream_mode == "new_cudf_default");
   auto adaptor                       = cudf::test::stream_checking_resource_adaptor(

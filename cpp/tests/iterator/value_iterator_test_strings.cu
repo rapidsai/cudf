@@ -23,7 +23,7 @@ auto strings_to_string_views(std::vector<std::string>& input_strings)
   std::tie(chars, offsets) = cudf::test::detail::make_chars_and_offsets(
     input_strings.begin(), input_strings.end(), all_valid);
   auto dev_chars = cudf::detail::make_device_uvector(
-    chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // calculate the expected value by CPU. (but contains device pointers)
   thrust::host_vector<cudf::string_view> replaced_array(input_strings.size());
@@ -45,7 +45,7 @@ TEST_F(StringIteratorTest, string_view_null_iterator)
   // the char data has to be in GPU
   auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
                                                    cudf::get_default_stream(),
-                                                   cudf::get_current_device_resource_ref_unsafe());
+                                                   cudf::get_current_device_resource_ref());
   T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data and valid arrays
@@ -82,7 +82,7 @@ TEST_F(StringIteratorTest, string_view_no_null_iterator)
   // the char data has to be in GPU
   auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
                                                    cudf::get_default_stream(),
-                                                   cudf::get_current_device_resource_ref_unsafe());
+                                                   cudf::get_current_device_resource_ref());
   T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data array
@@ -108,7 +108,7 @@ TEST_F(StringIteratorTest, string_scalar_iterator)
   // the char data has to be in GPU
   auto initmsg = cudf::detail::make_device_uvector(cudf::host_span<char const>{zero},
                                                    cudf::get_default_stream(),
-                                                   cudf::get_current_device_resource_ref_unsafe());
+                                                   cudf::get_current_device_resource_ref());
   T init       = T{initmsg.data(), int(initmsg.size())};
 
   // data array

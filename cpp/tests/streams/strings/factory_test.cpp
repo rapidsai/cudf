@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,12 +26,12 @@ TEST_F(StringsFactoryTest, StringConstructionFromPairs)
 
   auto const h_data = std::vector<char>{'a', 'b', 'c'};
   auto const d_data = cudf::detail::make_device_uvector_async(
-    h_data, stream, cudf::get_current_device_resource_ref_unsafe());
+    h_data, stream, cudf::get_current_device_resource_ref());
 
   auto const h_input =
     std::vector<string_pair>{{d_data.data(), 1}, {d_data.data() + 1, 1}, {d_data.data() + 2, 1}};
   auto const d_input = cudf::detail::make_device_uvector_async(
-    h_input, stream, cudf::get_current_device_resource_ref_unsafe());
+    h_input, stream, cudf::get_current_device_resource_ref());
   auto const input = cudf::device_span<string_pair const>{d_input.data(), d_input.size()};
   cudf::make_strings_column(input, stream);
 }
@@ -42,12 +42,12 @@ TEST_F(StringsFactoryTest, StringBatchConstruction)
 
   auto const h_data = std::vector<char>{'a', 'b', 'c'};
   auto const d_data = cudf::detail::make_device_uvector_async(
-    h_data, stream, cudf::get_current_device_resource_ref_unsafe());
+    h_data, stream, cudf::get_current_device_resource_ref());
 
   auto const h_input =
     std::vector<string_pair>{{d_data.data(), 1}, {d_data.data() + 1, 1}, {d_data.data() + 2, 1}};
   auto const d_input = cudf::detail::make_device_uvector_async(
-    h_input, stream, cudf::get_current_device_resource_ref_unsafe());
+    h_input, stream, cudf::get_current_device_resource_ref());
 
   std::vector<cudf::device_span<string_pair const>> input(
     10, cudf::device_span<string_pair const>{d_input.data(), d_input.size()});

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -154,7 +154,7 @@ class column_buffer_base {
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref_unsafe()};
+  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
  public:
   data_type type{type_id::EMPTY};

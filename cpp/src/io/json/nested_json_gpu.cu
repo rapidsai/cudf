@@ -1435,7 +1435,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
   cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(
-    stream, cudf::get_current_device_resource_ref_unsafe());
+    stream, cudf::get_current_device_resource_ref());
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   constexpr auto max_translation_table_size =
@@ -1517,7 +1517,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
     fst::detail::make_translation_functor<symbol_t, 0, 2>(token_filter::TransduceToken{}),
     stream);
 
-  auto const mr = cudf::get_current_device_resource_ref_unsafe();
+  auto const mr = cudf::get_current_device_resource_ref();
   cudf::detail::device_scalar<SymbolOffsetT> d_num_selected_tokens(stream, mr);
   rmm::device_uvector<PdaTokenT> filtered_tokens_out{tokens.size(), stream, mr};
   rmm::device_uvector<SymbolOffsetT> filtered_token_indices_out{tokens.size(), stream, mr};
@@ -1638,7 +1638,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   auto const max_token_out_count =
     cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
   cudf::detail::device_scalar<std::size_t> num_written_tokens{
-    stream, cudf::get_current_device_resource_ref_unsafe()};
+    stream, cudf::get_current_device_resource_ref()};
   // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
   // see a JSON-line delimiter as the very first item
   SymbolOffsetT const delimiter_offset =
@@ -2138,10 +2138,10 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
       // Move string_offsets and string_lengths to GPU
       rmm::device_uvector<json_column::row_offset_t> d_string_offsets =
         cudf::detail::make_device_uvector_async(
-          json_col.string_offsets, stream, cudf::get_current_device_resource_ref_unsafe());
+          json_col.string_offsets, stream, cudf::get_current_device_resource_ref());
       rmm::device_uvector<json_column::row_offset_t> d_string_lengths =
         cudf::detail::make_device_uvector_async(
-          json_col.string_lengths, stream, cudf::get_current_device_resource_ref_unsafe());
+          json_col.string_lengths, stream, cudf::get_current_device_resource_ref());
 
       // Prepare iterator that returns (string_offset, string_length)-tuples
       auto offset_length_it =

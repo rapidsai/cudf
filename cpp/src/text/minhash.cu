@@ -455,7 +455,7 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
   auto const hashes_size = input.chars_size(stream);
   auto d_hashes          = rmm::device_uvector<hash_value_type>(hashes_size, stream);
   auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(
-    0, stream, cudf::get_current_device_resource_ref_unsafe());
+    0, stream, cudf::get_current_device_resource_ref());
 
   minhash_seed_kernel<HashFunction>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(*d_strings,
@@ -542,7 +542,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
   auto const hashes_size = input.child().size();
   auto d_hashes          = rmm::device_uvector<hash_value_type>(hashes_size, stream);
   auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(
-    0, stream, cudf::get_current_device_resource_ref_unsafe());
+    0, stream, cudf::get_current_device_resource_ref());
 
   auto d_list = cudf::detail::lists_column_device_view(*d_input);
   minhash_ngrams_kernel<HashFunction>
@@ -595,10 +595,10 @@ std::unique_ptr<cudf::column> build_list_result(cudf::column_view const& input,
                                                 rmm::device_async_resource_ref mr)
 {
   // build the offsets for the output lists column
-  auto const zero = cudf::numeric_scalar<cudf::size_type>(
-    0, true, stream, cudf::get_current_device_resource_ref_unsafe());
+  auto const zero =
+    cudf::numeric_scalar<cudf::size_type>(0, true, stream, cudf::get_current_device_resource_ref());
   auto const size = cudf::numeric_scalar<cudf::size_type>(
-    seeds_size, true, stream, cudf::get_current_device_resource_ref_unsafe());
+    seeds_size, true, stream, cudf::get_current_device_resource_ref());
   auto offsets = cudf::detail::sequence(input.size() + 1, zero, size, stream, mr);
   hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
 

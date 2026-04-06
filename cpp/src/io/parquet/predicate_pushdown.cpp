@@ -123,7 +123,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
-  auto mr = cudf::get_current_device_resource_ref_unsafe();
+  auto mr = cudf::get_current_device_resource_ref();
 
   // Get a boolean mask indicating which columns can participate in stats based filtering
   auto const [stats_columns_mask, has_is_null_operator] =
@@ -249,7 +249,7 @@ aggregate_reader_metadata::filter_row_groups(
 
   // Aligned resource adaptor to allocate bloom filter buffers with
   auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::device_async_resource_ref>(
-    cudf::get_current_device_resource_ref_unsafe(), get_bloom_filter_alignment());
+    cudf::get_current_device_resource_ref(), get_bloom_filter_alignment());
 
   // Read a vector of bloom filter bitset device buffers for all columns with equality
   // predicate(s) across all row groups

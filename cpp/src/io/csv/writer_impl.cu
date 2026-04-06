@@ -136,9 +136,9 @@ struct column_to_strings_fn {
     requires(std::is_same_v<column_type, bool>)
   {
     string_scalar true_string{
-      options_.get_true_value(), true, stream_, cudf::get_current_device_resource_ref_unsafe()};
+      options_.get_true_value(), true, stream_, cudf::get_current_device_resource_ref()};
     string_scalar false_string{
-      options_.get_false_value(), true, stream_, cudf::get_current_device_resource_ref_unsafe()};
+      options_.get_false_value(), true, stream_, cudf::get_current_device_resource_ref()};
     return cudf::strings::detail::from_booleans(column, true_string, false_string, stream_, mr_);
   }
 
@@ -156,7 +156,7 @@ struct column_to_strings_fn {
     string_scalar delimiter{std::string{options_.get_inter_column_delimiter()},
                             true,
                             stream_,
-                            cudf::get_current_device_resource_ref_unsafe()};
+                            cudf::get_current_device_resource_ref()};
 
     auto d_column = column_device_view::create(column_v, stream_);
     escape_strings_fn fn{*d_column, delimiter.value(stream_)};
@@ -349,14 +349,13 @@ void write_chunked(data_sink* out_sink,
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   cudf::string_scalar newline{
-    options.get_line_terminator(), true, stream, cudf::get_current_device_resource_ref_unsafe()};
+    options.get_line_terminator(), true, stream, cudf::get_current_device_resource_ref()};
 
   // use strings concatenate to build the final CSV output in device memory
   auto contents_w_nl = [&] {
     auto const total_size =
       str_column_view.chars_size(stream) + (newline.size() * str_column_view.size());
-    auto const empty_str =
-      string_scalar("", true, stream, cudf::get_current_device_resource_ref_unsafe());
+    auto const empty_str = string_scalar("", true, stream, cudf::get_current_device_resource_ref());
     // use join_strings when the output will be less than 2GB
     if (total_size < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
       return cudf::strings::detail::join_strings(str_column_view, newline, empty_str, stream, mr)
@@ -410,12 +409,8 @@ void write_csv(data_sink* out_sink,
   //
   CUDF_FUNC_RANGE();
 
-  write_chunked_begin(out_sink,
-                      table,
-                      user_column_names,
-                      options,
-                      stream,
-                      cudf::get_current_device_resource_ref_unsafe());
+  write_chunked_begin(
+    out_sink, table, user_column_names, options, stream, cudf::get_current_device_resource_ref());
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
@@ -449,7 +444,7 @@ void write_csv(data_sink* out_sink,
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options, stream, cudf::get_current_device_resource_ref_unsafe()};
+    column_to_strings_fn converter{options, stream, cudf::get_current_device_resource_ref()};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;
@@ -478,27 +473,22 @@ void write_csv(data_sink* out_sink,
         cudf::string_scalar delimiter_str{std::string{options.get_inter_column_delimiter()},
                                           true,
                                           stream,
-                                          cudf::get_current_device_resource_ref_unsafe()};
+                                          cudf::get_current_device_resource_ref()};
         cudf::string_scalar options_narep{
-          options.get_na_rep(), true, stream, cudf::get_current_device_resource_ref_unsafe()};
+          options.get_na_rep(), true, stream, cudf::get_current_device_resource_ref()};
         if (str_table_view.num_columns() > 1)
           return cudf::strings::detail::concatenate(str_table_view,
                                                     delimiter_str,
                                                     options_narep,
                                                     strings::separator_on_nulls::YES,
                                                     stream,
-                                                    cudf::get_current_device_resource_ref_unsafe());
-        return cudf::strings::detail::replace_nulls(str_table_view.column(0),
-                                                    options_narep,
-                                                    stream,
-                                                    cudf::get_current_device_resource_ref_unsafe());
+                                                    cudf::get_current_device_resource_ref());
+        return cudf::strings::detail::replace_nulls(
+          str_table_view.column(0), options_narep, stream, cudf::get_current_device_resource_ref());
       }();
 
-      write_chunked(out_sink,
-                    str_concat_col->view(),
-                    options,
-                    stream,
-                    cudf::get_current_device_resource_ref_unsafe());
+      write_chunked(
+        out_sink, str_concat_col->view(), options, stream, cudf::get_current_device_resource_ref());
     }
   }
 }

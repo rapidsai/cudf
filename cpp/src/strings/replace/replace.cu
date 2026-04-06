@@ -278,7 +278,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // Count the number of targets in the entire column.
   // Note this may over-count in the case where a target spans adjacent strings.
   cudf::detail::device_scalar<int64_t> d_target_count(
-    0, stream, cudf::get_current_device_resource_ref_unsafe());
+    0, stream, cudf::get_current_device_resource_ref());
   constexpr int64_t block_size         = 512;
   constexpr size_type bytes_per_thread = 4;
   auto const num_blocks                = util::div_rounding_up_safe(
@@ -305,7 +305,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // create a vector of offsets to each string's set of target positions
   auto const targets_offsets = create_offsets_from_positions(
-    input, targets_positions, stream, cudf::get_current_device_resource_ref_unsafe());
+    input, targets_positions, stream, cudf::get_current_device_resource_ref());
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 

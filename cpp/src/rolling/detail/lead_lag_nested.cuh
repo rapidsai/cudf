@@ -127,7 +127,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                                                input.size(),
                                                mask_state::UNALLOCATED,
                                                stream,
-                                               cudf::get_current_device_resource_ref_unsafe());
+                                               cudf::get_current_device_resource_ref());
   auto gather_map        = gather_map_column->mutable_view();
 
   auto const input_size = input.size();
@@ -183,7 +183,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::negative_index_policy::NOT_ALLOWED,
                          stream,
-                         cudf::get_current_device_resource_ref_unsafe());
+                         cudf::get_current_device_resource_ref());
 
   // Scatter defaults into locations where LEAD/LAG computed nulls.
   auto scattered_results = cudf::detail::scatter(

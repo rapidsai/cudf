@@ -502,7 +502,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_g
   // HistogramEven writes num_partitions bins; the extra element is used by the exclusive scan
   // below to produce the total row count as the last offset. Zero-initialize to avoid UB.
   auto histogram = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_partitions + 1, stream, cudf::get_current_device_resource_ref_unsafe());
+    num_partitions + 1, stream, cudf::get_current_device_resource_ref());
   {
     auto const num_levels  = num_partitions + 1;
     auto const lower_level = size_type{0};
@@ -612,10 +612,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Holds the total number of rows in each partition
   auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_partitions, stream, cudf::get_current_device_resource_ref_unsafe());
+    num_partitions, stream, cudf::get_current_device_resource_ref());
 
   auto row_partition_offset = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_rows, stream, cudf::get_current_device_resource_ref_unsafe());
+    num_rows, stream, cudf::get_current_device_resource_ref());
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations

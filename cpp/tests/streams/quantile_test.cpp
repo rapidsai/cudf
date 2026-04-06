@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,7 +50,7 @@ TEST_F(QuantileTest, TestEmpty)
 TEST_F(QuantileTest, EmptyInput)
 {
   auto empty_ = cudf::tdigest::detail::make_empty_tdigests_column(
-    1, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    1, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref());
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<cudf::column_view> input;

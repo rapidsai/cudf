@@ -43,7 +43,7 @@ struct executor_ast {
     cudf::table_view const& table,
     cudf::ast::expression const& expr,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref_unsafe())
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
     return cudf::compute_column(table, expr, stream, mr);
   }
@@ -54,7 +54,7 @@ struct executor_jit {
     cudf::table_view const& table,
     cudf::ast::expression const& expr,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref_unsafe())
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
     return cudf::compute_column_jit(table, expr, stream, mr);
   }

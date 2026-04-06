@@ -591,9 +591,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   }
 
   auto const d_comp_in = cudf::detail::make_device_uvector_async(
-    comp_in, stream, cudf::get_current_device_resource_ref_unsafe());
+    comp_in, stream, cudf::get_current_device_resource_ref());
   auto const d_comp_out = cudf::detail::make_device_uvector_async(
-    comp_out, stream, cudf::get_current_device_resource_ref_unsafe());
+    comp_out, stream, cudf::get_current_device_resource_ref());
   rmm::device_uvector<codec_exec_result> comp_res(num_comp_pages, stream);
   thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
                              comp_res.begin(),
@@ -624,9 +624,9 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   // now copy the uncompressed V2 def and rep level data
   if (not copy_in.empty()) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
-      copy_in, stream, cudf::get_current_device_resource_ref_unsafe());
+      copy_in, stream, cudf::get_current_device_resource_ref());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
-      copy_out, stream, cudf::get_current_device_resource_ref_unsafe());
+      copy_out, stream, cudf::get_current_device_resource_ref());
 
     cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
   }
@@ -721,7 +721,7 @@ rmm::device_uvector<size_t> compute_decompression_scratch_sizes(
   });
 
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
-    temp_cost, stream, cudf::get_current_device_resource_ref_unsafe());
+    temp_cost, stream, cudf::get_current_device_resource_ref());
 
   std::array codecs{compression_type::BROTLI,
                     compression_type::GZIP,

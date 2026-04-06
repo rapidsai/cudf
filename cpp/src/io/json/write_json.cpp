@@ -49,7 +49,7 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
   std::string const host_chars =
     std::accumulate(host_strings.begin(), host_strings.end(), std::string(""));
   auto d_chars = cudf::detail::make_device_uvector_async(
-    host_span<char const>{host_chars}, stream, cudf::get_current_device_resource_ref_unsafe());
+    host_span<char const>{host_chars}, stream, cudf::get_current_device_resource_ref());
   std::vector<cudf::size_type> offsets(host_strings.size() + 1, 0);
   std::transform_inclusive_scan(host_strings.begin(),
                                 host_strings.end(),
@@ -57,8 +57,7 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
                                 std::plus<cudf::size_type>{},
                                 [](auto& str) { return str.size(); });
   auto d_offsets = std::make_unique<cudf::column>(
-    cudf::detail::make_device_uvector(
-      offsets, stream, cudf::get_current_device_resource_ref_unsafe()),
+    cudf::detail::make_device_uvector(offsets, stream, cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
   return cudf::make_strings_column(
@@ -87,11 +86,11 @@ std::unique_ptr<column> make_column_names_column(host_span<column_name_info cons
     unescaped_string_col->size(),
     unescaped_string_col->null_count(),
     cudf::detail::copy_bitmask(
-      *unescaped_string_col, stream, cudf::get_current_device_resource_ref_unsafe()),
+      *unescaped_string_col, stream, cudf::get_current_device_resource_ref()),
     true,
     true,
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
 }
 
 std::unique_ptr<column> timestamp_to_strings(column_view const& column,
@@ -159,9 +158,9 @@ std::unique_ptr<column> leaf_column_to_strings(column_view const& column,
   if (cudf::is_duration(column.type())) { return duration_to_strings(column, stream, mr); }
   if (cudf::is_boolean(column.type())) {
     string_scalar const true_value(
-      options.get_true_value(), true, stream, cudf::get_current_device_resource_ref_unsafe());
+      options.get_true_value(), true, stream, cudf::get_current_device_resource_ref());
     string_scalar const false_value(
-      options.get_false_value(), true, stream, cudf::get_current_device_resource_ref_unsafe());
+      options.get_false_value(), true, stream, cudf::get_current_device_resource_ref());
     return cudf::strings::detail::from_booleans(column, true_value, false_value, stream, mr);
   }
   if (cudf::is_integral(column.type())) {
@@ -194,13 +193,13 @@ struct column_to_strings_fn {
     : options_(options),
       stream_(stream),
       mr_(std::move(mr)),
-      narep(options.get_na_rep(), true, stream, cudf::get_current_device_resource_ref_unsafe()),
-      struct_value_separator(",", true, stream, cudf::get_current_device_resource_ref_unsafe()),
-      struct_row_begin_wrap("{", true, stream, cudf::get_current_device_resource_ref_unsafe()),
-      struct_row_end_wrap("}", true, stream, cudf::get_current_device_resource_ref_unsafe()),
-      list_value_separator(",", true, stream, cudf::get_current_device_resource_ref_unsafe()),
-      list_row_begin_wrap("[", true, stream, cudf::get_current_device_resource_ref_unsafe()),
-      list_row_end_wrap("]", true, stream, cudf::get_current_device_resource_ref_unsafe())
+      narep(options.get_na_rep(), true, stream, cudf::get_current_device_resource_ref()),
+      struct_value_separator(",", true, stream, cudf::get_current_device_resource_ref()),
+      struct_row_begin_wrap("{", true, stream, cudf::get_current_device_resource_ref()),
+      struct_row_end_wrap("}", true, stream, cudf::get_current_device_resource_ref()),
+      list_value_separator(",", true, stream, cudf::get_current_device_resource_ref()),
+      list_row_begin_wrap("[", true, stream, cudf::get_current_device_resource_ref()),
+      list_row_end_wrap("]", true, stream, cudf::get_current_device_resource_ref())
   {
   }
 
@@ -238,13 +237,13 @@ struct column_to_strings_fn {
     };
 
     auto new_offsets = cudf::lists::detail::get_normalized_offsets(
-      lists_column_view(column), stream_, cudf::get_current_device_resource_ref_unsafe());
+      lists_column_view(column), stream_, cudf::get_current_device_resource_ref());
     auto const list_child_string = make_lists_column(
       column.size(),
       std::move(new_offsets),
       child_string_with_null(),
       column.null_count(),
-      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref_unsafe()));
+      cudf::detail::copy_bitmask(column, stream_, cudf::get_current_device_resource_ref()));
     return join_list_of_strings(lists_column_view(*list_child_string),
                                 list_row_begin_wrap.value(stream_),
                                 list_row_end_wrap.value(stream_),
@@ -316,7 +315,7 @@ struct column_to_strings_fn {
                              narep,
                              options_.is_enabled_include_nulls(),
                              stream_,
-                             cudf::get_current_device_resource_ref_unsafe());
+                             cudf::get_current_device_resource_ref());
   }
 
  private:
@@ -377,12 +376,12 @@ void write_json_uncompressed(data_sink* out_sink,
 
   auto const line_terminator = std::string(options.is_enabled_lines() ? "\n" : ",");
   string_scalar const d_line_terminator_with_row_end{
-    "}" + line_terminator, true, stream, cudf::get_current_device_resource_ref_unsafe()};
+    "}" + line_terminator, true, stream, cudf::get_current_device_resource_ref()};
   string_scalar const d_line_terminator{
-    line_terminator, true, stream, cudf::get_current_device_resource_ref_unsafe()};
+    line_terminator, true, stream, cudf::get_current_device_resource_ref()};
   std::string const list_braces{"[]"};
   string_scalar const d_list_braces{
-    list_braces, true, stream, cudf::get_current_device_resource_ref_unsafe()};
+    list_braces, true, stream, cudf::get_current_device_resource_ref()};
 
   if (!options.is_enabled_lines()) {
     if (out_sink->is_device_write_preferred(1)) {
@@ -412,7 +411,7 @@ void write_json_uncompressed(data_sink* out_sink,
       vector_views = cudf::detail::split(table, splits, stream);
     }
 
-    column_to_strings_fn converter{options, stream, cudf::get_current_device_resource_ref_unsafe()};
+    column_to_strings_fn converter{options, stream, cudf::get_current_device_resource_ref()};
 
     for (auto&& sub_view : vector_views) {
       if (sub_view.num_rows() == 0) continue;

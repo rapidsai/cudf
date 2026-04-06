@@ -282,10 +282,10 @@ TEST_F(StringsContainsTests, HexTest)
   std::vector<cudf::size_type> offsets({cuda::counting_iterator<cudf::size_type>{0},
                                         cuda::counting_iterator<cudf::size_type>{0} + count + 1});
   auto d_chars = cudf::detail::make_device_uvector(
-    ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
     cudf::detail::make_device_uvector(
-      offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe()),
+      offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
   auto input = cudf::make_strings_column(count, std::move(d_offsets), d_chars.release(), 0, {});

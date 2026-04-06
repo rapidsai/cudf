@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -57,7 +57,7 @@ auto groupby_histogram(cudf::column_view const& keys,
                                                    cudf::order::ASCENDING,
                                                    cudf::null_order::BEFORE,
                                                    cudf::get_default_stream(),
-                                                   cudf::get_current_device_resource_ref_unsafe());
+                                                   cudf::get_current_device_resource_ref());
 
   return std::pair{std::move(sorted_keys), std::move(sorted_histograms)};
 }

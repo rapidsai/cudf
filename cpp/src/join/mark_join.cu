@@ -47,7 +47,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   if (nullable_columns.size() > 1) {
     auto row_bitmask =
       cudf::detail::bitmask_and(
-        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref_unsafe())
+        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref())
         .first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
@@ -503,7 +503,7 @@ mark_join::mark_join(cudf::table_view const& build,
     auto const nullable_columns = get_nullable_columns(_build);
     auto const row_bitmask =
       cudf::detail::bitmask_and(
-        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref_unsafe())
+        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref())
         .first;
     _num_build_inserted = cudf::detail::count_set_bits(
       static_cast<bitmask_type const*>(row_bitmask.data()), 0, _build.num_rows(), stream);

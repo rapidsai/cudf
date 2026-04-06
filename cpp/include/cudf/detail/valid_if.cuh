@@ -92,7 +92,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(InputIterator begin,
   size_type null_count{0};
   if (size > 0) {
     cudf::detail::device_scalar<size_type> valid_count{
-      0, stream, cudf::get_current_device_resource_ref_unsafe()};
+      0, stream, cudf::get_current_device_resource_ref()};
 
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};

@@ -50,7 +50,7 @@ auto column_view_with_common_nulls(column_view const& column_0,
                                    rmm::cuda_stream_view stream)
 {
   auto [new_nullmask, null_count] = cudf::bitmask_and(
-    table_view{{column_0, column_1}}, stream, cudf::get_current_device_resource_ref_unsafe());
+    table_view{{column_0, column_1}}, stream, cudf::get_current_device_resource_ref());
   if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
   auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
     return column_view(col.type(),
@@ -455,7 +455,7 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
                                                     helper.num_groups(stream),
                                                     null_handling,
                                                     stream,
-                                                    cudf::get_current_device_resource_ref_unsafe());
+                                                    cudf::get_current_device_resource_ref());
   auto const nulls_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
@@ -526,12 +526,11 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
 {
   if (cache.has_result(values, agg)) { return; }
 
-  auto const merged_result =
-    detail::group_merge_lists(get_grouped_values(),
-                              helper.group_offsets(stream),
-                              helper.num_groups(stream),
-                              stream,
-                              cudf::get_current_device_resource_ref_unsafe());
+  auto const merged_result   = detail::group_merge_lists(get_grouped_values(),
+                                                       helper.group_offsets(stream),
+                                                       helper.num_groups(stream),
+                                                       stream,
+                                                       cudf::get_current_device_resource_ref());
   auto const& merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
   cache.add_result(values,
                    agg,

@@ -95,7 +95,7 @@ struct contains_scalar_dispatch {
 
     auto const haystack_tv = table_view{{haystack}};
     auto const needle_as_col =
-      make_column_from_scalar(needle, 1, stream, cudf::get_current_device_resource_ref_unsafe());
+      make_column_from_scalar(needle, 1, stream, cudf::get_current_device_resource_ref());
     auto const needle_tv = table_view{{needle_as_col->view()}};
     auto const has_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
 
@@ -140,7 +140,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
   auto const dict_col = cudf::dictionary_column_view(haystack);
   // first, find the needle in the dictionary's key set
   auto const index = cudf::dictionary::detail::get_index(
-    dict_col, needle, stream, cudf::get_current_device_resource_ref_unsafe());
+    dict_col, needle, stream, cudf::get_current_device_resource_ref());
   // if found, check the index is actually in the indices column
   return index->is_valid(stream) && cudf::type_dispatcher(dict_col.indices().type(),
                                                           contains_scalar_dispatch{},

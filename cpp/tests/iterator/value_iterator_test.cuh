@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -17,7 +17,7 @@ void non_null_iterator(IteratorTest<T>& testFixture)
 {
   auto host_array = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
   auto dev_array  = cudf::detail::make_device_uvector(
-    host_array, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    host_array, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
   // calculate the expected value by CPU.
   thrust::host_vector<T> replaced_array(host_array);

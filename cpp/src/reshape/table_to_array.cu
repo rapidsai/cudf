@@ -58,7 +58,7 @@ void table_to_array_impl(table_view const& input,
     h_dsts[i] = reinterpret_cast<T*>(base_ptr + i * item_size * num_rows);
   }
 
-  auto const mr = cudf::get_current_device_resource_ref_unsafe();
+  auto const mr = cudf::get_current_device_resource_ref();
 
   auto d_srcs = cudf::detail::make_device_uvector_async(h_srcs, stream, mr);
   auto d_dsts = cudf::detail::make_device_uvector_async(h_dsts, stream, mr);

@@ -366,7 +366,7 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorNoMask)
                                                  this->num_elements());
 
   auto original = cudf::detail::make_device_uvector_async(
-    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto original_data = original.data();
   cudf::column moved_to{std::move(original), rmm::device_buffer{}, 0};
   verify_column_views(moved_to);
@@ -382,7 +382,7 @@ TYPED_TEST(TypedColumnTest, DeviceUvectorConstructorWithMask)
                                                  this->num_elements());
 
   auto original = cudf::detail::make_device_uvector_async(
-    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+    data, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto original_data = original.data();
   auto original_mask = this->all_valid_mask.data();
   cudf::column moved_to{std::move(original), std::move(this->all_valid_mask), 0};
@@ -651,11 +651,9 @@ TEST_F(RebindStreamColumnTest, RebindStreamPreservesNestedStructData)
   std::iota(h_ints.begin(), h_ints.end(), int32_t{0});
 
   auto d_ints = cudf::detail::make_device_uvector_async(
-    h_ints, stream_a, cudf::get_current_device_resource_ref_unsafe());
-  auto null_mask = cudf::create_null_mask(num_rows,
-                                          cudf::mask_state::ALL_VALID,
-                                          stream_a,
-                                          cudf::get_current_device_resource_ref_unsafe());
+    h_ints, stream_a, cudf::get_current_device_resource_ref());
+  auto null_mask = cudf::create_null_mask(
+    num_rows, cudf::mask_state::ALL_VALID, stream_a, cudf::get_current_device_resource_ref());
 
   stream_a.synchronize();
 

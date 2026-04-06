@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -139,9 +139,9 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     result_init[5] = result_init[2];
 
     auto dev_data = cudf::detail::make_device_uvector(
-      v, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+      v, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto dev_result = cudf::detail::make_device_uvector(
-      result_init, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+      result_init, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
 
     if (block_size == 0) { block_size = vec_size; }
 

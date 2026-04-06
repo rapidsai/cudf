@@ -47,8 +47,7 @@ std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
   // New column, near identical to `indices`, except with null values replaced.
   // `segmented_gather()` on a null index should produce a null row.
   if (not indices.nullable()) {
-    return std::make_unique<column>(
-      indices, stream, cudf::get_current_device_resource_ref_unsafe());
+    return std::make_unique<column>(indices, stream, cudf::get_current_device_resource_ref());
   }
 
   auto const d_indices = column_device_view::create(indices, stream);
@@ -59,7 +58,7 @@ std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
                                          indices.size(),
                                          mask_state::UNALLOCATED,
                                          stream,
-                                         cudf::get_current_device_resource_ref_unsafe());
+                                         cudf::get_current_device_resource_ref());
   thrust::copy_n(rmm::exec_policy_nosync(stream),
                  null_replaced_iter_begin,
                  indices.size(),
@@ -85,7 +84,7 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
                         num_rows,
                         mask_state::UNALLOCATED,
                         stream,
-                        cudf::get_current_device_resource_ref_unsafe());
+                        cudf::get_current_device_resource_ref());
   thrust::fill_n(rmm::exec_policy_nosync(stream),
                  index_child->mutable_view().begin<size_type>(),
                  num_rows,
@@ -104,9 +103,9 @@ std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_
 {
   return cudf::detail::sequence(
     num_lists + 1,
-    cudf::scalar_type_t<size_type>(0, true, stream, cudf::get_current_device_resource_ref_unsafe()),
+    cudf::scalar_type_t<size_type>(0, true, stream, cudf::get_current_device_resource_ref()),
     stream,
-    cudf::get_current_device_resource_ref_unsafe());
+    cudf::get_current_device_resource_ref());
 }
 
 }  // namespace

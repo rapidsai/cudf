@@ -65,15 +65,15 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                                           rmm::device_async_resource_ref mr)
 {
   // get the number of tokens in each string
-  auto const token_counts = token_count_fn(
-    strings_count, tokenizer, stream, cudf::get_current_device_resource_ref_unsafe());
+  auto const token_counts =
+    token_count_fn(strings_count, tokenizer, stream, cudf::get_current_device_resource_ref());
   auto d_token_counts = token_counts->view();
   // create token-index offsets from the counts
   auto [token_offsets, total_tokens] =
     cudf::detail::make_offsets_child_column(d_token_counts.template begin<cudf::size_type>(),
                                             d_token_counts.template end<cudf::size_type>(),
                                             stream,
-                                            cudf::get_current_device_resource_ref_unsafe());
+                                            cudf::get_current_device_resource_ref());
   //  build a list of pointers to each token
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   // now go get the tokens
@@ -183,7 +183,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   d_chars += offset;
 
   auto const character_counts = cudf::strings::detail::count_characters(
-    strings_column, stream, cudf::get_current_device_resource_ref_unsafe());
+    strings_column, stream, cudf::get_current_device_resource_ref());
   auto [list_offsets, num_characters] =
     cudf::detail::make_offsets_child_column(character_counts->view().begin<cudf::size_type>(),
                                             character_counts->view().end<cudf::size_type>(),

@@ -506,7 +506,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
 
   // scatter string and separator
   auto labels = cudf::lists::detail::generate_labels(
-    lists_strings, num_strings, stream, cudf::get_current_device_resource_ref_unsafe());
+    lists_strings, num_strings, stream, cudf::get_current_device_resource_ref());
   auto d_strings_children = cudf::column_device_view::create(strings_children, stream);
   thrust::for_each(rmm::exec_policy_nosync(stream),
                    cuda::counting_iterator<size_type>{0},

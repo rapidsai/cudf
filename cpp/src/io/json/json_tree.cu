@@ -515,7 +515,7 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
                                         0,
                                         opt,
                                         stream,
-                                        cudf::get_current_device_resource_ref_unsafe());
+                                        cudf::get_current_device_resource_ref());
   // hash using iter, create a hashmap for 0-num_keys.
   // insert and find. -> array
   // store to static_map with keys as field key[index], and values as key[array[index]]

@@ -50,7 +50,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
     return make_strings_column(
       size,
       make_column_from_scalar(
-        numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref_unsafe()),
+        numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref()),
         size + 1,
         stream,
         mr),

@@ -105,7 +105,7 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
   if (bloom_filter_byte_ranges.size()) {
     // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
     auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::device_async_resource_ref>(
-      cudf::get_current_device_resource_ref_unsafe(), bloom_filter_alignment);
+      cudf::get_current_device_resource_ref(), bloom_filter_alignment);
 
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
       cudf::io::parquet::fetch_byte_ranges_to_device_async(

@@ -182,14 +182,13 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
   {
     auto dict_target = dictionary::detail::add_keys(
       dictionary_column_view(target),
-      make_column_from_scalar(
-        source.get(), 1, stream, cudf::get_current_device_resource_ref_unsafe())
+      make_column_from_scalar(source.get(), 1, stream, cudf::get_current_device_resource_ref())
         ->view(),
       stream,
       mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(
-      dict_view, source.get(), stream, cudf::get_current_device_resource_ref_unsafe());
+      dict_view, source.get(), stream, cudf::get_current_device_resource_ref());
     auto scalar_iter = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), cuda::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
@@ -250,7 +249,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
       auto row_slr = detail::get_element(
-        typed_s->view().column(i), 0, stream, cudf::get_current_device_resource_ref_unsafe());
+        typed_s->view().column(i), 0, stream, cudf::get_current_device_resource_ref());
       return type_dispatcher<dispatch_storage_type>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
@@ -388,7 +387,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                            target.size(),
                                            mask_state::UNALLOCATED,
                                            stream,
-                                           cudf::get_current_device_resource_ref_unsafe());
+                                           cudf::get_current_device_resource_ref());
   auto mutable_indices = indices->mutable_view();
 
   thrust::sequence(rmm::exec_policy_nosync(stream),
@@ -397,10 +396,8 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map  = detail::apply_boolean_mask(table_view{{indices->view()}},
-                                                boolean_mask,
-                                                stream,
-                                                cudf::get_current_device_resource_ref_unsafe());
+  auto scatter_map = detail::apply_boolean_mask(
+    table_view{{indices->view()}}, boolean_mask, stream, cudf::get_current_device_resource_ref());
   auto output_table = detail::scatter(
     table_view{{input}}, scatter_map->get_column(0).view(), table_view{{target}}, stream, mr);
 

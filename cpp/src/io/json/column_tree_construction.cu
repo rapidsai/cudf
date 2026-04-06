@@ -131,7 +131,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   NodeIndexT num_columns = unpermuted_col_ids.size();
 
   auto mapped_col_ids = cudf::detail::make_device_uvector_async(
-    unpermuted_col_ids, stream, cudf::get_current_device_resource_ref_unsafe());
+    unpermuted_col_ids, stream, cudf::get_current_device_resource_ref());
   rmm::device_uvector<NodeIndexT> rev_mapped_col_ids(num_columns, stream);
   rmm::device_uvector<NodeIndexT> reordering_index(unpermuted_col_ids.size(), stream);
 
@@ -148,7 +148,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
 
   {
     auto mapped_col_ids_copy = cudf::detail::make_device_uvector_async(
-      mapped_col_ids, stream, cudf::get_current_device_resource_ref_unsafe());
+      mapped_col_ids, stream, cudf::get_current_device_resource_ref());
     thrust::sequence(
       rmm::exec_policy_nosync(stream), rev_mapped_col_ids.begin(), rev_mapped_col_ids.end());
     thrust::sort_by_key(rmm::exec_policy_nosync(stream),
@@ -185,9 +185,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
   auto construct_row_idx = [&stream](NodeIndexT num_columns,
                                      device_span<NodeIndexT const> parent_col_ids) {
     auto row_idx = cudf::detail::make_zeroed_device_uvector_async<NodeIndexT>(
-      static_cast<std::size_t>(num_columns + 1),
-      stream,
-      cudf::get_current_device_resource_ref_unsafe());
+      static_cast<std::size_t>(num_columns + 1), stream, cudf::get_current_device_resource_ref());
     // Note that the first element of csr_parent_col_ids is -1 (parent_node_sentinel)
     // children adjacency
 

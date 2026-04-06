@@ -1329,11 +1329,11 @@ void compact_orc_data_streams(device_2dspan<stripe_stream> strm_desc,
   auto const num_stripes   = strm_desc.size().first;
   auto const num_chunks    = num_rowgroups * num_streams;
   auto srcs                = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
-    num_chunks, stream, cudf::get_current_device_resource_ref_unsafe());
+    num_chunks, stream, cudf::get_current_device_resource_ref());
   auto dsts = cudf::detail::make_zeroed_device_uvector_async<uint8_t*>(
-    num_chunks, stream, cudf::get_current_device_resource_ref_unsafe());
+    num_chunks, stream, cudf::get_current_device_resource_ref());
   auto lengths = cudf::detail::make_zeroed_device_uvector_async<size_t>(
-    num_chunks, stream, cudf::get_current_device_resource_ref_unsafe());
+    num_chunks, stream, cudf::get_current_device_resource_ref());
 
   auto const num_blocks =
     cudf::util::div_rounding_up_unsafe(num_stripes, compact_streams_block_size) *
@@ -1400,7 +1400,7 @@ void decimal_sizes_to_offsets(device_2dspan<rowgroup_rows const> rg_bounds,
 
   // Copy the vector of views to the device so that we can pass it to the kernel
   auto d_sizes = cudf::detail::make_device_uvector_async<decimal_column_element_sizes>(
-    h_sizes, stream, cudf::get_current_device_resource_ref_unsafe());
+    h_sizes, stream, cudf::get_current_device_resource_ref());
 
   constexpr int block_size = 256;
   // number of rowgroups * number of decimal columns

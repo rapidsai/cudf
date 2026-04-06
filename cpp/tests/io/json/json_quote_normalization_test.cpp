@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,7 +31,7 @@ void run_test(std::string const& host_input,
   // Preprocessing FST
   cudf::io::datasource::owning_buffer<rmm::device_buffer> device_data(std::move(device_input));
   cudf::io::json::detail::normalize_single_quotes(
-    device_data, delimiter, stream_view, cudf::get_current_device_resource_ref_unsafe());
+    device_data, delimiter, stream_view, cudf::get_current_device_resource_ref());
 
   std::string preprocessed_host_output(device_data.size(), 0);
   CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),

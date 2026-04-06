@@ -154,7 +154,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   auto const count_itr =
     cudf::detail::make_counting_transform_iterator(0, strings_tokenizer{d_strings, d_delimiter});
   auto [token_offsets, total_tokens] = cudf::strings::detail::make_offsets_child_column(
-    count_itr, count_itr + strings_count, stream, cudf::get_current_device_resource_ref_unsafe());
+    count_itr, count_itr + strings_count, stream, cudf::get_current_device_resource_ref());
   auto d_token_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
 
@@ -178,11 +178,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
           static_cast<cudf::size_type>(d_token_offsets[idx + 1] - d_token_offsets[idx]);
         return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
       }));
-  auto [ngram_offsets, total_ngrams] =
-    cudf::detail::make_offsets_child_column(ngram_counts,
-                                            ngram_counts + strings_count,
-                                            stream,
-                                            cudf::get_current_device_resource_ref_unsafe());
+  auto [ngram_offsets, total_ngrams] = cudf::detail::make_offsets_child_column(
+    ngram_counts, ngram_counts + strings_count, stream, cudf::get_current_device_resource_ref());
   auto d_ngram_offsets = ngram_offsets->view().begin<cudf::size_type>();
 
   // Compute the total size of the ngrams for each string (not for each ngram)
@@ -198,7 +195,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   auto const sizes_itr = cudf::detail::make_counting_transform_iterator(
     0, ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions});
   auto [chars_offsets, output_chars_size] = cudf::strings::detail::make_offsets_child_column(
-    sizes_itr, sizes_itr + strings_count, stream, cudf::get_current_device_resource_ref_unsafe());
+    sizes_itr, sizes_itr + strings_count, stream, cudf::get_current_device_resource_ref());
   auto d_chars_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(chars_offsets->view());
 

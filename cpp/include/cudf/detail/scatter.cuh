@@ -209,7 +209,7 @@ struct column_scatterer_impl<dictionary32> {
     auto target_matched    = dictionary::detail::add_keys(target, source.keys(), stream, mr);
     auto const target_view = dictionary_column_view(target_matched->view());
     auto source_matched    = dictionary::detail::set_keys(
-      source, target_view.keys(), stream, cudf::get_current_device_resource_ref_unsafe());
+      source, target_view.keys(), stream, cudf::get_current_device_resource_ref());
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices

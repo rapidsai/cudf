@@ -56,7 +56,7 @@ std::unique_ptr<cudf::table> left_semi_join(
     // Build from right, probe with left (original behavior)
     cudf::filtered_join obj(right_selected, compare_nulls, build_side, cudf::get_default_stream());
     auto const join_indices = obj.semi_join(
-      left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+      left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
     auto indices_col  = cudf::column_view{indices_span};
     return cudf::gather(left_input, indices_col);
@@ -64,7 +64,7 @@ std::unique_ptr<cudf::table> left_semi_join(
     // Build from left, probe with right using mark_join
     cudf::mark_join obj(left_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.semi_join(
-      right_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+      right_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
     auto indices_col  = cudf::column_view{indices_span};
     return cudf::gather(left_input, indices_col);
@@ -86,7 +86,7 @@ std::unique_ptr<cudf::table> left_anti_join(
     // Build from right, probe with left (original behavior)
     cudf::filtered_join obj(right_selected, compare_nulls, build_side, cudf::get_default_stream());
     auto const join_indices = obj.anti_join(
-      left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+      left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
     auto indices_col  = cudf::column_view{indices_span};
     return cudf::gather(left_input, indices_col);
@@ -94,7 +94,7 @@ std::unique_ptr<cudf::table> left_anti_join(
     // Build from left, probe with right using mark_join
     cudf::mark_join obj(left_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.anti_join(
-      right_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref_unsafe());
+      right_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
     auto indices_col  = cudf::column_view{indices_span};
     return cudf::gather(left_input, indices_col);
@@ -424,21 +424,17 @@ TEST_P(SemiAntiJoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
                               build_side,
                               load_factor,
                               cudf::get_default_stream());
-      auto result = obj.semi_join(empty_probe_table,
-                                  cudf::get_default_stream(),
-                                  cudf::get_current_device_resource_ref_unsafe());
-      result      = obj.anti_join(empty_probe_table,
-                             cudf::get_default_stream(),
-                             cudf::get_current_device_resource_ref_unsafe());
+      auto result = obj.semi_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      result = obj.anti_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     } else {
       cudf::mark_join obj(
         build_table, cudf::null_equality::EQUAL, load_factor, cudf::get_default_stream());
-      auto result = obj.semi_join(empty_probe_table,
-                                  cudf::get_default_stream(),
-                                  cudf::get_current_device_resource_ref_unsafe());
-      result      = obj.anti_join(empty_probe_table,
-                             cudf::get_default_stream(),
-                             cudf::get_current_device_resource_ref_unsafe());
+      auto result = obj.semi_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      result = obj.anti_join(
+        empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     }
   });
 }

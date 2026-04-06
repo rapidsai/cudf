@@ -106,7 +106,7 @@ struct result_column_creator {
                                     null_count,
                                     std::move(null_mask),
                                     stream,
-                                    cudf::get_current_device_resource_ref_unsafe());
+                                    cudf::get_current_device_resource_ref());
   }
 };
 

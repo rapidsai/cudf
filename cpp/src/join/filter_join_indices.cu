@@ -72,7 +72,7 @@ filter_join_indices(cudf::table_view const& left,
 
   // Create expression parser
   auto const parser = ast::detail::expression_parser{
-    predicate, left, right, has_nulls, stream, cudf::get_current_device_resource_ref_unsafe()};
+    predicate, left, right, has_nulls, stream, cudf::get_current_device_resource_ref()};
 
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The predicate expression must produce a Boolean output");

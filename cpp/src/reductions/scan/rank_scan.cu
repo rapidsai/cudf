@@ -125,7 +125,7 @@ std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   column_view const& order_by, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
 {
   auto const rank_column =
-    inclusive_rank_scan(order_by, stream, cudf::get_current_device_resource_ref_unsafe());
+    inclusive_rank_scan(order_by, stream, cudf::get_current_device_resource_ref());
   auto const rank_view = rank_column->view();
 
   // Result type for min 0-index percent rank is independent of input type.

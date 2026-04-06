@@ -557,11 +557,11 @@ void gather_bitmask(table_view const& source,
     return col->mutable_view().null_mask();
   });
   auto d_target_masks =
-    make_device_uvector_async(target_masks, stream, cudf::get_current_device_resource_ref_unsafe());
+    make_device_uvector_async(target_masks, stream, cudf::get_current_device_resource_ref());
 
   auto const device_source = table_device_view::create(source, stream);
   auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(
-    target.size(), stream, cudf::get_current_device_resource_ref_unsafe());
+    target.size(), stream, cudf::get_current_device_resource_ref());
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {

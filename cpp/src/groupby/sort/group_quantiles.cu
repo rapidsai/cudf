@@ -156,7 +156,7 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         rmm::device_async_resource_ref mr)
 {
   auto dv_quantiles = cudf::detail::make_device_uvector_async(
-    quantiles, stream, cudf::get_current_device_resource_ref_unsafe());
+    quantiles, stream, cudf::get_current_device_resource_ref());
 
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()

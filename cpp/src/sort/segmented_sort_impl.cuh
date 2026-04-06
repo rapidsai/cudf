@@ -65,12 +65,12 @@ struct column_fast_sort_fn {
                                                 input.size(),
                                                 mask_allocation_policy::NEVER,
                                                 stream,
-                                                cudf::get_current_device_resource_ref_unsafe());
+                                                cudf::get_current_device_resource_ref());
     mutable_column_view output_view = temp_col->mutable_view();
     auto temp_indices =
       cudf::column(cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0),
                    stream,
-                   cudf::get_current_device_resource_ref_unsafe());
+                   cudf::get_current_device_resource_ref());
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
     auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
@@ -307,7 +307,7 @@ std::unique_ptr<table> segmented_sort_by_key_common(table_view const& values,
                                           column_order,
                                           null_precedence,
                                           stream,
-                                          cudf::get_current_device_resource_ref_unsafe());
+                                          cudf::get_current_device_resource_ref());
   // Gather segmented sort of child value columns
   return detail::gather(values,
                         sorted_order->view(),

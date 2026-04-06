@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -563,7 +563,7 @@ table struct_scalar::init_data(table&& data,
 
   // push validity mask down
   auto const validity = cudf::detail::create_null_mask(
-    1, mask_state::ALL_NULL, stream, cudf::get_current_device_resource_ref_unsafe());
+    1, mask_state::ALL_NULL, stream, cudf::get_current_device_resource_ref());
   for (auto& col : data_cols) {
     col = cudf::structs::detail::superimpose_and_sanitize_nulls(
       static_cast<bitmask_type const*>(validity.data()), 1, std::move(col), stream, mr);

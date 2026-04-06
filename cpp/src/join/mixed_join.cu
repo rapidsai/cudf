@@ -234,7 +234,7 @@ mixed_join_setup_data setup_mixed_join_common(table_view const& left_equality,
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   auto const row_bitmask =
-    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref_unsafe()).first;
+    cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
   auto preprocessed_build = detail::row::equality::preprocessed_table::create(build, stream);
   build_join_hash_table(build,
                         preprocessed_build,

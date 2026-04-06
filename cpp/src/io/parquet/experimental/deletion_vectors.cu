@@ -159,9 +159,9 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   // Scatter row group offsets and row group indices (or span indices) to their corresponding
   // row group span offsets
   auto d_row_group_offsets = cudf::detail::make_device_uvector_async(
-    row_group_offsets, stream, cudf::get_current_device_resource_ref_unsafe());
+    row_group_offsets, stream, cudf::get_current_device_resource_ref());
   auto d_row_group_span_offsets = cudf::detail::make_device_uvector_async(
-    row_group_span_offsets, stream, cudf::get_current_device_resource_ref_unsafe());
+    row_group_span_offsets, stream, cudf::get_current_device_resource_ref());
   auto in_iter =
     thrust::make_zip_iterator(d_row_group_offsets.begin(), cuda::counting_iterator<size_type>{0});
   auto out_iter = thrust::make_zip_iterator(row_indices_iter, row_group_keys.begin());
@@ -522,7 +522,7 @@ table_with_metadata chunked_parquet_reader::read_chunk()
                                                   _deletion_vector_row_counts,
                                                   _start_row,
                                                   _stream,
-                                                  cudf::get_current_device_resource_ref_unsafe());
+                                                  cudf::get_current_device_resource_ref());
   return table_with_metadata{
     // Supply user-provided mr to apply_boolean_mask to allocate output table's memory
     cudf::apply_boolean_mask(table_with_index->view(), row_mask->view(), _stream, _mr),
@@ -604,7 +604,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                           deletion_vectors_refs,
                                           deletion_vector_row_counts,
                                           stream,
-                                          cudf::get_current_device_resource_ref_unsafe());
+                                          cudf::get_current_device_resource_ref());
   // Filter the table using the deletion vector
   return table_with_metadata{
     // Supply user-provided mr to apply_boolean_mask to allocate output table's memory

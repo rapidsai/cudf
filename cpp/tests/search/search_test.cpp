@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1825,7 +1825,7 @@ TEST_F(SearchTest, multi_contains_primitive_nan_unequal)
                                        cudf::null_equality::EQUAL,
                                        cudf::nan_equality::UNEQUAL,
                                        cudf::get_default_stream(),
-                                       cudf::get_current_device_resource_ref_unsafe());
+                                       cudf::get_current_device_resource_ref());
 
   // With nan_equality::UNEQUAL, NaN should not match NaN
   EXPECT_FALSE(result.front_element(cudf::get_default_stream()));

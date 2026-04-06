@@ -596,7 +596,7 @@ void infer_column_types(parse_options const& parse_opts,
   auto const column_stats = cudf::io::csv::gpu::detect_column_types(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref_unsafe()),
+    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
     row_offsets,
     num_inferred_columns,
     stream);
@@ -683,19 +683,18 @@ decode_result decode_data(parse_options const& parse_opts,
   }
 
   auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_active_columns, stream, cudf::get_current_device_resource_ref_unsafe());
+    num_active_columns, stream, cudf::get_current_device_resource_ref());
 
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
-    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref_unsafe()),
+    make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
     row_offsets,
-    make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref_unsafe()),
-    make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref_unsafe()),
-    make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref_unsafe()),
+    make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
+    make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
-    make_device_uvector_async(
-      h_is_quoted_flags, stream, cudf::get_current_device_resource_ref_unsafe()),
+    make_device_uvector_async(h_is_quoted_flags, stream, cudf::get_current_device_resource_ref()),
     stream);
 
   auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
@@ -978,9 +977,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     if (num_string_cols > 0) {
       auto const quotechar = parse_opts.quotechar;
       cudf::string_scalar quotechar_scalar(
-        std::string(1, quotechar), true, stream, cudf::get_current_device_resource_ref_unsafe());
+        std::string(1, quotechar), true, stream, cudf::get_current_device_resource_ref());
       cudf::string_scalar dblquotechar_scalar(
-        std::string(2, quotechar), true, stream, cudf::get_current_device_resource_ref_unsafe());
+        std::string(2, quotechar), true, stream, cudf::get_current_device_resource_ref());
       constexpr size_t max_tasks = 4;
       auto const cols_per_task   = cudf::util::div_rounding_up_safe(num_string_cols, max_tasks);
       auto const num_tasks       = cudf::util::div_rounding_up_safe(num_string_cols, cols_per_task);
@@ -1000,7 +999,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         } else {
           auto replaced_all_col = cudf::strings::detail::replace(
             cudf::make_strings_column(
-              *buffer->_strings, col_stream, cudf::get_current_device_resource_ref_unsafe())
+              *buffer->_strings, col_stream, cudf::get_current_device_resource_ref())
               ->view(),
             dblquotechar_scalar,
             quotechar_scalar,

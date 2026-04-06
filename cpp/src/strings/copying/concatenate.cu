@@ -79,7 +79,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
     });
   thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
   auto d_input_offsets = cudf::detail::make_device_uvector_async(
-    input_offsets, stream, cudf::get_current_device_resource_ref_unsafe());
+    input_offsets, stream, cudf::get_current_device_resource_ref());
   auto const output_size = input_offsets.back();
 
   // Compute the partition offsets and size of chars column

@@ -255,7 +255,7 @@ void reader_impl::preprocess_file(read_mode mode)
                  {},
                  selected_stripes[0].stripe_footer->writerTimezone,
                  _stream,
-                 cudf::get_current_device_resource_ref_unsafe())
+                 cudf::get_current_device_resource_ref())
              : std::make_unique<cudf::table>();
   }();
 

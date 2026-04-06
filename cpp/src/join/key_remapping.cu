@@ -312,8 +312,7 @@ class key_remap_table : public key_remap_table_interface {
 
     auto const row_bitmask =
       skip_nulls
-        ? cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref_unsafe())
-            .first
+        ? cudf::detail::bitmask_and(_build, stream, cudf::get_current_device_resource_ref()).first
         : rmm::device_buffer{};
     auto const bitmask_ptr =
       skip_nulls ? reinterpret_cast<cudf::bitmask_type const*>(row_bitmask.data()) : nullptr;
@@ -343,7 +342,7 @@ class key_remap_table : public key_remap_table_interface {
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
 
     cudf::detail::device_scalar<cudf::size_type> d_distinct_count{
-      0, stream, cudf::get_current_device_resource_ref_unsafe()};
+      0, stream, cudf::get_current_device_resource_ref()};
 
     auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
@@ -453,10 +452,10 @@ class key_remap_table : public key_remap_table_interface {
       _hash_table.find_async(
         iter, iter + probe_num_rows, d_equal, key_hasher{}, found_begin, stream.value());
     } else {
-      auto stencil           = cuda::counting_iterator<cudf::size_type>{0};
-      auto const row_bitmask = cudf::detail::bitmask_and(
-                                 probe_keys, stream, cudf::get_current_device_resource_ref_unsafe())
-                                 .first;
+      auto stencil = cuda::counting_iterator<cudf::size_type>{0};
+      auto const row_bitmask =
+        cudf::detail::bitmask_and(probe_keys, stream, cudf::get_current_device_resource_ref())
+          .first;
       auto const pred =
         row_is_valid{reinterpret_cast<cudf::bitmask_type const*>(row_bitmask.data())};
 
