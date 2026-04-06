@@ -153,9 +153,12 @@ def test_empty_astype_always_castable(type1, type2, as_dtype, copy):
     else:
         expected = cudf.Series([], dtype=as_dtype(type2))
     assert_eq(result, expected)
-    if not copy and cudf.dtype(type1) == cudf.dtype(type2):
+    if not copy and type1 == type2 == "category":
+        # Categorical shallow copy reuses the same column object.
         assert ser._column is result._column
     else:
+        # Under CoW, copy=False returns a shallow copy (distinct column
+        # object sharing the same buffer), so column identity never holds.
         assert ser._column is not result._column
 
 
@@ -1328,7 +1331,8 @@ def test_series_astype_no_copy(copy):
     gsr = cudf.Series([1, 2, 3])
     result = gsr.astype("int64", copy=copy)
     assert_eq(result, gsr)
-    assert (result is gsr) is (not copy)
+    # Under CoW, copy=False returns a shallow copy (distinct object).
+    assert result is not gsr
 
 
 def test_astype_aware_to_naive_raises():
