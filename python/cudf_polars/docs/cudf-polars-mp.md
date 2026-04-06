@@ -14,9 +14,10 @@ The `cluster` option selects the execution model:
 | `"single"`      | Single-GPU, in-process execution                     | Stable (legacy)   |
 | `"distributed"` | Multi-GPU via [Dask Distributed][dask-distributed]   | Stable (legacy)   |
 | `"ray"`         | Multi-GPU via [Ray][ray-docs] actors                 | Preview (new API) |
-| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki]                      | Preview (new API) |
+| `"dask"`        | Multi-GPU via [Dask Distributed][dask-distributed]   | Preview (new API) |
+| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki] launched with `rrun` | Preview (new API) |
 
-Two preview execution modes are available:
+Three preview execution modes are available:
 
 * **Ray mode** — a single-client model where a driver program coordinates GPU
   workers implemented as Ray actors.
@@ -24,10 +25,15 @@ Two preview execution modes are available:
   When launched with `rrun` a full UCXX communicator connects the ranks.
   Without `rrun` it falls back to a single-rank communicator with no external
   dependencies, which is useful for local development and testing.
+* **Ray mode** — a single-client model where a driver program coordinates GPU workers
+  implemented as Ray actors.
+* **Dask mode** — a single-client model where a driver program coordinates GPU workers
+  running on a Dask distributed cluster.
 
-This document describes these two execution modes.
+This document describes these three execution modes.
 
 * [Ray execution mode](#ray-execution-mode)
+* [Dask execution mode](#dask-execution-mode)
 * [SPMD execution mode](#spmd-execution-mode)
 
 ---
@@ -171,15 +177,128 @@ worker. If not provided, `RayEngine` constructs a default `Options` with
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
 argument; user-supplied keys are merged with reserved entries set by `RayEngine`.
 
-Notable `executor_options` keys:
+---
 
-* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
-  `ThreadPoolExecutor` that drives the RapidsMPF actor network on each worker.
+## Dask execution mode
 
-Reserved keys:
+Dask mode uses a single client process that drives execution across multiple ranks.
+Each rank corresponds to one GPU worker and participates in collective operations
+through a shared UCXX communicator. In the Dask implementation each rank is implemented
+as a **Dask worker**, with one worker per available GPU.
 
-* `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
-* `engine_options`: `"memory_resource"`, `"executor"`
+Conceptually the system looks like this:
+
+```
+                 ┌──────────────────────────────┐
+                 │        User script           │
+                 │   (single client process)    │
+                 │  LazyFrame.collect(engine=…) │
+                 └──────────────┬───────────────┘
+                                │ IR dispatched to all workers
+               ┌────────────────|─────────────────┐
+               ↓                ↓                 ↓
+        ┌─────────────┐  ┌─────────────┐   ┌─────────────┐
+        │ Dask worker │  │ Dask worker │   │ Dask worker │
+        │   rank 0    │  │   rank 1    │   │  rank N-1   │
+        │   run IR    │  │   run IR    │   │   run IR    │
+        └──────┬──────┘  └──────┬──────┘   └──────┬──────┘
+               ↓                ↓                 ↓
+┌────────────────────────────────────────────────────────────────┐
+│                     RapidsMPF streaming engine                 │
+│   shuffle / all-gather · UCXX communicator · RMM GPU memory    │
+└────────────────────────────────────────────────────────────────┘
+               ↑                ↑                 ↑
+             GPU 0            GPU 1            GPU N-1
+```
+
+### Prerequisites
+
+* Dask distributed (`distributed`) and `dask-cuda` installed
+* RapidsMPF and UCXX available on all GPU nodes
+
+### Running in Dask mode
+
+`DaskEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.dask`. On construction it:
+
+1. If `dask_client` is `None`, creates a `dask_cuda.LocalCUDACluster` (one worker per GPU) and a `distributed.Client`
+2. Bootstraps a UCXX communicator across all workers
+
+`DaskEngine` is a `StreamingEngine` subclass (and therefore a `pl.GPUEngine`) that can be used directly or as a context manager.
+
+```python
+import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+with DaskEngine() as engine:
+    result = (
+        pl.scan_parquet("/data/dataset/*.parquet")
+        .filter(pl.col("amount") > 100)
+        .group_by("customer_id")
+        .agg(pl.col("amount").sum())
+        .collect(engine=engine)
+    )
+
+print(result)
+```
+
+The context manager yields a `DaskEngine` with:
+
+* `engine.nranks` — number of Dask workers at bootstrap time
+* `engine.gather_cluster_info()` — cluster diagnostics
+
+### Dask lifecycle
+
+Bring-your-own-client variant:
+
+```python
+from distributed import Client
+import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+with Client("scheduler-address:8786") as dc:
+    with DaskEngine(dask_client=dc) as engine:
+        result = pl.scan_parquet(...).collect(engine=engine)
+```
+
+Jupyter/manual style:
+
+```python
+engine = DaskEngine()
+result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+engine.shutdown()
+```
+
+`DaskEngine` raises `RuntimeError` if created inside an `rrun` cluster.
+
+### Cluster diagnostics
+
+```python
+with DaskEngine() as engine:
+    print(f"cluster has {engine.nranks} workers")
+    for info in engine.gather_cluster_info():
+        print(
+            f"hostname={info['hostname']}, pid={info['pid']}, "
+            f"CUDA_VISIBLE_DEVICES={info['cuda_visible_devices']}"
+        )
+```
+
+Each entry includes `pid`, `hostname`, and `cuda_visible_devices`.
+
+### Passing options
+
+```python
+from rapidsmpf.config import Options
+
+with DaskEngine(
+    rapidsmpf_options=Options(num_streaming_threads=8),
+    executor_options={
+        "max_rows_per_partition": 500_000,
+        "rapidsmpf_py_executor_max_workers": 2,
+    },
+    engine_options={"raise_on_fail": True},
+) as engine:
+    ...
+```
 
 ---
 
@@ -390,10 +509,6 @@ argument; user-supplied keys are merged with reserved entries set by `SPMDEngine
 pass `engine_options={"parquet_options": {"use_rapidsmpf_native": True}}` to enable
 native Parquet reads.
 
-Notable `executor_options` keys:
-
-* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
-  `ThreadPoolExecutor` that drives the RapidsMPF actor network.
 
 Reserved keys:
 
