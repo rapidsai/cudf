@@ -663,6 +663,26 @@ class hybrid_scan_reader {
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
 
   /**
+   * @brief Partition row groups into passes such that the amount of GPU memory required to read,
+   * decompress and decode a pass is bounded by the specified limit
+   *
+   * Note that the `pass_read_limit` is a hint, not an absolute limit - if a single row group
+   * cannot fit within the limit given, it will still constitute a pass. The compressed row group
+   * size is estimated over all columns in each row group (not just the columns selected for
+   * reading), for conservative estimates.
+   *
+   * @throws cudf::logic_error if `row_group_indices` is empty
+   *
+   * @param row_group_indices Input row group indices
+   * @param pass_read_limit Limit on the amount of memory used for reading and decompressing row
+   * group data or `0` if there is no limit
+   *
+   * @return Vector of vectors of row group indices, one per constructed pass
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
+    cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
+
+  /**
    * @brief Check if there is any parquet data left to read for the current setup
    *
    * @return Boolean indicating if there is any data left to read

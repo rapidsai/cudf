@@ -12,7 +12,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <cstdint>
@@ -47,10 +47,11 @@ namespace {
 [[nodiscard]] cudf::size_type compute_total_row_groups(
   host_span<std::vector<cudf::size_type> const> row_group_indices)
 {
-  auto const total_row_groups = std::accumulate(
-    row_group_indices.begin(), row_group_indices.end(), size_t{0}, [](auto sum, auto const& pfm) {
-      return sum + pfm.size();
-    });
+  auto const total_row_groups =
+    std::accumulate(row_group_indices.begin(),
+                    row_group_indices.end(),
+                    std::size_t{0},
+                    [](auto sum, auto const& pfm) { return sum + pfm.size(); });
 
   // Check if we have less than 2B total row groups.
   CUDF_EXPECTS(total_row_groups <= std::numeric_limits<cudf::size_type>::max(),
@@ -173,10 +174,10 @@ void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> 
 size_type aggregate_reader_metadata::total_rows_in_row_groups(
   cudf::host_span<std::vector<size_type> const> row_group_indices) const
 {
-  size_t total_rows = 0;
+  std::size_t total_rows = 0;
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_idx) {
                   auto const& pfm = per_file_metadata[src_idx];
                   for (auto const row_group_idx : row_group_indices[src_idx]) {
@@ -354,8 +355,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
   auto have_bloom_filters = false;
 
   // For all sources
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_index) {
                   // Get all row group indices in the data source
                   auto const& rg_indices = row_group_indices[src_index];
@@ -420,8 +421,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
 
   // For all sources
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
     [&](auto const src_index) {
       // Get all row group indices in the data source
       auto const& rg_indices = row_group_indices[src_index];
@@ -527,7 +528,8 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   rmm::cuda_stream_view stream) const
 {
   // Compute total number of input row groups
-  auto const total_row_groups = static_cast<size_t>(compute_total_row_groups(row_group_indices));
+  auto const total_row_groups =
+    static_cast<std::size_t>(compute_total_row_groups(row_group_indices));
 
   // Filter row groups using column chunk dictionaries
   auto const dictionary_filtered_row_groups = apply_dictionary_filter(chunks,
@@ -617,7 +619,7 @@ named_to_reference_converter::named_to_reference_converter(
   std::transform(
     metadata.schema_info.cbegin(),
     metadata.schema_info.cend(),
-    thrust::counting_iterator<size_t>(0),
+    cuda::counting_iterator<std::size_t>{0},
     std::inserter(_column_name_to_index, _column_name_to_index.end()),
     [&](auto const& sch, auto index) {
       return std::make_pair(

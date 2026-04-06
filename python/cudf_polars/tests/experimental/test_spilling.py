@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -38,7 +39,14 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 @pytest.mark.parametrize(
     "engine,spilled_host_mem_type",
     [
-        ({"rapidsmpf_options": {"pinned_memory": "true"}}, MemoryType.PINNED_HOST),
+        pytest.param(
+            {"rapidsmpf_options": {"pinned_memory": "true"}},
+            MemoryType.PINNED_HOST,
+            marks=pytest.mark.skipif(
+                not is_pinned_memory_resources_supported(),
+                reason="Pinned memory requires CUDA 12.6+ driver and runtime",
+            ),
+        ),
         ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
     ],
     indirect=["engine"],

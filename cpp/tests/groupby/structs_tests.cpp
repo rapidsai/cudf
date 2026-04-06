@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -63,7 +63,7 @@ TYPED_TEST(groupby_structs_test, basic)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9};
@@ -87,7 +87,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_members)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,       1,    2,    3,    4,    5,    6,      7,    8,    9 };
@@ -115,7 +115,7 @@ TYPED_TEST(groupby_structs_test, structs_with_null_rows)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9};
@@ -141,7 +141,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9  };
@@ -173,7 +173,7 @@ TYPED_TEST(groupby_structs_test, null_members_differ_from_null_structs)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {    0,      1,    2,    3,    4,    5,    6,    7,    8,    9 };
@@ -204,7 +204,7 @@ TYPED_TEST(groupby_structs_test, structs_of_structs)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values            = fwcw<V> {    0,      1,    2,    3,    4,    5,    6,    7,    8,    9 };
@@ -240,7 +240,7 @@ TYPED_TEST(groupby_structs_test, empty_input)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {};
@@ -264,7 +264,7 @@ TYPED_TEST(groupby_structs_test, all_null_input)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9};
@@ -288,7 +288,7 @@ TYPED_TEST(groupby_structs_test, lists_as_keys)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {     0,      1,      2,      3,       4  };
