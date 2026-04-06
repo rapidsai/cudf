@@ -519,7 +519,12 @@ def test_groupby_agg_combinations(agg):
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
 def test_groupby_list_simple(list_agg):
-    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, None, 4, 5, 6]})
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": pd.array([1, 2, None, 4, 5, 6], dtype="double[pyarrow]"),
+        }
+    )
     gdf = cudf.from_pandas(pdf)
 
     assert_groupby_results_equal(
@@ -573,7 +578,9 @@ def test_groupby_list_of_structs(list_agg):
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
 def test_groupby_list_single_element(list_agg):
-    pdf = pd.DataFrame({"a": [1, 2], "b": [3, None]})
+    pdf = pd.DataFrame(
+        {"a": [1, 2], "b": pd.array([3, None], dtype="double[pyarrow]")}
+    )
     gdf = cudf.from_pandas(pdf)
 
     assert_groupby_results_equal(
@@ -590,7 +597,7 @@ def test_groupby_list_strings(agg):
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 1, 2, 2],
-            "b": ["b", "a", None, "e", "d"],
+            "b": pd.array(["b", "a", None, "e", "d"], dtype="string[pyarrow]"),
             "c": [1, 2, 3, 4, 5],
         }
     )
