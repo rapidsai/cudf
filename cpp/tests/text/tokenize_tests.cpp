@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -200,7 +200,7 @@ TEST_F(TextTokenizeTest, Vocabulary)
                                                       "the mousé  ate  cheese",
                                                       "",
                                                       "dog"},
-                                                  validity);
+                                                     validity);
 
   auto input_view = cudf::strings_column_view(input);
   auto delimiter  = cudf::string_scalar(" ");

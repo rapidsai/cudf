@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -439,8 +439,6 @@ inline void CompactProtocolFieldWriter::field_string_list(int field,
 inline int CompactProtocolFieldWriter::current_field() { return current_field_value; }
 
 inline void CompactProtocolFieldWriter::set_current_field(int const& field)
-{
-  current_field_value = field;
-}
+{ current_field_value = field; }
 
 }  // namespace cudf::io::parquet::detail

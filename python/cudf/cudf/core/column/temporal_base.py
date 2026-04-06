@@ -255,7 +255,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
             children=[],
         )
         return cast(
-            cudf.core.column.numerical.NumericalColumn,
+            "cudf.core.column.numerical.NumericalColumn",
             ColumnBase.create(new_plc_column, self._UNDERLYING_DTYPE).astype(
                 dtype
             ),

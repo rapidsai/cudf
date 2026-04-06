@@ -3066,7 +3066,7 @@ class IndexedFrame(Frame):
             return self._gather(
                 GatherMap.from_column_unchecked(
                     cast(
-                        cudf.core.column.numerical.NumericalColumn,
+                        "cudf.core.column.numerical.NumericalColumn",
                         ColumnBase.from_range(
                             range(start, stop, stride)
                         ).astype(SIZE_TYPE_DTYPE),
@@ -4971,7 +4971,7 @@ class IndexedFrame(Frame):
         try:
             gather_map = GatherMap.from_column_unchecked(
                 cast(
-                    cudf.core.column.numerical.NumericalColumn,
+                    "cudf.core.column.numerical.NumericalColumn",
                     as_column(
                         random_state.choice(
                             len(self), size=n, replace=replace, p=weights
@@ -6923,7 +6923,7 @@ def _get_replacement_values_for_columns(
     for i in to_replace_columns:
         if i in values_columns:
             if isinstance(values_columns[i], list):
-                val_col = cast(list, values_columns[i])
+                val_col = cast("list", values_columns[i])
                 all_na = any(val is None for val in val_col)
             else:
                 all_na = False

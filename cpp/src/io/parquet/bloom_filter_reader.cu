@@ -256,9 +256,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
    * @return AST operation expression
    */
   [[nodiscard]] std::reference_wrapper<ast::expression const> get_bloom_filter_expr() const
-  {
-    return _bloom_filter_expr.back();
-  }
+  { return _bloom_filter_expr.back(); }
 
  private:
   std::vector<cudf::size_type> _col_literals_offsets;
@@ -560,9 +558,7 @@ equality_literals_collector::equality_literals_collector(ast::expression const& 
 
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
   ast::literal const& expr)
-{
-  return expr;
-}
+{ return expr; }
 
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
   ast::column_reference const& expr)
@@ -576,9 +572,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
   ast::column_name_reference const& expr)
-{
-  CUDF_FAIL("Column name reference is not supported in DictionaryAST and BloomfilterAST");
-}
+{ CUDF_FAIL("Column name reference is not supported in DictionaryAST and BloomfilterAST"); }
 
 std::reference_wrapper<ast::expression const> equality_literals_collector::visit(
   ast::operation const& expr)
@@ -616,9 +610,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 }
 
 std::vector<std::vector<ast::literal*>> equality_literals_collector::get_literals() &&
-{
-  return std::move(_literals);
-}
+{ return std::move(_literals); }
 
 std::vector<std::reference_wrapper<ast::expression const>>
 equality_literals_collector::visit_operands(

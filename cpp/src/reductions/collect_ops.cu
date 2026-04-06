@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,9 +26,7 @@ namespace {
  * @return A boolean value indicating if we need to handle nulls
  */
 bool need_handle_nulls(column_view const& input, null_policy null_handling)
-{
-  return null_handling == null_policy::EXCLUDE && input.has_nulls();
-}
+{ return null_handling == null_policy::EXCLUDE && input.has_nulls(); }
 
 }  // namespace
 

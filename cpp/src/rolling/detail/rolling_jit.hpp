@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,9 +13,7 @@ namespace detail {
 
 template <class T>
 T minimum(T a, T b)
-{
-  return b < a ? b : a;
-}
+{ return b < a ? b : a; }
 
 struct preceding_window_wrapper {
   cudf::size_type const* d_group_offsets;

@@ -63,9 +63,7 @@ class modulo_partitioner {
 
 template <typename T>
 bool is_power_two(T number)
-{
-  return (0 == (number & (number - 1)));
-}
+{ return (0 == (number & (number - 1))); }
 
 /**
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
@@ -78,9 +76,7 @@ template <typename hash_value_t>
 class bitwise_partitioner {
  public:
   bitwise_partitioner(size_type num_partitions) : mask{(num_partitions - 1)}
-  {
-    assert(is_power_two(num_partitions));
-  }
+  { assert(is_power_two(num_partitions)); }
 
   __device__ size_type operator()(hash_value_t hash_value) const
   {
@@ -828,9 +824,7 @@ struct dispatch_map_type {
   template <typename MapType, typename... Args>
   std::pair<std::unique_ptr<table>, std::vector<size_type>> operator()(Args&&...) const
     requires(not is_index_type<MapType>())
-  {
-    CUDF_FAIL("Unexpected, non-integral partition map.");
-  }
+  { CUDF_FAIL("Unexpected, non-integral partition map."); }
 };
 }  // namespace
 
@@ -850,16 +844,12 @@ struct IdentityHash {
   template <typename return_type = result_type>
   CUDF_HOST_DEVICE constexpr return_type operator()(Key const& key) const
     requires(!cuda::std::is_arithmetic_v<Key>)
-  {
-    CUDF_UNREACHABLE("IdentityHash does not support this data type");
-  }
+  { CUDF_UNREACHABLE("IdentityHash does not support this data type"); }
 
   template <typename return_type = result_type>
   CUDF_HOST_DEVICE constexpr return_type operator()(Key const& key) const
     requires(cuda::std::is_arithmetic_v<Key>)
-  {
-    return static_cast<result_type>(key);
-  }
+  { return static_cast<result_type>(key); }
 };
 
 template <template <typename> class hash_function>

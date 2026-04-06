@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,11 +37,11 @@ void bench_case(nvbench::state& state)
     auto ascii_data = ascii_column->view();
 
     col_view       = cudf::column_view(col_view.type(),
-                                 col_view.size(),
-                                 ascii_data.data<char>(),
-                                 col_view.null_mask(),
-                                 col_view.null_count(),
-                                 0,
+                                       col_view.size(),
+                                       ascii_data.data<char>(),
+                                       col_view.null_mask(),
+                                       col_view.null_count(),
+                                       0,
                                        {input.offsets()});
     col_size       = ascii_column->alloc_size();
     ascii_contents = ascii_column->release();

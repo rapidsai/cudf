@@ -474,9 +474,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initDefaultCudaDevice(JNIEnv* env
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_cleanupDefaultCudaDevice(JNIEnv* env, jclass clazz)
-{
-  cudf::jni::set_cudf_device(cudaInvalidDeviceId);
-}
+{ cudf::jni::set_cudf_device(cudaInvalidDeviceId); }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
                                                               jclass clazz,

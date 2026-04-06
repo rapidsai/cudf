@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,9 +26,7 @@ struct size_of_helper {
   template <typename T>
   constexpr int operator()() const noexcept
     requires(is_fixed_width<T>() && not is_fixed_point<T>())
-  {
-    return sizeof(T);
-  }
+  { return sizeof(T); }
 
   template <typename T>
   constexpr int operator()() const noexcept

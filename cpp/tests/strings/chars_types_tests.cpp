@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -239,9 +239,9 @@ TEST_F(StringsCharsTest, Numerics)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
-  auto types = cudf::strings::string_character_types::DIGIT |
-               cudf::strings::string_character_types::DECIMAL |
-               cudf::strings::string_character_types::NUMERIC;
+  auto types   = cudf::strings::string_character_types::DIGIT |
+                 cudf::strings::string_character_types::DECIMAL |
+                 cudf::strings::string_character_types::NUMERIC;
   auto results = cudf::strings::all_characters_of_type(
     strings_view, (cudf::strings::string_character_types)types);
 

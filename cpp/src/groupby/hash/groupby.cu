@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -107,9 +107,7 @@ struct can_use_hash_groupby_fn {
 
   template <aggregation::Kind k>
   constexpr static bool uses_underlying_type()
-  {
-    return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM;
-  }
+  { return k == aggregation::MIN or k == aggregation::MAX or k == aggregation::SUM; }
 
   template <typename T, aggregation::Kind K>
     requires(cudf::is_fixed_point<T>())

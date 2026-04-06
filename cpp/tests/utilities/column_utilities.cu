@@ -268,9 +268,7 @@ struct column_property_comparator {
                   cudf::column_view const& rhs_row_indices,
                   debug_output_level verbosity)
     requires(!std::is_same_v<T, cudf::list_view> && !std::is_same_v<T, cudf::struct_view>)
-  {
-    return compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity);
-  }
+  { return compare_common(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity); }
 
   template <typename T>
   bool operator()(cudf::column_view const& lhs,
@@ -977,9 +975,7 @@ struct strings_to_host_fn {
                   cudf::column_view const&,
                   rmm::cuda_stream_view)
     requires(!std::is_same_v<OffsetType, int32_t> && !std::is_same_v<OffsetType, int64_t>)
-  {
-    CUDF_FAIL("invalid offsets type");
-  }
+  { CUDF_FAIL("invalid offsets type"); }
 };
 }  // namespace
 
@@ -1001,9 +997,7 @@ std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(c
 }
 
 large_strings_enabler::large_strings_enabler(bool default_enable)
-{
-  default_enable ? enable() : disable();
-}
+{ default_enable ? enable() : disable(); }
 
 large_strings_enabler::~large_strings_enabler() { disable(); }
 

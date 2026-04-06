@@ -116,9 +116,7 @@ std::optional<std::unique_ptr<cudf::scalar>> export_scalar(arrow::Scalar const& 
 
 std::optional<std::unique_ptr<cudf::scalar>> export_scalar(
   std::shared_ptr<arrow::Scalar> const arrow_scalar)
-{
-  return export_scalar(*arrow_scalar);
-}
+{ return export_scalar(*arrow_scalar); }
 
 TYPED_TEST_SUITE(FromArrowTestDurationsTest, cudf::test::DurationTypes);
 using FixedPointTypes = cudf::test::Types<int32_t, int64_t, __int128_t>;
@@ -512,7 +510,7 @@ TYPED_TEST(FromArrowTestDecimalsTest, FixedPointTableNulls)
     auto const validity = std::vector<uint8_t>{1, 1, 1, 1, 1, 1, 0, 0};
     auto const col      = fp_wrapper<T>({1, 2, 3, 4, 5, 6, 0, 0},
                                         {true, true, true, true, true, true, false, false},
-                                   scale_type{scale});
+                                        scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     auto const arr = get_decimal_arrow_array(data, validity, precision, scale);

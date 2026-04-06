@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -51,15 +51,11 @@ template class table_view_base<mutable_column_view>;
 
 // Returns a table_view with set of specified columns
 table_view table_view::select(std::vector<size_type> const& column_indices) const
-{
-  return select(column_indices.begin(), column_indices.end());
-}
+{ return select(column_indices.begin(), column_indices.end()); }
 
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view()
-{
-  return table_view{std::vector<column_view>{begin(), end()}};
-}
+{ return table_view{std::vector<column_view>{begin(), end()}}; }
 
 table_view::table_view(std::vector<table_view> const& views)
   : table_view{detail::concatenate_column_views(views)}

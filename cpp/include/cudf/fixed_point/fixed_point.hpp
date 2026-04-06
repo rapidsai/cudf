@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -109,9 +109,7 @@ CUDF_HOST_DEVICE inline constexpr Rep ipow(T exponent)
  */
 template <typename Rep, Radix Rad, typename T>
 CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& scale)
-{
-  return val / ipow<Rep, Rad>(static_cast<int32_t>(scale));
-}
+{ return val / ipow<Rep, Rad>(static_cast<int32_t>(scale)); }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
  *
@@ -126,9 +124,7 @@ CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& 
  */
 template <typename Rep, Radix Rad, typename T>
 CUDF_HOST_DEVICE inline constexpr T left_shift(T const& val, scale_type const& scale)
-{
-  return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale));
-}
+{ return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale)); }
 
 /** @brief Function that performs a `right` or `left shift`
  * scale "times" on the `val`
@@ -272,9 +268,7 @@ class fixed_point {
    * @return The `scaled_integer` representation of the `fixed_point` number
    */
   CUDF_HOST_DEVICE inline operator scaled_integer<Rep>() const
-  {
-    return scaled_integer<Rep>{_value, _scale};
-  }
+  { return scaled_integer<Rep>{_value, _scale}; }
 
   /**
    * @brief Method that returns the underlying value of the `fixed_point` number
@@ -296,9 +290,7 @@ class fixed_point {
    * @return The `fixed_point` value as a boolean (zero is `false`, nonzero is `true`)
    */
   CUDF_HOST_DEVICE inline explicit constexpr operator bool() const
-  {
-    return static_cast<bool>(_value);
-  }
+  { return static_cast<bool>(_value); }
 
   /**
    * @brief operator +=
@@ -632,9 +624,7 @@ CUDF_HOST_DEVICE inline auto subtraction_overflow(T lhs, T rhs)
  */
 template <typename Rep, typename T>
 CUDF_HOST_DEVICE inline auto division_overflow(T lhs, T rhs)
-{
-  return lhs == cuda::std::numeric_limits<Rep>::min() && rhs == -1;
-}
+{ return lhs == cuda::std::numeric_limits<Rep>::min() && rhs == -1; }
 
 /** @brief Function for identifying integer overflow when multiplying
  *

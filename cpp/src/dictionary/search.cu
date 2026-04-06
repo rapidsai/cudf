@@ -34,15 +34,11 @@ struct dispatch_scalar_index {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
     requires(is_index_type<IndexType>())
-  {
-    return std::make_unique<numeric_scalar<IndexType>>(index, is_valid, stream, mr);
-  }
+  { return std::make_unique<numeric_scalar<IndexType>>(index, is_valid, stream, mr); }
   template <typename IndexType, typename... Args>
   std::unique_ptr<scalar> operator()(Args&&...)
     requires(not is_index_type<IndexType>())
-  {
-    CUDF_FAIL("indices must be an integral type");
-  }
+  { CUDF_FAIL("indices must be an integral type"); }
 };
 
 /**

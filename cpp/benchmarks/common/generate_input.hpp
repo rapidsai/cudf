@@ -56,23 +56,17 @@ enum class distribution_id : int8_t {
 namespace {
 template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
 distribution_id default_distribution_id()
-{
-  return distribution_id::GEOMETRIC;
-}
+{ return distribution_id::GEOMETRIC; }
 
 template <typename T, std::enable_if_t<!std::is_unsigned_v<T> && cudf::is_numeric<T>()>* = nullptr>
 distribution_id default_distribution_id()
-{
-  return distribution_id::NORMAL;
-}
+{ return distribution_id::NORMAL; }
 
 template <typename T,
           std::enable_if_t<!std::is_same_v<T, bool> && std::is_unsigned_v<T> &&
                            cudf::is_numeric<T>()>* = nullptr>
 distribution_id default_distribution_id()
-{
-  return distribution_id::GEOMETRIC;
-}
+{ return distribution_id::GEOMETRIC; }
 
 /**
  * @brief Default range for the timestamp types: 1970 - 2020.
@@ -266,9 +260,7 @@ class data_profile {
 
   template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
   distribution_params<T> get_distribution_params() const
-  {
-    return distribution_params<T>{bool_probability_true};
-  }
+  { return distribution_params<T>{bool_probability_true}; }
 
   template <typename T, std::enable_if_t<cudf::is_chrono<T>()>* = nullptr>
   distribution_params<T> get_distribution_params() const
@@ -286,21 +278,15 @@ class data_profile {
 
   template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
   distribution_params<T> get_distribution_params() const
-  {
-    return string_dist_desc;
-  }
+  { return string_dist_desc; }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>* = nullptr>
   distribution_params<T> get_distribution_params() const
-  {
-    return list_dist_desc;
-  }
+  { return list_dist_desc; }
 
   template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
   distribution_params<T> get_distribution_params() const
-  {
-    return struct_dist_desc;
-  }
+  { return struct_dist_desc; }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   distribution_params<T> get_distribution_params() const

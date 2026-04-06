@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -101,9 +101,7 @@ struct meanvar {
 template <typename ElementType>
 struct transformer_squared {
   CUDF_HOST_DEVICE inline ElementType operator()(ElementType const& value)
-  {
-    return (value * value);
-  };
+  { return (value * value); };
 };
 
 /**

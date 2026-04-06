@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -101,9 +101,7 @@ class reprog_device {
    * @brief Returns the number of regex groups found in the expression.
    */
   [[nodiscard]] CUDF_HOST_DEVICE inline int32_t group_counts() const
-  {
-    return _num_capturing_groups;
-  }
+  { return _num_capturing_groups; }
 
   /**
    * @brief Returns true if this is an empty program.

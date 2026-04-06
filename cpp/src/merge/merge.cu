@@ -290,14 +290,14 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
 
   index_vector merged_indices(total_size, stream);
 
-  auto const left_indices_col     = cudf::detail::lower_bound(right_table,
+  auto const left_indices_col = cudf::detail::lower_bound(right_table,
                                                           left_table,
                                                           column_order,
                                                           null_precedence,
                                                           stream,
                                                           cudf::get_current_device_resource_ref());
-  auto const left_indices         = left_indices_col->view();
-  auto left_indices_mutable       = left_indices_col->mutable_view();
+  auto const left_indices     = left_indices_col->view();
+  auto left_indices_mutable   = left_indices_col->mutable_view();
   auto const left_indices_begin   = left_indices.begin<cudf::size_type>();
   auto const left_indices_end     = left_indices.end<cudf::size_type>();
   auto left_indices_mutable_begin = left_indices_mutable.begin<cudf::size_type>();
@@ -339,9 +339,7 @@ struct column_merger {
                                      column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
-  {
-    CUDF_FAIL("Unsupported type for merge.");
-  }
+  { CUDF_FAIL("Unsupported type for merge."); }
 
   // column merger operator;
   //
@@ -355,10 +353,10 @@ struct column_merger {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();
     auto merged_col  = cudf::detail::allocate_like(lcol.has_nulls() ? lcol : rcol,
-                                                  merged_size,
-                                                  cudf::mask_allocation_policy::RETAIN,
-                                                  stream,
-                                                  mr);
+                                                   merged_size,
+                                                   cudf::mask_allocation_policy::RETAIN,
+                                                   stream,
+                                                   mr);
 
     //"gather" data from lcol, rcol according to row_order_ "map"
     //(directly calling gather() won't work because
@@ -663,12 +661,12 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     // Only use mr for the output table
     auto const& new_tbl_mr = merge_queue.empty() ? mr : cudf::get_current_device_resource_ref();
     auto merged_table      = merge(left_table.view,
-                              right_table.view,
-                              key_cols,
-                              column_order,
-                              null_precedence,
-                              stream,
-                              new_tbl_mr);
+                                   right_table.view,
+                                   key_cols,
+                                   column_order,
+                                   null_precedence,
+                                   stream,
+                                   new_tbl_mr);
 
     auto const merged_table_view = merged_table->view();
     merge_queue.emplace(merged_table_view, std::move(merged_table));

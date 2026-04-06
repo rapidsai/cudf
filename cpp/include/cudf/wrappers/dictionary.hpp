@@ -83,9 +83,7 @@ struct dictionary_wrapper {
    * @return The maximum value of the value type
    */
   static CUDF_HOST_DEVICE inline constexpr value_type max_value()
-  {
-    return cuda::std::numeric_limits<value_type>::max();
-  }
+  { return cuda::std::numeric_limits<value_type>::max(); }
 
   /**
    * @brief Returns the minimum value of the value type.
@@ -93,9 +91,7 @@ struct dictionary_wrapper {
    * @return The minimum value of the value type
    */
   static CUDF_HOST_DEVICE inline constexpr value_type min_value()
-  {
-    return cuda::std::numeric_limits<value_type>::min();
-  }
+  { return cuda::std::numeric_limits<value_type>::min(); }
 
   /**
    * @brief Returns the lowest value of the value type.
@@ -103,9 +99,7 @@ struct dictionary_wrapper {
    * @return The lowest value of the value type
    */
   static CUDF_HOST_DEVICE inline constexpr value_type lowest_value()
-  {
-    return cuda::std::numeric_limits<value_type>::lowest();
-  }
+  { return cuda::std::numeric_limits<value_type>::lowest(); }
 
  private:
   value_type _value;
@@ -123,9 +117,7 @@ struct dictionary_wrapper {
 template <typename Integer>
 CUDF_HOST_DEVICE inline bool operator==(dictionary_wrapper<Integer> const& lhs,
                                         dictionary_wrapper<Integer> const& rhs)
-{
-  return lhs.value() == rhs.value();
-}
+{ return lhs.value() == rhs.value(); }
 
 /**
  * @brief Not equal to operator for dictionary_wrapper
@@ -138,9 +130,7 @@ CUDF_HOST_DEVICE inline bool operator==(dictionary_wrapper<Integer> const& lhs,
 template <typename Integer>
 CUDF_HOST_DEVICE inline bool operator!=(dictionary_wrapper<Integer> const& lhs,
                                         dictionary_wrapper<Integer> const& rhs)
-{
-  return lhs.value() != rhs.value();
-}
+{ return lhs.value() != rhs.value(); }
 
 /**
  * @brief Less than or equal to operator for dictionary_wrapper
@@ -153,9 +143,7 @@ CUDF_HOST_DEVICE inline bool operator!=(dictionary_wrapper<Integer> const& lhs,
 template <typename Integer>
 CUDF_HOST_DEVICE inline bool operator<=(dictionary_wrapper<Integer> const& lhs,
                                         dictionary_wrapper<Integer> const& rhs)
-{
-  return lhs.value() <= rhs.value();
-}
+{ return lhs.value() <= rhs.value(); }
 
 /**
  * @brief Greater than or equal to operator for dictionary_wrapper
@@ -168,9 +156,7 @@ CUDF_HOST_DEVICE inline bool operator<=(dictionary_wrapper<Integer> const& lhs,
 template <typename Integer>
 CUDF_HOST_DEVICE inline bool operator>=(dictionary_wrapper<Integer> const& lhs,
                                         dictionary_wrapper<Integer> const& rhs)
-{
-  return lhs.value() >= rhs.value();
-}
+{ return lhs.value() >= rhs.value(); }
 
 /**
  * @brief Less than operator for dictionary_wrapper
@@ -183,9 +169,7 @@ CUDF_HOST_DEVICE inline bool operator>=(dictionary_wrapper<Integer> const& lhs,
 template <typename Integer>
 CUDF_HOST_DEVICE inline constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
                                                  dictionary_wrapper<Integer> const& rhs)
-{
-  return lhs.value() < rhs.value();
-}
+{ return lhs.value() < rhs.value(); }
 
 /**
  * @brief Greater than operator for dictionary_wrapper
@@ -198,9 +182,7 @@ CUDF_HOST_DEVICE inline constexpr bool operator<(dictionary_wrapper<Integer> con
 template <typename Integer>
 CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
                                        dictionary_wrapper<Integer> const& rhs)
-{
-  return lhs.value() > rhs.value();
-}
+{ return lhs.value() > rhs.value(); }
 
 using dictionary32 = dictionary_wrapper<int32_t>;  ///< 32-bit integer indexed dictionary wrapper
 

@@ -55,9 +55,7 @@ class primitive_keys_fn {
   CUDF_HOST_DEVICE constexpr primitive_keys_fn(hasher const& hash) : _hash{hash} {}
 
   __device__ __forceinline__ auto operator()(size_type i) const noexcept
-  {
-    return cuco::pair{_hash(i), T{i}};
-  }
+  { return cuco::pair{_hash(i), T{i}}; }
 
  private:
   hasher _hash;
@@ -75,9 +73,7 @@ class build_keys_fn {
   CUDF_HOST_DEVICE constexpr build_keys_fn(hasher const& hash) : _hash{hash} {}
 
   __device__ __forceinline__ auto operator()(size_type i) const noexcept
-  {
-    return cuco::pair{_hash(i), T{i}};
-  }
+  { return cuco::pair{_hash(i), T{i}}; }
 
  private:
   hasher _hash;
@@ -90,9 +86,7 @@ class build_keys_fn {
 struct output_fn {
   __device__ constexpr cudf::size_type operator()(
     cuco::pair<hash_value_type, rhs_index_type> const& x) const
-  {
-    return static_cast<cudf::size_type>(x.second);
-  }
+  { return static_cast<cudf::size_type>(x.second); }
 };
 
 /**
@@ -418,15 +412,11 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 distinct_hash_join::inner_join(cudf::table_view const& probe,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr) const
-{
-  return _impl->inner_join(probe, stream, mr);
-}
+{ return _impl->inner_join(probe, stream, mr); }
 
 std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   cudf::table_view const& probe,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
-{
-  return _impl->left_join(probe, stream, mr);
-}
+{ return _impl->left_join(probe, stream, mr); }
 }  // namespace cudf

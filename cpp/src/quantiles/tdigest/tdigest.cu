@@ -42,9 +42,7 @@ namespace detail {
 // https://developer.nvidia.com/blog/lerp-faster-cuda/
 template <typename T>
 __device__ inline T lerp(T v0, T v1, T t)
-{
-  return fma(t, v1, fma(-t, v0, v0));
-}
+{ return fma(t, v1, fma(-t, v0, v0)); }
 
 struct centroid {
   double mean;
@@ -353,7 +351,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                 detail::size_begin(input) + input.size(),
                                 [] __device__(auto const x) { return x == 0; },
                                 stream) == static_cast<std::size_t>(input.size());
-  auto row_size_iter = cuda::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
+  auto row_size_iter        = cuda::make_constant_iterator(all_empty_rows ? 0 : percentiles.size());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          row_size_iter,
                          row_size_iter + input.size() + 1,

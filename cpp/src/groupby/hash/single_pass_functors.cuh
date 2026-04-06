@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -16,9 +16,7 @@ namespace cudf::groupby::detail::hash {
 struct size_of_functor {
   template <typename T>
   CUDF_HOST_DEVICE constexpr cudf::size_type operator()()
-  {
-    return sizeof(T);
-  }
+  { return sizeof(T); }
 };
 
 // TODO: TO BE REMOVED issue tracked via #17171
@@ -45,9 +43,7 @@ __device__ T identity_from_operator()
 template <typename T, cudf::aggregation::Kind k, typename Enable = void>
 __device__ T identity_from_operator()
   requires(std::is_same_v<cudf::detail::corresponding_operator_t<k>, void>)
-{
-  CUDF_UNREACHABLE("Unable to get identity/sentinel from device operator");
-}
+{ CUDF_UNREACHABLE("Unable to get identity/sentinel from device operator"); }
 
 template <typename T, cudf::aggregation::Kind k>
 __device__ T get_identity()
@@ -72,9 +68,7 @@ struct initialize_target_element {
   __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
-  {
-    CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
-  }
+  { CUDF_UNREACHABLE("Invalid source type and aggregation combination."); }
 };
 
 template <typename Target, cudf::aggregation::Kind k>
@@ -97,9 +91,7 @@ struct initialize_shmem {
   __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
-  {
-    initialize_target_element<Target, k>{}(target, target_mask, idx);
-  }
+  { initialize_target_element<Target, k>{}(target, target_mask, idx); }
 };
 
 /**

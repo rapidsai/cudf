@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2019 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2019 Eyal Rozenberg <eyalroz@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 /*
@@ -119,9 +119,7 @@ CUDF_HOST_DEVICE constexpr S round_up_unsafe(S number_to_round, S modulus) noexc
  */
 template <typename S, typename T>
 CUDF_HOST_DEVICE constexpr S div_rounding_up_unsafe(S const& dividend, T const& divisor) noexcept
-{
-  return (dividend + divisor - 1) / divisor;
-}
+{ return (dividend + divisor - 1) / divisor; }
 
 namespace detail {
 template <typename I>

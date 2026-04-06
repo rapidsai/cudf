@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,15 +16,11 @@ namespace io {
 
 template <typename T>
 inline __device__ T shuffle(T var, int lane = 0)
-{
-  return __shfl_sync(~0, var, lane);
-}
+{ return __shfl_sync(~0, var, lane); }
 
 template <typename T>
 inline __device__ T shuffle_xor(T var, uint32_t delta)
-{
-  return __shfl_xor_sync(~0, var, delta);
-}
+{ return __shfl_xor_sync(~0, var, delta); }
 
 inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 

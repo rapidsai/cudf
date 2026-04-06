@@ -123,9 +123,7 @@ struct set_keys_dispatch_fn {
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
     requires(not cudf::is_dictionary_key<T>())
-  {
-    CUDF_UNREACHABLE("not a valid dictionary key type");
-  }
+  { CUDF_UNREACHABLE("not a valid dictionary key type"); }
 };
 }  // namespace
 

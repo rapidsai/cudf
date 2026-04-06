@@ -570,7 +570,7 @@ class DatetimeColumn(TemporalBaseColumn):
             )
         with self.access(mode="read", scope="internal"):
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 ColumnBase.create(
                     plc.strings.convert.convert_datetime.from_timestamps(
                         self.plc_column,
@@ -841,7 +841,7 @@ class DatetimeColumn(TemporalBaseColumn):
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
         result = cast(
-            DatetimeTZColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+            "DatetimeTZColumn", ColumnBase.create(gmt_data.plc_column, dtype)
         )
         # Avoid re-computing local times from UTC times
         result._local_time = localized
@@ -921,7 +921,7 @@ class DatetimeTZColumn(DatetimeColumn):
                     .plc_column
                 )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
+                    "DatetimeTZColumn", ColumnBase.create(casted_plc, dtype)
                 )
             else:
                 casted = self
@@ -934,7 +934,7 @@ class DatetimeTZColumn(DatetimeColumn):
                     .plc_column
                 )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
+                    "DatetimeTZColumn", ColumnBase.create(casted_plc, dtype)
                 )
             else:
                 casted = self
@@ -1000,7 +1000,7 @@ class DatetimeTZColumn(DatetimeColumn):
             return self.copy()
 
         return cast(
-            DatetimeTZColumn,
+            "DatetimeTZColumn",
             ColumnBase.create(
                 self.plc_column,
                 get_compatible_timezone(

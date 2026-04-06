@@ -625,22 +625,22 @@ __device__ void transform(void* user_data, cudf::size_type row,
     )***";
 
   auto expected                  = cudf::test::strings_column_wrapper{"John Doe",
-                                                     "Mia Folk",
-                                                     "Abd Louis",
-                                                     "Mendes Xi",
-                                                     "Arya Serenity",
-                                                     "John Scott",
-                                                     "François Ольга",
-                                                     "José Łukasz",
-                                                     "Søren Zoë",
-                                                     "张 伟"};
+                                                                      "Mia Folk",
+                                                                      "Abd Louis",
+                                                                      "Mendes Xi",
+                                                                      "Arya Serenity",
+                                                                      "John Scott",
+                                                                      "François Ольга",
+                                                                      "José Łukasz",
+                                                                      "Søren Zoë",
+                                                                      "张 伟"};
   cudf::transform_input inputs[] = {first_name, last_name, cudf::scalar_column_view(scratch_sizes)};
   auto result                    = cudf::transform_extended(inputs,
-                                         cuda,
-                                         cudf::data_type(cudf::type_id::STRING),
-                                         cudf::udf_source_type::CUDA,
-                                         scratch.data(),
-                                         cudf::null_aware::NO);
+                                                            cuda,
+                                                            cudf::data_type(cudf::type_id::STRING),
+                                                            cudf::udf_source_type::CUDA,
+                                                            scratch.data(),
+                                                            cudf::null_aware::NO);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -879,13 +879,13 @@ TEST_F(NullTest, IsNull)
 
   cudf::transform_input inputs[] = {*value};
   auto result                    = cudf::transform_extended(inputs,
-                                         udf,
-                                         cudf::data_type(cudf::type_id::BOOL8),
-                                         cudf::udf_source_type::CUDA,
-                                         std::nullopt,
-                                         cudf::null_aware::YES,
-                                         std::nullopt,
-                                         cudf::output_nullability::ALL_VALID);
+                                                            udf,
+                                                            cudf::data_type(cudf::type_id::BOOL8),
+                                                            cudf::udf_source_type::CUDA,
+                                                            std::nullopt,
+                                                            cudf::null_aware::YES,
+                                                            std::nullopt,
+                                                            cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
@@ -926,13 +926,13 @@ return l - t * l + t * h;
 
   cudf::transform_input inputs[] = {*low, *high, *t};
   auto cuda_result               = cudf::transform_extended(inputs,
-                                              udf,
-                                              cudf::data_type(cudf::type_id::FLOAT32),
-                                              cudf::udf_source_type::CUDA,
-                                              std::nullopt,
-                                              cudf::null_aware::YES,
-                                              std::nullopt,
-                                              cudf::output_nullability::ALL_VALID);
+                                                            udf,
+                                                            cudf::data_type(cudf::type_id::FLOAT32),
+                                                            cudf::udf_source_type::CUDA,
+                                                            std::nullopt,
+                                                            cudf::null_aware::YES,
+                                                            std::nullopt,
+                                                            cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
 }

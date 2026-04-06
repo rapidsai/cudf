@@ -65,9 +65,7 @@ struct key_hasher {
   template <typename T>
   __device__ constexpr hash_value_type operator()(
     cuco::pair<hash_value_type, T> const& key) const noexcept
-  {
-    return key.first;
-  }
+  { return key.first; }
 };
 
 /**
@@ -78,9 +76,7 @@ class row_is_valid {
   row_is_valid(cudf::bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
   __device__ bool operator()(cudf::size_type const& i) const noexcept
-  {
-    return cudf::bit_is_set(_row_bitmask, i);
-  }
+  { return cudf::bit_is_set(_row_bitmask, i); }
 
  private:
   cudf::bitmask_type const* _row_bitmask;
@@ -95,9 +91,7 @@ class make_key_pair {
   CUDF_HOST_DEVICE constexpr make_key_pair(Hasher const& hash) : _hash{hash} {}
 
   __device__ __forceinline__ auto operator()(cudf::size_type i) const noexcept
-  {
-    return cuco::pair{_hash(i), T{i}};
-  }
+  { return cuco::pair{_hash(i), T{i}}; }
 
  private:
   Hasher _hash;
@@ -109,9 +103,7 @@ class make_key_pair {
 struct extract_index {
   __device__ constexpr cudf::size_type operator()(
     cuco::pair<hash_value_type, rhs_index_type> const& x) const
-  {
-    return static_cast<cudf::size_type>(x.second);
-  }
+  { return static_cast<cudf::size_type>(x.second); }
 };
 
 /**
@@ -625,9 +617,7 @@ key_remapping::key_remapping(cudf::table_view const& build,
                              rmm::cuda_stream_view stream)
   : _impl{std::make_unique<detail::key_remapping_impl>(
       build, compare_nulls, static_cast<bool>(metrics), stream)}
-{
-  CUDF_EXPECTS(build.num_columns() > 0, "Build table must have at least one column");
-}
+{ CUDF_EXPECTS(build.num_columns() > 0, "Build table must have at least one column"); }
 
 key_remapping::~key_remapping() = default;
 
@@ -676,8 +666,6 @@ bool key_remapping::has_metrics() const { return _impl->has_metrics(); }
 size_type key_remapping::get_distinct_count() const { return _impl->get_distinct_count(); }
 
 size_type key_remapping::get_max_duplicate_count() const
-{
-  return _impl->get_max_duplicate_count();
-}
+{ return _impl->get_max_duplicate_count(); }
 
 }  // namespace cudf

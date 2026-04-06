@@ -111,9 +111,7 @@ struct prefetch_queue_s {
 
 template <typename T>
 inline __device__ volatile uint32_t* prefetch_addr32(volatile prefetch_queue_s& q, T* ptr)
-{
-  return reinterpret_cast<volatile uint32_t*>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
-}
+{ return reinterpret_cast<volatile uint32_t*>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]); }
 
 #endif  // ENABLE_PREFETCH
 
@@ -174,9 +172,7 @@ inline __device__ uint32_t showbits(inflate_state_s* s, uint32_t n)
 }
 
 inline __device__ uint32_t nextbits32(inflate_state_s* s)
-{
-  return __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos);
-}
+{ return __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos); }
 
 inline __device__ void skipbits(inflate_state_s* s, uint32_t n)
 {
@@ -1236,9 +1232,7 @@ class cost_model {
   static CUDF_HOST_DEVICE double task_device_cost(size_t input_size,
                                                   size_t output_size,
                                                   task_type task_type)
-  {
-    return cost_factor(input_size, output_size, task_type) * input_size;
-  }
+  { return cost_factor(input_size, output_size, task_type) * input_size; }
 
   static double task_host_cost(size_t input_size,
                                size_t output_size,
@@ -1386,17 +1380,13 @@ sorted_codec_parameters sort_decompression_tasks(
   device_span<device_span<uint8_t> const> outputs,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
-{
-  return sort_tasks(inputs, outputs, task_type::DECOMPRESSION, stream, mr);
-}
+{ return sort_tasks(inputs, outputs, task_type::DECOMPRESSION, stream, mr); }
 
 sorted_codec_parameters sort_compression_tasks(device_span<device_span<uint8_t const> const> inputs,
                                                device_span<device_span<uint8_t> const> outputs,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
-{
-  return sort_tasks(inputs, outputs, task_type::COMPRESSION, stream, mr);
-}
+{ return sort_tasks(inputs, outputs, task_type::COMPRESSION, stream, mr); }
 
 void copy_results_to_original_order(device_span<codec_exec_result const> sorted_results,
                                     device_span<codec_exec_result> original_results,

@@ -44,11 +44,11 @@ std::pair<rmm::device_buffer, size_type> mask_scan(column_view const& input_view
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
   auto first_null_position = [&] {
-    size_type const first_null = thrust::find_if_not(rmm::exec_policy_nosync(stream),
-                                                     valid_itr,
-                                                     valid_itr + input_view.size(),
-                                                     cuda::std::identity{}) -
-                                 valid_itr;
+    size_type const first_null       = thrust::find_if_not(rmm::exec_policy_nosync(stream),
+                                                           valid_itr,
+                                                           valid_itr + input_view.size(),
+                                                           cuda::std::identity{}) -
+                                       valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
   }();
@@ -96,9 +96,7 @@ struct scan_functor<Op, cudf::string_view> {
                                         bitmask_type const* mask,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
-  {
-    return cudf::strings::detail::scan_inclusive<Op>(input_view, mask, stream, mr);
-  }
+  { return cudf::strings::detail::scan_inclusive<Op>(input_view, mask, stream, mr); }
 };
 
 template <typename Op>
@@ -108,9 +106,7 @@ struct scan_functor<Op, cudf::struct_view> {
                                         bitmask_type const*,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
-  {
-    return cudf::structs::detail::scan_inclusive<Op>(input, stream, mr);
-  }
+  { return cudf::structs::detail::scan_inclusive<Op>(input, stream, mr); }
 };
 
 template <typename Op, typename T>
@@ -178,16 +174,12 @@ struct scan_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
     requires(is_supported<T>())
-  {
-    return scan_functor<Op, T>::invoke(input, output_mask, stream, mr);
-  }
+  { return scan_functor<Op, T>::invoke(input, output_mask, stream, mr); }
 
   template <typename T, typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
     requires(!is_supported<T>())
-  {
-    CUDF_FAIL("Unsupported type for inclusive scan operation");
-  }
+  { CUDF_FAIL("Unsupported type for inclusive scan operation"); }
 };
 
 }  // namespace

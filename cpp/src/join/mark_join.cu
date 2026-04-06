@@ -59,9 +59,7 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
 struct row_is_null {
   bitmask_type const* _row_bitmask;
   __device__ bool operator()(size_type i) const noexcept
-  {
-    return !cudf::bit_is_set(_row_bitmask, i);
-  }
+  { return !cudf::bit_is_set(_row_bitmask, i); }
 };
 
 static constexpr int32_t mark_block_size = 1024;

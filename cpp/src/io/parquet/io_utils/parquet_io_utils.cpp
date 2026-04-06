@@ -49,9 +49,7 @@ std::unique_ptr<cudf::io::datasource::buffer> fetch_footer_to_host(cudf::io::dat
 
 std::unique_ptr<cudf::io::datasource::buffer> fetch_page_index_to_host(
   cudf::io::datasource& datasource, cudf::io::text::byte_range_info const page_index_bytes)
-{
-  return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
-}
+{ return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size()); }
 
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,

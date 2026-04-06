@@ -372,9 +372,7 @@ CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int pow10)
  */
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int pow10)
-{
-  return value / ipow<uint64_t, Radix::BASE_10>(pow10);
-}
+{ return value / ipow<uint64_t, Radix::BASE_10>(pow10); }
 
 /**
  * @brief Divide by a power of 10 that fits within a 128bit integer.
@@ -386,9 +384,7 @@ CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int pow10)
  */
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T divide_power10_128bit(T value, int pow10)
-{
-  return value / ipow<__uint128_t, Radix::BASE_10>(pow10);
-}
+{ return value / ipow<__uint128_t, Radix::BASE_10>(pow10); }
 
 /**
  * @brief Multiply by a power of 10 that fits within a 32bit integer.
@@ -427,9 +423,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_32bit(T value, int pow10)
  */
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int pow10)
-{
-  return value * ipow<uint64_t, Radix::BASE_10>(pow10);
-}
+{ return value * ipow<uint64_t, Radix::BASE_10>(pow10); }
 
 /**
  * @brief Multiply by a power of 10 that fits within a 128bit integer.
@@ -441,9 +435,7 @@ CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int pow10)
  */
 template <typename T, CUDF_ENABLE_IF(cuda::std::is_unsigned_v<T>)>
 CUDF_HOST_DEVICE inline constexpr T multiply_power10_128bit(T value, int pow10)
-{
-  return value * ipow<__uint128_t, Radix::BASE_10>(pow10);
-}
+{ return value * ipow<__uint128_t, Radix::BASE_10>(pow10); }
 
 /**
  * @brief Multiply an integer by a power of 10.

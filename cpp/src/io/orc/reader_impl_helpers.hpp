@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -109,9 +109,7 @@ inline type_id to_cudf_decimal_type(host_span<std::string const> decimal128_colu
 }
 
 inline std::string get_map_child_col_name(std::size_t const idx)
-{
-  return (idx == 0) ? "key" : "value";
-}
+{ return (idx == 0) ? "key" : "value"; }
 
 /**
  * @brief Create empty columns and respective schema information from the buffer.

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,9 +36,7 @@ struct scalar_construction_helper {
 
   template <typename T, typename... Args, std::enable_if_t<not is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<scalar> operator()(Args... args) const
-  {
-    CUDF_FAIL("Invalid type.");
-  }
+  { CUDF_FAIL("Invalid type."); }
 };
 }  // namespace
 
@@ -85,23 +83,17 @@ std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
 std::unique_ptr<scalar> make_list_scalar(column_view elements,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
-{
-  return std::make_unique<list_scalar>(elements, true, stream, mr);
-}
+{ return std::make_unique<list_scalar>(elements, true, stream, mr); }
 
 std::unique_ptr<scalar> make_struct_scalar(table_view const& data,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-{
-  return std::make_unique<struct_scalar>(data, true, stream, mr);
-}
+{ return std::make_unique<struct_scalar>(data, true, stream, mr); }
 
 std::unique_ptr<scalar> make_struct_scalar(host_span<column_view const> data,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-{
-  return std::make_unique<struct_scalar>(data, true, stream, mr);
-}
+{ return std::make_unique<struct_scalar>(data, true, stream, mr); }
 
 namespace {
 struct default_scalar_functor {
@@ -110,9 +102,7 @@ struct default_scalar_functor {
   template <typename T, std::enable_if_t<not is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-  {
-    return make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
-  }
+  { return make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr); }
 
   template <typename T, std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
@@ -128,39 +118,29 @@ struct default_scalar_functor {
 template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<string_view>(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-{
-  return std::unique_ptr<scalar>(new string_scalar("", false, stream, mr));
-}
+{ return std::unique_ptr<scalar>(new string_scalar("", false, stream, mr)); }
 
 template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<dictionary32>(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-{
-  CUDF_FAIL("dictionary type not supported");
-}
+{ CUDF_FAIL("dictionary type not supported"); }
 
 template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-{
-  CUDF_FAIL("list_view type not supported");
-}
+{ CUDF_FAIL("list_view type not supported"); }
 
 template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<struct_view>(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-{
-  CUDF_FAIL("struct_view type not supported");
-}
+{ CUDF_FAIL("struct_view type not supported"); }
 
 }  // namespace
 
 std::unique_ptr<scalar> make_default_constructed_scalar(data_type type,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
-{
-  return type_dispatcher(type, default_scalar_functor{type}, stream, mr);
-}
+{ return type_dispatcher(type, default_scalar_functor{type}, stream, mr); }
 
 std::unique_ptr<scalar> make_empty_scalar_like(column_view const& column,
                                                rmm::cuda_stream_view stream,

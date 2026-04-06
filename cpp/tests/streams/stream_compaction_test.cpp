@@ -376,16 +376,16 @@ TEST_F(StreamCompactionTest, FilterUDF)
   auto const expected         = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}.release();
   cudf::filter_input inputs[] = {col};
   auto const result           = cudf::filter_extended(inputs,
-                                            R"***(
+                                                      R"***(
 __device__ void filter(bool * out, int32_t a){
   *out = a < 10;
 })***",
                                                       {col},
-                                            cudf::udf_source_type::CUDA,
-                                            std::nullopt,
-                                            cudf::null_aware::NO,
-                                            cudf::output_nullability::PRESERVE,
-                                            cudf::test::get_default_stream());
+                                                      cudf::udf_source_type::CUDA,
+                                                      std::nullopt,
+                                                      cudf::null_aware::NO,
+                                                      cudf::output_nullability::PRESERVE,
+                                                      cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result[0]);
 }
 

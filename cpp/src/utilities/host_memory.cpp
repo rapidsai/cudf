@@ -213,9 +213,7 @@ class new_delete_memory_resource {
   void* allocate([[maybe_unused]] cuda::stream_ref stream,
                  std::size_t bytes,
                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
-  {
-    return allocate_sync(bytes, alignment);
-  }
+  { return allocate_sync(bytes, alignment); }
 
   void deallocate_sync(void* ptr,
                        std::size_t bytes,
@@ -229,9 +227,7 @@ class new_delete_memory_resource {
                   void* ptr,
                   std::size_t bytes,
                   std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
-  {
-    deallocate_sync(ptr, bytes, alignment);
-  }
+  { deallocate_sync(ptr, bytes, alignment); }
 
   bool operator==(new_delete_memory_resource const& other) const { return true; }
 
@@ -278,9 +274,7 @@ CUDF_EXPORT auto& kernel_pinned_copy_threshold()
 }
 
 void set_kernel_pinned_copy_threshold(size_t threshold)
-{
-  kernel_pinned_copy_threshold() = threshold;
-}
+{ kernel_pinned_copy_threshold() = threshold; }
 
 size_t get_kernel_pinned_copy_threshold() { return kernel_pinned_copy_threshold(); }
 
@@ -292,9 +286,7 @@ CUDF_EXPORT auto& allocate_host_as_pinned_threshold()
 }
 
 void set_allocate_host_as_pinned_threshold(size_t threshold)
-{
-  allocate_host_as_pinned_threshold() = threshold;
-}
+{ allocate_host_as_pinned_threshold() = threshold; }
 
 size_t get_allocate_host_as_pinned_threshold() { return allocate_host_as_pinned_threshold(); }
 

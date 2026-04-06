@@ -402,9 +402,7 @@ std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
                                     std::is_same<T, __int128_t>>,
                  std::size_t>
 get_decimal_precision()
-{
-  return std::numeric_limits<T>::digits10;
-}
+{ return std::numeric_limits<T>::digits10; }
 
 struct VectorOfArrays {
   std::vector<nanoarrow::UniqueArray> arrays;
@@ -433,9 +431,7 @@ struct VectorOfArrays {
   static const char* get_last_error(ArrowArrayStream* stream) { return nullptr; }
 
   static void release(ArrowArrayStream* stream)
-  {
-    delete static_cast<VectorOfArrays*>(stream->private_data);
-  }
+  { delete static_cast<VectorOfArrays*>(stream->private_data); }
 };
 
 void makeStreamFromArrays(std::vector<nanoarrow::UniqueArray> arrays,

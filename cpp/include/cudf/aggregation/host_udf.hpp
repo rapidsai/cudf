@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,9 +58,7 @@ class host_udf_base {
    * @return The hash value of the instance
    */
   [[nodiscard]] virtual std::size_t do_hash() const
-  {
-    return std::hash<int>{}(static_cast<int>(aggregation::Kind::HOST_UDF));
-  }
+  { return std::hash<int>{}(static_cast<int>(aggregation::Kind::HOST_UDF)); }
 
   /**
    * @brief Compares two instances of the derived class for equality.

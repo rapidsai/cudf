@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,9 +22,7 @@ void tuple_for_each_impl(Tuple&& tuple, F&& f, std::index_sequence<Indices...>)
 
 template <typename F, typename... Args>
 void tuple_for_each(std::tuple<Args...> const& tuple, F&& f)
-{
-  tuple_for_each_impl(tuple, std::forward<F>(f), std::index_sequence_for<Args...>{});
-}
+{ tuple_for_each_impl(tuple, std::forward<F>(f), std::index_sequence_for<Args...>{}); }
 
 class TraitsTest : public ::testing::Test {};
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -121,9 +121,7 @@ class CompactProtocolReader {
 
  public:
   static inline constexpr int NumRequiredBits(uint32_t max_level) noexcept
-  {
-    return 32 - cuda::std::countl_zero(max_level);
-  }
+  { return 32 - cuda::std::countl_zero(max_level); }
   bool InitSchema(FileMetaData* md);
 
  protected:

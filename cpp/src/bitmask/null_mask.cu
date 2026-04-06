@@ -559,33 +559,25 @@ size_type null_count(bitmask_type const* bitmask,
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 host_span<size_type const> indices,
                                                 rmm::cuda_stream_view stream)
-{
-  return detail::segmented_count_set_bits(bitmask, indices.begin(), indices.end(), stream);
-}
+{ return detail::segmented_count_set_bits(bitmask, indices.begin(), indices.end(), stream); }
 
 // Count zero bits in the specified ranges of a bitmask
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
                                                   host_span<size_type const> indices,
                                                   rmm::cuda_stream_view stream)
-{
-  return segmented_count_unset_bits(bitmask, indices.begin(), indices.end(), stream);
-}
+{ return segmented_count_unset_bits(bitmask, indices.begin(), indices.end(), stream); }
 
 // Count valid elements in the specified ranges of a validity bitmask
 std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
                                              host_span<size_type const> indices,
                                              rmm::cuda_stream_view stream)
-{
-  return segmented_valid_count(bitmask, indices.begin(), indices.end(), stream);
-}
+{ return segmented_valid_count(bitmask, indices.begin(), indices.end(), stream); }
 
 // Count null elements in the specified ranges of a validity bitmask
 std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
                                             host_span<size_type const> indices,
                                             rmm::cuda_stream_view stream)
-{
-  return segmented_null_count(bitmask, indices.begin(), indices.end(), stream);
-}
+{ return segmented_null_count(bitmask, indices.begin(), indices.end(), stream); }
 
 // Inplace Bitwise AND of the masks
 cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2017-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,16 +31,12 @@ struct MurmurHash3_x86_32 {
 
   __device__ constexpr result_type compute_bytes(cuda::std::byte const* bytes,
                                                  std::uint64_t size) const
-  {
-    return this->_impl.compute_hash(bytes, size);
-  }
+  { return this->_impl.compute_hash(bytes, size); }
 
  private:
   template <typename T>
   __device__ constexpr result_type compute(T const& key) const
-  {
-    return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T));
-  }
+  { return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(&key), sizeof(T)); }
 
   cuco::murmurhash3_32<Key> _impl;
 };
@@ -48,28 +44,22 @@ struct MurmurHash3_x86_32 {
 template <>
 MurmurHash3_x86_32<bool>::result_type __device__ inline MurmurHash3_x86_32<bool>::operator()(
   bool const& key) const
-{
-  return this->compute(static_cast<uint8_t>(key));
-}
+{ return this->compute(static_cast<uint8_t>(key)); }
 
 template <>
 MurmurHash3_x86_32<float>::result_type __device__ inline MurmurHash3_x86_32<float>::operator()(
   float const& key) const
-{
-  return this->compute(normalize_nans_and_zeros(key));
-}
+{ return this->compute(normalize_nans_and_zeros(key)); }
 
 template <>
 MurmurHash3_x86_32<double>::result_type __device__ inline MurmurHash3_x86_32<double>::operator()(
   double const& key) const
-{
-  return this->compute(normalize_nans_and_zeros(key));
-}
+{ return this->compute(normalize_nans_and_zeros(key)); }
 
 template <>
 MurmurHash3_x86_32<cudf::string_view>::result_type
-  __device__ inline MurmurHash3_x86_32<cudf::string_view>::
-  operator()(cudf::string_view const& key) const
+  __device__ inline MurmurHash3_x86_32<cudf::string_view>::operator()(
+    cudf::string_view const& key) const
 {
   return this->compute_bytes(reinterpret_cast<cuda::std::byte const*>(key.data()),
                              key.size_bytes());
@@ -77,42 +67,32 @@ MurmurHash3_x86_32<cudf::string_view>::result_type
 
 template <>
 MurmurHash3_x86_32<numeric::decimal32>::result_type
-  __device__ inline MurmurHash3_x86_32<numeric::decimal32>::
-  operator()(numeric::decimal32 const& key) const
-{
-  return this->compute(key.value());
-}
+  __device__ inline MurmurHash3_x86_32<numeric::decimal32>::operator()(
+    numeric::decimal32 const& key) const
+{ return this->compute(key.value()); }
 
 template <>
 MurmurHash3_x86_32<numeric::decimal64>::result_type
-  __device__ inline MurmurHash3_x86_32<numeric::decimal64>::
-  operator()(numeric::decimal64 const& key) const
-{
-  return this->compute(key.value());
-}
+  __device__ inline MurmurHash3_x86_32<numeric::decimal64>::operator()(
+    numeric::decimal64 const& key) const
+{ return this->compute(key.value()); }
 
 template <>
 MurmurHash3_x86_32<numeric::decimal128>::result_type
-  __device__ inline MurmurHash3_x86_32<numeric::decimal128>::
-  operator()(numeric::decimal128 const& key) const
-{
-  return this->compute(key.value());
-}
+  __device__ inline MurmurHash3_x86_32<numeric::decimal128>::operator()(
+    numeric::decimal128 const& key) const
+{ return this->compute(key.value()); }
 
 template <>
 MurmurHash3_x86_32<cudf::list_view>::result_type
-  __device__ inline MurmurHash3_x86_32<cudf::list_view>::
-  operator()(cudf::list_view const& key) const
-{
-  CUDF_UNREACHABLE("List column hashing is not supported");
-}
+  __device__ inline MurmurHash3_x86_32<cudf::list_view>::operator()(
+    cudf::list_view const& key) const
+{ CUDF_UNREACHABLE("List column hashing is not supported"); }
 
 template <>
 MurmurHash3_x86_32<cudf::struct_view>::result_type
-  __device__ inline MurmurHash3_x86_32<cudf::struct_view>::
-  operator()(cudf::struct_view const& key) const
-{
-  CUDF_UNREACHABLE("Direct hashing of struct_view is not supported");
-}
+  __device__ inline MurmurHash3_x86_32<cudf::struct_view>::operator()(
+    cudf::struct_view const& key) const
+{ CUDF_UNREACHABLE("Direct hashing of struct_view is not supported"); }
 
 }  // namespace cudf::hashing::detail

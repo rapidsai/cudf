@@ -293,16 +293,12 @@ class custom_test_data_sink : public cudf::io::data_sink {
   ~custom_test_data_sink() override { flush(); }  // NOLINT
 
   void host_write(void const* data, size_t size) override
-  {
-    outfile_.write(static_cast<char const*>(data), size);
-  }
+  { outfile_.write(static_cast<char const*>(data), size); }
 
   [[nodiscard]] bool supports_device_write() const override { return true; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
-  {
-    this->device_write_async(gpu_data, size, stream).get();
-  }
+  { this->device_write_async(gpu_data, size, stream).get(); }
 
   std::future<void> device_write_async(void const* gpu_data,
                                        size_t size,
@@ -1519,7 +1515,7 @@ TEST_F(ParquetWriterTest, TimestampMicrosINT96NoOverflow)
   auto const in_opts = parquet_reader_options::builder(source_info(filepath))
                          .timestamp_type(cudf::data_type(cudf::type_id::TIMESTAMP_MICROSECONDS))
                          .build();
-  auto const result = read_parquet(in_opts);
+  auto const result  = read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
@@ -2145,9 +2141,7 @@ template <bool supports_device_writes>
 class custom_test_memmap_sink : public cudf::io::data_sink {
  public:
   explicit custom_test_memmap_sink(std::vector<char>* mm_writer_buf)
-  {
-    mm_writer = cudf::io::data_sink::create(mm_writer_buf);
-  }
+  { mm_writer = cudf::io::data_sink::create(mm_writer_buf); }
 
   ~custom_test_memmap_sink() override { mm_writer->flush(); }
 
@@ -2156,9 +2150,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
   [[nodiscard]] bool supports_device_write() const override { return supports_device_writes; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
-  {
-    this->device_write_async(gpu_data, size, stream).get();
-  }
+  { this->device_write_async(gpu_data, size, stream).get(); }
 
   std::future<void> device_write_async(void const* gpu_data,
                                        size_t size,

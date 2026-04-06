@@ -39,7 +39,7 @@ def _nesting_level(dtype: pl.DataType) -> int:
     current = dtype
     while isinstance(current, pl.List):
         level += 1
-        current = cast(pl.DataType, current.inner)
+        current = cast("pl.DataType", current.inner)
     return level
 
 
@@ -383,7 +383,8 @@ class BooleanFunction(Expr):
                     haystack.obj.children()[1],
                     dtype=DataType(
                         cast(
-                            pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner
+                            "pl.DataType",
+                            cast("pl.List", haystack.dtype.polars_type).inner,
                         )
                     ),
                 ).astype(needles.dtype, stream=df.stream)

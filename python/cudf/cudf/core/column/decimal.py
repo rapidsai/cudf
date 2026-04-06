@@ -137,12 +137,12 @@ class DecimalBaseColumn(NumericalBaseColumn):
                     )
                 )
                 return cast(
-                    cudf.core.column.string.StringColumn,
+                    "cudf.core.column.string.StringColumn",
                     ColumnBase.create(plc_column, dtype),
                 )
         else:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 cudf.core.column.column_empty(0, dtype=dtype),
             )
 

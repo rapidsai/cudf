@@ -469,7 +469,7 @@ class RayEngine(StreamingEngine):
                     nranks=num_gpus,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     py_executor_max_workers=cast(
-                        int,
+                        "int",
                         executor_options.get("rapidsmpf_py_executor_max_workers", 1),
                     ),
                 )

@@ -1336,9 +1336,11 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
         for col in df.columns:
             if df[col].dtype == "object":
                 df[col] = df[col].apply(
-                    lambda x: _replace_in_list(x, replace_items)
-                    if isinstance(x, list)
-                    else x
+                    lambda x: (
+                        _replace_in_list(x, replace_items)
+                        if isinstance(x, list)
+                        else x
+                    )
                 )
         return df
 

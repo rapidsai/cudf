@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -47,9 +47,7 @@ inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_p
  */
 template <typename state_buf>
 inline __device__ void read_boolean(state_buf* sb, int src_pos, uint8_t* dst)
-{
-  *dst = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
-}
+{ *dst = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)]; }
 
 /**
  * @brief Store a 32-bit data element

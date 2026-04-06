@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -30,10 +30,9 @@ struct UngroupedBase : cudf::test::BaseFixture {
   cw_t descending_nulls_before{};
   cw_t descending_nulls_after{};
   UngroupedBase()
-    : ascending_no_nulls{
-        // clang-format off
+    : ascending_no_nulls{// clang-format off
         {min, T{5}, T{5}, T{6}, T{7}, T{9}, T{9}, T{12}, T{13}, T{17}, T{22}, T{22}, max}},
-        // clang-format on
+      // clang-format on
       ascending_nulls_before{
         {min, T{5}, T{5}, T{6}, T{7}, T{9}, T{9}, T{12}, T{13}, T{17}, T{22}, T{22}, max},
         {false, false, false, false, true, true, true, true, true, true, true, true, true}},

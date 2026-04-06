@@ -212,14 +212,10 @@ class orc_column_view {
   auto is_string() const noexcept { return cudf_column.type().id() == type_id::STRING; }
 
   void attach_rowgroup_char_counts(host_span<size_type const> counts)
-  {
-    rowgroup_char_counts = counts;
-  }
+  { rowgroup_char_counts = counts; }
 
   [[nodiscard]] auto rowgroup_char_count(size_type rg_idx) const
-  {
-    return rowgroup_char_counts[rg_idx];
-  }
+  { return rowgroup_char_counts[rg_idx]; }
 
   [[nodiscard]] auto char_count() const
   {
@@ -318,9 +314,7 @@ struct orc_table_view {
 
   [[nodiscard]] auto num_columns() const noexcept { return columns.size(); }
   [[nodiscard]] size_type num_rows() const noexcept
-  {
-    return columns.empty() ? 0 : columns.front().size();
-  }
+  { return columns.empty() ? 0 : columns.front().size(); }
   [[nodiscard]] auto num_string_columns() const noexcept { return string_column_indices.size(); }
 
   auto& column(uint32_t idx) { return columns.at(idx); }
@@ -328,9 +322,7 @@ struct orc_table_view {
 
   auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
   [[nodiscard]] auto const& string_column(uint32_t idx) const
-  {
-    return columns.at(string_column_indices.at(idx));
-  }
+  { return columns.at(string_column_indices.at(idx)); }
 };
 
 namespace {
@@ -2364,11 +2356,11 @@ auto convert_table_to_orc_data(table_view const& input,
   auto const block_align = compress_required_chunk_alignment(compression);
 
   auto streams  = create_streams(orc_table.columns,
-                                segmentation,
-                                decimal_column_sizes(dec_chunk_sizes.rg_sizes),
-                                enable_dictionary,
-                                compression,
-                                write_mode);
+                                 segmentation,
+                                 decimal_column_sizes(dec_chunk_sizes.rg_sizes),
+                                 enable_dictionary,
+                                 compression,
+                                 write_mode);
   auto enc_data = encode_columns(
     orc_table, std::move(dec_chunk_sizes), segmentation, streams, block_align, stream);
 

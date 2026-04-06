@@ -24,9 +24,7 @@ std::unique_ptr<column> sorted_order(table_view const& input,
                                      std::vector<null_order> const& null_precedence,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
-{
-  return sorted_order<sort_method::UNSTABLE>(input, column_order, null_precedence, stream, mr);
-}
+{ return sorted_order<sort_method::UNSTABLE>(input, column_order, null_precedence, stream, mr); }
 
 std::unique_ptr<table> sort_by_key(table_view const& values,
                                    table_view const& keys,

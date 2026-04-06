@@ -31,9 +31,7 @@ std::string cuda_type(cudf::data_type type, bool nullable)
 }
 
 std::string instance_context::make_tmp_id()
-{
-  return std::format("{}{}", tmp_prefix_, num_tmp_vars_++);
-}
+{ return std::format("{}{}", tmp_prefix_, num_tmp_vars_++); }
 
 bool instance_context::has_nulls() const { return has_nulls_; }
 
@@ -310,11 +308,11 @@ std::string operation::generate_code(instance_context& ctx,
         auto operands_str  = (operands_.size() == 1)
                                ? std::string{first_operand}
                                : std::accumulate(operands_.begin() + 1,
-                                                operands_.end(),
-                                                std::string{first_operand},
-                                                [](auto const& a, auto& node) {
+                                                 operands_.end(),
+                                                 std::string{first_operand},
+                                                 [](auto const& a, auto& node) {
                                                   return std::format("{}, {}", a, node->get_id());
-                                                });
+                                                 });
 
         auto cuda = std::format(
           "{} {} = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::{}, "
@@ -464,15 +462,11 @@ decltype(auto) dispatch_input_spec(ast_input_spec const& in, Fn&& fn, Args&&... 
 
 std::variant<column_view, scalar_column_view> get_column_view(ast_column_input_spec const& spec,
                                                               ast_args const& args)
-{
-  return resolve_table(spec, args).column(spec.column);
-}
+{ return resolve_table(spec, args).column(spec.column); }
 
 std::variant<column_view, scalar_column_view> get_column_view(ast_scalar_input_spec const& spec,
                                                               ast_args const& args)
-{
-  return scalar_column_view{spec.broadcast_column->view()};
-}
+{ return scalar_column_view{spec.broadcast_column->view()}; }
 
 std::tuple<null_aware, output_nullability> ast_converter::generate_code(target target_id,
                                                                         ast::expression const& expr,

@@ -24,9 +24,7 @@ stats_columns_collector::stats_columns_collector(ast::expression const& expr,
 
 std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::literal const& expr)
-{
-  return expr;
-}
+{ return expr; }
 
 std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::column_reference const& expr)
@@ -40,9 +38,7 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
 
 std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::column_name_reference const& expr)
-{
-  CUDF_FAIL("Column name reference is not supported in statistics AST");
-}
+{ CUDF_FAIL("Column name reference is not supported in statistics AST"); }
 
 std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
   ast::operation const& expr)
@@ -85,9 +81,7 @@ std::reference_wrapper<ast::expression const> stats_columns_collector::visit(
 }
 
 std::pair<thrust::host_vector<bool>, bool> stats_columns_collector::get_stats_columns_mask() &&
-{
-  return {std::move(_columns_mask), _has_is_null_operator};
-}
+{ return {std::move(_columns_mask), _has_is_null_operator}; }
 
 std::vector<std::reference_wrapper<ast::expression const>> stats_columns_collector::visit_operands(
   cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
@@ -264,8 +258,6 @@ std::reference_wrapper<ast::expression const> stats_expression_converter::visit(
 }
 
 std::reference_wrapper<ast::expression const> stats_expression_converter::get_stats_expr() const
-{
-  return _stats_expr.back();
-}
+{ return _stats_expr.back(); }
 
 }  // namespace cudf::io::parquet::detail

@@ -55,9 +55,7 @@ struct count_accessor {
   template <typename T>
   cudf::size_type operator()(rmm::cuda_stream_view)
     requires(not std::is_integral_v<T>)
-  {
-    CUDF_FAIL("count value should be a integral type.");
-  }
+  { CUDF_FAIL("count value should be a integral type."); }
 };
 
 struct count_checker {
@@ -81,9 +79,7 @@ struct count_checker {
   template <typename T>
   void operator()(rmm::cuda_stream_view)
     requires(not std::is_integral_v<T>)
-  {
-    CUDF_FAIL("count value type should be integral.");
-  }
+  { CUDF_FAIL("count value type should be integral."); }
 };
 
 }  // namespace

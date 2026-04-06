@@ -50,9 +50,7 @@ struct dispatch_nan_to_null {
   std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> operator()(
     column_view const& input, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
     requires(!std::is_floating_point_v<T>)
-  {
-    CUDF_FAIL("Input column can't be a non-floating type");
-  }
+  { CUDF_FAIL("Input column can't be a non-floating type"); }
 };
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
@@ -82,9 +80,7 @@ struct copy_float_data_fn {
   template <typename T>
     requires(not std::is_floating_point_v<T>)
   std::unique_ptr<rmm::device_buffer> operator()() const
-  {
-    CUDF_FAIL("Input must be a floating point type");
-  }
+  { CUDF_FAIL("Input must be a floating point type"); }
 };
 
 std::unique_ptr<column> column_nans_to_nulls(column_view const& input,

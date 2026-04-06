@@ -118,9 +118,7 @@ using is_duration_t = cuda::std::disjunction<cuda::std::is_same<cudf::duration_D
  */
 template <typename L, typename R>
 constexpr inline bool is_relationally_comparable()
-{
-  return detail::is_relationally_comparable_impl<L, R>::value;
-}
+{ return detail::is_relationally_comparable_impl<L, R>::value; }
 
 /**
  * @brief Checks whether `data_type` `type` supports relational comparisons.
@@ -145,9 +143,7 @@ bool is_relationally_comparable(data_type type);
  */
 template <typename L, typename R>
 constexpr inline bool is_equality_comparable()
-{
-  return detail::is_equality_comparable_impl<L, R>::value;
-}
+{ return detail::is_equality_comparable_impl<L, R>::value; }
 
 /**
  * @brief Checks whether `data_type` `type` supports equality comparisons.
@@ -167,9 +163,7 @@ bool is_equality_comparable(data_type type);
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_numeric()
-{
-  return cuda::std::is_arithmetic<T>();
-}
+{ return cuda::std::is_arithmetic<T>(); }
 
 /**
  * @brief Indicates whether `type` is a numeric `data_type`.
@@ -197,9 +191,7 @@ bool is_numeric(data_type type);
  */
 template <typename T>
 constexpr inline bool is_index_type()
-{
-  return cuda::std::is_integral_v<T> and not cuda::std::is_same_v<T, bool>;
-}
+{ return cuda::std::is_integral_v<T> and not cuda::std::is_same_v<T, bool>; }
 
 /**
  * @brief Indicates whether the type `type` is a index type.
@@ -222,9 +214,7 @@ bool is_index_type(data_type type);
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_signed()
-{
-  return cuda::std::is_signed_v<T>;
-}
+{ return cuda::std::is_signed_v<T>; }
 
 /**
  * @brief Indicates whether `type` is a signed numeric `data_type`.
@@ -246,9 +236,7 @@ bool is_signed(data_type type);
  */
 template <typename T>
 constexpr inline bool is_unsigned()
-{
-  return cuda::std::is_unsigned_v<T>;
-}
+{ return cuda::std::is_unsigned_v<T>; }
 
 /**
  * @brief Indicates whether `type` is a unsigned numeric `data_type`.
@@ -269,9 +257,7 @@ bool is_unsigned(data_type type);
  */
 template <typename Iterator>
 CUDF_HOST_DEVICE constexpr inline bool is_signed_iterator()
-{
-  return cuda::std::is_signed_v<typename cuda::std::iterator_traits<Iterator>::value_type>;
-}
+{ return cuda::std::is_signed_v<typename cuda::std::iterator_traits<Iterator>::value_type>; }
 
 /**
  * @brief Indicates whether the type `T` is an integral type.
@@ -282,9 +268,7 @@ CUDF_HOST_DEVICE constexpr inline bool is_signed_iterator()
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_integral()
-{
-  return cuda::std::is_integral_v<T>;
-}
+{ return cuda::std::is_integral_v<T>; }
 
 /**
  * @brief Indicates whether `type` is a integral `data_type`.
@@ -306,9 +290,7 @@ bool is_integral(data_type type);
  */
 template <typename T>
 constexpr inline bool is_integral_not_bool()
-{
-  return cuda::std::is_integral_v<T> and not cuda::std::is_same_v<T, bool>;
-}
+{ return cuda::std::is_integral_v<T> and not cuda::std::is_same_v<T, bool>; }
 
 /**
  * @brief Indicates whether `type` is a integral `data_type` and not BOOL8
@@ -330,9 +312,7 @@ bool is_integral_not_bool(data_type type);
  */
 template <typename T>
 constexpr inline bool is_numeric_not_bool()
-{
-  return cudf::is_numeric<T>() and not cuda::std::is_same_v<T, bool>;
-}
+{ return cudf::is_numeric<T>() and not cuda::std::is_same_v<T, bool>; }
 
 /**
  * @brief Indicates whether `type` is a numeric `data_type` but not BOOL8
@@ -354,9 +334,7 @@ bool is_numeric_not_bool(data_type type);
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_floating_point()
-{
-  return cuda::std::is_floating_point_v<T>;
-}
+{ return cuda::std::is_floating_point_v<T>; }
 
 /**
  * @brief Indicates whether `type` is a floating point `data_type`.
@@ -378,9 +356,7 @@ bool is_floating_point(data_type type);
  */
 template <typename T>
 constexpr inline bool is_byte()
-{
-  return cuda::std::is_same_v<cuda::std::remove_cv_t<T>, std::byte>;
-}
+{ return cuda::std::is_same_v<cuda::std::remove_cv_t<T>, std::byte>; }
 
 /**
  * @brief Indicates whether `T` is a Boolean type.
@@ -391,9 +367,7 @@ constexpr inline bool is_byte()
  */
 template <typename T>
 constexpr inline bool is_boolean()
-{
-  return cuda::std::is_same_v<T, bool>;
-}
+{ return cuda::std::is_same_v<T, bool>; }
 
 /**
  * @brief Indicates whether `type` is a Boolean `data_type`.
@@ -413,9 +387,7 @@ bool is_boolean(data_type type);
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_timestamp()
-{
-  return is_timestamp_t<T>::value;
-}
+{ return is_timestamp_t<T>::value; }
 
 /**
  * @brief Indicates whether `type` is a timestamp `data_type`.
@@ -464,9 +436,7 @@ bool is_fixed_point(data_type type);
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_duration()
-{
-  return is_duration_t<T>::value;
-}
+{ return is_duration_t<T>::value; }
 
 /**
  * @brief Indicates whether `type` is a duration `data_type`.
@@ -488,9 +458,7 @@ bool is_duration(data_type type);
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_chrono()
-{
-  return is_duration<T>() || is_timestamp<T>();
-}
+{ return is_duration<T>() || is_timestamp<T>(); }
 
 /**
  * @brief Indicates whether `type` is a chrono `data_type`.
@@ -532,9 +500,7 @@ constexpr bool is_rep_layout_compatible()
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_dictionary()
-{
-  return cuda::std::is_same_v<dictionary32, T>;
-}
+{ return cuda::std::is_same_v<dictionary32, T>; }
 
 /**
  * @brief Indicates whether `type` is a dictionary `data_type`.
@@ -554,9 +520,7 @@ bool is_dictionary(data_type type);
  */
 template <typename T>
 constexpr inline bool is_dictionary_key()
-{
-  return !is_dictionary<T>() && is_relationally_comparable<T, T>();
-}
+{ return !is_dictionary<T>() && is_relationally_comparable<T, T>(); }
 
 /**
  * @brief Indicates whether `type` is a valid dictionary type
@@ -644,9 +608,7 @@ bool is_compound(data_type type);
  */
 template <typename T>
 CUDF_HOST_DEVICE constexpr inline bool is_nested()
-{
-  return cuda::std::is_same_v<T, cudf::list_view> || cuda::std::is_same_v<T, cudf::struct_view>;
-}
+{ return cuda::std::is_same_v<T, cudf::list_view> || cuda::std::is_same_v<T, cudf::struct_view>; }
 
 /**
  * @brief Indicates whether `type` is a nested type

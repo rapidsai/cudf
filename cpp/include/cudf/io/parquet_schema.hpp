@@ -310,9 +310,7 @@ struct LogicalType {
    * @return True if the time is in milliseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_millis() const
-  {
-    return type == TIME and time_type->unit.type == TimeUnit::MILLIS;
-  }
+  { return type == TIME and time_type->unit.type == TimeUnit::MILLIS; }
 
   /**
    * @brief Check if the time is in microseconds
@@ -320,9 +318,7 @@ struct LogicalType {
    * @return True if the time is in microseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_micros() const
-  {
-    return type == TIME and time_type->unit.type == TimeUnit::MICROS;
-  }
+  { return type == TIME and time_type->unit.type == TimeUnit::MICROS; }
 
   /**
    * @brief Check if the time is in nanoseconds
@@ -330,9 +326,7 @@ struct LogicalType {
    * @return True if the time is in nanoseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_time_nanos() const
-  {
-    return type == TIME and time_type->unit.type == TimeUnit::NANOS;
-  }
+  { return type == TIME and time_type->unit.type == TimeUnit::NANOS; }
 
   /**
    * @brief Check if the timestamp is in milliseconds
@@ -340,9 +334,7 @@ struct LogicalType {
    * @return True if the timestamp is in milliseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_millis() const
-  {
-    return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MILLIS;
-  }
+  { return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MILLIS; }
 
   /**
    * @brief Check if the timestamp is in microseconds
@@ -350,9 +342,7 @@ struct LogicalType {
    * @return True if the timestamp is in microseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_micros() const
-  {
-    return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS;
-  }
+  { return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::MICROS; }
 
   /**
    * @brief Check if the timestamp is in nanoseconds
@@ -360,9 +350,7 @@ struct LogicalType {
    * @return True if the timestamp is in nanoseconds, false otherwise
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_timestamp_nanos() const
-  {
-    return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS;
-  }
+  { return type == TIMESTAMP and timestamp_type->unit.type == TimeUnit::NANOS; }
 
   /**
    * @brief Get the bit width of the integer type
@@ -370,9 +358,7 @@ struct LogicalType {
    * @return The bit width of the integer type, or -1 if the type is not an integer
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr int8_t bit_width() const
-  {
-    return type == INTEGER ? int_type->bitWidth : -1;
-  }
+  { return type == INTEGER ? int_type->bitWidth : -1; }
 
   /**
    * @brief Check if the integer is signed
@@ -387,9 +373,7 @@ struct LogicalType {
    * @return The scale of the decimal type, or -1 if the type is not a decimal
    */
   [[nodiscard]] constexpr int32_t scale() const
-  {
-    return type == DECIMAL ? decimal_type->scale : -1;
-  }
+  { return type == DECIMAL ? decimal_type->scale : -1; }
 
   /**
    * @brief Get the precision of the decimal type
@@ -397,9 +381,7 @@ struct LogicalType {
    * @return The precision of the decimal type, or -1 if the type is not a decimal
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr int32_t precision() const
-  {
-    return type == DECIMAL ? decimal_type->precision : -1;
-  }
+  { return type == DECIMAL ? decimal_type->precision : -1; }
 };
 
 /**
@@ -500,9 +482,7 @@ struct SchemaElement {
    * @return True if the schema element is a stub, false otherwise
    */
   [[nodiscard]] bool is_stub() const
-  {
-    return repetition_type == FieldRepetitionType::REPEATED && num_children == 1;
-  }
+  { return repetition_type == FieldRepetitionType::REPEATED && num_children == 1; }
 
   /**
    * @brief Check if the schema element is a one-level list

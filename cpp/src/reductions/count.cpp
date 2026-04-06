@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,9 +32,7 @@ struct count_scalar_fn {
   std::unique_ptr<cudf::scalar> operator()(size_type,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref) const
-  {
-    CUDF_FAIL("COUNT is not supported for boolean or non-numeric types", std::invalid_argument);
-  }
+  { CUDF_FAIL("COUNT is not supported for boolean or non-numeric types", std::invalid_argument); }
 };
 }  // namespace
 

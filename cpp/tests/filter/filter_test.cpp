@@ -306,9 +306,7 @@ struct ast_expression_executor {
 struct jit_expression_executor {
   static std::unique_ptr<cudf::table> filter(cudf::ast::expression const& expr,
                                              cudf::table_view const& table)
-  {
-    return cudf::filter(table, expr, table);
-  }
+  { return cudf::filter(table, expr, table); }
 };
 
 template <typename T>

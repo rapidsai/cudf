@@ -66,7 +66,7 @@ def scatter(
         *target_columns, mode="write", scope="internal"
     ) as target_columns:
         plc_tbl = plc.copying.scatter(
-            cast(list[plc.Scalar], sources)
+            cast("list[plc.Scalar]", sources)
             if isinstance(sources[0], plc.Scalar)
             else plc.Table(
                 [col.plc_column for col in cast("list[ColumnBase]", sources)]

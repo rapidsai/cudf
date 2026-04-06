@@ -40,9 +40,7 @@ struct operator_functor<ast_operator::ADD, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs + rhs)
-  {
-    return lhs + rhs;
-  }
+  { return lhs + rhs; }
 };
 
 template <>
@@ -51,9 +49,7 @@ struct operator_functor<ast_operator::SUB, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs - rhs)
-  {
-    return lhs - rhs;
-  }
+  { return lhs - rhs; }
 };
 
 template <>
@@ -62,9 +58,7 @@ struct operator_functor<ast_operator::MUL, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs * rhs)
-  {
-    return lhs * rhs;
-  }
+  { return lhs * rhs; }
 };
 
 template <>
@@ -73,9 +67,7 @@ struct operator_functor<ast_operator::DIV, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs / rhs)
-  {
-    return lhs / rhs;
-  }
+  { return lhs / rhs; }
 };
 
 template <>
@@ -85,9 +77,7 @@ struct operator_functor<ast_operator::TRUE_DIV, false> {
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(static_cast<double>(lhs) / static_cast<double>(rhs))
-  {
-    return static_cast<double>(lhs) / static_cast<double>(rhs);
-  }
+  { return static_cast<double>(lhs) / static_cast<double>(rhs); }
 };
 
 template <>
@@ -97,9 +87,7 @@ struct operator_functor<ast_operator::FLOOR_DIV, false> {
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
     requires(cuda::std::is_integral_v<CommonType>)
-  {
-    return cudf::detail::integral_floor_div(lhs, rhs);
-  }
+  { return cudf::detail::integral_floor_div(lhs, rhs); }
 
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
@@ -120,25 +108,19 @@ struct operator_functor<ast_operator::MOD, false> {
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs))
     requires(cuda::std::is_integral_v<CommonType>)
-  {
-    return static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs);
-  }
+  { return static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs); }
 
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
     requires(cuda::std::is_same_v<CommonType, float>)
-  {
-    return fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs));
-  }
+  { return fmodf(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)); }
 
   template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)))
     requires(cuda::std::is_same_v<CommonType, double>)
-  {
-    return fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs));
-  }
+  { return fmod(static_cast<CommonType>(lhs), static_cast<CommonType>(rhs)); }
 };
 
 template <>
@@ -189,17 +171,13 @@ struct operator_functor<ast_operator::POW, false> {
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> LHS
     requires(cuda::std::is_integral_v<LHS> and cuda::std::is_integral_v<RHS>)
-  {
-    return cudf::detail::integral_pow(lhs, rhs);
-  }
+  { return cudf::detail::integral_pow(lhs, rhs); }
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(cuda::std::pow(lhs, rhs))
     requires(not(cuda::std::is_integral_v<LHS> and cuda::std::is_integral_v<RHS>))
-  {
-    return cuda::std::pow(lhs, rhs);
-  }
+  { return cuda::std::pow(lhs, rhs); }
 };
 
 template <>
@@ -208,9 +186,7 @@ struct operator_functor<ast_operator::EQUAL, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs == rhs)
-  {
-    return lhs == rhs;
-  }
+  { return lhs == rhs; }
 };
 
 // Alias NULL_EQUAL = EQUAL in the non-nullable case.
@@ -224,9 +200,7 @@ struct operator_functor<ast_operator::NOT_EQUAL, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs != rhs)
-  {
-    return lhs != rhs;
-  }
+  { return lhs != rhs; }
 };
 
 template <>
@@ -235,9 +209,7 @@ struct operator_functor<ast_operator::LESS, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs < rhs)
-  {
-    return lhs < rhs;
-  }
+  { return lhs < rhs; }
 };
 
 template <>
@@ -246,9 +218,7 @@ struct operator_functor<ast_operator::GREATER, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs > rhs)
-  {
-    return lhs > rhs;
-  }
+  { return lhs > rhs; }
 };
 
 template <>
@@ -257,9 +227,7 @@ struct operator_functor<ast_operator::LESS_EQUAL, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs <= rhs)
-  {
-    return lhs <= rhs;
-  }
+  { return lhs <= rhs; }
 };
 
 template <>
@@ -268,9 +236,7 @@ struct operator_functor<ast_operator::GREATER_EQUAL, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs >= rhs)
-  {
-    return lhs >= rhs;
-  }
+  { return lhs >= rhs; }
 };
 
 template <>
@@ -279,9 +245,7 @@ struct operator_functor<ast_operator::BITWISE_AND, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs & rhs)
-  {
-    return lhs & rhs;
-  }
+  { return lhs & rhs; }
 };
 
 template <>
@@ -290,9 +254,7 @@ struct operator_functor<ast_operator::BITWISE_OR, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs | rhs)
-  {
-    return lhs | rhs;
-  }
+  { return lhs | rhs; }
 };
 
 template <>
@@ -301,9 +263,7 @@ struct operator_functor<ast_operator::BITWISE_XOR, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs ^ rhs)
-  {
-    return lhs ^ rhs;
-  }
+  { return lhs ^ rhs; }
 };
 
 template <>
@@ -312,9 +272,7 @@ struct operator_functor<ast_operator::LOGICAL_AND, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs && rhs)
-  {
-    return lhs && rhs;
-  }
+  { return lhs && rhs; }
 };
 
 // Alias NULL_LOGICAL_AND = LOGICAL_AND in the non-nullable case.
@@ -328,9 +286,7 @@ struct operator_functor<ast_operator::LOGICAL_OR, false> {
 
   template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs || rhs)
-  {
-    return lhs || rhs;
-  }
+  { return lhs || rhs; }
 };
 
 // Alias NULL_LOGICAL_OR = LOGICAL_OR in the non-nullable case.
@@ -344,9 +300,7 @@ struct operator_functor<ast_operator::IDENTITY, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(input)
-  {
-    return input;
-  }
+  { return input; }
 };
 
 template <>
@@ -355,9 +309,7 @@ struct operator_functor<ast_operator::IS_NULL, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> bool
-  {
-    return false;
-  }
+  { return false; }
 };
 
 template <>
@@ -367,9 +319,7 @@ struct operator_functor<ast_operator::SIN, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::sin(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::sin(input);
-  }
+  { return cuda::std::sin(input); }
 };
 
 template <>
@@ -379,9 +329,7 @@ struct operator_functor<ast_operator::COS, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::cos(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::cos(input);
-  }
+  { return cuda::std::cos(input); }
 };
 
 template <>
@@ -391,9 +339,7 @@ struct operator_functor<ast_operator::TAN, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::tan(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::tan(input);
-  }
+  { return cuda::std::tan(input); }
 };
 
 template <>
@@ -403,9 +349,7 @@ struct operator_functor<ast_operator::ARCSIN, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::asin(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::asin(input);
-  }
+  { return cuda::std::asin(input); }
 };
 
 template <>
@@ -415,9 +359,7 @@ struct operator_functor<ast_operator::ARCCOS, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::acos(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::acos(input);
-  }
+  { return cuda::std::acos(input); }
 };
 
 template <>
@@ -427,9 +369,7 @@ struct operator_functor<ast_operator::ARCTAN, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::atan(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::atan(input);
-  }
+  { return cuda::std::atan(input); }
 };
 
 template <>
@@ -439,9 +379,7 @@ struct operator_functor<ast_operator::SINH, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::sinh(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::sinh(input);
-  }
+  { return cuda::std::sinh(input); }
 };
 
 template <>
@@ -451,9 +389,7 @@ struct operator_functor<ast_operator::COSH, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::cosh(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::cosh(input);
-  }
+  { return cuda::std::cosh(input); }
 };
 
 template <>
@@ -463,9 +399,7 @@ struct operator_functor<ast_operator::TANH, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::tanh(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::tanh(input);
-  }
+  { return cuda::std::tanh(input); }
 };
 
 template <>
@@ -476,9 +410,7 @@ struct operator_functor<ast_operator::ARCSINH, false> {
   __device__ inline auto operator()(InputT input) const noexcept
     -> decltype(cuda::std::asinh(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::asinh(input);
-  }
+  { return cuda::std::asinh(input); }
 };
 
 template <>
@@ -489,9 +421,7 @@ struct operator_functor<ast_operator::ARCCOSH, false> {
   __device__ inline auto operator()(InputT input) const noexcept
     -> decltype(cuda::std::acosh(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::acosh(input);
-  }
+  { return cuda::std::acosh(input); }
 };
 
 template <>
@@ -502,9 +432,7 @@ struct operator_functor<ast_operator::ARCTANH, false> {
   __device__ inline auto operator()(InputT input) const noexcept
     -> decltype(cuda::std::atanh(input))
     requires(cuda::std::is_floating_point_v<InputT>)
-  {
-    return cuda::std::atanh(input);
-  }
+  { return cuda::std::atanh(input); }
 };
 
 template <>
@@ -513,9 +441,7 @@ struct operator_functor<ast_operator::EXP, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::exp(input))
-  {
-    return cuda::std::exp(input);
-  }
+  { return cuda::std::exp(input); }
 };
 
 template <>
@@ -524,9 +450,7 @@ struct operator_functor<ast_operator::LOG, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::log(input))
-  {
-    return cuda::std::log(input);
-  }
+  { return cuda::std::log(input); }
 };
 
 template <>
@@ -535,9 +459,7 @@ struct operator_functor<ast_operator::SQRT, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::sqrt(input))
-  {
-    return cuda::std::sqrt(input);
-  }
+  { return cuda::std::sqrt(input); }
 };
 
 template <>
@@ -546,9 +468,7 @@ struct operator_functor<ast_operator::CBRT, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::cbrt(input))
-  {
-    return cuda::std::cbrt(input);
-  }
+  { return cuda::std::cbrt(input); }
 };
 
 template <>
@@ -557,9 +477,7 @@ struct operator_functor<ast_operator::CEIL, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::ceil(input))
-  {
-    return cuda::std::ceil(input);
-  }
+  { return cuda::std::ceil(input); }
 };
 
 template <>
@@ -569,9 +487,7 @@ struct operator_functor<ast_operator::FLOOR, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept
     -> decltype(cuda::std::floor(input))
-  {
-    return cuda::std::floor(input);
-  }
+  { return cuda::std::floor(input); }
 };
 
 template <>
@@ -582,16 +498,12 @@ struct operator_functor<ast_operator::ABS, false> {
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::abs(input))
     requires(cuda::std::is_signed_v<InputT>)
-  {
-    return cuda::std::abs(input);
-  }
+  { return cuda::std::abs(input); }
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(input)
     requires(cuda::std::is_unsigned_v<InputT>)
-  {
-    return input;
-  }
+  { return input; }
 };
 
 template <>
@@ -600,9 +512,7 @@ struct operator_functor<ast_operator::RINT, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(cuda::std::rint(input))
-  {
-    return cuda::std::rint(input);
-  }
+  { return cuda::std::rint(input); }
 };
 
 template <>
@@ -611,9 +521,7 @@ struct operator_functor<ast_operator::BIT_INVERT, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(~input)
-  {
-    return ~input;
-  }
+  { return ~input; }
 };
 
 template <>
@@ -622,9 +530,7 @@ struct operator_functor<ast_operator::NOT, false> {
 
   template <typename InputT>
   __device__ inline auto operator()(InputT input) const noexcept -> decltype(!input)
-  {
-    return !input;
-  }
+  { return !input; }
 };
 
 template <typename To>
@@ -644,9 +550,7 @@ struct cast {
   template <typename From>
   __device__ inline auto operator()(From f) const noexcept -> decltype(static_cast<To>(f))
     requires(!is_fixed_point<From>())
-  {
-    return static_cast<To>(f);
-  }
+  { return static_cast<To>(f); }
 };
 
 template <>
@@ -692,9 +596,7 @@ struct operator_functor<ast_operator::IS_NULL, true> {
 
   template <typename LHS>
   __device__ inline auto operator()(LHS const lhs) const noexcept -> bool
-  {
-    return !lhs.has_value();
-  }
+  { return !lhs.has_value(); }
 };
 
 // NULL_EQUAL(null, null) is true, NULL_EQUAL(null, valid) is false, and NULL_EQUAL(valid, valid) ==
@@ -767,9 +669,7 @@ struct operator_functor<ast_operator::NULL_LOGICAL_OR, true> {
 constexpr bool flatten_predicate(possibly_null_value_t<bool, false> value) { return value; }
 
 constexpr bool flatten_predicate(possibly_null_value_t<bool, true> value)
-{
-  return value.has_value() && *value;
-}
+{ return value.has_value() && *value; }
 
 }  // namespace ast::detail
 }  // namespace CUDF_EXPORT cudf

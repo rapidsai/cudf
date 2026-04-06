@@ -1496,7 +1496,7 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
                        .column_names({"col_Double"})
                        .case_sensitive_names(false)
                        .filter(read_expr);
-    auto result = cudf::io::read_parquet(read_opts);
+    auto result    = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 
     // Repeat but select columns using indices instead of names
@@ -1504,7 +1504,7 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
                   .column_indices({2})
                   .case_sensitive_names(false)
                   .filter(read_expr);
-    result = cudf::io::read_parquet(read_opts);
+    result    = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
 
@@ -1518,7 +1518,7 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
                        .column_names({"col_Double", "col_UInt32"})
                        .case_sensitive_names(false)
                        .filter(read_ref_expr);
-    auto result = cudf::io::read_parquet(read_opts);
+    auto result    = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*(cudf::io::read_parquet(read_opts).tbl), *expected);
 
     // Repeat but select columns using indices instead of names
@@ -2575,7 +2575,7 @@ TEST_F(ParquetReaderTest, NumRowsPerSource)
                            .skip_rows(rows_to_skip)
                            .num_rows(rows_to_read)
                            .build();
-    auto const result = cudf::io::read_parquet(in_opts);
+    auto const result  = cudf::io::read_parquet(in_opts);
     column_wrapper<int64_t> int64_col_selected{int64_data.begin() + rows_to_skip,
                                                int64_data.begin() + rows_to_skip + rows_to_read,
                                                cudf::test::iterators::no_nulls()};
@@ -4063,7 +4063,7 @@ TEST_F(ParquetReaderTest, ByteBoundsOnly)
     auto const in_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                            .num_bytes(num_bytes)
                            .build();
-    auto const read = cudf::io::read_parquet(in_opts).tbl;
+    auto const read    = cudf::io::read_parquet(in_opts).tbl;
 
     auto const expected_in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -4080,7 +4080,7 @@ TEST_F(ParquetReaderTest, ByteBoundsOnly)
     auto const in_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                            .skip_bytes(skip_bytes)
                            .build();
-    auto const read = cudf::io::read_parquet(in_opts).tbl;
+    auto const read    = cudf::io::read_parquet(in_opts).tbl;
 
     auto const expected_in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -4099,7 +4099,7 @@ TEST_F(ParquetReaderTest, ByteBoundsOnly)
                            .skip_bytes(skip_bytes)
                            .num_bytes(num_bytes)
                            .build();
-    auto const read = cudf::io::read_parquet(in_opts).tbl;
+    auto const read    = cudf::io::read_parquet(in_opts).tbl;
 
     auto const expected_in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -4133,7 +4133,7 @@ TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
                            .num_bytes(num_bytes)
                            .filter(filter_expression)
                            .build();
-    auto const read = cudf::io::read_parquet(in_opts).tbl;
+    auto const read    = cudf::io::read_parquet(in_opts).tbl;
 
     auto const expected_in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -4158,7 +4158,7 @@ TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
                            .skip_bytes(skip_bytes)
                            .filter(filter_expression)
                            .build();
-    auto const read = cudf::io::read_parquet(in_opts).tbl;
+    auto const read    = cudf::io::read_parquet(in_opts).tbl;
 
     auto const expected_in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -4185,7 +4185,7 @@ TEST_F(ParquetReaderTest, ByteBoundsAndFilters)
                            .num_bytes(num_bytes)
                            .filter(filter_expression)
                            .build();
-    auto const read = cudf::io::read_parquet(in_opts).tbl;
+    auto const read    = cudf::io::read_parquet(in_opts).tbl;
 
     auto const expected_in_opts =
       cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -4281,7 +4281,7 @@ TEST_F(ParquetReaderTest, DecimalTypeOption)
     auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                      .decimal_width(cudf::type_id::DECIMAL128)
                      .build();
-    auto result = cudf::io::read_parquet(options);
+    auto result  = cudf::io::read_parquet(options);
 
     EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::DECIMAL128);
     EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);
@@ -4291,7 +4291,7 @@ TEST_F(ParquetReaderTest, DecimalTypeOption)
     auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                      .decimal_width(cudf::type_id::DECIMAL64)
                      .build();
-    auto result = cudf::io::read_parquet(options);
+    auto result  = cudf::io::read_parquet(options);
 
     EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::DECIMAL64);
     EXPECT_EQ(result.tbl->view().column(0).type().scale(), -2);

@@ -244,9 +244,7 @@ class csv_reader_options {
    * @return Names of the columns to be read
    */
   [[nodiscard]] std::vector<std::string> const& get_use_cols_names() const
-  {
-    return _use_cols_names;
-  }
+  { return _use_cols_names; }
 
   /**
    * @brief Returns indexes of columns to read.
@@ -374,9 +372,7 @@ class csv_reader_options {
    * @return `true` if detect_whitespace_around_quotes is enabled
    */
   [[nodiscard]] bool is_enabled_detect_whitespace_around_quotes() const
-  {
-    return _detect_whitespace_around_quotes;
-  }
+  { return _detect_whitespace_around_quotes; }
 
   /**
    * @brief Returns names of columns to read as datetime.
@@ -384,9 +380,7 @@ class csv_reader_options {
    * @return Names of columns to read as datetime
    */
   [[nodiscard]] std::vector<std::string> const& get_parse_dates_names() const
-  {
-    return _parse_dates_names;
-  }
+  { return _parse_dates_names; }
 
   /**
    * @brief Returns indexes of columns to read as datetime.
@@ -394,9 +388,7 @@ class csv_reader_options {
    * @return Indexes of columns to read as datetime
    */
   [[nodiscard]] std::vector<int> const& get_parse_dates_indexes() const
-  {
-    return _parse_dates_indexes;
-  }
+  { return _parse_dates_indexes; }
 
   /**
    * @brief Returns names of columns to read as hexadecimal.
@@ -404,9 +396,7 @@ class csv_reader_options {
    * @return Names of columns to read as hexadecimal
    */
   [[nodiscard]] std::vector<std::string> const& get_parse_hex_names() const
-  {
-    return _parse_hex_names;
-  }
+  { return _parse_hex_names; }
 
   /**
    * @brief Returns indexes of columns to read as hexadecimal.
@@ -422,9 +412,7 @@ class csv_reader_options {
    */
   [[nodiscard]] std::variant<std::vector<data_type>, std::map<std::string, data_type>> const&
   get_dtypes() const
-  {
-    return _dtypes;
-  }
+  { return _dtypes; }
 
   /**
    * @brief Returns additional values to recognize as boolean true values.
@@ -546,9 +534,7 @@ class csv_reader_options {
    * @param col_names Vector of column names that are needed
    */
   void set_use_cols_names(std::vector<std::string> col_names)
-  {
-    _use_cols_names = std::move(col_names);
-  }
+  { _use_cols_names = std::move(col_names); }
 
   /**
    * @brief Sets indexes of columns to read.
@@ -556,9 +542,7 @@ class csv_reader_options {
    * @param col_indices Vector of column indices that are needed
    */
   void set_use_cols_indexes(std::vector<int> col_indices)
-  {
-    _use_cols_indexes = std::move(col_indices);
-  }
+  { _use_cols_indexes = std::move(col_indices); }
 
   /**
    * @brief Sets number of rows to read.
@@ -723,9 +707,7 @@ class csv_reader_options {
    * @param col_names Vector of column names to infer as datetime
    */
   void set_parse_dates(std::vector<std::string> col_names)
-  {
-    _parse_dates_names = std::move(col_names);
-  }
+  { _parse_dates_names = std::move(col_names); }
 
   /**
    * @brief Sets indexes of columns to read as datetime.
@@ -733,9 +715,7 @@ class csv_reader_options {
    * @param col_indices Vector of column indices to infer as datetime
    */
   void set_parse_dates(std::vector<int> col_indices)
-  {
-    _parse_dates_indexes = std::move(col_indices);
-  }
+  { _parse_dates_indexes = std::move(col_indices); }
 
   /**
    * @brief Sets names of columns to parse as hexadecimal
@@ -743,9 +723,7 @@ class csv_reader_options {
    * @param col_names Vector of column names to parse as hexadecimal
    */
   void set_parse_hex(std::vector<std::string> col_names)
-  {
-    _parse_hex_names = std::move(col_names);
-  }
+  { _parse_hex_names = std::move(col_names); }
 
   /**
    * @brief Sets indexes of columns to parse as hexadecimal
@@ -774,9 +752,7 @@ class csv_reader_options {
    * @param vals Vector of values to be considered to be `true`
    */
   void set_true_values(std::vector<std::string> vals)
-  {
-    _true_values.insert(_true_values.end(), vals.begin(), vals.end());
-  }
+  { _true_values.insert(_true_values.end(), vals.begin(), vals.end()); }
 
   /**
    * @brief Sets additional values to recognize as boolean false values.
@@ -784,9 +760,7 @@ class csv_reader_options {
    * @param vals Vector of values to be considered to be `false`
    */
   void set_false_values(std::vector<std::string> vals)
-  {
-    _false_values.insert(_false_values.end(), vals.begin(), vals.end());
-  }
+  { _false_values.insert(_false_values.end(), vals.begin(), vals.end()); }
 
   /**
    * @brief Sets additional values to recognize as null values.
@@ -1757,9 +1731,7 @@ void write_csv(csv_writer_options const& options,
 struct is_supported_csv_write_type_fn {
   template <typename T>
   constexpr bool operator()() const
-  {
-    return cudf::io::detail::is_convertible_to_string_column<T>();
-  }
+  { return cudf::io::detail::is_convertible_to_string_column<T>(); }
 };
 /// @endcond
 
@@ -1770,9 +1742,7 @@ struct is_supported_csv_write_type_fn {
  * @return true if the type is supported for CSV writing, false otherwise.
  */
 constexpr bool is_supported_write_csv(data_type type)
-{
-  return cudf::type_dispatcher(type, is_supported_csv_write_type_fn{});
-}
+{ return cudf::type_dispatcher(type, is_supported_csv_write_type_fn{}); }
 
 /** @} */  // end of group
 }  // namespace io

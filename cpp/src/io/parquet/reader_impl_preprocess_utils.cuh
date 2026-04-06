@@ -408,9 +408,7 @@ struct start_offset_output_iterator {
   }
 
   CUDF_HOST_DEVICE constexpr inline start_offset_output_iterator operator+(size_t i) const
-  {
-    return start_offset_output_iterator{pages, cur_index + i, input_cols, max_depth, num_pages};
-  }
+  { return start_offset_output_iterator{pages, cur_index + i, input_cols, max_depth, num_pages}; }
 
   CUDF_HOST_DEVICE constexpr inline start_offset_output_iterator& operator++()
   {
@@ -466,9 +464,7 @@ struct page_offset_output_iter {
   using iterator_category = thrust::output_device_iterator_tag;
 
   CUDF_HOST_DEVICE constexpr inline page_offset_output_iter operator+(int i) const
-  {
-    return {p + i};
-  }
+  { return {p + i}; }
 
   CUDF_HOST_DEVICE constexpr inline page_offset_output_iter& operator++()
   {
@@ -489,9 +485,7 @@ struct update_subpass_chunk_row {
   device_span<size_t> page_src_index;
 
   __device__ constexpr inline void operator()(size_t i)
-  {
-    subpass_pages[i].chunk_row = pass_pages[page_src_index[i]].chunk_row;
-  }
+  { subpass_pages[i].chunk_row = pass_pages[page_src_index[i]].chunk_row; }
 };
 
 /**
@@ -503,9 +497,7 @@ struct update_pass_num_rows {
   device_span<size_t> page_src_index;
 
   __device__ constexpr inline void operator()(size_t i)
-  {
-    pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows;
-  }
+  { pass_pages[page_src_index[i]].num_rows = subpass_pages[i].num_rows; }
 };
 
 }  // namespace cudf::io::parquet::detail

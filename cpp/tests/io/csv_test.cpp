@@ -38,9 +38,7 @@ using cudf::type_to_id;
 
 template <typename T>
 auto dtype()
-{
-  return data_type{type_to_id<T>()};
-}
+{ return data_type{type_to_id<T>()}; }
 
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
@@ -255,9 +253,7 @@ void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const
 template <typename T>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
   requires(!std::is_floating_point_v<T>)
-{
-  EXPECT_THAT(cudf::test::to_host<T>(rhs).first, ::testing::ElementsAreArray(lhs));
-}
+{ EXPECT_THAT(cudf::test::to_host<T>(rhs).first, ::testing::ElementsAreArray(lhs)); }
 
 void write_csv_helper(std::string const& filename,
                       cudf::table_view const& table,
@@ -273,9 +269,7 @@ void write_csv_helper(std::string const& filename,
 
 template <typename T>
 std::string assign(T input)
-{
-  return std::to_string(input);
-}
+{ return std::to_string(input); }
 
 std::string assign(std::string input) { return input; }
 
@@ -457,7 +451,7 @@ void test_quoting_disabled_with_delimiter(char delimiter_char)
                      .header(-1)
                      .delimiter(delimiter_char)
                      .quoting(cudf::io::quote_style::NONE);
-  auto r_table = cudf::io::read_csv(r_options.build());
+  auto r_table   = cudf::io::read_csv(r_options.build());
 
   auto const expected =
     cudf::test::strings_column_wrapper{"All", "are\"brown", "and", "the", "sky", "is", "grey"};
@@ -2069,14 +2063,14 @@ TEST_F(CsvReaderTest, ParseInRangeIntegers)
                                                   std::numeric_limits<int64_t>::min() + 2,
                                                   std::numeric_limits<int64_t>::min() + 1,
                                                   std::numeric_limits<int64_t>::min()};
-  std::vector<uint64_t> greater_int64_max      = {uint64_t{std::numeric_limits<int64_t>::max()} - 1,
-                                                  uint64_t{std::numeric_limits<int64_t>::max()},
-                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 1,
-                                                  uint64_t{std::numeric_limits<int64_t>::max()} + 2};
-  std::vector<uint64_t> less_equal_uint64_max  = {std::numeric_limits<uint64_t>::max() - 3,
-                                                  std::numeric_limits<uint64_t>::max() - 2,
-                                                  std::numeric_limits<uint64_t>::max() - 1,
-                                                  std::numeric_limits<uint64_t>::max()};
+  std::vector<uint64_t> greater_int64_max     = {uint64_t{std::numeric_limits<int64_t>::max()} - 1,
+                                                 uint64_t{std::numeric_limits<int64_t>::max()},
+                                                 uint64_t{std::numeric_limits<int64_t>::max()} + 1,
+                                                 uint64_t{std::numeric_limits<int64_t>::max()} + 2};
+  std::vector<uint64_t> less_equal_uint64_max = {std::numeric_limits<uint64_t>::max() - 3,
+                                                 std::numeric_limits<uint64_t>::max() - 2,
+                                                 std::numeric_limits<uint64_t>::max() - 1,
+                                                 std::numeric_limits<uint64_t>::max()};
   auto input_small_int = column_wrapper<int64_t>(small_int.begin(), small_int.end());
   auto input_less_equal_int64_max =
     column_wrapper<int64_t>(less_equal_int64_max.begin(), less_equal_int64_max.end());

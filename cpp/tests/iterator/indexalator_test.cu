@@ -71,9 +71,7 @@ TYPED_TEST(IndexalatorTest, optional_iterator)
 template <typename Integer>
 struct transform_fn {
   __device__ cudf::size_type operator()(Integer v)
-  {
-    return static_cast<cudf::size_type>(v) + static_cast<cudf::size_type>(v);
-  }
+  { return static_cast<cudf::size_type>(v) + static_cast<cudf::size_type>(v); }
 };
 
 TYPED_TEST(IndexalatorTest, output_iterator)

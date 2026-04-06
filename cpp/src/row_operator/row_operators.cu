@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -583,9 +583,9 @@ transform_lists_of_structs(column_view const& lhs,
                                   cudf::get_current_device_resource_ref());
 
       auto const ranks        = compute_ranks(concatenated_children->view(),
-                                       column_null_order,
-                                       stream,
-                                       cudf::get_current_device_resource_ref());
+                                              column_null_order,
+                                              stream,
+                                              cudf::get_current_device_resource_ref());
       auto const ranks_slices = cudf::detail::slice(
         ranks->view(),
         {0, child_lhs.size(), child_lhs.size(), child_lhs.size() + child_rhs.size()},
@@ -861,9 +861,7 @@ two_table_comparator::two_table_comparator(table_view const& left,
                                            rmm::cuda_stream_view stream)
   : d_left_table{preprocessed_table::create(left, stream)},
     d_right_table{preprocessed_table::create(right, stream)}
-{
-  check_shape_compatibility(left, right);
-}
+{ check_shape_compatibility(left, right); }
 
 two_table_comparator::two_table_comparator(std::shared_ptr<preprocessed_table> left,
                                            std::shared_ptr<preprocessed_table> right)

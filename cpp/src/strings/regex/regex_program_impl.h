@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -31,9 +31,7 @@ struct regex_program::regex_program_impl {
 
 struct regex_device_builder {
   static auto create_prog_device(regex_program const& p, rmm::cuda_stream_view stream)
-  {
-    return detail::reprog_device::create(p._impl->prog, stream);
-  }
+  { return detail::reprog_device::create(p._impl->prog, stream); }
 };
 
 }  // namespace strings

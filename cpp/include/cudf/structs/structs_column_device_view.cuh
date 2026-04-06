@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -66,9 +66,7 @@ class structs_column_device_view : private column_device_view {
    * @return The child column sliced relative to the parent's offset and size
    */
   [[nodiscard]] __device__ inline column_device_view get_sliced_child(size_type idx) const
-  {
-    return child(idx).slice(offset(), size());
-  }
+  { return child(idx).slice(offset(), size()); }
 };
 
 }  // namespace detail

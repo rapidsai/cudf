@@ -37,9 +37,7 @@ template <typename T, typename Enable = void>
 struct interleave_columns_impl {
   template <typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
-  {
-    CUDF_FAIL("Unsupported type in `interleave_columns`.");
-  }
+  { CUDF_FAIL("Unsupported type in `interleave_columns`."); }
 };
 
 struct interleave_columns_functor {
@@ -48,9 +46,7 @@ struct interleave_columns_functor {
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-  {
-    return interleave_columns_impl<T>{}(input, create_mask, stream, mr);
-  }
+  { return interleave_columns_impl<T>{}(input, create_mask, stream, mr); }
 };
 
 template <typename T>
@@ -59,9 +55,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::list_
                                      bool create_mask,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
-  {
-    return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
-  }
+  { return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr); }
 };
 
 template <typename T>

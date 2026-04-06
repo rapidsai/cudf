@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -299,9 +299,7 @@ struct make_literal {
                                  bool is_valid,
                                  cudf::jni::ast::compiled_expr& compiled_expr,
                                  jni_serialized_ast& jni_ast)
-  {
-    throw std::logic_error("Unsupported AST literal type");
-  }
+  { throw std::logic_error("Unsupported AST literal type"); }
 };
 
 /** Decode a serialized AST literal */

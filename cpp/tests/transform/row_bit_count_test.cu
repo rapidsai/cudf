@@ -501,10 +501,10 @@ TEST_F(RowBitCount, NestedTypes)
                                                                l4_offsets.end());
     auto const l4_size = l4_offsets.size() - 1;
     auto l4            = cudf::make_lists_column(static_cast<cudf::size_type>(l4_size),
-                                      l4_offsets_col.release(),
-                                      innermost_struct.release(),
-                                      0,
-                                      rmm::device_buffer{});
+                                                 l4_offsets_col.release(),
+                                                 innermost_struct.release(),
+                                                 0,
+                                                 rmm::device_buffer{});
 
     // inner struct
     std::vector<std::unique_ptr<cudf::column>> inner_struct_children;

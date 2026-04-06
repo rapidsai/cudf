@@ -1533,7 +1533,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto list_offset_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
                               list_offset_iterator, list_offset_iterator + num_list_rows + 1)
                               .release();
-  auto lists_column = make_lists_column(
+  auto lists_column       = make_lists_column(
     num_list_rows, std::move(list_offset_column), std::move(struct_column), 0, {});
 
   // List construction succeeded.

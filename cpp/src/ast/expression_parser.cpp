@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -284,9 +284,7 @@ cudf::size_type expression_parser::visit(operation const& expr)
 // 2. column name references are not supported in the libcudf table operations such as join,
 // transform.
 cudf::size_type expression_parser::visit(column_name_reference const& expr)
-{
-  CUDF_FAIL("Column name references are not supported in the AST expression parser.");
-}
+{ CUDF_FAIL("Column name references are not supported in the AST expression parser."); }
 
 cudf::data_type expression_parser::output_type() const
 {

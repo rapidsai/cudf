@@ -109,9 +109,7 @@ class alignas(16) column_device_view_base {
   template <typename T = void,
             CUDF_ENABLE_IF(cuda::std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   [[nodiscard]] CUDF_HOST_DEVICE T const* head() const noexcept
-  {
-    return static_cast<T const*>(_data);
-  }
+  { return static_cast<T const*>(_data); }
 
   /**
    * @brief Returns the underlying data casted to the specified type, plus the
@@ -130,9 +128,7 @@ class alignas(16) column_device_view_base {
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] CUDF_HOST_DEVICE T const* data() const noexcept
-  {
-    return head<T>() + _offset;
-  }
+  { return head<T>() + _offset; }
 
   /**
    * @brief Returns the number of elements in the column.
@@ -169,9 +165,7 @@ class alignas(16) column_device_view_base {
    * @return Raw pointer to the underlying bitmask allocation
    */
   [[nodiscard]] CUDF_HOST_DEVICE bitmask_type const* null_mask() const noexcept
-  {
-    return _null_mask;
-  }
+  { return _null_mask; }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
@@ -196,9 +190,7 @@ class alignas(16) column_device_view_base {
    * @return false The element is null
    */
   [[nodiscard]] __device__ bool is_valid(size_type element_index) const noexcept
-  {
-    return not nullable() or is_valid_nocheck(element_index);
-  }
+  { return not nullable() or is_valid_nocheck(element_index); }
 
   /**
    * @brief Returns whether the specified element holds a valid value (i.e., not
@@ -213,9 +205,7 @@ class alignas(16) column_device_view_base {
    * @return false The element is null
    */
   [[nodiscard]] __device__ bool is_valid_nocheck(size_type element_index) const noexcept
-  {
-    return bit_is_set(_null_mask, offset() + element_index);
-  }
+  { return bit_is_set(_null_mask, offset() + element_index); }
 
   /**
    * @brief Returns whether the specified element is null.
@@ -231,9 +221,7 @@ class alignas(16) column_device_view_base {
    * @return false The element is valid
    */
   [[nodiscard]] __device__ bool is_null(size_type element_index) const noexcept
-  {
-    return not is_valid(element_index);
-  }
+  { return not is_valid(element_index); }
 
   /**
    * @brief Returns whether the specified element is null
@@ -247,9 +235,7 @@ class alignas(16) column_device_view_base {
    * @return false The element is valid
    */
   [[nodiscard]] __device__ bool is_null_nocheck(size_type element_index) const noexcept
-  {
-    return not is_valid_nocheck(element_index);
-  }
+  { return not is_valid_nocheck(element_index); }
 
   /**
    * @brief Returns the specified bitmask word from the `null_mask()`.
@@ -261,9 +247,7 @@ class alignas(16) column_device_view_base {
    * @return bitmask word for the given word_index
    */
   [[nodiscard]] __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
-  {
-    return null_mask()[word_index];
-  }
+  { return null_mask()[word_index]; }
 
  protected:
   data_type _type{type_id::EMPTY};   ///< Element type
@@ -401,9 +385,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T element(size_type element_index) const noexcept
-  {
-    return data<T>()[element_index];
-  }
+  { return data<T>()[element_index]; }
 
   /**
    * @brief Returns `string_view` to the string element at the specified index.
@@ -454,9 +436,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * @return column_view The requested child `column_view`
    */
   [[nodiscard]] __device__ column_device_view_core child(size_type child_index) const noexcept
-  {
-    return d_children[child_index];
-  }
+  { return d_children[child_index]; }
 
   /**
    * @brief Returns the number of child columns
@@ -464,9 +444,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
    * @return The number of child columns
    */
   [[nodiscard]] CUDF_HOST_DEVICE size_type num_child_columns() const noexcept
-  {
-    return _num_children;
-  }
+  { return _num_children; }
 
   /**
    * @brief Returns the number of nulls in this column
@@ -559,9 +537,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
   template <typename T = void,
             CUDF_ENABLE_IF(cuda::std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
   CUDF_HOST_DEVICE T* head() const noexcept
-  {
-    return const_cast<T*>(detail::column_device_view_base::head<T>());
-  }
+  { return const_cast<T*>(detail::column_device_view_base::head<T>()); }
 
   /**
    * @brief Returns the underlying data casted to the specified type, plus the
@@ -577,9 +553,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   CUDF_HOST_DEVICE T* data() const noexcept
-  {
-    return const_cast<T*>(detail::column_device_view_base::data<T>());
-  }
+  { return const_cast<T*>(detail::column_device_view_base::data<T>()); }
 
   /**
    * @brief Returns reference to element at the specified index.
@@ -597,9 +571,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   [[nodiscard]] __device__ T& element(size_type element_index) const noexcept
-  {
-    return data<T>()[element_index];
-  }
+  { return data<T>()[element_index]; }
 
   /**
    * @brief Assigns `value` to the element at `element_index`
@@ -610,9 +582,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   __device__ void assign(size_type element_index, T value) const noexcept
-  {
-    data<T>()[element_index] = value;
-  }
+  { data<T>()[element_index] = value; }
 
   /**
    * @brief Assigns `value` to the element at `element_index`.
@@ -640,9 +610,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @return Raw pointer to the underlying bitmask allocation
    */
   [[nodiscard]] CUDF_HOST_DEVICE bitmask_type* null_mask() const noexcept
-  {
-    return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
-  }
+  { return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask()); }
 
   /**
    * @brief Returns the specified child
@@ -652,9 +620,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    */
   [[nodiscard]] __device__ mutable_column_device_view_core
   child(size_type child_index) const noexcept
-  {
-    return d_children[child_index];
-  }
+  { return d_children[child_index]; }
 
 #ifdef __CUDACC__  // because set_bit in bit.hpp is wrapped with __CUDACC__
   /**
@@ -672,9 +638,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @param element_index The index of the element to update
    */
   __device__ void set_valid(size_type element_index) const noexcept
-  {
-    return set_bit(null_mask(), element_index);
-  }
+  { return set_bit(null_mask(), element_index); }
 
   /**
    * @brief Updates the null mask to indicate that the specified element is null
@@ -690,9 +654,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @param element_index The index of the element to update
    */
   __device__ void set_null(size_type element_index) const noexcept
-  {
-    return clear_bit(null_mask(), element_index);
-  }
+  { return clear_bit(null_mask(), element_index); }
 
 #endif
 
@@ -707,9 +669,7 @@ class alignas(16) mutable_column_device_view_core : public detail::column_device
    * @param new_word The new bitmask word
    */
   __device__ void set_mask_word(size_type word_index, bitmask_type new_word) const noexcept
-  {
-    null_mask()[word_index] = new_word;
-  }
+  { null_mask()[word_index] = new_word; }
 
  protected:
   /**

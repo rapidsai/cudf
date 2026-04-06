@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,9 +59,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   T identity_from_operator()
     requires(std::is_same_v<corresponding_operator_t<k>, void>)
-  {
-    CUDF_FAIL("Unable to get identity/sentinel from device operator");
-  }
+  { CUDF_FAIL("Unable to get identity/sentinel from device operator"); }
 
   template <typename T, aggregation::Kind k>
   T get_identity()
@@ -109,9 +107,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   void operator()(mutable_column_view const& col, rmm::cuda_stream_view stream)
     requires(not is_supported<T, k>())
-  {
-    CUDF_FAIL("Unsupported aggregation for initializing values");
-  }
+  { CUDF_FAIL("Unsupported aggregation for initializing values"); }
 };
 }  // namespace
 

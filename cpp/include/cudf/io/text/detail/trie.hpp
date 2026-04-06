@@ -158,9 +158,7 @@ struct trie {
                      rmm::cuda_stream_view stream,
                      rmm::device_async_resource_ref mr)
 
-  {
-    return create(std::vector<std::string>{std::move(pattern)}, stream, mr);
-  }
+  { return create(std::vector<std::string>{std::move(pattern)}, stream, mr); }
 
   /**
    * @brief Create a trie which represents the given pattern.

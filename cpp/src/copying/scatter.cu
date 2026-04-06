@@ -406,9 +406,7 @@ std::unique_ptr<column> boolean_mask_scatter(scalar const& input,
                                              column_view const& boolean_mask,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
-{
-  return detail::copy_if_else(input, target, boolean_mask, stream, mr);
-}
+{ return detail::copy_if_else(input, target, boolean_mask, stream, mr); }
 
 std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             table_view const& target,

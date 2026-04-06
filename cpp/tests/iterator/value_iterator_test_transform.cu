@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <tests/iterator/iterator_tests.cuh>
@@ -16,9 +16,7 @@ template <typename T>
 struct cast_fn {
   template <typename U>
   __device__ T operator()(U const& val) const
-  {
-    return static_cast<T>(val);
-  }
+  { return static_cast<T>(val); }
 };
 
 // Tests up cast reduction with null iterator.

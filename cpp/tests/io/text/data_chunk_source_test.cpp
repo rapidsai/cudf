@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -162,9 +162,7 @@ enum class compression { ENABLED, DISABLED };
 enum class eof { ADD_EOF_BLOCK, NO_EOF_BLOCK };
 
 uint64_t virtual_offset(std::size_t block_offset, std::size_t local_offset)
-{
-  return (block_offset << 16) | local_offset;
-}
+{ return (block_offset << 16) | local_offset; }
 
 void write_bgzip(std::ostream& output_stream,
                  cudf::host_span<char const> data,

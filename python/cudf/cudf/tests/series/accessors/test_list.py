@@ -165,9 +165,11 @@ def test_sort_values(data, index, ascending, na_position, ignore_index):
     gs = cudf.from_pandas(ps)
 
     expected = ps.apply(
-        lambda x: sorted(x, key=key_func, reverse=not ascending)
-        if x is not None
-        else None
+        lambda x: (
+            sorted(x, key=key_func, reverse=not ascending)
+            if x is not None
+            else None
+        )
     )
     if ignore_index:
         expected.reset_index(drop=True, inplace=True)

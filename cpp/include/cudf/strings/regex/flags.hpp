@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -38,9 +38,7 @@ enum regex_flags : uint32_t {
  * @return true if `f` includes MULTILINE
  */
 constexpr bool is_multiline(regex_flags const f)
-{
-  return (f & regex_flags::MULTILINE) == regex_flags::MULTILINE;
-}
+{ return (f & regex_flags::MULTILINE) == regex_flags::MULTILINE; }
 
 /**
  * @brief Returns true if the given flags contain DOTALL.
@@ -49,9 +47,7 @@ constexpr bool is_multiline(regex_flags const f)
  * @return true if `f` includes DOTALL
  */
 constexpr bool is_dotall(regex_flags const f)
-{
-  return (f & regex_flags::DOTALL) == regex_flags::DOTALL;
-}
+{ return (f & regex_flags::DOTALL) == regex_flags::DOTALL; }
 
 /**
  * @brief Returns true if the given flags contain ASCII.
@@ -60,9 +56,7 @@ constexpr bool is_dotall(regex_flags const f)
  * @return true if `f` includes ASCII
  */
 constexpr bool is_ascii(regex_flags const f)
-{
-  return (f & regex_flags::ASCII) == regex_flags::ASCII;
-}
+{ return (f & regex_flags::ASCII) == regex_flags::ASCII; }
 
 /**
  * @brief Returns true if the given flags contain EXT_NEWLINE
@@ -71,9 +65,7 @@ constexpr bool is_ascii(regex_flags const f)
  * @return true if `f` includes EXT_NEWLINE
  */
 constexpr bool is_ext_newline(regex_flags const f)
-{
-  return (f & regex_flags::EXT_NEWLINE) == regex_flags::EXT_NEWLINE;
-}
+{ return (f & regex_flags::EXT_NEWLINE) == regex_flags::EXT_NEWLINE; }
 
 /**
  * @brief Capture groups setting

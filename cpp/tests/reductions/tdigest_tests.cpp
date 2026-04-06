@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -73,9 +73,7 @@ TYPED_TEST(ReductionTDigestAllTypes, AllNull)
 struct ReductionTDigestMerge : public cudf::test::BaseFixture {};
 
 TEST_F(ReductionTDigestMerge, Simple)
-{
-  cudf::test::tdigest_merge_simple(reduce_op{}, reduce_merge_op{});
-}
+{ cudf::test::tdigest_merge_simple(reduce_op{}, reduce_merge_op{}); }
 
 // tests an issue with the cluster generating code with a small number of centroids that have large
 // weights

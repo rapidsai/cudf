@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -74,11 +74,11 @@
     cudf::binary_operation(one, discount, cudf::binary_operator::SUB, discount.type(), stream, mr);
   auto const revenue_type = cudf::data_type{cudf::type_id::FLOAT64};
   auto revenue            = cudf::binary_operation(extendedprice,
-                                        one_minus_discount->view(),
-                                        cudf::binary_operator::MUL,
-                                        revenue_type,
-                                        stream,
-                                        mr);
+                                                   one_minus_discount->view(),
+                                                   cudf::binary_operator::MUL,
+                                                   revenue_type,
+                                                   stream,
+                                                   mr);
   return revenue;
 }
 

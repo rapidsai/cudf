@@ -198,7 +198,7 @@ struct saturating {
     U uy     = static_cast<U>(y);
     U result = Op{}(ux, uy);
     ux       = (ux >> cuda::std::numeric_limits<T>::digits) +
-         static_cast<U>(cuda::std::numeric_limits<T>::max());
+               static_cast<U>(cuda::std::numeric_limits<T>::max());
     // Note: the casts here are implementation defined (until C++20) but all
     // the platforms we care about do the twos-complement thing.
     if constexpr (cuda::std::is_same_v<Op, cuda::std::plus<>>) {
@@ -381,8 +381,8 @@ struct bounded_distance_functor {
       return direction == direction::PRECEDING ? i - row_info.null_start() + 1
                                                : row_info.null_end() - i - 1;
     }
-    auto const offset_value_did_overflow = [subtract = (order == order::ASCENDING) ==
-                                                       (direction == direction::PRECEDING),
+    auto const offset_value_did_overflow = [subtract  = (order == order::ASCENDING) ==
+                                                        (direction == direction::PRECEDING),
                                             delta     = *row_delta,
                                             row_value = begin[i]]() {
       return subtract ? saturating_sub{}(row_value, delta) : saturating_add{}(row_value, delta);
@@ -390,10 +390,10 @@ struct bounded_distance_functor {
     OrderbyT const offset_value = cuda::std::get<0>(offset_value_did_overflow);
     bool const did_overflow     = cuda::std::get<1>(offset_value_did_overflow);
     auto const distance         = [preceding    = direction == direction::PRECEDING,
-                           current      = begin + i,
-                           start        = begin + row_info.non_null_start(),
-                           end          = begin + row_info.non_null_end(),
-                           offset_value = offset_value](auto&& cmp) {
+                                   current      = begin + i,
+                                   start        = begin + row_info.non_null_start(),
+                                   end          = begin + row_info.non_null_end(),
+                                   offset_value = offset_value](auto&& cmp) {
       if (preceding) {
         // Search for first slot we can place the offset value
         return 1 + cuda::std::distance(
@@ -678,9 +678,7 @@ struct range_window_clamper {
                                      scalar const*,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
-  {
-    CUDF_FAIL("Unsupported rolling window type.", cudf::data_type_error);
-  }
+  { CUDF_FAIL("Unsupported rolling window type.", cudf::data_type_error); }
 };
 }  // namespace rolling
 }  // namespace detail

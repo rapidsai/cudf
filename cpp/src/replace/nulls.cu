@@ -143,9 +143,7 @@ struct replace_nulls_column_kernel_forwarder {
                                            cudf::column_view const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
-  {
-    CUDF_FAIL("No specialization exists for the given type.");
-  }
+  { CUDF_FAIL("No specialization exists for the given type."); }
 };
 
 template <>
@@ -230,9 +228,7 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            cudf::scalar const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
-  {
-    CUDF_FAIL("No specialization exists for the given type.");
-  }
+  { CUDF_FAIL("No specialization exists for the given type."); }
 };
 
 template <>

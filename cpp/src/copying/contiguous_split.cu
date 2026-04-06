@@ -509,9 +509,7 @@ struct buf_info_functor {
   template <typename T, typename... Args>
   std::pair<src_buf_info*, size_type> operator()(Args&&...)
     requires(std::is_same_v<T, cudf::dictionary32>)
-  {
-    CUDF_FAIL("Unsupported type");
-  }
+  { CUDF_FAIL("Unsupported type"); }
 
  private:
   std::pair<src_buf_info*, size_type> add_null_buffer(column_view const& col,
@@ -615,7 +613,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view
   // info for the offsets buffer
   auto offset_col = current;
   *current        = src_buf_info(type_id::INT32,
-                          // note: offsets can be null in the case where the lists column
+                                 // note: offsets can be null in the case where the lists column
                           // has been created with empty_like().
                           lcv.offsets(),
                           offset_stack_pos,
@@ -958,23 +956,17 @@ struct size_of_helper {
   template <typename T>
   constexpr int __device__ operator()() const
     requires(!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>)
-  {
-    return 0;
-  }
+  { return 0; }
 
   template <typename T>
   constexpr int __device__ operator()() const
     requires(!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>)
-  {
-    return sizeof(cudf::device_storage_type_t<int8_t>);
-  }
+  { return sizeof(cudf::device_storage_type_t<int8_t>); }
 
   template <typename T>
   constexpr int __device__ operator()() const noexcept
     requires(is_fixed_width<T>())
-  {
-    return sizeof(cudf::device_storage_type_t<T>);
-  }
+  { return sizeof(cudf::device_storage_type_t<T>); }
 };
 
 /**
@@ -1843,9 +1835,7 @@ struct contiguous_split_state {
   bool has_next() const { return !is_empty && chunk_iter_state->has_more_copies(); }
 
   std::size_t get_total_contiguous_size() const
-  {
-    return is_empty ? 0 : chunk_iter_state->total_size;
-  }
+  { return is_empty ? 0 : chunk_iter_state->total_size; }
 
   std::vector<packed_table> contiguous_split()
   {
@@ -2143,29 +2133,21 @@ chunked_pack::chunked_pack(cudf::table_view const& input,
 chunked_pack::~chunked_pack() = default;
 
 std::size_t chunked_pack::get_total_contiguous_size() const
-{
-  return state->get_total_contiguous_size();
-}
+{ return state->get_total_contiguous_size(); }
 
 bool chunked_pack::has_next() const { return state->has_next(); }
 
 std::size_t chunked_pack::next(cudf::device_span<uint8_t> const& user_buffer)
-{
-  return state->contiguous_split_chunk(user_buffer);
-}
+{ return state->contiguous_split_chunk(user_buffer); }
 
 std::unique_ptr<std::vector<uint8_t>> chunked_pack::build_metadata() const
-{
-  return state->build_packed_column_metadata();
-}
+{ return state->build_packed_column_metadata(); }
 
 std::unique_ptr<chunked_pack> chunked_pack::create(cudf::table_view const& input,
                                                    std::size_t user_buffer_size,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::device_async_resource_ref temp_mr)
-{
-  return std::make_unique<chunked_pack>(input, user_buffer_size, stream, temp_mr);
-}
+{ return std::make_unique<chunked_pack>(input, user_buffer_size, stream, temp_mr); }
 
 std::size_t packed_size(cudf::table_view const& input,
                         rmm::cuda_stream_view stream,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -120,9 +120,7 @@ test_case<T> interpolate_extrema_high()
 
 template <>
 test_case<bool> interpolate_extrema_high<bool>()
-{
-  return interpolate_center<bool>();
-}
+{ return interpolate_center<bool>(); }
 
 // interpolate_extrema_low
 
@@ -141,9 +139,7 @@ test_case<T> interpolate_extrema_low()
 
 template <>
 test_case<bool> interpolate_extrema_low<bool>()
-{
-  return interpolate_center<bool>();
-}
+{ return interpolate_center<bool>(); }
 
 // single
 
@@ -402,14 +398,10 @@ TYPED_TEST(QuantileTest, TestUnsorted) { test(testdata::unsorted<TypeParam>()); 
 TYPED_TEST(QuantileTest, TestInterpolateCenter) { test(testdata::interpolate_center<TypeParam>()); }
 
 TYPED_TEST(QuantileTest, TestInterpolateExtremaHigh)
-{
-  test(testdata::interpolate_extrema_high<TypeParam>());
-}
+{ test(testdata::interpolate_extrema_high<TypeParam>()); }
 
 TYPED_TEST(QuantileTest, TestInterpolateExtremaLow)
-{
-  test(testdata::interpolate_extrema_low<TypeParam>());
-}
+{ test(testdata::interpolate_extrema_low<TypeParam>()); }
 
 TYPED_TEST(QuantileTest, TestEmpty)
 {

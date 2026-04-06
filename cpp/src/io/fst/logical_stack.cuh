@@ -234,9 +234,7 @@ struct PropagateLastWrite {
 struct StackOpToStackSymbol {
   template <typename StackLevelT, typename ValueT>
   constexpr CUDF_HOST_DEVICE ValueT operator()(StackOp<StackLevelT, ValueT> const& kv_op) const
-  {
-    return kv_op.value;
-  }
+  { return kv_op.value; }
 };
 
 /**
@@ -245,9 +243,7 @@ struct StackOpToStackSymbol {
 template <typename StackOpT>
 struct RemapEmptyStack {
   constexpr CUDF_HOST_DEVICE StackOpT operator()(StackOpT const& kv_op) const
-  {
-    return kv_op.stack_level == 0 ? empty_stack_symbol : kv_op;
-  }
+  { return kv_op.stack_level == 0 ? empty_stack_symbol : kv_op; }
   StackOpT empty_stack_symbol;
 };
 

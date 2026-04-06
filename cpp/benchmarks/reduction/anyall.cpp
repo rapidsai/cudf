@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,8 +21,8 @@ static void reduction_anyall(nvbench::state& state, nvbench::type_list<DataType>
   auto const kind_str = state.get_string("kind");
 
   auto const input_type = cudf::type_to_id<DataType>();
-  auto const agg        = kind_str == "any" ? cudf::make_any_aggregation<cudf::reduce_aggregation>()
-                                            : cudf::make_all_aggregation<cudf::reduce_aggregation>();
+  auto const agg = kind_str == "any" ? cudf::make_any_aggregation<cudf::reduce_aggregation>()
+                                     : cudf::make_all_aggregation<cudf::reduce_aggregation>();
 
   data_profile const profile =
     data_profile_builder().no_validity().distribution(input_type,
