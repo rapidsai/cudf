@@ -148,6 +148,41 @@ To profile a script being run from the command line, pass the
 python -m cudf.pandas --profile script.py
 ```
 
+To perform line-by-line profiling from the command line, pass the
+`--line-profile` argument:
+
+```bash
+python -m cudf.pandas --line-profile script.py
+```
+
+### Using the Profiler in Python Scripts
+
+Profiling can also be performed programmatically in Python scripts using the
+`Profiler` class. This is useful when running scripts outside of Jupyter or
+when more control over profiling is needed.
+
+```python
+import cudf.pandas
+cudf.pandas.install()
+
+from cudf.pandas import Profiler
+import pandas as pd
+
+with Profiler() as profiler:
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    df.sum()
+
+print(profiler)
+```
+
+Example output:
+
+```text
+Operation                      Device
+-------------------------------------
+DataFrame.sum                 GPU
+```
+
 ### cudf.pandas CLI Features
 
 Several of the ways to provide input to the `python` interpreter also work with `python -m cudf.pandas`, such as the REPL, the `-c` flag, and reading from stdin.
