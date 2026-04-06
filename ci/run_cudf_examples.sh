@@ -14,10 +14,12 @@ pushd basic || exit
 compute-sanitizer --tool memcheck basic_example
 popd || exit
 
+# TODO: Temporary workaround for compute-sanitizer bug 5824899 that occurs only on the examples
 GPU_COMPUTE_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -n1 | tr -d '[:space:]')
 CSE="compute-sanitizer"
 if [[ "${GPU_COMPUTE_CAP}" == "12.0" ]]; then
     CSE=""
+    echo "Disabling compute-sanitizer for examples for sm_120 device"
 fi
 
 pushd hybrid_scan_io || exit
