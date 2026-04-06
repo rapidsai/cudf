@@ -1768,6 +1768,8 @@ class parquet_writer_options_builder
  *  cudf::io::write_parquet(options);
  * @endcode
  *
+ * @note If an exception is thrown during encoding or compression, no data is written to the sink.
+ *
  * @param options Settings for controlling writing behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A parquet-compatible blob that contains the file metadata (parquet FileMetadata thrift
@@ -1888,6 +1890,9 @@ class chunked_parquet_writer {
 
   /**
    * @brief Writes table to output.
+   *
+   * @note If an exception is thrown during encoding or compression, the data from the failing call
+   * is not written to the sink. Data from previous successful calls is unaffected.
    *
    * @param[in] table Table that needs to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same

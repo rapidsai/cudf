@@ -84,8 +84,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     start_date = pl.lit(start_date_py, dtype=pl.Datetime("us"))
     end_date = start_date + pl.duration(days=60)
     multi_warehouse_orders = (
-        web_sales.group_by("ws_order_number")
-        .agg([pl.col("ws_warehouse_sk").n_unique().alias("warehouse_count")])
+        web_sales.filter(pl.col("ws_warehouse_sk").is_not_null())
+        .group_by("ws_order_number")
+        .agg(pl.col("ws_warehouse_sk").n_unique().alias("warehouse_count"))
         .filter(pl.col("warehouse_count") > 1)
         .select("ws_order_number")
     )
@@ -109,6 +110,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 & (pl.col("d_date") <= end_date)
                 & (pl.col("ca_state") == state)
                 & (pl.col("web_company_name") == web_company_name)
+                & pl.col("ws_warehouse_sk").is_not_null()
             )
             .join(
                 multi_warehouse_orders,

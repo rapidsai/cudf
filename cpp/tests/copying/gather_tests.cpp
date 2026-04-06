@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,9 +10,13 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/filling.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -232,4 +236,25 @@ TYPED_TEST(GatherTest, MultiColNulls)
   for (auto i = 0; i < source_table.num_columns(); ++i) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_column, result->view().column(i));
   }
+}
+
+class GatherNullableTest : public cudf::test::BaseFixture {};
+
+TEST_F(GatherNullableTest, NullableNoNulls)
+{
+  constexpr cudf::size_type source_size{1000};
+  auto source_zero                            = cudf::make_fixed_width_scalar<int32_t>(0);
+  std::unique_ptr<cudf::column> source_column = cudf::sequence(source_size, *source_zero);
+
+  auto valid_mask = cudf::create_null_mask(source_size, cudf::mask_state::ALL_VALID);
+  source_column->set_null_mask(std::move(valid_mask), 0);
+  cudf::table_view source_table({source_column->view(), source_column->view()});
+
+  auto gather_zero = cudf::make_fixed_width_scalar<int32_t>(0);
+
+  std::unique_ptr<cudf::column> gather_map = cudf::sequence(source_size, *gather_zero);
+  std::unique_ptr<cudf::table> result =
+    cudf::gather(source_table, gather_map->view(), cudf::out_of_bounds_policy::DONT_CHECK);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(source_table, result->view());
 }

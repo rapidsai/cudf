@@ -18,9 +18,7 @@ from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.context import Context
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
@@ -28,18 +26,12 @@ import pylibcudf as plc
 import rmm.mr
 from pylibcudf.contiguous_split import pack
 
-from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.experimental.rapidsmpf.core import generate_network
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
     check_reserved_keys,
+    execute_ir_on_rank,
 )
-from cudf_polars.experimental.rapidsmpf.utils import (
-    empty_table_chunk,
-    set_memory_resource,
-)
-from cudf_polars.experimental.utils import _concat
+from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
 from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
@@ -107,56 +99,17 @@ def evaluate_pipeline_spmd_mode(
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
 
-    ir_context = IRExecutionContext(get_cuda_stream=context.get_stream_from_pool)
-
-    metadata_collector: list[ChannelMetadata] | None = [] if collect_metadata else None
-
-    nodes, output = generate_network(
+    return execute_ir_on_rank(
         context,
         comm,
+        py_executor,
         ir,
         partition_info,
         config_options,
         stats,
-        ir_context=ir_context,
-        collective_id_map=collective_id_map,
-        metadata_collector=metadata_collector,
+        collective_id_map,
+        collect_metadata=collect_metadata,
     )
-
-    run_actor_network(actors=nodes, py_executor=py_executor)
-
-    messages = output.release()
-    chunks = [
-        TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        for msg in messages
-    ]
-    dfs: list[DataFrame]
-    if chunks:
-        dfs = [
-            DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                chunk.stream,
-            )
-            for chunk in chunks
-        ]
-        df = _concat(*dfs, context=ir_context)
-    else:
-        # No chunks received - create an empty DataFrame with correct schema
-        stream = ir_context.get_cuda_stream()
-        chunk = empty_table_chunk(ir, context, stream)
-        df = DataFrame.from_table(
-            chunk.table_view(),
-            list(ir.schema.keys()),
-            list(ir.schema.values()),
-            stream,
-        )
-
-    result = df.to_polars()
-    return result, metadata_collector
 
 
 def allgather_polars_dataframe(
