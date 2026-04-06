@@ -77,7 +77,7 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 template <typename Type>
 void bench_groupby_max_cardinality(nvbench::state& state, nvbench::type_list<Type>)
 {
-  auto constexpr num_rows     = 20'000'000;
+  auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const cardinality      = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const num_aggregations = state.get_int64("num_aggregations");
   auto const is_streaming     = state.get_string("api") == "streaming";
@@ -158,6 +158,7 @@ NVBENCH_BENCH_TYPES(bench_groupby_max,
 
 NVBENCH_BENCH_TYPES(bench_groupby_max_cardinality, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t>))
   .set_name("groupby_max_cardinality")
+  .add_int64_axis("num_rows", {20'000'000})
   .add_int64_axis("num_aggregations", {1, 2, 3, 4, 5, 6, 7, 8})
   .add_int64_axis("cardinality", {20, 50, 100, 1'000, 10'000, 100'000, 1'000'000})
   .add_string_axis("api", {"normal", "streaming"});
