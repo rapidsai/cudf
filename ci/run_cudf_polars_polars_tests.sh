@@ -80,8 +80,6 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        --executor streaming
 
 echo "Run polars tests with the streaming executor and rapidsmpf runtime"
-CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE=1 \
-CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD=rapidsmpf \
 CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
