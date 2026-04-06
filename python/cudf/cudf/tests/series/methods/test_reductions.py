@@ -837,7 +837,7 @@ def test_string_std():
     assert_exceptions_equal(lfunc=psr.std, rfunc=sr.std)
 
 
-def test_string_reduction_error():
+def test_string_reduction():
     s = cudf.Series([None, None], dtype="str")
     ps = s.to_pandas(nullable=True)
     # pandas 3 treats the NaN null sentinel as truthy (numpy semantics), so
