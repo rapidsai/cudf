@@ -336,15 +336,18 @@ class StringMethods(BaseAccessor):
                 )
             ):
                 other_cols = (
-                    as_column(
-                        frame.reindex(parent_index), dtype=DEFAULT_STRING_DTYPE
+                    (
+                        as_column(
+                            frame.reindex(parent_index),
+                            dtype=DEFAULT_STRING_DTYPE,
+                        )
+                        if (
+                            parent_index is not None
+                            and isinstance(frame, cudf.Series)
+                            and not frame.index.equals(parent_index)
+                        )
+                        else as_column(frame, dtype=DEFAULT_STRING_DTYPE)
                     )
-                    if (
-                        parent_index is not None
-                        and isinstance(frame, cudf.Series)
-                        and not frame.index.equals(parent_index)
-                    )
-                    else as_column(frame, dtype=DEFAULT_STRING_DTYPE)
                     for frame in others
                 )
             elif others is not None and not isinstance(others, StringMethods):
@@ -644,6 +647,17 @@ class StringMethods(BaseAccessor):
             data, expand=expand, replace_name=result_name
         )
 
+    def _remove_named_capture_groups(self, pat: str) -> str:
+        r"""
+        Removes any named capture groups from the given regex pattern.
+        Named capture groups are expected in the format "(?P<name>)" only.
+        These are unnecessary (and unexpected) by the pylibcudf for non-extract regex calls.
+        """
+        to_remove = "|".join(re.compile(pat).groupindex.keys())
+        if to_remove:
+            pat = re.sub(rf"\(\?P<(?:{to_remove})>", "(", pat)
+        return pat
+
     def contains(
         self,
         pat: str | Sequence,
@@ -789,7 +803,8 @@ class StringMethods(BaseAccessor):
 
         if is_scalar(pat):
             if regex:
-                result_col = self._column.contains_re(pat, flags)  # type: ignore[arg-type]
+                pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
+                result_col = self._column.contains_re(pat, flags)
             else:
                 if case is False:
                     input_column = self._column.to_lower()
@@ -3621,6 +3636,7 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)
         return self._return_or_inplace(self._column.count_re(pat, flags))
 
     def _findall(
@@ -3638,8 +3654,9 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
         return self._return_or_inplace(
-            self._column.findall(method, pat, flags)  # type: ignore[arg-type]
+            self._column.findall(method, pat, flags)
         )
 
     def findall(self, pat: str, flags: int = 0) -> Series | Index:
@@ -3801,9 +3818,11 @@ class StringMethods(BaseAccessor):
         return cudf.Series._from_column(
             result,
             name=self._parent.name,
-            index=self._parent.index
-            if isinstance(self._parent, cudf.Series)
-            else self._parent,
+            index=(
+                self._parent.index
+                if isinstance(self._parent, cudf.Series)
+                else self._parent
+            ),
         )
 
     def isempty(self) -> Series | Index:
@@ -4368,6 +4387,7 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)
         result = self._column.matches_re(pat, flags)
         if na is not no_default:
             result = result.fillna(na)
