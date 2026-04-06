@@ -81,3 +81,26 @@ Spawning research agents for fresh ideas before the next experiment.
 The csv_read_io HOST_BUFFER result dropped from 5.51 GiB/s (earlier in this session) to 3.92 GiB/s (current). The code hasn't changed (same commit d4d3b515). GPU SM clock verified at 2405 MHz (near max 3003 MHz). The likely cause is system-level variability (thermal, power management, background processes). 
 
 **Going forward:** Use RELATIVE improvements between consecutive runs (same session conditions) rather than absolute numbers for experiment decisions. Run back-to-back comparisons on the same session for reliable results.
+
+## Experiment 31: L2 persistent cache for NA trie
+
+**Hypothesis:** Pin the NA trie in L2 persistent cache using cudaAccessPolicyWindow to prevent eviction by streaming CSV data.
+
+**Result:** DISCARD — within noise (5.33 vs 5.29 GiB/s). The NA trie is ~400 bytes, well within L1 cache (128KB/SM). L1 already keeps it hot without L2 pinning.
+
+**What was learned:** L2 cache pinning only helps for data that's too large for L1 but accessed repeatedly. At ~400 bytes, the NA trie lives comfortably in L1. The L2 persistent API adds host-side overhead (cudaStreamSetAttribute calls) that may actually slow things down for small structures.
+
+## Strategic Conclusion After 31 Experiments
+
+The CSV reader optimization has reached a definitive plateau at ~5.3 GiB/s (+145% from baseline). The last 12 experiments (Exp22-31) produced ZERO measurable improvements despite trying:
+- Register pressure reduction (Exp24, 25, 27, 28, 30) 
+- Host overhead reduction (Exp22, 29)
+- Cache optimization (Exp31)
+- Various novel approaches from research
+
+The bottleneck is ARCHITECTURAL: the row-oriented, monolithic-kernel design with 80-register pressure. The only path to significantly better performance is column-oriented conversion (CUDAFastCSV approach), which requires a major refactor.
+
+**Recommendations for future work:**
+1. Column-oriented conversion with field index (CUDAFastCSV approach) — multi-day effort, estimated 2-3x potential gain
+2. Writer optimization — completely untouched, 2.5x slower than reader
+3. Multi-stream pipelining for FILEPATH path — moderate effort, 10-20% potential on file I/O
