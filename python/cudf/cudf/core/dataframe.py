@@ -4650,7 +4650,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             n_result = result._num_columns
             if orig_on is not None:
                 # `on` names data columns shared by both sides; they appear once.
-                k = 1 if isinstance(orig_on, str) else len(orig_on)
+                k = 1 if is_scalar(orig_on) else len(orig_on)
             elif (
                 orig_left_on is not None
                 and orig_right_on is not None
@@ -4660,20 +4660,19 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 # Count same-name (lk, rk) key-column pairs.
                 orig_left_on_list = (
                     [orig_left_on]
-                    if isinstance(orig_left_on, str)
+                    if is_scalar(orig_left_on)
                     else list(orig_left_on)
                 )
                 orig_right_on_list = (
                     [orig_right_on]
-                    if isinstance(orig_right_on, str)
+                    if is_scalar(orig_right_on)
                     else list(orig_right_on)
                 )
                 k = sum(
-                    1
+                    lk == rk
                     for lk, rk in zip(
                         orig_left_on_list, orig_right_on_list, strict=True
                     )
-                    if lk == rk
                 )
             elif (
                 not orig_left_on
