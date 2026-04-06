@@ -47,9 +47,8 @@
 namespace cudf::groupby {
 namespace {
 
-// Key columns always have null masks (created with ALL_NULL), so the row
-// comparator and hasher must always be null-aware.
-auto constexpr has_null = cudf::nullate::DYNAMIC{true};
+// Whether key columns have null masks depends on whether any input batch had nullable keys.
+// When keys are non-nullable, we skip null mask allocation and use null-unaware row operators.
 
 template <typename SetRef>
 struct compute_target_indices_fn {
@@ -284,7 +283,7 @@ struct streaming_groupby::impl {
                    std::invalid_argument);
       _key_columns.push_back(make_fixed_width_column(key_col.type(),
                                                      _max_groups,
-                                                     mask_state::ALL_NULL,
+                                                     mask_state::UNALLOCATED,
                                                      stream,
                                                      cudf::get_current_device_resource_ref()));
     }
@@ -340,6 +339,7 @@ struct streaming_groupby::impl {
     auto const comparator  = cudf::detail::row::equality::self_comparator{preprocessed_keys};
     auto const row_hash    = cudf::detail::row::hash::row_hasher{std::move(preprocessed_keys)};
 
+    auto const has_null    = cudf::nullate::DYNAMIC{_has_nullable_keys};
     auto const d_row_hash  = row_hash.device_hasher(has_null);
     auto const d_row_equal = comparator.equal_to<false>(has_null, null_equality::EQUAL);
 
@@ -359,8 +359,23 @@ struct streaming_groupby::impl {
                             size_type staging_offset,
                             rmm::cuda_stream_view stream)
   {
+    // Lazily allocate null masks when the first nullable batch arrives.
+    if (!_has_nullable_keys) {
+      for (size_type c = 0; c < num_keys(); ++c) {
+        if (batch_keys.column(c).nullable()) {
+          _has_nullable_keys = true;
+          break;
+        }
+      }
+      if (_has_nullable_keys) {
+        for (size_type c = 0; c < num_keys(); ++c) {
+          auto mask = cudf::create_null_mask(_max_groups, mask_state::ALL_VALID, stream);
+          _key_columns[c]->set_null_mask(std::move(mask), 0);
+        }
+      }
+    }
+
     for (size_type c = 0; c < num_keys(); ++c) {
-      if (batch_keys.column(c).nullable()) { _has_nullable_keys = true; }
       auto dst = _key_columns[c]->mutable_view();
       cudf::copy_range_in_place(
         batch_keys.column(c), dst, 0, batch_keys.column(c).size(), staging_offset, stream);
@@ -411,10 +426,10 @@ struct streaming_groupby::impl {
     auto const comparator = cudf::detail::row::equality::self_comparator{preprocessed_keys};
     auto const row_hash   = cudf::detail::row::hash::row_hasher{std::move(preprocessed_keys)};
 
+    auto const has_null   = cudf::nullate::DYNAMIC{_has_nullable_keys};
     auto const d_row_hash = row_hash.device_hasher(has_null);
 
-    auto const skip_rows_with_nulls =
-      cudf::has_nulls(full_key_view) && _null_handling == null_policy::EXCLUDE;
+    auto const skip_rows_with_nulls = _has_nullable_keys && _null_handling == null_policy::EXCLUDE;
     auto row_bitmask_buffer =
       skip_rows_with_nulls ? compute_row_bitmask(full_key_view, stream) : rmm::device_buffer{};
     auto const* row_bitmask =
