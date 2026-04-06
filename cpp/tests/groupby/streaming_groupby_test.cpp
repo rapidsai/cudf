@@ -881,7 +881,7 @@ TEST_F(StreamingGroupbyTest, FinalizeBeforeAggregateThrows)
 {
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
-  EXPECT_THROW(streaming_agg.finalize(), cudf::logic_error);
+  EXPECT_THROW(static_cast<void>(streaming_agg.finalize()), cudf::logic_error);
 }
 
 // Test merge with MEAN aggregation (compound: SUM + COUNT intermediates).
