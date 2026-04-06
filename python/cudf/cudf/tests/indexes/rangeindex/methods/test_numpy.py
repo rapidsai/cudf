@@ -37,6 +37,17 @@ def test_rangeindex_to_numpy_copy_true_returns_new_array():
     np.testing.assert_array_equal(copied, base)
 
 
+def test_rangeindex_to_numpy_copy_on_write():
+    gidx = cudf.RangeIndex(start=0, stop=10, step=1)
+
+    with cudf.option_context("copy_on_write", True):
+        result = gidx.to_numpy()
+
+    base = gidx.to_numpy(copy=False)
+    assert result is not base
+    np.testing.assert_array_equal(result, base)
+
+
 def test_rangeindex_values_host_shares_to_numpy_cache():
     gidx = cudf.RangeIndex(start=0, stop=10, step=1)
 

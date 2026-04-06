@@ -2911,7 +2911,7 @@ class RangeIndex(Index):
             FutureWarning,
             stacklevel=2,
         )
-        return self.to_numpy(copy=False)
+        return self.to_numpy()
 
     @_performance_tracking
     def to_numpy(
@@ -2927,9 +2927,10 @@ class RangeIndex(Index):
         dtype : str or :class:`numpy.dtype`, optional
             The dtype to cast the result to. Defaults to the RangeIndex dtype.
         copy : bool, default False
-            Whether to guarantee a copy of the returned array.
-            ``copy=False`` avoids an extra allocation when no dtype conversion
-            is needed; ``copy=True`` always returns a freshly allocated array.
+            Whether to ensure that the returned value is not a view on
+            another array. Note that ``copy=False`` does not ensure that
+            ``to_numpy()`` is no-copy. Rather, ``copy=True`` ensures that
+            a copy is made, even if not strictly necessary.
         na_value : Any, default None
             Accepted for compatibility with the pandas API. Because
             ``RangeIndex`` cannot contain missing values, this argument has no
@@ -2939,11 +2940,12 @@ class RangeIndex(Index):
         -------
         numpy.ndarray
         """
+        copy = copy or cudf.get_option("copy_on_write")
         result = self._numpy_values
         if dtype is not None:
-            result = result.astype(dtype, copy=False)
+            result = result.astype(dtype, copy=copy)
         if copy:
-            result = result.copy()
+            return result.copy()
         return result
 
     @_performance_tracking
