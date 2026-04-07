@@ -279,7 +279,7 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used when the rapidsmpf runtime is enabled.
-        Default is True.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -318,7 +318,7 @@ class ParquetOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
             _bool_converter,
-            default=True,
+            default=False,
         )
     )
 
