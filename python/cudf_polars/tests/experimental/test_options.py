@@ -144,6 +144,8 @@ test_spmd_engine_from_options_creates_engine = pytest.mark.spmd(
 )
 
 
+# distributed's shutdown leaves unclosed sockets; suppress the noise.
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
 def test_dask_engine_from_options_creates_engine() -> None:
     """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
     pytest.importorskip("distributed")
