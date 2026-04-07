@@ -13,13 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
 
-# TODO: Add multi-partition Sort support to the rapidsmpf runtime.
-# See: https://github.com/rapidsai/cudf/issues/20486
-pytestmark = pytest.mark.skipif(
-    DEFAULT_RUNTIME == "rapidsmpf",
-    reason="Sort not yet supported for rapidsmpf runtime.",
-)
-
 
 @pytest.fixture(scope="module")
 def engine():

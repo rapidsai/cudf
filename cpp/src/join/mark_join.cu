@@ -292,7 +292,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
 
   auto materialize_probe_rows = [&](auto const& key_fn) {
     rmm::device_uvector<probe_key_type> probe_rows(probe.num_rows(), stream);
-    cub::DeviceTransform::Transform(cuda::counting_iterator{size_type{0}},
+    cub::DeviceTransform::Transform(cuda::counting_iterator<size_type>{0},
                                     probe_rows.begin(),
                                     probe.num_rows(),
                                     cuda::proclaim_return_type<probe_key_type>(key_fn),
@@ -397,7 +397,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
     auto const bitmask_buffer_and_ptr = build_row_bitmask(_build, stream);
     auto const row_bitmask_ptr        = bitmask_buffer_and_ptr.second;
     thrust::copy_if(rmm::exec_policy_nosync(stream),
-                    cuda::counting_iterator{size_type{0}},
+                    cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator{_build.num_rows()},
                     result.begin() + unmatched_valid,
                     row_is_null{row_bitmask_ptr});
@@ -438,7 +438,7 @@ mark_join::mark_join(cudf::table_view const& build,
         <<<grid_size, cuco::detail::default_block_size(), 0, stream.value()>>>(
           build_iter,
           _build.num_rows(),
-          cuda::counting_iterator{size_type{0}},
+          cuda::counting_iterator<size_type>{0},
           row_is_valid{row_bitmask_ptr},
           insert_ref);
     } else {
