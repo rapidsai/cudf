@@ -19,6 +19,8 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -360,24 +362,47 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
  *
  * Performs the multi-replace operation with a thread per string.
  * This performs best on smaller strings. @see AVG_CHAR_BYTES_THRESHOLD
+ *
+ * @tparam TargetGetter Callable `(size_type idx) -> string_view` returning the target for row idx
+ * @tparam ReplGetter   Callable `(size_type idx) -> string_view` returning the replacement for row
+ * idx
  */
+template <typename TargetGetter, typename ReplGetter>
 struct replace_fn {
   column_device_view const d_strings;
-  string_view d_target;
-  string_view d_replacement;
+  TargetGetter get_target;
+  ReplGetter get_repl;
   cudf::size_type maxrepl;
+  bitmask_type const* d_valid_mask;
   cudf::size_type* d_sizes{};
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
 
   __device__ void operator()(size_type idx)
   {
-    if (d_strings.is_null(idx)) {
+    // A row is null when the pre-computed combined validity mask marks it invalid,
+    // or (when no combined mask is provided) when the input row itself is null.
+    // Null rows produce zero-size output so the column never has non-empty nulls.
+    bool const is_null = d_valid_mask ? !bit_is_set(d_valid_mask, idx) : d_strings.is_null(idx);
+    if (is_null) {
       if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
     auto const d_str   = d_strings.element<string_view>(idx);
+    auto const d_tgt   = get_target(idx);
+    auto const d_repl  = get_repl(idx);
     char const* in_ptr = d_str.data();
+
+    // Empty target: copy input unchanged (no replacement).
+    // This handles per-row empty targets gracefully for the column variant.
+    if (d_tgt.empty()) {
+      if (!d_chars) {
+        d_sizes[idx] = d_str.size_bytes();
+      } else {
+        memcpy(d_chars + d_offsets[idx], in_ptr, d_str.size_bytes());
+      }
+      return;
+    }
 
     size_type bytes = d_str.size_bytes();
     size_type spos  = 0;
@@ -385,13 +410,11 @@ struct replace_fn {
     char* out_ptr   = d_chars ? d_chars + d_offsets[idx] : nullptr;
     auto max_n      = (maxrepl < 0) ? d_str.length() : maxrepl;
 
-    // check each character against each target
+    // check each character against the target
     while (spos < d_str.size_bytes() && (max_n > 0)) {
-      auto const d_tgt = d_target;
       if ((d_tgt.size_bytes() <= (d_str.size_bytes() - spos)) &&    // check fit
           (d_tgt.compare(in_ptr + spos, d_tgt.size_bytes()) == 0))  // and match
       {
-        auto const d_repl = d_replacement;
         bytes += d_repl.size_bytes() - d_tgt.size_bytes();
         if (out_ptr) {
           out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);
@@ -411,23 +434,35 @@ struct replace_fn {
   }
 };
 
+/**
+ * @brief Perform string-parallel replace using per-row target/replacement getters.
+ *
+ * @param d_valid_mask Pre-computed combined validity mask (bitwise AND of input,
+ *   targets, and repls null masks). Null rows produce zero-size output so the
+ *   result never contains non-empty nulls. Pass `nullptr` when no combined mask
+ *   is needed (e.g. scalar target/repl with no per-row nullability).
+ *
+ * @warning The returned column has `null_count == 0` and no null mask. Callers
+ * must call `set_null_mask()` afterwards when any nulls are present.
+ */
+template <typename TargetGetter, typename ReplGetter>
 std::unique_ptr<column> replace_string_parallel(strings_column_view const& input,
-                                                string_view const& d_target,
-                                                string_view const& d_replacement,
+                                                TargetGetter get_target,
+                                                ReplGetter get_repl,
                                                 cudf::size_type maxrepl,
+                                                bitmask_type const* d_valid_mask,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::device_async_resource_ref mr)
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   auto [offsets_column, chars] = make_strings_children(
-    replace_fn{*d_strings, d_target, d_replacement, maxrepl}, input.size(), stream, mr);
+    replace_fn<TargetGetter, ReplGetter>{*d_strings, get_target, get_repl, maxrepl, d_valid_mask},
+    input.size(),
+    stream,
+    mr);
 
-  return make_strings_column(input.size(),
-                             std::move(offsets_column),
-                             chars.release(),
-                             input.null_count(),
-                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
+  return make_strings_column(input.size(), std::move(offsets_column), chars.release(), 0, {});
 }
 
 }  // namespace
@@ -448,11 +483,61 @@ std::unique_ptr<column> replace(strings_column_view const& input,
   string_view d_target(target.data(), target.size());
   string_view d_repl(repl.data(), repl.size());
 
-  return (input.size() == input.null_count() ||
-          ((input.chars_size(stream) / (input.size() - input.null_count())) <
-           AVG_CHAR_BYTES_THRESHOLD))
-           ? replace_string_parallel(input, d_target, d_repl, maxrepl, stream, mr)
-           : replace_character_parallel(input, d_target, d_repl, maxrepl, stream, mr);
+  if (input.size() == input.null_count() ||
+      ((input.chars_size(stream) / (input.size() - input.null_count())) <
+       AVG_CHAR_BYTES_THRESHOLD)) {
+    auto tgt_fn  = [d_target] __device__(size_type) { return d_target; };
+    auto repl_fn = [d_repl] __device__(size_type) { return d_repl; };
+    auto result  = replace_string_parallel(input, tgt_fn, repl_fn, maxrepl, nullptr, stream, mr);
+    if (input.parent().nullable()) {
+      result->set_null_mask(cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                            input.null_count());
+    }
+    return result;
+  }
+  return replace_character_parallel(input, d_target, d_repl, maxrepl, stream, mr);
+}
+
+std::unique_ptr<column> replace(strings_column_view const& input,
+                                strings_column_view const& targets,
+                                strings_column_view const& repls,
+                                cudf::size_type maxrepl,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+{
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
+  CUDF_EXPECTS(targets.size() == input.size(),
+               "targets column must have the same number of rows as input");
+  CUDF_EXPECTS(repls.size() == input.size(),
+               "repls column must have the same number of rows as input");
+
+  // Compute the combined null mask up-front so the kernel produces zero-size
+  // output for null rows, preventing non-empty nulls in the result.
+  bool const has_any_nulls =
+    input.null_count() > 0 || targets.null_count() > 0 || repls.null_count() > 0;
+  rmm::device_buffer null_mask;
+  size_type null_count = 0;
+  if (has_any_nulls) {
+    auto const views = std::vector<column_view>{input.parent(), targets.parent(), repls.parent()};
+    std::tie(null_mask, null_count) = cudf::detail::bitmask_and(table_view{views}, stream, mr);
+  }
+  auto const d_valid_mask =
+    has_any_nulls ? static_cast<bitmask_type const*>(null_mask.data()) : nullptr;
+
+  auto d_targets = column_device_view::create(targets.parent(), stream);
+  auto d_repls   = column_device_view::create(repls.parent(), stream);
+
+  auto tgt_fn = [d_tgts = *d_targets] __device__(size_type idx) {
+    return d_tgts.is_valid(idx) ? d_tgts.element<string_view>(idx) : string_view{};
+  };
+  auto repl_fn = [d_rps = *d_repls] __device__(size_type idx) {
+    return d_rps.is_valid(idx) ? d_rps.element<string_view>(idx) : string_view{};
+  };
+
+  auto result = replace_string_parallel(input, tgt_fn, repl_fn, maxrepl, d_valid_mask, stream, mr);
+
+  if (has_any_nulls) { result->set_null_mask(std::move(null_mask), null_count); }
+  return result;
 }
 
 }  // namespace detail
@@ -468,6 +553,17 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::replace(strings, target, repl, maxrepl, stream, mr);
+}
+
+std::unique_ptr<column> replace(strings_column_view const& strings,
+                                strings_column_view const& targets,
+                                strings_column_view const& repls,
+                                cudf::size_type maxrepl,
+                                rmm::cuda_stream_view stream,
+                                rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace(strings, targets, repls, maxrepl, stream, mr);
 }
 
 }  // namespace strings
