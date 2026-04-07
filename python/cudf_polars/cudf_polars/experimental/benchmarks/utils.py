@@ -20,7 +20,6 @@ import textwrap
 import time
 import traceback
 import uuid
-import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -359,7 +358,6 @@ class RunConfig:
     runtime: str
     stream_policy: str | None
     cluster: str
-    scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
@@ -414,7 +412,6 @@ class RunConfig:
         """Create a RunConfig from command line arguments."""
         executor: ExecutorType = args.executor
         cluster = args.cluster
-        scheduler = args.scheduler
         runtime = args.runtime
         stream_policy = args.stream_policy
 
@@ -422,35 +419,9 @@ class RunConfig:
         if stream_policy == "auto":
             stream_policy = None
 
-        # Deal with deprecated scheduler argument
-        # and non-streaming executors
+        # Deal with non-streaming executors
         if executor == "in-memory" or executor == "cpu":
-            cluster = None
-            scheduler = None
-        elif scheduler is not None:
-            if cluster is not None:
-                raise ValueError(
-                    "Cannot specify both -s/--scheduler and -c/--cluster. "
-                    "Please use -c/--cluster only."
-                )
-            else:
-                warnings.warn(
-                    "The -s/--scheduler argument is deprecated. Use -c/--cluster instead.",
-                    FutureWarning,
-                    stacklevel=2,
-                )
-            cluster = "single" if scheduler == "synchronous" else "distributed"
-        elif cluster is not None:
-            match cluster:
-                case "single":
-                    scheduler = "synchronous"
-                case "distributed":
-                    scheduler = "distributed"
-                case "spmd":  # launched via rrun, not Dask
-                    scheduler = None
-        else:
             cluster = "single"
-            scheduler = "synchronous"
 
         path = args.path
         name = args.query_set
@@ -520,7 +491,6 @@ class RunConfig:
             queries=args.query,
             executor=executor,
             cluster=cluster,
-            scheduler=scheduler,
             runtime=runtime,
             stream_policy=stream_policy,
             n_workers=args.n_workers,
@@ -969,19 +939,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
                 - ray         : Ray actor-based multi-GPU execution"""),
     )
     parser.add_argument(
-        "-s",
-        "--scheduler",
-        default=None,
-        type=str,
-        choices=["synchronous", "distributed"],
-        help=textwrap.dedent("""\
-            *Deprecated*: Use --cluster instead.
-
-            Scheduler type to use with the 'streaming' executor.
-                - synchronous : Run locally in a single process
-                - distributed : Use Dask for multi-GPU execution"""),
-    )
-    parser.add_argument(
         "--runtime",
         type=str,
         choices=["tasks", "rapidsmpf"],
@@ -1227,7 +1184,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--native-parquet",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
     )
     parser.add_argument(

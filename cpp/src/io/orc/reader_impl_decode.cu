@@ -392,7 +392,8 @@ void decode_stream_data(int64_t num_dicts,
     update_null_mask(chunks, out_buffers, stream, mr);
   }
 
-  cudf::detail::device_scalar<size_type> error_count(0, stream);
+  cudf::detail::device_scalar<size_type> error_count(
+    0, stream, cudf::get_current_device_resource_ref());
   decode_column_data(chunks.base_device_ptr(),
                      global_dict.data(),
                      row_groups,
