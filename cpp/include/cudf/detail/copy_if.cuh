@@ -18,9 +18,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -51,7 +51,7 @@ std::unique_ptr<table> copy_if(table_view const& input,
   if (0 == input.num_rows() || 0 == input.num_columns()) { return empty_like(input); }
 
   auto indices     = rmm::device_uvector<size_type>(input.num_rows(), stream);
-  auto const begin = thrust::counting_iterator<size_type>(0);
+  auto const begin = cuda::counting_iterator<size_type>{0};
   auto const end   = begin + input.num_rows();
   auto const indices_end =
     thrust::copy_if(rmm::exec_policy_nosync(stream), begin, end, indices.begin(), filter);

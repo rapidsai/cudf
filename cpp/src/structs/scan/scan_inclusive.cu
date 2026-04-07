@@ -15,7 +15,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scan.h>
 
 #include <vector>
@@ -37,8 +37,8 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
   auto const binop_generator =
     cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
   thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                         thrust::counting_iterator<size_type>(0),
-                         thrust::counting_iterator<size_type>(input.size()),
+                         cuda::counting_iterator<size_type>{0},
+                         cuda::counting_iterator<size_type>{input.size()},
                          gather_map.begin(),
                          binop_generator.binop());
 

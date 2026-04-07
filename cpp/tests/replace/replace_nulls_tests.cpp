@@ -36,7 +36,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
 
@@ -444,9 +443,10 @@ TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLargeArray)
   cudf::size_type const sz = 1000;
 
   // Source: 0, null, null...
-  auto src_begin       = thrust::make_counting_iterator(0);
+  auto src_begin = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return static_cast<TypeParam>(i); });
   auto src_end         = src_begin + sz;
-  auto nulls_idx_begin = thrust::make_counting_iterator(1);
+  auto nulls_idx_begin = cuda::counting_iterator<cudf::size_type>{1};
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 0, 0, 0, ...
@@ -465,9 +465,10 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
   cudf::size_type const sz = 1000;
 
   // Source: null, ... null, 999
-  auto src_begin       = thrust::make_counting_iterator(0);
+  auto src_begin = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return static_cast<TypeParam>(i); });
   auto src_end         = src_begin + sz;
-  auto nulls_idx_begin = thrust::make_counting_iterator(0);
+  auto nulls_idx_begin = cuda::counting_iterator<cudf::size_type>{0};
   auto nulls_idx_end   = nulls_idx_begin + sz - 1;
 
   // Expected: 999, 999, 999, ...

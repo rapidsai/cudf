@@ -136,7 +136,14 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     assert_gpu_result_equal(q, check_exact=False)
 
 
-def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
+def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs, using_rapidsmpf, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf,
+            strict=False,
+            reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
+        )
+    )
     sorted_keys = [
         key.sort(descending=descending)
         for key, descending in zip(keys, itertools.cycle([False, True]))

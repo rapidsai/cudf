@@ -20,7 +20,6 @@
 #include <cuda/iterator>
 #include <cuda/std/algorithm>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -323,7 +322,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
   auto d_page_indexes = cudf::detail::make_device_uvector_async(
     page_indexes, stream, cudf::get_current_device_resource_ref());
 
-  auto iter = thrust::make_counting_iterator<size_type>(0);
+  auto iter = cuda::counting_iterator<size_type>{0};
   thrust::for_each(
     rmm::exec_policy_nosync(stream), iter, iter + num_pages, copy_page_info{d_page_indexes, pages});
 }
@@ -435,7 +434,7 @@ void decode_page_headers(pass_intermediate_data& pass,
 {
   CUDF_FUNC_RANGE();
 
-  auto iter = thrust::counting_iterator<size_t>(0);
+  auto iter = cuda::counting_iterator<size_t>{0};
   rmm::device_uvector<size_type> chunk_page_offsets(pass.chunks.size() + 1, stream);
   thrust::transform_exclusive_scan(
     rmm::exec_policy_nosync(stream),
@@ -493,8 +492,8 @@ void decode_page_headers(pass_intermediate_data& pass,
                      std::cmp_equal(chunk.h_chunk_info->pages.size(), chunk.num_data_pages),
                    "Encountered invalid sized data page information in the page index");
       auto const num_data_pages = chunk.num_data_pages;
-      std::for_each(thrust::counting_iterator(0),
-                    thrust::counting_iterator(num_data_pages),
+      std::for_each(cuda::counting_iterator<int32_t>{0},
+                    cuda::counting_iterator{num_data_pages},
                     [&](auto const page_idx) {
                       host_page_locations[curr_page_idx] = data_ptr;
                       ++curr_page_idx;

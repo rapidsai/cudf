@@ -99,3 +99,9 @@ def test_setsorted(request, descending, nulls_last, with_nulls):
         assert a.order == (
             plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
         )
+
+
+def test_sort_concat_filtered_to_empty():
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = pl.concat([df.filter(pl.col("a") == 0), df.filter(pl.col("a") == 4)]).sort("a")
+    assert_gpu_result_equal(q)
