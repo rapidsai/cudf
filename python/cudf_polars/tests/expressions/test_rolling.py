@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
     from cudf_polars.typing import RankMethod
@@ -32,10 +31,6 @@ def df():
     )
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 @pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
 def test_rolling_datetime(time_unit):
     dates = [
@@ -60,10 +55,6 @@ def test_rolling_datetime(time_unit):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 def test_rolling_date():
     dates = [
         "2020-01-01",
@@ -85,10 +76,6 @@ def test_rolling_date():
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 @pytest.mark.parametrize("dtype", [pl.Int32, pl.UInt32, pl.Int64, pl.UInt64])
 def test_rolling_integral_orderby(dtype):
     df = pl.LazyFrame(
@@ -104,10 +91,6 @@ def test_rolling_integral_orderby(dtype):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 def test_rolling_agg_first():
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
     q = df.with_columns(pl.col("a").sum().rolling("b", period="2i"))
@@ -127,10 +110,6 @@ def test_rolling_collect_list_raises():
     )
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 def test_unsorted_raises():
     df = pl.LazyFrame({"orderby": [1, 2, 4, 2], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
@@ -143,10 +122,6 @@ def test_unsorted_raises():
         q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 def test_orderby_nulls_raises_computeerror():
     df = pl.LazyFrame({"orderby": [1, 2, 4, None], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="2i"))
@@ -158,10 +133,6 @@ def test_orderby_nulls_raises_computeerror():
         q.collect(engine=pl.GPUEngine(raise_on_fail=True))
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 def test_invalid_duration_spec_raises_in_translation():
     df = pl.LazyFrame({"orderby": [1, 2, 4, 5], "values": [1, 2, 3, 4]})
     q = df.select(pl.col("values").sum().rolling("orderby", period="3d"))
@@ -181,10 +152,6 @@ def test_rolling_inside_groupby_raises(request):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 def test_rolling_sum_all_null_window_returns_null():
     df = pl.LazyFrame(
         {

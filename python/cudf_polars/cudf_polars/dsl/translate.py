@@ -32,9 +32,6 @@ from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
-from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_139,
-)
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -882,54 +879,52 @@ def _(
     assert_never(node.options)
 
 
-if not POLARS_VERSION_LT_139:  # type: ignore[misc]
-
-    @_translate_expr.register
-    def _(
-        node: plrs._expr_nodes.Rolling,
-        translator: Translator,
-        dtype: DataType,
-        schema: Schema,
-    ) -> expr.Expr:
-        with set_expr_context(translator, ExecutionContext.ROLLING):
-            agg_expr = translator.translate_expr(n=node.function, schema=schema)
-        orderby = translator.visitor.view_expression(node.index_column).name
-        orderby_dtype = schema[orderby].plc_type
-        if plc.traits.is_integral(orderby_dtype):
-            orderby_dtype = plc.DataType(plc.TypeId.INT64)
-        name_generator = unique_names(schema)
-        aggs, named_post_agg = decompose_single_agg(
-            expr.NamedExpr(next(name_generator), agg_expr),
-            name_generator,
-            is_top=True,
-            context=ExecutionContext.ROLLING,
+@_translate_expr.register
+def _(
+    node: plrs._expr_nodes.Rolling,
+    translator: Translator,
+    dtype: DataType,
+    schema: Schema,
+) -> expr.Expr:
+    with set_expr_context(translator, ExecutionContext.ROLLING):
+        agg_expr = translator.translate_expr(n=node.function, schema=schema)
+    orderby = translator.visitor.view_expression(node.index_column).name
+    orderby_dtype = schema[orderby].plc_type
+    if plc.traits.is_integral(orderby_dtype):
+        orderby_dtype = plc.DataType(plc.TypeId.INT64)
+    name_generator = unique_names(schema)
+    aggs, named_post_agg = decompose_single_agg(
+        expr.NamedExpr(next(name_generator), agg_expr),
+        name_generator,
+        is_top=True,
+        context=ExecutionContext.ROLLING,
+    )
+    named_aggs = [a for a, _ in aggs]
+    closed_window = node.closed_window
+    if isinstance(named_post_agg.value, expr.Col):
+        (named_agg,) = named_aggs
+        return expr.RollingWindow(
+            named_agg.value.dtype,
+            orderby_dtype,
+            node.offset,
+            node.period,
+            closed_window,
+            orderby,
+            named_agg.value,
         )
-        named_aggs = [a for a, _ in aggs]
-        closed_window = node.closed_window
-        if isinstance(named_post_agg.value, expr.Col):
-            (named_agg,) = named_aggs
-            return expr.RollingWindow(
-                named_agg.value.dtype,
-                orderby_dtype,
-                node.offset,
-                node.period,
-                closed_window,
-                orderby,
-                named_agg.value,
-            )
-        replacements: dict[expr.Expr, expr.Expr] = {
-            expr.Col(a.value.dtype, a.name): expr.RollingWindow(
-                a.value.dtype,
-                orderby_dtype,
-                node.offset,
-                node.period,
-                closed_window,
-                orderby,
-                a.value,
-            )
-            for a in named_aggs
-        }
-        return replace([named_post_agg.value], replacements)[0]
+    replacements: dict[expr.Expr, expr.Expr] = {
+        expr.Col(a.value.dtype, a.name): expr.RollingWindow(
+            a.value.dtype,
+            orderby_dtype,
+            node.offset,
+            node.period,
+            closed_window,
+            orderby,
+            a.value,
+        )
+        for a in named_aggs
+    }
+    return replace([named_post_agg.value], replacements)[0]
 
 
 @_translate_expr.register

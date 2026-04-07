@@ -1417,11 +1417,8 @@ class DataFrameScan(IR):
         if projection is not None:
             df = df.select(projection)
 
-        # Zero-width dataframes lose their row count when converted through
-        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
         if len(schema) == 0:
             return DataFrame([], stream=context.get_cuda_stream(), num_rows=height)
-
         df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type

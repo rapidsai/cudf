@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 
 @pytest.fixture
@@ -124,10 +123,6 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
         assert_ir_translation_raises(q, NotImplementedError)
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 @pytest.mark.parametrize("period", ["2d", "3d"])
 def test_rolling(df: pl.LazyFrame, agg_expr, period: str):
     """Test rolling window functions over time series."""
@@ -151,10 +146,6 @@ def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
     assert_ir_translation_raises(query, NotImplementedError)
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 @pytest.mark.parametrize("closed", ["left", "right", "both", "none"])
 def test_rolling_closed(df: pl.LazyFrame, closed: str):
     """Test rolling window functions with different closed parameters."""

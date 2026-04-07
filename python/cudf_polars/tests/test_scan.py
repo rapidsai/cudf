@@ -18,9 +18,6 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_139,
-)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -572,7 +569,6 @@ def test_scan_ndjson_remote(
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_139,
             reason="polars 1.39+ ndjson remote reader requires range request support",
         )
     )

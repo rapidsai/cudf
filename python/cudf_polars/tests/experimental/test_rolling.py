@@ -11,7 +11,6 @@ import polars as pl
 
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -34,10 +33,6 @@ def engine(
         yield engine
 
 
-@pytest.mark.xfail(
-    condition=POLARS_VERSION_LT_139,
-    reason="AExpr::Rolling Python API requires polars >= 1.39",
-)
 def test_rolling_datetime(engine):
     dates = [
         "2020-01-01 13:45:48",
