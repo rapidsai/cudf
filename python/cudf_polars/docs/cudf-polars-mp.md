@@ -93,7 +93,7 @@ opts = StreamingOptions.from_dict({
 
 ### Building from CLI arguments
 
-`add_cli_args()` registers all options on an `ArgumentParser`.
+`_add_cli_args()` registers all options on an `ArgumentParser`.
 `_from_argparse()` then converts the parsed namespace into a `StreamingOptions`:
 
 ```python
@@ -101,7 +101,7 @@ import argparse
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
 parser = argparse.ArgumentParser()
-StreamingOptions.add_cli_args(parser)
+StreamingOptions._add_cli_args(parser)
 # ... add your own args ...
 args = parser.parse_args()
 opts = StreamingOptions._from_argparse(args)

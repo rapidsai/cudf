@@ -62,6 +62,23 @@ def _opt(category: str) -> Any:
     return dataclasses.field(default=UNSPECIFIED, metadata={"category": category})
 
 
+def _category_opts(
+    obj: Any, category: str, fallback: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Return fields of *obj* in *category*, falling back to *fallback* for UNSPECIFIED fields."""
+    result = {}
+    for f in dataclasses.fields(obj):
+        if f.metadata.get("category") != category:
+            continue
+        v = getattr(obj, f.name)
+        if isinstance(v, _Unspecified):
+            if fallback and f.name in fallback:
+                result[f.name] = fallback[f.name]
+        else:
+            result[f.name] = v
+    return result
+
+
 @dataclasses.dataclass
 class StreamingOptions:
     """
@@ -270,24 +287,12 @@ class StreamingOptions:
         ``RAPIDSMPF_*`` environment variable (if set); otherwise the rapidsmpf
         C++ library applies its own built-in default.
         """
-        # get_environment_variables() returns uppercase keys,
-        # e.g. {"NUM_STREAMING_THREADS": "4"}.
-        env = get_environment_variables()
-
-        opts: dict[str, str] = {}
-        for f in dataclasses.fields(self):
-            if f.metadata.get("category") != "rapidsmpf":
-                continue
-            v = getattr(self, f.name)
-            if isinstance(v, _Unspecified):
-                env_key = f.name.upper()
-                if env_key in env:
-                    opts[f.name] = env[env_key]
-                # else: omit entirely → rapidsmpf C++ uses its built-in default
-            else:
-                opts[f.name] = str(v)
-
-        return Options(opts)
+        # get_environment_variables() returns uppercase keys e.g. {"NUM_STREAMING_THREADS": "4"};
+        # lowercasing maps them directly to field names.
+        env = {k.lower(): v for k, v in get_environment_variables().items()}
+        return Options(
+            {k: str(v) for k, v in _category_opts(self, "rapidsmpf", env).items()}
+        )
 
     def to_executor_options(self) -> dict[str, Any]:
         """
@@ -297,14 +302,7 @@ class StreamingOptions:
         ``StreamingExecutor`` reads ``CUDF_POLARS__EXECUTOR__*`` environment
         variables for any omitted fields.
         """
-        opts: dict[str, Any] = {}
-        for f in dataclasses.fields(self):
-            if f.metadata.get("category") != "executor":
-                continue
-            v = getattr(self, f.name)
-            if not isinstance(v, _Unspecified):
-                opts[f.name] = v
-        return opts
+        return _category_opts(self, "executor")
 
     def to_engine_options(self) -> dict[str, Any]:
         """
@@ -314,14 +312,7 @@ class StreamingOptions:
         ``ConfigOptions.from_polars_engine`` handles environment variables for
         any omitted fields.
         """
-        opts: dict[str, Any] = {}
-        for f in dataclasses.fields(self):
-            if f.metadata.get("category") != "engine":
-                continue
-            v = getattr(self, f.name)
-            if not isinstance(v, _Unspecified):
-                opts[f.name] = v
-        return opts
+        return _category_opts(self, "engine")
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -332,8 +323,7 @@ class StreamingOptions:
 
         Returns
         -------
-        dict
-            Mapping of field name to value for every non-UNSPECIFIED field.
+        Mapping of field name to value for every non-UNSPECIFIED field.
 
         Examples
         --------
@@ -355,7 +345,7 @@ class StreamingOptions:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> StreamingOptions:
+    def from_dict(cls, data: dict[str, Any]) -> StreamingOptions:
         """
         Build a :class:`StreamingOptions` from a plain dictionary.
 
@@ -364,7 +354,7 @@ class StreamingOptions:
 
         Parameters
         ----------
-        d
+        data
             Flat dictionary of option name to value. Unknown keys raise
             :exc:`TypeError`.
 
@@ -381,7 +371,7 @@ class StreamingOptions:
         >>> StreamingOptions.from_dict({})  # all fields UNSPECIFIED
         StreamingOptions(...)
         """
-        return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in d.items()})
+        return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in data.items()})
 
     @classmethod
     def _from_argparse(cls, args: argparse.Namespace) -> StreamingOptions:
@@ -389,7 +379,7 @@ class StreamingOptions:
         Build a :class:`StreamingOptions` from a parsed :class:`argparse.Namespace`.
 
         Designed to work with namespaces produced by :func:`argparse.ArgumentParser`
-        parsers that have been augmented with :meth:`add_cli_args`. Fields not present
+        parsers that have been augmented with :meth:`_add_cli_args`. Fields not present
         in the namespace (or set to ``None``) remain :data:`UNSPECIFIED`.
 
         Parameters
@@ -404,7 +394,7 @@ class StreamingOptions:
         Examples
         --------
         >>> parser = argparse.ArgumentParser()
-        >>> StreamingOptions.add_cli_args(parser)
+        >>> StreamingOptions._add_cli_args(parser)
         >>> opts = StreamingOptions._from_argparse(parser.parse_args([]))
         """
 
@@ -424,7 +414,7 @@ class StreamingOptions:
         sp = getattr(args, "stream_policy", None)
         cuda_stream_policy: Any = UNSPECIFIED if (sp is None or sp == "auto") else sp
 
-        # target_partition_size: canonical dest from add_cli_args; fall back to
+        # target_partition_size: canonical dest from _add_cli_args; fall back to
         # "blocksize" for legacy benchmark scripts that predate this module.
         target_partition_size = (
             _get("target_partition_size")
@@ -457,7 +447,7 @@ class StreamingOptions:
         )
 
     @staticmethod
-    def add_cli_args(parser: argparse.ArgumentParser) -> None:
+    def _add_cli_args(parser: argparse.ArgumentParser) -> None:
         """
         Register :class:`StreamingOptions`-specific CLI arguments on *parser*.
 
@@ -471,7 +461,7 @@ class StreamingOptions:
         Examples
         --------
         >>> parser = argparse.ArgumentParser()
-        >>> StreamingOptions.add_cli_args(parser)
+        >>> StreamingOptions._add_cli_args(parser)
         >>> opts = StreamingOptions._from_argparse(parser.parse_args([]))
         """
         g = parser.add_argument_group("Streaming and RapidsMPF Options")

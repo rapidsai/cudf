@@ -185,11 +185,11 @@ def test_from_dict_roundtrip() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test__from_argparse_empty_namespace_equals_default() -> None:
+def test_from_argparse_empty_namespace_equals_default() -> None:
     assert StreamingOptions._from_argparse(argparse.Namespace()) == StreamingOptions()
 
 
-def test__from_argparse_direct_fields() -> None:
+def test_from_argparse_direct_fields() -> None:
     opts = StreamingOptions._from_argparse(
         argparse.Namespace(fallback_mode="raise", max_rows_per_partition=500_000)
     )
@@ -197,7 +197,7 @@ def test__from_argparse_direct_fields() -> None:
     assert opts.max_rows_per_partition == 500_000
 
 
-def test__from_argparse_renames() -> None:
+def test_from_argparse_renames() -> None:
     opts = StreamingOptions._from_argparse(
         argparse.Namespace(
             rapidsmpf_log="DEBUG",
@@ -210,7 +210,7 @@ def test__from_argparse_renames() -> None:
     assert opts.target_partition_size == 1_000_000
 
 
-def test__from_argparse_dynamic_planning() -> None:
+def test_from_argparse_dynamic_planning() -> None:
     assert isinstance(
         StreamingOptions._from_argparse(
             argparse.Namespace(dynamic_planning=True)
@@ -225,7 +225,7 @@ def test__from_argparse_dynamic_planning() -> None:
     )
 
 
-def test__from_argparse_stream_policy() -> None:
+def test_from_argparse_stream_policy() -> None:
     assert isinstance(
         StreamingOptions._from_argparse(
             argparse.Namespace(stream_policy="auto")
@@ -241,13 +241,13 @@ def test__from_argparse_stream_policy() -> None:
 
 
 # ---------------------------------------------------------------------------
-# add_cli_args
+# _add_cli_args
 # ---------------------------------------------------------------------------
 
 
 def test_add_cli_args_then_from_argparse_roundtrip() -> None:
     parser = argparse.ArgumentParser()
-    StreamingOptions.add_cli_args(parser)
+    StreamingOptions._add_cli_args(parser)
     args = parser.parse_args(
         ["--num-streaming-threads", "8", "--rapidsmpf-log", "DEBUG", "--raise-on-fail"]
     )
