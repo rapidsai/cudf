@@ -26,6 +26,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -156,8 +157,10 @@ std::unique_ptr<column> leaf_column_to_strings(column_view const& column,
   if (cudf::is_timestamp(column.type())) { return timestamp_to_strings(column, stream, mr); }
   if (cudf::is_duration(column.type())) { return duration_to_strings(column, stream, mr); }
   if (cudf::is_boolean(column.type())) {
-    string_scalar const true_value(options.get_true_value(), true, stream);
-    string_scalar const false_value(options.get_false_value(), true, stream);
+    string_scalar const true_value(
+      options.get_true_value(), true, stream, cudf::get_current_device_resource_ref());
+    string_scalar const false_value(
+      options.get_false_value(), true, stream, cudf::get_current_device_resource_ref());
     return cudf::strings::detail::from_booleans(column, true_value, false_value, stream, mr);
   }
   if (cudf::is_integral(column.type())) {
@@ -190,13 +193,13 @@ struct column_to_strings_fn {
     : options_(options),
       stream_(stream),
       mr_(std::move(mr)),
-      narep(options.get_na_rep(), true, stream),
-      struct_value_separator(",", true, stream),
-      struct_row_begin_wrap("{", true, stream),
-      struct_row_end_wrap("}", true, stream),
-      list_value_separator(",", true, stream),
-      list_row_begin_wrap("[", true, stream),
-      list_row_end_wrap("]", true, stream)
+      narep(options.get_na_rep(), true, stream, cudf::get_current_device_resource_ref()),
+      struct_value_separator(",", true, stream, cudf::get_current_device_resource_ref()),
+      struct_row_begin_wrap("{", true, stream, cudf::get_current_device_resource_ref()),
+      struct_row_end_wrap("}", true, stream, cudf::get_current_device_resource_ref()),
+      list_value_separator(",", true, stream, cudf::get_current_device_resource_ref()),
+      list_row_begin_wrap("[", true, stream, cudf::get_current_device_resource_ref()),
+      list_row_end_wrap("]", true, stream, cudf::get_current_device_resource_ref())
   {
   }
 
@@ -372,10 +375,13 @@ void write_json_uncompressed(data_sink* out_sink,
   }();
 
   auto const line_terminator = std::string(options.is_enabled_lines() ? "\n" : ",");
-  string_scalar const d_line_terminator_with_row_end{"}" + line_terminator, true, stream};
-  string_scalar const d_line_terminator{line_terminator, true, stream};
+  string_scalar const d_line_terminator_with_row_end{
+    "}" + line_terminator, true, stream, cudf::get_current_device_resource_ref()};
+  string_scalar const d_line_terminator{
+    line_terminator, true, stream, cudf::get_current_device_resource_ref()};
   std::string const list_braces{"[]"};
-  string_scalar const d_list_braces{list_braces, true, stream};
+  string_scalar const d_list_braces{
+    list_braces, true, stream, cudf::get_current_device_resource_ref()};
 
   if (!options.is_enabled_lines()) {
     if (out_sink->is_device_write_preferred(1)) {

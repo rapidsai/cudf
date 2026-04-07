@@ -56,7 +56,7 @@ pytestmark = [
 
 def test_reserved_executor_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd", "ray_context"):
+    for key in ("runtime", "cluster", "spmd_context", "ray_context"):
         with pytest.raises(TypeError, match="reserved"):
             RayEngine(executor_options={key: "anything"})
 

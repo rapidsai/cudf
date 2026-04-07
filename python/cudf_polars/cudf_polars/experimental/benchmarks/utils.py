@@ -1227,7 +1227,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--native-parquet",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
     )
     parser.add_argument(
@@ -1326,7 +1326,11 @@ def parse_args(
     ):
         raise ValueError("Must specify --validate to use --output-expected-directory.")
 
-    if parsed_args.suffix and not parsed_args.suffix.startswith("."):
+    if (
+        parsed_args.suffix
+        and not parsed_args.suffix.startswith(".")
+        and not parsed_args.suffix.startswith("/")
+    ):
         parsed_args.suffix = f".{parsed_args.suffix}"
 
     return parsed_args
@@ -1425,7 +1429,7 @@ def check_input_data_type(
         table, col = "item", "i_current_price"
     else:
         table, col = "customer", "c_acctbal"
-    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    path = f"{run_config.dataset_path}/{table}{run_config.suffix}"
     t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
 
     num_type: Literal["decimal", "float"]
@@ -1438,7 +1442,7 @@ def check_input_data_type(
     if run_config.query_set == "pdsds":
         date_type = "date"
     else:
-        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        path = f"{run_config.dataset_path}/orders{run_config.suffix}"
         t = (
             pl.scan_parquet(path)
             .select(pl.col("o_orderdate"))
@@ -2137,7 +2141,7 @@ def print_duckdb_plan(
 
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
@@ -2173,7 +2177,7 @@ def execute_duckdb_query(
         tbl_names = PDSH_TABLE_NAMES
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
