@@ -248,7 +248,7 @@ std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& in
   auto const d_column = column_device_view::create(input.parent(), stream);
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{input.size()},
                       results.begin(),

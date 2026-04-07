@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,7 +55,7 @@ make_offsets_child_column_batch_async(std::vector<column_string_pairs> const& in
     auto const d_offsets = offsets->mutable_view().template data<OutputType>();
     auto const output_it = cudf::detail::make_sizes_to_offsets_iterator(
       d_offsets, d_offsets + string_count + 1, chars_sizes.data() + idx);
-    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            input_it,
                            input_it + string_count + 1,
                            output_it,
@@ -83,7 +83,10 @@ std::vector<std::unique_ptr<column>> make_strings_column_batch(
 
   rmm::device_uvector<size_type> d_valid_counts(num_columns, stream, mr);
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), d_valid_counts.begin(), d_valid_counts.end(), 0);
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    d_valid_counts.begin(),
+    d_valid_counts.end(),
+    0);
 
   for (std::size_t idx = 0; idx < num_columns; ++idx) {
     auto const& string_pairs = input[idx];

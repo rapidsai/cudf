@@ -188,7 +188,7 @@ std::unique_ptr<table> partition(strings_column_view const& strings,
   partition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
 
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::counting_iterator<size_type>{0},
                      strings_count,
                      partitioner);
@@ -214,7 +214,7 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
   auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
   rpartition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::counting_iterator<size_type>{0},
                      strings_count,
                      partitioner);
