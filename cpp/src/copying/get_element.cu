@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,8 @@ struct get_element_functor {
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
-    numeric_scalar<size_type> key_index_scalar{index, true, stream};
+    numeric_scalar<size_type> key_index_scalar{
+      index, true, stream, cudf::get_current_device_resource_ref()};
     auto d_key_index = get_scalar_device_view(key_index_scalar);
     auto d_col       = column_device_view::create(input, stream);
 
