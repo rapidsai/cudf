@@ -253,7 +253,7 @@ index_vector generate_merged_indices(table_view const& left_table,
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -263,7 +263,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   } else {
     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order, {});
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -304,7 +304,7 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
 
   auto const total_counter = cuda::counting_iterator<cudf::size_type>{0};
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     total_counter,
     total_counter + total_size,
     [merged = merged_indices.data(), left = left_indices_begin, left_size, right_size] __device__(
@@ -389,7 +389,7 @@ struct column_merger {
     // and "gather" into merged_view.data()[indx_merged]
     // from lcol or rcol, depending on side;
     //
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),
