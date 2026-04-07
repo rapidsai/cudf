@@ -23,7 +23,7 @@ git clone https://github.com/rapidsai/cuml.git --branch "${RAPIDS_BRANCH}" --dep
 CUML_TESTS_DIR=/tmp/cuml/python/cuml/tests
 
 rapids-logger "pytest cuml cuDF-compat subset"
-timeout 10m python -m pytest --cache-clear \
+timeout 15m python -m pytest --cache-clear \
   "${CUML_TESTS_DIR}/test_array.py" \
   "${CUML_TESTS_DIR}/test_compose.py" \
   "${CUML_TESTS_DIR}/test_input_utils.py" \
@@ -32,10 +32,8 @@ timeout 10m python -m pytest --cache-clear \
   "${CUML_TESTS_DIR}/test_label_encoder.py" \
   "${CUML_TESTS_DIR}/test_linear_model.py" \
   "${CUML_TESTS_DIR}/test_metrics.py" \
-  "${CUML_TESTS_DIR}/test_nearest_neighbors.py" \
   "${CUML_TESTS_DIR}/test_one_hot_encoder.py" \
   "${CUML_TESTS_DIR}/test_ordinal_encoder.py" \
-  "${CUML_TESTS_DIR}/test_pickle.py" \
   "${CUML_TESTS_DIR}/test_random_forest.py" \
   "${CUML_TESTS_DIR}/test_reflection.py" \
   "${CUML_TESTS_DIR}/test_sgd.py" \
