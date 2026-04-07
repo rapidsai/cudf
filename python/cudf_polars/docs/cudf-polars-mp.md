@@ -446,9 +446,12 @@ manager imported from `cudf_polars.experimental.rapidsmpf.frontend.spmd`. On con
 
 1. Bootstraps a communicator: UCXX when running under `rrun`, otherwise a
    single-rank communicator that requires no external library.
+   Pass an already-bootstrapped communicator via `comm=` to skip this step and
+   reuse an existing one (see [Reusing a communicator](#reusing-a-communicator) below).
 2. Creates a RapidsMPF streaming `Context` that owns GPU memory and a CUDA stream pool.
 
-All resources are released when the context exits (or `shutdown()` is called).
+All resources except the (optionally) caller-supplied communicator are released when
+the context exits (or `shutdown()` is called).
 
 The recommended way to construct an `SPMDEngine` is via `from_options()`:
 
@@ -564,6 +567,33 @@ may silently collide with an ID already reserved by an active collective inside 
 The result is guaranteed to be a `pl.DataFrame` containing rows from all ranks in rank order
 (rank 0 first, then rank 1, …, rank N-1).
 
+### Reusing a communicator
+
+By default `SPMDEngine` bootstraps a new UCXX communicator on every construction.
+When running multiple engines in sequence (for example in a test suite or an
+interactive session), bootstrapping repeatedly is unnecessary and can cause race
+conditions in the file-based coordination layer shared by all ranks.
+
+Pass a pre-created communicator via the `comm=` argument to skip the bootstrap
+entirely. The engine **does not** close the communicator on shutdown — the caller
+retains ownership and can reuse it across multiple `SPMDEngine` lifetimes.
+
+```python
+from rapidsmpf import bootstrap
+from rapidsmpf.progress_thread import ProgressThread
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+# Bootstrap once.
+comm = bootstrap.create_ucxx_comm(progress_thread=ProgressThread())
+
+# Reuse across multiple engine lifetimes — no re-bootstrap between them.
+with SPMDEngine(comm=comm) as engine:
+    result1 = df1.lazy().collect(engine=engine)
+
+with SPMDEngine(comm=comm) as engine:
+    result2 = df2.lazy().collect(engine=engine)
+```
+
 ### Passing options
 
 Prefer `SPMDEngine.from_options()` with a `StreamingOptions` object (see
@@ -591,6 +621,10 @@ RapidsMPF `Context` share the same resource), sets the wrapped resource as curre
 restores the original resource on shutdown. To use a custom allocator, call
 `rmm.mr.set_current_device_resource(your_mr)` **before** constructing `SPMDEngine`.
 Do not pre-wrap it in `RmmResourceAdaptor`.
+
+`comm` is an already-bootstrapped communicator. When provided, the bootstrap step
+is skipped and the caller retains ownership (see
+[Reusing a communicator](#reusing-a-communicator)). Defaults to `None`.
 
 `rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context`. Defaults
 to `None` (uses RapidsMPF defaults).
