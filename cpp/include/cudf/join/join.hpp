@@ -74,7 +74,7 @@ struct join_match_context {
    * @param match_counts Device vector containing the count of matching rows in the right table
    *                     for each row in the left table
    */
-  join_match_context(table_view const& left_table,
+  join_match_context(table_view const& left_table,  // NOLINT(modernize-pass-by-value)
                      std::unique_ptr<rmm::device_uvector<size_type>> match_counts)
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
   {
