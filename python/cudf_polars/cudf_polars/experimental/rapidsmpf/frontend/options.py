@@ -384,7 +384,7 @@ class StreamingOptions:
         return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in d.items()})
 
     @classmethod
-    def from_argparse(cls, args: argparse.Namespace) -> StreamingOptions:
+    def _from_argparse(cls, args: argparse.Namespace) -> StreamingOptions:
         """
         Build a :class:`StreamingOptions` from a parsed :class:`argparse.Namespace`.
 
@@ -405,7 +405,7 @@ class StreamingOptions:
         --------
         >>> parser = argparse.ArgumentParser()
         >>> StreamingOptions.add_cli_args(parser)
-        >>> opts = StreamingOptions.from_argparse(parser.parse_args([]))
+        >>> opts = StreamingOptions._from_argparse(parser.parse_args([]))
         """
 
         def _get(attr: str) -> Any:
@@ -472,7 +472,7 @@ class StreamingOptions:
         --------
         >>> parser = argparse.ArgumentParser()
         >>> StreamingOptions.add_cli_args(parser)
-        >>> opts = StreamingOptions.from_argparse(parser.parse_args([]))
+        >>> opts = StreamingOptions._from_argparse(parser.parse_args([]))
         """
         g = parser.add_argument_group("Streaming and RapidsMPF Options")
         g.add_argument(

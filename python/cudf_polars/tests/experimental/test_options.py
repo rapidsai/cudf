@@ -181,24 +181,24 @@ def test_from_dict_roundtrip() -> None:
 
 
 # ---------------------------------------------------------------------------
-# from_argparse
+# _from_argparse
 # ---------------------------------------------------------------------------
 
 
-def test_from_argparse_empty_namespace_equals_default() -> None:
-    assert StreamingOptions.from_argparse(argparse.Namespace()) == StreamingOptions()
+def test__from_argparse_empty_namespace_equals_default() -> None:
+    assert StreamingOptions._from_argparse(argparse.Namespace()) == StreamingOptions()
 
 
-def test_from_argparse_direct_fields() -> None:
-    opts = StreamingOptions.from_argparse(
+def test__from_argparse_direct_fields() -> None:
+    opts = StreamingOptions._from_argparse(
         argparse.Namespace(fallback_mode="raise", max_rows_per_partition=500_000)
     )
     assert opts.fallback_mode == "raise"
     assert opts.max_rows_per_partition == 500_000
 
 
-def test_from_argparse_renames() -> None:
-    opts = StreamingOptions.from_argparse(
+def test__from_argparse_renames() -> None:
+    opts = StreamingOptions._from_argparse(
         argparse.Namespace(
             rapidsmpf_log="DEBUG",
             rapidsmpf_statistics=True,
@@ -210,30 +210,30 @@ def test_from_argparse_renames() -> None:
     assert opts.target_partition_size == 1_000_000
 
 
-def test_from_argparse_dynamic_planning() -> None:
+def test__from_argparse_dynamic_planning() -> None:
     assert isinstance(
-        StreamingOptions.from_argparse(
+        StreamingOptions._from_argparse(
             argparse.Namespace(dynamic_planning=True)
         ).dynamic_planning,
         _Unspecified,
     )
     assert (
-        StreamingOptions.from_argparse(
+        StreamingOptions._from_argparse(
             argparse.Namespace(dynamic_planning=False)
         ).dynamic_planning
         is None
     )
 
 
-def test_from_argparse_stream_policy() -> None:
+def test__from_argparse_stream_policy() -> None:
     assert isinstance(
-        StreamingOptions.from_argparse(
+        StreamingOptions._from_argparse(
             argparse.Namespace(stream_policy="auto")
         ).cuda_stream_policy,
         _Unspecified,
     )
     assert (
-        StreamingOptions.from_argparse(
+        StreamingOptions._from_argparse(
             argparse.Namespace(stream_policy="pool")
         ).cuda_stream_policy
         == "pool"
@@ -251,7 +251,7 @@ def test_add_cli_args_then_from_argparse_roundtrip() -> None:
     args = parser.parse_args(
         ["--num-streaming-threads", "8", "--rapidsmpf-log", "DEBUG", "--raise-on-fail"]
     )
-    opts = StreamingOptions.from_argparse(args)
+    opts = StreamingOptions._from_argparse(args)
     assert opts.num_streaming_threads == 8
     assert opts.log == "DEBUG"
     assert opts.raise_on_fail is True

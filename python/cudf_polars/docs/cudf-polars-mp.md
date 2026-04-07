@@ -94,7 +94,7 @@ opts = StreamingOptions.from_dict({
 ### Building from CLI arguments
 
 `add_cli_args()` registers all options on an `ArgumentParser`.
-`from_argparse()` then converts the parsed namespace into a `StreamingOptions`:
+`_from_argparse()` then converts the parsed namespace into a `StreamingOptions`:
 
 ```python
 import argparse
@@ -104,7 +104,7 @@ parser = argparse.ArgumentParser()
 StreamingOptions.add_cli_args(parser)
 # ... add your own args ...
 args = parser.parse_args()
-opts = StreamingOptions.from_argparse(args)
+opts = StreamingOptions._from_argparse(args)
 ```
 
 Selected CLI flags (see `--help` for the full list):
@@ -115,7 +115,7 @@ Selected CLI flags (see `--help` for the full list):
 | `--rapidsmpf-log LEVEL`       | `log`                         | `WARN`       |
 | `--spill-device-limit PCT`    | `spill_device_limit`          | `80%`        |
 
-`from_argparse()` also accepts namespaces from legacy benchmark scripts that
+`_from_argparse()` also accepts namespaces from legacy benchmark scripts that
 use the old dest names (`blocksize` → `target_partition_size`, `rapidsmpf_log`
 → `log`, etc.).
 
