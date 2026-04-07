@@ -417,7 +417,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
     // be applying the deletion vector to produce the output table
     _table_mr{deletion_vector_info.serialized_roaring_bitmaps.empty()
                 ? mr
-                : cudf::get_current_device_resource_ref()}
+                : rmm::mr::get_current_device_resource_ref()}
 {
   auto const& serialized_roaring_bitmaps = deletion_vector_info.serialized_roaring_bitmaps;
   auto const& deletion_vector_row_counts = deletion_vector_info.deletion_vector_row_counts;
@@ -557,7 +557,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   // Use default mr to read parquet table and build row index column if we will be applying the
   // deletion vector to produce a new table later
   auto const table_mr =
-    serialized_roaring_bitmaps.empty() ? mr : cudf::get_current_device_resource_ref();
+    serialized_roaring_bitmaps.empty() ? mr : rmm::mr::get_current_device_resource_ref();
 
   // Read the parquet table
   auto [table, metadata] = cudf::io::read_parquet(options, stream, table_mr);
