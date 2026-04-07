@@ -91,34 +91,6 @@ opts = StreamingOptions.from_dict({
 })
 ```
 
-### Building from CLI arguments
-
-`_add_cli_args()` registers all options on an `ArgumentParser`.
-`_from_argparse()` then converts the parsed namespace into a `StreamingOptions`:
-
-```python
-import argparse
-from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-
-parser = argparse.ArgumentParser()
-StreamingOptions._add_cli_args(parser)
-# ... add your own args ...
-args = parser.parse_args()
-opts = StreamingOptions._from_argparse(args)
-```
-
-Selected CLI flags (see `--help` for the full list):
-
-| Flag                          | Field                         | Default      |
-| ----------------------------- | ----------------------------- | ------------ |
-| `--num-streaming-threads N`   | `num_streaming_threads`       | `1`          |
-| `--rapidsmpf-log LEVEL`       | `log`                         | `WARN`       |
-| `--spill-device-limit PCT`    | `spill_device_limit`          | `80%`        |
-
-`_from_argparse()` also accepts namespaces from legacy benchmark scripts that
-use the old dest names (`blocksize` → `target_partition_size`, `rapidsmpf_log`
-→ `log`, etc.).
-
 ---
 
 ## Ray execution mode
