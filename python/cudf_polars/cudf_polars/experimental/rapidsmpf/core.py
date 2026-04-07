@@ -35,6 +35,7 @@ import cudf_polars.experimental.rapidsmpf.groupby
 import cudf_polars.experimental.rapidsmpf.io
 import cudf_polars.experimental.rapidsmpf.join
 import cudf_polars.experimental.rapidsmpf.repartition
+import cudf_polars.experimental.rapidsmpf.rolling
 import cudf_polars.experimental.rapidsmpf.union
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import (
