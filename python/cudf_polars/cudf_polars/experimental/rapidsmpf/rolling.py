@@ -46,7 +46,17 @@ if TYPE_CHECKING:
 
 
 def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
-    """Convert a raw polars ordinal to native column units."""
+    """
+    Convert a raw polars ordinal to native column units.
+
+    Mirrors the unit conversion in ``duration_to_scalar``
+    (``dsl/utils/windows.py``): polars stores durations as nanosecond
+    ordinals; libcudf range-window bounds are in native column units
+    (microseconds for TIMESTAMP_MICROSECONDS, etc.).  Halo thresholds
+    are computed by casting the index column to INT64 via
+    ``_get_idx_col_i64``, which also yields epoch values in the same
+    native units, so the comparison is consistent.
+    """
     if type_id in (plc.TypeId.INT64, plc.TypeId.TIMESTAMP_NANOSECONDS):
         return ordinal
     elif type_id == plc.TypeId.TIMESTAMP_MICROSECONDS:
@@ -395,7 +405,14 @@ async def rolling_actor(
             await ch_out.drain(context)
             return
 
-        # Window parameters
+        # Window parameters.
+        # IR field naming (see offsets_to_windows in dsl/utils/windows.py):
+        #   preceding_ordinal = Polars `offset`  (negative = look left)
+        #   following_ordinal = Polars `period`  (always positive)
+        # libcudf preceding = -offset, libcudf following = offset + period.
+        # Therefore:
+        #   lookback  (how far left  the halo must reach) = max(0, -offset)
+        #   lookahead (how far right the halo must reach) = max(0, offset + period)
         type_id = ir.index_dtype.id()
         preceding_native = _ordinal_to_native(type_id, ir.preceding_ordinal)
         following_native = _ordinal_to_native(type_id, ir.following_ordinal)
@@ -421,8 +438,11 @@ async def rolling_actor(
                 br,
             )
 
-            halo_exchange_id = collective_ids.pop()
+            # Allocator (collectives/common.py) reserves [halo_exchange_id,
+            # allreduce_id] in that order; pop() from the back gives the
+            # allreduce ID first.
             allreduce_id = collective_ids.pop()
+            halo_exchange_id = collective_ids.pop()
             he = HaloExchange(context, comm, halo_exchange_id)
 
             while True:
@@ -503,6 +523,8 @@ async def rolling_actor(
             n_chunk_rows = chunk_table.num_rows()
 
             if n_chunk_rows == 0:
+                # Empty chunks carry no output rows and contribute nothing to
+                # n_processed, so skipping them is safe even when zlice is set.
                 continue
 
             chunk_stream = chunk.stream
