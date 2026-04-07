@@ -266,6 +266,12 @@ class SPMDEngine(StreamingEngine):
 
     Parameters
     ----------
+    comm
+        An already-bootstrapped communicator. When provided, the bootstrap step
+        is skipped and the caller retains ownership; the communicator is **not**
+        closed on shutdown. Pass this to share a single communicator across multiple
+        engine lifetimes (e.g. a session-scoped pytest fixture).
+        When ``None`` (default) a new communicator is bootstrapped automatically.
     rapidsmpf_options
         RapidsMPF-specific options. Defaults to the reading ``RAPIDSMPF_*``
         environment variables.
@@ -300,6 +306,7 @@ class SPMDEngine(StreamingEngine):
     def __init__(
         self,
         *,
+        comm: Communicator | None = None,
         rapidsmpf_options: Options | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
@@ -315,17 +322,16 @@ class SPMDEngine(StreamingEngine):
             else Options(get_environment_variables())
         )
         mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-        if bootstrap.is_running_with_rrun():
-            comm = bootstrap.create_ucxx_comm(
-                progress_thread=ProgressThread(),
-                type=bootstrap.BackendType.AUTO,
-                options=rapidsmpf_options,
-            )
-        else:
-            comm = single_communicator(
-                progress_thread=ProgressThread(),
-                options=rapidsmpf_options,
-            )
+        if comm is None:
+            if bootstrap.is_running_with_rrun():
+                comm = bootstrap.create_ucxx_comm(
+                    progress_thread=ProgressThread(),
+                    type=bootstrap.BackendType.AUTO,
+                    options=rapidsmpf_options,
+                )
+            else:
+                comm = single_communicator(rapidsmpf_options, ProgressThread())
+        # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
             max_workers=cast(
