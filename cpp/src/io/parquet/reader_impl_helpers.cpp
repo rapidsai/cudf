@@ -1262,11 +1262,14 @@ std::tuple<size_t, size_t, size_t, size_t> aggregate_reader_metadata::get_row_gr
   auto const total_size = compressed_size + row_group.total_byte_size;
 
   size_t const max_leaf_values =
-    std::max_element(
-      row_group.columns.cbegin(),
-      row_group.columns.cend(),
-      [](auto const& a, auto const& b) { return a.meta_data.num_values < b.meta_data.num_values; })
-      ->meta_data.num_values;
+    row_group.columns.empty()
+      ? 0
+      : std::max_element(row_group.columns.cbegin(),
+                         row_group.columns.cend(),
+                         [](auto const& a, auto const& b) {
+                           return a.meta_data.num_values < b.meta_data.num_values;
+                         })
+          ->meta_data.num_values;
 
   return {compressed_size, total_size, static_cast<size_t>(row_group.num_rows), max_leaf_values};
 }
