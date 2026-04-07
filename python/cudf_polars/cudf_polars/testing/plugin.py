@@ -262,7 +262,7 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH: Mapping[str, str] = {
-    # "tests/unit/io/test_hive.py": "Crashes pytest worker",
+    "tests/unit/io/test_hive.py": "A failure in this file causes segfaults later in the test suite",
     "tests/unit/io/test_partition.py": "A failure in this file causes segfaults later in the test suite",
 }
 
@@ -364,7 +364,9 @@ def pytest_collection_modifyitems(
             for file_path in RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH
         ):
             item.add_marker(
-                pytest.mark.skip(reason="Contains slow tests or maybe segfaults")
+                pytest.mark.skip(
+                    reason="A failure in this file causes segfaults later in the test suite"
+                )
             )
         elif (
             with_rapidsmpf
