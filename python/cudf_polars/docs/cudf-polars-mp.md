@@ -258,7 +258,7 @@ with RayEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
-        "rapidsmpf_py_executor_max_workers": 2,
+        "num_py_executors": 2,
     },
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
@@ -389,7 +389,7 @@ with DaskEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
-        "rapidsmpf_py_executor_max_workers": 2,
+        "num_py_executors": 2,
     },
     engine_options={"raise_on_fail": True},
 ) as engine:
@@ -594,7 +594,7 @@ with SPMDEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
-        "rapidsmpf_py_executor_max_workers": 2,
+        "num_py_executors": 2,
     },
     engine_options={"parquet_options": {"use_rapidsmpf_native": True}},
 ) as engine:

@@ -135,10 +135,8 @@ def test_allgather_polars_dataframe() -> None:
 
 
 def test_max_workers() -> None:
-    """executor_options forwards rapidsmpf_py_executor_max_workers to the thread pool."""
-    with SPMDEngine(
-        executor_options={"rapidsmpf_py_executor_max_workers": 2}
-    ) as engine:
+    """executor_options forwards num_py_executors to the thread pool."""
+    with SPMDEngine(executor_options={"num_py_executors": 2}) as engine:
         result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
     assert result.shape == (3, 1)
 

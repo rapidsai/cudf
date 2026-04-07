@@ -711,7 +711,7 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
-    rapidsmpf_py_executor_max_workers
+    num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor used by
         the rapidsmpf runtime. Default is None, which uses ThreadPoolExecutor's
         default behavior. This option is only used by the "rapidsmpf" runtime.
@@ -815,9 +815,9 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    rapidsmpf_py_executor_max_workers: int | None = dataclasses.field(
+    num_py_executors: int | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
+            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=None
         )
     )
     spmd_context: SPMDContext | None = None
@@ -942,8 +942,8 @@ class StreamingExecutor:
             raise TypeError("max_io_threads must be an int")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
-        if not isinstance(self.rapidsmpf_py_executor_max_workers, (int, type(None))):
-            raise TypeError("rapidsmpf_py_executor_max_workers must be int or None")
+        if not isinstance(self.num_py_executors, (int, type(None))):
+            raise TypeError("num_py_executors must be int or None")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.

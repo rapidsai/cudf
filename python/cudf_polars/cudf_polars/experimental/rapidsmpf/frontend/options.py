@@ -11,9 +11,9 @@ import json
 import textwrap
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-if TYPE_CHECKING:
-    from rapidsmpf.config import Options
+from rapidsmpf.config import Options, get_environment_variables
 
+if TYPE_CHECKING:
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
         MemoryResourceConfig,
@@ -130,9 +130,9 @@ class StreamingOptions:
         Env: ``RAPIDSMPF_PERIODIC_SPILL_CHECK``.
         Default: ``"1ms"``.
         Category: rapidsmpf.
-    rapidsmpf_py_executor_max_workers
+    num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
-        Env: ``CUDF_POLARS__EXECUTOR__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS``.
+        Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
         Default: ``1``.
         Category: executor.
     fallback_mode
@@ -205,7 +205,7 @@ class StreamingOptions:
     spill_device_limit: str | _Unspecified = _opt("rapidsmpf")
     periodic_spill_check: str | _Unspecified = _opt("rapidsmpf")
     # ---- Executor ----
-    rapidsmpf_py_executor_max_workers: int | _Unspecified = _opt("executor")
+    num_py_executors: int | _Unspecified = _opt("executor")
     fallback_mode: str | _Unspecified = _opt("executor")
     max_rows_per_partition: int | _Unspecified = _opt("executor")
     broadcast_join_limit: int | _Unspecified = _opt("executor")
@@ -270,8 +270,6 @@ class StreamingOptions:
         ``RAPIDSMPF_*`` environment variable (if set); otherwise the rapidsmpf
         C++ library applies its own built-in default.
         """
-        from rapidsmpf.config import Options, get_environment_variables
-
         # get_environment_variables() returns uppercase keys,
         # e.g. {"NUM_STREAMING_THREADS": "4"}.
         env = get_environment_variables()
@@ -458,7 +456,7 @@ class StreamingOptions:
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
-            rapidsmpf_py_executor_max_workers=_get("py_executor_max_workers"),
+            num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
             broadcast_join_limit=_get("broadcast_join_limit"),
@@ -583,13 +581,13 @@ class StreamingOptions:
                 Env: RAPIDSMPF_PERIODIC_SPILL_CHECK. Built-in default: 1ms."""),
         )
         g.add_argument(
-            "--py-executor-max-workers",
-            dest="py_executor_max_workers",
+            "--num-py-executors",
+            dest="num_py_executors",
             default=None,
             type=int,
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
-                Env: CUDF_POLARS__EXECUTOR__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS.
+                Env: CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS.
                 Built-in default: 1."""),
         )
         g.add_argument(

@@ -165,7 +165,7 @@ class RankActor:
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options produced by
         :meth:`rapidsmpf.config.Options.serialize`.
-    py_executor_max_workers
+    num_py_executors
         Maximum number of threads for the actor's Python thread-pool executor.
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
     """
@@ -175,7 +175,7 @@ class RankActor:
         *,
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
-        py_executor_max_workers: int,
+        num_py_executors: int,
     ) -> None:
         self._mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
         self._rapidsmpf_options: Options = Options.deserialize(
@@ -186,7 +186,7 @@ class RankActor:
         )
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
-            max_workers=py_executor_max_workers,
+            max_workers=num_py_executors,
             thread_name_prefix="ray-executor",
         )
         self._comm: Communicator | None = None
@@ -475,9 +475,9 @@ class RayEngine(StreamingEngine):
                 RankActor.remote(  # type: ignore[attr-defined]
                     nranks=num_gpus,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
-                    py_executor_max_workers=cast(
+                    num_py_executors=cast(
                         int,
-                        executor_options.get("rapidsmpf_py_executor_max_workers", 1),
+                        executor_options.get("num_py_executors", 1),
                     ),
                 )
                 for _ in range(num_gpus)

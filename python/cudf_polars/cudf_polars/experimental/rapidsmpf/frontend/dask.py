@@ -174,7 +174,7 @@ def _setup_worker(
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int | None,
-            executor_options.get("rapidsmpf_py_executor_max_workers"),
+            executor_options.get("num_py_executors"),
         ),
         thread_name_prefix="dask-executor",
     )

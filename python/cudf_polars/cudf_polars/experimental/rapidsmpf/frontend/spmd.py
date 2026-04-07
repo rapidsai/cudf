@@ -335,9 +335,7 @@ class SPMDEngine(StreamingEngine):
             )
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(
-                int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
-            ),
+            max_workers=cast(int, executor_options.get("num_py_executors", 1)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
