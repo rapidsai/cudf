@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from unittest.mock import patch
 
 import pytest
 
@@ -14,6 +15,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.options import (
     StreamingOptions,
     Unspecified,
 )
+from cudf_polars.utils.config import MemoryResourceConfig
 
 # ---------------------------------------------------------------------------
 # Sentinel
@@ -160,6 +162,108 @@ def test_dask_engine_from_options_creates_engine() -> None:
             assert engine.nranks >= 1
     except Exception as e:
         pytest.skip(f"Dask GPU cluster unavailable: {e}")
+
+
+# ---------------------------------------------------------------------------
+# memory_resource_config forwarding
+# ---------------------------------------------------------------------------
+
+
+def test_parse_memory_resource_config() -> None:
+    """_parse_memory_resource_config converts a JSON string to MemoryResourceConfig."""
+    from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        _parse_memory_resource_config,
+    )
+
+    config = _parse_memory_resource_config('{"qualname": "rmm.mr.CudaMemoryResource"}')
+    assert isinstance(config, MemoryResourceConfig)
+    assert config.qualname == "rmm.mr.CudaMemoryResource"
+
+
+def test_from_argparse_memory_resource_config_passthrough() -> None:
+    """MemoryResourceConfig instances pass through _from_argparse unchanged."""
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    ns = argparse.Namespace(memory_resource_config=config)
+    opts = StreamingOptions._from_argparse(ns)
+    assert opts.memory_resource_config is config
+
+
+def test_cli_memory_resource_config_roundtrip() -> None:
+    """--memory-resource-config JSON roundtrips through CLI parsing."""
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(
+        ["--memory-resource-config", '{"qualname": "rmm.mr.CudaAsyncMemoryResource"}']
+    )
+    opts = StreamingOptions._from_argparse(args)
+    assert isinstance(opts.memory_resource_config, MemoryResourceConfig)
+    assert opts.memory_resource_config.qualname == "rmm.mr.CudaAsyncMemoryResource"
+
+
+def test_memory_resource_config_in_engine_options() -> None:
+    """memory_resource_config is included in to_engine_options() when set."""
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    opts = StreamingOptions(memory_resource_config=config)
+    assert opts.to_engine_options()["memory_resource_config"] is config
+
+
+@pytest.mark.spmd
+def test_spmd_engine_memory_resource_config() -> None:
+    """SPMDEngine uses the MR from memory_resource_config when provided."""
+    pytest.importorskip("rapidsmpf")
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    opts = StreamingOptions(
+        fallback_mode="silent",
+        memory_resource_config=config,
+    )
+    with patch.object(
+        MemoryResourceConfig,
+        "create_memory_resource",
+        wraps=config.create_memory_resource,
+    ) as mock_create:
+        with SPMDEngine.from_options(opts) as engine:
+            assert engine.nranks >= 1
+        mock_create.assert_called_once()
+
+
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+def test_dask_engine_memory_resource_config() -> None:
+    """DaskEngine workers use the MR from memory_resource_config when provided."""
+    pytest.importorskip("distributed")
+    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+    opts = StreamingOptions(
+        fallback_mode="silent",
+        memory_resource_config=MemoryResourceConfig(
+            qualname="rmm.mr.CudaMemoryResource"
+        ),
+    )
+    try:
+        with DaskEngine.from_options(opts) as engine:
+            assert engine.nranks >= 1
+    except Exception as e:
+        pytest.skip(f"Dask GPU cluster unavailable: {e}")
+
+
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+def test_ray_engine_memory_resource_config() -> None:
+    """RayEngine actors use the MR from memory_resource_config when provided."""
+    pytest.importorskip("ray")
+    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+    opts = StreamingOptions(
+        fallback_mode="silent",
+        memory_resource_config=MemoryResourceConfig(
+            qualname="rmm.mr.CudaMemoryResource"
+        ),
+    )
+    try:
+        with RayEngine.from_options(opts) as engine:
+            assert engine.nranks >= 1
+    except Exception as e:
+        pytest.skip(f"Ray GPU cluster unavailable: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_ray_mode(
@@ -176,8 +176,14 @@ class RankActor:
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
         num_py_executors: int,
+        memory_resource_config: MemoryResourceConfig | None = None,
     ) -> None:
-        self._mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
+        base_mr = (
+            memory_resource_config.create_memory_resource()
+            if memory_resource_config is not None
+            else rmm.mr.CudaAsyncMemoryResource()
+        )
+        self._mr = RmmResourceAdaptor(base_mr)
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
@@ -449,6 +455,8 @@ class RayEngine(StreamingEngine):
 
         check_reserved_keys(executor_options, engine_options)
 
+        mr_config = engine_options.pop("memory_resource_config", None)
+
         rapidsmpf_options = (
             rapidsmpf_options
             if rapidsmpf_options is not None
@@ -479,6 +487,7 @@ class RayEngine(StreamingEngine):
                         int,
                         executor_options.get("num_py_executors", 1),
                     ),
+                    memory_resource_config=mr_config,
                 )
                 for _ in range(num_gpus)
             ]

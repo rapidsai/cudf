@@ -328,7 +328,13 @@ class SPMDEngine(StreamingEngine):
             if rapidsmpf_options is not None
             else Options(get_environment_variables())
         )
-        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+        mr_config = engine_options.pop("memory_resource_config", None)
+        base_mr = (
+            mr_config.create_memory_resource()
+            if mr_config is not None
+            else rmm.mr.get_current_device_resource()
+        )
+        mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
@@ -337,7 +343,10 @@ class SPMDEngine(StreamingEngine):
                     options=rapidsmpf_options,
                 )
             else:
-                comm = single_communicator(rapidsmpf_options, ProgressThread())
+                comm = single_communicator(
+                    progress_thread=ProgressThread(),
+                    options=rapidsmpf_options,
+                )
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
