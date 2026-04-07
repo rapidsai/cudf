@@ -1837,11 +1837,6 @@ class GroupBy(IR):
                 raise NotImplementedError(
                     "value_counts is not supported in groupby"
                 )  # pragma: no cover; Nested list[struct] types not supported
-            if any(
-                isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
-                for child in expr.children
-            ):
-                raise NotImplementedError("value_counts is not supported in groupby")
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice

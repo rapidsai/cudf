@@ -268,7 +268,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_numeric_column(output_type, 0, mask_state::UNALLOCATED, stream);
+    return make_numeric_column(output_type, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   // Create integer output column copying the strings null-mask
