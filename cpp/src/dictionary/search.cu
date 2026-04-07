@@ -73,7 +73,11 @@ struct find_index_fn {
     auto keys_view   = column_device_view::create(input.keys(), stream);
     auto const begin = keys_view->begin<Element>();
     auto const end   = keys_view->end<Element>();
-    auto const iter  = thrust::find(rmm::exec_policy_nosync(stream), begin, end, find_key);
+    auto const iter =
+      thrust::find(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   begin,
+                   end,
+                   find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
                            cuda::std::distance(begin, iter),
