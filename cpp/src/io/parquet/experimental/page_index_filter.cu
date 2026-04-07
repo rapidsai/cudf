@@ -21,8 +21,10 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -881,7 +883,8 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   // Return early if no columns will participate in stats based page filtering
   if (stats_columns_mask.empty()) {
-    auto const scalar_true = cudf::numeric_scalar<bool>(true, true, stream);
+    auto const scalar_true =
+      cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
     return cudf::make_column_from_scalar(scalar_true, total_rows, stream, mr);
   }
 
