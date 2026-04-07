@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -145,7 +145,8 @@ void copy_range(SourceValueIterator source_value_begin,
   auto grid = cudf::detail::grid_1d{num_items, block_size, 1};
 
   if (target.nullable()) {
-    cudf::detail::device_scalar<size_type> null_count(target.null_count(), stream);
+    cudf::detail::device_scalar<size_type> null_count(
+      target.null_count(), stream, cudf::get_current_device_resource_ref());
 
     auto kernel =
       copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator, T, true>;
