@@ -4607,8 +4607,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         lhs, rhs = self, right
         merge_cls = Merge
-        if how == "right":
-            # Merge doesn't support right, so just swap
+        is_right_join = how == "right"
+        if is_right_join:
+            # Merge doesn't support right, so just swap.
+            # Capture original key params before swap so we can restore
+            # the expected column order (self columns first) after the merge.
+            orig_on = on
+            orig_left_on = left_on
+            orig_right_on = right_on
+            orig_left_index = left_index
+            orig_right_index = right_index
             how = "left"
             lhs, rhs = right, self
             left_on, right_on = right_on, left_on
@@ -4617,7 +4625,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
 
-        return merge_cls(
+        result = merge_cls(
             lhs,
             rhs,
             on=on,
@@ -4630,6 +4638,63 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             indicator=indicator,
             suffixes=suffixes,
         ).perform_merge()
+
+        if is_right_join:
+            # After the swap, result columns are ordered as:
+            #   [key_cols (k), right_non_key_cols, self_non_key_cols]
+            # Pandas expects:
+            #   [key_cols (k), self_non_key_cols, right_non_key_cols]
+            # Reorder using integer positions to avoid issues with None/NaN
+            # column names: new positions = [0..k-1, N_r..n-1, k..N_r-1]
+            N_r = right._num_columns
+            n_result = result._num_columns
+            if orig_on is not None:
+                # `on` names data columns shared by both sides; they appear once.
+                k = 1 if is_scalar(orig_on) else len(orig_on)
+            elif (
+                orig_left_on is not None
+                and orig_right_on is not None
+                and not orig_left_index
+                and not orig_right_index
+            ):
+                # Count same-name (lk, rk) key-column pairs.
+                orig_left_on_list = (
+                    [orig_left_on]
+                    if is_scalar(orig_left_on)
+                    else list(orig_left_on)
+                )
+                orig_right_on_list = (
+                    [orig_right_on]
+                    if is_scalar(orig_right_on)
+                    else list(orig_right_on)
+                )
+                k = sum(
+                    lk == rk
+                    for lk, rk in zip(
+                        orig_left_on_list, orig_right_on_list, strict=True
+                    )
+                )
+            elif (
+                not orig_left_on
+                and not orig_right_on
+                and not orig_left_index
+                and not orig_right_index
+            ):
+                # Auto-detect: intersection of column names are the keys.
+                k = len(set(self._column_names) & set(right._column_names))
+            else:
+                k = 0
+            # Only reorder when there are both right non-key cols and self
+            # non-key cols to swap; use integer positions to avoid NaN issues.
+            if k < N_r < n_result:
+                new_indices = (
+                    list(range(k))
+                    + list(range(N_r, n_result))
+                    + list(range(k, N_r))
+                )
+                result = result.iloc[:, new_indices]
+
+        return result
 
     @_performance_tracking
     def join(

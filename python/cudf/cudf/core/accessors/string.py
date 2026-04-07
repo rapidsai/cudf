@@ -361,7 +361,7 @@ class StringMethods(BaseAccessor):
                 other_cols = [as_column(others, dtype=DEFAULT_STRING_DTYPE)]
             else:
                 raise TypeError(
-                    "others must be Series, Index, DataFrame, np.ndarrary "
+                    "others must be Series, Index, DataFrame, np.ndarray "
                     "or list-like (either containing only strings or "
                     "containing only objects of type Series/Index/"
                     "np.ndarray[1-dim])"

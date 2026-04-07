@@ -8,10 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -1364,13 +1360,6 @@ def test_merge_datetime_timedelta_error(temporal_types_as_str):
 def test_join_ordering_pandas_compat(request, sort, how):
     if how in ["leftanti", "leftsemi", "cross"]:
         pytest.skip(f"Test not applicable for {how}")
-    request.applymarker(
-        pytest.mark.xfail(
-            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
-            and how == "right",
-            reason="TODO: Result ording of suffix'ed columns is incorrect",
-        )
-    )
     left_key = [1, 3, 2, 1, 1, 2, 5, 1, 4, 5, 8, 12, 12312, 1] * 100
     left_val = range(len(left_key))
     left = cudf.DataFrame({"key": left_key, "val": left_val})
