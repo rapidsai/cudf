@@ -22,24 +22,20 @@ struct size_of_functor {
   }
 };
 
-template <typename Target, cudf::aggregation::Kind k, typename Enable = void>
+template <typename Target, cudf::aggregation::Kind k>
 struct initialize_target_element {
   __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
+    requires(not cudf::detail::is_identity_supported<Target, k>())
   {
     CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
-};
 
-template <typename Target, cudf::aggregation::Kind k>
-struct initialize_target_element<
-  Target,
-  k,
-  cuda::std::enable_if_t<cudf::detail::is_identity_supported<Target, k>()>> {
   __device__ void operator()(cuda::std::byte* target,
                              bool* target_mask,
                              cudf::size_type idx) const noexcept
+    requires(cudf::detail::is_identity_supported<Target, k>())
   {
     using DeviceType          = cudf::device_storage_type_t<Target>;
     DeviceType* target_casted = reinterpret_cast<DeviceType*>(target);

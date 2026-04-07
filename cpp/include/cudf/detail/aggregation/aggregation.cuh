@@ -139,17 +139,11 @@ CUDF_HOST_DEVICE constexpr bool is_identity_supported()
  */
 template <typename T, aggregation::Kind k>
 CUDF_HOST_DEVICE T identity_from_operator()
-  requires(not cuda::std::is_same_v<corresponding_operator_t<k>, void>)
 {
+  static_assert(not cuda::std::is_same_v<corresponding_operator_t<k>, void>,
+                "Unable to get identity/sentinel from device operator");
   using DeviceType = device_storage_type_t<T>;
   return corresponding_operator_t<k>::template identity<DeviceType>();
-}
-
-template <typename T, aggregation::Kind k>
-CUDF_HOST_DEVICE T identity_from_operator()
-  requires(cuda::std::is_same_v<corresponding_operator_t<k>, void>)
-{
-  CUDF_UNREACHABLE("Unable to get identity/sentinel from device operator");
 }
 
 /**
