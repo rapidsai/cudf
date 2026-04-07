@@ -35,7 +35,10 @@ rmm::device_uvector<size_type> segmented_counts(bitmask_type const* null_mask,
 
   rmm::device_uvector<size_type> valid_counts(num_segments, stream, mr);
   thrust::adjacent_difference(
-    rmm::exec_policy_nosync(stream), offsets.begin() + 1, offsets.end(), valid_counts.begin());
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    offsets.begin() + 1,
+    offsets.end(),
+    valid_counts.begin());
   return valid_counts;
 }
 
