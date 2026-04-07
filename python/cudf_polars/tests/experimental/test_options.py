@@ -129,6 +129,7 @@ def test_rapidsmpf_options_env_var_absent(monkeypatch: pytest.MonkeyPatch) -> No
     assert "log" not in StreamingOptions().to_rapidsmpf_options().get_strings()
 
 
+@pytest.mark.spmd
 def test_spmd_engine_from_options_creates_engine() -> None:
     """from_options with default StreamingOptions creates a valid SPMDEngine."""
     pytest.importorskip("rapidsmpf")
@@ -137,11 +138,6 @@ def test_spmd_engine_from_options_creates_engine() -> None:
     opts = StreamingOptions(fallback_mode="silent", raise_on_fail=True)
     with SPMDEngine.from_options(opts) as engine:
         assert engine.nranks >= 1
-
-
-test_spmd_engine_from_options_creates_engine = pytest.mark.spmd(
-    test_spmd_engine_from_options_creates_engine
-)
 
 
 # distributed's shutdown leaves unclosed sockets; suppress the noise.
