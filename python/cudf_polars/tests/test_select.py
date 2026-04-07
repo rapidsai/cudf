@@ -12,7 +12,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_134
 
 
 def test_select():
@@ -51,7 +50,7 @@ def test_select_decimal_precision_none_result_max_precision():
     gpu_result = query.collect(engine="gpu")
     # See github.com/pola-rs/polars/issues/19784
     # for context on the decimal changes.
-    assert cpu_result.schema["a"].precision is None if POLARS_VERSION_LT_134 else 38
+    assert cpu_result.schema["a"].precision == 38
     assert gpu_result.schema["a"].precision == 38
 
 

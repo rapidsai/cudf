@@ -13,6 +13,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.versions import POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -244,16 +245,22 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
-        elif self.name == "set_sorted":  # pragma: no cover
-            # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
-            # and is is currently not implemented. We should reimplement it as a MapFunction.
+        elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
-            (asc,) = self.options
-            order = (
-                plc.types.Order.ASCENDING
-                if asc == "ascending"
-                else plc.types.Order.DESCENDING
-            )
+            if POLARS_VERSION_LT_139:
+                (asc,) = self.options
+                order = (
+                    plc.types.Order.ASCENDING
+                    if asc == "ascending"
+                    else plc.types.Order.DESCENDING
+                )
+            else:
+                descending, _nulls_last = self.options
+                order = (
+                    plc.types.Order.DESCENDING
+                    if descending
+                    else plc.types.Order.ASCENDING
+                )
             null_order = plc.types.NullOrder.BEFORE
             if column.null_count > 0 and (n := column.size) > 1:
                 # PERF: This invokes four stream synchronisations!

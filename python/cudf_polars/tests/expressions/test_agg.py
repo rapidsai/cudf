@@ -14,11 +14,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_134,
-    POLARS_VERSION_LT_135,
-    POLARS_VERSION_LT_136,
-)
 
 
 @pytest.fixture(
@@ -59,7 +54,7 @@ def is_sorted(request):
 @pytest.fixture
 def xfail_if_sorted_gt_135(is_sorted, request):
     # See https://github.com/rapidsai/cudf/pull/20791#issuecomment-3750528419
-    if is_sorted and not POLARS_VERSION_LT_135:
+    if is_sorted:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/24981")
         )
@@ -219,10 +214,6 @@ def test_decimal_quantile(decimal_df, interp):
     assert_gpu_result_equal(q)
 
 
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_134,
-    reason="std/var on decimal not supported before polars 1.34",
-)
 def test_decimal_std_var(decimal_df):
     q = decimal_df.select(
         std=pl.col("a").std(),
@@ -232,12 +223,7 @@ def test_decimal_std_var(decimal_df):
 
 
 def test_invalid_agg(request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_136,
-            reason="polars raises now",
-        )
-    )
+    request.applymarker(pytest.mark.xfail(reason="polars raises now"))
     df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
     q = df.select(pl.col("s").sum())
     assert_ir_translation_raises(q, NotImplementedError)

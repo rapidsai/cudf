@@ -50,13 +50,6 @@ from cudf_polars.utils.cuda_stream import (
     get_new_cuda_stream,
     join_cuda_streams,
 )
-from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_134,
-    POLARS_VERSION_LT_136,
-    POLARS_VERSION_LT_137,
-    POLARS_VERSION_LT_138,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
@@ -523,16 +516,7 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if (
-            any(str(p).startswith("https:/") for p in self.paths)
-            and POLARS_VERSION_LT_131
-        ):  # pragma: no cover; polars passed us the wrong URI
-            # https://github.com/pola-rs/polars/issues/22766
-            raise NotImplementedError("Read from https")
-        if any(
-            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
-            for p in self.paths
-        ):
+        if any(str(p).startswith("file://") for p in self.paths):
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
@@ -1050,8 +1034,8 @@ class Sink(IR):
                 raise NotImplementedError(
                     f"Compression type '{compression}' is not supported."
                 )
-        elif kind == (
-            "Json" if POLARS_VERSION_LT_137 else "NDJson"
+        elif (
+            kind == "NDJson"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
                 plc.io.json.is_supported_write_json(dtype.plc_type)
@@ -1235,13 +1219,11 @@ class Sink(IR):
         """Write the dataframe to a file."""
         target = plc.io.SinkInfo([path])
 
-        if POLARS_VERSION_LT_136 and options.get("mkdir", False):
-            Path(path).parent.mkdir(parents=True, exist_ok=True)  # pragma: no cover
         if kind == "Csv":
             cls._write_csv(target, options, df)
         elif kind == "Parquet":
             cls._write_parquet(target, parquet_options, options, df)
-        elif kind == ("Json" if POLARS_VERSION_LT_137 else "NDJson"):
+        elif kind == "NDJson":
             cls._write_json(target, df)
 
         return DataFrame([], stream=df.stream)
@@ -1829,14 +1811,6 @@ class GroupBy(IR):
                 raise NotImplementedError("Nested list[struct] types not supported")
         for request in agg_requests:
             expr = request.value
-            if (
-                POLARS_VERSION_LT_136
-                and isinstance(expr, unary.UnaryFunction)
-                and expr.name == "value_counts"
-            ):
-                raise NotImplementedError(
-                    "value_counts is not supported in groupby"
-                )  # pragma: no cover; Nested list[struct] types not supported
             if any(
                 isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
                 for child in expr.children
@@ -1989,19 +1963,15 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
-        if (
-            not POLARS_VERSION_LT_134
-            and isinstance(child, expr.ColRef)
-            and (
-                (
-                    plc.traits.is_floating_point(src.plc_type)
-                    and plc.traits.is_floating_point(dst.plc_type)
-                )
-                or (
-                    plc.traits.is_integral(src.plc_type)
-                    and plc.traits.is_integral(dst.plc_type)
-                    and src.plc_type.id() == dst.plc_type.id()
-                )
+        if isinstance(child, expr.ColRef) and (
+            (
+                plc.traits.is_floating_point(src.plc_type)
+                and plc.traits.is_floating_point(dst.plc_type)
+            )
+            or (
+                plc.traits.is_integral(src.plc_type)
+                and plc.traits.is_integral(dst.plc_type)
+                and src.plc_type.id() == dst.plc_type.id()
             )
         ):
             return child
@@ -3035,11 +3005,11 @@ class MapFunction(IR):
                 f"Unhandled map function {self.name}"
             )  # pragma: no cover
         if self.name == "explode":
-            if POLARS_VERSION_LT_136 or len(self.options) == 1:
+            if len(self.options) == 1:
                 (to_explode,) = self.options
             else:
                 (to_explode, empty_as_null, keep_nulls) = self.options
-                if (POLARS_VERSION_LT_136 and not empty_as_null) or not keep_nulls:
+                if not keep_nulls:
                     raise NotImplementedError(
                         "Explode an empty or null list/array"
                     )  # pragma: no cover
@@ -3049,23 +3019,10 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
-            # As of 1.31, polars validates renaming in the IR
-            old, new, strict = self.options
-            if len(new) != len(set(new)) or (
-                set(new) & (set(df.schema.keys()) - set(old))
-            ):
-                raise NotImplementedError(
-                    "Duplicate new names in rename."
-                )  # pragma: no cover
-            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
             variable_name = "variable" if variable_name is None else variable_name
-            if POLARS_VERSION_LT_136 and len(pivotees) == 0:  # pragma: no cover
-                index = frozenset(indices)
-                pivotees = [name for name in df.schema if name not in index]
             if not all(
                 dtypes.can_cast(df.schema[p].plc_type, self.schema[value_name].plc_type)
                 for p in pivotees
@@ -3082,8 +3039,6 @@ class MapFunction(IR):
             )
         elif self.name == "row_index":
             col_name, offset = options
-            if POLARS_VERSION_LT_138 and col_name in df.schema:  # pragma: no cover
-                raise NotImplementedError("Duplicate row index name")
             self.options = (col_name, offset)
         elif self.name == "fast_count":
             # TODO: Remove this once all scan types support projections
@@ -3132,11 +3087,6 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
-            # final tag is "swapping" which is useful for the
-            # optimiser (it blocks some pushdown operations)
-            old, new, _ = options
-            return df.rename_columns(dict(zip(old, new, strict=True)))
         elif name == "explode":
             ((to_explode,),) = options
             index = df.column_names.index(to_explode)

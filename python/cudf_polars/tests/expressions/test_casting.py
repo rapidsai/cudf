@@ -13,7 +13,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 _supported_dtypes = [(pl.Int8(), pl.Int64())]
 
@@ -101,4 +100,4 @@ def test_float_to_decimal_rounding():
         }
     )
     q = df.select(pl.col("foo") / pl.col("bar"))
-    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, check_dtypes=True)

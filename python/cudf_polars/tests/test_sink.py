@@ -11,7 +11,6 @@ from cudf_polars.testing.asserts import (
     assert_sink_ir_translation_raises,
     assert_sink_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.fixture(scope="module")
@@ -164,10 +163,6 @@ def test_sink_in_memory_executor(df, tmp_path, file_type):
 
 @pytest.mark.parametrize("compression", ["gzip", "zstd"])
 @pytest.mark.parametrize("file_type", ["csv", "ndjson"])
-@pytest.mark.skipif(
-    POLARS_VERSION_LT_138,
-    reason="compression parameter added in Polars 1.38",
-)
 def test_sink_compression_raises(df, tmp_path, compression, file_type):
     path = tmp_path / f"out.{file_type}"
     assert_sink_ir_translation_raises(

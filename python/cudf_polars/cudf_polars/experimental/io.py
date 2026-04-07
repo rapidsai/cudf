@@ -35,7 +35,6 @@ from cudf_polars.experimental.base import (
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.utils.cuda_stream import get_cuda_stream
-from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping
@@ -515,7 +514,7 @@ def _sink_to_file(
             # Path.open returns IO[Any] but SinkInfo needs more specific IO types
             sink = plc.io.types.SinkInfo([f])  # type: ignore[arg-type]
             Sink._write_csv(sink, use_options, df)
-    elif kind == "Json" if POLARS_VERSION_LT_137 else "NDJson":
+    elif kind == "NDJson":
         mode = "wb" if writer_state is None else "ab"
         with Path.open(Path(path), mode) as f:
             # Path.open returns IO[Any] but SinkInfo needs more specific IO types
