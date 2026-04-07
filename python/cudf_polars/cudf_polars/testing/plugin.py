@@ -267,7 +267,7 @@ RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH: Mapping[str, str] = {
     # "tests/benchmark/test_group_by.py": "Extra long running tests",
     "tests/unit/io/test_hive.py": "Crashes pytest worker",
     # "tests/unit/io/test_lazy_parquet.py": "Crashes pytest worker",
-    "tests/unit/io/test_partition.py": "Extra long running tests",
+    # "tests/unit/io/test_partition.py": "Extra long running tests",
     # "tests/unit/io/test_parquet.py": "Extra long running tests",
     # "tests/unit/io/test_scan.py": "Extra long running tests",
     # "tests/unit/io/test_scan_lines.py": "Crashes pytest worker",
