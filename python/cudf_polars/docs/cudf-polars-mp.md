@@ -39,7 +39,7 @@ This document describes these three execution modes.
 
 ## Unified configuration (`StreamingOptions`)
 
-`StreamingOptions` is the recommended way to configure both Ray and SPMD engines.
+`StreamingOptions` is the recommended way to configure Ray, Dask, and SPMD engines.
 It provides a single typed object covering all configuration knobs across three
 categories:
 
@@ -64,14 +64,19 @@ opts = StreamingOptions(
 )
 ```
 
-Pass the options object to `from_options()` on either engine — this is the
+Pass the options object to `from_options()` on any engine — this is the
 recommended constructor for typical use:
 
 ```python
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 with RayEngine.from_options(opts) as engine:
+    result = df.lazy().collect(engine=engine)
+
+# or, in Dask mode:
+with DaskEngine.from_options(opts) as engine:
     result = df.lazy().collect(engine=engine)
 
 # or, in SPMD mode:
@@ -354,6 +359,10 @@ Each entry includes `pid`, `hostname`, and `cuda_visible_devices`.
 
 ### Passing options
 
+Prefer `DaskEngine.from_options()` with a `StreamingOptions` object (see
+[Unified configuration](#unified-configuration-streamingoptions)). For
+fine-grained control, the `__init__` parameters accept raw dicts:
+
 ```python
 from rapidsmpf.config import Options
 
@@ -367,6 +376,9 @@ with DaskEngine(
 ) as engine:
     ...
 ```
+
+`executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
+argument; user-supplied keys are merged with reserved entries set by `DaskEngine`.
 
 ---
 

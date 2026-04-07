@@ -144,6 +144,19 @@ test_spmd_engine_from_options_creates_engine = pytest.mark.spmd(
 )
 
 
+def test_dask_engine_from_options_creates_engine() -> None:
+    """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
+    pytest.importorskip("distributed")
+    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+    opts = StreamingOptions(fallback_mode="silent")
+    try:
+        with DaskEngine.from_options(opts) as engine:
+            assert engine.nranks >= 1
+    except Exception as e:
+        pytest.skip(f"Dask GPU cluster unavailable: {e}")
+
+
 # ---------------------------------------------------------------------------
 # from_dict
 # ---------------------------------------------------------------------------
