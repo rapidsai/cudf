@@ -424,7 +424,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // after the threshold check above. The check makes very little impact for long strings
   // but results in a large performance gain when the input contains no special characters.
   constexpr int64_t bytes_per_thread = 4;
-  cudf::detail::device_scalar<int64_t> mb_count(0, stream);
+  cudf::detail::device_scalar<int64_t> mb_count(0, stream, cudf::get_current_device_resource_ref());
   auto const grid = cudf::detail::grid_1d(chars_size, block_size, bytes_per_thread);
   mismatch_multibytes_kernel<bytes_per_thread>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
