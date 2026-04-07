@@ -1874,7 +1874,7 @@ class GroupBy(IR):
             target_length=df.num_rows,
             stream=df.stream,
         )
-        sorted = (
+        keys_are_sorted = (
             plc.types.Sorted.YES
             if all(k.is_sorted for k in keys)
             else plc.types.Sorted.NO
@@ -1882,13 +1882,15 @@ class GroupBy(IR):
         grouper = plc.groupby.GroupBy(
             plc.Table([k.obj for k in keys]),
             null_handling=plc.types.NullPolicy.INCLUDE,
-            keys_are_sorted=sorted,
+            keys_are_sorted=keys_are_sorted,
             column_order=[k.order for k in keys],
             null_precedence=[k.null_order for k in keys],
         )
         requests = []
         names = []
+        cast_to_schema = []
         for request in agg_requests:
+            should_cast = False
             name = request.name
             value = request.value
             if isinstance(value, expr.Len):
@@ -1899,7 +1901,12 @@ class GroupBy(IR):
                     child = value.children[0]
                 else:
                     (child,) = value.children
+                # libcudf will return int64 when summing integers
+                # but the schema may be a lower bit width
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                should_cast = value.name == "sum" and plc.traits.is_integral_not_bool(
+                    col.type()
+                )
             else:
                 # Anything else, we pre-evaluate
                 column = value.evaluate(df, context=ExecutionContext.GROUPBY)
@@ -1910,13 +1917,18 @@ class GroupBy(IR):
                 col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
+            cast_to_schema.append(should_cast)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
         results = [
             Column(column, name=name, dtype=schema[name])
-            for name, column, request in zip(
+            if not should_cast
+            else Column(column, name=name, dtype=schema[name]).astype(
+                schema[name], stream=df.stream
+            )
+            for name, column, should_cast in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
-                agg_requests,
+                cast_to_schema,
                 strict=True,
             )
         ]
@@ -1924,9 +1936,13 @@ class GroupBy(IR):
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
+        if keys_are_sorted:
+            result_keys = [
+                col.sorted_like(key) for col, key in zip(result_keys, keys, strict=True)
+            ]
         broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
-        if maintain_order and not sorted:
+        if maintain_order and not keys_are_sorted:
             # The order we want
             want = plc.stream_compaction.stable_distinct(
                 plc.Table([k.obj for k in keys]),

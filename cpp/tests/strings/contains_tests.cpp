@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,8 +16,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
@@ -277,11 +277,10 @@ TEST_F(StringsContainsTests, OctalTest)
 TEST_F(StringsContainsTests, HexTest)
 {
   std::vector<char> ascii_chars(  // all possible matchable chars
-    {thrust::make_counting_iterator<char>(0), thrust::make_counting_iterator<char>(127)});
+    {cuda::counting_iterator<char>{0}, cuda::counting_iterator<char>{127}});
   auto const count = static_cast<cudf::size_type>(ascii_chars.size());
-  std::vector<cudf::size_type> offsets(
-    {thrust::make_counting_iterator<cudf::size_type>(0),
-     thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
+  std::vector<cudf::size_type> offsets({cuda::counting_iterator<cudf::size_type>{0},
+                                        cuda::counting_iterator<cudf::size_type>{0} + count + 1});
   auto d_chars = cudf::detail::make_device_uvector(
     ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(

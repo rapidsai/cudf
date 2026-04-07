@@ -169,6 +169,23 @@ Additional style guidelines for libcudf code:
 
 Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
 
+### Device Code and `constexpr` Functions
+
+libcudf does **not** enable `--expt-relaxed-constexpr`. This means the CUDA compiler will reject
+calls to `constexpr` host functions from `__device__` or `__global__` code. Follow these rules:
+
+ * Every `constexpr` function that may be called from device code **must** be explicitly annotated
+   with `__device__` or `CUDF_HOST_DEVICE`. A bare `constexpr` without an execution-space
+   annotation is host-only.
+ * In `__device__` and `CUDF_HOST_DEVICE` functions, use `cuda::std::`
+   utilities (type traits, algorithms, math functions) instead of `std::`. The `std::` counterparts
+   are host-only and will cause compilation errors in device code. For example:
+   - `cuda::std::is_void_v<T>` instead of `std::is_void_v<T>`
+   - `cuda::std::min` / `cuda::std::max` instead of `std::min` / `std::max`
+   - `cuda::std::numeric_limits<T>` instead of `std::numeric_limits<T>`
+ * Prefer `cuda::std::` type traits and constexpr functions over `std::` in templates that may be
+   instantiated in device code, even if the template itself is not annotated with `__device__`.
+
 ### Includes
 
 The following guidelines apply to organizing `#include` lines.
@@ -331,12 +348,14 @@ A *mutable*, non-owning view of a table.
 
 ## cudf::size_type
 
-The `cudf::size_type` is the type used for the number of elements in a column, offsets to elements
-within a column, indices to address specific elements, segments for subsets of column elements, etc.
-It is equivalent to a signed, 32-bit integer type and therefore has a maximum value of 2147483647.
-Some APIs also accept negative index values and those functions support a minimum value of
--2147483648. This fundamental type also influences output values not just for column size limits
-but for counting elements as well.
+The `cudf::size_type` is the type used for the number of elements in a column, indices to address
+specific elements, segments for subsets of column elements, etc. It is equivalent to a signed,
+32-bit integer type and therefore has a maximum value of 2147483647. Some APIs also accept negative
+index values and those functions support a minimum value of -2147483648. This fundamental type also
+influences output values not just for column size limits but for counting elements as well.
+
+Offset to elements within a column should be either `int32_t` or `int64_t` appropriately, except
+for `LIST` columns that only support `int32_t` offsets.
 
 ## Spans
 
@@ -1512,11 +1531,19 @@ the null masks of both struct fields.
 ## Dictionary columns
 
 Dictionaries provide an efficient way to represent low-cardinality data by storing a single copy
-of each value. A dictionary comprises a column of sorted keys and a column containing an index into
-the keys column for each row of the parent column. The keys column may have any libcudf data type,
-such as a numerical type or strings. The indices represent the corresponding positions of each
-element's value in the keys. The indices child column can have any unsigned integer type
-(`UINT8`, `UINT16`, `UINT32`, or `UINT64`).
+of each value. A dictionary comprises a column of distinct keys and a column containing an index into
+the keys column for each row of the parent column. The keys column may have any fixed-width data_type
+or STRING data_type. The indices represent the corresponding positions of each
+element's value in the keys. The indices child column can have any signed integer type
+(`INT8`, `INT16`, `INT32`, or `INT64`).
+
+The `cudf::dictionary::encode()` API is non-deterministic. That is, calling this encode twice on the same
+input column will produce equivalent dictionary columns but the keys may be in a different order
+and therefore the indices will not match as well. Using `cudf::dictionary::decode()` on both dictionary
+columns should produce the same result.
+
+Although `cudf::make_dictionary_column()` expects distinct keys, the API does not enforce this constraint.
+Using a dictionary column with non-distinct keys in libcudf APIs may result in undefined behavior.
 
 ## Nested column challenges
 

@@ -16,6 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/transform_scan.h>
@@ -27,7 +28,7 @@ struct write_if {
   using token_t   = cudf::io::json::token_t;
   using scan_type = cuda::std::pair<token_t, bool>;
   PdaTokenT* tokens;
-  size_t n;
+  std::size_t n;
   // Index, value
   __device__ void operator()(size_type i, scan_type x)
   {
@@ -263,7 +264,7 @@ void validate_token_stream(device_span<char const> d_input,
     });
 
   auto num_tokens = tokens.size();
-  auto count_it   = thrust::make_counting_iterator(0);
+  auto count_it   = cuda::counting_iterator<std::size_t>{0};
   auto predicate  = cuda::proclaim_return_type<bool>([tokens        = tokens.begin(),
                                                      token_indices = token_indices.begin(),
                                                      validate_values,

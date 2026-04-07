@@ -11,10 +11,11 @@ set -euo pipefail
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
 rapids-logger "Running experimental legacy tests with the 'rapidsmpf' runtime and a 'single' cluster"
-timeout 10m python -m pytest --cache-clear "$@" "tests/experimental/legacy" \
+timeout 10m python -m pytest --cache-clear "$@" "tests" \
     --executor streaming \
     --cluster single \
-    --runtime rapidsmpf
+    --runtime rapidsmpf \
+    --blocksize-mode small
 
 rapids-logger "Running experimental legacy tests with the 'rapidsmpf' runtime and a 'distributed' cluster"
 timeout 10m python -m pytest --cache-clear "$@" "tests/experimental/legacy" \

@@ -14,9 +14,10 @@ The `cluster` option selects the execution model:
 | `"single"`      | Single-GPU, in-process execution                     | Stable (legacy)   |
 | `"distributed"` | Multi-GPU via [Dask Distributed][dask-distributed]   | Stable (legacy)   |
 | `"ray"`         | Multi-GPU via [Ray][ray-docs] actors                 | Preview (new API) |
-| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki]                      | Preview (new API) |
+| `"dask"`        | Multi-GPU via [Dask Distributed][dask-distributed]   | Preview (new API) |
+| `"spmd"`        | Multi-GPU via [SPMD][spmd-wiki] launched with `rrun` | Preview (new API) |
 
-Two preview execution modes are available:
+Three preview execution modes are available:
 
 * **Ray mode** — a single-client model where a driver program coordinates GPU
   workers implemented as Ray actors.
@@ -24,10 +25,15 @@ Two preview execution modes are available:
   When launched with `rrun` a full UCXX communicator connects the ranks.
   Without `rrun` it falls back to a single-rank communicator with no external
   dependencies, which is useful for local development and testing.
+* **Ray mode** — a single-client model where a driver program coordinates GPU workers
+  implemented as Ray actors.
+* **Dask mode** — a single-client model where a driver program coordinates GPU workers
+  running on a Dask distributed cluster.
 
-This document describes these two execution modes.
+This document describes these three execution modes.
 
 * [Ray execution mode](#ray-execution-mode)
+* [Dask execution mode](#dask-execution-mode)
 * [SPMD execution mode](#spmd-execution-mode)
 
 ---
@@ -81,21 +87,20 @@ broadcasts it to all actors, so every rank always executes the same query.
 
 ### Running in Ray mode
 
-`ray_execution()` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. It:
+`RayEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. On construction it:
 
 1. Calls `ray.init()` if Ray is not already running
 2. Creates one `RankActor` per GPU
 3. Bootstraps a UCXX communicator across the actors
-4. Yields a `pl.GPUEngine` and a `RayClient`
 
-Actors are shut down on exit. If the context started Ray, it also calls
-`ray.shutdown()`.
+Actors are shut down when `shutdown()` is called or the context manager exits. If the
+engine started Ray, it also calls `ray.shutdown()`.
 
 ```python
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
-with ray_execution() as (ray_client, engine):
+with RayEngine() as engine:
     result = (
         pl.scan_parquet("/data/dataset/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -107,41 +112,36 @@ with ray_execution() as (ray_client, engine):
 print(result)
 ```
 
-The context manager yields:
-
-* `ray_client` — cluster diagnostics and utilities
-* `engine` — `pl.GPUEngine` configured for Ray execution
-
 ### Ray lifecycle
 
-If Ray is already initialized, `ray_execution()` attaches to the existing cluster and
+If Ray is already initialized, `RayEngine` attaches to the existing cluster and
 does not call `ray.shutdown()` on exit.
 
 ```python
 import ray
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.ray import ray_execution
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
 ray.init(address="auto")
 
 try:
-    with ray_execution() as (ray_client, engine):
+    with RayEngine() as engine:
         result = pl.scan_parquet(...).collect(engine=engine)
 finally:
     ray.shutdown()
 ```
 
-`ray_execution()` raises `RuntimeError` if called inside an `rrun` cluster or if no
+`RayEngine` raises `RuntimeError` if created inside an `rrun` cluster or if no
 GPUs are available.
 
 ### Cluster diagnostics
 
-`RayClient.gather_cluster_info()` returns placement information for all rank actors:
+`RayEngine.gather_cluster_info()` returns placement information for all rank actors:
 
 ```python
-with ray_execution() as (ray_client, engine):
-    print(f"cluster has {ray_client.nranks} ranks")
-    for i, info in enumerate(ray_client.gather_cluster_info()):
+with RayEngine() as engine:
+    print(f"cluster has {engine.nranks} ranks")
+    for i, info in enumerate(engine.gather_cluster_info()):
         print(
             f"rank {i}: hostname={info['hostname']}, pid={info['pid']}, "
             f"CUDA_VISIBLE_DEVICES={info['cuda_visible_devices']}"
@@ -158,7 +158,7 @@ pass-through dictionaries:
 ```python
 from rapidsmpf.config import Options
 
-with ray_execution(
+with RayEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
@@ -166,27 +166,139 @@ with ray_execution(
     },
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
-) as (ray_client, engine):
+) as engine:
     ...
 ```
 
 `rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context` on each
-worker. If not provided, `ray_execution()` constructs a default `Options` with
+worker. If not provided, `RayEngine` constructs a default `Options` with
 `num_streaming_threads=4`.
 
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
-argument; user-supplied keys are merged with reserved entries set by `ray_execution()`.
-Any additional keyword arguments to `ray_execution()` are also forwarded to `pl.GPUEngine`.
+argument; user-supplied keys are merged with reserved entries set by `RayEngine`.
 
-Notable `executor_options` keys:
+---
 
-* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
-  `ThreadPoolExecutor` that drives the RapidsMPF actor network on each worker.
+## Dask execution mode
 
-Reserved keys:
+Dask mode uses a single client process that drives execution across multiple ranks.
+Each rank corresponds to one GPU worker and participates in collective operations
+through a shared UCXX communicator. In the Dask implementation each rank is implemented
+as a **Dask worker**, with one worker per available GPU.
 
-* `executor_options`: `"runtime"`, `"cluster"`, `"spmd"`, `"ray_context"`
-* `engine_options`: `"memory_resource"`, `"executor"`
+Conceptually the system looks like this:
+
+```
+                 ┌──────────────────────────────┐
+                 │        User script           │
+                 │   (single client process)    │
+                 │  LazyFrame.collect(engine=…) │
+                 └──────────────┬───────────────┘
+                                │ IR dispatched to all workers
+               ┌────────────────|─────────────────┐
+               ↓                ↓                 ↓
+        ┌─────────────┐  ┌─────────────┐   ┌─────────────┐
+        │ Dask worker │  │ Dask worker │   │ Dask worker │
+        │   rank 0    │  │   rank 1    │   │  rank N-1   │
+        │   run IR    │  │   run IR    │   │   run IR    │
+        └──────┬──────┘  └──────┬──────┘   └──────┬──────┘
+               ↓                ↓                 ↓
+┌────────────────────────────────────────────────────────────────┐
+│                     RapidsMPF streaming engine                 │
+│   shuffle / all-gather · UCXX communicator · RMM GPU memory    │
+└────────────────────────────────────────────────────────────────┘
+               ↑                ↑                 ↑
+             GPU 0            GPU 1            GPU N-1
+```
+
+### Prerequisites
+
+* Dask distributed (`distributed`) and `dask-cuda` installed
+* RapidsMPF and UCXX available on all GPU nodes
+
+### Running in Dask mode
+
+`DaskEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.dask`. On construction it:
+
+1. If `dask_client` is `None`, creates a `dask_cuda.LocalCUDACluster` (one worker per GPU) and a `distributed.Client`
+2. Bootstraps a UCXX communicator across all workers
+
+`DaskEngine` is a `StreamingEngine` subclass (and therefore a `pl.GPUEngine`) that can be used directly or as a context manager.
+
+```python
+import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+with DaskEngine() as engine:
+    result = (
+        pl.scan_parquet("/data/dataset/*.parquet")
+        .filter(pl.col("amount") > 100)
+        .group_by("customer_id")
+        .agg(pl.col("amount").sum())
+        .collect(engine=engine)
+    )
+
+print(result)
+```
+
+The context manager yields a `DaskEngine` with:
+
+* `engine.nranks` — number of Dask workers at bootstrap time
+* `engine.gather_cluster_info()` — cluster diagnostics
+
+### Dask lifecycle
+
+Bring-your-own-client variant:
+
+```python
+from distributed import Client
+import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+with Client("scheduler-address:8786") as dc:
+    with DaskEngine(dask_client=dc) as engine:
+        result = pl.scan_parquet(...).collect(engine=engine)
+```
+
+Jupyter/manual style:
+
+```python
+engine = DaskEngine()
+result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+engine.shutdown()
+```
+
+`DaskEngine` raises `RuntimeError` if created inside an `rrun` cluster.
+
+### Cluster diagnostics
+
+```python
+with DaskEngine() as engine:
+    print(f"cluster has {engine.nranks} workers")
+    for info in engine.gather_cluster_info():
+        print(
+            f"hostname={info['hostname']}, pid={info['pid']}, "
+            f"CUDA_VISIBLE_DEVICES={info['cuda_visible_devices']}"
+        )
+```
+
+Each entry includes `pid`, `hostname`, and `cuda_visible_devices`.
+
+### Passing options
+
+```python
+from rapidsmpf.config import Options
+
+with DaskEngine(
+    rapidsmpf_options=Options(num_streaming_threads=8),
+    executor_options={
+        "max_rows_per_partition": 500_000,
+        "rapidsmpf_py_executor_max_workers": 2,
+    },
+    engine_options={"raise_on_fail": True},
+) as engine:
+    ...
+```
 
 ---
 
@@ -197,11 +309,11 @@ per GPU and each process owns its local data fragment. Collective operations
 (shuffles, all-gathers, joins) coordinate across processes to produce a globally
 consistent result.
 
-`spmd_execution()` selects the communicator automatically:
+`SPMDEngine` selects the communicator automatically:
 
 * **With `rrun`** — the `rrun` launcher starts one process per GPU and
-  `spmd_execution()` bootstraps a UCXX communicator across all ranks.
-* **Without `rrun`** — `spmd_execution()` falls back to a single-rank
+  `SPMDEngine` bootstraps a UCXX communicator across all ranks.
+* **Without `rrun`** — `SPMDEngine` falls back to a single-rank
   communicator that requires no external communication library (no UCXX,
   Ray, or Dask). This mode is useful for local development, unit tests,
   and single-GPU pipelines.
@@ -249,15 +361,14 @@ every rank, call `allgather_polars_dataframe()`.
 
 ### Running in SPMD mode
 
-`spmd_execution()` is the primary entry point for SPMD execution. It is a context
-manager imported from `cudf_polars.experimental.rapidsmpf.frontend.spmd`. On entry it:
+`SPMDEngine` is the primary entry point for SPMD execution. It is a context
+manager imported from `cudf_polars.experimental.rapidsmpf.frontend.spmd`. On construction it:
 
 1. Bootstraps a communicator: UCXX when running under `rrun`, otherwise a
    single-rank communicator that requires no external library.
 2. Creates a RapidsMPF streaming `Context` that owns GPU memory and a CUDA stream pool.
-3. Constructs and yields a `pl.GPUEngine` bound to that context.
 
-All resources are released when the context exits.
+All resources are released when the context exits (or `shutdown()` is called).
 
 ```python
 # multi-GPU launch: rrun -n 4 python my_script.py
@@ -265,11 +376,11 @@ All resources are released when the context exits.
 import polars as pl
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+    SPMDEngine,
     allgather_polars_dataframe,
-    spmd_execution,
 )
 
-with spmd_execution() as engine:
+with SPMDEngine() as engine:
     result = (
         pl.scan_parquet("/data/dataset/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -286,7 +397,7 @@ with spmd_execution() as engine:
         )
 ```
 
-The context manager yields an `SPMDEngine` with:
+`SPMDEngine` provides:
 
 * `engine.comm` — [`rapidsmpf.communicator.Communicator`][rapidsmpf-communicator]
 * `engine.context` — [`rapidsmpf.streaming.core.context.Context`][rapidsmpf-context]
@@ -310,7 +421,7 @@ In practice:
 
 ```python
 # Every rank executes the same query in the same order.
-with spmd_execution() as engine:
+with SPMDEngine() as engine:
     result = (
         pl.scan_parquet("/data/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -325,7 +436,7 @@ with spmd_execution() as engine:
 ```python
 # Rank 0 executes a group_by collective; other ranks do not.
 # The collective IDs go out of sync → deadlock.
-with spmd_execution() as engine:
+with SPMDEngine() as engine:
     df = pl.scan_parquet("/data/*.parquet")
     if engine.rank == 0:        # DON'T DO THIS
         df = df.group_by("customer_id").agg(pl.col("amount").sum())
@@ -340,11 +451,11 @@ with spmd_execution() as engine:
 ```python
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+    SPMDEngine,
     allgather_polars_dataframe,
-    spmd_execution,
 )
 
-with spmd_execution() as engine:
+with SPMDEngine() as engine:
     with reserve_op_id() as op_id:
         full = allgather_polars_dataframe(
             engine=engine,
@@ -370,7 +481,7 @@ arguments:
 import rmm
 from rapidsmpf.config import Options
 
-with spmd_execution(
+with SPMDEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
     executor_options={
         "max_rows_per_partition": 500_000,
@@ -381,27 +492,23 @@ with spmd_execution(
     ...
 ```
 
-**Memory resource:** `spmd_execution` captures `rmm.mr.get_current_device_resource()`
-at entry, wraps it in `RmmResourceAdaptor` (so libcudf temporary allocations and the
+**Memory resource:** `SPMDEngine` captures `rmm.mr.get_current_device_resource()`
+at construction, wraps it in `RmmResourceAdaptor` (so libcudf temporary allocations and the
 RapidsMPF `Context` share the same resource), sets the wrapped resource as current, and
-restores the original resource on exit. To use a custom allocator, call
-`rmm.mr.set_current_device_resource(your_mr)` **before** entering `spmd_execution()`.
+restores the original resource on shutdown. To use a custom allocator, call
+`rmm.mr.set_current_device_resource(your_mr)` **before** constructing `SPMDEngine`.
 Do not pre-wrap it in `RmmResourceAdaptor`.
 
 `rapidsmpf_options` is an `Options` object passed to the RapidsMPF `Context`. Defaults
 to `None` (uses RapidsMPF defaults).
 
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
-argument; user-supplied keys are merged with reserved entries set by `spmd_execution()`.
+argument; user-supplied keys are merged with reserved entries set by `SPMDEngine`.
 
 `engine_options` is forwarded as keyword arguments to `pl.GPUEngine`. For example,
 pass `engine_options={"parquet_options": {"use_rapidsmpf_native": True}}` to enable
 native Parquet reads.
 
-Notable `executor_options` keys:
-
-* `"rapidsmpf_py_executor_max_workers"` (default: `1`) — number of threads in the Python
-  `ThreadPoolExecutor` that drives the RapidsMPF actor network.
 
 Reserved keys:
 

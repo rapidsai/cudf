@@ -20,6 +20,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
+
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
 #include <arrow/compute/initialize.h>
@@ -270,7 +272,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
-  auto i      = thrust::make_counting_iterator(0);
+  auto i      = cuda::counting_iterator<int>{0};
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
   CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),
@@ -317,7 +319,7 @@ void grouped_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<i
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
-  auto i      = thrust::make_counting_iterator(0);
+  auto i      = cuda::counting_iterator<int>{0};
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
   CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),
