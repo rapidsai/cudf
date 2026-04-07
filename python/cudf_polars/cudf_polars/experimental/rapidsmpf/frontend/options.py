@@ -8,12 +8,16 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import textwrap
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from rapidsmpf.config import Options, get_environment_variables
+from rapidsmpf.config import Options
+from rapidsmpf.utils.string import parse_boolean
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
         MemoryResourceConfig,
@@ -23,43 +27,77 @@ if TYPE_CHECKING:
 __all__: list[str] = [
     "UNSPECIFIED",
     "StreamingOptions",
+    "Unspecified",
 ]
 
 
-class _Unspecified:
-    """Sentinel value meaning "fall back to env var, then built-in default"."""
+class Unspecified:
+    """
+    Sentinel value meaning "fall back to environment variable, then built-in default".
 
-    _instance: _Unspecified | None = None
+    The singleton instance :data:`UNSPECIFIED` is used as the default for every
+    :class:`StreamingOptions` field.  When a field is still ``UNSPECIFIED`` after
+    construction (i.e. neither an explicit value nor an environment variable was provided),
+    the underlying library applies its own built-in default.
+    """
 
-    def __new__(cls) -> _Unspecified:
+    _instance: Unspecified | None = None
+
+    def __new__(cls) -> Unspecified:
+        """Return the singleton instance."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __repr__(self) -> str:
+        """Return ``"UNSPECIFIED"``."""
         return "UNSPECIFIED"
 
 
-UNSPECIFIED = _Unspecified()
-"""Sentinel default for all option fields.
+UNSPECIFIED = Unspecified()
+"""Singleton sentinel for all :class:`StreamingOptions` fields.
 
-When a field is left at ``UNSPECIFIED``, its value is resolved in order:
-  1. The corresponding environment variable (if set).
-  2. The built-in default of the underlying library (rapidsmpf C++ or cudf-polars).
+A field set to ``UNSPECIFIED`` after construction means no explicit value and no
+matching environment variable was found; the underlying library will apply its own
+built-in default.
 """
 
 
-def _opt(category: str) -> Any:
+def _opt(
+    category: str,
+    env_var: str | None = None,
+    coerce: Callable[[str], Any] = str,
+) -> Any:
     """
-    Factory for ``StreamingOptions`` fields with category metadata.
+    Factory for ``StreamingOptions`` fields with category and env-var metadata.
 
     Parameters
     ----------
     category
-        Which ``_to_*`` method claims this field: ``"rapidsmpf"``,
+        Which ``to_*`` method claims this field: ``"rapidsmpf"``,
         ``"executor"``, or ``"engine"``.
+    env_var
+        Environment variable to read at field-default time.  When a
+        :class:`StreamingOptions` is instantiated without an explicit value for
+        this field, the factory reads the environment variable (if set) on the constructing
+        process.  ``None`` means no environment variable; the field defaults to
+        :data:`UNSPECIFIED`.
+    coerce
+        Callable used to convert the raw env-var string to the field's type.
+        Defaults to ``str`` (no conversion).
     """
-    return dataclasses.field(default=UNSPECIFIED, metadata={"category": category})
+
+    def _default() -> Any:
+        if env_var:
+            raw = os.environ.get(env_var)
+            if raw is not None:
+                return coerce(raw)
+        return UNSPECIFIED
+
+    return dataclasses.field(
+        default_factory=_default,
+        metadata={"category": category, "env_var": env_var, "coerce": coerce},
+    )
 
 
 def _category_opts(
@@ -71,7 +109,7 @@ def _category_opts(
         if f.metadata.get("category") != category:
             continue
         v = getattr(obj, f.name)
-        if isinstance(v, _Unspecified):
+        if isinstance(v, Unspecified):
             if fallback and f.name in fallback:
                 result[f.name] = fallback[f.name]
         else:
@@ -209,71 +247,65 @@ class StreamingOptions:
     """
 
     # ---- RapidsMPF runtime ----
-    num_streaming_threads: int | _Unspecified = _opt("rapidsmpf")
-    num_streams: int | _Unspecified = _opt("rapidsmpf")
-    log: Literal["NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"] | _Unspecified = (
-        _opt("rapidsmpf")
+    num_streaming_threads: int | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_NUM_STREAMING_THREADS", int
     )
-    statistics: bool | _Unspecified = _opt("rapidsmpf")
-    memory_reserve_timeout: str | _Unspecified = _opt("rapidsmpf")
-    allow_overbooking_by_default: bool | _Unspecified = _opt("rapidsmpf")
-    pinned_memory: bool | _Unspecified = _opt("rapidsmpf")
-    pinned_initial_pool_size: int | _Unspecified = _opt("rapidsmpf")
-    spill_device_limit: str | _Unspecified = _opt("rapidsmpf")
-    periodic_spill_check: str | _Unspecified = _opt("rapidsmpf")
+    num_streams: int | Unspecified = _opt("rapidsmpf", "RAPIDSMPF_NUM_STREAMS", int)
+    log: Literal["NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"] | Unspecified = (
+        _opt("rapidsmpf", "RAPIDSMPF_LOG")
+    )
+    statistics: bool | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_STATISTICS", parse_boolean
+    )
+    memory_reserve_timeout: str | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_MEMORY_RESERVE_TIMEOUT"
+    )
+    allow_overbooking_by_default: bool | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_ALLOW_OVERBOOKING_BY_DEFAULT", parse_boolean
+    )
+    pinned_memory: bool | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_PINNED_MEMORY", parse_boolean
+    )
+    pinned_initial_pool_size: int | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_PINNED_INITIAL_POOL_SIZE", int
+    )
+    spill_device_limit: str | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_SPILL_DEVICE_LIMIT"
+    )
+    periodic_spill_check: str | Unspecified = _opt(
+        "rapidsmpf", "RAPIDSMPF_PERIODIC_SPILL_CHECK"
+    )
     # ---- Executor ----
-    num_py_executors: int | _Unspecified = _opt("executor")
-    fallback_mode: str | _Unspecified = _opt("executor")
-    max_rows_per_partition: int | _Unspecified = _opt("executor")
-    broadcast_join_limit: int | _Unspecified = _opt("executor")
-    target_partition_size: int | _Unspecified = _opt("executor")
-    dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | _Unspecified = (
+    num_py_executors: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS", int
+    )
+    fallback_mode: str | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__FALLBACK_MODE"
+    )
+    max_rows_per_partition: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", int
+    )
+    broadcast_join_limit: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", int
+    )
+    target_partition_size: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", int
+    )
+    dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
     )
-    unique_fraction: dict[str, float] | _Unspecified = _opt("executor")
+    unique_fraction: dict[str, float] | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
+    )
     # ---- Engine ----
-    raise_on_fail: bool | _Unspecified = _opt("engine")
-    parquet_options: dict[str, Any] | ParquetOptions | _Unspecified = _opt("engine")
-    memory_resource_config: dict[str, Any] | MemoryResourceConfig | _Unspecified = _opt(
+    raise_on_fail: bool | Unspecified = _opt("engine")
+    parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
+    memory_resource_config: dict[str, Any] | MemoryResourceConfig | Unspecified = _opt(
         "engine"
     )
     cuda_stream_policy: (
-        Literal["default", "new", "pool"] | dict[str, Any] | _Unspecified
-    ) = _opt("engine")
-
-    _VALID_LOG_LEVELS: ClassVar[frozenset[str]] = frozenset(
-        {"NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"}
-    )
-    _VALID_FALLBACK_MODES: ClassVar[frozenset[str]] = frozenset(
-        {"warn", "raise", "silent"}
-    )
-
-    def __post_init__(self) -> None:
-        """Validate field values after construction."""
-        if (
-            not isinstance(self.num_streaming_threads, _Unspecified)
-            and self.num_streaming_threads <= 0
-        ):
-            raise ValueError(
-                f"num_streaming_threads must be > 0, got {self.num_streaming_threads}"
-            )
-        if not isinstance(self.num_streams, _Unspecified) and self.num_streams <= 0:
-            raise ValueError(f"num_streams must be > 0, got {self.num_streams}")
-        if (
-            not isinstance(self.log, _Unspecified)
-            and self.log not in self._VALID_LOG_LEVELS
-        ):
-            raise ValueError(
-                f"log must be one of {sorted(self._VALID_LOG_LEVELS)}, got {self.log!r}"
-            )
-        if (
-            not isinstance(self.fallback_mode, _Unspecified)
-            and self.fallback_mode not in self._VALID_FALLBACK_MODES
-        ):
-            raise ValueError(
-                f"fallback_mode must be one of {sorted(self._VALID_FALLBACK_MODES)}, "
-                f"got {self.fallback_mode!r}"
-            )
+        Literal["default", "new", "pool"] | dict[str, Any] | Unspecified
+    ) = _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
 
     # ------------------------------------------------------------------
     # Conversion helpers used by the engines
@@ -283,15 +315,13 @@ class StreamingOptions:
         """
         Build a ``rapidsmpf.config.Options`` from the RapidsMPF fields.
 
-        Fields that are :data:`UNSPECIFIED` fall back to the corresponding
-        ``RAPIDSMPF_*`` environment variable (if set); otherwise the rapidsmpf
-        C++ library applies its own built-in default.
+        ``RAPIDSMPF_*`` environment variables are resolved at
+        :class:`StreamingOptions` construction time, so any field still
+        :data:`UNSPECIFIED` here has no environment variable and no explicit value; the
+        rapidsmpf C++ library will apply its own built-in default for those.
         """
-        # get_environment_variables() returns uppercase keys e.g. {"NUM_STREAMING_THREADS": "4"};
-        # lowercasing maps them directly to field names.
-        env = {k.lower(): v for k, v in get_environment_variables().items()}
         return Options(
-            {k: str(v) for k, v in _category_opts(self, "rapidsmpf", env).items()}
+            {k: str(v) for k, v in _category_opts(self, "rapidsmpf").items()}
         )
 
     def to_executor_options(self) -> dict[str, Any]:
@@ -337,7 +367,7 @@ class StreamingOptions:
         return {
             f.name: getattr(self, f.name)
             for f in dataclasses.fields(self)
-            if not isinstance(getattr(self, f.name), _Unspecified)
+            if not isinstance(getattr(self, f.name), Unspecified)
         }
 
     # ------------------------------------------------------------------

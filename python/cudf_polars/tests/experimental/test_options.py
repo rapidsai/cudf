@@ -12,7 +12,7 @@ import pytest
 from cudf_polars.experimental.rapidsmpf.frontend.options import (
     UNSPECIFIED,
     StreamingOptions,
-    _Unspecified,
+    Unspecified,
 )
 
 # ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.options import (
 
 
 def test_unspecified_is_singleton() -> None:
-    assert _Unspecified() is UNSPECIFIED
+    assert Unspecified() is UNSPECIFIED
 
 
 def test_unspecified_repr() -> None:
@@ -33,11 +33,18 @@ def test_unspecified_repr() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_all_fields_unspecified_by_default() -> None:
+def test_all_fields_unspecified_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Clear all env vars that StreamingOptions reads so every field stays UNSPECIFIED.
+    for key in list(os.environ):
+        if key.startswith(("RAPIDSMPF_", "CUDF_POLARS__")):
+            monkeypatch.delenv(key, raising=False)
     opts = StreamingOptions()
-    assert isinstance(opts.fallback_mode, _Unspecified)
-    assert isinstance(opts.log, _Unspecified)
-    assert isinstance(opts.raise_on_fail, _Unspecified)
+    # Fields with no env var are always UNSPECIFIED.
+    assert isinstance(opts.raise_on_fail, Unspecified)
+    assert isinstance(opts.parquet_options, Unspecified)
+    # Fields whose env vars were cleared are also UNSPECIFIED.
+    assert isinstance(opts.fallback_mode, Unspecified)
+    assert isinstance(opts.log, Unspecified)
 
 
 # ---------------------------------------------------------------------------
@@ -170,12 +177,12 @@ def test_from_dict_maps_known_fields() -> None:
     )
     assert opts.fallback_mode == "raise"
     assert opts.num_streaming_threads == 8
-    assert isinstance(opts.log, _Unspecified)
+    assert isinstance(opts.log, Unspecified)
 
 
 def test_from_dict_none_value_is_unspecified() -> None:
     opts = StreamingOptions.from_dict({"fallback_mode": None})
-    assert isinstance(opts.fallback_mode, _Unspecified)
+    assert isinstance(opts.fallback_mode, Unspecified)
 
 
 def test_from_dict_unknown_key_raises() -> None:
@@ -226,7 +233,7 @@ def test_from_argparse_dynamic_planning() -> None:
         StreamingOptions._from_argparse(
             argparse.Namespace(dynamic_planning=True)
         ).dynamic_planning,
-        _Unspecified,
+        Unspecified,
     )
     assert (
         StreamingOptions._from_argparse(
@@ -241,7 +248,7 @@ def test_from_argparse_stream_policy() -> None:
         StreamingOptions._from_argparse(
             argparse.Namespace(stream_policy="auto")
         ).cuda_stream_policy,
-        _Unspecified,
+        Unspecified,
     )
     assert (
         StreamingOptions._from_argparse(
@@ -267,54 +274,7 @@ def test_add_cli_args_then_from_argparse_roundtrip() -> None:
     assert opts.log == "DEBUG"
     assert opts.raise_on_fail is True
     # Unprovided args default to None → UNSPECIFIED
-    assert isinstance(opts.fallback_mode, _Unspecified)
-
-
-# ---------------------------------------------------------------------------
-# __post_init__ validation
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("value", [0, -1, -100])
-def test_num_streaming_threads_invalid(value: int) -> None:
-    with pytest.raises(ValueError, match="num_streaming_threads must be > 0"):
-        StreamingOptions(num_streaming_threads=value)
-
-
-@pytest.mark.parametrize("value", [0, -1, -100])
-def test_num_streams_invalid(value: int) -> None:
-    with pytest.raises(ValueError, match="num_streams must be > 0"):
-        StreamingOptions(num_streams=value)
-
-
-@pytest.mark.parametrize("value", ["ERROR", "VERBOSE", "debug", ""])
-def test_log_invalid(value: str) -> None:
-    with pytest.raises(ValueError, match="log must be one of"):
-        StreamingOptions(log=value)  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize("value", ["WARN", "ignore", ""])
-def test_fallback_mode_invalid(value: str) -> None:
-    with pytest.raises(ValueError, match="fallback_mode must be one of"):
-        StreamingOptions(fallback_mode=value)
-
-
-@pytest.mark.parametrize("value", [1, 8, 64])
-def test_num_streaming_threads_valid(value: int) -> None:
-    opts = StreamingOptions(num_streaming_threads=value)
-    assert opts.num_streaming_threads == value
-
-
-@pytest.mark.parametrize("log", ["NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"])
-def test_log_valid_values(log: str) -> None:
-    opts = StreamingOptions(log=log)  # type: ignore[arg-type]
-    assert opts.log == log
-
-
-@pytest.mark.parametrize("mode", ["warn", "raise", "silent"])
-def test_fallback_mode_valid_values(mode: str) -> None:
-    opts = StreamingOptions(fallback_mode=mode)
-    assert opts.fallback_mode == mode
+    assert isinstance(opts.fallback_mode, Unspecified)
 
 
 # ---------------------------------------------------------------------------
