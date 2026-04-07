@@ -117,7 +117,7 @@ std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
     auto d_output2        = output2->mutable_view().data<uint64_t>();
 
     // Compute the hash value for each row
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        cuda::counting_iterator<size_type>{0},
                        input.num_rows(),
                        murmur_device_row_hasher(nullable, *input_view, seed, d_output1, d_output2));

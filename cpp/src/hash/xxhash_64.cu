@@ -38,7 +38,7 @@ std::unique_ptr<column> xxhash_64(table_view const& input,
   auto output_view      = output->mutable_view();
 
   // Compute the hash value for each row
-  thrust::tabulate(rmm::exec_policy_nosync(stream),
+  thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    output_view.begin<hash_value_type>(),
                    output_view.end<hash_value_type>(),
                    row_hasher.device_hasher<XXHash_64>(nullable, seed));

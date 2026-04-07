@@ -310,7 +310,7 @@ std::unique_ptr<column> md5(table_view const& input,
 
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{input.num_rows()},
     [d_chars, device_input = *device_input] __device__(auto row_index) {
