@@ -345,10 +345,12 @@ std::
     col_lengths, stream, cudf::get_current_device_resource_ref());
   std::size_t inbuf_lengths_size = inbuf_lengths.size();
   size_type inbuf_size =
-    thrust::reduce(rmm::exec_policy_nosync(stream), inbuf_lengths.begin(), inbuf_lengths.end());
+    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   inbuf_lengths.begin(),
+                   inbuf_lengths.end());
   rmm::device_uvector<char> inbuf(inbuf_size, stream);
   rmm::device_uvector<size_type> inbuf_offsets(inbuf_lengths_size, stream);
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          inbuf_lengths.begin(),
                          inbuf_lengths.end(),
                          inbuf_offsets.begin(),
@@ -409,7 +411,7 @@ std::
   // now these indices need to be removed
   // TODO: is there a better way to do this?
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     outbuf_indices.begin(),
     outbuf_indices.end(),
     [inbuf_offsets_begin = inbuf_offsets.begin(),
@@ -423,19 +425,19 @@ std::
 
   auto stencil = cudf::detail::make_zeroed_device_uvector_async<bool>(
     static_cast<std::size_t>(inbuf_size), stream, cudf::get_current_device_resource_ref());
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   cuda::make_constant_iterator(true),
                   cuda::make_constant_iterator(true) + num_deletions,
                   outbuf_indices.begin(),
                   stencil.begin());
-  thrust::remove_if(rmm::exec_policy_nosync(stream),
+  thrust::remove_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     inbuf.begin(),
                     inbuf.end(),
                     stencil.begin(),
                     cuda::std::identity{});
   inbuf.resize(inbuf_size - num_deletions, stream);
 
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          inbuf_lengths.begin(),
                          inbuf_lengths.end(),
                          inbuf_offsets.begin(),

@@ -190,7 +190,10 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                rmm::cuda_stream_view stream)
 {
   auto const first_delimiter_position =
-    thrust::find(rmm::exec_policy_nosync(stream), d_data.begin(), d_data.end(), delimiter);
+    thrust::find(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                 d_data.begin(),
+                 d_data.end(),
+                 delimiter);
   return first_delimiter_position != d_data.end()
            ? static_cast<size_type>(cuda::std::distance(d_data.begin(), first_delimiter_position))
            : -1;
@@ -339,7 +342,10 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     auto rev_it_begin = cuda::std::make_reverse_iterator(bufsubspan.end());
     auto rev_it_end   = cuda::std::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
-      thrust::find(rmm::exec_policy_nosync(stream), rev_it_begin, rev_it_end, delimiter);
+      thrust::find(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   rev_it_begin,
+                   rev_it_end,
+                   delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
@@ -710,7 +716,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     auto const delimiter_source = cuda::make_constant_iterator(delimiter);
     auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
       delimiter_map, stream, cudf::get_current_device_resource_ref());
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     delimiter_source,
                     delimiter_source + d_delimiter_map.size(),
                     d_delimiter_map.data(),
