@@ -46,14 +46,19 @@ std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
 {
   // New column, near identical to `indices`, except with null values replaced.
   // `segmented_gather()` on a null index should produce a null row.
-  if (not indices.nullable()) { return std::make_unique<column>(indices, stream); }
+  if (not indices.nullable()) {
+    return std::make_unique<column>(indices, stream, cudf::get_current_device_resource_ref());
+  }
 
   auto const d_indices = column_device_view::create(indices, stream);
   // Replace null indices with MAX_SIZE_TYPE, so that gather() returns null for them.
   auto const null_replaced_iter_begin =
     cudf::detail::make_null_replacement_iterator(*d_indices, std::numeric_limits<size_type>::max());
-  auto index_child =
-    make_numeric_column(data_type{type_id::INT32}, indices.size(), mask_state::UNALLOCATED, stream);
+  auto index_child = make_numeric_column(data_type{type_id::INT32},
+                                         indices.size(),
+                                         mask_state::UNALLOCATED,
+                                         stream,
+                                         cudf::get_current_device_resource_ref());
   thrust::copy_n(rmm::exec_policy_nosync(stream),
                  null_replaced_iter_begin,
                  indices.size(),
@@ -75,7 +80,11 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
                                                rmm::cuda_stream_view stream)
 {
   auto index_child =  // [index, index, index, ..., index]
-    make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
+    make_numeric_column(data_type{type_id::INT32},
+                        num_rows,
+                        mask_state::UNALLOCATED,
+                        stream,
+                        cudf::get_current_device_resource_ref());
   thrust::fill_n(rmm::exec_policy_nosync(stream),
                  index_child->mutable_view().begin<size_type>(),
                  num_rows,
@@ -92,10 +101,11 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
  */
 std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_stream_view stream)
 {
-  return cudf::detail::sequence(num_lists + 1,
-                                cudf::scalar_type_t<size_type>(0, true, stream),
-                                stream,
-                                cudf::get_current_device_resource_ref());
+  return cudf::detail::sequence(
+    num_lists + 1,
+    cudf::scalar_type_t<size_type>(0, true, stream, cudf::get_current_device_resource_ref()),
+    stream,
+    cudf::get_current_device_resource_ref());
 }
 
 }  // namespace
