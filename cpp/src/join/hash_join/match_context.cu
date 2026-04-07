@@ -83,4 +83,29 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
   return match_counts;
 }
 
+template <typename Hasher>
+std::unique_ptr<rmm::device_uvector<size_type>> hash_join<Hasher>::make_match_counts(
+  join_kind join,
+  cudf::table_view const& probe,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  return make_join_match_counts(_build,
+                                _preprocessed_build,
+                                _impl->_hash_table,
+                                _is_empty,
+                                _has_nulls,
+                                _nulls_equal,
+                                join,
+                                probe,
+                                stream,
+                                mr);
+}
+
+template std::unique_ptr<rmm::device_uvector<size_type>>
+hash_join<hash_join_hasher>::make_match_counts(join_kind,
+                                               cudf::table_view const&,
+                                               rmm::cuda_stream_view,
+                                               rmm::device_async_resource_ref) const;
+
 }  // namespace cudf::detail

@@ -116,7 +116,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{
+    _impl{std::make_unique<impl>(impl{typename impl::hash_table_t{
       cuco::extent{static_cast<size_t>(build.num_rows())},
       load_factor,
       cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(), cudf::JoinNoMatch}},
@@ -125,7 +125,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
       {},
       {},
       rmm::mr::polymorphic_allocator<char>{},
-      stream.value()},
+      stream.value()}})},
     _build{build},
     _preprocessed_build{cudf::detail::row::equality::preprocessed_table::create(_build, stream)}
 {
@@ -141,7 +141,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
     cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref()).first;
   cudf::detail::build_hash_join(_build,
                                 _preprocessed_build,
-                                _hash_table,
+                                _impl->_hash_table,
                                 _has_nulls,
                                 _nulls_equal,
                                 reinterpret_cast<bitmask_type const*>(row_bitmask.data()),
@@ -158,6 +158,11 @@ template hash_join<hash_join_hasher>::hash_join(cudf::table_view const& build,
                                                 cudf::null_equality compare_nulls,
                                                 double load_factor,
                                                 rmm::cuda_stream_view stream);
+
+template <typename Hasher>
+hash_join<Hasher>::~hash_join() = default;
+
+template hash_join<hash_join_hasher>::~hash_join();
 
 }  // namespace cudf::detail
 

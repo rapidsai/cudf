@@ -16,10 +16,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/polymorphic_allocator.hpp>
-
-#include <cuco/static_multiset.cuh>
-#include <cuda/std/functional>
 
 #include <cstddef>
 #include <memory>
@@ -41,68 +37,18 @@ namespace detail {
  * @tparam Hasher Unary callable type
  */
 template <typename Hasher>
-struct hash_join {
+class hash_join {
  public:
-  /**
-   * @brief A custom comparator used for the build table insertion
-   */
-  struct always_not_equal {
-    __device__ constexpr bool operator()(
-      cuco::pair<hash_value_type, size_type> const&,
-      cuco::pair<hash_value_type, size_type> const&) const noexcept
-    {
-      // multiset always insert
-      return false;
-    }
-  };
+  /// Opaque CUDA implementation holding the hash table and related device functors.
+  struct impl;
 
-  struct hasher1 {
-    __device__ constexpr hash_value_type operator()(
-      cuco::pair<hash_value_type, size_type> const& key) const noexcept
-    {
-      return key.first;
-    }
-  };
-
-  struct hasher2 {
-    hasher2(hash_value_type seed) : _hash{seed} {}
-
-    __device__ constexpr hash_value_type operator()(
-      cuco::pair<hash_value_type, size_type> const& key) const noexcept
-    {
-      return _hash(key.first);
-    }
-
-   private:
-    Hasher _hash;
-  };
-
-  using hash_table_t =
-    cuco::static_multiset<cuco::pair<cudf::hash_value_type, cudf::size_type>,
-                          cuco::extent<std::size_t>,
-                          cuda::thread_scope_device,
-                          always_not_equal,
-                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hasher1, hasher2>,
-                          rmm::mr::polymorphic_allocator<char>,
-                          cuco::storage<2>>;
-
-  hash_join()                            = delete;
-  ~hash_join()                           = default;
+  hash_join() = delete;
+  ~hash_join();
   hash_join(hash_join const&)            = delete;
   hash_join(hash_join&&)                 = delete;
   hash_join& operator=(hash_join const&) = delete;
   hash_join& operator=(hash_join&&)      = delete;
 
- private:
-  bool const _is_empty;   ///< true if `_hash_table` is empty
-  bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
-  cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
-  cudf::table_view _build;                 ///< input table to build the hash map
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
-    _preprocessed_build;     ///< input table preprocssed for row operators
-  hash_table_t _hash_table;  ///< hash table built on `_build`
-
- public:
   /**
    * @brief Constructor that internally builds the hash table based on the given `build` table.
    *
@@ -204,6 +150,20 @@ struct hash_join {
     rmm::device_async_resource_ref mr) const;
 
  private:
+  bool const _is_empty;   ///< true if `_hash_table` is empty
+  bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
+  cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
+  cudf::table_view _build;                 ///< input table to build the hash map
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table>
+    _preprocessed_build;        ///< input table preprocssed for row operators
+  std::unique_ptr<impl> _impl;  ///< CUDA hash table implementation
+
+  [[nodiscard]] std::unique_ptr<rmm::device_uvector<size_type>> make_match_counts(
+    join_kind join,
+    cudf::table_view const& probe,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
   template <join_kind Join>
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                           std::unique_ptr<rmm::device_uvector<size_type>>>
