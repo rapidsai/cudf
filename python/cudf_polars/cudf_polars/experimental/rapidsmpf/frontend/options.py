@@ -9,7 +9,7 @@ import argparse
 import dataclasses
 import json
 import textwrap
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from rapidsmpf.config import Options
@@ -188,7 +188,9 @@ class StreamingOptions:
     # ---- RapidsMPF runtime ----
     num_streaming_threads: int | _Unspecified = _opt("rapidsmpf")
     num_streams: int | _Unspecified = _opt("rapidsmpf")
-    log: Literal["NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"] | _Unspecified = _opt("rapidsmpf")
+    log: Literal["NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"] | _Unspecified = (
+        _opt("rapidsmpf")
+    )
     statistics: bool | _Unspecified = _opt("rapidsmpf")
     memory_reserve_timeout: str | _Unspecified = _opt("rapidsmpf")
     allow_overbooking_by_default: bool | _Unspecified = _opt("rapidsmpf")
