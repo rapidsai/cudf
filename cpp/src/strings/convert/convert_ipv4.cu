@@ -68,7 +68,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_numeric_column(data_type{type_id::UINT32}, 0, mask_state::UNALLOCATED, stream);
+    return make_numeric_column(data_type{type_id::UINT32}, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   auto strings_column = column_device_view::create(input.parent(), stream);
