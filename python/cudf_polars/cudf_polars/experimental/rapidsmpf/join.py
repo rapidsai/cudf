@@ -574,6 +574,20 @@ async def passthrough_split(
     await ch_out.drain(context)
 
 
+def use_bloom_filter(
+    join_type: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
+    left_rows: int,
+    right_rows: int,
+    threshold: float,
+) -> bool:
+    """Return True if bloom filter pre-filtering should be applied."""
+    # TODO: We can do left, and right if we also control which side we apply the filter to.
+    if threshold == 0.0 or join_type not in ("Inner", "Semi"):
+        return False
+    small_rows, large_rows = sorted([left_rows, right_rows])
+    return large_rows > 0 and small_rows / large_rows < threshold
+
+
 async def _shuffle_join(
     context: Context,
     comm: Communicator,
@@ -585,8 +599,9 @@ async def _shuffle_join(
     strategy: JoinStrategy,
     collective_ids: list[int],
     *,
-    size_estimates: tuple[int, int],
+    row_counts: tuple[int, int],
     tracer: ActorTracer | None,
+    bloom_threshold: float,
 ) -> None:
     """Execute a shuffle (hash) join."""
     # Send output metadata
@@ -604,42 +619,33 @@ async def _shuffle_join(
         duplicated=False,
     )
     await send_metadata(ch_out, context, metadata_out)
-
-    left_size, right_size = size_estimates
-    bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
-    bloom_build_input: Channel[TableChunk] = context.create_channel()
-    passthrough_output: Channel[TableChunk] = context.create_channel()
-    if left_size < right_size:
-        passthrough_input = ch_left
-        ch_left = passthrough_output
-        build_indices = strategy.left_indices
-        bloom_apply_input = ch_right
-        apply_indices = strategy.right_indices
-        ch_right = context.create_channel()
-        bloom_apply_output = ch_right
-    else:
-        passthrough_input = ch_right
-        ch_right = passthrough_output
-        build_indices = strategy.right_indices
-        bloom_apply_input = ch_left
-        apply_indices = strategy.left_indices
-        ch_left = context.create_channel()
-        bloom_apply_output = ch_left
-
-    # Construct a shuffle-shuffle-join pipeline.
-    # The shuffle operations will pass chunks through unchanged
-    # if the data is already partitioned correctly.
-    ch_left_shuffle = context.create_channel()
-    ch_right_shuffle = context.create_channel()
-    # note: this is an actor inside of an actor. How should we log that in our traces?
-    async with shutdown_on_error(
-        context, ch_left_shuffle, ch_right_shuffle, trace_ir=ir, ir_context=ir_context
-    ):
+    left_rows, right_rows = row_counts
+    if use_bloom_filter(ir.options[0], left_rows, right_rows, bloom_threshold):
+        bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
+        bloom_build_input: Channel[TableChunk] = context.create_channel()
+        passthrough_output: Channel[TableChunk] = context.create_channel()
+        if left_rows < right_rows:
+            passthrough_input = ch_left
+            ch_left = passthrough_output
+            build_indices = strategy.left_indices
+            bloom_apply_input = ch_right
+            apply_indices = strategy.right_indices
+            ch_right = context.create_channel()
+            bloom_apply_output = ch_right
+        else:
+            passthrough_input = ch_right
+            ch_right = passthrough_output
+            build_indices = strategy.right_indices
+            bloom_apply_input = ch_left
+            apply_indices = strategy.left_indices
+            ch_left = context.create_channel()
+            bloom_apply_output = ch_left
         # TODO: configure based on GPU L2 size
         nblocks = BloomFilter.fitting_num_blocks(32 * 1024 * 1024)
         filter = BloomFilter(context, comm, LIBCUDF_DEFAULT_HASH_SEED, nblocks)
         # TODO: if we end up not needing to shuffle, should we apply the bloom filter?
-        actor_tasks = [
+        chs_to_shutdown = [bloom_build_output, bloom_build_input, passthrough_output]
+        filter_tasks = [
             passthrough_split(
                 context,
                 passthrough_input,
@@ -657,6 +663,26 @@ async def _shuffle_join(
                 bloom_apply_output,
                 apply_indices,
             ),
+        ]
+    else:
+        chs_to_shutdown = []
+        filter_tasks = []
+    # Construct a shuffle-shuffle-join pipeline.
+    # The shuffle operations will pass chunks through unchanged
+    # if the data is already partitioned correctly.
+    ch_left_shuffle = context.create_channel()
+    ch_right_shuffle = context.create_channel()
+    # note: this is an actor inside of an actor. How should we log that in our traces?
+    async with shutdown_on_error(
+        context,
+        *chs_to_shutdown,
+        ch_left_shuffle,
+        ch_right_shuffle,
+        trace_ir=ir,
+        ir_context=ir_context,
+    ):
+        actor_tasks = [
+            *filter_tasks,
             _global_shuffle(
                 context,
                 comm,
@@ -1155,8 +1181,16 @@ async def join_actor(
                         ch_right,
                         strategy,
                         collective_ids,
-                        size_estimates=(left_sample.total_size, right_sample.total_size),
+                        row_counts=(
+                            left_sample.total_rows,
+                            right_sample.total_rows,
+                        ),
                         tracer=tracer,
+                        bloom_threshold=(
+                            executor.dynamic_planning.bloom_filter_threshold
+                            if executor.dynamic_planning is not None
+                            else 0.0
+                        ),
                     )
                 )
             await gather_in_task_group(*actor_tasks)
