@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections import deque
 from typing import TYPE_CHECKING
 
@@ -32,6 +31,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     chunk_to_frame,
     concat_batch,
     empty_table_chunk,
+    gather_in_task_group,
     names_to_indices,
     recv_metadata,
     replay_buffered_channel,
@@ -414,7 +414,7 @@ async def sort_actor(
         await send_metadata(ch_out, context, output_metadata)
 
         chunk_store = ChunkStore(context)
-        _, local_candidates_list = await asyncio.gather(
+        _, local_candidates_list = await gather_in_task_group(
             replay_buffered_channel(
                 context, ch_replay, ch_in, sampled_chunks, metadata_in, trace_ir=ir
             ),

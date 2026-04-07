@@ -1227,7 +1227,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--native-parquet",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
     )
     parser.add_argument(
@@ -1326,7 +1326,11 @@ def parse_args(
     ):
         raise ValueError("Must specify --validate to use --output-expected-directory.")
 
-    if parsed_args.suffix and not parsed_args.suffix.startswith("."):
+    if (
+        parsed_args.suffix
+        and not parsed_args.suffix.startswith(".")
+        and not parsed_args.suffix.startswith("/")
+    ):
         parsed_args.suffix = f".{parsed_args.suffix}"
 
     return parsed_args
@@ -1348,6 +1352,7 @@ def validate_result(
     expected: pl.DataFrame,
     sort_by: list[tuple[str, bool]],
     limit: int | None = None,
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None,
     **kwargs: Any,
 ) -> ValidationResult:
     """
@@ -1362,7 +1367,12 @@ def validate_result(
     """
     try:
         assert_tpch_result_equal(
-            result, expected, sort_by=sort_by, limit=limit, **kwargs
+            result,
+            expected,
+            sort_by=sort_by,
+            limit=limit,
+            sort_keys=sort_keys,
+            **kwargs,
         )
     except Exception as e:
         return ValidationResult.from_error(e)
@@ -1381,6 +1391,13 @@ class QueryResult:
         The result of the query.
     sort_by: list[tuple[str, bool]]
         The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
+        Used for the ties/limit boundary logic in validation.
+    sort_keys: list[tuple[pl.Expr, bool]] | None
+        Optional Polars expressions for the sortedness check. Use this when the query
+        sorts by a conditional expression (e.g. ``CASE WHEN lochierarchy = 0 THEN i_category END``)
+        that cannot be represented as a plain column name in ``sort_by``. When provided,
+        these expressions are evaluated against the output and used only for the sortedness
+        check; ``sort_by`` still drives the ties/limit boundary logic.
     limit: int | None
         The limit of the query, if any.
 
@@ -1390,6 +1407,7 @@ class QueryResult:
     sort_by: list[tuple[str, bool]]
     limit: int | None = None
     nulls_last: bool = True
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
 def check_input_data_type(
@@ -1411,7 +1429,7 @@ def check_input_data_type(
         table, col = "item", "i_current_price"
     else:
         table, col = "customer", "c_acctbal"
-    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    path = f"{run_config.dataset_path}/{table}{run_config.suffix}"
     t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
 
     num_type: Literal["decimal", "float"]
@@ -1424,7 +1442,7 @@ def check_input_data_type(
     if run_config.query_set == "pdsds":
         date_type = "date"
     else:
-        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        path = f"{run_config.dataset_path}/orders{run_config.suffix}"
         t = (
             pl.scan_parquet(path)
             .select(pl.col("o_orderdate"))
@@ -1475,6 +1493,7 @@ def run_polars_query_iteration(
             query_result.sort_by,
             limit=query_result.limit,
             nulls_last=query_result.nulls_last,
+            sort_keys=query_result.sort_keys,
             **get_validation_options(args),
         )
     else:
@@ -2122,7 +2141,7 @@ def print_duckdb_plan(
 
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
@@ -2158,7 +2177,7 @@ def execute_duckdb_query(
         tbl_names = PDSH_TABLE_NAMES
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"

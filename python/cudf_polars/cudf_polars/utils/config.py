@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
+    import distributed
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
     from ray.actor import ActorHandle
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
 __all__ = [
     "Cluster",
     "ConfigOptions",
+    "DaskContext",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
@@ -176,6 +178,7 @@ class Cluster(enum.StrEnum):
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
     RAY = "ray"
+    DASK = "dask"
 
 
 class Scheduler(enum.StrEnum):
@@ -276,7 +279,7 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used when the rapidsmpf runtime is enabled.
-        Default is True.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -315,7 +318,7 @@ class ParquetOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
             _bool_converter,
-            default=True,
+            default=False,
         )
     )
 
@@ -568,6 +571,37 @@ class RayContext:
     rank_actors: list[ActorHandle[RankActor]]
 
 
+@dataclasses.dataclass(frozen=True)
+class DaskContext:
+    """
+    Configuration for Dask cluster execution.
+
+    .. note::
+        This dataclass holds a :class:`~distributed.Client` handle, which is
+        only valid within the Dask session that created it. It is stripped from
+        ``config_options`` before pickling for remote worker calls in
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.dask.evaluate_pipeline_dask_mode`.
+        Do not persist or transfer this object across Dask sessions.
+
+    Parameters
+    ----------
+    client
+        Active :class:`~distributed.Client` connected to the cluster.
+    rapidsmpf_id
+        Unique identifier for this RapidsMPF bootstrap session.
+    owned_client
+        Client to close on shutdown, if created internally by
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`.
+    owned_cluster
+        Cluster to close on shutdown, if created internally.
+    """
+
+    client: distributed.Client
+    rapidsmpf_id: str
+    owned_client: distributed.Client | None = None
+    owned_cluster: Any | None = None
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -788,6 +822,7 @@ class StreamingExecutor:
     )
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
+    dask_context: DaskContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
