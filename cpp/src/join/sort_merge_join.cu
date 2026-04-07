@@ -278,8 +278,9 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   auto match_offsets =
     cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
   // Use pinned memory as bounce buffer for efficient device-to-host transfer of the last element
-  auto last_element = cudf::detail::device_scalar<int64_t>(0, stream);
-  auto output_itr   = cudf::detail::make_sizes_to_offsets_iterator(
+  auto last_element =
+    cudf::detail::device_scalar<int64_t>(0, stream, cudf::get_current_device_resource_ref());
+  auto output_itr = cudf::detail::make_sizes_to_offsets_iterator(
     match_offsets.begin(), match_offsets.end(), last_element.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),

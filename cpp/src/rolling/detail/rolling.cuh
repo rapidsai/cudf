@@ -449,7 +449,8 @@ struct rolling_window_launcher {
       auto const d_inp_ptr         = column_device_view::create(input, stream);
       auto const d_default_out_ptr = column_device_view::create(default_outputs, stream);
       auto const d_out_ptr = mutable_column_device_view::create(output->mutable_view(), stream);
-      auto d_valid_count   = cudf::detail::device_scalar<size_type>{0, stream};
+      auto d_valid_count =
+        cudf::detail::device_scalar<size_type>{0, stream, cudf::get_current_device_resource_ref()};
 
       auto constexpr block_size = 256;
       auto const grid           = cudf::detail::grid_1d(input.size(), block_size);
