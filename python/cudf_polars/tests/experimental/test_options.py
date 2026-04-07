@@ -129,24 +129,6 @@ def test_rapidsmpf_options_env_var_absent(monkeypatch: pytest.MonkeyPatch) -> No
     assert "log" not in StreamingOptions().to_rapidsmpf_options().get_strings()
 
 
-# ---------------------------------------------------------------------------
-# from_options smoke tests (no GPU required)
-# ---------------------------------------------------------------------------
-
-
-def test_spmd_engine_from_options_is_classmethod() -> None:
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-    assert callable(SPMDEngine.from_options)
-
-
-def test_ray_engine_from_options_is_classmethod() -> None:
-    pytest.importorskip("ray")
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
-
-    assert callable(RayEngine.from_options)
-
-
 def test_spmd_engine_from_options_creates_engine() -> None:
     """from_options with default StreamingOptions creates a valid SPMDEngine."""
     pytest.importorskip("rapidsmpf")
@@ -275,3 +257,80 @@ def test_add_cli_args_then_from_argparse_roundtrip() -> None:
     assert opts.raise_on_fail is True
     # Unprovided args default to None → UNSPECIFIED
     assert isinstance(opts.fallback_mode, _Unspecified)
+
+
+# ---------------------------------------------------------------------------
+# __post_init__ validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", [0, -1, -100])
+def test_num_streaming_threads_invalid(value: int) -> None:
+    with pytest.raises(ValueError, match="num_streaming_threads must be > 0"):
+        StreamingOptions(num_streaming_threads=value)
+
+
+@pytest.mark.parametrize("value", [0, -1, -100])
+def test_num_streams_invalid(value: int) -> None:
+    with pytest.raises(ValueError, match="num_streams must be > 0"):
+        StreamingOptions(num_streams=value)
+
+
+@pytest.mark.parametrize("value", ["ERROR", "VERBOSE", "debug", ""])
+def test_log_invalid(value: str) -> None:
+    with pytest.raises(ValueError, match="log must be one of"):
+        StreamingOptions(log=value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("value", ["WARN", "ignore", ""])
+def test_fallback_mode_invalid(value: str) -> None:
+    with pytest.raises(ValueError, match="fallback_mode must be one of"):
+        StreamingOptions(fallback_mode=value)
+
+
+@pytest.mark.parametrize("value", [1, 8, 64])
+def test_num_streaming_threads_valid(value: int) -> None:
+    opts = StreamingOptions(num_streaming_threads=value)
+    assert opts.num_streaming_threads == value
+
+
+@pytest.mark.parametrize("log", ["NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"])
+def test_log_valid_values(log: str) -> None:
+    opts = StreamingOptions(log=log)  # type: ignore[arg-type]
+    assert opts.log == log
+
+
+@pytest.mark.parametrize("mode", ["warn", "raise", "silent"])
+def test_fallback_mode_valid_values(mode: str) -> None:
+    opts = StreamingOptions(fallback_mode=mode)
+    assert opts.fallback_mode == mode
+
+
+# ---------------------------------------------------------------------------
+# to_dict / roundtrip
+# ---------------------------------------------------------------------------
+
+
+def test_to_dict_empty_when_all_unspecified() -> None:
+    assert StreamingOptions().to_dict() == {}
+
+
+def test_to_dict_contains_only_set_fields() -> None:
+    opts = StreamingOptions(fallback_mode="silent", num_streaming_threads=4)
+    d = opts.to_dict()
+    assert d == {"fallback_mode": "silent", "num_streaming_threads": 4}
+
+
+def test_to_dict_roundtrip() -> None:
+    original = StreamingOptions(
+        fallback_mode="silent",
+        num_streaming_threads=4,
+        log="DEBUG",
+        raise_on_fail=True,
+    )
+    assert StreamingOptions.from_dict(original.to_dict()) == original
+
+
+def test_to_dict_roundtrip_empty() -> None:
+    opts = StreamingOptions()
+    assert StreamingOptions.from_dict(opts.to_dict()) == opts

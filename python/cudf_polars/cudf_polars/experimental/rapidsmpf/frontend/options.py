@@ -9,10 +9,16 @@ import argparse
 import dataclasses
 import json
 import textwrap
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 if TYPE_CHECKING:
     from rapidsmpf.config import Options
+
+    from cudf_polars.utils.config import (
+        DynamicPlanningOptions,
+        MemoryResourceConfig,
+        ParquetOptions,
+    )
 
 __all__: list[str] = [
     "UNSPECIFIED",
@@ -204,13 +210,53 @@ class StreamingOptions:
     max_rows_per_partition: int | _Unspecified = _opt("executor")
     broadcast_join_limit: int | _Unspecified = _opt("executor")
     target_partition_size: int | _Unspecified = _opt("executor")
-    dynamic_planning: Any = _opt("executor")
+    dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | _Unspecified = (
+        _opt("executor")
+    )
     unique_fraction: dict[str, float] | _Unspecified = _opt("executor")
     # ---- Engine ----
     raise_on_fail: bool | _Unspecified = _opt("engine")
-    parquet_options: Any = _opt("engine")
-    memory_resource_config: Any = _opt("engine")
-    cuda_stream_policy: Any = _opt("engine")
+    parquet_options: dict[str, Any] | ParquetOptions | _Unspecified = _opt("engine")
+    memory_resource_config: dict[str, Any] | MemoryResourceConfig | _Unspecified = _opt(
+        "engine"
+    )
+    cuda_stream_policy: (
+        Literal["default", "new", "pool"] | dict[str, Any] | _Unspecified
+    ) = _opt("engine")
+
+    _VALID_LOG_LEVELS: ClassVar[frozenset[str]] = frozenset(
+        {"NONE", "PRINT", "WARN", "INFO", "DEBUG", "TRACE"}
+    )
+    _VALID_FALLBACK_MODES: ClassVar[frozenset[str]] = frozenset(
+        {"warn", "raise", "silent"}
+    )
+
+    def __post_init__(self) -> None:
+        """Validate field values after construction."""
+        if (
+            not isinstance(self.num_streaming_threads, _Unspecified)
+            and self.num_streaming_threads <= 0
+        ):
+            raise ValueError(
+                f"num_streaming_threads must be > 0, got {self.num_streaming_threads}"
+            )
+        if not isinstance(self.num_streams, _Unspecified) and self.num_streams <= 0:
+            raise ValueError(f"num_streams must be > 0, got {self.num_streams}")
+        if (
+            not isinstance(self.log, _Unspecified)
+            and self.log not in self._VALID_LOG_LEVELS
+        ):
+            raise ValueError(
+                f"log must be one of {sorted(self._VALID_LOG_LEVELS)}, got {self.log!r}"
+            )
+        if (
+            not isinstance(self.fallback_mode, _Unspecified)
+            and self.fallback_mode not in self._VALID_FALLBACK_MODES
+        ):
+            raise ValueError(
+                f"fallback_mode must be one of {sorted(self._VALID_FALLBACK_MODES)}, "
+                f"got {self.fallback_mode!r}"
+            )
 
     # ------------------------------------------------------------------
     # Conversion helpers used by the engines
@@ -278,6 +324,33 @@ class StreamingOptions:
             if not isinstance(v, _Unspecified):
                 opts[f.name] = v
         return opts
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Return all explicitly-set fields as a plain dictionary.
+
+        Fields that are :data:`UNSPECIFIED` are omitted. The result can be
+        round-tripped via :meth:`from_dict`.
+
+        Returns
+        -------
+        dict
+            Mapping of field name to value for every non-UNSPECIFIED field.
+
+        Examples
+        --------
+        >>> StreamingOptions(fallback_mode="silent").to_dict()
+        {'fallback_mode': 'silent'}
+        >>> StreamingOptions.from_dict(
+        ...     StreamingOptions(fallback_mode="silent").to_dict()
+        ... )  # doctest: +ELLIPSIS
+        StreamingOptions(...)
+        """
+        return {
+            f.name: getattr(self, f.name)
+            for f in dataclasses.fields(self)
+            if not isinstance(getattr(self, f.name), _Unspecified)
+        }
 
     # ------------------------------------------------------------------
     # Factory methods
