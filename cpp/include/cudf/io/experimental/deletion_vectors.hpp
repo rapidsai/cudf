@@ -176,7 +176,7 @@ table_with_metadata read_parquet(
   parquet_reader_options const& options,
   deletion_vector_info const& deletion_vector_info,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource_ref());
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 
