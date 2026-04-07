@@ -22,8 +22,8 @@ void nvbench_left_anti_join(nvbench::state& state,
   auto const right_size  = state.get_int64("right_size");
   auto const selectivity = state.get_float64("selectivity");
   auto const join_type   = state.get_string("join_type");
-  if (join_type == "mark_join" && (left_size > right_size || left_size > 100'000)) {
-    state.skip("mark_join: build (left) should be smaller than probe (right) and <= 100K");
+  if (join_type == "mark_join" && left_size > right_size) {
+    state.skip("mark_join: build (left) should be smaller than probe (right)");
     return;
   }
   if (join_type == "filtered_join" && right_size > left_size) {
@@ -68,8 +68,8 @@ void nvbench_left_semi_join(nvbench::state& state,
   auto const right_size  = state.get_int64("right_size");
   auto const selectivity = state.get_float64("selectivity");
   auto const join_type   = state.get_string("join_type");
-  if (join_type == "mark_join" && (left_size > right_size || left_size > 100'000)) {
-    state.skip("mark_join: build (left) should be smaller than probe (right) and <= 100K");
+  if (join_type == "mark_join" && left_size > right_size) {
+    state.skip("mark_join: build (left) should be smaller than probe (right)");
     return;
   }
   if (join_type == "filtered_join" && right_size > left_size) {

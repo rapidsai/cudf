@@ -27,7 +27,6 @@ import functools
 import importlib.util
 import json
 import os
-import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
+    import distributed
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
     from ray.actor import ActorHandle
@@ -50,13 +50,13 @@ if TYPE_CHECKING:
 __all__ = [
     "Cluster",
     "ConfigOptions",
+    "DaskContext",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
     "RayContext",
     "Runtime",
     "SPMDContext",
-    "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -176,20 +176,7 @@ class Cluster(enum.StrEnum):
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
     RAY = "ray"
-
-
-class Scheduler(enum.StrEnum):
-    """
-    **Deprecated**: Use :class:`Cluster` instead.
-
-    The scheduler to use for the task-based streaming executor.
-
-    * ``Scheduler.SYNCHRONOUS`` : Single-GPU execution (use ``Cluster.SINGLE`` instead)
-    * ``Scheduler.DISTRIBUTED`` : Multi-GPU execution (use ``Cluster.DISTRIBUTED`` instead)
-    """
-
-    SYNCHRONOUS = "synchronous"
-    DISTRIBUTED = "distributed"
+    DASK = "dask"
 
 
 class ShuffleMethod(enum.StrEnum):
@@ -276,7 +263,7 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used when the rapidsmpf runtime is enabled.
-        Default is True.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -315,7 +302,7 @@ class ParquetOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
             _bool_converter,
-            default=True,
+            default=False,
         )
     )
 
@@ -568,6 +555,37 @@ class RayContext:
     rank_actors: list[ActorHandle[RankActor]]
 
 
+@dataclasses.dataclass(frozen=True)
+class DaskContext:
+    """
+    Configuration for Dask cluster execution.
+
+    .. note::
+        This dataclass holds a :class:`~distributed.Client` handle, which is
+        only valid within the Dask session that created it. It is stripped from
+        ``config_options`` before pickling for remote worker calls in
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.dask.evaluate_pipeline_dask_mode`.
+        Do not persist or transfer this object across Dask sessions.
+
+    Parameters
+    ----------
+    client
+        Active :class:`~distributed.Client` connected to the cluster.
+    rapidsmpf_id
+        Unique identifier for this RapidsMPF bootstrap session.
+    owned_client
+        Client to close on shutdown, if created internally by
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`.
+    owned_cluster
+        Cluster to close on shutdown, if created internally.
+    """
+
+    client: distributed.Client
+    rapidsmpf_id: str
+    owned_client: distributed.Client | None = None
+    owned_cluster: Any | None = None
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -591,12 +609,6 @@ class StreamingExecutor:
         * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
           an active Dask cluster)
 
-    scheduler
-        **Deprecated**: Use ``cluster`` instead.
-
-        For backward compatibility:
-        * ``Scheduler.SYNCHRONOUS`` maps to ``Cluster.SINGLE``
-        * ``Scheduler.DISTRIBUTED`` maps to ``Cluster.DISTRIBUTED``
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
@@ -707,13 +719,6 @@ class StreamingExecutor:
             default=None,
         )
     )
-    scheduler: Scheduler | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SCHEDULER",
-            Scheduler.__call__,
-            default=None,
-        )
-    )
     fallback_mode: StreamingFallbackMode = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__FALLBACK_MODE",
@@ -788,42 +793,16 @@ class StreamingExecutor:
     )
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
+    dask_context: DaskContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
         if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
             if not rapidsmpf_single_available():
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
-            if self.shuffle_method == "tasks":
-                raise ValueError(
-                    "The rapidsmpf streaming engine does not support task-based shuffling."
-                )
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
 
-        # Handle backward compatibility for deprecated scheduler parameter
-        if self.scheduler is not None:
-            if self.cluster is not None:
-                raise ValueError(
-                    "Cannot specify both 'scheduler' and 'cluster'. "
-                    "The 'scheduler' parameter is deprecated. "
-                    "Please use only 'cluster' instead."
-                )
-            else:
-                warnings.warn(
-                    """The 'scheduler' parameter is deprecated. Please use 'cluster' instead.
-                    Use 'cluster="single"' instead of 'scheduler="synchronous"' and "
-                    'cluster="distributed"' instead of 'scheduler="distributed"'.""",
-                    FutureWarning,
-                    stacklevel=2,
-                )
-            # Map old scheduler values to new cluster values
-            if self.scheduler == "synchronous":
-                object.__setattr__(self, "cluster", Cluster.SINGLE)
-            elif self.scheduler == "distributed":
-                object.__setattr__(self, "cluster", Cluster.DISTRIBUTED)
-            # Clear scheduler to avoid confusion
-            object.__setattr__(self, "scheduler", None)
-        elif self.cluster is None:
+        if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
@@ -1098,19 +1077,6 @@ class ConfigOptions(Generic[ExecutorType]):
             user_memory_resource_config = MemoryResourceConfig(
                 **user_memory_resource_config
             )
-
-        # Backward compatibility for "cardinality_factor"
-        # TODO: Remove this in 25.10
-        if "cardinality_factor" in user_executor_options:
-            warnings.warn(
-                "The 'cardinality_factor' configuration is deprecated. "
-                "Please use 'unique_fraction' instead.",
-                FutureWarning,
-                stacklevel=2,
-            )
-            cardinality_factor = user_executor_options.pop("cardinality_factor")
-            if "unique_fraction" not in user_executor_options:
-                user_executor_options["unique_fraction"] = cardinality_factor
 
         # These are user-provided options, so we need to actually validate
         # them.

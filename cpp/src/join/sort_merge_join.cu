@@ -266,8 +266,8 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   auto const count_matches = thrust::reduce(
     rmm::exec_policy_nosync(stream), count_matches_it, count_matches_it + larger_numrows);
   rmm::device_uvector<size_type> nonzero_matches(count_matches, stream, temp_mr);
-  cudf::detail::copy_if_async(thrust::counting_iterator<size_type>(0),
-                              thrust::counting_iterator<size_type>(larger_numrows),
+  cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
+                              cuda::counting_iterator<size_type>{larger_numrows},
                               match_counts->begin(),
                               nonzero_matches.begin(),
                               cuda::std::identity{},
@@ -278,8 +278,9 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
   auto match_offsets =
     cudf::detail::make_zeroed_device_uvector_async<int64_t>(match_counts->size(), stream, temp_mr);
   // Use pinned memory as bounce buffer for efficient device-to-host transfer of the last element
-  auto last_element = cudf::detail::device_scalar<int64_t>(0, stream);
-  auto output_itr   = cudf::detail::make_sizes_to_offsets_iterator(
+  auto last_element =
+    cudf::detail::device_scalar<int64_t>(0, stream, cudf::get_current_device_resource_ref());
+  auto output_itr = cudf::detail::make_sizes_to_offsets_iterator(
     match_offsets.begin(), match_offsets.end(), last_element.data());
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          match_counts->begin(),
@@ -407,8 +408,8 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   count_matches = reduce(count_matches_it, std::move(count_matches), larger_numrows, stream);
   auto const h_count_matches = count_matches.value(stream);
   rmm::device_uvector<size_type> nonzero_matches(h_count_matches, stream, temp_mr);
-  cudf::detail::copy_if_async(cuda::counting_iterator<size_type>(0),
-                              cuda::counting_iterator<size_type>(larger_numrows),
+  cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
+                              cuda::counting_iterator<size_type>{larger_numrows},
                               match_counts->begin(),
                               nonzero_matches.begin(),
                               cuda::std::identity{},
@@ -434,8 +435,8 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
   // Fill in unmatched entries (left-join-only rows)
   // These rows exist in the larger table but have no matches in the smaller table
   cudf::detail::copy_if_async(
-    cuda::counting_iterator<size_type>(0),
-    cuda::counting_iterator<size_type>(larger_numrows),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{larger_numrows},
     match_counts->begin(),
     larger_indices.begin(),
     [] __device__(auto c) -> bool { return c == 0; },
@@ -558,7 +559,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
         rmm::exec_policy_nosync(stream),
         cuda::std::reverse_iterator(lcv.offsets_end()),
         cuda::std::reverse_iterator(lcv.offsets_end()) + offsets.size(),
-        cuda::std::reverse_iterator(thrust::counting_iterator(offsets.size())),
+        cuda::std::reverse_iterator(cuda::counting_iterator{offsets.size()}),
         cuda::std::reverse_iterator(offsets_subset.end()),
         cuda::std::reverse_iterator(child_positions.end()));
       auto subset_size   = cuda::std::distance(cuda::std::reverse_iterator(offsets_subset.end()),
@@ -577,8 +578,8 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
 
       thrust::for_each(
         rmm::exec_policy_nosync(stream),
-        thrust::counting_iterator(0),
-        thrust::counting_iterator(0) + subset_size,
+        cuda::counting_iterator<cudf::size_type>{0},
+        cuda::counting_iterator<cudf::size_type>{0} + subset_size,
         list_nonnull_filter{static_cast<bitmask_type*>(validity_mask.data()),
                             static_cast<bitmask_type const*>(reduced_validity_mask.data()),
                             child_positions,
@@ -711,9 +712,9 @@ rmm::device_uvector<size_type> sort_merge_join::preprocessed_table::map_table_to
   auto const table_mapping_size = _table_view.num_rows() - _num_nulls.value();
   rmm::device_uvector<size_type> table_mapping(table_mapping_size, stream, temp_mr);
   cudf::detail::copy_if_async(
-    cuda::counting_iterator<size_type>(0),
-    cuda::counting_iterator<size_type>(_table_view.num_rows()),
-    cuda::counting_iterator<size_type>(0),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{_table_view.num_rows()},
+    cuda::counting_iterator<size_type>{0},
     table_mapping.begin(),
     is_row_valid{static_cast<bitmask_type const*>(_validity_mask.value().data())},
     stream);
@@ -776,16 +777,16 @@ auto sort_merge_join::invoke_merge(preprocessed_table const& preprocessed_left,
               r_view.begin<size_type>(),
               r_view.end<size_type>(),
               left_view,
-              thrust::counting_iterator(0),
-              thrust::counting_iterator(left_view.num_rows()),
+              cuda::counting_iterator<cudf::size_type>{0},
+              cuda::counting_iterator{left_view.num_rows()},
               stream);
     return op(obj);
   } else if (!has_right_sorting_order && has_left_sorting_order) {
     // preprocessed_right unsorted, preprocessed_left sorted
     auto l_view = preprocessed_left._null_processed_table_sorted_order.value()->view();
     merge obj(right_view,
-              thrust::counting_iterator(0),
-              thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+              cuda::counting_iterator<cudf::size_type>{0},
+              cuda::counting_iterator{preprocessed_right._null_processed_table_view.num_rows()},
               left_view,
               l_view.begin<size_type>(),
               l_view.end<size_type>(),
@@ -794,11 +795,11 @@ auto sort_merge_join::invoke_merge(preprocessed_table const& preprocessed_left,
   }
   // Both unsorted
   merge obj(right_view,
-            thrust::counting_iterator(0),
-            thrust::counting_iterator(preprocessed_right._null_processed_table_view.num_rows()),
+            cuda::counting_iterator<cudf::size_type>{0},
+            cuda::counting_iterator{preprocessed_right._null_processed_table_view.num_rows()},
             left_view,
-            thrust::counting_iterator(0),
-            thrust::counting_iterator(left_view.num_rows()),
+            cuda::counting_iterator<cudf::size_type>{0},
+            cuda::counting_iterator{left_view.num_rows()},
             stream);
   return op(obj);
 }
@@ -905,9 +906,9 @@ sort_merge_join::left_join(table_view const& left,
       // Append filtered null rows with JoinNoMatch for right side
       auto const validity_mask =
         static_cast<bitmask_type const*>(preprocessed_left._validity_mask.value().data());
-      cudf::detail::copy_if_async(cuda::counting_iterator<size_type>(0),
-                                  cuda::counting_iterator<size_type>(left.num_rows()),
-                                  cuda::counting_iterator<size_type>(0),
+      cudf::detail::copy_if_async(cuda::counting_iterator<size_type>{0},
+                                  cuda::counting_iterator<size_type>{left.num_rows()},
+                                  cuda::counting_iterator<size_type>{0},
                                   left_result_indices.begin() + preprocessed_left_indices->size(),
                                   is_row_null{validity_mask},
                                   stream);

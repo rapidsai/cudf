@@ -20,7 +20,6 @@ import textwrap
 import time
 import traceback
 import uuid
-import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -359,7 +358,6 @@ class RunConfig:
     runtime: str
     stream_policy: str | None
     cluster: str
-    scheduler: str  # Deprecated, kept for backward compatibility
     n_workers: int
     versions: PackageVersions = dataclasses.field(
         default_factory=PackageVersions.collect
@@ -414,7 +412,6 @@ class RunConfig:
         """Create a RunConfig from command line arguments."""
         executor: ExecutorType = args.executor
         cluster = args.cluster
-        scheduler = args.scheduler
         runtime = args.runtime
         stream_policy = args.stream_policy
 
@@ -422,35 +419,9 @@ class RunConfig:
         if stream_policy == "auto":
             stream_policy = None
 
-        # Deal with deprecated scheduler argument
-        # and non-streaming executors
+        # Deal with non-streaming executors
         if executor == "in-memory" or executor == "cpu":
-            cluster = None
-            scheduler = None
-        elif scheduler is not None:
-            if cluster is not None:
-                raise ValueError(
-                    "Cannot specify both -s/--scheduler and -c/--cluster. "
-                    "Please use -c/--cluster only."
-                )
-            else:
-                warnings.warn(
-                    "The -s/--scheduler argument is deprecated. Use -c/--cluster instead.",
-                    FutureWarning,
-                    stacklevel=2,
-                )
-            cluster = "single" if scheduler == "synchronous" else "distributed"
-        elif cluster is not None:
-            match cluster:
-                case "single":
-                    scheduler = "synchronous"
-                case "distributed":
-                    scheduler = "distributed"
-                case "spmd":  # launched via rrun, not Dask
-                    scheduler = None
-        else:
             cluster = "single"
-            scheduler = "synchronous"
 
         path = args.path
         name = args.query_set
@@ -520,7 +491,6 @@ class RunConfig:
             queries=args.query,
             executor=executor,
             cluster=cluster,
-            scheduler=scheduler,
             runtime=runtime,
             stream_policy=stream_policy,
             n_workers=args.n_workers,
@@ -761,6 +731,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
             "rmm_async": args.rmm_async,
             "rmm_release_threshold": args.rmm_release_threshold,
             "threads_per_worker": run_config.threads,
+            "memory_limit": args.worker_memory_limit,
         }
 
         client = Client(LocalCUDACluster(**kwargs))
@@ -968,19 +939,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
                 - ray         : Ray actor-based multi-GPU execution"""),
     )
     parser.add_argument(
-        "-s",
-        "--scheduler",
-        default=None,
-        type=str,
-        choices=["synchronous", "distributed"],
-        help=textwrap.dedent("""\
-            *Deprecated*: Use --cluster instead.
-
-            Scheduler type to use with the 'streaming' executor.
-                - synchronous : Run locally in a single process
-                - distributed : Use Dask for multi-GPU execution"""),
-    )
-    parser.add_argument(
         "--runtime",
         type=str,
         choices=["tasks", "rapidsmpf"],
@@ -1103,6 +1061,16 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Default: None (no release threshold)"""),
     )
     parser.add_argument(
+        "--worker-memory-limit",
+        default="auto",
+        type=str,
+        help=textwrap.dedent("""\
+            Passed to dask_cuda.LocalCUDACluster to control the memory limit
+            of each Dask worker. Use 'auto' to let Dask determine the limit
+            automatically, or '0' for unlimited.
+            Default: auto"""),
+    )
+    parser.add_argument(
         "--rmm-async",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1216,7 +1184,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--native-parquet",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Use C++ read_parquet nodes for the rapidsmpf runtime.",
     )
     parser.add_argument(
@@ -1315,7 +1283,11 @@ def parse_args(
     ):
         raise ValueError("Must specify --validate to use --output-expected-directory.")
 
-    if parsed_args.suffix and not parsed_args.suffix.startswith("."):
+    if (
+        parsed_args.suffix
+        and not parsed_args.suffix.startswith(".")
+        and not parsed_args.suffix.startswith("/")
+    ):
         parsed_args.suffix = f".{parsed_args.suffix}"
 
     return parsed_args
@@ -1337,6 +1309,7 @@ def validate_result(
     expected: pl.DataFrame,
     sort_by: list[tuple[str, bool]],
     limit: int | None = None,
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None,
     **kwargs: Any,
 ) -> ValidationResult:
     """
@@ -1351,7 +1324,12 @@ def validate_result(
     """
     try:
         assert_tpch_result_equal(
-            result, expected, sort_by=sort_by, limit=limit, **kwargs
+            result,
+            expected,
+            sort_by=sort_by,
+            limit=limit,
+            sort_keys=sort_keys,
+            **kwargs,
         )
     except Exception as e:
         return ValidationResult.from_error(e)
@@ -1370,6 +1348,13 @@ class QueryResult:
         The result of the query.
     sort_by: list[tuple[str, bool]]
         The columns that the query sorts by. Each tuple contains (column_name, descending_flag).
+        Used for the ties/limit boundary logic in validation.
+    sort_keys: list[tuple[pl.Expr, bool]] | None
+        Optional Polars expressions for the sortedness check. Use this when the query
+        sorts by a conditional expression (e.g. ``CASE WHEN lochierarchy = 0 THEN i_category END``)
+        that cannot be represented as a plain column name in ``sort_by``. When provided,
+        these expressions are evaluated against the output and used only for the sortedness
+        check; ``sort_by`` still drives the ties/limit boundary logic.
     limit: int | None
         The limit of the query, if any.
 
@@ -1379,6 +1364,7 @@ class QueryResult:
     sort_by: list[tuple[str, bool]]
     limit: int | None = None
     nulls_last: bool = True
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
 def check_input_data_type(
@@ -1400,7 +1386,7 @@ def check_input_data_type(
         table, col = "item", "i_current_price"
     else:
         table, col = "customer", "c_acctbal"
-    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    path = f"{run_config.dataset_path}/{table}{run_config.suffix}"
     t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
 
     num_type: Literal["decimal", "float"]
@@ -1413,7 +1399,7 @@ def check_input_data_type(
     if run_config.query_set == "pdsds":
         date_type = "date"
     else:
-        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        path = f"{run_config.dataset_path}/orders{run_config.suffix}"
         t = (
             pl.scan_parquet(path)
             .select(pl.col("o_orderdate"))
@@ -1464,6 +1450,7 @@ def run_polars_query_iteration(
             query_result.sort_by,
             limit=query_result.limit,
             nulls_last=query_result.nulls_last,
+            sort_keys=query_result.sort_keys,
             **get_validation_options(args),
         )
     else:
@@ -2111,7 +2098,7 @@ def print_duckdb_plan(
 
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
@@ -2147,7 +2134,7 @@ def execute_duckdb_query(
         tbl_names = PDSH_TABLE_NAMES
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
