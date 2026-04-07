@@ -16,6 +16,7 @@
 #include <cudf/join/mark_join.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -44,16 +45,15 @@ std::pair<rmm::device_buffer, bitmask_type const*> build_row_bitmask(table_view 
   CUDF_EXPECTS(nullable_columns.size() > 0,
                "The input table has nulls thus it should have nullable columns.");
 
+  auto const temp_mr = cudf::get_current_device_resource_ref();
   if (nullable_columns.size() > 1) {
     auto row_bitmask =
-      cudf::detail::bitmask_and(
-        table_view{nullable_columns}, stream, cudf::get_current_device_resource_ref())
-        .first;
+      cudf::detail::bitmask_and(table_view{nullable_columns}, stream, temp_mr).first;
     auto const row_bitmask_ptr = static_cast<bitmask_type const*>(row_bitmask.data());
     return std::pair(std::move(row_bitmask), row_bitmask_ptr);
   }
 
-  return std::pair(rmm::device_buffer{0, stream}, nullable_columns.front().null_mask());
+  return std::pair(rmm::device_buffer{0, stream, temp_mr}, nullable_columns.front().null_mask());
 }
 
 struct row_is_null {
@@ -402,7 +402,8 @@ cudf::size_type mark_join::mark_probe_without_prefilter(storage_ref_type storage
                                                         bitmask_type const* probe_row_bitmask,
                                                         rmm::cuda_stream_view stream)
 {
-  cudf::detail::device_scalar<cudf::size_type> d_mark_counter(0, stream);
+  cudf::detail::device_scalar<cudf::size_type> d_mark_counter(
+    0, stream, cudf::get_current_device_resource_ref());
 
   if (num_probe_rows > 0) {
     int grid_size = 0;
@@ -476,8 +477,9 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
 {
   CUDF_FUNC_RANGE();
 
+  auto const temp_mr          = cudf::get_current_device_resource_ref();
   auto materialize_probe_rows = [&](auto const& key_fn) {
-    rmm::device_uvector<probe_key_type> probe_rows(probe.num_rows(), stream);
+    rmm::device_uvector<probe_key_type> probe_rows(probe.num_rows(), stream, temp_mr);
     cub::DeviceTransform::Transform(cuda::counting_iterator<size_type>{0},
                                     probe_rows.begin(),
                                     probe.num_rows(),
@@ -486,7 +488,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
     return probe_rows;
   };
 
-  rmm::device_uvector<probe_key_type> probe_rows(0, stream);
+  rmm::device_uvector<probe_key_type> probe_rows(0, stream, temp_mr);
   if (is_primitive_row_op_compatible(_build)) {
     auto const d_probe_hasher = primitive_row_hasher{nullate::DYNAMIC{true}, preprocessed_probe};
     probe_rows =
@@ -501,7 +503,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
   auto const num_buckets = static_cast<cudf::thread_index_type>(storage_ref.num_buckets());
 
   auto const probe_has_nulls = has_nested_nulls(probe);
-  rmm::device_buffer probe_bitmask_buffer(0, stream);
+  rmm::device_buffer probe_bitmask_buffer(0, stream, temp_mr);
   bitmask_type const* probe_bitmask_ptr = nullptr;
   if (probe_has_nulls && _nulls_equal == null_equality::UNEQUAL) {
     auto bitmask_buffer_and_ptr = build_row_bitmask(probe, stream);
@@ -534,7 +536,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_join::mark_probe_and_
     return std::make_unique<rmm::device_uvector<size_type>>(std::move(result));
   }
 
-  cudf::detail::device_scalar<cudf::size_type> d_scan_offset(0, stream);
+  cudf::detail::device_scalar<cudf::size_type> d_scan_offset(0, stream, temp_mr);
 
   {
     int grid_size = 0;
@@ -615,7 +617,8 @@ mark_join::mark_join(cudf::table_view const& build,
   auto const has_null_build_keys =
     cudf::has_nested_nulls(_build) && _nulls_equal == null_equality::UNEQUAL;
 
-  rmm::device_buffer row_bitmask_buffer(0, stream);
+  auto const temp_mr = cudf::get_current_device_resource_ref();
+  rmm::device_buffer row_bitmask_buffer(0, stream, temp_mr);
   bitmask_type const* row_bitmask_ptr = nullptr;
   if (has_null_build_keys) {
     auto bitmask_buffer_and_ptr = build_row_bitmask(_build, stream);
@@ -662,7 +665,7 @@ mark_join::mark_join(cudf::table_view const& build,
 
   auto do_build_and_filter = [&](auto const& d_build_hasher, auto const& d_build_comparator) {
     if (_prefilter == cudf::join_prefilter::YES) {
-      rmm::device_uvector<hash_value_type> build_hashes(_build.num_rows(), stream);
+      rmm::device_uvector<hash_value_type> build_hashes(_build.num_rows(), stream, temp_mr);
       cub::DeviceTransform::Transform(
         cuda::counting_iterator{size_type{0}},
         build_hashes.begin(),
