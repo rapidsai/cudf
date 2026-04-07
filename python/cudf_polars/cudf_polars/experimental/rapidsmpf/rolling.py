@@ -61,6 +61,53 @@ def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
         )
 
 
+def _filter_relay_pd(
+    pd: PackedData,
+    index_col_idx: int,
+    type_id: plc.TypeId,
+    threshold: int,
+    stream: Stream,
+    br: Any,
+    *,
+    ge: bool,
+) -> PackedData | None:
+    """
+    Unpack, filter, and repack a halo payload for multi-hop relay.
+
+    Parameters
+    ----------
+    pd
+        Packed halo payload to filter.
+    index_col_idx
+        Column position of the rolling index within the table.
+    type_id
+        TypeId of the index column (used to cast to INT64 for comparisons).
+    threshold
+        Index threshold.  Rows with index >= threshold are kept when
+        ``ge=True``; rows with index <= threshold are kept when ``ge=False``.
+    stream
+        CUDA stream for all GPU operations.
+    br
+        Buffer resource used for memory allocation.
+    ge
+        If True keep rows >= threshold (relay rightward); else keep rows
+        <= threshold (relay leftward).
+
+    Returns
+    -------
+    Filtered and repacked payload, or None if no rows survive the filter.
+    """
+    i64 = plc.DataType(plc.TypeId.INT64)
+    bool8 = plc.DataType(plc.TypeId.BOOL8)
+    table = unpack_and_concat(partitions=[pd], stream=stream, br=br)
+    idx_col = _get_idx_col_i64(table, index_col_idx, type_id, i64, stream)
+    if ge:
+        filtered = _filter_ge(table, idx_col, threshold, i64, bool8, stream)
+    else:
+        filtered = _filter_le(table, idx_col, threshold, i64, bool8, stream)
+    return _pack_table(filtered, stream, br)
+
+
 def _pack_table(table: plc.Table, stream: Stream, br: Any) -> PackedData | None:
     """Pack a plc.Table into PackedData; return None if the table is empty."""
     if table.num_rows() == 0:
@@ -141,7 +188,7 @@ def _compute_send_halos(
     lookahead: int,
     get_stream: Callable[[], Stream],
     br: Any,
-) -> tuple[PackedData | None, PackedData | None]:
+) -> tuple[PackedData | None, PackedData | None, int | None, int | None]:
     """
     Walk boundary chunks to build the inter-rank halo payloads.
 
@@ -153,6 +200,9 @@ def _compute_send_halos(
     send_left: symmetric walk forward from the first chunk with the threshold
     anchored to the first chunk's min index.
 
+    Also returns ``(local_min, local_max)``: the min/max index values across all
+    local chunks, used by the caller to decide whether multi-hop relay is needed.
+
     ``mids`` is updated in-place as chunks are extracted and re-inserted.
     All GPU operations on a chunk's table view complete *before* re-insertion
     so the spill manager cannot invalidate the view mid-operation.
@@ -162,6 +212,9 @@ def _compute_send_halos(
     n = len(mids)
     i64 = plc.DataType(plc.TypeId.INT64)
     bool8 = plc.DataType(plc.TypeId.BOOL8)
+
+    local_max: int | None = None  # max index of last non-empty chunk
+    local_min: int | None = None  # min index of first non-empty chunk
 
     send_right: PackedData | None = None
     if lookback > 0:
@@ -179,6 +232,7 @@ def _compute_send_halos(
             mn, mx = _minmax_py(idx_col, i64, chunk_stream)
             if threshold_r is None:
                 threshold_r = mx - lookback
+                local_max = mx  # first iteration = last non-empty chunk
             should_stop = mx < threshold_r
             if not should_stop:
                 right_pairs.insert(
@@ -221,6 +275,7 @@ def _compute_send_halos(
             mn, mx = _minmax_py(idx_col, i64, chunk_stream)
             if threshold_l is None:
                 threshold_l = mn + lookahead
+                local_min = mn  # first iteration = first non-empty chunk
             should_stop = mn > threshold_l
             if not should_stop:
                 left_pairs.append(
@@ -246,7 +301,39 @@ def _compute_send_halos(
                 )
             send_left = _pack_table(combined, combined_stream, br)
 
-    return send_left, send_right
+    # If only one walk ran, scan the complementary boundary chunk for the missing bound
+    if local_max is not None and local_min is None:
+        # backward walk ran but not forward; peek at first non-empty chunk for local_min
+        for j in range(n):
+            chunk = TableChunk.from_message(sm.extract(mid=mids[j]))
+            chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
+            table = chunk.table_view()
+            chunk_stream = chunk.stream
+            if table.num_rows() > 0:
+                idx_col = _get_idx_col_i64(
+                    table, index_col_idx, type_id, i64, chunk_stream
+                )
+                local_min, _ = _minmax_py(idx_col, i64, chunk_stream)
+                mids[j] = sm.insert(Message(0, chunk))
+                break
+            mids[j] = sm.insert(Message(0, chunk))
+    elif local_min is not None and local_max is None:
+        # forward walk ran but not backward; peek at last non-empty chunk for local_max
+        for j in range(n - 1, -1, -1):
+            chunk = TableChunk.from_message(sm.extract(mid=mids[j]))
+            chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
+            table = chunk.table_view()
+            chunk_stream = chunk.stream
+            if table.num_rows() > 0:
+                idx_col = _get_idx_col_i64(
+                    table, index_col_idx, type_id, i64, chunk_stream
+                )
+                _, local_max = _minmax_py(idx_col, i64, chunk_stream)
+                mids[j] = sm.insert(Message(0, chunk))
+                break
+            mids[j] = sm.insert(Message(0, chunk))
+
+    return send_left, send_right, local_min, local_max
 
 
 async def _unpack_pds_to_table(
@@ -323,7 +410,7 @@ async def rolling_actor(
         halo_right_pds: list[PackedData] = []
 
         if comm.nranks > 1:
-            send_left, send_right = _compute_send_halos(
+            send_left, send_right, local_min, local_max = _compute_send_halos(
                 mids,
                 sm,
                 index_col_idx,
@@ -344,14 +431,47 @@ async def rolling_actor(
                     halo_left_pds.insert(0, from_left)
                 if from_right is not None:
                     halo_right_pds.append(from_right)
-                my_done = (from_left is None) and (from_right is None)
+
+                # Relay with threshold filtering: only forward rows the next
+                # rank actually needs.  The threshold mirrors the one used when
+                # computing the initial send_right/send_left (anchored to this
+                # rank's local_max/local_min).  If nothing survives the filter
+                # the relay becomes None, terminating in O(lookback/range)
+                # rounds rather than O(N) ranks.
+                relay_stream = ir_context.get_cuda_stream()
+                relay_right: PackedData | None = None
+                if from_left is not None and local_max is not None:
+                    relay_right = await asyncio.to_thread(
+                        _filter_relay_pd,
+                        from_left,
+                        index_col_idx,
+                        type_id,
+                        local_max - lookback,
+                        relay_stream,
+                        br,
+                        ge=True,
+                    )
+                relay_left: PackedData | None = None
+                if from_right is not None and local_min is not None:
+                    relay_left = await asyncio.to_thread(
+                        _filter_relay_pd,
+                        from_right,
+                        index_col_idx,
+                        type_id,
+                        local_min + lookahead,
+                        relay_stream,
+                        br,
+                        ge=False,
+                    )
+
+                my_done = (relay_right is None) and (relay_left is None)
                 (total_done,) = await allgather_reduce(
                     context, comm, allreduce_id, int(my_done)
                 )
                 if total_done == comm.nranks:
                     break
-                send_right = from_left
-                send_left = from_right
+                send_right = relay_right
+                send_left = relay_left
 
         # Unpack inter-rank halos into DataFrames (carry their streams)
         halo_stream = ir_context.get_cuda_stream()
