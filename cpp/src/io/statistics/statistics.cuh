@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -107,9 +107,7 @@ struct statistics_merge_group {
 template <typename T>
 __device__ T get_element(column_device_view const& col, uint32_t row)
   requires(!std::is_same_v<T, statistics::byte_array_view>)
-{
-  return col.element<T>(row);
-}
+{ return col.element<T>(row); }
 
 template <typename T>
 __device__ T get_element(column_device_view const& col, uint32_t row)

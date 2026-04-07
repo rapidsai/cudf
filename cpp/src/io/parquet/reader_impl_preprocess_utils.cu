@@ -213,7 +213,7 @@ void generate_depth_remappings(
     if (io_size != 0) {
       auto& source = sources[source_idx];
       auto* dest   = static_cast<uint8_t*>(page_data[source_idx].data()) +
-                   chunk_buffer_offset[first_chunk - begin_chunk];
+                     chunk_buffer_offset[first_chunk - begin_chunk];
 
       if (source->is_device_read_preferred(io_size)) {
         auto fut = source->device_read_async(io_offset, io_size, dest, stream);

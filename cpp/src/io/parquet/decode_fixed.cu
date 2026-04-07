@@ -391,9 +391,9 @@ __device__ int update_validity_and_row_indices_nested(
           int const vindex     = value_count + thread_value_count;  // absolute input value index
           int const bit_offset = (valid_map_offset + vindex + write_start) -
                                  first_row;  // absolute bit offset into the output validity map
-          int const write_end = cudf::detail::warp_size -
-                                __clz(in_write_row_bounds_mask);  // last bit in the warp to store
-          int const bit_count = write_end - write_start;
+          int const write_end  = cudf::detail::warp_size -
+                                 __clz(in_write_row_bounds_mask);  // last bit in the warp to store
+          int const bit_count  = write_end - write_start;
 
           store_validity(bit_offset, ni.valid_map, warp_validity_mask >> write_start, bit_count);
         }
@@ -876,7 +876,7 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
   valid_count     = !process_nulls
                       ? first_row
                       : skip_validity_and_row_indices_nonlist<decode_block_size_t, level_t>(
-                      first_row, s, def, has_nesting_t, t);
+                          first_row, s, def, has_nesting_t, t);
 
   if constexpr (has_dict_t) {
     skip_decode<rolling_buf_size>(dict_stream, valid_count, t);
@@ -995,7 +995,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   __shared__ __align__(16) page_state_s state_g;
   constexpr bool use_dict_buffers = has_dict_t || has_bools_t;
   using state_buf_t               = page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
-                                           use_dict_buffers ? rolling_buf_size : 1,
+                                                         use_dict_buffers ? rolling_buf_size : 1,
                                                          1>;
   __shared__ __align__(16) state_buf_t state_buffers;
 

@@ -405,8 +405,10 @@ def test_dir(fast_and_intermediate_with_doc, slow_and_intermediate_with_doc):
     "check",
     [
         lambda Pxy, Slow: dir(Pxy().method) == dir(Slow().method),
-        lambda Pxy, Slow: dir(Pxy().intermediate().method)
-        == dir(Slow().intermediate().method),
+        lambda Pxy, Slow: (
+            dir(Pxy().intermediate().method)
+            == dir(Slow().intermediate().method)
+        ),
     ],
 )
 def test_dir_bound_method(

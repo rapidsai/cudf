@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,7 +24,7 @@ void PQ_write(nvbench::state& state)
   cudf::size_type const num_cols = state.get_int64("num_cols");
 
   auto const tbl  = create_random_table(cycle_dtypes({cudf::type_id::INT32}, num_cols),
-                                       table_size_bytes{data_size});
+                                        table_size_bytes{data_size});
   auto const view = tbl->view();
 
   std::size_t encoded_file_size = 0;

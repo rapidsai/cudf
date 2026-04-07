@@ -522,9 +522,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @return True if this is the first output chunk
    */
   [[nodiscard]] bool is_first_output_chunk() const
-  {
-    return _file_itm_data._output_chunk_count == 0 and _rows_processed_so_far == 0;
-  }
+  { return _file_itm_data._output_chunk_count == 0 and _rows_processed_so_far == 0; }
 
  private:
   aggregate_reader_metadata* _extended_metadata;

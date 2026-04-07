@@ -144,9 +144,7 @@ auto chunked_read(std::string const& filepath,
 auto chunked_read(std::string const& filepath,
                   output_limit output_limit_bytes,
                   output_row_granularity output_granularity)
-{
-  return chunked_read(filepath, output_limit_bytes, input_limit{0UL}, output_granularity);
-}
+{ return chunked_read(filepath, output_limit_bytes, input_limit{0UL}, output_granularity); }
 
 }  // namespace
 
@@ -988,9 +986,7 @@ namespace {
 std::size_t constexpr input_limit_expected_file_count = 3;
 
 std::vector<std::string> input_limit_get_test_names(std::string const& base_filename)
-{
-  return {base_filename + "_a.orc", base_filename + "_b.orc", base_filename + "_c.orc"};
-}
+{ return {base_filename + "_a.orc", base_filename + "_b.orc", base_filename + "_c.orc"}; }
 
 void input_limit_test_write_one(std::string const& filepath,
                                 cudf::table_view const& input,

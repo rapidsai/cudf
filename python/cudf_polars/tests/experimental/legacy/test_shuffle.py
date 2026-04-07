@@ -95,6 +95,6 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     # Cast needed because polars' EngineType "cpu" isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
     expect = df.collect(
-        engine=cast(Literal["auto", "in-memory", "streaming", "gpu"], "cpu")
+        engine=cast("Literal['auto', 'in-memory', 'streaming', 'gpu']", "cpu")
     )
     assert_frame_equal(result, expect, check_row_order=False)

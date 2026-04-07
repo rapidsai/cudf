@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -114,9 +114,7 @@ class table_view_base {
    * @return A reference to the desired column
    */
   [[nodiscard]] ColumnView const& column(size_type column_index) const
-  {
-    return _columns.at(column_index);
-  }
+  { return _columns.at(column_index); }
 
   /**
    * @brief Returns the number of columns
@@ -269,9 +267,7 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
    * @return A mutable column view reference to the desired column
    */
   [[nodiscard]] mutable_column_view& column(size_type column_index) const
-  {
-    return const_cast<mutable_column_view&>(table_view_base::column(column_index));
-  }
+  { return const_cast<mutable_column_view&>(table_view_base::column(column_index)); }
   /**
    * @brief Creates an immutable `table_view` of the columns
    */

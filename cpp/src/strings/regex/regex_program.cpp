@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,9 +44,7 @@ int32_t regex_program::instructions_count() const { return _impl->prog.insts_cou
 int32_t regex_program::groups_count() const { return _impl->prog.groups_count(); }
 
 std::size_t regex_program::compute_working_memory_size(int32_t num_strings) const
-{
-  return detail::compute_working_memory_size(num_strings, instructions_count());
-}
+{ return detail::compute_working_memory_size(num_strings, instructions_count()); }
 
 }  // namespace strings
 }  // namespace cudf

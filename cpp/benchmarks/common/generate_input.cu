@@ -120,9 +120,7 @@ int num_direct_parents(int num_lvls, int num_leaf_columns)
 
 // Size of the null mask for each row, in bytes
 [[nodiscard]] double row_null_mask_size(data_profile const& profile)
-{
-  return profile.get_null_probability().has_value() ? 1. / 8 : 0.;
-}
+{ return profile.get_null_probability().has_value() ? 1. / 8 : 0.; }
 
 /**
  * @brief Computes the average element size in a column, given the data profile.
@@ -136,15 +134,11 @@ double avg_element_size(data_profile const& profile, cudf::data_type dtype);
 // Utilities to determine the mean size of an element, given the data profile
 template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
 double non_fixed_width_size(data_profile const& profile)
-{
-  CUDF_FAIL("Should not be called, use `size_of` for this type instead");
-}
+{ CUDF_FAIL("Should not be called, use `size_of` for this type instead"); }
 
 template <typename T, CUDF_ENABLE_IF(!cudf::is_fixed_width<T>())>
 double non_fixed_width_size(data_profile const& profile)
-{
-  CUDF_FAIL("not implemented!");
-}
+{ CUDF_FAIL("not implemented!"); }
 
 template <>
 double non_fixed_width_size<cudf::string_view>(data_profile const& profile)
@@ -212,9 +206,7 @@ double non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
 struct non_fixed_width_size_fn {
   template <typename T>
   double operator()(data_profile const& profile)
-  {
-    return non_fixed_width_size<T>(profile);
-  }
+  { return non_fixed_width_size<T>(profile); }
 };
 
 double avg_element_size(data_profile const& profile, cudf::data_type dtype)
@@ -345,9 +337,7 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   }
 
   rmm::device_uvector<DeviceType> operator()(thrust::minstd_rand& engine, unsigned size)
-  {
-    return dist(engine, size);
-  }
+  { return dist(engine, size); }
 };
 
 /**
@@ -441,9 +431,7 @@ rmm::device_uvector<cudf::size_type> sample_indices_with_run_length(cudf::size_t
 struct valid_or_zero {
   template <typename T>
   __device__ T operator()(cuda::std::tuple<T, bool> len_valid) const
-  {
-    return cuda::std::get<1>(len_valid) ? cuda::std::get<0>(len_valid) : T{0};
-  }
+  { return cuda::std::get<1>(len_valid) ? cuda::std::get<0>(len_valid) : T{0}; }
 };
 
 enum class string_encoding {
@@ -671,9 +659,7 @@ template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::dictionary32>(data_profile const& profile,
                                                                        thrust::minstd_rand& engine,
                                                                        cudf::size_type num_rows)
-{
-  CUDF_FAIL("not implemented yet");
-}
+{ CUDF_FAIL("not implemented yet"); }
 
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profile const& profile,
@@ -854,9 +840,7 @@ template <typename T>
 std::unique_ptr<cudf::column> create_distinct_rows_column(data_profile const& profile,
                                                           thrust::minstd_rand& engine,
                                                           cudf::size_type num_rows)
-{
-  return create_random_column<T>(profile, engine, num_rows);
-}
+{ return create_random_column<T>(profile, engine, num_rows); }
 
 template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::string_view>(
@@ -896,9 +880,7 @@ std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::list_view>(
 template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::dictionary32>(
   data_profile const& profile, thrust::minstd_rand& engine, cudf::size_type num_rows)
-{
-  CUDF_FAIL("not implemented yet");
-}
+{ CUDF_FAIL("not implemented yet"); }
 
 template <>
 std::unique_ptr<cudf::column> create_distinct_rows_column<cudf::struct_view>(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -23,9 +23,7 @@ struct tdigest_size_fn {
    * @return Size of the tdigest
    */
   __device__ size_type operator()(size_type tdigest_index)
-  {
-    return offsets[tdigest_index + 1] - offsets[tdigest_index];
-  }
+  { return offsets[tdigest_index + 1] - offsets[tdigest_index]; }
 };
 
 /**

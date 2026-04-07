@@ -138,9 +138,7 @@ text::byte_range_info aggregate_reader_metadata::page_index_byte_range() const
 }
 
 FileMetaData aggregate_reader_metadata::parquet_metadata() const
-{
-  return per_file_metadata.front();
-}
+{ return per_file_metadata.front(); }
 
 void aggregate_reader_metadata::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes)
 {
@@ -297,9 +295,7 @@ aggregate_reader_metadata::filter_row_groups_with_byte_range(
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::size_t bytes_to_skip,
   std::optional<std::size_t> const& bytes_to_read) const
-{
-  return apply_byte_bounds_filter(row_group_indices, bytes_to_skip, bytes_to_read);
-}
+{ return apply_byte_bounds_filter(row_group_indices, bytes_to_skip, bytes_to_read); }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
   host_span<std::vector<cudf::size_type> const> row_group_indices,

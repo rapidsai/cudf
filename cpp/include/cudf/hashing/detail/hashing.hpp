@@ -81,9 +81,7 @@ std::unique_ptr<column> xxhash_64(table_view const& input,
  * @return Combined hash value
  */
 CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
-{
-  return lhs ^ (rhs + 0x9e37'79b9 + (lhs << 6) + (lhs >> 2));
-}
+{ return lhs ^ (rhs + 0x9e37'79b9 + (lhs << 6) + (lhs >> 2)); }
 // SPDX-SnippetEnd
 
 /* SPDX-SnippetBegin
@@ -106,9 +104,7 @@ CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
  * @return Combined hash value
  */
 CUDF_HOST_DEVICE constexpr uint64_t hash_combine(uint64_t lhs, uint64_t rhs)
-{
-  return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
-}
+{ return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2)); }
 // SPDX-SnippetEnd
 
 }  // namespace hashing::detail

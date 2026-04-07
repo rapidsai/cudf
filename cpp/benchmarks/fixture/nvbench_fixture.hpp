@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -47,9 +47,7 @@ struct nvbench_base_fixture {
   inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 
   inline auto make_arena()
-  {
-    return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
-  }
+  { return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda()); }
 
   inline auto make_managed_pool()
   {

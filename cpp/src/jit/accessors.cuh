@@ -24,28 +24,20 @@ struct column_accessor {
 
   template <typename ColumnView>
   static __device__ decltype(auto) element(ColumnView const* columns, cudf::size_type row)
-  {
-    return columns[index].template element<T>(row);
-  }
+  { return columns[index].template element<T>(row); }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
                                 cudf::size_type row,
                                 T value)
-  {
-    outputs[index].assign<T>(row, value);
-  }
+  { outputs[index].assign<T>(row, value); }
 
   template <typename ColumnView>
   static __device__ bool is_null(ColumnView const* inputs, cudf::size_type row)
-  {
-    return inputs[index].is_null(row);
-  }
+  { return inputs[index].is_null(row); }
 
   template <typename ColumnView>
   static __device__ bool is_valid(ColumnView const* inputs, cudf::size_type row)
-  {
-    return inputs[index].is_valid(row);
-  }
+  { return inputs[index].is_valid(row); }
 
   template <typename ColumnView>
   static __device__ cuda::std::optional<T> nullable_element(ColumnView const* columns,
@@ -63,28 +55,20 @@ struct span_accessor {
 
   static __device__ type& element(cudf::jit::device_optional_span<T> const* spans,
                                   cudf::size_type row)
-  {
-    return spans[index][row];
-  }
+  { return spans[index][row]; }
 
   static __device__ void assign(cudf::jit::device_optional_span<T> const* outputs,
                                 cudf::size_type row,
                                 T value)
-  {
-    outputs[index][row] = value;
-  }
+  { outputs[index][row] = value; }
 
   static __device__ bool is_null(cudf::jit::device_optional_span<T> const* inputs,
                                  cudf::size_type row)
-  {
-    return inputs[index].is_null(row);
-  }
+  { return inputs[index].is_null(row); }
 
   static __device__ bool is_valid(cudf::jit::device_optional_span<T> const* inputs,
                                   cudf::size_type row)
-  {
-    return inputs[index].is_valid(row);
-  }
+  { return inputs[index].is_valid(row); }
 
   static __device__ cuda::std::optional<T> nullable_element(
     cudf::jit::device_optional_span<T> const* outputs, cudf::size_type row)
@@ -101,34 +85,24 @@ struct scalar_accessor {
 
   template <typename ColumnView>
   static __device__ decltype(auto) element(ColumnView const* columns, cudf::size_type)
-  {
-    return Accessor::element(columns, 0);
-  }
+  { return Accessor::element(columns, 0); }
 
   static __device__ void assign(cudf::mutable_column_device_view_core const* outputs,
                                 cudf::size_type,
                                 type value)
-  {
-    return Accessor::assign(outputs, 0, value);
-  }
+  { return Accessor::assign(outputs, 0, value); }
 
   template <typename ColumnView>
   static __device__ bool is_null(ColumnView const* columns, cudf::size_type)
-  {
-    return Accessor::is_null(columns, 0);
-  }
+  { return Accessor::is_null(columns, 0); }
 
   template <typename ColumnView>
   static __device__ bool is_valid(ColumnView const* columns, cudf::size_type)
-  {
-    return Accessor::is_valid(columns, 0);
-  }
+  { return Accessor::is_valid(columns, 0); }
 
   template <typename ColumnView>
   static __device__ decltype(auto) nullable_element(ColumnView const* columns, cudf::size_type)
-  {
-    return Accessor::nullable_element(columns, 0);
-  }
+  { return Accessor::nullable_element(columns, 0); }
 };
 
 // Join-specific accessor for indexed table access.
@@ -207,27 +181,21 @@ struct join_scalar_accessor {
                               cudf::size_type,
                               cudf::size_type,
                               cudf::size_type)
-  {
-    return left_tables[index].template element<T>(0);
-  }
+  { return left_tables[index].template element<T>(0); }
 
   static __device__ bool is_null(cudf::column_device_view_core const* left_tables,
                                  cudf::column_device_view_core const*,
                                  cudf::size_type,
                                  cudf::size_type,
                                  cudf::size_type)
-  {
-    return left_tables[index].is_null(0);
-  }
+  { return left_tables[index].is_null(0); }
 
   static __device__ bool is_valid(cudf::column_device_view_core const* left_tables,
                                   cudf::column_device_view_core const*,
                                   cudf::size_type,
                                   cudf::size_type,
                                   cudf::size_type)
-  {
-    return left_tables[index].is_valid(0);
-  }
+  { return left_tables[index].is_valid(0); }
 
   static __device__ cuda::std::optional<T> nullable_element(
     cudf::column_device_view_core const* left_tables,

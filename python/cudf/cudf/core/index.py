@@ -135,7 +135,7 @@ def _lexsorted_equal_range(
     )
     upper_bound = plc.copying.get_element(plc_upper_bound, 0).to_py()
 
-    return cast(int, lower_bound), cast(int, upper_bound), sort_inds
+    return cast("int", lower_bound), cast("int", upper_bound), sort_inds
 
 
 def _index_from_data(data: MutableMapping, name: Any = no_default):
@@ -5932,4 +5932,4 @@ def _validate_freq(freq: Any) -> DateOffset | MonthEnd | YearEnd | None:
         return freq
     elif freq is not None and not isinstance(freq, cudf.DateOffset):
         raise ValueError(f"Invalid frequency: {freq}")
-    return cast(cudf.DateOffset, freq)
+    return cast("cudf.DateOffset", freq)

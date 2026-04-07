@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -341,9 +341,7 @@ void batched_compress_async(compression_type compression,
 }
 
 bool is_aligned(void const* ptr, std::uintptr_t alignment) noexcept
-{
-  return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0;
-}
+{ return (reinterpret_cast<std::uintptr_t>(ptr) % alignment) == 0; }
 
 std::optional<std::string> is_compression_disabled_impl(compression_type compression,
                                                         feature_status_parameters params)
@@ -504,9 +502,7 @@ size_t batched_decompress_temp_size(compression_type compression,
 }
 
 bool is_batched_decompress_temp_size_ex_supported(compression_type compression)
-{
-  return compression == compression_type::ZSTD;
-}
+{ return compression == compression_type::ZSTD; }
 
 size_t batched_decompress_temp_size_ex(compression_type compression,
                                        device_span<device_span<uint8_t const> const> inputs,

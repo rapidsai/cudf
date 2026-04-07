@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,13 +37,11 @@ void BM_compiled_binaryop(nvbench::state& state, cudf::binary_operator binop)
 #define BM_STRINGIFY(a) #a
 
 // TODO tparam boolean for null.
-#define BM_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)               \
-  static void name(::nvbench::state& st)                                      \
-  {                                                                           \
-    ::BM_compiled_binaryop<lhs, rhs, tout>(st, ::cudf::binary_operator::bop); \
-  }                                                                           \
-  NVBENCH_BENCH(name)                                                         \
-    .set_name("compiled_binary_op_" BM_STRINGIFY(name))                       \
+#define BM_BINARYOP_BENCHMARK_DEFINE(name, lhs, rhs, bop, tout)                 \
+  static void name(::nvbench::state& st)                                        \
+  { ::BM_compiled_binaryop<lhs, rhs, tout>(st, ::cudf::binary_operator::bop); } \
+  NVBENCH_BENCH(name)                                                           \
+    .set_name("compiled_binary_op_" BM_STRINGIFY(name))                         \
     .add_int64_axis("num_rows", {10'000, 100'000, 1'000'000, 10'000'000, 100'000'000})
 
 #define build_name(a, b, c, d) a##_##b##_##c##_##d

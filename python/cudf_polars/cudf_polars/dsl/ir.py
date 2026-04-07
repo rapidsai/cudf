@@ -2500,9 +2500,11 @@ class Join(IR):
                         right.columns,
                         left=False,
                         empty=True,
-                        rename=lambda name: name
-                        if name not in left.column_names_set
-                        else f"{name}{suffix}",
+                        rename=lambda name: (
+                            name
+                            if name not in left.column_names_set
+                            else f"{name}{suffix}"
+                        ),
                         stream=stream,
                     )
                     result = DataFrame([*left_cols, *right_cols], stream=stream)
@@ -2516,9 +2518,11 @@ class Join(IR):
                     right_cols = Join._build_columns(
                         columns[left.num_columns :],
                         right.columns,
-                        rename=lambda name: name
-                        if name not in left.column_names_set
-                        else f"{name}{suffix}",
+                        rename=lambda name: (
+                            name
+                            if name not in left.column_names_set
+                            else f"{name}{suffix}"
+                        ),
                         left=False,
                         stream=stream,
                     )

@@ -287,7 +287,7 @@ std::unique_ptr<column> transform_operation(size_type row_size,
   }
 
   mutable_column_view outputs[] = {{*output}};
-  auto kernel                   = build_transform_kernel(is_fixed_point(output_type)
+  auto kernel = build_transform_kernel(is_fixed_point(output_type)
                                          ? "cudf::transformation::jit::fixed_point_kernel"
                                          : "cudf::transformation::jit::kernel",
                                        outputs,

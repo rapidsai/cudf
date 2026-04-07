@@ -534,7 +534,7 @@ TYPED_TEST(ReductionHistogramTest, Histogram)
   auto constexpr null{0};
   {
     auto const input    = data_col{{null, -3, 2, 1, 2, 0, null, 5, 2, null, -3, -2, null, 2, 1},
-                                nulls_at({0, 6, 9, 12})};
+                                   nulls_at({0, 6, 9, 12})};
     auto const expected = [] {
       auto child1 = data_col{{null, -3, -2, 0, 1, 2, 5}, null_at(0)};
       auto child2 = int64_col{4, 2, 1, 1, 2, 4, 1};
@@ -2275,9 +2275,9 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
     for (auto const i : {0, 1, 2, 3, 4}) {
       auto const expected      = decimalXX{scaled_integer<RepType>{i + 1, scale}};
       auto const result        = cudf::reduce(column,
-                                       *cudf::make_quantile_aggregation<reduce_aggregation>(
-                                         {i / 4.0}, cudf::interpolation::LINEAR),
-                                       out_type);
+                                              *cudf::make_quantile_aggregation<reduce_aggregation>(
+                                                {i / 4.0}, cudf::interpolation::LINEAR),
+                                              out_type);
       auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }

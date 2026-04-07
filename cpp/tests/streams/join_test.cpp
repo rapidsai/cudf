@@ -50,9 +50,7 @@ class JoinTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(JoinTest, InnerJoin)
-{
-  cudf::inner_join(table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
-}
+{ cudf::inner_join(table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream()); }
 
 TEST_F(JoinTest, SortMergeInnerJoin)
 {
@@ -62,14 +60,10 @@ TEST_F(JoinTest, SortMergeInnerJoin)
 }
 
 TEST_F(JoinTest, LeftJoin)
-{
-  cudf::left_join(table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
-}
+{ cudf::left_join(table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream()); }
 
 TEST_F(JoinTest, FullJoin)
-{
-  cudf::full_join(table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
-}
+{ cudf::full_join(table0, table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream()); }
 
 TEST_F(JoinTest, LeftSemiJoin)
 {

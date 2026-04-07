@@ -37,27 +37,19 @@ static constexpr hash_value_type mark_bit_mask = hash_value_type{1}
                                                  << (sizeof(hash_value_type) * 8 - 1);
 
 CUDF_HOST_DEVICE constexpr hash_value_type set_mark(hash_value_type value) noexcept
-{
-  return value | mark_bit_mask;
-}
+{ return value | mark_bit_mask; }
 
 CUDF_HOST_DEVICE constexpr hash_value_type unset_mark(hash_value_type value) noexcept
-{
-  return value & ~mark_bit_mask;
-}
+{ return value & ~mark_bit_mask; }
 
 CUDF_HOST_DEVICE constexpr bool is_marked(hash_value_type value) noexcept
-{
-  return (value & mark_bit_mask) != 0;
-}
+{ return (value & mark_bit_mask) != 0; }
 
 struct masked_hash_fn {
   template <typename T>
   CUDF_HOST_DEVICE constexpr hash_value_type operator()(
     cuco::pair<hash_value_type, T> const& key) const noexcept
-  {
-    return unset_mark(key.first);
-  }
+  { return unset_mark(key.first); }
 };
 
 struct secondary_hash_fn {
@@ -68,9 +60,7 @@ struct secondary_hash_fn {
 
   template <typename T>
   CUDF_HOST_DEVICE auto operator()(cuco::pair<hash_value_type, T> const& key) const noexcept
-  {
-    return cuco::xxhash_32<hash_value_type>{_seed}(unset_mark(key.first));
-  }
+  { return cuco::xxhash_32<hash_value_type>{_seed}(unset_mark(key.first)); }
 };
 
 template <typename T, typename Hasher>
@@ -78,9 +68,7 @@ struct masked_key_fn {
   CUDF_HOST_DEVICE constexpr masked_key_fn(Hasher const& hasher) : _hasher{hasher} {}
 
   __device__ __forceinline__ auto operator()(size_type i) const noexcept
-  {
-    return cuco::pair{unset_mark(_hasher(i)), T{i}};
-  }
+  { return cuco::pair{unset_mark(_hasher(i)), T{i}}; }
 
  private:
   Hasher _hasher;
@@ -116,9 +104,7 @@ struct insertion_adapter {
   __device__ constexpr bool operator()(
     cuco::pair<hash_value_type, lhs_index_type> const&,
     cuco::pair<hash_value_type, lhs_index_type> const&) const noexcept
-  {
-    return false;
-  }
+  { return false; }
 };
 
 using masked_probing_scheme = cuco::double_hashing<1, masked_hash_fn, secondary_hash_fn>;

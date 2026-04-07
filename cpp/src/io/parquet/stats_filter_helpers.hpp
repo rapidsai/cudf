@@ -82,9 +82,7 @@ class stats_caster_base {
   template <typename T>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
     requires(cudf::is_dictionary<T>() or cudf::is_nested<T>())
-  {
-    CUDF_FAIL("unsupported type for stats casting");
-  }
+  { CUDF_FAIL("unsupported type for stats casting"); }
 
   template <typename T>
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)

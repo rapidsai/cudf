@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,9 +26,7 @@ namespace {
  * @brief Function to print example usage and argument information.
  */
 void print_usage()
-{
-  std::cout << "\nUsage: parquet_inspect <input parquet file> <output path>\n\n";
-}
+{ std::cout << "\nUsage: parquet_inspect <input parquet file> <output path>\n\n"; }
 
 }  // namespace
 

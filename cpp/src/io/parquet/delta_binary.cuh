@@ -97,17 +97,13 @@ struct delta_binary_decoder {
   // returns the value stored in the `value` array at index
   // `rolling_index<delta_rolling_buf_size>(idx)`. If `idx` is `0`, then return `first_value`.
   __device__ constexpr zigzag128_t value_at(size_type idx)
-  {
-    return idx == 0 ? first_value : value[rolling_index<delta_rolling_buf_size>(idx)];
-  }
+  { return idx == 0 ? first_value : value[rolling_index<delta_rolling_buf_size>(idx)]; }
 
   // returns the number of values encoded in the block data. when all_values is true,
   // account for the first value in the header. otherwise just count the values encoded
   // in the mini-block data.
   __device__ constexpr uint32_t num_encoded_values(bool all_values)
-  {
-    return value_count == 0 ? 0 : all_values ? value_count : value_count - 1;
-  }
+  { return value_count == 0 ? 0 : all_values ? value_count : value_count - 1; }
 
   // read mini-block header into state object. should only be called from init_binary_block or
   // setup_next_mini_block. header format is:

@@ -69,14 +69,10 @@ class test_cuda_stream_pool : public cuda_stream_pool {
  public:
   rmm::cuda_stream_view get_stream() override { return cudf::test::get_default_stream(); }
   [[maybe_unused]] rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
-  {
-    return cudf::test::get_default_stream();
-  }
+  { return cudf::test::get_default_stream(); }
 
   std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
-  {
-    return std::vector<rmm::cuda_stream_view>(count, cudf::test::get_default_stream());
-  }
+  { return std::vector<rmm::cuda_stream_view>(count, cudf::test::get_default_stream()); }
 
   [[nodiscard]] std::size_t get_stream_pool_size() const override { return 1UL; }
 };

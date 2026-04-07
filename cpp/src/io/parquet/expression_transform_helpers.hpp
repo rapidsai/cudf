@@ -242,9 +242,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
    */
   [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> get_converted_expr()
     const
-  {
-    return _converted_expr;
-  }
+  { return _converted_expr; }
 
  protected:
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(

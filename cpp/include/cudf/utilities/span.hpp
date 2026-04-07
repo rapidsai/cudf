@@ -112,9 +112,7 @@ class span_base {
    * @return The size of the sequence in bytes
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr size_type size_bytes() const noexcept
-  {
-    return sizeof(T) * _size;
-  }
+  { return sizeof(T) * _size; }
 
   /**
    * @brief Checks if the span is empty.
@@ -130,9 +128,7 @@ class span_base {
    * @return A subspan of the first N elements of the sequence
    */
   [[nodiscard]] constexpr Derived first(size_type count) const noexcept
-  {
-    return Derived(_data, count);
-  }
+  { return Derived(_data, count); }
 
   /**
    * @brief Obtains a subspan consisting of the last N elements of the sequence
@@ -141,9 +137,7 @@ class span_base {
    * @return A subspan of the last N elements of the sequence
    */
   [[nodiscard]] constexpr Derived last(size_type count) const noexcept
-  {
-    return Derived(_data + _size - count, count);
-  }
+  { return Derived(_data + _size - count, count); }
 
  protected:
   pointer _data{nullptr};  ///< Pointer to the first element in the span
@@ -272,9 +266,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    * @return Reference to the last element in the span
    */
   [[nodiscard]] constexpr typename base::reference back() const
-  {
-    return this->_data[this->_size - 1];
-  }
+  { return this->_data[this->_size - 1]; }
 
   /**
    * @brief Returns whether the data is device accessible (e.g. pinned memory)
@@ -292,9 +284,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr host_span subspan(
     typename base::size_type offset, typename base::size_type count) const noexcept
-  {
-    return host_span{this->data() + offset, count, _is_device_accessible};
-  }
+  { return host_span{this->data() + offset, count, _is_device_accessible}; }
 
   /**
    * @brief Returns a standard span instance
@@ -302,9 +292,7 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
    * @return Standard span instance
    */
   [[nodiscard]] constexpr operator std::span<T>() const noexcept
-  {
-    return std::span<T>(this->data(), this->size());
-  }
+  { return std::span<T>(this->data(), this->size()); }
 
  private:
   bool _is_device_accessible{false};
@@ -386,9 +374,7 @@ class base_2dspan {
    * @return A reference to the row-th element of the sequence, i.e., `data()[row]`
    */
   CUDF_HOST_DEVICE constexpr RowType<T, dynamic_extent> operator[](std::size_t row) const
-  {
-    return _flat.subspan(row * _size.second, _size.second);
-  }
+  { return _flat.subspan(row * _size.second, _size.second); }
 
   /**
    * @brief Returns a flattened span of the 2D span.
@@ -396,9 +382,7 @@ class base_2dspan {
    * @return A flattened span of the 2D span
    */
   [[nodiscard]] CUDF_HOST_DEVICE constexpr RowType<T, dynamic_extent> flat_view() const
-  {
-    return _flat;
-  }
+  { return _flat; }
 
   /**
    * @brief Construct a 2D span from another 2D span of convertible type

@@ -169,7 +169,7 @@ def test_read_csv_dtypes(csv_table_data, source_or_sink, usecols):
 
     dtypes, new_fields = _convert_types(
         pa_table,
-        lambda t: (pa.types.is_unsigned_integer(t) or pa.types.is_integer(t)),
+        lambda t: pa.types.is_unsigned_integer(t) or pa.types.is_integer(t),
         pa.float64(),
     )
     # Extract the dtype out of the (name, type, child_types) tuple

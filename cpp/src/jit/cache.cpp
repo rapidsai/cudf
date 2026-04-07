@@ -128,9 +128,7 @@ void jit::program_cache::clear()
 }
 
 void jit::program_cache::enable(bool enable)
-{
-  _disabled.store(!enable, std::memory_order_seq_cst);
-}
+{ _disabled.store(!enable, std::memory_order_seq_cst); }
 
 bool jit::program_cache::is_enabled() const { return !_disabled.load(std::memory_order_seq_cst); }
 
@@ -154,7 +152,5 @@ std::unique_ptr<jit::program_cache> jit::program_cache::create()
 }
 
 jitify2::ProgramCache<>& jit::get_program_cache(jitify2::PreprocessedProgramData const& preprog)
-{
-  return cudf::get_context().program_cache().get(preprog);
-}
+{ return cudf::get_context().program_cache().get(preprog); }
 }  // namespace cudf

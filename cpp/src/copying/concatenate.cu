@@ -50,14 +50,12 @@ namespace {
 // when there are more than a trivial number of columns, or when the null mask
 // can also be computed at the same time
 constexpr bool use_fused_kernel_heuristic(bool const has_nulls, size_t const num_columns)
-{
-  return has_nulls || num_columns > 4;
-}
+{ return has_nulls || num_columns > 4; }
 
 auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_view stream)
 {
   // Create device views for each input view
-  using CDViewPtr         = decltype(column_device_view::create(std::declval<column_view>(),
+  using CDViewPtr = decltype(column_device_view::create(std::declval<column_view>(),
                                                         std::declval<rmm::cuda_stream_view>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(views.begin(), views.end(), device_view_owners.begin(), [stream](auto const& col) {
@@ -344,27 +342,19 @@ struct concatenate_dispatch {
 
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::dictionary32>()
-{
-  return cudf::dictionary::detail::concatenate(views, stream, mr);
-}
+{ return cudf::dictionary::detail::concatenate(views, stream, mr); }
 
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::string_view>()
-{
-  return cudf::strings::detail::concatenate(views, stream, mr);
-}
+{ return cudf::strings::detail::concatenate(views, stream, mr); }
 
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
-{
-  return cudf::lists::detail::concatenate(views, stream, mr);
-}
+{ return cudf::lists::detail::concatenate(views, stream, mr); }
 
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::struct_view>()
-{
-  return cudf::structs::detail::concatenate(views, stream, mr);
-}
+{ return cudf::structs::detail::concatenate(views, stream, mr); }
 
 void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream);
 

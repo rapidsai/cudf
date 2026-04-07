@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -181,9 +181,7 @@ struct rle_stream {
   __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
-  {
-    return warp_id == num_rle_stream_decode_warps;
-  }
+  { return warp_id == num_rle_stream_decode_warps; }
 
   __device__ void init(int _level_bits,
                        uint8_t const* _start,

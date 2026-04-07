@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -121,9 +121,7 @@ struct DeviceFSMPolicy {
  */
 template <typename TileState>
 CUDF_KERNEL void initialization_pass_kernel(TileState items_state, uint32_t num_tiles)
-{
-  items_state.InitializeStatus(num_tiles);
-}
+{ items_state.InitializeStatus(num_tiles); }
 
 template <typename DfaT,
           typename SymbolItT,

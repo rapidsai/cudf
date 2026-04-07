@@ -208,10 +208,10 @@ struct MixedJoinTest : public cudf::test::BaseFixture {
     auto device_results_to_host = [](const PairJoinReturn& result) {
       // Create column views from device_uvectors
       auto left_view  = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                         result.first->size(),
-                                         result.first->data(),
-                                         nullptr,
-                                         0);
+                                          result.first->size(),
+                                          result.first->data(),
+                                          nullptr,
+                                          0);
       auto right_view = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                           result.second->size(),
                                           result.second->data(),
@@ -475,9 +475,7 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
 TYPED_TEST_SUITE(MixedInnerJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(MixedInnerJoinTest, Empty)
-{
-  this->test({}, {}, {}, {}, left_zero_eq_right_zero, {}, {});
-}
+{ this->test({}, {}, {}, {}, left_zero_eq_right_zero, {}, {}); }
 
 TYPED_TEST(MixedInnerJoinTest, BasicEquality)
 {
@@ -1001,10 +999,10 @@ TEST_F(MixedInnerJoinTest2, JitOnlyPredicate)
   //   (2,2): 0b0111^0b0001 = popcount 2 → FAIL
   //   (3,3): 0b1111^0b0000 = popcount 4 → FAIL
   auto left_view  = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                     result.first->size(),
-                                     result.first->data(),
-                                     nullptr,
-                                     0);
+                                      result.first->size(),
+                                      result.first->data(),
+                                      nullptr,
+                                      0);
   auto right_view = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                       result.second->size(),
                                       result.second->data(),

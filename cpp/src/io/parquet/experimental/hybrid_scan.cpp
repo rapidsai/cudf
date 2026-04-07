@@ -28,14 +28,10 @@ hybrid_scan_reader::hybrid_scan_reader(FileMetaData const& parquet_metadata,
 hybrid_scan_reader::~hybrid_scan_reader() = default;
 
 [[nodiscard]] text::byte_range_info hybrid_scan_reader::page_index_byte_range() const
-{
-  return _impl->page_index_byte_range();
-}
+{ return _impl->page_index_byte_range(); }
 
 [[nodiscard]] FileMetaData hybrid_scan_reader::parquet_metadata() const
-{
-  return _impl->parquet_metadata();
-}
+{ return _impl->parquet_metadata(); }
 
 void hybrid_scan_reader::setup_page_index(cudf::host_span<uint8_t const> page_index_bytes) const
 {
@@ -368,9 +364,7 @@ table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk() const
 
 std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_group_passes(
   cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
-{
-  return _impl->construct_row_group_passes(row_group_indices, pass_read_limit);
-}
+{ return _impl->construct_row_group_passes(row_group_indices, pass_read_limit); }
 
 bool hybrid_scan_reader::has_next_table_chunk() const { return _impl->has_next_table_chunk(); }
 

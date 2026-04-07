@@ -577,7 +577,7 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     ).columns()[0]
     return GatherMap.from_column_unchecked(
         cast(
-            cudf.core.column.NumericalColumn,
+            "cudf.core.column.NumericalColumn",
             type(haystack).create(
                 plc_right_rows,
                 dtype=dtype_from_pylibcudf_column(plc_right_rows),

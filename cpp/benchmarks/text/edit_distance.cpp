@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,8 +59,8 @@ static void bench_edit_distance_ascii(nvbench::state& state)
 
   auto offsets    = create_random_column(offsets_type, row_count{num_rows + 1}, profile);
   offsets         = cudf::scan(offsets->view(),
-                       *cudf::make_sum_aggregation<cudf::scan_aggregation>(),
-                       cudf::scan_type::EXCLUSIVE);
+                               *cudf::make_sum_aggregation<cudf::scan_aggregation>(),
+                               cudf::scan_type::EXCLUSIVE);
   auto chars_size = offsets_type == cudf::type_id::INT64
                       ? dynamic_cast<cudf::numeric_scalar<int64_t>*>(
                           cudf::get_element(offsets->view(), num_rows).get())

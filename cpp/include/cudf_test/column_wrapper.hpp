@@ -98,9 +98,7 @@ struct fixed_width_type_converter {
             typename ToT                                        = To,
             std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
   constexpr ToT operator()(FromT element) const
-  {
-    return element;
-  }
+  { return element; }
 
   /**
    * @brief Convert types if possible, otherwise construct target from source.
@@ -117,9 +115,7 @@ struct fixed_width_type_converter {
                                                      std::is_constructible_v<ToT, FromT>),
                      void>* = nullptr>
   constexpr ToT operator()(FromT element) const
-  {
-    return static_cast<ToT>(element);
-  }
+  { return static_cast<ToT>(element); }
 
   /**
    * @brief Convert integral values to timestamps
@@ -134,9 +130,7 @@ struct fixed_width_type_converter {
     typename ToT                                                                    = To,
     std::enable_if_t<std::is_integral_v<FromT> && cudf::is_timestamp<ToT>(), void>* = nullptr>
   constexpr ToT operator()(FromT element) const
-  {
-    return ToT{typename ToT::duration{element}};
-  }
+  { return ToT{typename ToT::duration{element}}; }
 };
 
 /**
@@ -277,7 +271,7 @@ std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(ValidityIterator b
                                                               ValidityIterator end)
 {
   auto [null_mask, null_count] = make_null_mask_vector(begin, end);
-  auto d_mask                  = rmm::device_buffer{null_mask.data(),
+  auto d_mask = rmm::device_buffer{null_mask.data(),
                                    cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)),
                                    cudf::test::get_default_stream()};
   return {std::move(d_mask), null_count};
@@ -934,9 +928,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * @brief Default constructor initializes an empty column with dictionary type.
    */
   dictionary_column_wrapper() : column_wrapper{}
-  {
-    wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
-  }
+  { wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32); }
 
   /**
    * @brief Construct a non-nullable dictionary column of the fixed-width elements in the
@@ -1118,9 +1110,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @return column_view to keys column
    */
   [[nodiscard]] column_view keys() const
-  {
-    return cudf::dictionary_column_view{wrapped->view()}.keys();
-  }
+  { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
@@ -1128,9 +1118,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @return column_view to indices column
    */
   [[nodiscard]] column_view indices() const
-  {
-    return cudf::dictionary_column_view{wrapped->view()}.indices();
-  }
+  { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
 
   /**
    * @brief Default constructor initializes an empty dictionary column of strings
@@ -1491,9 +1479,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    */
   lists_column_wrapper() : column_wrapper{}
-  {
-    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()));
-  }
+  { build_from_non_nested(make_empty_column(cudf::type_to_id<T>())); }
 
   /**
    * @brief Construct a lists column of nested lists from an initializer list of values
@@ -1785,9 +1771,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   }
 
   [[nodiscard]] column_view get_view() const
-  {
-    return root ? lists_column_view(*wrapped).child() : *wrapped;
-  }
+  { return root ? lists_column_view(*wrapped).child() : *wrapped; }
 
   int depth = 0;
   bool root = false;
@@ -1827,9 +1811,7 @@ class structs_column_wrapper : public detail::column_wrapper {
    */
   structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
                          std::vector<bool> const& validity = {})
-  {
-    init(std::move(child_columns), validity);
-  }
+  { init(std::move(child_columns), validity); }
 
   /**
    * @brief Constructs a struct column from the list of column wrappers for child columns.

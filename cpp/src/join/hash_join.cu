@@ -96,9 +96,7 @@ class pair_equal {
 struct output_fn {
   __device__ constexpr cudf::size_type operator()(
     cuco::pair<hash_value_type, cudf::size_type> const& slot) const
-  {
-    return slot.second;
-  }
+  { return slot.second; }
 };
 
 class primitive_pair_equal {
@@ -111,9 +109,7 @@ class primitive_pair_equal {
   __device__ __forceinline__ bool operator()(
     cuco::pair<hash_value_type, size_type> const& lhs,
     cuco::pair<hash_value_type, size_type> const& rhs) const noexcept
-  {
-    return lhs.first == rhs.first and _check_row_equality(lhs.second, rhs.second);
-  }
+  { return lhs.first == rhs.first and _check_row_equality(lhs.second, rhs.second); }
 
  private:
   cudf::detail::row::primitive::row_equality_comparator _check_row_equality;
@@ -886,9 +882,7 @@ hash_join::inner_join(cudf::table_view const& probe,
                       std::optional<std::size_t> output_size,
                       rmm::cuda_stream_view stream,
                       rmm::device_async_resource_ref mr) const
-{
-  return _impl->inner_join(probe, output_size, stream, mr);
-}
+{ return _impl->inner_join(probe, output_size, stream, mr); }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -896,9 +890,7 @@ hash_join::left_join(cudf::table_view const& probe,
                      std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::device_async_resource_ref mr) const
-{
-  return _impl->left_join(probe, output_size, stream, mr);
-}
+{ return _impl->left_join(probe, output_size, stream, mr); }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -906,49 +898,35 @@ hash_join::full_join(cudf::table_view const& probe,
                      std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::device_async_resource_ref mr) const
-{
-  return _impl->full_join(probe, output_size, stream, mr);
-}
+{ return _impl->full_join(probe, output_size, stream, mr); }
 
 std::size_t hash_join::inner_join_size(cudf::table_view const& probe,
                                        rmm::cuda_stream_view stream) const
-{
-  return _impl->inner_join_size(probe, stream);
-}
+{ return _impl->inner_join_size(probe, stream); }
 
 std::size_t hash_join::left_join_size(cudf::table_view const& probe,
                                       rmm::cuda_stream_view stream) const
-{
-  return _impl->left_join_size(probe, stream);
-}
+{ return _impl->left_join_size(probe, stream); }
 
 std::size_t hash_join::full_join_size(cudf::table_view const& probe,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr) const
-{
-  return _impl->full_join_size(probe, stream, mr);
-}
+{ return _impl->full_join_size(probe, stream, mr); }
 
 cudf::join_match_context hash_join::inner_join_match_context(
   cudf::table_view const& probe,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
-{
-  return _impl->inner_join_match_context(probe, stream, mr);
-}
+{ return _impl->inner_join_match_context(probe, stream, mr); }
 
 cudf::join_match_context hash_join::left_join_match_context(cudf::table_view const& probe,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr) const
-{
-  return _impl->left_join_match_context(probe, stream, mr);
-}
+{ return _impl->left_join_match_context(probe, stream, mr); }
 
 cudf::join_match_context hash_join::full_join_match_context(cudf::table_view const& probe,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr) const
-{
-  return _impl->full_join_match_context(probe, stream, mr);
-}
+{ return _impl->full_join_match_context(probe, stream, mr); }
 
 }  // namespace cudf

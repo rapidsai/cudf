@@ -357,7 +357,7 @@ struct page_stats_caster : public stats_caster_base {
                             // Use the null count to determine if the page is completely null
                             auto const page_row_count = page_row_offsets[column_page_idx + 1] -
                                                         page_row_offsets[column_page_idx];
-                            auto const& null_count = column_index.null_counts.value()[page_idx];
+                            auto const& null_count    = column_index.null_counts.value()[page_idx];
                             if (null_count == page_row_count) {
                               is_null->val[column_page_idx] = false;
                             } else if (null_count > 0 and null_count < page_row_count) {
@@ -669,9 +669,7 @@ struct search_fenwick_tree_functor {
    * @return Boolean indicating if the value is a power of two
    */
   __device__ bool inline constexpr is_power_of_two(cudf::size_type value) const noexcept
-  {
-    return (value & (value - 1)) == 0;
-  }
+  { return (value & (value - 1)) == 0; }
 
   /**
    * @brief Finds the smallest power of two in the range [start, end). If no power of two is

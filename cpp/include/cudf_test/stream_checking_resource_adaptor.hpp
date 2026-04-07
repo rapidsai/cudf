@@ -51,9 +51,7 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    * @return The wrapped upstream resource
    */
   [[nodiscard]] rmm::device_async_resource_ref get_upstream_resource() const noexcept
-  {
-    return upstream_;
-  }
+  { return upstream_; }
 
  private:
   /**

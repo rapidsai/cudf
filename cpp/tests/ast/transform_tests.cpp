@@ -44,9 +44,7 @@ struct executor_ast {
     cudf::ast::expression const& expr,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-  {
-    return cudf::compute_column(table, expr, stream, mr);
-  }
+  { return cudf::compute_column(table, expr, stream, mr); }
 };
 
 struct executor_jit {
@@ -55,9 +53,7 @@ struct executor_jit {
     cudf::ast::expression const& expr,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-  {
-    return cudf::compute_column_jit(table, expr, stream, mr);
-  }
+  { return cudf::compute_column_jit(table, expr, stream, mr); }
 };
 
 using Executors = cudf::test::Types<executor_ast, executor_jit>;
@@ -491,10 +487,10 @@ TYPED_TEST(TransformTest, DISABLED_DeeplyNestedArithmeticLogicalExpression)
   auto const& col_ref_1 = tree.push(cudf::ast::column_reference(1));
 
   auto const& left_expression  = generate_ast_expr(left_depth_level,
-                                                  col_ref_0,
-                                                  cudf::ast::ast_operator::LESS,
-                                                  cudf::ast::ast_operator::ADD,
-                                                  false);
+                                                   col_ref_0,
+                                                   cudf::ast::ast_operator::LESS,
+                                                   cudf::ast::ast_operator::ADD,
+                                                   false);
   auto const& right_expression = generate_ast_expr(right_depth_level,
                                                    col_ref_1,
                                                    cudf::ast::ast_operator::EQUAL,

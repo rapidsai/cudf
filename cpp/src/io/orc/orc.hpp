@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -154,62 +154,46 @@ struct Metadata {
 };
 
 int inline constexpr encode_field_number(int field_number, ProtofType field_type) noexcept
-{
-  return (field_number * 8) + static_cast<int>(field_type);
-}
+{ return (field_number * 8) + static_cast<int>(field_type); }
 
 namespace {
 template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
   requires(!std::is_arithmetic_v<base_t> and !std::is_enum_v<base_t>)
-{
-  return encode_field_number(field_number, ProtofType::FIXEDLEN);
-}
+{ return encode_field_number(field_number, ProtofType::FIXEDLEN); }
 
 template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
   requires(std::is_integral_v<base_t> or std::is_enum_v<base_t>)
-{
-  return encode_field_number(field_number, ProtofType::VARINT);
-}
+{ return encode_field_number(field_number, ProtofType::VARINT); }
 
 template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
   requires(std::is_same_v<base_t, float>)
-{
-  return encode_field_number(field_number, ProtofType::FIXED32);
-}
+{ return encode_field_number(field_number, ProtofType::FIXED32); }
 
 template <typename base_t>
 int static constexpr encode_field_number_base(int field_number) noexcept
   requires(std::is_same_v<base_t, double>)
-{
-  return encode_field_number(field_number, ProtofType::FIXED64);
-}
+{ return encode_field_number(field_number, ProtofType::FIXED64); }
 };  // namespace
 
 template <typename T>
 int constexpr encode_field_number(int field_number) noexcept
   requires(!std::is_class_v<T> or std::is_same_v<T, std::string>)
-{
-  return encode_field_number_base<T>(field_number);
-}
+{ return encode_field_number_base<T>(field_number); }
 
 // containers change the field number encoding
 template <typename T>
 int constexpr encode_field_number(int field_number) noexcept
   requires(std::is_same_v<T, std::vector<typename T::value_type>>)
-{
-  return encode_field_number_base<T>(field_number);
-}
+{ return encode_field_number_base<T>(field_number); }
 
 // optional fields don't change the field number encoding
 template <typename T>
 int constexpr encode_field_number(int field_number) noexcept
   requires(std::is_same_v<T, std::optional<typename T::value_type>>)
-{
-  return encode_field_number_base<typename T::value_type>(field_number);
-}
+{ return encode_field_number_base<typename T::value_type>(field_number); }
 
 /**
  * @brief Class for parsing Orc's Protocol Buffers encoded metadata
@@ -220,9 +204,7 @@ class protobuf_reader {
 
   template <typename T>
   void read(T& s)
-  {
-    read(s, m_end - m_cur);
-  }
+  { read(s, m_end - m_cur); }
   void read(PostScript&, size_t maxlen);
   void read(Footer&, size_t maxlen);
   void read(StripeInformation&, size_t maxlen);
@@ -266,16 +248,12 @@ class protobuf_reader {
   template <typename T>
   void read_field(T& value, uint8_t const* end)
     requires(std::is_integral_v<T>)
-  {
-    value = get<T>();
-  }
+  { value = get<T>(); }
 
   template <typename T>
   void read_field(T& value, uint8_t const* end)
     requires(std::is_enum_v<T>)
-  {
-    value = static_cast<T>(get<uint32_t>());
-  }
+  { value = static_cast<T>(get<uint32_t>()); }
 
   template <typename T>
   void read_field(T& value, uint8_t const* end)
@@ -357,9 +335,7 @@ class protobuf_reader {
     }
 
     inline void operator()(protobuf_reader* pbr, uint8_t const* end)
-    {
-      pbr->read_field(output_value, end);
-    }
+    { pbr->read_field(output_value, end); }
   };
 
   template <typename T>
@@ -373,9 +349,7 @@ class protobuf_reader {
     }
 
     inline void operator()(protobuf_reader* pbr, uint8_t const* end)
-    {
-      pbr->read_packed_field(output_value, end);
-    }
+    { pbr->read_packed_field(output_value, end); }
   };
 
   template <typename T>
@@ -389,9 +363,7 @@ class protobuf_reader {
     }
 
     inline void operator()(protobuf_reader* pbr, uint8_t const* end)
-    {
-      pbr->read_raw_field(output_value, end);
-    }
+    { pbr->read_raw_field(output_value, end); }
   };
 
   uint8_t const* const m_base;
@@ -401,15 +373,11 @@ class protobuf_reader {
 
 template <>
 inline uint8_t protobuf_reader::get<uint8_t>()
-{
-  return (m_cur < m_end) ? *m_cur++ : 0;
-};
+{ return (m_cur < m_end) ? *m_cur++ : 0; };
 
 template <>
 inline bool protobuf_reader::get<bool>()
-{
-  return static_cast<bool>(get<uint8_t>());
-};
+{ return static_cast<bool>(get<uint8_t>()); };
 
 template <>
 inline uint32_t protobuf_reader::get<uint32_t>()
@@ -442,15 +410,11 @@ auto decode_zigzag(T u)
 
 template <>
 inline int32_t protobuf_reader::get<int32_t>()
-{
-  return decode_zigzag(get<uint32_t>());
-}
+{ return decode_zigzag(get<uint32_t>()); }
 
 template <>
 inline int64_t protobuf_reader::get<int64_t>()
-{
-  return decode_zigzag(get<uint64_t>());
-}
+{ return decode_zigzag(get<uint64_t>()); }
 
 /**
  * @brief Class for encoding Orc's metadata with Protocol Buffers
@@ -544,9 +508,7 @@ class orc_decompressor {
   host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint64_t GetMaxUncompressedBlockSize(uint32_t block_len) const
-  {
-    return std::min(static_cast<uint64_t>(block_len) << m_log2MaxRatio, m_blockSize);
-  }
+  { return std::min(static_cast<uint64_t>(block_len) << m_log2MaxRatio, m_blockSize); }
   [[nodiscard]] compression_type compression() const { return _compression; }
   [[nodiscard]] auto GetBlockSize() const { return m_blockSize; }
 
@@ -639,25 +601,19 @@ class metadata {
    * @brief Returns the ID of the parent column of the given column.
    */
   [[nodiscard]] size_type parent_id(size_type column_id) const
-  {
-    return parents.at(column_id).value().id;
-  }
+  { return parents.at(column_id).value().id; }
 
   /**
    * @brief Returns the index the given column has in its parent's children list.
    */
   [[nodiscard]] size_type field_index(size_type column_id) const
-  {
-    return parents.at(column_id).value().field_idx;
-  }
+  { return parents.at(column_id).value().field_idx; }
 
   /**
    * @brief Returns whether the given column has a parent.
    */
   [[nodiscard]] size_type column_has_parent(size_type column_id) const
-  {
-    return parents.at(column_id).has_value();
-  }
+  { return parents.at(column_id).has_value(); }
 
  public:
   PostScript ps;

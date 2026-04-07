@@ -768,9 +768,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
-{
-  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
-}
+{ initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs); }
 
 arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
 {

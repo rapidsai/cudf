@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -131,9 +131,7 @@ class data_sink {
    * @return whether the device write is expected to be more performant for the given size
    */
   [[nodiscard]] virtual bool is_device_write_preferred(size_t size) const
-  {
-    return supports_device_write();
-  }
+  { return supports_device_write(); }
 
   /**
    * @brief Append the buffer content to the sink from a gpu address
@@ -150,9 +148,7 @@ class data_sink {
    * @param stream CUDA stream to use
    */
   virtual void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
-  {
-    CUDF_FAIL("data_sink classes that support device_write must override it.");
-  }
+  { CUDF_FAIL("data_sink classes that support device_write must override it."); }
 
   /**
    * @brief Asynchronously append the buffer content to the sink from a gpu address
@@ -179,9 +175,7 @@ class data_sink {
   virtual std::future<void> device_write_async(void const* gpu_data,
                                                size_t size,
                                                rmm::cuda_stream_view stream)
-  {
-    CUDF_FAIL("data_sink classes that support device_write_async must override it.");
-  }
+  { CUDF_FAIL("data_sink classes that support device_write_async must override it."); }
 
   /**
    * @pure @brief Flush the data written into the sink

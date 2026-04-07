@@ -44,7 +44,7 @@ def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                cast(pl_Struct, dtype.polars_type).fields,
+                cast("pl_Struct", dtype.polars_type).fields,
                 dtype.children,
                 strict=True,
             )
@@ -967,7 +967,7 @@ class StringFunction(Expr):
             if POLARS_VERSION_LT_132:  # pragma: no cover
                 (column,) = columns
                 width_arg, char = self.options
-                pad_width = cast(int, width_arg)
+                pad_width = cast("int", width_arg)
             else:
                 (column, width_col) = columns
                 (char,) = self.options
@@ -994,7 +994,7 @@ class StringFunction(Expr):
             if POLARS_VERSION_LT_132:  # pragma: no cover
                 (column,) = columns
                 width_arg, char = self.options
-                pad_width = cast(int, width_arg)
+                pad_width = cast("int", width_arg)
             else:
                 (column, width_col) = columns
                 (char,) = self.options

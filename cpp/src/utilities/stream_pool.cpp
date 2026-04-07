@@ -111,9 +111,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
   rmm_cuda_stream_pool() : _pool{STREAM_POOL_SIZE, rmm::cuda_stream::flags::non_blocking} {}
   rmm::cuda_stream_view get_stream() override { return _pool.get_stream(); }
   rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
-  {
-    return _pool.get_stream(stream_id);
-  }
+  { return _pool.get_stream(stream_id); }
 
   std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
   {
@@ -134,14 +132,10 @@ class debug_cuda_stream_pool : public cuda_stream_pool {
  public:
   rmm::cuda_stream_view get_stream() override { return cudf::get_default_stream(); }
   rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
-  {
-    return cudf::get_default_stream();
-  }
+  { return cudf::get_default_stream(); }
 
   std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
-  {
-    return std::vector<rmm::cuda_stream_view>(count, cudf::get_default_stream());
-  }
+  { return std::vector<rmm::cuda_stream_view>(count, cudf::get_default_stream()); }
 
   [[nodiscard]] std::size_t get_stream_pool_size() const override { return 1UL; }
 };

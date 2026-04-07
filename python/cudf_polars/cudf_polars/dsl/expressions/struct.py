@@ -95,7 +95,7 @@ class StructFunction(Expr):
                 (
                     i
                     for i, field in enumerate(
-                        cast(pl.Struct, self.children[0].dtype.polars_type).fields
+                        cast("pl.Struct", self.children[0].dtype.polars_type).fields
                     )
                     if field.name == self.options[0]
                 ),
@@ -117,7 +117,7 @@ class StructFunction(Expr):
                 [
                     (field.name, [])
                     for field in cast(
-                        pl.Struct, self.children[0].dtype.polars_type
+                        "pl.Struct", self.children[0].dtype.polars_type
                     ).fields
                 ],
             )

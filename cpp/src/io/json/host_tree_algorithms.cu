@@ -917,7 +917,7 @@ void scatter_offsets(tree_meta_t const& tree,
       [col_ids         = col_ids.begin(),
        parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
         return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
-                                                                  : col_ids[parent_node_ids[node_id]];
+                                                                : col_ids[parent_node_ids[node_id]];
       }));
   auto const list_children_end = cudf::detail::copy_if(
     thrust::make_zip_iterator(cuda::counting_iterator<size_type>{0}, parent_col_id),

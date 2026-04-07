@@ -66,9 +66,7 @@ struct overflow_sum_op {
 // Transform function to convert int64_t values to sum_overflow_result
 struct to_sum_overflow {
   __device__ sum_overflow_result operator()(int64_t value) const
-  {
-    return sum_overflow_result{value, false};
-  }
+  { return sum_overflow_result{value, false}; }
 };
 
 // Transform functor for null-aware conversion using index
@@ -148,11 +146,11 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
     // Use direct iterator for non-null case
     auto input_iter = dcol->begin<int64_t>();
     result          = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
-                                      input_iter,
-                                      input_iter + col.size(),
-                                      to_sum_overflow{},
-                                      initial_value,
-                                      overflow_sum_op{});
+                                               input_iter,
+                                               input_iter + col.size(),
+                                               to_sum_overflow{},
+                                               initial_value,
+                                               overflow_sum_op{});
   }
 
   // Create result struct scalar with {sum: int64_t, overflow: bool}

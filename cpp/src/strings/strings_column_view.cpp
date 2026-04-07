@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,9 +12,7 @@
 namespace cudf {
 //
 strings_column_view::strings_column_view(column_view strings_column) : column_view(strings_column)
-{
-  CUDF_EXPECTS(type().id() == type_id::STRING, "strings_column_view only supports strings");
-}
+{ CUDF_EXPECTS(type().id() == type_id::STRING, "strings_column_view only supports strings"); }
 
 column_view strings_column_view::parent() const { return static_cast<column_view>(*this); }
 
@@ -32,14 +30,10 @@ int64_t strings_column_view::chars_size(rmm::cuda_stream_view stream) const
 
 strings_column_view::chars_iterator strings_column_view::chars_begin(
   rmm::cuda_stream_view) const noexcept
-{
-  return head<char>();
-}
+{ return head<char>(); }
 
 strings_column_view::chars_iterator strings_column_view::chars_end(
   rmm::cuda_stream_view stream) const
-{
-  return chars_begin(stream) + chars_size(stream);
-}
+{ return chars_begin(stream) + chars_size(stream); }
 
 }  // namespace cudf

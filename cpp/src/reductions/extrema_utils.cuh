@@ -34,9 +34,7 @@ struct noinline_adapter_fn {
   noinline_adapter_fn(Functor&& f_) : f{std::forward<Functor>(f_)} {}
   template <typename... Args>
   [[nodiscard]] __attribute__((noinline)) __device__ auto operator()(Args&&... args) const
-  {
-    return f(std::forward<Args>(args)...);
-  }
+  { return f(std::forward<Args>(args)...); }
 };
 
 /**
@@ -52,9 +50,7 @@ class arg_minmax_dispatcher {
 
   template <typename ElementType>
   static constexpr bool is_supported()
-  {
-    return !cudf::is_dictionary<ElementType>() && !std::is_same_v<ElementType, void>;
-  }
+  { return !cudf::is_dictionary<ElementType>() && !std::is_same_v<ElementType, void>; }
 
   template <typename InputIterator, typename... Args>
   size_type find_extremum_idx(InputIterator it,
@@ -154,9 +150,7 @@ class arg_minmax_dispatcher {
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
     requires(not is_supported<ElementType>())
-  {
-    CUDF_FAIL("ARGMIN/ARGMAX is not supported for this type");
-  }
+  { CUDF_FAIL("ARGMIN/ARGMAX is not supported for this type"); }
 };
 
 }  // namespace cudf::reduction::simple::detail

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,17 +79,13 @@ std::unique_ptr<column> contains_re(strings_column_view const& input,
                                     regex_program const& prog,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
-{
-  return contains_impl(input, prog, false, stream, mr);
-}
+{ return contains_impl(input, prog, false, stream, mr); }
 
 std::unique_ptr<column> matches_re(strings_column_view const& input,
                                    regex_program const& prog,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
-{
-  return contains_impl(input, prog, true, stream, mr);
-}
+{ return contains_impl(input, prog, true, stream, mr); }
 
 std::unique_ptr<column> count_re(strings_column_view const& input,
                                  regex_program const& prog,

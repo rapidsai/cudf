@@ -90,9 +90,7 @@ namespace {
 template <typename T>
 static auto numeric_to_string_precise(T value)
   requires(std::is_integral_v<T>)
-{
-  return std::to_string(value);
-}
+{ return std::to_string(value); }
 
 template <typename T>
 static auto numeric_to_string_precise(T value)
@@ -454,23 +452,15 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 }  // namespace detail
 
 std::vector<std::string> to_strings(cudf::column_view const& col)
-{
-  return detail::to_strings(col);
-}
+{ return detail::to_strings(col); }
 
 std::string to_string(cudf::column_view const& col, std::string const& delimiter)
-{
-  return detail::to_string(col, delimiter);
-}
+{ return detail::to_string(col, delimiter); }
 
 std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null_mask_size)
-{
-  return detail::to_string(null_mask, null_mask_size);
-}
+{ return detail::to_string(null_mask, null_mask_size); }
 
 void print(cudf::column_view const& col, std::ostream& os)
-{
-  os << to_string(col, ",") << std::endl;
-}
+{ os << to_string(col, ",") << std::endl; }
 
 }  // namespace cudf::test

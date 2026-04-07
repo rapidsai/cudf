@@ -18,9 +18,7 @@ namespace cudf {
 
 context::context(context_config const& cfg, init_flags flags)
   : _config{cfg}, _program_cache_init_flag{}, _program_cache{nullptr}
-{
-  initialize_components(flags);
-}
+{ initialize_components(flags); }
 
 void context::ensure_nvcomp_loaded() { io::detail::nvcomp::load_nvcomp_library(); }
 

@@ -52,9 +52,7 @@ struct dispatch_from_arrow_device {
                               bool,
                               rmm::cuda_stream_view,
                               rmm::device_async_resource_ref)
-  {
-    CUDF_FAIL("Unsupported type in from_arrow_device", cudf::data_type_error);
-  }
+  { CUDF_FAIL("Unsupported type in from_arrow_device", cudf::data_type_error); }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || is_fixed_point<T>())>
   dispatch_tuple_t operator()(ArrowSchemaView* schema,
@@ -249,11 +247,11 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::dictionary32>(
   size_type const offset     = input->offset;
   size_type const null_count = input->null_count;
   column_view indices_view   = column_view{dict_indices_type,
-                                         offset + num_rows,
-                                         input->buffers[fixed_width_data_buffer_idx],
-                                         nullptr,
-                                         0,
-                                         0};
+                                           offset + num_rows,
+                                           input->buffers[fixed_width_data_buffer_idx],
+                                           nullptr,
+                                           0,
+                                           0};
 
   return std::make_tuple<column_view, owned_columns_t>(
     {type,
@@ -327,11 +325,11 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::list_view>(
   size_type const offset     = input->offset;
   size_type const null_count = input->null_count;
   auto offsets_view          = column_view{data_type(type_id::INT32),
-                                  (num_rows == 0) ? 0 : (offset + num_rows + 1),
-                                  input->buffers[fixed_width_data_buffer_idx],
-                                  nullptr,
-                                  0,
-                                  0};
+                                           (num_rows == 0) ? 0 : (offset + num_rows + 1),
+                                           input->buffers[fixed_width_data_buffer_idx],
+                                           nullptr,
+                                           0,
+                                           0};
 
   ArrowSchemaView child_schema_view;
   NANOARROW_THROW_NOT_OK(

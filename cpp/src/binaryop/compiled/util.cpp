@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,30 +36,22 @@ struct common_type_functor {
 struct has_mutable_element_accessor_functor {
   template <typename T>
   bool operator()() const
-  {
-    return mutable_column_device_view::has_element_accessor<T>();
-  }
+  { return mutable_column_device_view::has_element_accessor<T>(); }
 };
 
 bool has_mutable_element_accessor(data_type t)
-{
-  return type_dispatcher(t, has_mutable_element_accessor_functor{});
-}
+{ return type_dispatcher(t, has_mutable_element_accessor_functor{}); }
 
 template <typename InputType>
 struct is_constructible_functor {
   template <typename TargetType>
   bool operator()() const
-  {
-    return std::is_constructible_v<TargetType, InputType>;
-  }
+  { return std::is_constructible_v<TargetType, InputType>; }
 };
 
 template <typename InputType>
 bool is_constructible(data_type target_type)
-{
-  return type_dispatcher(target_type, is_constructible_functor<InputType>{});
-}
+{ return type_dispatcher(target_type, is_constructible_functor<InputType>{}); }
 
 /**
  * @brief Functor that return true if BinaryOperator supports given input and output types.
@@ -206,7 +198,5 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
 }
 
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
-{
-  return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op);
-}
+{ return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op); }
 }  // namespace cudf::binops::compiled

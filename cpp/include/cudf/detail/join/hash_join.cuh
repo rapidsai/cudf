@@ -59,9 +59,7 @@ struct hash_join {
   struct hasher1 {
     __device__ constexpr hash_value_type operator()(
       cuco::pair<hash_value_type, size_type> const& key) const noexcept
-    {
-      return key.first;
-    }
+    { return key.first; }
   };
 
   struct hasher2 {
@@ -69,9 +67,7 @@ struct hash_join {
 
     __device__ constexpr hash_value_type operator()(
       cuco::pair<hash_value_type, size_type> const& key) const noexcept
-    {
-      return _hash(key.first);
-    }
+    { return _hash(key.first); }
 
    private:
     Hasher _hash;

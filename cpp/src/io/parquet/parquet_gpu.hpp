@@ -157,16 +157,12 @@ using std::is_scoped_enum;
 template <typename... Ts,
           CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
 CUDF_HOST_DEVICE constexpr std::uint32_t BitAnd(Ts... bits)
-{
-  return (... & static_cast<std::uint32_t>(bits));
-}
+{ return (... & static_cast<std::uint32_t>(bits)); }
 
 template <typename... Ts,
           CUDF_ENABLE_IF(... && (std::is_same_v<std::uint32_t, Ts> || is_scoped_enum<Ts>::value))>
 CUDF_HOST_DEVICE constexpr std::uint32_t BitOr(Ts... bits)
-{
-  return (... | static_cast<std::uint32_t>(bits));
-}
+{ return (... | static_cast<std::uint32_t>(bits)); }
 
 /**
  * @brief Enums for the flags in the page header
@@ -393,9 +389,7 @@ struct get_page_key {
  * @brief Return an iterator that returns they keys for a vector of pages.
  */
 inline auto make_page_key_iterator(device_span<PageInfo const> pages)
-{
-  return thrust::make_transform_iterator(pages.begin(), get_page_key{});
-}
+{ return thrust::make_transform_iterator(pages.begin(), get_page_key{}); }
 
 /**
  * @brief Struct describing a particular chunk of column data
@@ -542,9 +536,7 @@ struct EncPage;
 
 // convert Encoding to a mask value
 CUDF_HOST_DEVICE constexpr uint32_t encoding_to_mask(Encoding encoding)
-{
-  return 1 << static_cast<uint32_t>(encoding);
-}
+{ return 1 << static_cast<uint32_t>(encoding); }
 
 /**
  * @brief Enum of mask bits for the EncPage kernel_mask
@@ -603,14 +595,10 @@ struct EncColumnChunk {
   size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_dict_pages() const
-  {
-    return use_dictionary ? 1 : 0;
-  }
+  { return use_dictionary ? 1 : 0; }
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr uint32_t num_data_pages() const
-  {
-    return num_pages - num_dict_pages();
-  }
+  { return num_pages - num_dict_pages(); }
 };
 
 /**
@@ -651,14 +639,10 @@ struct EncPage {
   bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
-  {
-    return page_type == PageType::DATA_PAGE_V2;
-  }
+  { return page_type == PageType::DATA_PAGE_V2; }
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr auto level_bytes() const
-  {
-    return def_lvl_bytes + rep_lvl_bytes;
-  }
+  { return def_lvl_bytes + rep_lvl_bytes; }
 };
 
 /**

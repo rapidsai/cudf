@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -160,9 +160,7 @@ class table {
    * specified by the elements of `column_indices`
    */
   [[nodiscard]] table_view select(std::vector<cudf::size_type> const& column_indices) const
-  {
-    return select(column_indices.begin(), column_indices.end());
-  };
+  { return select(column_indices.begin(), column_indices.end()); };
 
   /**
    * @brief Returns a reference to the specified column

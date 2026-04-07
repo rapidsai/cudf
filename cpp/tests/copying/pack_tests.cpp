@@ -679,7 +679,7 @@ TEST_F(PackUnpackTest, MetadataViewRejectsCorruptedChildCount)
   auto const entry_size          = corrupted.size() / 4;                // 4 entries total
   auto const num_children_offset = entry_size                           // skip stub entry
                                    + entry_size - 2 * sizeof(int32_t);  // num_children in struct
-  cudf::size_type bad_children = 10;
+  cudf::size_type bad_children   = 10;
   std::memcpy(corrupted.data() + num_children_offset, &bad_children, sizeof(bad_children));
 
   EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);

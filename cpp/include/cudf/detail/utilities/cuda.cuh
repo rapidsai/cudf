@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -69,9 +69,7 @@ __device__ T single_lane_block_sum_reduce(T lane_value)
 
 template <class F>
 CUDF_KERNEL void single_thread_kernel(F f)
-{
-  f();
-}
+{ f(); }
 
 /**
  * @brief single thread cuda kernel
@@ -82,9 +80,7 @@ CUDF_KERNEL void single_thread_kernel(F f)
  */
 template <class Functor>
 void device_single_thread(Functor functor, rmm::cuda_stream_view stream)
-{
-  single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor);
-}
+{ single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor); }
 
 }  // namespace detail
 }  // namespace cudf

@@ -41,15 +41,11 @@ namespace jit {
 
 template <typename WindowType>
 cudf::size_type __device__ get_window(WindowType window, cudf::thread_index_type index)
-{
-  return window[index];
-}
+{ return window[index]; }
 
 template <>
 cudf::size_type __device__ get_window(cudf::size_type window, cudf::thread_index_type index)
-{
-  return window;
-}
+{ return window; }
 
 template <typename InType,
           typename OutType,

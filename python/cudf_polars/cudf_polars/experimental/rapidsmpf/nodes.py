@@ -198,7 +198,7 @@ async def default_node_multi(
                 ready_chunks,
                 reserve_extra=sum(
                     chunk.data_alloc_size()
-                    for chunk in cast(list[TableChunk], ready_chunks)
+                    for chunk in cast("list[TableChunk]", ready_chunks)
                 ),
                 net_memory_delta=0,
             )

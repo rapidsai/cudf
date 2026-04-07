@@ -69,9 +69,7 @@ struct all_fn {
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
     requires(!std::is_arithmetic_v<T>)
-  {
-    CUDF_FAIL("Unexpected key type for dictionary in reduction all()");
-  }
+  { CUDF_FAIL("Unexpected key type for dictionary in reduction all()"); }
 };
 
 }  // namespace

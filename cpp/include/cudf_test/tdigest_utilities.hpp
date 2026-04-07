@@ -38,32 +38,24 @@ struct tdigest_gen {
     typename Func,
     typename std::enable_if_t<cudf::is_numeric<T>() || cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(Func op, column_view const& values, int delta)
-  {
-    return op(values, delta);
-  }
+  { return op(values, delta); }
 
   template <
     typename T,
     typename Func,
     typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(Func op, column_view const& values, int delta)
-  {
-    CUDF_FAIL("Invalid tdigest test type");
-  }
+  { CUDF_FAIL("Invalid tdigest test type"); }
   // @endcond
 };
 
 template <typename T>
 inline T frand()
-{
-  return static_cast<T>(rand()) / static_cast<T>(RAND_MAX);
-}
+{ return static_cast<T>(rand()) / static_cast<T>(RAND_MAX); }
 
 template <typename T>
 inline T rand_range(T min, T max)
-{
-  return min + static_cast<T>(frand<T>() * (max - min));
-}
+{ return min + static_cast<T>(frand<T>() * (max - min)); }
 
 inline std::unique_ptr<column> generate_typed_percentile_distribution(
   std::vector<double> const& buckets,

@@ -113,7 +113,7 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
             .over(
                 pl.col("a"),
                 mapping_strategy=cast(
-                    Literal["group_to_rows", "join", "explode"], mapping_strategy
+                    "Literal['group_to_rows', 'join', 'explode']", mapping_strategy
                 ),
             )
         ]
@@ -167,7 +167,7 @@ def test_rolling_closed(request, df: pl.LazyFrame, closed: str):
             .rolling(
                 period="2d",
                 index_column="date",
-                closed=cast(Literal["left", "right", "both", "none"], closed),
+                closed=cast("Literal['left', 'right', 'both', 'none']", closed),
             )
         ]
     )

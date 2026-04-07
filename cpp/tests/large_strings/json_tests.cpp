@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,9 +22,7 @@ struct JsonLargeReaderTest : public cudf::test::StringsLargeTest,
                              public testing::WithParamInterface<cudf::io::compression_type> {
  public:
   void set_batch_size(size_t batch_size_upper_bound)
-  {
-    setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(batch_size_upper_bound).c_str(), 1);
-  }
+  { setenv("LIBCUDF_JSON_BATCH_SIZE", std::to_string(batch_size_upper_bound).c_str(), 1); }
 
   ~JsonLargeReaderTest() { unsetenv("LIBCUDF_JSON_BATCH_SIZE"); }
 };

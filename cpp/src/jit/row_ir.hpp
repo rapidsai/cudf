@@ -317,9 +317,7 @@ struct [[nodiscard]] operation final : node {
   template <typename... T>
     requires(std::is_base_of_v<node, T> && ...)
   static std::array<std::unique_ptr<node>, sizeof...(T)> operands(T&&... args)
-  {
-    return {std::make_unique<T>(std::forward<T>(args))...};
-  }
+  { return {std::make_unique<T>(std::forward<T>(args))...}; }
 
   /**
    * @brief Create a set of operand IR nodes from existing unique pointers
@@ -327,9 +325,7 @@ struct [[nodiscard]] operation final : node {
   template <typename... T>
     requires(std::is_base_of_v<node, T> && ...)
   static std::array<std::unique_ptr<node>, sizeof...(T)> operands(std::unique_ptr<T>&&... args)
-  {
-    return {std::move(args)...};
-  }
+  { return {std::move(args)...}; }
 
   /**
    * @brief Construct a new operation IR node

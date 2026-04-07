@@ -238,7 +238,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         if len(self) == 0:
             return super().strftime(format)
         return cast(
-            cudf.core.column.string.StringColumn,
+            "cudf.core.column.string.StringColumn",
             PylibcudfFunction(
                 plc.strings.convert.convert_durations.from_durations,
                 fixed_dtype_policy(dtype),
@@ -354,7 +354,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
         plc_result = plc.replace.replace_nulls(plc_result, nat_scalar)
 
         return cast(
-            cudf.core.column.string.StringColumn,
+            "cudf.core.column.string.StringColumn",
             ColumnBase.create(plc_result, dtype),
         )
 

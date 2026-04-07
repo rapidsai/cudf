@@ -69,9 +69,7 @@ struct any_fn {
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref)
     requires(!std::is_arithmetic_v<T>)
-  {
-    CUDF_FAIL("Unexpected key type for dictionary in reduction any()");
-  }
+  { CUDF_FAIL("Unexpected key type for dictionary in reduction any()"); }
 };
 
 }  // namespace

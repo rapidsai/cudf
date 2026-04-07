@@ -39,9 +39,7 @@ template <aggregation::Kind K, typename T, typename Enable = void>
 struct group_scan_functor {
   template <typename... Args>
   static std::unique_ptr<column> invoke(Args&&...)
-  {
-    CUDF_FAIL("Unsupported groupby scan type-agg combination.");
-  }
+  { CUDF_FAIL("Unsupported groupby scan type-agg combination."); }
 };
 
 template <aggregation::Kind K>
@@ -52,9 +50,7 @@ struct group_scan_dispatcher {
                                      cudf::device_span<cudf::size_type const> group_labels,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
-  {
-    return group_scan_functor<K, T>::invoke(values, num_groups, group_labels, stream, mr);
-  }
+  { return group_scan_functor<K, T>::invoke(values, num_groups, group_labels, stream, mr); }
 };
 
 /**

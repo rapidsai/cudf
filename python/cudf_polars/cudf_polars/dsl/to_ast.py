@@ -191,7 +191,9 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
                 # to a expr.LiteralColumn, so the actual type is in the inner type
                 # .inner returns DataTypeClass | DataType, need to cast to DataType
                 plc_dtype = DataType(
-                    cast(pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner)
+                    cast(
+                        "pl.DataType", cast("pl.List", haystack.dtype.polars_type).inner
+                    )
                 ).plc_type
             else:
                 plc_dtype = haystack.dtype.plc_type  # pragma: no cover

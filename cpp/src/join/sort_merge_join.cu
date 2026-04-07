@@ -67,9 +67,7 @@ struct index_mapping {
   T mapping;  ///< Mapping container that translates indices
 
   __device__ size_type operator()(size_type idx) const noexcept
-  {
-    return idx >= 0 ? mapping[idx] : idx;
-  }
+  { return idx >= 0 ? mapping[idx] : idx; }
 };
 
 /**
@@ -101,9 +99,7 @@ struct is_row_valid {
   bitmask_type const* _validity_mask;  ///< Validity mask for the table
 
   __device__ auto operator()(size_type idx) const noexcept
-  {
-    return bit_is_set(_validity_mask, idx);
-  }
+  { return bit_is_set(_validity_mask, idx); }
 };
 
 /**
@@ -115,9 +111,7 @@ struct is_row_null {
   bitmask_type const* const _validity_mask;  ///< Validity mask for the table
 
   __device__ auto operator()(size_type idx) const noexcept
-  {
-    return !cudf::bit_is_set(_validity_mask, idx);
-  }
+  { return !cudf::bit_is_set(_validity_mask, idx); }
 };
 
 template <typename InputIt, typename ScalarType>
@@ -562,7 +556,7 @@ void sort_merge_join::preprocessed_table::populate_nonnull_filter(rmm::cuda_stre
         cuda::std::reverse_iterator(offsets_subset.end()),
         cuda::std::reverse_iterator(child_positions.end()));
       auto subset_size   = cuda::std::distance(cuda::std::reverse_iterator(offsets_subset.end()),
-                                             cuda::std::get<0>(unique_end));
+                                               cuda::std::get<0>(unique_end));
       auto subset_offset = offsets.size() - subset_size;
 
       auto [reduced_validity_mask, num_nulls] =
@@ -1048,9 +1042,7 @@ sort_merge_join::inner_join(table_view const& left,
                             sorted is_left_sorted,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr) const
-{
-  return _impl->inner_join(left, is_left_sorted, stream, mr);
-}
+{ return _impl->inner_join(left, is_left_sorted, stream, mr); }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -1058,26 +1050,20 @@ sort_merge_join::left_join(table_view const& left,
                            sorted is_left_sorted,
                            rmm::cuda_stream_view stream,
                            rmm::device_async_resource_ref mr) const
-{
-  return _impl->left_join(left, is_left_sorted, stream, mr);
-}
+{ return _impl->left_join(left, is_left_sorted, stream, mr); }
 
 std::unique_ptr<join_match_context> sort_merge_join::inner_join_match_context(
   table_view const& left,
   sorted is_left_sorted,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
-{
-  return _impl->inner_join_match_context(left, is_left_sorted, stream, mr);
-}
+{ return _impl->inner_join_match_context(left, is_left_sorted, stream, mr); }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 sort_merge_join::partitioned_inner_join(cudf::join_partition_context const& context,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr) const
-{
-  return _impl->partitioned_inner_join(context, stream, mr);
-}
+{ return _impl->partitioned_inner_join(context, stream, mr); }
 
 }  // namespace cudf

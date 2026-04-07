@@ -1553,11 +1553,11 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadOutOfBoundChunks)
     auto sources                    = cudf::io::make_datasources(cudf::io::source_info{filepath});
     auto metadatas                  = cudf::io::read_parquet_footers(sources);
     auto const reader               = cudf::io::chunked_parquet_reader(output_read_limit,
-                                                         0,
-                                                         std::move(sources),
-                                                         std::move(metadatas),
-                                                         options,
-                                                         cudf::get_default_stream());
+                                                                       0,
+                                                                       std::move(sources),
+                                                                       std::move(metadatas),
+                                                                       options,
+                                                                       cudf::get_default_stream());
     auto const [result, num_chunks] = read_chunks_with_while_loop(reader);
     auto const out_of_bound_table_chunk = reader.read_chunk().tbl;
 
@@ -1616,11 +1616,11 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     auto sources       = cudf::io::make_datasources(cudf::io::source_info{filepath});
     auto metadatas     = cudf::io::read_parquet_footers(sources);
     auto const reader  = cudf::io::chunked_parquet_reader(output_read_limit,
-                                                         pass_read_limit,
-                                                         std::move(sources),
-                                                         std::move(metadatas),
-                                                         options,
-                                                         cudf::get_default_stream());
+                                                          pass_read_limit,
+                                                          std::move(sources),
+                                                          std::move(metadatas),
+                                                          options,
+                                                          cudf::get_default_stream());
 
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
 
@@ -1662,7 +1662,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
                            .skip_rows(rows_to_skip)
                            .num_rows(rows_to_read)
                            .build();
-    auto const reader = cudf::io::chunked_parquet_reader(
+    auto const reader  = cudf::io::chunked_parquet_reader(
       output_read_limit, pass_read_limit, options, cudf::get_default_stream());
 
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
@@ -1718,7 +1718,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
                            .skip_rows(rows_to_skip)
                            .build();
-    auto const reader = cudf::io::chunked_parquet_reader(
+    auto const reader  = cudf::io::chunked_parquet_reader(
       output_read_limit, pass_read_limit, options, cudf::get_default_stream());
 
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);
@@ -1747,7 +1747,7 @@ TEST_F(ParquetChunkedReaderTest, TestNumRowsPerSource)
     auto const options = cudf::io::parquet_reader_options_builder(cudf::io::source_info{filepath})
                            .filter(filter_expression)
                            .build();
-    auto const reader = cudf::io::chunked_parquet_reader(
+    auto const reader  = cudf::io::chunked_parquet_reader(
       output_read_limit, pass_read_limit, options, cudf::get_default_stream());
 
     auto const [result, num_chunks, num_rows_per_source] = read_table_and_nrows_per_source(reader);

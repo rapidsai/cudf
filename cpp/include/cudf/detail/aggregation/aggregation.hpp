@@ -56,9 +56,7 @@ struct clonable {
      * @return A unique_ptr containing the cloned aggregation object
      */
     [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-    {
-      return std::make_unique<Derived>(static_cast<Derived const&>(*this));
-    }
+    { return std::make_unique<Derived>(static_cast<Derived const&>(*this)); }
   };
 };
 
@@ -223,9 +221,7 @@ class std_var_aggregation
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
   std_var_aggregation(aggregation::Kind k, size_type ddof) : _ddof{ddof}
@@ -291,9 +287,7 @@ class quantile_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  private:
   [[nodiscard]] size_t hash_impl() const
@@ -348,15 +342,11 @@ class nunique_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  private:
   [[nodiscard]] size_t hash_impl() const
-  {
-    return std::hash<int>{}(static_cast<int>(_null_handling));
-  }
+  { return std::hash<int>{}(static_cast<int>(_null_handling)); }
 };
 
 /**
@@ -382,15 +372,11 @@ class nth_element_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  private:
   [[nodiscard]] size_t hash_impl() const
-  {
-    return std::hash<size_type>{}(_n) ^ std::hash<int>{}(static_cast<int>(_null_handling));
-  }
+  { return std::hash<size_type>{}(_n) ^ std::hash<int>{}(static_cast<int>(_null_handling)); }
 };
 
 /**
@@ -459,9 +445,7 @@ class rank_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  private:
   [[nodiscard]] size_t hash_impl() const
@@ -496,15 +480,11 @@ class collect_list_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  private:
   [[nodiscard]] size_t hash_impl() const
-  {
-    return std::hash<int>{}(static_cast<int>(_null_handling));
-  }
+  { return std::hash<int>{}(static_cast<int>(_null_handling)); }
 };
 
 /**
@@ -538,9 +518,7 @@ class collect_set_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
   [[nodiscard]] size_t hash_impl() const
@@ -569,9 +547,7 @@ class lead_lag_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
   size_type row_offset;
 
@@ -607,9 +583,7 @@ class udf_aggregation final : public clonable<udf_aggregation>::derived_from<rol
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
   std::string const _source;
   std::string const _operator_name;
@@ -682,15 +656,11 @@ class merge_sets_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
   [[nodiscard]] size_t hash_impl() const
-  {
-    return std::hash<int>{}(static_cast<int>(_nulls_equal) ^ static_cast<int>(_nans_equal));
-  }
+  { return std::hash<int>{}(static_cast<int>(_nulls_equal) ^ static_cast<int>(_nans_equal)); }
 };
 
 /**
@@ -726,15 +696,11 @@ class covariance_aggregation final
   size_type _ddof;
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
   [[nodiscard]] size_t hash_impl() const
-  {
-    return std::hash<size_type>{}(_min_periods) ^ std::hash<size_type>{}(_ddof);
-  }
+  { return std::hash<size_type>{}(_min_periods) ^ std::hash<size_type>{}(_ddof); }
 };
 
 /**
@@ -758,15 +724,11 @@ class correlation_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
   [[nodiscard]] size_t hash_impl() const
-  {
-    return std::hash<int>{}(static_cast<int>(_type)) ^ std::hash<size_type>{}(_min_periods);
-  }
+  { return std::hash<int>{}(static_cast<int>(_type)) ^ std::hash<size_type>{}(_min_periods); }
 };
 
 /**
@@ -816,9 +778,7 @@ class bitwise_aggregation final
   }
 
   [[nodiscard]] size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ static_cast<size_t>(bit_op);
-  }
+  { return this->aggregation::do_hash() ^ static_cast<size_t>(bit_op); }
 };
 
 class top_k_aggregation final
@@ -840,15 +800,11 @@ class top_k_aggregation final
   }
 
   [[nodiscard]] std::size_t do_hash() const override
-  {
-    return this->aggregation::do_hash() ^ hash_impl();
-  }
+  { return this->aggregation::do_hash() ^ hash_impl(); }
 
  private:
   [[nodiscard]] std::size_t hash_impl() const
-  {
-    return std::hash<int>{}(static_cast<int>(k)) ^ std::hash<int>{}(static_cast<int>(topk_order));
-  }
+  { return std::hash<int>{}(static_cast<int>(k)) ^ std::hash<int>{}(static_cast<int>(topk_order)); }
 };
 
 /**
@@ -1278,9 +1234,7 @@ struct dispatch_aggregation {
 #endif
   template <aggregation::Kind k, typename F, typename... Ts>
   CUDF_HOST_DEVICE inline decltype(auto) operator()(F&& f, Ts&&... args) const
-  {
-    return f.template operator()<Element, k>(std::forward<Ts>(args)...);
-  }
+  { return f.template operator()<Element, k>(std::forward<Ts>(args)...); }
 };
 
 struct dispatch_source {
@@ -1342,9 +1296,7 @@ data_type target_type(data_type source_type, aggregation::Kind k);
  */
 template <typename Source, aggregation::Kind k>
 constexpr inline bool is_valid_aggregation()
-{
-  return (not std::is_void_v<target_type_t<Source, k>>);
-}
+{ return (not std::is_void_v<target_type_t<Source, k>>); }
 
 /**
  * @brief Indicates whether the specified aggregation `k` is valid to perform on

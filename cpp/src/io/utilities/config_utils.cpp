@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -60,9 +60,7 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
 [[nodiscard]] bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
 [[nodiscard]] bool is_stable_enabled()
-{
-  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
-}
+{ return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
 
 }  // namespace nvcomp_integration
 

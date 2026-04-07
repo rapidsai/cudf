@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -147,9 +147,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
   T value,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-{
-  return std::make_unique<scalar_type_t<T>>(value, true, stream, mr);
-}
+{ return std::make_unique<scalar_type_t<T>>(value, true, stream, mr); }
 
 /**
  * @brief Construct scalar using the given value of fixed_point type
@@ -167,9 +165,7 @@ std::unique_ptr<scalar> make_fixed_point_scalar(
   numeric::scale_type scale,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-{
-  return std::make_unique<scalar_type_t<T>>(value, scale, true, stream, mr);
-}
+{ return std::make_unique<scalar_type_t<T>>(value, scale, true, stream, mr); }
 
 /**
  * @brief Construct scalar using the given column of elements

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,9 +37,7 @@ struct hash_functor {
   column_device_view const& col;
   uint32_t const seed = 0;
   __device__ auto operator()(key_type idx) const
-  {
-    return cudf::hashing::detail::MurmurHash3_x86_32<T>{seed}(col.element<T>(idx));
-  }
+  { return cudf::hashing::detail::MurmurHash3_x86_32<T>{seed}(col.element<T>(idx)); }
 };
 
 template <int block_size>

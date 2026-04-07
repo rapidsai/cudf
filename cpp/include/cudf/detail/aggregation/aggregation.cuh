@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,9 +20,7 @@ namespace cudf {
 namespace detail {
 template <typename T>
 CUDF_HOST_DEVICE constexpr bool is_product_supported()
-{
-  return is_numeric<T>();
-}
+{ return is_numeric<T>(); }
 
 /**
  * @brief Maps an `aggregation::Kind` value to its corresponding binary operator
@@ -108,9 +106,7 @@ using corresponding_operator_t = typename corresponding_operator<k>::type;
 
 template <aggregation::Kind k>
 constexpr bool has_corresponding_operator()
-{
-  return !std::is_same_v<typename corresponding_operator<k>::type, void>;
-}
+{ return !std::is_same_v<typename corresponding_operator<k>::type, void>; }
 
 }  // namespace detail
 }  // namespace cudf

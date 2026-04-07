@@ -173,7 +173,7 @@ def _setup_worker(
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
-            int | None,
+            "int | None",
             executor_options.get("rapidsmpf_py_executor_max_workers"),
         ),
         thread_name_prefix="dask-executor",
