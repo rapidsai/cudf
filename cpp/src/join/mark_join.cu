@@ -80,7 +80,7 @@ cuco::extent<std::size_t> get_bloom_filter_blocks(std::size_t filter_bytes)
 {
   std::size_t num_sub_filters =
     filter_bytes / (sizeof(typename FilterType::word_type) * FilterType::words_per_block);
-  return num_sub_filters ? num_sub_filters : 1;
+  return cuda::std::max<std::size_t>(num_sub_filters, 1);
 }
 
 template <typename IteratorType, typename FilterType, typename ElementType>
