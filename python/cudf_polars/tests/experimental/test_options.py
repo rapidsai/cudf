@@ -168,7 +168,7 @@ def test_from_dict_none_value_is_unspecified() -> None:
 
 
 def test_from_dict_unknown_key_raises() -> None:
-    with pytest.raises(TypeError, match="unknown field"):
+    with pytest.raises(TypeError):
         StreamingOptions.from_dict({"no_such_field": 42})
 
 

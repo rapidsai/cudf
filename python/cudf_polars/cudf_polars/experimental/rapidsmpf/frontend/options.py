@@ -372,11 +372,6 @@ class StreamingOptions:
         -------
         A new :class:`StreamingOptions` instance.
 
-        Raises
-        ------
-        TypeError
-            If ``d`` contains a key that is not a known field.
-
         Examples
         --------
         >>> StreamingOptions.from_dict(
@@ -386,15 +381,7 @@ class StreamingOptions:
         >>> StreamingOptions.from_dict({})  # all fields UNSPECIFIED
         StreamingOptions(...)
         """
-        known = {f.name for f in dataclasses.fields(cls)}
-        unknown = d.keys() - known
-        if unknown:
-            raise TypeError(
-                f"StreamingOptions.from_dict() got unknown field(s): "
-                f"{', '.join(sorted(unknown))}"
-            )
-        kwargs = {k: (UNSPECIFIED if v is None else v) for k, v in d.items()}
-        return cls(**kwargs)
+        return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in d.items()})
 
     @classmethod
     def from_argparse(cls, args: argparse.Namespace) -> StreamingOptions:
