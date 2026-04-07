@@ -22,23 +22,17 @@ from rapidsmpf.config import (
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
-from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.context import Context
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
 import rmm.mr
 
-from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.experimental.rapidsmpf.core import generate_network
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
     check_reserved_keys,
+    execute_ir_on_rank,
 )
-from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
-from cudf_polars.experimental.utils import _concat
 from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
@@ -329,59 +323,21 @@ class RankActor:
         ir, partition_info, stats, collective_id_map = query_bundle
         if self._ctx is None:
             raise RuntimeError("setup_worker must be called before evaluate_polars_ir")
-        ir_context = IRExecutionContext(get_cuda_stream=self._ctx.get_stream_from_pool)
-        metadata_collector: list[ChannelMetadata] | None = (
-            [] if collect_metadata else None
-        )
-
-        nodes, output = generate_network(
-            self._ctx,
-            self._comm,
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            ir_context=ir_context,
-            collective_id_map=collective_id_map,
-            metadata_collector=metadata_collector,
-        )
-
-        run_actor_network(actors=nodes, py_executor=self._py_executor)
-
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg).make_available_and_spill(
-                self._ctx.br(), allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        if chunks:
-            dfs = [
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
-                )
-                for chunk in chunks
-            ]
-            df = _concat(*dfs, context=ir_context)
-        else:
-            # No chunks received, create an empty DataFrame with the correct schema.
-            stream = ir_context.get_cuda_stream()
-            chunk = empty_table_chunk(ir, self._ctx, stream)
-            df = DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                stream,
-            )
         # Ray transfers the returned Polars DataFrame back to the client via the
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        result = df.to_polars()
-        return result, metadata_collector
+        return execute_ir_on_rank(
+            self._ctx,
+            self._comm,
+            self._py_executor,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            collective_id_map,
+            collect_metadata=collect_metadata,
+        )
 
 
 def get_num_gpus_in_ray_cluster() -> int:
