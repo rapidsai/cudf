@@ -19,6 +19,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -220,7 +221,8 @@ filter_join_indices(cudf::table_view const& left,
     // Find the number of indices passing the filter i.e. rows that are valid according to the
     // predicate CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of
     // size greater than integer limits
-    cudf::detail::device_scalar<std::size_t> d_num_valid(stream);
+    cudf::detail::device_scalar<std::size_t> d_num_valid(stream,
+                                                         cudf::get_current_device_resource_ref());
     {
       auto const predicate_it =
         cuda::transform_iterator{predicate_results_ptr,
