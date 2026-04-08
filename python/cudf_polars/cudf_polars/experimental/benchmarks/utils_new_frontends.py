@@ -833,6 +833,9 @@ def run_polars_query_iteration(
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
 
+    # TODO: shuffle stats collection is not yet wired up for the new
+    # frontends. The Dask-specific gather_shuffle_statistics API does
+    # not apply to SPMD/Ray; needs a generic rapidsmpf API first.
     shuffle_stats = None
 
     if expected is not None:
