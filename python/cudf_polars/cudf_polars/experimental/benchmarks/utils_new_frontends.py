@@ -436,14 +436,13 @@ class RunConfig:
         """Create a RunConfig from command line arguments."""
         from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
-        frontend = getattr(args, "frontend", "spmd")
         streaming_options = StreamingOptions._from_argparse(args)
 
         path = args.path
         name = args.query_set
         scale_factor = args.scale
 
-        if getattr(args, "qualification", False) and "pdsds" not in name:
+        if args.qualification and "pdsds" not in name:
             raise ValueError("--qualification can only be used with PDS-DS benchmarks.")
 
         if scale_factor is None:
@@ -488,17 +487,15 @@ class RunConfig:
                     f"but the inferred scale factor is {sf_inf}."
                 )
 
-        if getattr(args, "validate_directory", None):
+        if args.validate_directory:
             validation_method = ValidationMethod(
                 expected_source="duckdb",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
             )
-        elif getattr(args, "validate", False):
+        elif args.validate:
             validation_method = ValidationMethod(
-                expected_source="polars-cpu"
-                if getattr(args, "baseline", "duckdb") == "cpu"
-                else "duckdb",
+                expected_source="polars-cpu" if args.baseline == "cpu" else "duckdb",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
             )
@@ -511,18 +508,18 @@ class RunConfig:
             dataset_path=path,
             scale_factor=scale_factor,
             suffix=args.suffix,
-            qualification=getattr(args, "qualification", False),
-            executor=getattr(args, "executor", "streaming"),
-            frontend=frontend,
+            qualification=args.qualification,
+            executor=args.executor,
+            frontend=args.frontend,
             iterations=args.iterations,
-            io_mode=getattr(args, "io_mode", "lukewarm"),
-            collect_traces=getattr(args, "collect_traces", False),
-            native_parquet=getattr(args, "native_parquet", True),
-            max_io_threads=getattr(args, "max_io_threads", 2),
+            io_mode=args.io_mode,
+            collect_traces=args.collect_traces,
+            native_parquet=args.native_parquet,
+            max_io_threads=args.max_io_threads,
             rmm_release_threshold=getattr(args, "rmm_release_threshold", None),
             streaming_options=streaming_options,
             validation_method=validation_method,
-            extra_info=getattr(args, "extra_info", {}),
+            extra_info=args.extra_info,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -1772,12 +1769,10 @@ def parse_args(
             "use --spill-device-limit instead."
         )
 
-    if getattr(parsed_args, "validate_directory", None) and getattr(
-        parsed_args, "validate", False
-    ):
+    if parsed_args.validate_directory and parsed_args.validate:
         raise ValueError("Specify either --validate-directory or --validate, not both.")
     if (
-        getattr(parsed_args, "validate_directory", None) is not None
+        parsed_args.validate_directory is not None
         and not parsed_args.validate_directory.exists()
     ):
         raise FileNotFoundError(
@@ -1801,7 +1796,7 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     parquet_options = {"use_rapidsmpf_native": run_config.native_parquet}
     validation_files = (
         list_validation_files(args.validate_directory)
-        if getattr(args, "validate_directory", None) is not None
+        if args.validate_directory is not None
         else None
     )
     numeric_type, date_type = check_input_data_type(run_config)
