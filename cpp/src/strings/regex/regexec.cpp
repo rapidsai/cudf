@@ -50,7 +50,6 @@ reprog_device::reprog_device(reprog const& prog)
  * Buffer layout:
  *   [glushkov_program_device struct]
  *   [_positions    : num_states × glushkov_position]
- *   [_follow_table : num_states × g_state_t]
  *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × g_state_t]
  *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS_DEV × uint8_t + padding]
  *   [_reach_ascii  : 128 × g_state_t]
@@ -297,9 +296,10 @@ void reprog_device::destroy() { delete this; }
 
 std::size_t reprog_device::working_memory_size(int32_t num_threads) const
 {
-  // Always allocate Thompson working memory even when Glushkov is active,
-  // because extract() falls back to the Thompson engine (Glushkov does not
-  // track capture groups) and needs a valid working-memory buffer.
+  // Glushkov uses register-only state (uint64_t bitmask) — zero working memory.
+  // Extract APIs create their reprog_device without Glushkov (use_glushkov=false),
+  // so they still get Thompson working memory allocated here.
+  if (_glushkov) return 0;
   return compute_working_memory_size(num_threads, insts_counts());
 }
 

@@ -15,16 +15,19 @@
  * One thread processes one input string.  The NFA state is a single g_state_t
  * (uint64_t) bitmask held in a register – no global working memory required.
  *
- * For each starting position `start` in the string (unanchored search):
- *   1. Initialise: state = first_set                          (virtual start)
- *   2. For each character c at position pos ≥ start:
- *        follow_state = compute_follow(state)                  (shift + exceptions)
- *        state        = (pos == start ? first_set : follow_state) & reach(c)
- *      Equivalently:
- *        state = first_set & reach(c_start)       (first char)
- *        state = compute_follow(state) & reach(c)  (subsequent chars)
- *   3. If state & accept_mask: record greedy match end.
- *   4. Return leftmost non-empty (or nullable zero-length) match.
+ * Unanchored non-nullable search: two-phase O(n) per match.
+ *   Phase 1 (forward scan): inject first_set at every character; track the
+ *     earliest injection position (inject_start_pos) since state was last 0.
+ *     When state & accept_mask fires, record the match end; continue extending
+ *     greedily until state dies.
+ *   Phase 2 (BEGIN_END only): rescan from inject_start_pos, trying each valid
+ *     start position with a single-seed NFA until one reaches accept.  The
+ *     earliest start that accepts gives the leftmost match.
+ *   END_ONLY (contains_re, matches_re): phase 1 result is returned directly;
+ *     the start position is not needed so phase 2 is skipped.
+ *
+ * Anchored (end >= 0) or nullable: original inner-loop from start_pos.
+ * Both are already O(n) per string.
  *
  * The shift-and follow computation (Hyperscan-style):
  *   follow(state) ≈ OR_k( (state & shift_masks[k]) << shift_amounts[k] )
@@ -42,6 +45,37 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
+/// Count trailing zeros in a 64-bit value (portable across host and device).
+__host__ __device__ __forceinline__ uint32_t glushkov_ctz64(uint64_t x)
+{
+#ifdef __CUDA_ARCH__
+  return static_cast<uint32_t>(__ffsll(static_cast<long long>(x)) - 1);
+#else
+  return static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(x)));
+#endif
+}
+
+/**
+ * @brief Emulate Thompson's first-alternative-wins priority by killing lower-priority states.
+ *
+ * When multiple alternatives can accept at the same position, the lowest-indexed accepting
+ * position corresponds to the highest-priority alternative (Thompson's relist orders first
+ * alternatives first).  All bits above the lowest accepting bit are cleared so that
+ * lower-priority paths are killed while self-loops and continuations of the winning path
+ * survive.
+ *
+ * @param state       Current NFA state bitmask.
+ * @param accept_mask Bitmask of accepting positions.
+ * @return            State with lower-priority alternatives killed.
+ */
+__host__ __device__ __forceinline__ g_state_t glushkov_priority_kill(g_state_t const state,
+                                                                     g_state_t const accept_mask)
+{
+  auto const lsb_a = glushkov_ctz64(state & accept_mask);
+  if (lsb_a < 63) { return state & ((g_state_t(1) << (lsb_a + 1)) - 1); }
+  return state;
+}
 
 // ---------------------------------------------------------------------------
 // Character matching
@@ -124,12 +158,7 @@ __device__ __forceinline__ g_state_t glushkov_compute_follow_impl(
   // Phase 2: exception transitions (backward / large-span)
   g_state_t exc = state & prog.exception_mask;
   while (exc) {
-    // Index of lowest set bit: __ffsll (device) or __builtin_ctzll (host)
-#ifdef __CUDA_ARCH__
-    uint32_t const p = static_cast<uint32_t>(__ffsll(static_cast<long long>(exc))) - 1u;
-#else
-    uint32_t const p = static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(exc)));
-#endif
+    uint32_t const p = glushkov_ctz64(exc);
     exc &= exc - 1;  // clear lowest set bit
     follow |= src.exception_succ(p);
   }
@@ -195,6 +224,12 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach(
  *   - Greedy (longest match from that start).
  *   - Nullable patterns produce zero-length matches.
  *
+ * For unanchored non-nullable patterns, uses a two-phase O(n) algorithm:
+ * Phase 1 injects first_set at every character and extends greedily; when
+ * state & accept_mask fires, the match end is recorded.  Phase 2 (BEGIN_END
+ * only) rescans from inject_start_pos (the earliest injection position since
+ * state was last 0) to find the leftmost valid start for that match end.
+ *
  * @tparam P          Positional mode (BEGIN_END or END_ONLY).
  * @tparam DataSource glushkov_global_source or glushkov_shmem_source.
  * @param prog   Glushkov device program.
@@ -215,10 +250,6 @@ __device__ __forceinline__ match_result glushkov_find_impl(
   cudf::size_type end,
   DataSource const& src)
 {
-  // size_bytes() is O(1) — a stored field.  We avoid length() (O(n)) entirely
-  // by using byte-offset checks for loop termination.  For nullable patterns,
-  // the only case needing special handling is when begin is already at/past
-  // end-of-string, which we handle with a pre-loop check.
   auto const size_bytes = static_cast<int32_t>(d_str.size_bytes());  // O(1)
 
   int32_t const start_pos = begin.position();
@@ -233,83 +264,178 @@ __device__ __forceinline__ match_result glushkov_find_impl(
     }
   }
 
-  // Outer loop: try each starting position (leftmost-first search).
-  // Termination always uses a byte-offset check (O(1)).  When end >= 0,
-  // we also check the character-position bound supplied by the caller.
-  auto outer_itr = begin;
-  for (int32_t start = start_pos; ; ++start, ++outer_itr) {
-    // Outer loop termination (end is an exclusive upper bound, matching Thompson)
-    if (end >= 0 && start >= end) { break; }
-    if (outer_itr.byte_offset() >= size_bytes) { break; }
+  // --- Anchored (end >= 0) or nullable: the inner-loop approach, O(n) ---
+  // Anchored: outer loop runs at most (end - start_pos) iterations (typically 1).
+  // Nullable: pre-seeded zero-length match returns after first inner loop.
+  // Both are already O(n) per string.
+  if (end >= 0 || prog.nullable) {
+    auto outer_itr = begin;
+    for (int32_t start = start_pos; ; ++start, ++outer_itr) {
+      if (end >= 0 && start >= end) { break; }
+      if (outer_itr.byte_offset() >= size_bytes) { break; }
 
-    // Optimization: skip positions whose first character cannot begin any match.
-    if (!prog.nullable) {
-      if (prog.has_startchar) {
-        // Fast path: tight byte scan to next occurrence of the literal start
-        // character (mirrors Thompson NFA's find_char).  Much cheaper than a
-        // reach-table lookup per byte since it is just a register compare.
-        while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar) {
-          ++outer_itr;
-          ++start;
-        }
-        if (outer_itr.byte_offset() >= size_bytes) { break; }
-        // Re-check end bound: the skip may have advanced past it
-        if (end >= 0 && start >= end) { break; }
-      } else {
-        // General path: reach(c) & first_set == 0 → no NFA position in
-        // first_set accepts this character; skip without running the NFA.
-        char32_t const first_c = *outer_itr;
-        if ((glushkov_compute_reach_impl(first_c, prog, src) & prog.first_set) == 0) {
-          continue;
-        }
-      }
-    }
-
-    match_result cur_match{};
-
-    // Nullable: a zero-length match is possible at every position
-    if (prog.nullable) {
-      if constexpr (P == positional::BEGIN_END) {
-        cur_match = match_pair{start, start};
-      } else {
-        cur_match = match_pair{-1, start};
-      }
-    }
-
-    // Inner loop: run anchored Glushkov NFA from 'start' to end of string.
-    // Use byte-offset bound (O(1)) rather than character-count bound so that
-    // this loop never requires a prior d_str.length() call.
-    g_state_t state = prog.first_set;
-    auto inner_itr  = outer_itr;
-
-    for (int32_t pos = start; inner_itr.byte_offset() < size_bytes; ++pos, ++inner_itr) {
-      char32_t const c = *inner_itr;
-
-      if (pos == start) {
-        // First character: intersect first_set with reach(c)
-        state = state & glushkov_compute_reach_impl(c, prog, src);
-      } else {
-        // Subsequent characters: follow → reach
-        state = glushkov_compute_follow_impl(state, prog, src) &
-                glushkov_compute_reach_impl(c, prog, src);
-      }
-
-      if (state == 0) { break; }  // Dead state – no match possible from 'start'
-
-      if (state & prog.accept_mask) {
-        // Greedy: always update to capture the longest match from 'start'
-        if constexpr (P == positional::BEGIN_END) {
-          cur_match = match_pair{start, pos + 1};
+      if (!prog.nullable) {
+        if (prog.has_startchar) {
+          while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar) {
+            ++outer_itr;
+            ++start;
+          }
+          if (outer_itr.byte_offset() >= size_bytes) { break; }
+          if (end >= 0 && start >= end) { break; }
         } else {
-          cur_match = match_pair{-1, pos + 1};
+          char32_t const first_c = *outer_itr;
+          if ((glushkov_compute_reach_impl(first_c, prog, src) & prog.first_set) == 0) {
+            continue;
+          }
         }
       }
-    }
 
-    if (cur_match) { return cur_match; }  // Leftmost match found
+      match_result cur_match{};
+      if (prog.nullable) {
+        if constexpr (P == positional::BEGIN_END) {
+          cur_match = match_pair{start, start};
+        } else {
+          cur_match = match_pair{-1, start};
+        }
+      }
+
+      g_state_t state = prog.first_set;
+      auto inner_itr  = outer_itr;
+      for (int32_t pos = start; inner_itr.byte_offset() < size_bytes; ++pos, ++inner_itr) {
+        char32_t const c = *inner_itr;
+        if (pos == start) {
+          state = state & glushkov_compute_reach_impl(c, prog, src);
+        } else {
+          state = glushkov_compute_follow_impl(state, prog, src) &
+                  glushkov_compute_reach_impl(c, prog, src);
+        }
+        if (state == 0) { break; }
+        if (state & prog.accept_mask) {
+          if constexpr (P == positional::BEGIN_END) {
+            cur_match = match_pair{start, pos + 1};
+          } else {
+            cur_match = match_pair{-1, pos + 1};
+          }
+          state = glushkov_priority_kill(state, prog.accept_mask);
+        }
+      }
+      if (cur_match) { return cur_match; }
+    }
+    return {};
   }
 
-  return {};  // No match
+  // --- Non-nullable unanchored: two-phase O(n) search ---
+  //
+  // Phase 1 (forward scan): inject first_set at every step; detect match END
+  // via state & accept_mask (any active seed reaching accept); greedy extension
+  // until state dies.
+  //
+  // inject_start_pos records the earliest position where seeds were injected
+  // since state was last 0.  Phase 2 rescans from there to pinpoint the start.
+  //
+  // Phase 2 (BEGIN_END only): rescan from inject_start_pos, trying each valid
+  // start position with a single-seed NFA (mirrors the anchored inner loop).
+  // The first start whose NFA reaches accept gives the leftmost match.
+  //
+  // Cost: O(n) for phase 1; O(gap + match_length) per match for phase 2.
+  // Each character is processed at most twice overall.
+
+  g_state_t state = 0;
+  match_result cur_match{};
+
+  // Earliest position where seeds were injected since state was last 0.
+  int32_t inject_start_pos                    = start_pos;
+  string_view::const_iterator inject_start_itr = begin;
+
+  auto itr = begin;
+  for (int32_t pos = start_pos; itr.byte_offset() < size_bytes; ++pos, ++itr) {
+    // Fast skip when no active states and no match found yet.
+    if (state == 0 && !cur_match) {
+      if (prog.has_startchar) {
+        // Tight byte scan for the literal start character.
+        while (itr.byte_offset() < size_bytes && *itr != prog.startchar) {
+          ++itr;
+          ++pos;
+        }
+        if (itr.byte_offset() >= size_bytes) { break; }
+      }
+      // Record injection start for phase 2 rescan.
+      inject_start_pos = pos;
+      inject_start_itr = itr;
+    }
+
+    char32_t const c     = *itr;
+    auto const     reach = glushkov_compute_reach_impl(c, prog, src);
+
+    g_state_t state_next = (state != 0) ? glushkov_compute_follow_impl(state, prog, src)
+                                        : g_state_t{0};
+
+    // Inject fresh starts unless in greedy-extension mode.
+    if (!cur_match) { state_next |= prog.first_set; }
+
+    state = state_next & reach;
+
+    if (state == 0) {
+      if (cur_match) { break; }  // greedy extension died
+      continue;
+    }
+
+    // Detect match: any active state reaching accept.
+    if (state & prog.accept_mask) {
+      if constexpr (P == positional::BEGIN_END) {
+        cur_match = match_pair{inject_start_pos, pos + 1};  // start is provisional
+      } else {
+        cur_match = match_pair{-1, pos + 1};
+      }
+      // Greedy: continue extending.  Fresh start injection stops via
+      // the !cur_match gate above.
+      state = glushkov_priority_kill(state, prog.accept_mask);
+    }
+  }
+
+  if (!cur_match) { return {}; }
+
+  // For END_ONLY (contains_re, matches_re), start position is unused.
+  if constexpr (P != positional::BEGIN_END) { return cur_match; }
+
+  // --- Phase 2: find the earliest match start (BEGIN_END only) ---
+  //
+  // Rescan from inject_start_pos.  For each position where first_set
+  // matches, run a single-seed NFA forward.  The first start whose NFA
+  // reaches accept gives the leftmost match with greedy extension.
+
+  auto rescan_itr = inject_start_itr;
+  for (int32_t s = inject_start_pos; s < cur_match->second; ++s, ++rescan_itr) {
+    char32_t const c     = *rescan_itr;
+    auto const     reach = glushkov_compute_reach_impl(c, prog, src);
+    g_state_t seed       = prog.first_set & reach;
+    if (seed == 0) { continue; }
+
+    // Check immediate accept (single-position pattern, e.g. `\d`).
+    int32_t greedy_end = -1;
+    if (seed & prog.accept_mask) {
+      greedy_end = s + 1;
+      seed = glushkov_priority_kill(seed, prog.accept_mask);
+    }
+
+    // Advance the single-seed NFA forward.
+    auto scan_itr = rescan_itr;
+    ++scan_itr;
+    for (int32_t p = s + 1; scan_itr.byte_offset() < size_bytes; ++p, ++scan_itr) {
+      seed = glushkov_compute_follow_impl(seed, prog, src) &
+             glushkov_compute_reach_impl(*scan_itr, prog, src);
+      if (seed == 0) { break; }
+      if (seed & prog.accept_mask) {
+        greedy_end = p + 1;
+        seed       = glushkov_priority_kill(seed, prog.accept_mask);
+      }
+    }
+
+    if (greedy_end >= 0) { return match_pair{s, greedy_end}; }
+  }
+
+  // Fallback: should not reach here if phase 1 detected a match correctly.
+  return cur_match;
 }
 
 /**

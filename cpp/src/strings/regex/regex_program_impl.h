@@ -36,10 +36,14 @@ struct regex_program::regex_program_impl {
 };
 
 struct regex_device_builder {
-  static auto create_prog_device(regex_program const& p, rmm::cuda_stream_view stream)
+  static auto create_prog_device(regex_program const& p,
+                                 rmm::cuda_stream_view stream,
+                                 bool use_glushkov = true)
   {
     return detail::reprog_device::create(
-      p._impl->prog, p._impl->glushkov_prog.get(), stream);
+      p._impl->prog,
+      use_glushkov ? p._impl->glushkov_prog.get() : nullptr,
+      stream);
   }
 };
 

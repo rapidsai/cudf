@@ -55,9 +55,9 @@ int32_t regex_program::groups_count() const { return _impl->prog.groups_count();
 
 std::size_t regex_program::compute_working_memory_size(int32_t num_strings) const
 {
-  // Always allocate Thompson working memory even when Glushkov is active,
-  // because extract() falls back to the Thompson engine (Glushkov does not
-  // track capture groups) and needs a valid working-memory buffer.
+  // Returns the Thompson NFA working memory size (the maximum possible).
+  // On the device, reprog_device::working_memory_size() returns 0 for find-only
+  // APIs when Glushkov is active; extract APIs disable Glushkov at creation time.
   return detail::compute_working_memory_size(num_strings, instructions_count());
 }
 

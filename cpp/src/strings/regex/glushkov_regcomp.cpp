@@ -297,6 +297,12 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
     if (is_accept) { gp->nullable = true; }
   }
 
+  // Nullable patterns have ε-paths not represented as Glushkov positions.
+  // When the ε-path is the first alternative (e.g. `(|a)`), Thompson gives it
+  // highest priority (its END fires first), but Glushkov has no position to
+  // represent that priority.  Fall back to Thompson for correctness.
+  if (gp->nullable) { return nullptr; }
+
   // ---- Step 5: follow_table + accept_mask for each position --------------
   for (uint32_t idx = 0; idx < gp->num_states; ++idx) {
     int32_t const inst_id = char_insts[idx];

@@ -30,6 +30,9 @@ static std::vector<std::string> const patterns = {
   "5W4{1,3}",      // 5: bounded repetition (5 positions)
   "(?:5W){1,2}",   // 6: non-capturing group + bounded rep (4 positions)
   "5.4.",           // 7: dot wildcard (4 positions)
+  ".+5W",           // 8: late-failure stress (dot prefix, quadratic for Glushkov):
+                    //    '.' matches everything → inner loop runs full string from every start;
+                    //    only row 0 has "5W" → hit_rate controls match frequency correctly
 };
 
 static void bench_contains(nvbench::state& state)
@@ -59,5 +62,5 @@ NVBENCH_BENCH(bench_contains)
   .add_int64_axis("row_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("hit_rate", {50, 100})  // percentage
-  .add_int64_axis("pattern", {/*0, 1, */2, 3, 4, 5, 6, 7})
+  .add_int64_axis("pattern", {/*0, 1, */2, 3, 4, 5, 6, 7, 8})
   .add_string_axis("engine", {"thompson", "glushkov"});

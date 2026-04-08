@@ -29,6 +29,12 @@ static std::vector<std::string> const patterns = {
   "[a-z]+[A-Z]+",            // 2: multi char-class sequence
   "[a-f]+|[0-5]+",           // 3: alternation (comparable density to \d+)
   "[a-z][0-9]{0,3}[A-Z]",   // 4: bounded repetition / gap transitions (7 positions)
+  ".+[0-9]",                 // 5: late-failure stress (~97% hit rate, ~1 match/string):
+                             //    '.' matches all ASCII → inner loop never dead-states →
+                             //    extreme O(n²) per string for Glushkov vs O(n) for Thompson
+  "[a-z]+Z",                 // 6: late-failure + low hit rate (~23% on 32-char strings,
+                             //    ~79% on 256-char strings); Glushkov skips ~73% of start
+                             //    positions via reach filter but still exhibits quadratic growth
 };
 
 static void bench_count(nvbench::state& state)
@@ -65,5 +71,5 @@ NVBENCH_BENCH(bench_count)
   .add_int64_axis("min_width", {0})
   .add_int64_axis("max_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
-  .add_int64_axis("pattern", {0, 1, 2, 3, 4})
+  .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6})
   .add_string_axis("engine", {"thompson", "glushkov"});
