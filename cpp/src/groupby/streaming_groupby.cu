@@ -34,15 +34,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/atomic>
 #include <cuda/iterator>
-#include <cuda/std/type_traits>
+#include <cuda/std/functional>
 #include <thrust/copy.h>
-#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/sequence.h>
-#include <thrust/sort.h>
 #include <thrust/transform.h>
 
 #include <algorithm>
@@ -119,41 +115,27 @@ struct offset_cache_hasher {
   }
 };
 
-/// Predicate returning the bool stencil value as-is.
-struct is_true_pred {
-  __device__ bool operator()(bool v) const { return v; }
-};
-
 /// Adds a fixed offset to a value.
 struct offset_adder {
   size_type offset;
   __device__ size_type operator()(size_type v) const { return v + offset; }
 };
 
-/// Scatter companion vectors at encoded indices for newly discovered keys.
-/// deduped_encoded[k] is the encoded index; row k in the compacted batch.
-struct scatter_companion_at_encoded {
-  size_type const* deduped_encoded;
-  size_type* key_batch;
-  size_type* key_row;
+/// For each newly discovered key k, scatter companion vectors and record the
+/// encoded index for finalization.  Combines two operations in a single pass.
+struct scatter_new_key_metadata {
+  size_type const* deduped_encoded;  ///< deduped_encoded[k] = encoded index
+  size_type* key_batch;              ///< companion: batch id at encoded index
+  size_type* key_row;                ///< companion: row within compacted batch
+  size_type* group_encoded;          ///< group_encoded[dense_group] = encoded index
   size_type batch_id;
-  __device__ void operator()(size_type k) const
-  {
-    auto const enc = deduped_encoded[k];
-    key_batch[enc] = batch_id;
-    key_row[enc]   = k;
-  }
-};
-
-/// Record the encoded index for each dense group.
-/// Dense group (num_groups_before + k) was stored at encoded index deduped_encoded[k].
-struct record_group_encoded_index {
-  size_type const* deduped_encoded;
-  size_type* group_encoded;
   size_type num_groups_before;
   __device__ void operator()(size_type k) const
   {
-    group_encoded[num_groups_before + k] = deduped_encoded[k];
+    auto const enc                       = deduped_encoded[k];
+    key_batch[enc]                       = batch_id;
+    key_row[enc]                         = k;
+    group_encoded[num_groups_before + k] = enc;
   }
 };
 
@@ -266,12 +248,25 @@ std::vector<aggregation_request> build_aggregation_requests(
   return result;
 }
 
-rmm::device_buffer compute_row_bitmask(table_view const& keys, rmm::cuda_stream_view stream)
+/// Compute a combined null bitmask for multi-column keys.
+/// Returns {buffer, raw_pointer} where pointer is null if no nulls.
+std::pair<rmm::device_buffer, bitmask_type const*> compute_row_bitmask(table_view const& keys,
+                                                                       rmm::cuda_stream_view stream)
 {
-  if (keys.num_columns() == 0 || !cudf::has_nulls(keys)) { return rmm::device_buffer{}; }
-  auto result = cudf::bitmask_and(keys, stream);
-  if (result.second == 0) { return rmm::device_buffer{}; }
-  return std::move(result.first);
+  if (keys.num_columns() == 0 || !cudf::has_nulls(keys)) {
+    return {rmm::device_buffer{0, stream}, nullptr};
+  }
+  // Single-column fast path: reuse the column's null mask directly.
+  if (keys.num_columns() == 1) {
+    auto const& col = keys.column(0);
+    if (col.offset() == 0) { return {rmm::device_buffer{0, stream}, col.null_mask()}; }
+    auto buf = cudf::copy_bitmask(col, stream);
+    auto ptr = static_cast<bitmask_type const*>(buf.data());
+    return {std::move(buf), ptr};
+  }
+  auto [buf, null_count] = cudf::bitmask_and(keys, stream);
+  if (null_count == 0) { return {rmm::device_buffer{0, stream}, nullptr}; }
+  return {std::move(buf), static_cast<bitmask_type const*>(buf.data())};
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +311,7 @@ struct streaming_groupby::impl {
   size_type _num_unique_keys{0};
   /// High-water mark of encoded indices consumed.  Encoded batch indices are
   /// [_num_stored, _num_stored + batch_size).  After each batch, _num_stored
-  /// advances by the number of NEW unique keys (not batch_size).
+  /// advances by batch_size (the full encoding range, not just num_unique).
   size_type _num_stored{0};
   bool _has_nullable_keys{false};
 
@@ -379,7 +374,7 @@ struct streaming_groupby::impl {
 
   void initialize(table_view const& data, rmm::cuda_stream_view stream)
   {
-    auto const default_mr = cudf::get_current_device_resource_ref();
+    auto const mr = cudf::get_current_device_resource_ref();
 
     auto agg_requests = build_aggregation_requests(_requests_clone, data);
     auto [values_view, agg_kinds_hv, agg_objects, is_intermediate, has_compound] =
@@ -395,9 +390,9 @@ struct streaming_groupby::impl {
       static_cast<size_type>(std::min(static_cast<int64_t>(_max_groups) * 2,
                                       static_cast<int64_t>(std::numeric_limits<size_type>::max())));
     _agg_results = detail::hash::create_results_table(
-      _sparse_capacity, values_view, _agg_kinds, _is_agg_intermediate, stream, default_mr);
+      _sparse_capacity, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
 
-    _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, default_mr);
+    _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr);
 
     _value_col_indices.reserve(values_view.num_columns());
     for (size_type c = 0; c < values_view.num_columns(); ++c) {
@@ -422,14 +417,12 @@ struct streaming_groupby::impl {
     }
 
     // Companion vectors: 2 * max_groups to accommodate encoded index range.
-    _key_batch =
-      std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, default_mr);
-    _key_row =
-      std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, default_mr);
+    _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, mr);
+    _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, mr);
 
     // Group-to-encoded-index map: sized to max_groups (one entry per unique key).
     _group_encoded_indices =
-      std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, default_mr);
+      std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
 
     _initialized = true;
   }
@@ -515,10 +508,10 @@ struct streaming_groupby::impl {
 
     // Batch-local bitmask for null exclusion.
     auto const skip_rows_with_nulls = _has_nullable_keys && _null_handling == null_policy::EXCLUDE;
-    auto bitmask_buffer =
-      skip_rows_with_nulls ? compute_row_bitmask(batch_keys, stream) : rmm::device_buffer{};
-    auto const* batch_bitmask =
-      skip_rows_with_nulls ? static_cast<bitmask_type const*>(bitmask_buffer.data()) : nullptr;
+    auto [bitmask_buffer, batch_bitmask] = skip_rows_with_nulls
+                                             ? compute_row_bitmask(batch_keys, stream)
+                                             : std::pair<rmm::device_buffer, bitmask_type const*>{
+                                                 rmm::device_buffer{0, stream}, nullptr};
 
     // Build comparator.  When num_stored == 0 and _pp_batches is empty,
     // the n_table_comparator only enters the batch-self branch.
@@ -542,8 +535,7 @@ struct streaming_groupby::impl {
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(batch_size),
                       target_indices.begin(),
-                      insert_and_map_fn<decltype(iaf_ref)>{
-                        iaf_ref, batch_bitmask, num_stored, inserted_flags.data()});
+                      insert_and_map_fn{iaf_ref, batch_bitmask, num_stored, inserted_flags.data()});
 
     // Count newly inserted keys.
     auto const num_new_unique = static_cast<size_type>(thrust::count(
@@ -557,7 +549,7 @@ struct streaming_groupby::impl {
                       cuda::counting_iterator<size_type>(batch_size),
                       inserted_flags.begin(),
                       batch_local_indices.begin(),
-                      is_true_pred{});
+                      cuda::std::identity{});
 
       // Build encoded indices from batch-local: encoded = num_stored + batch_local.
       rmm::device_uvector<size_type> deduped_encoded(num_new_unique, stream, temp_mr);
@@ -583,21 +575,16 @@ struct streaming_groupby::impl {
       _compacted_batches.push_back(std::move(compacted));
       _pp_batches.push_back(pp_compacted);
 
-      // Scatter companion vectors at the encoded indices.
-      thrust::for_each_n(
-        rmm::exec_policy_nosync(stream),
-        cuda::counting_iterator<size_type>(0),
-        num_new_unique,
-        scatter_companion_at_encoded{
-          deduped_encoded.data(), _key_batch->data(), _key_row->data(), new_batch_id});
-
-      // Record encoded indices for finalization gather.
-      thrust::for_each_n(
-        rmm::exec_policy_nosync(stream),
-        cuda::counting_iterator<size_type>(0),
-        num_new_unique,
-        record_group_encoded_index{
-          deduped_encoded.data(), _group_encoded_indices->data(), _num_unique_keys});
+      // Scatter companion vectors and record encoded indices in a single pass.
+      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                         cuda::counting_iterator<size_type>(0),
+                         num_new_unique,
+                         scatter_new_key_metadata{deduped_encoded.data(),
+                                                  _key_batch->data(),
+                                                  _key_row->data(),
+                                                  _group_encoded_indices->data(),
+                                                  new_batch_id,
+                                                  _num_unique_keys});
 
       _num_unique_keys += num_new_unique;
     }
@@ -757,9 +744,9 @@ struct streaming_groupby::impl {
                    ") exceeds max_groups (" + std::to_string(_max_groups) + ").",
                  std::invalid_argument);
 
-    auto const default_mr = cudf::get_current_device_resource_ref();
+    auto const mr = cudf::get_current_device_resource_ref();
 
-    auto other_keys             = other.gather_all_unique_keys(stream, default_mr);
+    auto other_keys             = other.gather_all_unique_keys(stream, mr);
     auto const other_key_view   = other_keys->view();
     auto const num_other_groups = other._num_unique_keys;
     if (num_other_groups == 0) { return; }
@@ -772,7 +759,7 @@ struct streaming_groupby::impl {
                            out_of_bounds_policy::DONT_CHECK,
                            cudf::negative_index_policy::NOT_ALLOWED,
                            stream,
-                           default_mr);
+                           mr);
 
     update_nullable_state(other_key_view);
 
