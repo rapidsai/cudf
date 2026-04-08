@@ -17,7 +17,6 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/device_aggregators.cuh>
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
@@ -42,7 +41,6 @@
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
-#include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
@@ -65,15 +63,15 @@ using row_eq_t = detail::hash::row_comparator_t;
 ///
 /// Indices >= num_stored are "batch rows" (encoded as num_stored + batch_idx).
 /// Indices < num_stored are "stored groups" resolved via companion vectors
-/// key_batch[group] and key_row[group] to (compacted_batch_table, row_within_batch).
+/// key_batch[idx] and key_row[idx] to (compacted_batch_table, row_within_batch).
 ///
 /// Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
 /// and stored in a device array.  Self-comparisons use batch_self_eq.
 struct n_table_comparator {
   row_eq_t batch_self_eq;      ///< Self-comparator on the current batch table
   row_eq_t const* cross_eqs;   ///< Device array [num_compacted_batches]: batch vs compacted[k]
-  size_type const* key_batch;  ///< Companion vector: compacted batch index per group
-  size_type const* key_row;    ///< Companion vector: row index within compacted batch per group
+  size_type const* key_batch;  ///< Companion vector: compacted batch index per stored entry
+  size_type const* key_row;    ///< Companion vector: row index within compacted batch
   size_type num_stored;        ///< Threshold: idx >= num_stored is a batch row
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
@@ -81,42 +79,20 @@ struct n_table_comparator {
     bool const lhs_is_batch = (lhs >= num_stored);
     bool const rhs_is_batch = (rhs >= num_stored);
 
-    if (lhs_is_batch && rhs_is_batch) {
-      // Both from the current batch — self comparison.
-      return batch_self_eq(lhs - num_stored, rhs - num_stored);
-    }
-    if (lhs_is_batch) {
-      // lhs = batch row, rhs = stored group.
-      // cross_eqs[k] has lhs=batch_table, rhs=compacted[k]_table.
-      return cross_eqs[key_batch[rhs]](lhs - num_stored, key_row[rhs]);
-    }
-    if (rhs_is_batch) {
-      // lhs = stored group, rhs = batch row.  Equality is symmetric.
-      return cross_eqs[key_batch[lhs]](rhs - num_stored, key_row[lhs]);
-    }
-    // Both stored — only reachable during insert-phase hash collisions
-    // between distinct groups.  Index equality ⟺ value equality because
-    // each group index maps to exactly one unique key.
+    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - num_stored, rhs - num_stored); }
+    if (lhs_is_batch) { return cross_eqs[key_batch[rhs]](lhs - num_stored, key_row[rhs]); }
+    if (rhs_is_batch) { return cross_eqs[key_batch[lhs]](rhs - num_stored, key_row[lhs]); }
     return lhs == rhs;
   }
 };
 
-/// Lightweight comparator for the insert phase.  All keys being inserted were
-/// already confirmed unique in Phase 2, so the only comparisons during insert
-/// are hash-collision checks between distinct group indices.  Identity equality
-/// is correct because each group index maps to exactly one unique key.
-struct identity_comparator {
-  __device__ bool operator()(size_type lhs, size_type rhs) const noexcept { return lhs == rhs; }
-};
-
-/// First-batch fast path: insert_and_find on the main set for all batch rows.
-/// Produces target_indices (first-occurrence encoded index) and insertion flags.
-/// Used when num_stored == 0 to avoid allocating a separate temp dedup set.
+/// insert_and_find on the main set for each batch row.
+/// Produces target_indices (stored encoded index) and insertion flags.
 template <typename SetRef>
 struct insert_and_map_fn {
   SetRef set_ref;
   bitmask_type const* row_bitmask;
-  size_type offset;  // always 0 for first batch, kept for generality
+  size_type offset;
   bool* inserted_flags;
 
   __device__ size_type operator()(size_type batch_idx) const
@@ -132,26 +108,6 @@ struct insert_and_map_fn {
   }
 };
 
-/// Probe the hash set for each batch row.  Encodes batch row i as (offset + i)
-/// before calling find.  Returns the stored group index if found, SENTINEL otherwise.
-template <typename SetRef>
-struct probe_target_indices_fn {
-  SetRef set_ref;
-  bitmask_type const* row_bitmask;  // batch-local bitmask (may be nullptr)
-  size_type offset;                 // num_stored: batch row i -> offset + i
-
-  __device__ size_type operator()(size_type batch_idx) const
-  {
-    if (row_bitmask && !cudf::bit_is_set(row_bitmask, batch_idx)) {
-      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-    }
-    auto ref_copy = set_ref;
-    auto const it = ref_copy.find(offset + batch_idx);
-    if (it == set_ref.end()) { return cudf::detail::CUDF_SIZE_TYPE_SENTINEL; }
-    return *it;
-  }
-};
-
 /// Hasher that uses a precomputed hash cache with an offset.
 /// Given index `idx`, returns `cache[idx - offset]`.
 struct offset_cache_hasher {
@@ -163,13 +119,46 @@ struct offset_cache_hasher {
   }
 };
 
+/// Predicate returning the bool stencil value as-is.
+struct is_true_pred {
+  __device__ bool operator()(bool v) const { return v; }
+};
+
+/// Adds a fixed offset to a value.
+struct offset_adder {
+  size_type offset;
+  __device__ size_type operator()(size_type v) const { return v + offset; }
+};
+
+/// Scatter companion vectors at encoded indices for newly discovered keys.
+/// deduped_encoded[k] is the encoded index; row k in the compacted batch.
+struct scatter_companion_at_encoded {
+  size_type const* deduped_encoded;
+  size_type* key_batch;
+  size_type* key_row;
+  size_type batch_id;
+  __device__ void operator()(size_type k) const
+  {
+    auto const enc = deduped_encoded[k];
+    key_batch[enc] = batch_id;
+    key_row[enc]   = k;
+  }
+};
+
+/// Record the encoded index for each dense group.
+/// Dense group (num_groups_before + k) was stored at encoded index deduped_encoded[k].
+struct record_group_encoded_index {
+  size_type const* deduped_encoded;
+  size_type* group_encoded;
+  size_type num_groups_before;
+  __device__ void operator()(size_type k) const
+  {
+    group_encoded[num_groups_before + k] = deduped_encoded[k];
+  }
+};
+
 /**
  * @brief Element aggregator for merging intermediate results.
- *
- * Like cudf::detail::element_aggregator but for COUNT_VALID/COUNT_ALL it adds
- * the source count value instead of incrementing by 1. Also handles
- * SUM_OF_SQUARES by adding directly (the source already contains squared sums,
- * so we must NOT square again).
  */
 struct merge_element_aggregator {
   template <typename Source, aggregation::Kind k>
@@ -179,7 +168,7 @@ struct merge_element_aggregator {
                              size_type source_index) const noexcept
   {
     if constexpr (!cudf::detail::is_valid_aggregation<Source, k>()) {
-      return;  // Unsupported type/kind combination.
+      return;
     } else {
       if constexpr (k != aggregation::COUNT_ALL) {
         if (source.is_null(source_index)) { return; }
@@ -189,17 +178,14 @@ struct merge_element_aggregator {
       }
 
       if constexpr (k == aggregation::COUNT_VALID || k == aggregation::COUNT_ALL) {
-        // Merge counts by addition (not increment-by-1).
         using Target = cudf::detail::target_type_t<Source, k>;
         cudf::detail::atomic_add(&target.element<Target>(target_index),
                                  source.element<Target>(source_index));
       } else if constexpr (k == aggregation::SUM_OF_SQUARES) {
-        // Source already contains the sum of squared values; just add.
         using Target = cudf::detail::target_type_t<Source, k>;
         cudf::detail::atomic_add(&target.element<Target>(target_index),
                                  static_cast<Target>(source.element<Source>(source_index)));
       } else {
-        // SUM, MIN, MAX, PRODUCT: standard update_target_element works correctly.
         cudf::detail::update_target_element<Source, k>{}(
           target, target_index, source, source_index);
       }
@@ -207,10 +193,6 @@ struct merge_element_aggregator {
   }
 };
 
-/**
- * @brief Functor to merge intermediate aggregation results from a source table into a target table,
- * using pre-computed target indices.
- */
 struct merge_single_pass_aggs_fn {
   size_type const* target_indices;
   aggregation::Kind const* aggs;
@@ -292,145 +274,10 @@ rmm::device_buffer compute_row_bitmask(table_view const& keys, rmm::cuda_stream_
   return std::move(result.first);
 }
 
-/// Self-comparator wrapper that strips an offset before comparing.
-/// Used for deduplicating batch rows encoded as (num_stored + batch_idx).
-template <typename SelfEq>
-struct offset_self_comparator {
-  SelfEq self_eq;
-  size_type offset;
-  __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
-  {
-    return self_eq(lhs - offset, rhs - offset);
-  }
-};
-
-/// Translates virtual batch indices to dense group indices via a lookup table.
-struct apply_virtual_to_dense {
-  size_type const* virtual_to_dense;
-  size_type num_stored;
-  __device__ size_type operator()(size_type target) const
-  {
-    if (target >= num_stored) { return virtual_to_dense[target - num_stored]; }
-    return target;
-  }
-};
-
-/// Subtracts a fixed offset from a value.
-struct subtract_offset {
-  size_type offset;
-  __device__ size_type operator()(size_type v) const { return v - offset; }
-};
-
-/// For SENTINEL batch rows, insert_and_find on the temp set to deduplicate.
-/// For non-SENTINEL rows, keep the existing target. Counts unique new insertions.
-template <typename SetRef>
-struct dedup_new_keys_fn {
-  size_type const* targets;
-  SetRef temp_ref;
-  size_type num_stored;
-  bitmask_type const* row_bitmask;
-  size_type* new_count;
-
-  __device__ size_type operator()(size_type batch_idx, size_type cur_target) const
-  {
-    if (cur_target != cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { return cur_target; }
-    // Skip null-excluded rows.
-    if (row_bitmask && !cudf::bit_is_set(row_bitmask, batch_idx)) {
-      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
-    }
-    // This is a new key — deduplicate within the batch using the temp set.
-    auto const encoded_idx      = num_stored + batch_idx;
-    auto ref_copy               = temp_ref;
-    auto const [iter, inserted] = ref_copy.insert_and_find(encoded_idx);
-    if (inserted) {
-      cuda::atomic_ref<size_type, cuda::thread_scope_device>{*new_count}.fetch_add(
-        1, cuda::memory_order_relaxed);
-    }
-    return *iter;  // encoded index of the first occurrence
-  }
-};
-
-/// Inserts a single key into a hash set ref.
-template <typename SetRef>
-struct insert_single_key {
-  SetRef ref;
-  __device__ void operator()(size_type idx) const
-  {
-    auto ref_copy = ref;
-    ref_copy.insert(idx);
-  }
-};
-
-/// Scatter dense group indices into a batch-sized lookup array.
-/// deduped_combined[k] is a combined-table index (num_stored + batch_row).
-/// We set batch_to_dense[batch_row] = num_stored + k.
-struct scatter_dense_index {
-  size_type const* deduped_combined;
-  size_type* batch_to_dense;
-  size_type num_stored;
-  __device__ void operator()(size_type k) const
-  {
-    auto const batch_row      = deduped_combined[k] - num_stored;
-    batch_to_dense[batch_row] = num_stored + k;
-  }
-};
-
-/// Scatter companion vector entries for newly inserted groups.
-struct scatter_companion_vectors {
-  size_type const* deduped_combined;
-  size_type* key_batch;
-  size_type* key_row;
-  size_type num_stored;
-  size_type batch_id;
-  __device__ void operator()(size_type k) const
-  {
-    auto const group_idx = num_stored + k;
-    key_batch[group_idx] = batch_id;
-    key_row[group_idx]   = k;  // row k in the compacted batch
-  }
-};
-
-/// Predicate returning the bool stencil value as-is.
-struct is_true_pred {
-  __device__ bool operator()(bool v) const { return v; }
-};
-
-/// For first-batch path: scatter dense group index k at batch_to_dense[deduped[k]].
-struct scatter_first_batch_dense {
-  size_type const* deduped;
-  size_type* batch_to_dense;
-  __device__ void operator()(size_type k) const { batch_to_dense[deduped[k]] = k; }
-};
-
-/// For first-batch path: remap target from batch-row to dense group via lookup.
-struct remap_to_dense_fn {
-  size_type const* batch_to_dense;
-  __device__ size_type operator()(size_type t) const
-  {
-    return t == cudf::detail::CUDF_SIZE_TYPE_SENTINEL ? t : batch_to_dense[t];
-  }
-};
-
-/// For first-batch path: write companion vectors for groups [0, N).
-struct scatter_first_batch_companion {
-  size_type* key_batch;
-  size_type* key_row;
-  size_type batch_id;
-  __device__ void operator()(size_type k) const
-  {
-    key_batch[k] = batch_id;
-    key_row[k]   = k;
-  }
-};
-
 // ---------------------------------------------------------------------------
-// Helpers for building N cross-comparators on the host and copying to device
+// Helper: build N cross-comparators on host and copy to device
 // ---------------------------------------------------------------------------
 
-/// Build an array of device_row_comparator objects — one per compacted batch —
-/// comparing (batch_table vs compacted[k]_table).  Returns a device_uvector
-/// containing the comparators.  The preprocessed_table shared_ptrs must outlive
-/// all kernel launches that use the returned array.
 rmm::device_uvector<row_eq_t> build_cross_comparators(
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& pp_batch,
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>> const& pp_batches,
@@ -440,7 +287,6 @@ rmm::device_uvector<row_eq_t> build_cross_comparators(
   auto const n       = static_cast<size_type>(pp_batches.size());
   auto const temp_mr = cudf::get_current_device_resource_ref();
 
-  // Build comparators on the host.
   std::vector<row_eq_t> h_eqs;
   h_eqs.reserve(n);
   for (size_type k = 0; k < n; ++k) {
@@ -450,7 +296,6 @@ rmm::device_uvector<row_eq_t> build_cross_comparators(
     h_eqs.push_back(adapter.comparator);
   }
 
-  // Copy to device.
   return cudf::detail::make_device_uvector_async(h_eqs, stream, temp_mr);
 }
 
@@ -461,57 +306,51 @@ rmm::device_uvector<row_eq_t> build_cross_comparators(
 // ===========================================================================
 
 struct streaming_groupby::impl {
-  std::vector<size_type> _key_indices;  ///< Column indices in each batch that form the grouping key
-  std::vector<streaming_aggregation_request>
-    _requests_clone;                         ///< Deep copy of user-supplied aggregation requests
-  std::vector<size_type> _aggs_per_request;  ///< Number of user-facing aggs per request (for
-                                             ///< splitting results in finalize)
-  size_type _max_groups;       ///< Upper bound on distinct groups the hash set is sized for
-  null_policy _null_handling;  ///< Whether rows with null keys are excluded from aggregation
+  std::vector<size_type> _key_indices;
+  std::vector<streaming_aggregation_request> _requests_clone;
+  std::vector<size_type> _aggs_per_request;
+  size_type _max_groups;
+  null_policy _null_handling;
 
-  bool _initialized{false};  ///< Whether initialize() has been called (deferred until first batch
-                             ///< for type inference)
-  size_type _num_unique_keys{0};  ///< Running count of distinct keys inserted into the hash set
-  bool _has_nullable_keys{
-    false};  ///< Whether any input batch had nullable key columns (for output)
+  bool _initialized{false};
+  size_type _num_unique_keys{0};
+  /// High-water mark of encoded indices consumed.  Encoded batch indices are
+  /// [_num_stored, _num_stored + batch_size).  After each batch, _num_stored
+  /// advances by the number of NEW unique keys (not batch_size).
+  size_type _num_stored{0};
+  bool _has_nullable_keys{false};
 
   // -- Compacted batch storage --
-  /// Each element owns the compacted unique keys discovered in one batch.
   std::vector<std::unique_ptr<table>> _compacted_batches;
-  /// Preprocessed versions of the above for row operators.
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>> _pp_batches;
-  /// Companion vector: for group index g, _key_batch[g] is the compacted batch index.
+
+  /// Companion vectors indexed by ENCODED INDEX (sparse, up to 2*max_groups).
   std::unique_ptr<rmm::device_uvector<size_type>> _key_batch;
-  /// Companion vector: for group index g, _key_row[g] is the row within compacted batch.
   std::unique_ptr<rmm::device_uvector<size_type>> _key_row;
 
-  std::vector<size_type> _request_first_agg_offset;  ///< Per-request column offset into flattened
-                                                     ///< agg results (for compound finalization)
-  std::vector<aggregation::Kind> _agg_kinds;         ///< Expanded simple agg kinds after compound
-                                                     ///< expansion/dedup (one per results column)
-  std::vector<std::unique_ptr<aggregation>>
-    _agg_objects;  ///< Owning copies of expanded simple agg objects, parallel to `_agg_kinds`
-  std::vector<int8_t> _is_agg_intermediate;  ///< 1 if agg is an intermediate from compound
-                                             ///< expansion, 0 if user-requested
-  bool _has_compound_aggs{
-    false};  ///< Whether any user-facing agg is compound (requires finalization)
+  /// For each dense group g, _group_encoded_indices[g] is the encoded index
+  /// where that group's aggregation results live in _agg_results.
+  /// Used at finalization to gather sparse agg results into dense output.
+  std::unique_ptr<rmm::device_uvector<size_type>> _group_encoded_indices;
 
-  std::unique_ptr<table> _agg_results;  ///< Pre-allocated `_max_groups`-row table accumulating
-                                        ///< intermediate agg results across batches
-  std::vector<size_type>
-    _value_col_indices;  ///< Cached expanded-agg-column to data-column-index mapping (avoids
-                         ///< per-batch extract_single_pass_aggs)
-  rmm::device_uvector<aggregation::Kind>
-    _d_agg_kinds;  ///< Cached device copy of _agg_kinds (avoids per-batch H2D copy)
+  std::vector<size_type> _request_first_agg_offset;
+  std::vector<aggregation::Kind> _agg_kinds;
+  std::vector<std::unique_ptr<aggregation>> _agg_objects;
+  std::vector<int8_t> _is_agg_intermediate;
+  bool _has_compound_aggs{false};
 
-  ///< Persistent cuco::static_set mapping key rows (by virtual index) to group indices.
-  ///< Sized for `_max_groups` entries (with load-factor headroom). Created once on the first
-  ///< batch; the stored comparator/hasher become stale but are never used directly — device
-  ///< refs are rebound with fresh row operators before every operation.
+  /// Capacity of sparse agg results / companion vectors (2 * max_groups).
+  size_type _sparse_capacity{0};
+
+  /// Sparse agg results table, pre-allocated to _sparse_capacity rows.
+  /// Indexed by encoded index (not dense group index).
+  std::unique_ptr<table> _agg_results;
+  std::vector<size_type> _value_col_indices;
+  rmm::device_uvector<aggregation::Kind> _d_agg_kinds;
+
   std::unique_ptr<detail::hash::global_set_t> _key_set;
 
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
-
   [[nodiscard]] bool has_state() const { return _initialized && _num_unique_keys > 0; }
 
   impl(host_span<size_type const> key_indices,
@@ -551,13 +390,15 @@ struct streaming_groupby::impl {
     _is_agg_intermediate = std::move(is_intermediate);
     _has_compound_aggs   = has_compound;
 
+    // Sparse agg results: 2 * max_groups to accommodate encoded index range.
+    _sparse_capacity =
+      static_cast<size_type>(std::min(static_cast<int64_t>(_max_groups) * 2,
+                                      static_cast<int64_t>(std::numeric_limits<size_type>::max())));
     _agg_results = detail::hash::create_results_table(
-      _max_groups, values_view, _agg_kinds, _is_agg_intermediate, stream, default_mr);
+      _sparse_capacity, values_view, _agg_kinds, _is_agg_intermediate, stream, default_mr);
 
-    // Cache agg_kinds on device to avoid per-batch H2D copies.
     _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, default_mr);
 
-    // Build the cached mapping from each expanded agg column to its source data column index.
     _value_col_indices.reserve(values_view.num_columns());
     for (size_type c = 0; c < values_view.num_columns(); ++c) {
       auto const* col_head = values_view.column(c).head();
@@ -569,7 +410,6 @@ struct streaming_groupby::impl {
       }
     }
 
-    // Compute per-request first-column offset into the flattened single-pass agg table.
     size_type offset = 0;
     for (auto const& req : _requests_clone) {
       _request_first_agg_offset.push_back(offset);
@@ -581,19 +421,21 @@ struct streaming_groupby::impl {
       }
     }
 
-    // Allocate companion vectors.  No need to fill with SENTINEL — values at
-    // indices >= _num_unique_keys are never read (intercepted by the num_stored
-    // threshold check in n_table_comparator, or overwritten before use).
-    _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, default_mr);
-    _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, default_mr);
+    // Companion vectors: 2 * max_groups to accommodate encoded index range.
+    _key_batch =
+      std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, default_mr);
+    _key_row =
+      std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, default_mr);
+
+    // Group-to-encoded-index map: sized to max_groups (one entry per unique key).
+    _group_encoded_indices =
+      std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, default_mr);
 
     _initialized = true;
   }
 
   void create_key_set(table_view const& dummy_key_table, rmm::cuda_stream_view stream)
   {
-    // Create the hash set with a dummy comparator/hasher — they are always rebound
-    // before any operation. We just need the correct types.
     auto preprocessed =
       cudf::detail::row::hash::preprocessed_table::create(dummy_key_table, stream);
     auto const comparator = cudf::detail::row::equality::self_comparator{preprocessed};
@@ -615,7 +457,6 @@ struct streaming_groupby::impl {
       stream.value());
   }
 
-  /// Check and lazily update nullable state based on incoming batch keys.
   void update_nullable_state(table_view const& batch_keys)
   {
     if (_has_nullable_keys) return;
@@ -627,7 +468,6 @@ struct streaming_groupby::impl {
     }
   }
 
-  // Compute target indices for a batch of rows by inserting into the hash set.
   struct batch_insert_result {
     rmm::device_uvector<size_type> target_indices;
     size_type new_insertions;
@@ -635,33 +475,37 @@ struct streaming_groupby::impl {
   };
 
   /**
-   * @brief Insert batch keys and compute target indices.
+   * @brief Unified insert_and_find on the main set for all batches.
    *
-   * Fast path (num_stored == 0): Use insert_and_find on the main set directly
-   *   to dedup the first batch without allocating a separate temp set.
-   *   After compaction, clears the set and re-inserts dense group indices.
+   * Each batch row is encoded as (num_stored + batch_idx).  The n_table_comparator
+   * resolves stored entries via companion vectors and batch entries via the batch
+   * table.  insert_and_find naturally deduplicates both across batches (existing
+   * keys) and within the batch (intra-batch duplicates).
    *
-   * Normal path (num_stored > 0): Three-phase probe, dedup, insert.
-   *   Phase 1: find() with n_table_comparator for existing keys.
-   *   Phase 2: insert_and_find on temp set for intra-batch dedup.
-   *   Phase 3: Compact, scatter companion vectors, insert dense indices.
-   *
-   * The main hash set stores dense group indices [0, num_unique) after each
-   * batch completes.
+   * Target indices are the raw encoded indices stored in the set — sparse.
+   * Aggregation writes to agg_results[encoded_index].  Densification happens
+   * only at finalization.
    */
   batch_insert_result probe_and_insert(table_view const& batch_keys, rmm::cuda_stream_view stream)
   {
     auto const batch_size = batch_keys.num_rows();
-    auto const num_stored = _num_unique_keys;
+    auto const num_stored = _num_stored;
     auto const temp_mr    = cudf::get_current_device_resource_ref();
     auto const has_null   = cudf::nullate::DYNAMIC{_has_nullable_keys};
+
+    CUDF_EXPECTS(static_cast<int64_t>(num_stored) + batch_size <= _sparse_capacity,
+                 "Encoded index range (" + std::to_string(num_stored) + " + " +
+                   std::to_string(batch_size) + ") exceeds sparse capacity (" +
+                   std::to_string(_sparse_capacity) +
+                   "). Use smaller batches or increase max_groups.",
+                 std::overflow_error);
 
     // Preprocess batch for row operators.
     auto pp_batch = cudf::detail::row::hash::preprocessed_table::create(batch_keys, stream);
     auto const batch_hasher_obj = cudf::detail::row::hash::row_hasher{pp_batch};
     auto const d_batch_hash     = batch_hasher_obj.device_hasher(has_null);
 
-    // Precompute batch hash values into a cache — O(batch_size).
+    // Precompute batch hash values — O(batch_size).
     rmm::device_uvector<hash_value_type> batch_hash_cache(batch_size, stream, temp_mr);
     thrust::transform(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator<size_type>(0),
@@ -676,206 +520,56 @@ struct streaming_groupby::impl {
     auto const* batch_bitmask =
       skip_rows_with_nulls ? static_cast<bitmask_type const*>(bitmask_buffer.data()) : nullptr;
 
+    // Build comparator.  When num_stored == 0 and _pp_batches is empty,
+    // the n_table_comparator only enters the batch-self branch.
+    auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{pp_batch};
+    auto const batch_self_eq  = batch_self_cmp.equal_to<false>(has_null, null_equality::EQUAL);
+
+    auto d_cross_eqs = build_cross_comparators(pp_batch, _pp_batches, has_null, stream);
+
+    auto const eq = n_table_comparator{
+      batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), num_stored};
+    auto const hasher = offset_cache_hasher{batch_hash_cache.data(), num_stored};
+
+    auto iaf_ref =
+      _key_set->ref(cuco::op::insert_and_find).rebind_key_eq(eq).rebind_hash_function(hasher);
+
+    // insert_and_find for all batch rows.
     rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
+    rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
 
-    if (num_stored == 0) {
-      // =====================================================================
-      // Fast path: first batch — use main set directly for dedup.
-      // No temp set needed. insert_and_find on the main set gives both
-      // target indices and insertion flags in a single pass.
-      // =====================================================================
-      auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{pp_batch};
-      auto const batch_self_eq  = batch_self_cmp.equal_to<false>(has_null, null_equality::EQUAL);
-      auto const batch_hasher   = offset_cache_hasher{batch_hash_cache.data(), 0};
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(batch_size),
+                      target_indices.begin(),
+                      insert_and_map_fn<decltype(iaf_ref)>{
+                        iaf_ref, batch_bitmask, num_stored, inserted_flags.data()});
 
-      auto iaf_ref = _key_set->ref(cuco::op::insert_and_find)
-                       .rebind_key_eq(batch_self_eq)
-                       .rebind_hash_function(batch_hasher);
-
-      // Insert all batch rows; get first-occurrence index + insertion flag.
-      rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
-      thrust::transform(
-        rmm::exec_policy_nosync(stream),
-        cuda::counting_iterator<size_type>(0),
-        cuda::counting_iterator<size_type>(batch_size),
-        target_indices.begin(),
-        insert_and_map_fn<decltype(iaf_ref)>{iaf_ref, batch_bitmask, 0, inserted_flags.data()});
-
-      // Stream-compact inserted positions to get unique batch row indices.
-      // Count unique keys first.
-      auto const num_new_unique = static_cast<size_type>(thrust::count(
-        rmm::exec_policy_nosync(stream), inserted_flags.begin(), inserted_flags.end(), true));
-
-      if (num_new_unique > 0) {
-        // Gather the batch indices where inserted_flags == true.
-        rmm::device_uvector<size_type> deduped_batch_indices(num_new_unique, stream, temp_mr);
-        thrust::copy_if(rmm::exec_policy_nosync(stream),
-                        cuda::counting_iterator<size_type>(0),
-                        cuda::counting_iterator<size_type>(batch_size),
-                        inserted_flags.begin(),
-                        deduped_batch_indices.begin(),
-                        is_true_pred{});
-
-        // deduped_batch_indices are already in ascending order (copy_if preserves order
-        // of counting_iterator). These are the first-occurrence batch rows.
-
-        // Gather compacted unique keys from the batch.
-        auto compacted = cudf::detail::gather(batch_keys,
-                                              deduped_batch_indices,
-                                              out_of_bounds_policy::DONT_CHECK,
-                                              cudf::negative_index_policy::NOT_ALLOWED,
-                                              stream,
-                                              temp_mr);
-
-        auto pp_compacted =
-          cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
-
-        // Gather hashes for the compacted batch.
-        rmm::device_uvector<hash_value_type> compacted_hash_cache(num_new_unique, stream, temp_mr);
-        thrust::gather(rmm::exec_policy_nosync(stream),
-                       deduped_batch_indices.begin(),
-                       deduped_batch_indices.end(),
-                       batch_hash_cache.begin(),
-                       compacted_hash_cache.begin());
-
-        // Store the compacted batch.
-        auto const new_batch_id = static_cast<size_type>(_compacted_batches.size());
-        _compacted_batches.push_back(std::move(compacted));
-        _pp_batches.push_back(pp_compacted);
-
-        // Build batch_to_dense lookup: for first-occurrence batch row j,
-        // batch_to_dense[j] = dense group index k.
-        rmm::device_uvector<size_type> batch_to_dense(batch_size, stream, temp_mr);
-        thrust::fill(rmm::exec_policy_nosync(stream),
-                     batch_to_dense.begin(),
-                     batch_to_dense.end(),
-                     cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-
-        thrust::for_each_n(
-          rmm::exec_policy_nosync(stream),
-          cuda::counting_iterator<size_type>(0),
-          num_new_unique,
-          scatter_first_batch_dense{deduped_batch_indices.data(), batch_to_dense.data()});
-
-        // Remap target_indices from first-occurrence batch rows to dense group indices.
-        thrust::transform(rmm::exec_policy_nosync(stream),
-                          target_indices.begin(),
-                          target_indices.end(),
-                          target_indices.begin(),
-                          remap_to_dense_fn{batch_to_dense.data()});
-
-        // Scatter companion vectors.
-        thrust::for_each_n(
-          rmm::exec_policy_nosync(stream),
-          cuda::counting_iterator<size_type>(0),
-          num_new_unique,
-          scatter_first_batch_companion{_key_batch->data(), _key_row->data(), new_batch_id});
-
-        // Clear the main set (it currently holds sparse batch row indices)
-        // and re-insert dense group indices [0, num_new_unique).
-        _key_set->clear_async(stream.value());
-
-        auto const insert_hash = offset_cache_hasher{compacted_hash_cache.data(), 0};
-        auto insert_ref        = _key_set->ref(cuco::op::insert)
-                            .rebind_key_eq(identity_comparator{})
-                            .rebind_hash_function(insert_hash);
-        thrust::for_each(rmm::exec_policy_nosync(stream),
-                         cuda::counting_iterator<size_type>(0),
-                         cuda::counting_iterator<size_type>(num_new_unique),
-                         insert_single_key<decltype(insert_ref)>{insert_ref});
-
-        _num_unique_keys = num_new_unique;
-      }
-
-      return {std::move(target_indices), num_new_unique, std::move(bitmask_buffer)};
-    }
-
-    // =====================================================================
-    // Normal path: num_stored > 0 — probe existing, dedup new, insert.
-    // =====================================================================
-
-    // Phase 1: Probe the main set using n_table_comparator.
-    {
-      auto d_cross_eqs = build_cross_comparators(pp_batch, _pp_batches, has_null, stream);
-
-      auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{pp_batch};
-      auto const batch_self_eq  = batch_self_cmp.equal_to<false>(has_null, null_equality::EQUAL);
-
-      auto const probe_eq = n_table_comparator{
-        batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), num_stored};
-      auto const probe_hash = offset_cache_hasher{batch_hash_cache.data(), num_stored};
-
-      auto find_ref =
-        _key_set->ref(cuco::op::find).rebind_key_eq(probe_eq).rebind_hash_function(probe_hash);
-
-      thrust::transform(
-        rmm::exec_policy_nosync(stream),
-        cuda::counting_iterator<size_type>(0),
-        cuda::counting_iterator<size_type>(batch_size),
-        target_indices.begin(),
-        probe_target_indices_fn<decltype(find_ref)>{find_ref, batch_bitmask, num_stored});
-    }
-
-    // Count new keys (SENTINEL after probe). Early exit if none.
-    auto const num_sentinel = thrust::count(rmm::exec_policy_nosync(stream),
-                                            target_indices.begin(),
-                                            target_indices.end(),
-                                            cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-    if (num_sentinel == 0) { return {std::move(target_indices), 0, std::move(bitmask_buffer)}; }
-
-    // Phase 2: Deduplicate new keys within the batch using a temp set.
-    auto const batch_self_cmp2 = cudf::detail::row::equality::self_comparator{pp_batch};
-    auto const d_batch_eq      = batch_self_cmp2.equal_to<false>(has_null, null_equality::EQUAL);
-
-    auto const dedup_eq   = offset_self_comparator{d_batch_eq, num_stored};
-    auto const dedup_hash = offset_cache_hasher{batch_hash_cache.data(), num_stored};
-
-    auto temp_set = detail::hash::global_set_t(
-      cuco::extent<int64_t>{static_cast<int64_t>(num_sentinel)},
-      cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
-      cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-      d_batch_eq,
-      detail::hash::probing_scheme_t{detail::hash::row_hasher_with_cache_t{d_batch_hash}},
-      cuco::thread_scope_device,
-      cuco::storage<detail::hash::GROUPBY_BUCKET_SIZE>{},
-      rmm::mr::polymorphic_allocator<char>{},
-      stream.value());
-
-    auto temp_iaf_ref = temp_set.ref(cuco::op::insert_and_find)
-                          .rebind_key_eq(dedup_eq)
-                          .rebind_hash_function(dedup_hash);
-
-    auto d_new_count = cudf::detail::device_scalar<size_type>(0, stream, temp_mr);
-    thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      cuda::counting_iterator<size_type>(0),
-      cuda::counting_iterator<size_type>(batch_size),
-      target_indices.begin(),
-      target_indices.begin(),
-      dedup_new_keys_fn<decltype(temp_iaf_ref)>{
-        target_indices.begin(), temp_iaf_ref, num_stored, batch_bitmask, d_new_count.data()});
-
-    auto const num_new_unique = d_new_count.value(stream);
+    // Count newly inserted keys.
+    auto const num_new_unique = static_cast<size_type>(thrust::count(
+      rmm::exec_policy_nosync(stream), inserted_flags.begin(), inserted_flags.end(), true));
 
     if (num_new_unique > 0) {
-      // Retrieve deduplicated encoded indices from temp set.
+      // Stream compact: get the batch-local indices of newly inserted keys.
+      rmm::device_uvector<size_type> batch_local_indices(num_new_unique, stream, temp_mr);
+      thrust::copy_if(rmm::exec_policy_nosync(stream),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(batch_size),
+                      inserted_flags.begin(),
+                      batch_local_indices.begin(),
+                      is_true_pred{});
+
+      // Build encoded indices from batch-local: encoded = num_stored + batch_local.
       rmm::device_uvector<size_type> deduped_encoded(num_new_unique, stream, temp_mr);
-      temp_set.retrieve_all(deduped_encoded.begin(), stream.value());
-
-      // Sort for deterministic dense-index assignment.
-      thrust::sort(rmm::exec_policy_nosync(stream), deduped_encoded.begin(), deduped_encoded.end());
-
-      // Convert to batch-local indices for gather.
-      rmm::device_uvector<size_type> new_batch_indices(num_new_unique, stream, temp_mr);
       thrust::transform(rmm::exec_policy_nosync(stream),
+                        batch_local_indices.begin(),
+                        batch_local_indices.end(),
                         deduped_encoded.begin(),
-                        deduped_encoded.end(),
-                        new_batch_indices.begin(),
-                        subtract_offset{num_stored});
+                        offset_adder{num_stored});
 
-      // Gather new unique keys from the batch -> this is the new compacted batch.
+      // Gather compacted unique keys from the batch.
       auto compacted = cudf::detail::gather(batch_keys,
-                                            new_batch_indices,
+                                            batch_local_indices,
                                             out_of_bounds_policy::DONT_CHECK,
                                             cudf::negative_index_policy::NOT_ALLOWED,
                                             stream,
@@ -884,58 +578,34 @@ struct streaming_groupby::impl {
       auto pp_compacted =
         cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
 
-      // Gather hashes from the batch hash cache for the compacted batch.
-      rmm::device_uvector<hash_value_type> compacted_hash_cache(num_new_unique, stream, temp_mr);
-      thrust::gather(rmm::exec_policy_nosync(stream),
-                     new_batch_indices.begin(),
-                     new_batch_indices.end(),
-                     batch_hash_cache.begin(),
-                     compacted_hash_cache.begin());
-
       // Store the compacted batch.
       auto const new_batch_id = static_cast<size_type>(_compacted_batches.size());
       _compacted_batches.push_back(std::move(compacted));
       _pp_batches.push_back(pp_compacted);
 
-      // Scatter companion vectors for the new groups.
+      // Scatter companion vectors at the encoded indices.
       thrust::for_each_n(
         rmm::exec_policy_nosync(stream),
         cuda::counting_iterator<size_type>(0),
         num_new_unique,
-        scatter_companion_vectors{
-          deduped_encoded.data(), _key_batch->data(), _key_row->data(), num_stored, new_batch_id});
+        scatter_companion_at_encoded{
+          deduped_encoded.data(), _key_batch->data(), _key_row->data(), new_batch_id});
 
-      // Build batch_to_dense lookup and remap target indices.
-      rmm::device_uvector<size_type> batch_to_dense(batch_size, stream, temp_mr);
-      thrust::fill(rmm::exec_policy_nosync(stream),
-                   batch_to_dense.begin(),
-                   batch_to_dense.end(),
-                   cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
-
+      // Record encoded indices for finalization gather.
       thrust::for_each_n(
         rmm::exec_policy_nosync(stream),
         cuda::counting_iterator<size_type>(0),
         num_new_unique,
-        scatter_dense_index{deduped_encoded.data(), batch_to_dense.data(), num_stored});
-
-      thrust::transform(rmm::exec_policy_nosync(stream),
-                        target_indices.begin(),
-                        target_indices.end(),
-                        target_indices.begin(),
-                        apply_virtual_to_dense{batch_to_dense.data(), num_stored});
-
-      // Insert new dense indices into main set with identity comparator.
-      auto const insert_hash = offset_cache_hasher{compacted_hash_cache.data(), num_stored};
-      auto insert_ref        = _key_set->ref(cuco::op::insert)
-                          .rebind_key_eq(identity_comparator{})
-                          .rebind_hash_function(insert_hash);
-      thrust::for_each(rmm::exec_policy_nosync(stream),
-                       cuda::counting_iterator<size_type>(num_stored),
-                       cuda::counting_iterator<size_type>(num_stored + num_new_unique),
-                       insert_single_key<decltype(insert_ref)>{insert_ref});
+        record_group_encoded_index{
+          deduped_encoded.data(), _group_encoded_indices->data(), _num_unique_keys});
 
       _num_unique_keys += num_new_unique;
     }
+
+    // Advance encoding offset by the full batch size — the entire range
+    // [num_stored, num_stored + batch_size) is consumed, even for rows that
+    // were duplicates or null-excluded.  The next batch must encode after this range.
+    _num_stored += batch_size;
 
     return {std::move(target_indices), num_new_unique, std::move(bitmask_buffer)};
   }
@@ -991,13 +661,9 @@ struct streaming_groupby::impl {
       detail::hash::compute_single_pass_aggs_dense_output_fn{
         result.target_indices.begin(), _d_agg_kinds.data(), *d_values, *d_results_ptr});
 
-    // Check after aggregation so internal state remains consistent if this throws.
     check_unique_key_count();
   }
 
-  /// Reconstruct the full unique-keys table by concatenating all compacted batches.
-  /// Group indices are assigned sequentially across batches, so concatenation
-  /// produces keys in group-index order.
   [[nodiscard]] std::unique_ptr<table> gather_all_unique_keys(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
   {
@@ -1018,22 +684,19 @@ struct streaming_groupby::impl {
   {
     CUDF_EXPECTS(_initialized, "Cannot finalize streaming_groupby with no accumulated data.");
 
-    // Reconstruct unique keys by concatenating compacted batches.
     auto keys_output = gather_all_unique_keys(stream, mr);
 
-    // Gather aggregation results in the same order as group indices [0, N).
+    // Gather sparse agg results at the encoded indices for each dense group.
+    // _group_encoded_indices[g] is the encoded index for group g.
     auto const num_unique = _num_unique_keys;
-    rmm::device_uvector<size_type> gather_map(
-      num_unique, stream, cudf::get_current_device_resource_ref());
-    thrust::sequence(
-      rmm::exec_policy_nosync(stream), gather_map.begin(), gather_map.end(), size_type{0});
-
-    auto agg_gathered = cudf::detail::gather(_agg_results->view(),
-                                             gather_map,
-                                             out_of_bounds_policy::DONT_CHECK,
-                                             cudf::negative_index_policy::NOT_ALLOWED,
-                                             stream,
-                                             mr);
+    auto agg_gathered =
+      cudf::detail::gather(_agg_results->view(),
+                           device_span<size_type const>{_group_encoded_indices->data(),
+                                                        static_cast<std::size_t>(num_unique)},
+                           out_of_bounds_policy::DONT_CHECK,
+                           cudf::negative_index_policy::NOT_ALLOWED,
+                           stream,
+                           mr);
 
     if (_has_compound_aggs) {
       cudf::detail::result_cache cache(_agg_kinds.size());
@@ -1096,32 +759,28 @@ struct streaming_groupby::impl {
 
     auto const default_mr = cudf::get_current_device_resource_ref();
 
-    // Reconstruct other's unique keys by concatenating its compacted batches.
     auto other_keys             = other.gather_all_unique_keys(stream, default_mr);
     auto const other_key_view   = other_keys->view();
     auto const num_other_groups = other._num_unique_keys;
     if (num_other_groups == 0) { return; }
 
-    // Gather other's agg results at indices [0, num_other_groups).
-    rmm::device_uvector<size_type> other_gather_map(num_other_groups, stream, default_mr);
-    thrust::sequence(
-      rmm::exec_policy_nosync(stream), other_gather_map.begin(), other_gather_map.end());
+    // Gather other's sparse agg results using its encoded indices.
+    auto other_aggs =
+      cudf::detail::gather(other._agg_results->view(),
+                           device_span<size_type const>{other._group_encoded_indices->data(),
+                                                        static_cast<std::size_t>(num_other_groups)},
+                           out_of_bounds_policy::DONT_CHECK,
+                           cudf::negative_index_policy::NOT_ALLOWED,
+                           stream,
+                           default_mr);
 
-    auto other_aggs = cudf::detail::gather(other._agg_results->view(),
-                                           other_gather_map,
-                                           out_of_bounds_policy::DONT_CHECK,
-                                           cudf::negative_index_policy::NOT_ALLOWED,
-                                           stream,
-                                           default_mr);
-
-    // Treat the other's unique keys as a "batch" and insert into this object.
     update_nullable_state(other_key_view);
 
     if (!_key_set) { create_key_set(other_key_view, stream); }
 
     auto result = probe_and_insert(other_key_view, stream);
 
-    // Merge aggregation values using target indices.
+    // Merge aggregation values using target indices (sparse encoded).
     auto const d_source = table_device_view::create(other_aggs->view(), stream);
     auto d_target       = mutable_table_device_view::create(*_agg_results, stream);
 
