@@ -1,4 +1,4 @@
-name: Compute Sanitizer Trigger
+name: Compute Sanitizer Weekend
 
 # This workflow runs all compute-sanitizer tools on all libcudf tests weekly.
 # WARNING: This is very resource intensive and runs hundreds of GPU jobs.
