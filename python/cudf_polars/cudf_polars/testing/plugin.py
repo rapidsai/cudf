@@ -342,6 +342,15 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "DataFrames are different (value mismatch for column 'a')",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "AssertionError:",
     "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
+    "tests/unit/sql/test_qualify.py::test_qualify_constraints[above_avg]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_constraints[equals_max]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_constraints[compound_expr]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_distinct": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[sum_window]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[count_window]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_multiple_clauses": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_with_internal_cumulative_sum": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_with_where_clause": "https://github.com/rapidsai/cudf/issues/22050",
 }
 
 
