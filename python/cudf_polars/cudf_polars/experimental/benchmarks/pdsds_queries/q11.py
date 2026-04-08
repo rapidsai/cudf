@@ -128,10 +128,15 @@ def create_year_total(
 ) -> pl.LazyFrame:
     """Computes per-customer yearly totals for a sales table and year."""
     return (
-        customer_table.join(
-            sales_table, left_on="c_customer_sk", right_on=customer_sk_col, how="inner"
+        sales_table.join(
+            year_filter, left_on=date_sk_col, right_on="d_date_sk", how="inner"
         )
-        .join(year_filter, left_on=date_sk_col, right_on="d_date_sk", how="inner")
+        .join(
+            customer_table,
+            left_on=customer_sk_col,
+            right_on="c_customer_sk",
+            how="inner",
+        )
         .group_by(
             [
                 "c_customer_id",
@@ -182,23 +187,27 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_first = date_dim.filter(pl.col("d_year") == year_first)
     date_second = date_dim.filter(pl.col("d_year") == year_second)
 
-    # Total store sales 2001
-    t_s_firstyear = create_year_total(
-        customer,
-        store_sales,
-        "ss_customer_sk",
-        "ss_sold_date_sk",
-        "ss_ext_list_price",
-        "ss_ext_discount_amt",
-        date_first,
-    ).select(
-        [
-            pl.col("customer_id").alias("s_first_customer_id"),
-            pl.col("year_total").alias("s_first_year_total"),
-        ]
+    # Total store sales year_first
+    t_s_firstyear = (
+        create_year_total(
+            customer,
+            store_sales,
+            "ss_customer_sk",
+            "ss_sold_date_sk",
+            "ss_ext_list_price",
+            "ss_ext_discount_amt",
+            date_first,
+        )
+        .filter(pl.col("year_total") > 0)
+        .select(
+            [
+                pl.col("customer_id").alias("s_first_customer_id"),
+                pl.col("year_total").alias("s_first_year_total"),
+            ]
+        )
     )
 
-    # Total store sales 2002
+    # Total store sales year_second
     t_s_secyear = create_year_total(
         customer,
         store_sales,
@@ -217,23 +226,27 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ]
     )
 
-    # Total web sales 2001
-    t_w_firstyear = create_year_total(
-        customer,
-        web_sales,
-        "ws_bill_customer_sk",
-        "ws_sold_date_sk",
-        "ws_ext_list_price",
-        "ws_ext_discount_amt",
-        date_first,
-    ).select(
-        [
-            pl.col("customer_id").alias("w_first_customer_id"),
-            pl.col("year_total").alias("w_first_year_total"),
-        ]
+    # Total web sales year_first
+    t_w_firstyear = (
+        create_year_total(
+            customer,
+            web_sales,
+            "ws_bill_customer_sk",
+            "ws_sold_date_sk",
+            "ws_ext_list_price",
+            "ws_ext_discount_amt",
+            date_first,
+        )
+        .filter(pl.col("year_total") > 0)
+        .select(
+            [
+                pl.col("customer_id").alias("w_first_customer_id"),
+                pl.col("year_total").alias("w_first_year_total"),
+            ]
+        )
     )
 
-    # Total web sales 2002
+    # Total web sales year_second
     t_w_secyear = create_year_total(
         customer,
         web_sales,
@@ -249,7 +262,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ]
     )
 
-    # Join the tables and filter to get customers whose web and store spending grew from 2001 -> 2002
+    # Join the tables and filter to get customers whose web and store spending grew
+    # from year_first -> year_second
     return QueryResult(
         frame=(
             t_s_secyear.join(
@@ -271,16 +285,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 how="inner",
             )
             .filter(
-                (pl.col("s_first_year_total") > 0)
-                & (pl.col("w_first_year_total") > 0)
-                & (
-                    pl.when(pl.col("w_first_year_total") > 0)
-                    .then(pl.col("w_sec_year_total") / pl.col("w_first_year_total"))
-                    .otherwise(0.0)
-                    > pl.when(pl.col("s_first_year_total") > 0)
-                    .then(pl.col("s_sec_year_total") / pl.col("s_first_year_total"))
-                    .otherwise(0.0)
-                )
+                pl.col("w_sec_year_total") / pl.col("w_first_year_total")
+                > pl.col("s_sec_year_total") / pl.col("s_first_year_total")
             )
             .select(
                 [
