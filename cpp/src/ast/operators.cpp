@@ -30,8 +30,8 @@ struct arity_functor {
  * @brief Functor to determine the return type of an operator from its input types.
  */
 struct return_type_functor {
-  cudf::data_type lhs_type;
-  std::optional<cudf::data_type> rhs_type;  // not needed for unary
+  std::span<cudf::data_type const> operand_types;
+
   /**
    * @brief Callable for binary operators to determine return type.
    *
@@ -47,9 +47,10 @@ struct return_type_functor {
     using Out         = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     auto const out_id = cudf::type_to_id<Out>();
     if constexpr (cudf::is_fixed_point<Out>()) {
-      result = cudf::data_type(
-        out_id,
-        OperatorFunctor::fixed_point_result_scale(lhs_type.scale(), rhs_type.value().scale()));
+      auto const lhs_type = operand_types[0];
+      auto const rhs_type = operand_types[1];
+      result              = cudf::data_type(
+        out_id, OperatorFunctor::fixed_point_result_scale(lhs_type.scale(), rhs_type.scale()));
     } else {
       result = cudf::data_type{out_id};
     }
@@ -81,7 +82,7 @@ struct return_type_functor {
     using Out         = cuda::std::invoke_result_t<OperatorFunctor, T>;
     auto const out_id = cudf::type_to_id<Out>();
     if constexpr (cudf::is_fixed_point<Out>()) {
-      result = cudf::data_type(out_id, lhs_type.scale());
+      result = cudf::data_type(out_id, operand_types[0].scale());
     } else {
       result = cudf::data_type{out_id};
     }
@@ -167,19 +168,20 @@ struct type_dispatch_binary_op {
  * @tparam F Type of forwarded functor.
  * @tparam Ts Parameter pack of forwarded arguments.
  * @param op The binary operator to dispatch
- * @param lhs_type Type of left input data.
- * @param rhs_type Type of right input data.
+ * @param input_types Types for the input data
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
-inline constexpr void binary_operator_dispatcher(
-  ast_operator op, cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
+inline constexpr void binary_operator_dispatcher(ast_operator op,
+                                                 std::span<cudf::data_type const> input_types,
+                                                 F&& f,
+                                                 Ts&&... args)
 {
   ast_operator_dispatcher(op,
                           detail::type_dispatch_binary_op{},
-                          lhs_type,
-                          rhs_type,
+                          input_types[0],
+                          input_types[1],
                           std::forward<F>(f),
                           std::forward<Ts>(args)...);
 }
@@ -235,19 +237,19 @@ struct type_dispatch_unary_op {
  * @tparam F Type of forwarded functor.
  * @tparam Ts Parameter pack of forwarded arguments.
  * @param op The unary operator to dispatch
- * @param input_type Type of input data.
+ * @param input_types Types for the input data
  * @param f Forwarded functor to be called.
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
 inline constexpr void unary_operator_dispatcher(ast_operator op,
-                                                cudf::data_type input_type,
+                                                std::span<cudf::data_type const> input_types,
                                                 F&& f,
                                                 Ts&&... args)
 {
   ast_operator_dispatcher(op,
                           detail::type_dispatch_unary_op{},
-                          input_type,
+                          input_types[0],
                           std::forward<F>(f),
                           std::forward<Ts>(args)...);
 }
@@ -260,15 +262,13 @@ cudf::data_type ast_operator_return_type(ast_operator op,
   cudf::data_type result{cudf::type_id::EMPTY};
   switch (operand_types.size()) {
     case 1: {
-      auto const op_type = operand_types[0];
-      unary_operator_dispatcher(op, op_type, detail::return_type_functor{op_type}, result);
+      unary_operator_dispatcher(
+        op, operand_types, detail::return_type_functor{operand_types}, result);
       break;
     }
     case 2: {
-      auto const lhs_type = operand_types[0];
-      auto const rhs_type = operand_types[1];
       binary_operator_dispatcher(
-        op, lhs_type, rhs_type, detail::return_type_functor{lhs_type, rhs_type}, result);
+        op, operand_types, detail::return_type_functor{operand_types}, result);
       break;
     }
     default: CUDF_FAIL("Unsupported operator return type."); break;

@@ -1223,7 +1223,9 @@ TYPED_TEST(DecimalArithmeticTest, NestedDecimalArithmetic)
   auto const expected_scale = numeric::scale_type{-4};
   auto expected             = cudf::test::fixed_point_column_wrapper<RepType>(
     {RepType{95000}, RepType{180000}, RepType{255000}, RepType{320000}}, expected_scale);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 
+  result = cudf::compute_column_jit(table, mul_expr);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
