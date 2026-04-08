@@ -80,7 +80,7 @@ def test_categorical_empty():
     np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_numpy())
 
     # Test attributes
-    assert sr.cat.categories.dtype == pd.StringDtype(na_value=np.nan)
+    assert sr.cat.categories.dtype == np.dtype(object)
     assert pdsr.cat.categories.dtype == np.dtype(object)
     assert_eq(
         pdsr.cat.categories.astype(sr.cat.categories.dtype), sr.cat.categories
