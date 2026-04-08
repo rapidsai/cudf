@@ -20,11 +20,11 @@ git clone https://github.com/rapidsai/cuml.git --branch "${RAPIDS_BRANCH}" --dep
 CUML_TESTS_DIR=/tmp/cuml/python/cuml/tests
 
 rapids-logger "pytest cuml cuDF-compat subset"
-# --rootdir is needed because of https://github.com/pyca/cryptography/issues/14567
+# --confcutdir is needed because of https://github.com/pyca/cryptography/issues/14567
 # Can be removed once there is cryptography>46.0.7
 timeout 15m python -m pytest \
   --cache-clear \
-  --rootdir=/tmp/cuml/python/cuml \
+  --confcutdir="${CUML_TESTS_DIR}" \
   "${CUML_TESTS_DIR}/test_array.py" \
   "${CUML_TESTS_DIR}/test_compose.py" \
   "${CUML_TESTS_DIR}/test_input_utils.py" \
