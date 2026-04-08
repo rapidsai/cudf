@@ -341,7 +341,8 @@ class key_remap_table : public key_remap_table_interface {
     rmm::device_uvector<cudf::size_type> counts(build_num_rows, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
 
-    cudf::detail::device_scalar<cudf::size_type> d_distinct_count{0, stream};
+    cudf::detail::device_scalar<cudf::size_type> d_distinct_count{
+      0, stream, cudf::get_current_device_resource_ref()};
 
     auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
