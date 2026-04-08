@@ -300,7 +300,9 @@ def test_timedelta_astype_unicode_dtype_pandas_compat():
     sr = cudf.Series([1000000000], dtype="timedelta64[ns]")
     with cudf.option_context("mode.pandas_compatible", True):
         result = sr.astype(np.dtype("U"))
-    expected = pd.Series(pd.to_timedelta([1000000000], unit="ns")).astype(str)
+    expected = pd.Series(pd.to_timedelta([1000000000], unit="ns")).astype(
+        np.dtype("U")
+    )
     assert result.dtype == np.dtype("object")
     assert_eq(result, cudf.Series(expected))
 
