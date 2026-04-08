@@ -84,6 +84,10 @@ files:
       - depends_on_pylibcudf
       - depends_on_libcudf
       - depends_on_numba_cuda
+  test_cuml:
+    output: none
+    includes:
+      - depends_on_cuml
   test_python_pylibcudf:
     output: none
     includes:
@@ -1316,6 +1320,11 @@ dependencies:
       - output_types: conda
         packages:
           - dask-cudf==26.6.*,>=0.0.0a0
+  depends_on_cuml:
+    common:
+      - output_types: conda
+        packages:
+          - cuml==26.6.*,>=0.0.0a0
   depends_on_custreamz:
     common:
       - output_types: conda

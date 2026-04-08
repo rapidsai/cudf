@@ -5,10 +5,7 @@
 set -euo pipefail
 
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../
-source ./ci/test_python_common.sh test_python_cudf
-
-# Install cuml nightly (gets cuml + its dependencies from RAPIDS nightly channel)
-rapids-mamba-retry install -n test -c rapidsai-nightly cuml
+source ./ci/test_python_common.sh test_python_cudf test_cuml
 
 # Clone cuml at the matching RAPIDS branch to get test files
 # (the conda package doesn't ship cuml/tests/)
