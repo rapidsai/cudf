@@ -324,10 +324,8 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
-    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Requested number of partitions does not fit in shared memory.",
-    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Requested number of partitions does not fit in shared memory.",
-    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "RuntimeError: Cannot broadcast columns of length nrows=30 to target_length=4",
-    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "RuntimeError: Cannot broadcast columns of length nrows=30 to target_length=4",
+    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072",
+    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "RuntimeError: Cannot broadcast columns of length nrows=5 to target_length=4",
     "tests/unit/lazyframe/test_cse.py::test_cse_expr_selection_context": "https://github.com/rapidsai/cudf/issues/21645",
