@@ -2501,7 +2501,7 @@ def test_string_cat_str_error():
     with pytest.raises(
         TypeError,
         match=re.escape(
-            "others must be Series, Index, DataFrame, np.ndarrary "
+            "others must be Series, Index, DataFrame, np.ndarray "
             "or list-like (either containing only strings or "
             "containing only objects of type Series/Index/"
             "np.ndarray[1-dim])"
