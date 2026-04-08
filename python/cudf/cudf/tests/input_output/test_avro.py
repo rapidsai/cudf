@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -431,9 +431,14 @@ def test_alltypes_plain_avro():
     # by the 'timestamp_col' column, which is converted into Python
     # datetime.datetime() objects (see output of pprint(records[0]) above).
     # As we don't support that logical type yet in cudf, we need to convert to
-    # int64, then divide by 1000 to convert from nanoseconds to microseconds.
-    timestamps = expected["timestamp_col"].astype("int64")
-    timestamps //= 1000
+    # int64 microseconds. In pandas 3, datetime64 uses microsecond resolution,
+    # so astype("int64") already returns microseconds directly.
+    timestamps = (
+        expected["timestamp_col"]
+        .dt.tz_convert(None)
+        .astype("datetime64[us]")
+        .astype("int64")
+    )
     expected["timestamp_col"] = timestamps
 
     # Furthermore, we need to force the 'int_col' into an int32, per the schema
