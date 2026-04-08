@@ -311,7 +311,7 @@
 * Remove inefficiencies in gather by @galipremsagar in https://github.com/rapidsai/cudf/pull/21429
 * pds-h validation improvements by @TomAugspurger in https://github.com/rapidsai/cudf/pull/21388
 * check-nightly-ci: remove testing config by @jameslamb in https://github.com/rapidsai/cudf/pull/21494
-* Update RapidsMPF’s `Context()` since it no longer takes a statistics argument. by @madsbk in https://github.com/rapidsai/cudf/pull/21503
+* Update RapidsMPF's `Context()` since it no longer takes a statistics argument. by @madsbk in https://github.com/rapidsai/cudf/pull/21503
 * Drop uses of thrust/functional by @miscco in https://github.com/rapidsai/cudf/pull/21477
 * Refactor some common utilities out of find_and_replace by @vyasr in https://github.com/rapidsai/cudf/pull/21500
 * Sort specialization logic for dictionary column by @davidwendt in https://github.com/rapidsai/cudf/pull/21420
