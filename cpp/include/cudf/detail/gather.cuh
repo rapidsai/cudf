@@ -791,8 +791,6 @@ std::unique_ptr<table> gather(table_view const& source_table,
   //      mr);
   //  });
 
-  auto needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
-                           cudf::has_nested_nullable_columns(source_table);
   auto const needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
                                  cudf::has_nested_nullable_columns(source_table);
   if (needs_new_bitmask) {
