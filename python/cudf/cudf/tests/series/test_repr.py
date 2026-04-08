@@ -257,9 +257,9 @@ def test_timedelta_series_ns_ms_repr(ser):
 
 
 def test_categorical_series_with_nan_repr():
-    series = cudf.Series(
-        [1, 2, np.nan, 10, np.nan, None], nan_as_null=False
-    ).astype("category")
+    series = cudf.Series([1, 2.0, np.nan, 10, np.nan, np.nan]).astype(
+        "category"
+    )
 
     expected_repr = textwrap.dedent(
         """
