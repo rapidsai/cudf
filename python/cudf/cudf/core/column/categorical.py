@@ -303,18 +303,25 @@ class CategoricalColumn(ColumnBase):
         if arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
-        if self.categories.dtype.kind == "f":
-            new_mask, null_count = self.notnull().fillna(False).as_mask()
-            col = self.set_mask(new_mask, null_count)
-        else:
-            col = self
-
-        signed_dtype = min_signed_type(len(col.categories))
+        signed_dtype = min_signed_type(len(self.categories))
         codes = (
-            col.codes.astype(signed_dtype)
+            self.codes.astype(signed_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .to_numpy()
         )
+
+        if self.categories.dtype.kind == "f":
+            # For float categories, NaN can appear both as a null (null code)
+            # and as a valid category value (code pointing to a NaN category).
+            # Both must map to -1 so pd.Categorical.from_codes treats them as
+            # missing. notnull() correctly identifies both cases and produces
+            # a dense offset=0 column, so we combine at numpy level to avoid
+            # the mask-offset misalignment bug that arises from set_mask() on
+            # a sliced (offset>0) column.
+            notnull = self.notnull().fillna(False).to_numpy()
+            codes[~notnull] = _DEFAULT_CATEGORICAL_VALUE
+
+        col = self
 
         cats = col.categories.nans_to_nulls()
         if not isinstance(cats.dtype, IntervalDtype):
