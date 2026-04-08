@@ -1049,6 +1049,30 @@ def _run_query_loop(
     return records, plans, validation_failures, query_failures
 
 
+def _finalize_benchmark_run(
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    validation_failures: list[int],
+    query_failures: list[tuple[int, int]],
+) -> None:
+    """Summarize, serialize, and exit after a benchmark run."""
+    if args.summarize:
+        run_config.summarize()
+    if args.validate and run_config.executor != "cpu":
+        print("\nValidation Summary")
+        print("==================")
+        if validation_failures:
+            print(
+                f"{len(validation_failures)} queries failed validation: "
+                f"{sorted(set(validation_failures))}"
+            )
+        else:
+            print("✅ All validated queries passed.")
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write("\n")
+    sys.exit(1 if (query_failures or validation_failures) else 0)
+
+
 def run_polars_spmd(
     benchmark: Any,
     args: argparse.Namespace,
@@ -1096,7 +1120,6 @@ def run_polars_spmd(
                     op_id=op_id,
                 )
 
-        rank = engine.rank
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
             benchmark,
@@ -1109,25 +1132,10 @@ def run_polars_spmd(
             validation_files,
             prepare_validation_result=_allgather_result,
         )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
-    # Only rank 0 writes output and prints summaries to avoid N duplicate outputs.
-    if rank == 0:
-        if args.summarize:
-            run_config.summarize()
-        if args.validate and run_config.executor != "cpu":
-            print("\nValidation Summary")
-            print("==================")
-            if validation_failures:
-                print(
-                    f"{len(validation_failures)} queries failed validation: "
-                    f"{sorted(set(validation_failures))}"
-                )
-            else:
-                print("✅ All validated queries passed.")
-        # engine is not JSON-serializable (holds the SPMD Cython context)
-        args.output.write(json.dumps(run_config.serialize(engine=None)))
-        args.output.write("\n")
-    sys.exit(1 if (query_failures or validation_failures) else 0)
+        if engine.rank > 0:
+            sys.exit(1 if (query_failures or validation_failures) else 0)
+        run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
 def run_polars_ray(
@@ -1171,22 +1179,7 @@ def run_polars_ray(
             validation_files,
         )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
-    if args.summarize:
-        run_config.summarize()
-    if args.validate and run_config.executor != "cpu":
-        print("\nValidation Summary")
-        print("==================")
-        if validation_failures:
-            print(
-                f"{len(validation_failures)} queries failed validation: "
-                f"{sorted(set(validation_failures))}"
-            )
-        else:
-            print("✅ All validated queries passed.")
-    # engine holds ray_client (not JSON-serializable); serialize without it
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
-    args.output.write("\n")
-    sys.exit(1 if (query_failures or validation_failures) else 0)
+    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
 def run_polars_dask(
@@ -1230,22 +1223,7 @@ def run_polars_dask(
             validation_files,
         )
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
-    if args.summarize:
-        run_config.summarize()
-    if args.validate and run_config.executor != "cpu":
-        print("\nValidation Summary")
-        print("==================")
-        if validation_failures:
-            print(
-                f"{len(validation_failures)} queries failed validation: "
-                f"{sorted(set(validation_failures))}"
-            )
-        else:
-            print("✅ All validated queries passed.")
-    # engine holds dask_client (not JSON-serializable); serialize without it
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
-    args.output.write("\n")
-    sys.exit(1 if (query_failures or validation_failures) else 0)
+    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
 def setup_logging(query_id: int, iteration: int) -> None:
@@ -1788,7 +1766,7 @@ def parse_args(
         parser = build_parser(num_queries)
     parsed_args = parser.parse_args(args)
 
-    if getattr(parsed_args, "spill_device", None) is not None:
+    if parsed_args.spill_device is not None:
         parser.error(
             "--spill-device is not supported with --frontend; "
             "use --spill-device-limit instead."
