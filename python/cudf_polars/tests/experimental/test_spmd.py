@@ -139,11 +139,11 @@ def test_allgather_polars_dataframe(spmd_comm: Communicator) -> None:
         assert result["val"].to_list() == [r * 2 for r in range(engine.nranks)]
 
 
-def test_max_workers(spmd_comm: Communicator) -> None:
-    """executor_options forwards rapidsmpf_py_executor_max_workers to the thread pool."""
+def test_num_py_executors(spmd_comm: Communicator) -> None:
+    """executor_options forwards num_py_executors to the thread pool."""
     with SPMDEngine(
         comm=spmd_comm,
-        executor_options={"rapidsmpf_py_executor_max_workers": 2},
+        executor_options={"num_py_executors": 2},
     ) as engine:
         result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
     assert result.shape == (3, 1)
