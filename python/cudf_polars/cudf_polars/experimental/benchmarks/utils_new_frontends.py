@@ -1806,7 +1806,11 @@ def parse_args(
             f"--validate-directory: {parsed_args.validate_directory} does not exist."
         )
 
-    if parsed_args.suffix and not parsed_args.suffix.startswith("."):
+    if (
+        parsed_args.suffix
+        and not parsed_args.suffix.startswith(".")
+        and not parsed_args.suffix.startswith("/")
+    ):
         parsed_args.suffix = f".{parsed_args.suffix}"
 
     return parsed_args
