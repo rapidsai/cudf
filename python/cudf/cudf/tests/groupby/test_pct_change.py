@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -73,7 +73,13 @@ def test_groupby_pct_change_multiindex_dataframe(periods):
 
 
 def test_groupby_pct_change_empty_columns():
-    gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
+    gdf = cudf.DataFrame(
+        {
+            "id": cudf.Series([], dtype="object"),
+            "val1": cudf.Series([], dtype="float64"),
+            "val2": cudf.Series([], dtype="float64"),
+        }
+    )
     pdf = gdf.to_pandas()
 
     actual = gdf.groupby("id").pct_change()
