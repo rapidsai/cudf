@@ -1,9 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-
-from pandas.core.accessor import CachedAccessor
 
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import Index
@@ -132,12 +130,42 @@ doc_register_series_accessor = docfmt_partial(
 )
 
 
+class _CachedAccessor:
+    """Descriptor that instantiates an accessor once per object and caches it.
+
+    Pandas 3 removed caching from its CachedAccessor (renamed to Accessor),
+    so cudf maintains its own implementation to preserve the invariant that
+    ``obj.accessor is obj.accessor``.
+    """
+
+    def __init__(self, name, accessor):
+        self._name = name
+        self._accessor = accessor
+
+    def __get__(self, obj, cls):
+        if obj is None:
+            return self._accessor
+        # Cache on the object itself so repeated accesses return the same
+        # instance.  Use a mangled key to avoid colliding with user attrs.
+        cache_key = f"_cudf_accessor_{self._name}"
+        try:
+            return obj.__dict__[cache_key]
+        except KeyError:
+            pass
+        accessor_obj = self._accessor(obj)
+        try:
+            object.__setattr__(obj, cache_key, accessor_obj)
+        except (AttributeError, TypeError):
+            pass
+        return accessor_obj
+
+
 def _register_accessor(name, cls):
     def decorator(accessor):
         if hasattr(cls, name):
             msg = f"Attribute {name} will be overridden in {cls.__name__}"
             warnings.warn(msg)
-        cached_accessor = CachedAccessor(name, accessor)
+        cached_accessor = _CachedAccessor(name, accessor)
         cls._accessors.add(name)
         setattr(cls, name, cached_accessor)
 
