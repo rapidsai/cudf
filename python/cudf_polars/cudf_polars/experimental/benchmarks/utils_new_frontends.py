@@ -29,7 +29,6 @@ import nvtx
 import polars as pl
 
 import rmm.mr
-import rmm.statistics
 
 __all__: list[str] = [
     "COUNT_DTYPE",
@@ -395,8 +394,6 @@ class RunConfig:
     collect_traces: bool = False
     native_parquet: bool = True
     max_io_threads: int = 2
-    rmm_release_threshold: float | None = None
-
     # All streaming/rapidsmpf/engine knobs
     streaming_options: StreamingOptions = dataclasses.field(
         default_factory=lambda: __import__(
@@ -516,7 +513,6 @@ class RunConfig:
             collect_traces=args.collect_traces,
             native_parquet=args.native_parquet,
             max_io_threads=args.max_io_threads,
-            rmm_release_threshold=getattr(args, "rmm_release_threshold", None),
             streaming_options=streaming_options,
             validation_method=validation_method,
             extra_info=args.extra_info,
@@ -539,7 +535,6 @@ class RunConfig:
             "collect_traces": self.collect_traces,
             "native_parquet": self.native_parquet,
             "max_io_threads": self.max_io_threads,
-            "rmm_release_threshold": self.rmm_release_threshold,
             "n_workers": self.n_workers,
             "extra_info": self.extra_info,
             "run_id": str(self.run_id),
@@ -717,7 +712,7 @@ def execute_query(
 
         elif CUDF_POLARS_AVAILABLE:
             assert isinstance(engine, pl.GPUEngine)
-            if getattr(args, "debug", False):
+            if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
                 context = IRExecutionContext.from_config_options(
@@ -1090,11 +1085,7 @@ def run_polars_spmd(
     # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
-    rmm.mr.set_current_device_resource(
-        rmm.mr.CudaAsyncMemoryResource(
-            release_threshold=run_config.rmm_release_threshold
-        )
-    )
+    rmm.mr.set_current_device_resource(rmm.mr.CudaAsyncMemoryResource())
     engine_options = {
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
@@ -1633,6 +1624,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         help="Collect data tracing cudf-polars execution.",
     )
     parser.add_argument(
+        "--debug",
+        default=False,
+        action="store_true",
+        help="Debug run.",
+    )
+    parser.add_argument(
         "--max-io-threads",
         default=2,
         type=int,
@@ -1643,12 +1640,6 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Use C++ read_parquet nodes.",
-    )
-    parser.add_argument(
-        "--rmm-release-threshold",
-        default=None,
-        type=float,
-        help="Release threshold for CudaAsyncMemoryResource (fraction of GPU memory).",
     )
     parser.add_argument(
         "-o",
