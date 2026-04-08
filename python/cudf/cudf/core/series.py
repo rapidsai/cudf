@@ -123,10 +123,7 @@ def _describe_timetype(
         **dict(
             zip(
                 _format_percentile_names(percentiles),
-                obj.quantile(percentiles)
-                .astype(DEFAULT_STRING_DTYPE)
-                .to_numpy(na_value=np.nan)
-                .tolist(),
+                [str(typ(x)) for x in obj.quantile(percentiles).to_pandas()],
                 strict=True,
             )
         ),
@@ -3316,12 +3313,7 @@ class Series(SingleColumnFrame, IndexedFrame):
                     "All percentiles must be between 0 and 1, inclusive."
                 )
 
-            # describe always includes 50th percentile
-            percentiles = list(percentiles)
-            if 0.5 not in percentiles:
-                percentiles.append(0.5)
-
-            percentiles = np.sort(percentiles)
+            percentiles = np.sort(list(percentiles))
         else:
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
