@@ -201,32 +201,13 @@ struct merge_single_pass_aggs_fn {
   }
 };
 
-constexpr bool is_supported_streaming_agg(aggregation::Kind k)
-{
-  switch (k) {
-    case aggregation::SUM:
-    case aggregation::SUM_OF_SQUARES:
-    case aggregation::PRODUCT:
-    case aggregation::MIN:
-    case aggregation::MAX:
-    case aggregation::COUNT_VALID:
-    case aggregation::COUNT_ALL:
-    case aggregation::MEAN:
-    case aggregation::M2:
-    case aggregation::STD:
-    case aggregation::VARIANCE: return true;
-    default: return false;
-  }
-}
-
 void validate_requests(host_span<streaming_aggregation_request const> requests)
 {
   for (auto const& req : requests) {
     for (auto const& agg : req.aggregations) {
-      CUDF_EXPECTS(is_supported_streaming_agg(agg->kind),
+      CUDF_EXPECTS(detail::is_hash_aggregation(agg->kind),
                    "Unsupported aggregation kind for streaming groupby. "
-                   "Only hash-based aggregations (SUM, PRODUCT, MIN, MAX, COUNT, MEAN, "
-                   "SUM_OF_SQUARES, M2, VARIANCE, STD) are supported.",
+                   "Only hash-based aggregations are supported.",
                    std::invalid_argument);
     }
   }
