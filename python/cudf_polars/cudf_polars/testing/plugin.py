@@ -351,15 +351,6 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_qualify.py::test_qualify_multiple_clauses": "https://github.com/rapidsai/cudf/issues/22050",
     "tests/unit/sql/test_qualify.py::test_qualify_with_internal_cumulative_sum": "https://github.com/rapidsai/cudf/issues/22050",
     "tests/unit/sql/test_qualify.py::test_qualify_with_where_clause": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_extra_struct_fields": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_column_deletion": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_nested_column_cast_deletion_rename": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_nulls_nested": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values_nested": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_min_max_statistics_filter": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_categorical_24140": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "pyiceberg install issue? UserWarning: Falling back to pure Python Avro decoder, missing Cython implementation",
 }
 
 
