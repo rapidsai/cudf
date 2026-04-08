@@ -129,3 +129,16 @@ By default, only the `\n` character is recognized as a line break. The [cudf::st
 | Backreference | `\1` through `\99` | Insert the text matched by capturing groups 1 through 99 | Replacing `(a)(b)(c)` with `\3\3\1` in `abc` yields `cca` |
 | Backreference | `${1}` through `${99}` | Insert the text matched by capturing groups 1 through 99 | Replacing `(a)(b)(c)` with `${2}.${2}:{$3}` in `abc` yields `b.b:c` |
 | Whole match | `${0}` | Insert the whole regex match | Replacing `(\d)(a)` with `[${0}]:-${2}_${1};` in `123abc` yields `12[3a]:-a_3;bc`
+
+### Ignore case
+
+The [cudf::strings::regex_flags::IGNORECASE](@ref cudf::strings::regex_flags) can be used to match literal characters and characters within a character class
+to a limited extent. Only those characters supported by the C++ STL [`std::tolower`](https://en.cppreference.com/w/cpp/locale/tolower.html)
+and [`std::toupper`](https://en.cppreference.com/w/cpp/locale/toupper.html)
+when used with [`std::locale`](https://en.cppreference.com/w/cpp/locale/locale.html) with locale name`C.UTF-8` are supported.
+For example, this feature does not include matching characters which have multiple character counterparts.
+
+Character classes (defined by `[]`) have the further restriction that any range of characters are expected to map appropriately between
+lower case and upper case ranges. For example the range `[a-z]` would also try to match characters in `[A-Z]` when the `IGNORECASE` is specified.
+
+The inline `(?i...)` ignore case format pattern is not supported.
