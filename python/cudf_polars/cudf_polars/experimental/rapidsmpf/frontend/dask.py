@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -174,7 +175,7 @@ def _setup_worker(
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int | None,
-            executor_options.get("rapidsmpf_py_executor_max_workers"),
+            executor_options.get("num_py_executors"),
         ),
         thread_name_prefix="dask-executor",
     )
@@ -559,3 +560,46 @@ class DaskEngine(StreamingEngine):
             super().shutdown()
         if exceptions:
             raise ExceptionGroup("Worker teardown failed", exceptions)
+
+    @classmethod
+    def from_options(
+        cls,
+        options: StreamingOptions,
+        *,
+        dask_client: distributed.Client | None = None,
+    ) -> DaskEngine:
+        """
+        Create a :class:`DaskEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct a ``DaskEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+        dask_client
+            An existing :class:`distributed.Client` to use. If ``None``, a
+            :class:`dask_cuda.LocalCUDACluster` is created automatically.
+
+        Returns
+        -------
+        A new :class:`DaskEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=4, fallback_mode="silent")
+        >>> with DaskEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+        """
+        return cls(
+            dask_client=dask_client,
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+        )
