@@ -434,12 +434,12 @@ struct streaming_aggregation_request {
  * can be combined via `merge()`, and final results are produced via `finalize()`.
  *
  * The `max_groups` parameter controls GPU memory usage by setting the upper bound on
- * distinct key combinations. All internal structures (hash table, key table, and
- * aggregation result columns) are pre-allocated to this capacity with no dynamic growth.
- * The key table also serves as a staging area for incoming batch keys; duplicate rows
- * from past batches occupy slots alongside unique keys, so the cumulative row count
- * across all batches must not exceed `max_groups`. Only fixed-width key columns and
- * hash-based aggregation kinds are supported.
+ * distinct key combinations. The hash table and aggregation result columns are
+ * pre-allocated to this capacity. Unique keys are accumulated incrementally — only
+ * newly discovered keys are stored, and key storage grows proportionally to actual
+ * unique keys rather than `max_groups`. All column types (including variable-width
+ * types such as strings, lists, and structs) are supported for key columns.
+ * Only hash-based aggregation kinds are supported.
  *
  * Supported aggregation kinds:
  *   SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, MEAN,
@@ -447,7 +447,6 @@ struct streaming_aggregation_request {
  *
  * @throws std::invalid_argument for unsupported aggregation kinds
  * @throws std::invalid_argument if a single batch exceeds `max_groups` rows
- * @throws std::overflow_error if accumulated rows + batch size exceed `max_groups`
  * @throws cudf::logic_error if cumulative unique keys exceed `max_groups`
  */
 class streaming_groupby {
