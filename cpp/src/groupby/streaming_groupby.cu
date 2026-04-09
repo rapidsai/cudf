@@ -259,8 +259,9 @@ std::pair<rmm::device_buffer, bitmask_type const*> compute_row_bitmask(table_vie
 
 template <bool has_nested_columns>
 auto build_cross_comparators(
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& pp_batch,
-  std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>> const& pp_batches,
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_batch,
+  std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>> const&
+    preprocessed_batches,
   cudf::nullate::DYNAMIC has_null,
   rmm::cuda_stream_view stream)
 {
@@ -269,14 +270,14 @@ auto build_cross_comparators(
     cudf::nullate::DYNAMIC,
     cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
 
-  auto const n       = static_cast<size_type>(pp_batches.size());
+  auto const n       = static_cast<size_type>(preprocessed_batches.size());
   auto const temp_mr = cudf::get_current_device_resource_ref();
 
   std::vector<eq_t> h_eqs;
   h_eqs.reserve(n);
   for (size_type k = 0; k < n; ++k) {
-    auto const cross_cmp =
-      cudf::detail::row::equality::two_table_comparator{pp_batch, pp_batches[k]};
+    auto const cross_cmp = cudf::detail::row::equality::two_table_comparator{
+      preprocessed_batch, preprocessed_batches[k]};
     auto const adapter = cross_cmp.equal_to<has_nested_columns>(has_null, null_equality::EQUAL);
     h_eqs.push_back(adapter.comparator);
   }
@@ -304,7 +305,8 @@ struct streaming_groupby::impl {
 
   // -- Compacted batch storage --
   std::vector<std::unique_ptr<table>> _compacted_batches;
-  std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>> _pp_batches;
+  std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>>
+    _preprocessed_batches;
 
   /// Companion vectors indexed by ENCODED INDEX (sparse, up to 2*max_groups).
   std::unique_ptr<rmm::device_uvector<size_type>> _key_batch;
@@ -503,8 +505,9 @@ struct streaming_groupby::impl {
                  std::overflow_error);
 
     // Preprocess batch for row operators.
-    auto pp_batch = cudf::detail::row::hash::preprocessed_table::create(batch_keys, stream);
-    auto const batch_hasher_obj = cudf::detail::row::hash::row_hasher{pp_batch};
+    auto preprocessed_batch =
+      cudf::detail::row::hash::preprocessed_table::create(batch_keys, stream);
+    auto const batch_hasher_obj = cudf::detail::row::hash::row_hasher{preprocessed_batch};
     auto const d_batch_hash     = batch_hasher_obj.device_hasher(has_null);
 
     // Precompute batch hash values — O(batch_size).
@@ -523,16 +526,16 @@ struct streaming_groupby::impl {
                                                  rmm::device_buffer{0, stream}, nullptr};
 
     // Build comparator.  O(num_compacted_batches) host work + H2D copy per batch.
-    // When num_stored == 0 and _pp_batches is empty, the comparator only enters
+    // When num_stored == 0 and _preprocessed_batches is empty, the comparator only enters
     // the batch-self branch.
-    auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{pp_batch};
+    auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{preprocessed_batch};
 
     auto const do_insert = [&]<bool has_nested>(std::bool_constant<has_nested>) {
       auto const batch_self_eq =
         batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
 
-      auto d_cross_eqs =
-        build_cross_comparators<has_nested>(pp_batch, _pp_batches, has_null, stream);
+      auto d_cross_eqs = build_cross_comparators<has_nested>(
+        preprocessed_batch, _preprocessed_batches, has_null, stream);
 
       auto const eq = n_table_comparator{
         batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), num_stored};
@@ -593,7 +596,7 @@ struct streaming_groupby::impl {
         // Store the compacted batch.
         auto const new_batch_id = static_cast<size_type>(_compacted_batches.size());
         _compacted_batches.push_back(std::move(compacted));
-        _pp_batches.push_back(pp_compacted);
+        _preprocessed_batches.push_back(pp_compacted);
 
         // Scatter companion vectors and record encoded indices in a single pass.
         thrust::for_each_n(rmm::exec_policy_nosync(stream),
