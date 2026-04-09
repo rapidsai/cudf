@@ -437,17 +437,17 @@ struct streaming_aggregation_request {
  * distinct key combinations. The hash table and aggregation result columns are
  * pre-allocated to this capacity. Unique keys are accumulated incrementally — only
  * newly discovered keys are stored, and key storage grows proportionally to actual
- * unique keys rather than `max_groups`. All column types (including variable-width
+ * distinct keys rather than `max_groups`. All column types (including variable-width
  * types such as strings, lists, and structs) are supported for key columns.
  * Only hash-based aggregation kinds are supported.
  *
  * Supported aggregation kinds:
- *   SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, MEAN,
- *   SUM_OF_SQUARES, M2, VARIANCE, STD
+ *   SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX,
+ *   COUNT_VALID, COUNT_ALL, ARGMIN, ARGMAX, MEAN, M2, VARIANCE, STD
  *
  * @throws std::invalid_argument for unsupported aggregation kinds
  * @throws std::invalid_argument if a single batch exceeds `max_groups` rows
- * @throws cudf::logic_error if cumulative unique keys exceed `max_groups`
+ * @throws cudf::logic_error if cumulative distinct keys exceed `max_groups`
  */
 class streaming_groupby {
  public:
@@ -490,7 +490,7 @@ class streaming_groupby {
    *
    * @throws std::invalid_argument if `data.num_rows() > max_groups`
    * @throws std::overflow_error if accumulated rows + batch size exceed `max_groups`
-   * @throws cudf::logic_error if unique keys exceed `max_groups`
+   * @throws cudf::logic_error if distinct keys exceed `max_groups`
    */
   void aggregate(table_view const& data,
                  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -508,9 +508,9 @@ class streaming_groupby {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used for allocations
    *
-   * @throws std::invalid_argument if the other object has more unique keys than `max_groups`
+   * @throws std::invalid_argument if the other object has more distinct keys than `max_groups`
    * @throws std::overflow_error if accumulated rows + merge groups exceed `max_groups`
-   * @throws cudf::logic_error if unique keys exceed `max_groups` after merge
+   * @throws cudf::logic_error if distinct keys exceed `max_groups` after merge
    */
   void merge(streaming_groupby const& other,
              rmm::cuda_stream_view stream      = cudf::get_default_stream(),
@@ -527,11 +527,31 @@ class streaming_groupby {
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns
-   * @return Pair of unique keys table and a vector of aggregation_results (one per request)
+   * @return Pair of distinct keys table and a vector of aggregation_results (one per request)
    */
   [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> finalize(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Release the accumulated partial aggregates as intermediate results.
+   *
+   * Returns the unique keys and the raw intermediate aggregation state (e.g., SUM and
+   * COUNT for MEAN, M2 components for VARIANCE/STD) without applying compound
+   * finalization.  This is intended for distributed workflows where partial results
+   * from multiple workers are collected and merged via `merge()`.
+   *
+   * After this call the object is left in a moved-from state and must not be used
+   * except for destruction or move-assignment.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned table and columns
+   * @return Pair of distinct keys table and a vector of aggregation_results containing
+   *         the raw intermediate columns (one per expanded single-pass aggregation)
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> release(
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   struct impl;
