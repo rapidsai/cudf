@@ -2491,8 +2491,8 @@ def test_parquet_writer_list_large_mixed(tmp_path):
     gdf.to_parquet(fname)
     assert os.path.exists(fname)
 
-    got = pd.read_parquet(fname)
-    assert_eq(expect, got)
+    got = cudf.read_parquet(fname)
+    assert_eq(gdf, got)
 
 
 @pytest.mark.parametrize("store_schema", [True, False])
