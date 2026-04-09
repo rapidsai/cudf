@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include "io/protobuf/kernels.cuh"
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <string>
@@ -257,9 +257,9 @@ protobuf_field_meta_view make_field_meta_view(decode_protobuf_options const& con
 }
 
 std::unique_ptr<cudf::column> decode_protobuf(cudf::column_view const& binary_input,
-                                                        decode_protobuf_options const& context,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
+                                              decode_protobuf_options const& context,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
 {
   validate_decode_options(context);
   auto const& schema = context.schema;
@@ -335,9 +335,9 @@ std::unique_ptr<cudf::column> decode_protobuf(cudf::column_view const& binary_in
 }  // namespace detail
 
 std::unique_ptr<cudf::column> decode_protobuf(cudf::column_view const& binary_input,
-                                                        decode_protobuf_options const& context,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::device_async_resource_ref mr)
+                                              decode_protobuf_options const& context,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::decode_protobuf(binary_input, context, stream, mr);

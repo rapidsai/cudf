@@ -71,26 +71,26 @@ std::vector<CppT> jni_object_array_to_vectors(JNIEnv* env,
 
 extern "C" {
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_decodeProtobuf(
-  JNIEnv* env,
-  jclass,
-  jlong j_view_handle,
-  jintArray field_numbers,
-  jintArray parent_indices,
-  jintArray depth_levels,
-  jintArray wire_types,
-  jintArray output_type_ids,
-  jintArray encodings,
-  jbooleanArray is_repeated,
-  jbooleanArray is_required,
-  jbooleanArray has_default_value,
-  jlongArray default_ints,
-  jdoubleArray default_floats,
-  jbooleanArray default_bools,
-  jobjectArray default_strings,
-  jobjectArray enum_valid_values,
-  jobjectArray enum_names,
-  jboolean fail_on_errors)
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_ColumnView_decodeProtobuf(JNIEnv* env,
+                                              jclass,
+                                              jlong j_view_handle,
+                                              jintArray field_numbers,
+                                              jintArray parent_indices,
+                                              jintArray depth_levels,
+                                              jintArray wire_types,
+                                              jintArray output_type_ids,
+                                              jintArray encodings,
+                                              jbooleanArray is_repeated,
+                                              jbooleanArray is_required,
+                                              jbooleanArray has_default_value,
+                                              jlongArray default_ints,
+                                              jdoubleArray default_floats,
+                                              jbooleanArray default_bools,
+                                              jobjectArray default_strings,
+                                              jobjectArray enum_valid_values,
+                                              jobjectArray enum_names,
+                                              jboolean fail_on_errors)
 {
   JNI_NULL_CHECK(env, j_view_handle, "column view cannot be null", 0);
   JNI_NULL_CHECK(env, field_numbers, "field_numbers cannot be null", 0);
@@ -118,16 +118,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_decodeProtobuf(
     std::vector<cudf::io::protobuf::nested_field_descriptor> schema;
     schema.reserve(num_fields);
     for (int i = 0; i < num_fields; ++i) {
-      schema.push_back(
-        {n_field_numbers[i],
-         n_parent_indices[i],
-         n_depth_levels[i],
-         static_cast<cudf::io::protobuf::proto_wire_type>(n_wire_types[i]),
-         static_cast<cudf::type_id>(n_output_type_ids[i]),
-         static_cast<cudf::io::protobuf::proto_encoding>(n_encodings[i]),
-         n_is_repeated[i] != 0,
-         n_is_required[i] != 0,
-         n_has_default[i] != 0});
+      schema.push_back({n_field_numbers[i],
+                        n_parent_indices[i],
+                        n_depth_levels[i],
+                        static_cast<cudf::io::protobuf::proto_wire_type>(n_wire_types[i]),
+                        static_cast<cudf::type_id>(n_output_type_ids[i]),
+                        static_cast<cudf::io::protobuf::proto_encoding>(n_encodings[i]),
+                        n_is_repeated[i] != 0,
+                        n_is_required[i] != 0,
+                        n_has_default[i] != 0});
     }
 
     // Convert default values
@@ -141,9 +140,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_decodeProtobuf(
     }
 
     // Convert default strings (byte[][])
-    auto default_string_values =
-      jni_object_array_to_vectors<cudf::detail::host_vector<uint8_t>>(
-        env, default_strings, num_fields, jni_byte_array_to_host_vector);
+    auto default_string_values = jni_object_array_to_vectors<cudf::detail::host_vector<uint8_t>>(
+      env, default_strings, num_fields, jni_byte_array_to_host_vector);
     if (env->ExceptionCheck()) { return 0; }
 
     // Convert enum valid values (int[][])

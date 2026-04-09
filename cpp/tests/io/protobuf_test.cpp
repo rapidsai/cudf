@@ -72,9 +72,8 @@ std::vector<uint8_t> encode_string_field(int field_number, std::string const& s)
   return out;
 }
 
-std::unique_ptr<cudf::column> make_binary_column(
-  std::vector<std::vector<uint8_t>> const& messages,
-  std::vector<bool> const& validity = {})
+std::unique_ptr<cudf::column> make_binary_column(std::vector<std::vector<uint8_t>> const& messages,
+                                                 std::vector<bool> const& validity = {})
 {
   std::vector<int32_t> offsets;
   offsets.reserve(messages.size() + 1);
@@ -107,11 +106,10 @@ std::unique_ptr<cudf::column> make_binary_column(
     num_rows, std::move(offsets_col), std::move(data_col), 0, rmm::device_buffer{});
 }
 
-pb::decode_protobuf_options make_scalar_options(
-  std::vector<int> const& field_numbers,
-  std::vector<cudf::type_id> const& types,
-  std::vector<int> const& encodings,
-  bool fail_on_errors = true)
+pb::decode_protobuf_options make_scalar_options(std::vector<int> const& field_numbers,
+                                                std::vector<cudf::type_id> const& types,
+                                                std::vector<int> const& encodings,
+                                                bool fail_on_errors = true)
 {
   int const n = static_cast<int>(field_numbers.size());
 
@@ -136,11 +134,15 @@ pb::decode_protobuf_options make_scalar_options(
   std::vector<pb::nested_field_descriptor> schema;
   schema.reserve(n);
   for (int i = 0; i < n; ++i) {
-    schema.push_back({field_numbers[i], -1, 0,
+    schema.push_back({field_numbers[i],
+                      -1,
+                      0,
                       derive_wire_type(types[i], encodings[i]),
                       types[i],
                       static_cast<pb::proto_encoding>(encodings[i]),
-                      false, false, false});
+                      false,
+                      false,
+                      false});
   }
 
   std::vector<cudf::detail::host_vector<uint8_t>> default_strings;
@@ -150,8 +152,7 @@ pb::decode_protobuf_options make_scalar_options(
   for (int i = 0; i < n; ++i) {
     default_strings.push_back(
       cudf::detail::make_host_vector<uint8_t>(0, cudf::get_default_stream()));
-    enum_valid.push_back(
-      cudf::detail::make_host_vector<int32_t>(0, cudf::get_default_stream()));
+    enum_valid.push_back(cudf::detail::make_host_vector<int32_t>(0, cudf::get_default_stream()));
   }
 
   return pb::decode_protobuf_options{
@@ -211,9 +212,7 @@ TEST_F(ProtobufReaderTest, EmptySchema)
 TEST_F(ProtobufReaderTest, ZeroRows)
 {
   auto input   = make_binary_column({});
-  auto options = make_scalar_options({1, 2},
-                                    {cudf::type_id::INT64, cudf::type_id::STRING},
-                                    {0, 0});
+  auto options = make_scalar_options({1, 2}, {cudf::type_id::INT64, cudf::type_id::STRING}, {0, 0});
 
   auto result = pb::decode_protobuf(*input, options);
 
@@ -227,22 +226,48 @@ TEST_F(ProtobufReaderTest, ZeroRows)
 TEST_F(ProtobufReaderTest, ZeroRowsNestedSchema)
 {
   // [0: id(INT32), 1: inner(STRUCT), 2: name(STRING, parent=1)]
-  int const n = 3;
+  int const n                                     = 3;
   std::vector<pb::nested_field_descriptor> schema = {
-    {1, -1, 0, pb::proto_wire_type::VARINT, cudf::type_id::INT32,
-     pb::proto_encoding::DEFAULT, false, false, false},
-    {2, -1, 0, pb::proto_wire_type::LEN, cudf::type_id::STRUCT,
-     pb::proto_encoding::DEFAULT, false, false, false},
-    {1, 1, 1, pb::proto_wire_type::LEN, cudf::type_id::STRING,
-     pb::proto_encoding::DEFAULT, false, false, false},
+    {1,
+     -1,
+     0,
+     pb::proto_wire_type::VARINT,
+     cudf::type_id::INT32,
+     pb::proto_encoding::DEFAULT,
+     false,
+     false,
+     false},
+    {2,
+     -1,
+     0,
+     pb::proto_wire_type::LEN,
+     cudf::type_id::STRUCT,
+     pb::proto_encoding::DEFAULT,
+     false,
+     false,
+     false},
+    {1,
+     1,
+     1,
+     pb::proto_wire_type::LEN,
+     cudf::type_id::STRING,
+     pb::proto_encoding::DEFAULT,
+     false,
+     false,
+     false},
   };
 
   auto [hv, iv] = make_empty_host_vectors(n);
 
   pb::decode_protobuf_options options{
-    std::move(schema), std::vector<int64_t>(n, 0), std::vector<double>(n, 0.0),
-    std::vector<bool>(n, false), std::move(hv), std::move(iv),
-    std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>(n), true};
+    std::move(schema),
+    std::vector<int64_t>(n, 0),
+    std::vector<double>(n, 0.0),
+    std::vector<bool>(n, false),
+    std::move(hv),
+    std::move(iv),
+    std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>(n),
+    true};
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);
 
@@ -256,18 +281,30 @@ TEST_F(ProtobufReaderTest, ZeroRowsNestedSchema)
 
 TEST_F(ProtobufReaderTest, ZeroRowsRepeatedSchema)
 {
-  int const n = 1;
+  int const n                                     = 1;
   std::vector<pb::nested_field_descriptor> schema = {
-    {1, -1, 0, pb::proto_wire_type::VARINT, cudf::type_id::INT32,
-     pb::proto_encoding::DEFAULT, true, false, false},
+    {1,
+     -1,
+     0,
+     pb::proto_wire_type::VARINT,
+     cudf::type_id::INT32,
+     pb::proto_encoding::DEFAULT,
+     true,
+     false,
+     false},
   };
 
   auto [hv, iv] = make_empty_host_vectors(n);
 
   pb::decode_protobuf_options options{
-    std::move(schema), std::vector<int64_t>(n, 0), std::vector<double>(n, 0.0),
-    std::vector<bool>(n, false), std::move(hv), std::move(iv),
-    std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>(n), true};
+    std::move(schema),
+    std::vector<int64_t>(n, 0),
+    std::vector<double>(n, 0.0),
+    std::vector<bool>(n, false),
+    std::move(hv),
+    std::move(iv),
+    std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>(n),
+    true};
 
   auto result = pb::decode_protobuf(*make_binary_column({}), options);
 
@@ -278,12 +315,9 @@ TEST_F(ProtobufReaderTest, ZeroRowsRepeatedSchema)
 
 TEST_F(ProtobufReaderTest, StubReturnsAllNullWithCorrectTypes)
 {
-  auto input = make_binary_column(
-    {encode_varint_field(1, 42), encode_string_field(2, "hello")});
+  auto input = make_binary_column({encode_varint_field(1, 42), encode_string_field(2, "hello")});
 
-  auto options = make_scalar_options({1, 2},
-                                    {cudf::type_id::INT64, cudf::type_id::STRING},
-                                    {0, 0});
+  auto options = make_scalar_options({1, 2}, {cudf::type_id::INT64, cudf::type_id::STRING}, {0, 0});
 
   auto result = pb::decode_protobuf(*input, options);
 
@@ -313,11 +347,13 @@ TEST_F(ProtobufReaderTest, MultipleNumericTypesShape)
 {
   auto input = make_binary_column({encode_varint_field(1, 1)});
 
-  auto options = make_scalar_options(
-    {1, 2, 3, 4, 5},
-    {cudf::type_id::BOOL8, cudf::type_id::INT32, cudf::type_id::INT64,
-     cudf::type_id::FLOAT32, cudf::type_id::FLOAT64},
-    {0, 0, 0, 0, 0});
+  auto options = make_scalar_options({1, 2, 3, 4, 5},
+                                     {cudf::type_id::BOOL8,
+                                      cudf::type_id::INT32,
+                                      cudf::type_id::INT64,
+                                      cudf::type_id::FLOAT32,
+                                      cudf::type_id::FLOAT64},
+                                     {0, 0, 0, 0, 0});
 
   auto result = pb::decode_protobuf(*input, options);
 

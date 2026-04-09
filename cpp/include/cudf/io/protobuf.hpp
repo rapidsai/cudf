@@ -110,7 +110,7 @@ struct decode_protobuf_options {
   std::vector<cudf::detail::host_vector<int32_t>>
     enum_valid_values;  ///< Valid enum numbers per field
   std::vector<std::vector<cudf::detail::host_vector<uint8_t>>>
-    enum_names;       ///< UTF-8 enum names per field
+    enum_names;         ///< UTF-8 enum names per field
   bool fail_on_errors;  ///< If true, throw on malformed messages; otherwise return nulls
 };
 
@@ -149,7 +149,7 @@ struct protobuf_field_meta_view {
 std::unique_ptr<cudf::column> decode_protobuf(
   cudf::column_view const& binary_input,
   decode_protobuf_options const& options,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 }  // namespace io::protobuf
