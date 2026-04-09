@@ -311,15 +311,10 @@ class CategoricalColumn(ColumnBase):
         )
 
         if self.categories.dtype.kind == "f":
-            # For float categories, NaN can appear both as a null (null code)
-            # and as a valid category value (code pointing to a NaN category).
-            # Both must map to -1 so pd.Categorical.from_codes treats them as
-            # missing. notnull() correctly identifies both cases and produces
-            # a dense offset=0 column, so we combine at numpy level to avoid
-            # the mask-offset misalignment bug that arises from set_mask() on
-            # a sliced (offset>0) column.
-            notnull = self.notnull().fillna(False).to_numpy()
-            codes[~notnull] = _DEFAULT_CATEGORICAL_VALUE
+            # NaN categories need to be mapped to "missing" (-1) in pandas.
+            codes[~self.notnull().fillna(False).to_numpy()] = (
+                _DEFAULT_CATEGORICAL_VALUE
+            )
 
         col = self
 
