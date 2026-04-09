@@ -185,7 +185,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                     stream,
                                     mr);
   auto d_result    = result->mutable_view().begin<result_type>();
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     covariance.begin<result_type>(),
                     covariance.end<result_type>(),
                     stddev_iter,
