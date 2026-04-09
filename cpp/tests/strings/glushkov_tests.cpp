@@ -930,3 +930,28 @@ TEST_F(GlushkovRegexTests, NullableSecondAlt)
   check_replace_parity(sv, "(a|)a");
   check_split_parity(sv, "(a|)a");
 }
+
+// ---------------------------------------------------------------------------
+// Test: Top-level nullable patterns silently fall back to Thompson under
+// the GLUSHKOV flag and still produce correct results.
+//
+// glushkov_regcomp.cpp bails out with `if (gp->nullable) return nullptr;`
+// for any pattern whose overall language includes the empty string.  The
+// GLUSHKOV flag therefore transparently uses Thompson for these patterns.
+// This test verifies that the fallback pipeline is wired correctly and that
+// results under GLUSHKOV match results under DEFAULT for all such patterns.
+// ---------------------------------------------------------------------------
+TEST_F(GlushkovRegexTests, NullablePatternFallbackParity)
+{
+  cudf::test::strings_column_wrapper strings{"abc", "", "123", "xyz", "a1b2"};
+  auto sv = cudf::strings_column_view(strings);
+
+  // All of these patterns can match the empty string → top-level nullable →
+  // Glushkov compiler returns nullptr → engine falls back to Thompson.
+  std::vector<std::string> const patterns{"a*", "\\d*", "(ab)?", "x?y?z?", "[a-z]*"};
+  for (auto const& pattern : patterns) {
+    check_parity(sv, pattern);
+    check_count_parity(sv, pattern);
+    check_replace_parity(sv, pattern);
+  }
+}
