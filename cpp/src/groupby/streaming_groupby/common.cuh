@@ -164,6 +164,7 @@ struct streaming_groupby::impl {
   /// High-water mark of encoded indices consumed.  Encoded batch indices are
   /// [_num_stored, _num_stored + batch_size).  After each batch, _num_stored
   /// advances by batch_size (the full encoding range, not just distinct count).
+  /// The sum of all batch sizes must not exceed max_groups.
   size_type _num_stored{0};
   bool _has_nullable_keys{false};
   bool _has_nested_keys{false};
@@ -173,7 +174,7 @@ struct streaming_groupby::impl {
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>>
     _preprocessed_batches;
 
-  /// Companion vectors indexed by ENCODED INDEX (sparse, up to 2*max_groups).
+  /// Companion vectors indexed by encoded index (sparse, up to max_groups).
   std::unique_ptr<rmm::device_uvector<size_type>> _key_batch;
   std::unique_ptr<rmm::device_uvector<size_type>> _key_row;
 
@@ -188,10 +189,7 @@ struct streaming_groupby::impl {
   std::vector<int8_t> _is_agg_intermediate;
   bool _has_compound_aggs{false};
 
-  /// Capacity of sparse agg results / companion vectors (2 * max_groups).
-  size_type _sparse_capacity{0};
-
-  /// Sparse agg results table, pre-allocated to _sparse_capacity rows.
+  /// Sparse agg results table, pre-allocated to max_groups rows.
   /// Indexed by encoded index (not dense group index).
   std::unique_ptr<table> _agg_results;
   std::vector<size_type> _value_col_indices;
