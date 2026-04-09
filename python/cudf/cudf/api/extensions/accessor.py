@@ -23,8 +23,8 @@ _docstring_register_accessor = """
 
     Notes
     -----
-    The `{klass}` object will be passed to your custom accessor upon first
-    invocation. And will be cached for future calls.
+    The `{klass}` object will be passed to your custom accessor upon each
+    invocation.
 
     If the data passed to your accessor is of wrong datatype, you should
     raise an `AttributeError` in consistent with other cudf methods.
@@ -131,12 +131,7 @@ doc_register_series_accessor = docfmt_partial(
 
 
 class _CachedAccessor:
-    """Descriptor that instantiates an accessor once per object and caches it.
-
-    Pandas 3 removed caching from its CachedAccessor (renamed to Accessor),
-    so cudf maintains its own implementation to preserve the invariant that
-    ``obj.accessor is obj.accessor``.
-    """
+    """Custom property-like object. A descriptor for accessors."""
 
     def __init__(self, name, accessor):
         self._name = name
@@ -145,19 +140,7 @@ class _CachedAccessor:
     def __get__(self, obj, cls):
         if obj is None:
             return self._accessor
-        # Cache on the object itself so repeated accesses return the same
-        # instance.  Use a mangled key to avoid colliding with user attrs.
-        cache_key = f"_cudf_accessor_{self._name}"
-        try:
-            return obj.__dict__[cache_key]
-        except KeyError:
-            pass
-        accessor_obj = self._accessor(obj)
-        try:
-            object.__setattr__(obj, cache_key, accessor_obj)
-        except (AttributeError, TypeError):
-            pass
-        return accessor_obj
+        return self._accessor(obj)
 
 
 def _register_accessor(name, cls):
