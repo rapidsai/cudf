@@ -48,9 +48,17 @@
 namespace cudf::groupby {
 namespace {
 
-// device_row_comparator types for non-nested and nested key columns.
-using row_eq_t        = detail::hash::row_comparator_t;
-using nested_row_eq_t = detail::hash::nullable_row_comparator_t;
+using streaming_probing_scheme_t =
+  cuco::linear_probing<detail::hash::GROUPBY_CG_SIZE,
+                       cudf::hashing::detail::default_hash<size_type>>;
+
+using streaming_set_t = cuco::static_set<cudf::size_type,
+                                         cuco::extent<int64_t>,
+                                         cuda::thread_scope_device,
+                                         cuda::std::equal_to<size_type>,
+                                         streaming_probing_scheme_t,
+                                         rmm::mr::polymorphic_allocator<char>,
+                                         cuco::storage<detail::hash::GROUPBY_BUCKET_SIZE>>;
 
 /// N-table comparator for the persistent hash set.
 ///
@@ -322,7 +330,7 @@ struct streaming_groupby::impl {
   std::vector<size_type> _value_col_indices;
   rmm::device_uvector<aggregation::Kind> _d_agg_kinds;
 
-  std::unique_ptr<detail::hash::global_set_t> _key_set;
+  std::unique_ptr<streaming_set_t> _key_set;
 
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
   [[nodiscard]] bool has_state() const { return _initialized && _distinct_count > 0; }
@@ -437,23 +445,14 @@ struct streaming_groupby::impl {
     _initialized = true;
   }
 
-  void create_key_set(table_view const& dummy_key_table, rmm::cuda_stream_view stream)
+  void create_key_set(rmm::cuda_stream_view stream)
   {
-    auto preprocessed =
-      cudf::detail::row::hash::preprocessed_table::create(dummy_key_table, stream);
-    auto const comparator = cudf::detail::row::equality::self_comparator{preprocessed};
-    auto const row_hash   = cudf::detail::row::hash::row_hasher{std::move(preprocessed)};
-
-    auto const has_null    = cudf::nullate::DYNAMIC{false};
-    auto const d_row_hash  = row_hash.device_hasher(has_null);
-    auto const d_row_equal = comparator.equal_to<false>(has_null, null_equality::EQUAL);
-
-    _key_set = std::make_unique<detail::hash::global_set_t>(
+    _key_set = std::make_unique<streaming_set_t>(
       cuco::extent<int64_t>{static_cast<int64_t>(_max_groups)},
       cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
       cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-      d_row_equal,
-      detail::hash::probing_scheme_t{detail::hash::row_hasher_with_cache_t{d_row_hash}},
+      cuda::std::equal_to<size_type>{},
+      streaming_probing_scheme_t{cudf::hashing::detail::default_hash<size_type>{}},
       cuco::thread_scope_device,
       cuco::storage<detail::hash::GROUPBY_BUCKET_SIZE>{},
       rmm::mr::polymorphic_allocator<char>{},
@@ -642,7 +641,7 @@ struct streaming_groupby::impl {
 
     update_nullable_state(batch_keys);
 
-    if (!_key_set) { create_key_set(batch_keys, stream); }
+    if (!_key_set) { create_key_set(stream); }
 
     auto result = probe_and_insert(batch_keys, stream);
 
@@ -787,7 +786,7 @@ struct streaming_groupby::impl {
 
     update_nullable_state(other_key_view);
 
-    if (!_key_set) { create_key_set(other_key_view, stream); }
+    if (!_key_set) { create_key_set(stream); }
 
     auto result = probe_and_insert(other_key_view, stream);
 
