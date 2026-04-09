@@ -578,7 +578,10 @@ def names_to_indices(
     """
     keys = list(schema.keys())
     str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
-    return tuple(keys.index(n) for n in str_names)
+    try:
+        return tuple(keys.index(n) for n in str_names)
+    except ValueError as e:
+        raise ValueError(f"Not all {str_names} not found {schema}; {names}") from e
 
 
 async def replay_buffered_channel(
