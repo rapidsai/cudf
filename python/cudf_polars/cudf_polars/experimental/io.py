@@ -374,10 +374,11 @@ class StreamingSink(IR):
         self,
         schema: Schema,
         sink: Sink,
+        sink_to_directory: bool,  # noqa: FBT001
         df: IR,
-        *,
-        sink_to_directory: bool,
     ) -> None:
+        # Order must match ``_non_child`` + ``children`` so :meth:`Node.__reduce__`
+        # / ``reconstruct`` round-trip over pickling (e.g. Dask workers).
         self.schema = schema
         self.sink = sink
         self.sink_to_directory = sink_to_directory
@@ -413,8 +414,8 @@ def _(
     new_node = StreamingSink(
         ir.schema,
         ir.reconstruct([child]),
+        sink_to_directory,
         child,
-        sink_to_directory=sink_to_directory,
     )
     partition_info[new_node] = partition_info[child]
     return new_node, partition_info
