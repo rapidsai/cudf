@@ -347,8 +347,6 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_cpp.sh
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-cpp-benchmark-tests:
     # TODO: Remove this once benchmarks are working
     needs: [conda-cpp-build, changed-files]
@@ -386,8 +384,6 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: [conda-python-build-noarch, changed-files]
@@ -397,8 +393,6 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-java-tests:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
@@ -476,8 +470,6 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   wheel-build-cudf-polars:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -509,8 +501,7 @@ jobs:
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000")) | map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_experimental.sh"
   cudf-polars-polars-tests:
@@ -520,8 +511,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000")) | map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_polars_tests.sh"
   wheel-build-dask-cudf:
@@ -544,8 +534,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).not_cudf_polars
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000")) | map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
   devcontainer:
