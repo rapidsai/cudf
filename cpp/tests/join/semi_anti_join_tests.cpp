@@ -65,8 +65,7 @@ std::unique_ptr<cudf::table> left_semi_join(
   auto right_selected = right_input.select(right_on);
 
   if (!use_mark_join(implementation)) {
-    cudf::filtered_join obj(
-      right_selected, compare_nulls, cudf::get_default_stream());
+    cudf::filtered_join obj(right_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.semi_join(
       left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
@@ -95,8 +94,7 @@ std::unique_ptr<cudf::table> left_anti_join(
   auto right_selected = right_input.select(right_on);
 
   if (!use_mark_join(implementation)) {
-    cudf::filtered_join obj(
-      right_selected, compare_nulls, cudf::get_default_stream());
+    cudf::filtered_join obj(right_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.anti_join(
       left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
