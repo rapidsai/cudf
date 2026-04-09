@@ -401,12 +401,12 @@ struct streaming_groupby::impl {
     // Build column-index mapping from expanded agg columns to source data columns.
     // Match by data pointer AND offset to handle sliced columns correctly.
     _value_col_indices.reserve(values_view.num_columns());
-    for (size_type c = 0; c < values_view.num_columns(); ++c) {
-      auto const& vcol = values_view.column(c);
-      bool found       = false;
+    for (size_type i = 0; i < values_view.num_columns(); ++i) {
+      auto const& col = values_view.column(i);
+      bool found      = false;
       for (size_type j = 0; j < static_cast<size_type>(agg_requests.size()); ++j) {
         auto const& req_col = agg_requests[j].values;
-        if (req_col.head() == vcol.head() && req_col.offset() == vcol.offset()) {
+        if (req_col.head() == col.head() && req_col.offset() == col.offset()) {
           _value_col_indices.push_back(_requests_clone[j].column_index);
           found = true;
           break;
@@ -638,12 +638,7 @@ struct streaming_groupby::impl {
 
     if (!_initialized) { initialize(data, stream); }
 
-    std::vector<column_view> batch_key_cols;
-    batch_key_cols.reserve(num_keys());
-    for (auto idx : _key_indices) {
-      batch_key_cols.push_back(data.column(idx));
-    }
-    auto const batch_keys = table_view{batch_key_cols};
+    auto const batch_keys = data.select(_key_indices);
 
     update_nullable_state(batch_keys);
 
