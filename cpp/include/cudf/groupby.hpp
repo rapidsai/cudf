@@ -540,6 +540,11 @@ class streaming_groupby {
  private:
   struct impl;
   std::unique_ptr<impl> _impl;
+
+  void do_aggregate(table_view const& data, rmm::cuda_stream_view stream);
+  void do_merge(streaming_groupby const& other, rmm::cuda_stream_view stream);
+  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> do_finalize(
+    rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const;
 };
 
 /** @} */
