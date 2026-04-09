@@ -651,7 +651,7 @@ TYPED_TEST(TypedScatterListsTest, ListsOfStructsWithNullMembers)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_lists->view(), scatter_result->get_column(0));
 }
 
-TYPED_TEST(TypedScatterListsTest, ListsOfNullgitStructs)
+TYPED_TEST(TypedScatterListsTest, ListsOfNullStructs)
 {
   using T               = TypeParam;
   using offsets_column  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
