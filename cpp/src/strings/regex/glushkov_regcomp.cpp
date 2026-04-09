@@ -154,6 +154,158 @@ std::vector<int32_t> eps_closure_from(int32_t const start,
 }
 
 // ---------------------------------------------------------------------------
+// Thompson-priority frontier and conflict detection
+// ---------------------------------------------------------------------------
+
+/// One item in an ordered ε-frontier: either a char-consuming position or END.
+struct frontier_item {
+  enum kind_t : int32_t { CHAR_POS, ACCEPT };
+  kind_t kind;
+  int32_t gpos;  ///< Glushkov position index; valid only when kind == CHAR_POS
+};
+
+/**
+ * @brief ε-closure in Thompson priority order (right_id before left_id for OR).
+ *
+ * Visits OR branches in the order Thompson's NFA executor would: right_id
+ * (first alternative, higher priority) before left_id (second alternative).
+ * Records each distinct char-consuming position or END in first-visit order.
+ */
+void ordered_eps_frontier(int32_t const inst_id,
+                          reprog const& prog,
+                          std::vector<int32_t> const& inst_to_pos,
+                          std::unordered_set<int32_t>& seen,
+                          std::vector<frontier_item>& items)
+{
+  if (inst_id < 0 || inst_id >= prog.insts_count()) return;
+  if (!seen.insert(inst_id).second) return;
+
+  auto const& inst = prog.insts_data()[inst_id];
+  switch (inst.type) {
+    case CHAR:
+    case ANY:
+    case ANYNL:
+    case CCLASS:
+    case NCCLASS:
+      items.push_back({frontier_item::CHAR_POS, inst_to_pos[inst_id]});
+      break;
+
+    case END: items.push_back({frontier_item::ACCEPT, -1}); break;
+
+    case LBRA:
+    case RBRA:
+      ordered_eps_frontier(inst.u2.next_id, prog, inst_to_pos, seen, items);
+      break;
+
+    case OR:
+      // Thompson priority: right_id (first alternative) before left_id (second)
+      ordered_eps_frontier(inst.u1.right_id, prog, inst_to_pos, seen, items);
+      ordered_eps_frontier(inst.u2.left_id, prog, inst_to_pos, seen, items);
+      break;
+
+    default: break;
+  }
+}
+
+/**
+ * @brief Returns true if Glushkov position @p p matches ASCII character @p c.
+ */
+bool position_matches_char(glushkov_host_program const& gp, uint32_t const p, uint8_t const c)
+{
+  switch (gp.pos_inst_type[p]) {
+    case CHAR: return gp.pos_ch[p] == static_cast<char32_t>(c);
+    case ANY:
+      return (gp.pos_ch[p] == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
+    case ANYNL: return true;
+    case CCLASS:
+    case NCCLASS: {
+      bool const m = host_reclass_match_ascii(gp.classes[gp.pos_cls_idx[p]], c);
+      return (gp.pos_inst_type[p] == CCLASS) ? m : !m;
+    }
+    default: return false;
+  }
+}
+
+/**
+ * @brief Returns true if positions @p p and @p q can match a common character.
+ *
+ * Iterates all ASCII characters for an exact answer.  For non-ASCII input the
+ * function is conservative: if either side is a wildcard type (ANY/ANYNL/
+ * CCLASS/NCCLASS) it may match non-ASCII code points, so overlap is assumed.
+ */
+bool positions_chars_overlap(glushkov_host_program const& gp,
+                             uint32_t const p,
+                             uint32_t const q)
+{
+  for (int c = 0; c < 128; ++c) {
+    if (position_matches_char(gp, p, static_cast<uint8_t>(c)) &&
+        position_matches_char(gp, q, static_cast<uint8_t>(c))) {
+      return true;
+    }
+  }
+  // Non-ASCII: conservative overlap if both positions are non-CHAR types
+  bool const p_nonascii = (gp.pos_inst_type[p] != CHAR) || (gp.pos_ch[p] >= 128);
+  bool const q_nonascii = (gp.pos_inst_type[q] != CHAR) || (gp.pos_ch[q] >= 128);
+  if (p_nonascii && q_nonascii) { return true; }
+  // One side is a non-ASCII CHAR literal; if the other is a wildcard it might match
+  if (gp.pos_inst_type[p] == CHAR && gp.pos_ch[p] >= 128) {
+    return (gp.pos_inst_type[q] != CHAR);
+  }
+  if (gp.pos_inst_type[q] == CHAR && gp.pos_ch[q] >= 128) {
+    return (gp.pos_inst_type[p] != CHAR);
+  }
+  return false;
+}
+
+/**
+ * @brief Returns true if the frontier contains a priority conflict that
+ *        Glushkov's bit-order cannot represent.
+ *
+ * Two rules:
+ *   Rule 1 – END before char: an ACCEPT item appears before the first CHAR_POS
+ *             item in Thompson priority order → the pattern is nullable in a way
+ *             that priority_kill cannot handle correctly.
+ *   Rule 2 – non-monotone gpos + char overlap: two CHAR_POS items appear with
+ *             the higher-priority one at a larger gpos (inverted bit order), AND
+ *             they can match a common character → priority_kill picks the wrong
+ *             alternative when both are active.
+ */
+bool frontier_has_priority_conflict(std::vector<frontier_item> const& items,
+                                    glushkov_host_program const& gp)
+{
+  // Rule 1: ACCEPT before any CHAR_POS, but only when the frontier also
+  // contains at least one CHAR_POS.  An ACCEPT-only frontier (the normal
+  // "end of pattern" case) is not a priority conflict.
+  bool seen_char        = false;
+  bool accept_before_char = false;
+  for (auto const& item : items) {
+    if (item.kind == frontier_item::CHAR_POS) {
+      seen_char = true;
+    } else if (item.kind == frontier_item::ACCEPT && !seen_char) {
+      accept_before_char = true;
+    }
+  }
+  if (accept_before_char && seen_char) { return true; }
+
+  // Rule 2: non-monotone gpos pair with character overlap
+  for (size_t i = 0; i < items.size(); ++i) {
+    if (items[i].kind != frontier_item::CHAR_POS) continue;
+    for (size_t j = i + 1; j < items.size(); ++j) {
+      if (items[j].kind != frontier_item::CHAR_POS) continue;
+      // items[i] has higher Thompson priority than items[j].
+      // If items[i].gpos > items[j].gpos, bit order is inverted.
+      if (items[i].gpos > items[j].gpos) {
+        if (positions_chars_overlap(
+              gp, static_cast<uint32_t>(items[i].gpos), static_cast<uint32_t>(items[j].gpos))) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Shift-and mask construction
 // ---------------------------------------------------------------------------
 
@@ -318,6 +470,30 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
       if (fpos >= 0) { gp->follow_table[idx] |= g_state_t(1) << fpos; }
     }
     if (is_accept) { gp->accept_mask |= g_state_t(1) << idx; }
+  }
+
+  // ---- Step 5b: Detect Thompson priority conflicts ------------------------
+  // Verify that Glushkov's bit-order priority agrees with Thompson's branch-
+  // priority order for every ε-frontier in the NFA.  If a conflict is found
+  // (Rule 1: accept before char; Rule 2: inverted gpos pair with char overlap),
+  // the pattern cannot be correctly simulated by Glushkov → fall back.
+  {
+    std::unordered_set<int32_t> seen;
+    std::vector<frontier_item> items;
+
+    // Check start frontier
+    ordered_eps_frontier(prog.get_start_inst(), prog, inst_to_pos, seen, items);
+    if (frontier_has_priority_conflict(items, *gp)) { return nullptr; }
+
+    // Check follow frontier for each char-consuming position
+    for (uint32_t idx = 0; idx < gp->num_states; ++idx) {
+      int32_t const inst_id = char_insts[idx];
+      int32_t const next_id = prog.insts_data()[inst_id].u2.next_id;
+      seen.clear();
+      items.clear();
+      ordered_eps_frontier(next_id, prog, inst_to_pos, seen, items);
+      if (frontier_has_priority_conflict(items, *gp)) { return nullptr; }
+    }
   }
 
   // ---- Step 6: Shift-and masks ------------------------------------------

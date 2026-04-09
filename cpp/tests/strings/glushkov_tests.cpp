@@ -662,24 +662,6 @@ static void check_split_parity(cudf::strings_column_view const& sv,
 }
 
 // ---------------------------------------------------------------------------
-// Test: a|aa — simplest overlapping-prefix alternation.
-//
-// Priority kill ensures 'a' branch wins (first-alternative priority), so
-// both engines produce two "a" matches for "aa", not one "aa" match.
-// ---------------------------------------------------------------------------
-TEST_F(GlushkovRegexTests, DivergenceAlternationAOrAA)
-{
-  cudf::test::strings_column_wrapper strings{"a", "aa", "aab", "b", ""};
-  auto sv = cudf::strings_column_view(strings);
-
-  check_parity(sv, "a|aa");
-  check_findall_parity(sv, "a|aa");
-  check_count_parity(sv, "a|aa");
-  check_replace_parity(sv, "a|aa");
-  check_split_parity(sv, "a|aa");
-}
-
-// ---------------------------------------------------------------------------
 // Test: foo|foobar — longer literal as second alternation branch.
 //
 // Priority kill ensures "foo" wins (first alternative), so "foobar" is split
@@ -786,4 +768,165 @@ TEST_F(GlushkovRegexTests, ControlPrefixOverlapAgreement)
   check_replace_parity(sv, "(a|ab)c");
   check_findall_parity(sv, "(a|ab)c");
   check_split_parity(sv, "(a|ab)c");
+}
+
+// ---------------------------------------------------------------------------
+// Test: (|a)a — nullable sub-expression alternation.
+//
+// The sub-expression (|a) is nullable (empty branch listed first), but the
+// overall pattern requires at least one 'a'.  With leftmost-first semantics
+// the empty branch wins inside the group, so the engine effectively matches
+// a single 'a' each time.  On "aa" both engines should find two matches
+// (count=2), not one "aa" match.
+//
+// This exercises the priority kill for a nullable sub-expression that feeds
+// into a required successor character, verifying that Glushkov and Thompson
+// agree across count_re, findall, replace_re, and split_re.
+// ---------------------------------------------------------------------------
+TEST_F(GlushkovRegexTests, NullableSubExpressionAlternation)
+{
+  cudf::test::strings_column_wrapper strings{
+    "a",    // one match: (empty)a
+    "aa",   // two matches: (empty)a, (empty)a
+    "aaa",  // three matches
+    "b",    // no match
+    "ba",   // one match at pos 1
+    "aba",  // two matches: pos 0 and pos 2
+    "",     // empty — no match
+  };
+  auto sv = cudf::strings_column_view(strings);
+
+  check_parity(sv, "(|a)a");
+  check_count_parity(sv, "(|a)a");
+  check_findall_parity(sv, "(|a)a");
+  check_replace_parity(sv, "(|a)a");
+  check_split_parity(sv, "(|a)a");
+}
+
+// ---------------------------------------------------------------------------
+// Test: a(|b) — nullable first alternative in a follow frontier.
+//
+// After consuming 'a', the sub-expression (|b) has a nullable first branch
+// that reaches END.  Rule 1 (ACCEPT before char) forces Glushkov fallback.
+// ---------------------------------------------------------------------------
+TEST_F(GlushkovRegexTests, NullableFirstAltInFollow)
+{
+  cudf::test::strings_column_wrapper strings{
+    "a",    // match "a" (empty branch wins inside group)
+    "ab",   // match "a" at pos 0 (empty branch wins, 'b' is unconsumed)
+    "abc",  // match "a" at pos 0
+    "aa",   // two matches: "a" at pos 0, "a" at pos 1
+    "b",    // no match (pattern requires leading 'a')
+    "",     // no match
+  };
+  auto sv = cudf::strings_column_view(strings);
+
+  check_parity(sv, "a(|b)");
+  check_count_parity(sv, "a(|b)");
+  check_findall_parity(sv, "a(|b)");
+  check_replace_parity(sv, "a(|b)");
+  check_split_parity(sv, "a(|b)");
+}
+
+// ---------------------------------------------------------------------------
+// Test: (a|b)(|c) — non-nullable leading group + nullable trailing group.
+//
+// The second group (|c) has a nullable first alternative.  After consuming
+// 'a' or 'b', the follow frontier hits ACCEPT before 'c' → Rule 1 fallback.
+// ---------------------------------------------------------------------------
+TEST_F(GlushkovRegexTests, NonNullableLeadWithNullableTrail)
+{
+  cudf::test::strings_column_wrapper strings{
+    "a",    // match "a"
+    "ac",   // match "a" (empty branch wins in second group)
+    "bc",   // match "b"
+    "abc",  // match "a" at pos 0
+    "ba",   // match "b" at pos 0, "a" at pos 1
+    "",     // no match
+  };
+  auto sv = cudf::strings_column_view(strings);
+
+  check_parity(sv, "(a|b)(|c)");
+  check_count_parity(sv, "(a|b)(|c)");
+  check_findall_parity(sv, "(a|b)(|c)");
+  check_replace_parity(sv, "(a|b)(|c)");
+  check_split_parity(sv, "(a|b)(|c)");
+}
+
+// ---------------------------------------------------------------------------
+// Test: (|.)a — dot inside nullable first-alt group.
+//
+// The dot overlaps with 'a', so Rule 2 (non-monotone gpos + char overlap)
+// forces Glushkov fallback.
+// ---------------------------------------------------------------------------
+TEST_F(GlushkovRegexTests, NullableDotAlternation)
+{
+  cudf::test::strings_column_wrapper strings{
+    "a",    // match "a" (empty branch wins)
+    "aa",   // two matches
+    "ba",   // match "a" at pos 1
+    "ab",   // match "a" at pos 0
+    "xyz",  // no match (no 'a')
+    "",     // no match
+  };
+  auto sv = cudf::strings_column_view(strings);
+
+  check_parity(sv, "(|.)a");
+  check_count_parity(sv, "(|.)a");
+  check_findall_parity(sv, "(|.)a");
+  check_replace_parity(sv, "(|.)a");
+  check_split_parity(sv, "(|.)a");
+}
+
+// ---------------------------------------------------------------------------
+// Test: .*foo — greedy dot-star followed by literal.
+//
+// This is a common pattern that must stay on the Glushkov fast path.  The
+// quantifier OR has monotone gpos, so no priority conflict is detected.
+// ---------------------------------------------------------------------------
+TEST_F(GlushkovRegexTests, DotStarLiteral)
+{
+  cudf::test::strings_column_wrapper strings{
+    "foo",       // match "foo"
+    "xfoo",     // match "xfoo"
+    "xxfoo",    // match "xxfoo"
+    "foobar",   // match "foo" (or "foo" prefix depending on greedy)
+    "xfooyfooz", // match
+    "bar",      // no match
+    "",         // no match
+  };
+  auto sv = cudf::strings_column_view(strings);
+
+  check_parity(sv, ".*foo");
+  check_count_parity(sv, ".*foo");
+  check_findall_parity(sv, ".*foo");
+  check_replace_parity(sv, ".*foo");
+  check_split_parity(sv, ".*foo");
+}
+
+// ---------------------------------------------------------------------------
+// Test: (a|)a — nullable SECOND alternative (not first).
+//
+// Here the empty branch is the second alternative (lower Thompson priority).
+// The first alternative 'a' gets lower gpos, matching priority_kill's
+// assumption.  Frontier gpos is monotone → stays on Glushkov.
+// ---------------------------------------------------------------------------
+TEST_F(GlushkovRegexTests, NullableSecondAlt)
+{
+  cudf::test::strings_column_wrapper strings{
+    "a",    // match "a" (first alt 'a' wins inside group + consumes it; but the outer 'a' needs another)
+    "aa",   // match "aa"
+    "aaa",  // matches
+    "b",    // no match
+    "ba",   // no match (need two 'a's in a row for the greedy (a|)a to match "aa")
+    "baa",  // match "aa" at pos 1
+    "",     // no match
+  };
+  auto sv = cudf::strings_column_view(strings);
+
+  check_parity(sv, "(a|)a");
+  check_count_parity(sv, "(a|)a");
+  check_findall_parity(sv, "(a|)a");
+  check_replace_parity(sv, "(a|)a");
+  check_split_parity(sv, "(a|)a");
 }

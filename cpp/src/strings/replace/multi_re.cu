@@ -151,15 +151,16 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
       return regex_device_builder::create_prog_device(*h_prog, stream);
     });
 
-  // get the longest regex for the dispatcher
-  auto const max_prog =
-    std::max_element(h_progs.begin(), h_progs.end(), [](auto const& lhs, auto const& rhs) {
-      return lhs->insts_counts() < rhs->insts_counts();
-    });
-
-  auto d_max_prog        = **max_prog;
-  auto const buffer_size = d_max_prog.working_memory_size(input.size());
-  auto d_buffer          = rmm::device_buffer(buffer_size, stream);
+  // Compute the maximum working memory needed across all programs.
+  // Glushkov-backed programs return zero; Thompson fallbacks return nonzero.
+  // Using the max-by-instruction-count program would be wrong when that program
+  // is Glushkov-backed: its working_memory_size() returns 0, leaving Thompson
+  // fallback programs in the batch with no working memory (silent OOB access).
+  std::size_t buffer_size = 0;
+  for (auto const& prog : h_progs) {
+    buffer_size = std::max(buffer_size, prog->working_memory_size(input.size()));
+  }
+  auto d_buffer = rmm::device_buffer(buffer_size, stream);
 
   // copy all the reprog_device instances to a device memory array
   auto progs = cudf::detail::make_empty_host_vector<reprog_device>(h_progs.size(), stream);

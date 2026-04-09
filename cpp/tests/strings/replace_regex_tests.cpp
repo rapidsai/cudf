@@ -83,6 +83,26 @@ TEST_F(StringsReplaceRegexTest, ReplaceMultiRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+TEST_F(StringsReplaceRegexTest, MixedEngineReplace)
+{
+  // Regression test for mixed-engine batch working memory bug.
+  // "\\d+" is Glushkov-eligible (zero working memory); "^foo" has a BOL assertion
+  // so it falls back to Thompson NFA (nonzero working memory). The shared buffer
+  // must be sized from the max across all programs, not from the Glushkov program.
+  cudf::test::strings_column_wrapper input({"abc 123 def", "foo bar 456"});
+  auto sv = cudf::strings_column_view(input);
+
+  std::vector<std::string> patterns{"\\d+", "^foo"};
+  cudf::test::strings_column_wrapper repls({"NUM", "FOO"});
+  auto repls_view = cudf::strings_column_view(repls);
+
+  auto const flags = cudf::strings::regex_flags::GLUSHKOV;
+  auto results     = cudf::strings::replace_re(sv, patterns, repls_view, flags);
+
+  cudf::test::strings_column_wrapper expected({"abc NUM def", "FOO bar NUM"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, InvalidRegex)
 {
   // these are quantifiers that do not have a preceding character/class
