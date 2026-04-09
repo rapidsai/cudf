@@ -8,15 +8,19 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+
 #include <memory>
+#include <utility>
 #include <vector>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 
 template <typename RequestType>
 inline std::vector<aggregation_result> extract_results(host_span<RequestType const> requests,
@@ -48,6 +52,14 @@ inline std::vector<aggregation_result> extract_results(host_span<RequestType con
   return results;
 }
 
+/**
+ * @brief Compute a combined null bitmask for multi-column keys.
+ *
+ * @return Pair of {buffer, raw_pointer} where pointer is null if no nulls exist.
+ */
+std::pair<rmm::device_buffer, bitmask_type const*> compute_row_bitmask(
+  table_view const& keys, rmm::cuda_stream_view stream);
+
 /// Whether the given aggregation kind is supported by hash-based groupby.
 constexpr bool is_hash_aggregation(aggregation::Kind k)
 {
@@ -70,6 +82,4 @@ constexpr bool is_hash_aggregation(aggregation::Kind k)
   }
 }
 
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+}  // namespace cudf::groupby::detail

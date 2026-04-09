@@ -236,27 +236,6 @@ std::vector<aggregation_request> build_aggregation_requests(
   return result;
 }
 
-/// Compute a combined null bitmask for multi-column keys.
-/// Returns {buffer, raw_pointer} where pointer is null if no nulls.
-std::pair<rmm::device_buffer, bitmask_type const*> compute_row_bitmask(table_view const& keys,
-                                                                       rmm::cuda_stream_view stream)
-{
-  if (keys.num_columns() == 0 || !cudf::has_nulls(keys)) {
-    return {rmm::device_buffer{0, stream}, nullptr};
-  }
-  // Single-column fast path: reuse the column's null mask directly.
-  if (keys.num_columns() == 1) {
-    auto const& col = keys.column(0);
-    if (col.offset() == 0) { return {rmm::device_buffer{0, stream}, col.null_mask()}; }
-    auto buf = cudf::copy_bitmask(col, stream);
-    auto ptr = static_cast<bitmask_type const*>(buf.data());
-    return {std::move(buf), ptr};
-  }
-  auto [buf, null_count] = cudf::bitmask_and(keys, stream);
-  if (null_count == 0) { return {rmm::device_buffer{0, stream}, nullptr}; }
-  return {std::move(buf), static_cast<bitmask_type const*>(buf.data())};
-}
-
 template <bool has_nested_columns>
 auto build_cross_comparators(
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& preprocessed_batch,
@@ -521,7 +500,7 @@ struct streaming_groupby::impl {
     // Batch-local bitmask for null exclusion.
     auto const skip_rows_with_nulls = _has_nullable_keys && _null_handling == null_policy::EXCLUDE;
     auto [bitmask_buffer, batch_bitmask] = skip_rows_with_nulls
-                                             ? compute_row_bitmask(batch_keys, stream)
+                                             ? detail::compute_row_bitmask(batch_keys, stream)
                                              : std::pair<rmm::device_buffer, bitmask_type const*>{
                                                  rmm::device_buffer{0, stream}, nullptr};
 
