@@ -41,7 +41,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
   // We do not use cudf::gather since we can move the null-mask separately.
   auto indices_view = indices->view();
   auto output       = rmm::device_uvector<size_type>(indices_view.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  indices_view.begin<size_type>(),    // map first
                  indices_view.end<size_type>(),      // map last
                  key_sort_order.begin<size_type>(),  // input
