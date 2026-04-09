@@ -121,13 +121,7 @@ class IRExecutionContext:
     ) -> IRExecutionContext:
         """Create an IRExecutionContext from ConfigOptions."""
         query_id = query_id or uuid.uuid4()
-        match config_options.cuda_stream_policy:
-            case "default":
-                return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
-            case _:  # pragma: no cover
-                raise ValueError(
-                    f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
-                )
+        return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:

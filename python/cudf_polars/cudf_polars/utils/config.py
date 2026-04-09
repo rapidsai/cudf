@@ -949,10 +949,10 @@ class CUDAStreamPoolConfig:
 
 def _convert_cuda_stream_policy(
     user_cuda_stream_policy: dict | str,
-) -> Literal["default"] | CUDAStreamPoolConfig:
+) -> CUDAStreamPoolConfig | None:
     match user_cuda_stream_policy:
         case "default":
-            return "default"
+            return None
         case "pool":
             return CUDAStreamPoolConfig()
         case dict():
@@ -985,10 +985,10 @@ def _convert_cuda_stream_policy(
                         ) from None
 
 
-def _default_cuda_stream_policy() -> Literal["default"] | CUDAStreamPoolConfig:
+def _default_cuda_stream_policy() -> CUDAStreamPoolConfig | None:
     v = os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY")
     if v is None:
-        return "default"
+        return None
     return _convert_cuda_stream_policy(v)
 
 
@@ -1012,7 +1012,7 @@ class ConfigOptions(Generic[ExecutorType]):
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
     cuda_stream_policy
-        The policy to use for acquiring new CUDA streams. ``"default"`` uses the
+        The policy to use for CUDA streams. ``None`` (the default) uses the
         default CUDA stream. A :class:`~cudf_polars.utils.config.CUDAStreamPoolConfig`
         can be used to configure a stream pool.
     """
@@ -1026,7 +1026,7 @@ class ConfigOptions(Generic[ExecutorType]):
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
-    cuda_stream_policy: Literal["default"] | CUDAStreamPoolConfig = dataclasses.field(
+    cuda_stream_policy: CUDAStreamPoolConfig | None = dataclasses.field(
         default_factory=_default_cuda_stream_policy
     )
 
@@ -1130,7 +1130,7 @@ class ConfigOptions(Generic[ExecutorType]):
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
 
-        cuda_stream_policy: Literal["default"] | CUDAStreamPoolConfig
+        cuda_stream_policy: CUDAStreamPoolConfig | None
 
         if user_cuda_stream_policy is None:
             if (
@@ -1140,7 +1140,7 @@ class ConfigOptions(Generic[ExecutorType]):
                 cuda_stream_policy = CUDAStreamPoolConfig()
             else:
                 # everything else defaults to the default stream
-                cuda_stream_policy = "default"
+                cuda_stream_policy = None
         else:
             cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
 
