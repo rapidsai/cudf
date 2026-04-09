@@ -44,8 +44,12 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
 {
   // Materialize offsets column.
   auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
-  auto sizes = make_fixed_width_column(size_data_type, input_size, mask_state::UNALLOCATED, stream);
-  auto mutable_sizes = sizes->mutable_view();
+  auto sizes                           = make_fixed_width_column(size_data_type,
+                                       input_size,
+                                       mask_state::UNALLOCATED,
+                                       stream,
+                                       cudf::get_current_device_resource_ref());
+  auto mutable_sizes                   = sizes->mutable_view();
 
   // Consider the following preceding/following values:
   //    preceding = [1,2,2,2,2]
@@ -100,8 +104,11 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
                                                   PrecedingIter preceding_iter,
                                                   rmm::cuda_stream_view stream)
 {
-  auto gather_map = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, per_row_mapping.size(), mask_state::UNALLOCATED, stream);
+  auto gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                            per_row_mapping.size(),
+                                            mask_state::UNALLOCATED,
+                                            stream,
+                                            cudf::get_current_device_resource_ref());
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     cuda::counting_iterator<size_type>{0},

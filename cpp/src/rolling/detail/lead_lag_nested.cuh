@@ -123,9 +123,12 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
 
   auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
 
-  auto gather_map_column =
-    make_numeric_column(size_data_type, input.size(), mask_state::UNALLOCATED, stream);
-  auto gather_map = gather_map_column->mutable_view();
+  auto gather_map_column = make_numeric_column(size_data_type,
+                                               input.size(),
+                                               mask_state::UNALLOCATED,
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
+  auto gather_map        = gather_map_column->mutable_view();
 
   auto const input_size = input.size();
   auto const null_index = input.size();
