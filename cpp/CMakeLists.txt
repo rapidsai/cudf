@@ -415,6 +415,7 @@ add_library(
   src/filling/repeat.cu
   src/filling/sequence.cu
   src/groupby/common/m2_var_std.cu
+  src/groupby/common/utils.cpp
   src/groupby/groupby.cu
   src/groupby/streaming_groupby.cu
   src/groupby/hash/compute_global_memory_aggs.cu
