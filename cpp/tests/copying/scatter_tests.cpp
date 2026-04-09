@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -512,12 +512,12 @@ TYPED_TEST(BooleanMaskScatter, WithNull)
 {
   using T = TypeParam;
   cudf::test::fixed_width_column_wrapper<T, int32_t> source_col1({1, 5, 6, 8, 9}, {1, 0, 1, 0, 1});
-  cudf::test::strings_column_wrapper source_col2({"This", "is", "cudf", "test", "column"},
+  cudf::test::strings_column_wrapper source_col2({"This", "", "", "test", ""},
                                                  {true, false, false, true, false});
   cudf::test::fixed_width_column_wrapper<T, int32_t> target_col1({2, 2, 3, 4, 11, 12, 7, 7, 10, 10},
                                                                  {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
   cudf::test::strings_column_wrapper target_col2(
-    {"a", "bc", "cd", "ef", "gh", "ij", "jk", "lm", "no", "pq"},
+    {"a", "bc", "", "ef", "gh", "ij", "jk", "lm", "no", ""},
     {true, true, false, true, true, true, true, true, true, false});
   cudf::test::fixed_width_column_wrapper<bool> mask(
     {true, false, false, false, true, true, false, true, true, false});
@@ -525,7 +525,7 @@ TYPED_TEST(BooleanMaskScatter, WithNull)
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected_col1({1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
                                                                    {1, 1, 0, 1, 0, 1, 1, 0, 1, 0});
   cudf::test::strings_column_wrapper expected_col2(
-    {"This", "bc", "cd", "ef", "is", "cudf", "jk", "test", "column", "pq"},
+    {"This", "bc", "", "ef", "", "", "jk", "test", "", ""},
     {true, true, false, true, false, false, true, true, false, false});
   auto source_table   = cudf::table_view({source_col1, source_col2});
   auto target_table   = cudf::table_view({target_col1, target_col2});
@@ -556,12 +556,12 @@ TEST_F(BooleanMaskScatterString, NoNUll)
 
 TEST_F(BooleanMaskScatterString, WithNUll)
 {
-  cudf::test::strings_column_wrapper source({"This", "cudf"}, {false, true});
-  cudf::test::strings_column_wrapper target({"is", "is", "a", "udf", "api"},
+  cudf::test::strings_column_wrapper source({"", "cudf"}, {false, true});
+  cudf::test::strings_column_wrapper target({"is", "", "", "udf", "api"},
                                             {true, false, false, true, true});
   cudf::test::fixed_width_column_wrapper<bool> mask({true, false, false, true, false});
 
-  cudf::test::strings_column_wrapper expected({"This", "is", "a", "cudf", "api"},
+  cudf::test::strings_column_wrapper expected({"", "", "", "cudf", "api"},
                                               {false, false, false, true, true});
   auto source_table   = cudf::table_view({source});
   auto target_table   = cudf::table_view({target});
@@ -693,7 +693,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   cudf::test::fixed_width_column_wrapper<T, int32_t> target_col1({2, 2, 3, 4, 11, 12, 7, 7, 10, 10},
                                                                  {1, 1, 0, 1, 1, 1, 1, 1, 1, 0});
   cudf::test::strings_column_wrapper target_col2(
-    {"a", "bc", "cd", "ef", "gh", "ij", "jk", "lm", "no", "pq"},
+    {"a", "bc", "", "ef", "gh", "ij", "jk", "lm", "no", ""},
     {true, true, false, true, true, true, true, true, true, false});
   cudf::test::fixed_width_column_wrapper<bool> mask(
     {true, false, false, false, true, true, false, true, true, false});
@@ -701,7 +701,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   cudf::test::fixed_width_column_wrapper<T, int32_t> expected_col1(
     {11, 2, 3, 4, 11, 11, 7, 11, 11, 10}, {0, 1, 0, 1, 0, 0, 1, 0, 0, 0});
   cudf::test::strings_column_wrapper expected_col2(
-    {"cudf", "bc", "cd", "ef", "cudf", "cudf", "jk", "cudf", "cudf", "pq"},
+    {"cudf", "bc", "", "ef", "cudf", "cudf", "jk", "cudf", "cudf", ""},
     {true, true, false, true, true, true, true, true, true, false});
   auto target_table   = cudf::table_view({target_col1, target_col2});
   auto expected_table = cudf::table_view({expected_col1, expected_col2});
@@ -738,11 +738,11 @@ TEST_F(BooleanMaskScatterScalarString, WithNUll)
   scalar->set_valid_async(true);
   std::vector<std::reference_wrapper<const cudf::scalar>> scalar_vect;
   scalar_vect.emplace_back(*scalar);
-  cudf::test::strings_column_wrapper target({"is", "is", "a", "udf", "api"},
+  cudf::test::strings_column_wrapper target({"is", "", "", "udf", "api"},
                                             {true, false, false, true, true});
   cudf::test::fixed_width_column_wrapper<bool> mask({true, false, true, true, false});
 
-  cudf::test::strings_column_wrapper expected({"cudf", "is", "cudf", "cudf", "api"},
+  cudf::test::strings_column_wrapper expected({"cudf", "", "cudf", "cudf", "api"},
                                               {true, false, true, true, true});
   auto target_table   = cudf::table_view({target});
   auto expected_table = cudf::table_view({expected});
