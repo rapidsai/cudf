@@ -130,7 +130,7 @@ doc_register_series_accessor = docfmt_partial(
 )
 
 
-class _CachedAccessor:
+class _Accessor:
     """Custom property-like object. A descriptor for accessors."""
 
     def __init__(self, name, accessor):
