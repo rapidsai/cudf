@@ -289,10 +289,10 @@ struct streaming_groupby::impl {
   null_policy _null_handling;
 
   bool _initialized{false};
-  size_type _num_unique_keys{0};
+  size_type _distinct_count{0};
   /// High-water mark of encoded indices consumed.  Encoded batch indices are
   /// [_num_stored, _num_stored + batch_size).  After each batch, _num_stored
-  /// advances by batch_size (the full encoding range, not just num_unique).
+  /// advances by batch_size (the full encoding range, not just distinct count).
   size_type _num_stored{0};
   bool _has_nullable_keys{false};
 
@@ -327,7 +327,7 @@ struct streaming_groupby::impl {
   std::unique_ptr<detail::hash::global_set_t> _key_set;
 
   [[nodiscard]] size_type num_keys() const { return static_cast<size_type>(_key_indices.size()); }
-  [[nodiscard]] bool has_state() const { return _initialized && _num_unique_keys > 0; }
+  [[nodiscard]] bool has_state() const { return _initialized && _distinct_count > 0; }
 
   impl(host_span<size_type const> key_indices,
        host_span<streaming_aggregation_request const> requests,
@@ -401,7 +401,7 @@ struct streaming_groupby::impl {
     _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, mr);
     _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, mr);
 
-    // Group-to-encoded-index map: sized to max_groups (one entry per unique key).
+    // Group-to-encoded-index map: sized to max_groups (one entry per distinct key).
     _group_encoded_indices =
       std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
 
@@ -519,12 +519,12 @@ struct streaming_groupby::impl {
                       insert_and_map_fn{iaf_ref, batch_bitmask, num_stored, inserted_flags.data()});
 
     // Count newly inserted keys.
-    auto const num_new_unique = static_cast<size_type>(thrust::count(
+    auto const new_distinct_count = static_cast<size_type>(thrust::count(
       rmm::exec_policy_nosync(stream), inserted_flags.begin(), inserted_flags.end(), true));
 
-    if (num_new_unique > 0) {
+    if (new_distinct_count > 0) {
       // Stream compact: get the batch-local indices of newly inserted keys.
-      rmm::device_uvector<size_type> batch_local_indices(num_new_unique, stream, temp_mr);
+      rmm::device_uvector<size_type> batch_local_indices(new_distinct_count, stream, temp_mr);
       thrust::copy_if(rmm::exec_policy_nosync(stream),
                       cuda::counting_iterator<size_type>(0),
                       cuda::counting_iterator<size_type>(batch_size),
@@ -533,14 +533,14 @@ struct streaming_groupby::impl {
                       cuda::std::identity{});
 
       // Build encoded indices from batch-local: encoded = num_stored + batch_local.
-      rmm::device_uvector<size_type> deduped_encoded(num_new_unique, stream, temp_mr);
+      rmm::device_uvector<size_type> deduped_encoded(new_distinct_count, stream, temp_mr);
       thrust::transform(rmm::exec_policy_nosync(stream),
                         batch_local_indices.begin(),
                         batch_local_indices.end(),
                         deduped_encoded.begin(),
                         offset_adder{num_stored});
 
-      // Gather compacted unique keys from the batch.
+      // Gather compacted distinct keys from the batch.
       auto compacted = cudf::detail::gather(batch_keys,
                                             batch_local_indices,
                                             out_of_bounds_policy::DONT_CHECK,
@@ -559,15 +559,15 @@ struct streaming_groupby::impl {
       // Scatter companion vectors and record encoded indices in a single pass.
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
                          cuda::counting_iterator<size_type>(0),
-                         num_new_unique,
+                         new_distinct_count,
                          scatter_new_key_metadata{deduped_encoded.data(),
                                                   _key_batch->data(),
                                                   _key_row->data(),
                                                   _group_encoded_indices->data(),
                                                   new_batch_id,
-                                                  _num_unique_keys});
+                                                  _distinct_count});
 
-      _num_unique_keys += num_new_unique;
+      _distinct_count += new_distinct_count;
     }
 
     // Advance encoding offset by the full batch size — the entire range
@@ -575,14 +575,14 @@ struct streaming_groupby::impl {
     // were duplicates or null-excluded.  The next batch must encode after this range.
     _num_stored += batch_size;
 
-    return {std::move(target_indices), num_new_unique, std::move(bitmask_buffer)};
+    return {std::move(target_indices), new_distinct_count, std::move(bitmask_buffer)};
   }
 
-  void check_unique_key_count()
+  void check_distinct_count()
   {
-    CUDF_EXPECTS(_num_unique_keys <= _max_groups,
-                 "Unique keys (" + std::to_string(_num_unique_keys) + ") exceeded max_groups (" +
-                   std::to_string(_max_groups) + ").");
+    CUDF_EXPECTS(_distinct_count <= _max_groups,
+                 "Distinct key count (" + std::to_string(_distinct_count) +
+                   ") exceeded max_groups (" + std::to_string(_max_groups) + ").");
   }
 
   void do_aggregate(table_view const& data, rmm::cuda_stream_view stream)
@@ -629,10 +629,10 @@ struct streaming_groupby::impl {
       detail::hash::compute_single_pass_aggs_dense_output_fn{
         result.target_indices.begin(), _d_agg_kinds.data(), *d_values, *d_results_ptr});
 
-    check_unique_key_count();
+    check_distinct_count();
   }
 
-  [[nodiscard]] std::unique_ptr<table> gather_all_unique_keys(
+  [[nodiscard]] std::unique_ptr<table> gather_all_distinct_keys(
     rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
   {
     if (_compacted_batches.empty()) { return std::make_unique<table>(); }
@@ -652,15 +652,15 @@ struct streaming_groupby::impl {
   {
     CUDF_EXPECTS(_initialized, "Cannot finalize streaming_groupby with no accumulated data.");
 
-    auto keys_output = gather_all_unique_keys(stream, mr);
+    auto keys_output = gather_all_distinct_keys(stream, mr);
 
     // Gather sparse agg results at the encoded indices for each dense group.
     // _group_encoded_indices[g] is the encoded index for group g.
-    auto const num_unique = _num_unique_keys;
+    auto const num_distinct = _distinct_count;
     auto agg_gathered =
       cudf::detail::gather(_agg_results->view(),
                            device_span<size_type const>{_group_encoded_indices->data(),
-                                                        static_cast<std::size_t>(num_unique)},
+                                                        static_cast<std::size_t>(num_distinct)},
                            out_of_bounds_policy::DONT_CHECK,
                            cudf::negative_index_policy::NOT_ALLOWED,
                            stream,
@@ -720,16 +720,16 @@ struct streaming_groupby::impl {
     CUDF_EXPECTS(_initialized,
                  "Cannot merge into an uninitialized streaming_groupby. "
                  "Call aggregate() at least once before merge().");
-    CUDF_EXPECTS(other._num_unique_keys <= _max_groups,
-                 "Merge source unique keys (" + std::to_string(other._num_unique_keys) +
+    CUDF_EXPECTS(other._distinct_count <= _max_groups,
+                 "Merge source distinct count (" + std::to_string(other._distinct_count) +
                    ") exceeds max_groups (" + std::to_string(_max_groups) + ").",
                  std::invalid_argument);
 
     auto const mr = cudf::get_current_device_resource_ref();
 
-    auto other_keys             = other.gather_all_unique_keys(stream, mr);
+    auto other_keys             = other.gather_all_distinct_keys(stream, mr);
     auto const other_key_view   = other_keys->view();
-    auto const num_other_groups = other._num_unique_keys;
+    auto const num_other_groups = other._distinct_count;
     if (num_other_groups == 0) { return; }
 
     // Gather other's sparse agg results using its encoded indices.
@@ -759,7 +759,7 @@ struct streaming_groupby::impl {
                        merge_single_pass_aggs_fn{
                          result.target_indices.begin(), _d_agg_kinds.data(), *d_source, *d_target});
 
-    check_unique_key_count();
+    check_distinct_count();
   }
 };
 
@@ -798,6 +798,42 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> streaming_gro
 {
   CUDF_FUNC_RANGE();
   return _impl->do_finalize(stream, mr);
+}
+
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> streaming_groupby::release(
+  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(_impl->_initialized, "Cannot release streaming_groupby with no accumulated data.");
+
+  auto keys_output = _impl->gather_all_distinct_keys(stream, mr);
+
+  // Gather sparse agg results into dense order — raw intermediates, no compound finalization.
+  auto const num_distinct = _impl->_distinct_count;
+  auto agg_gathered =
+    cudf::detail::gather(_impl->_agg_results->view(),
+                         device_span<size_type const>{_impl->_group_encoded_indices->data(),
+                                                      static_cast<std::size_t>(num_distinct)},
+                         out_of_bounds_policy::DONT_CHECK,
+                         cudf::negative_index_policy::NOT_ALLOWED,
+                         stream,
+                         mr);
+
+  auto released_cols = agg_gathered->release();
+  std::vector<aggregation_result> results;
+  size_type col_idx = 0;
+  for (auto num_aggs : _impl->_aggs_per_request) {
+    aggregation_result agg_result;
+    for (size_type a = 0; a < num_aggs; ++a) {
+      agg_result.results.push_back(std::move(released_cols[col_idx++]));
+    }
+    results.push_back(std::move(agg_result));
+  }
+
+  // Leave the object in a moved-from state.
+  _impl.reset();
+
+  return {std::move(keys_output), std::move(results)};
 }
 
 }  // namespace cudf::groupby
