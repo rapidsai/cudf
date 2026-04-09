@@ -533,26 +533,6 @@ class streaming_groupby {
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
-  /**
-   * @brief Release the accumulated partial aggregates as intermediate results.
-   *
-   * Returns the unique keys and the raw intermediate aggregation state (e.g., SUM and
-   * COUNT for MEAN, M2 components for VARIANCE/STD) without applying compound
-   * finalization.  This is intended for distributed workflows where partial results
-   * from multiple workers are collected and merged via `merge()`.
-   *
-   * After this call the object is left in a moved-from state and must not be used
-   * except for destruction or move-assignment.
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the returned table and columns
-   * @return Pair of distinct keys table and a vector of aggregation_results containing
-   *         the raw intermediate columns (one per expanded single-pass aggregation)
-   */
-  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> release(
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
  private:
   struct impl;
   std::unique_ptr<impl> _impl;

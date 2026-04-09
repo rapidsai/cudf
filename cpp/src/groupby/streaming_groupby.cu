@@ -800,40 +800,4 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> streaming_gro
   return _impl->do_finalize(stream, mr);
 }
 
-std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> streaming_groupby::release(
-  rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-{
-  CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(_impl->_initialized, "Cannot release streaming_groupby with no accumulated data.");
-
-  auto keys_output = _impl->gather_all_distinct_keys(stream, mr);
-
-  // Gather sparse agg results into dense order — raw intermediates, no compound finalization.
-  auto const num_distinct = _impl->_distinct_count;
-  auto agg_gathered =
-    cudf::detail::gather(_impl->_agg_results->view(),
-                         device_span<size_type const>{_impl->_group_encoded_indices->data(),
-                                                      static_cast<std::size_t>(num_distinct)},
-                         out_of_bounds_policy::DONT_CHECK,
-                         cudf::negative_index_policy::NOT_ALLOWED,
-                         stream,
-                         mr);
-
-  auto released_cols = agg_gathered->release();
-  std::vector<aggregation_result> results;
-  size_type col_idx = 0;
-  for (auto num_aggs : _impl->_aggs_per_request) {
-    aggregation_result agg_result;
-    for (size_type a = 0; a < num_aggs; ++a) {
-      agg_result.results.push_back(std::move(released_cols[col_idx++]));
-    }
-    results.push_back(std::move(agg_result));
-  }
-
-  // Leave the object in a moved-from state.
-  _impl.reset();
-
-  return {std::move(keys_output), std::move(results)};
-}
-
 }  // namespace cudf::groupby
