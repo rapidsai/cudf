@@ -85,7 +85,6 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
        --import-mode=importlib \
        --cache-clear \
-       -r fEs \
        -m "" \
        --durations=50 \
        -p cudf_polars.testing.plugin \
