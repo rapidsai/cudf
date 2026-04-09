@@ -52,10 +52,6 @@ namespace {
 using row_eq_t        = detail::hash::row_comparator_t;
 using nested_row_eq_t = detail::hash::nullable_row_comparator_t;
 
-// ---------------------------------------------------------------------------
-// Functors
-// ---------------------------------------------------------------------------
-
 /// N-table comparator for the persistent hash set.
 ///
 /// Indices >= num_stored are "batch rows" (encoded as num_stored + batch_idx).
@@ -253,10 +249,6 @@ std::pair<rmm::device_buffer, bitmask_type const*> compute_row_bitmask(table_vie
   return {std::move(buf), static_cast<bitmask_type const*>(buf.data())};
 }
 
-// ---------------------------------------------------------------------------
-// Helper: build N cross-comparators on host and copy to device
-// ---------------------------------------------------------------------------
-
 template <bool has_nested_columns>
 auto build_cross_comparators(
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& pp_batch,
@@ -285,10 +277,6 @@ auto build_cross_comparators(
 }
 
 }  // namespace
-
-// ===========================================================================
-// streaming_groupby::impl
-// ===========================================================================
 
 struct streaming_groupby::impl {
   std::vector<size_type> _key_indices;
