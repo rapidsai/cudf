@@ -150,17 +150,22 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy_nosync(stream), itr, itr + size, result.begin(), ufn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      itr,
+                      itr + size,
+                      result.begin(),
+                      ufn);
     result_end = cudf::detail::copy_if(
       itr, itr + size, result.begin(), group_offsets->begin(), cuda::std::identity{}, stream);
   } else {
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
-                                     cuda::counting_iterator<size_type>{0},
-                                     cuda::counting_iterator<size_type>{size},
-                                     group_offsets->begin(),
-                                     permuted_row_equality_comparator(d_key_equal, sorted_order));
+    result_end =
+      thrust::unique_copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          cuda::counting_iterator<size_type>{0},
+                          cuda::counting_iterator<size_type>{size},
+                          group_offsets->begin(),
+                          permuted_row_equality_comparator(d_key_equal, sorted_order));
   }
 
   auto const num_groups = cuda::std::distance(group_offsets->begin(), result_end);

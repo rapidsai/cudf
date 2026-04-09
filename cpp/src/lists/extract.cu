@@ -59,7 +59,7 @@ std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
                                          mask_state::UNALLOCATED,
                                          stream,
                                          cudf::get_current_device_resource_ref());
-  thrust::copy_n(rmm::exec_policy_nosync(stream),
+  thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  null_replaced_iter_begin,
                  indices.size(),
                  index_child->mutable_view().begin<size_type>());
@@ -85,7 +85,7 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
                         mask_state::UNALLOCATED,
                         stream,
                         cudf::get_current_device_resource_ref());
-  thrust::fill_n(rmm::exec_policy_nosync(stream),
+  thrust::fill_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  index_child->mutable_view().begin<size_type>(),
                  num_rows,
                  index);
