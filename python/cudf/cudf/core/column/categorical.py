@@ -303,18 +303,20 @@ class CategoricalColumn(ColumnBase):
         if arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
-        if self.categories.dtype.kind == "f":
-            new_mask, null_count = self.notnull().fillna(False).as_mask()
-            col = self.set_mask(new_mask, null_count)
-        else:
-            col = self
-
-        signed_dtype = min_signed_type(len(col.categories))
+        signed_dtype = min_signed_type(len(self.categories))
         codes = (
-            col.codes.astype(signed_dtype)
+            self.codes.astype(signed_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .to_numpy()
         )
+
+        if self.categories.dtype.kind == "f":
+            # NaN categories need to be mapped to "missing" (-1) in pandas.
+            codes[~self.notnull().fillna(False).to_numpy()] = (
+                _DEFAULT_CATEGORICAL_VALUE
+            )
+
+        col = self
 
         cats = col.categories.nans_to_nulls()
         if not isinstance(cats.dtype, IntervalDtype):
