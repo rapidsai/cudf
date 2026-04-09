@@ -170,10 +170,7 @@ TYPED_TEST(DictionaryGetValueTest, GetNull)
 
 template <typename T>
 struct ListGetFixedWidthValueTest : public cudf::test::BaseFixture {
-  auto odds_valid()
-  {
-    return cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  }
+  auto odds_valid() { return nulls_at_multiples_of(2); }
   auto nth_valid(cudf::size_type x)
   {
     return cudf::detail::make_counting_transform_iterator(0, [=](auto i) { return x == i; });
@@ -326,10 +323,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
 }
 
 struct ListGetStringValueTest : public cudf::test::BaseFixture {
-  auto odds_valid()
-  {
-    return cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  }
+  auto odds_valid() { return nulls_at_multiples_of(2); }
   auto nth_valid(cudf::size_type x)
   {
     return cudf::detail::make_counting_transform_iterator(0, [=](auto i) { return x == i; });

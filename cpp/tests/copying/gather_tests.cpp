@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -75,7 +76,7 @@ TYPED_TEST(GatherTest, EveryOtherNullOdds)
 
   // Every other element is valid
   auto data     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto validity = cudf::test::iterators::nulls_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column(
     data, data + source_size, validity);
@@ -106,7 +107,7 @@ TYPED_TEST(GatherTest, EveryOtherNullEvens)
 
   // Every other element is valid
   auto data     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto validity = cudf::test::iterators::nulls_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column(
     data, data + source_size, validity);
@@ -203,7 +204,7 @@ TYPED_TEST(GatherTest, MultiColNulls)
   constexpr cudf::size_type n_cols = 3;
 
   auto data     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto validity = cudf::test::iterators::nulls_at_multiples_of(2);
 
   std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
   std::vector<cudf::column_view> source_columns;
@@ -227,8 +228,7 @@ TYPED_TEST(GatherTest, MultiColNulls)
   // Expected data
   auto expect_data =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return source_size - i - 1; });
-  auto expect_valid =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i + 1) % 2; });
+  auto expect_valid = cudf::test::iterators::valids_at_multiples_of(2);
 
   cudf::test::fixed_width_column_wrapper<TypeParam> expect_column(
     expect_data, expect_data + source_size, expect_valid);

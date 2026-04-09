@@ -25,6 +25,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -758,15 +759,9 @@ ret;
   std::vector<float> t_scalar_host = std::vector<float>(1, T);
   std::vector<float> expected_host = std::vector<float>(N, RES);
 
-  auto fourth()
-  {
-    return cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 4) == 0; });
-  }
+  auto fourth() { return cudf::test::iterators::valids_at_multiples_of(4); }
 
-  auto fifth()
-  {
-    return cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 5) == 0; });
-  }
+  auto fifth() { return cudf::test::iterators::valids_at_multiples_of(5); }
 };
 
 TEST_F(NullTest, ColumnNulls)

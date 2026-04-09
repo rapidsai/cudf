@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -92,8 +93,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<T>, 1 row
   //
@@ -181,8 +181,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<int>, 1 row
   //
@@ -296,8 +295,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListsWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<List<T>>, 1 row
   //
@@ -384,8 +382,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfListOfListsWithValidity)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<List<List<T>>>, 2 rows
   //
@@ -582,8 +579,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, EmptyListsWithValidity)
   // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<T>, 2 rows
   //
@@ -1247,8 +1243,7 @@ TEST_F(ListColumnWrapperTest, ListOfBools)
 
 TEST_F(ListColumnWrapperTest, ListOfBoolsWithValidity)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<bool>, 3 rows
   //
@@ -1508,15 +1503,14 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
     cuda::counting_iterator<int32_t>{0},
     cuda::counting_iterator{num_struct_rows},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
+    cudf::test::iterators::nulls_at_multiples_of(2)};
 
   auto bool_iterator =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 == 0; });
   auto bool_column =
     cudf::test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);
 
-  auto struct_validity_iterator =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 5 == 0; });
+  auto struct_validity_iterator = cudf::test::iterators::valids_at_multiples_of(5);
   auto struct_column =
     cudf::test::structs_column_wrapper{
       {numeric_column, bool_column},
@@ -1542,7 +1536,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   auto expected_numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
     cuda::counting_iterator<int32_t>{0},
     cuda::counting_iterator{num_struct_rows},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
+    cudf::test::iterators::nulls_at_multiples_of(2)};
 
   auto expected_bool_column =
     cudf::test::fixed_width_column_wrapper<bool>(bool_iterator, bool_iterator + num_struct_rows);

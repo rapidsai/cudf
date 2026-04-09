@@ -1214,8 +1214,7 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
 
   constexpr cudf::size_type num_values = (1 << num_nesting_levels) * rows_per_level;
   auto value_iter                      = cuda::counting_iterator<int>{0};
-  auto validity =
-    cudf::detail::make_counting_transform_iterator(0, [](cudf::size_type i) { return i % 2; });
+  auto validity                        = cudf::test::iterators::nulls_at_multiples_of(2);
   cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);
 
   // ~256k values with num_nesting_levels = 16

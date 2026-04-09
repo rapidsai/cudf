@@ -473,8 +473,7 @@ TEST_F(ParquetWriterTest, DecimalWrite)
   auto seq_col0                      = random_values<int32_t>(num_rows);
   auto seq_col1                      = random_values<int64_t>(num_rows);
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
     seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
@@ -1532,8 +1531,7 @@ TEST_F(ParquetWriterTest, PreserveNullability)
   auto const col1_data = random_values<int32_t>(num_rows);
 
   auto const col0_validity = cudf::test::iterators::no_nulls();
-  auto const col1_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto const col1_validity = cudf::test::iterators::valids_at_multiples_of(2);
 
   column_wrapper<int32_t> col0{col0_data.begin(), col0_data.end(), col0_validity};
   column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), col1_validity};
@@ -1923,8 +1921,7 @@ make_byte_stream_split_table(bool as_struct)
 
     // make as a nested struct
     if (as_struct) {
-      auto valids =
-        cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
+      auto valids                  = cudf::test::iterators::valids_at_multiples_of(2);
       auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
 
       std::vector<std::unique_ptr<cudf::column>> table_cols;
@@ -2219,7 +2216,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
 {
   auto sequence =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
+  auto validity = cudf::test::iterators::nulls_at_multiples_of(2);
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
