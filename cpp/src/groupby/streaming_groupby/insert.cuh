@@ -36,11 +36,10 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   auto const temp_mr    = cudf::get_current_device_resource_ref();
   auto const has_null   = cudf::nullate::DYNAMIC{_has_nullable_keys};
 
-  CUDF_EXPECTS(static_cast<int64_t>(num_stored) + batch_size <= _sparse_capacity,
-               "Encoded index range (" + std::to_string(num_stored) + " + " +
-                 std::to_string(batch_size) + ") exceeds sparse capacity (" +
-                 std::to_string(_sparse_capacity) +
-                 "). Use smaller batches or increase max_groups.",
+  CUDF_EXPECTS(static_cast<int64_t>(num_stored) + batch_size <= _max_groups,
+               "Cumulative batch rows (" + std::to_string(num_stored) + " + " +
+                 std::to_string(batch_size) + ") exceeds max_groups (" +
+                 std::to_string(_max_groups) + "). Use smaller batches or increase max_groups.",
                std::overflow_error);
 
   // Preprocess batch for row operators.

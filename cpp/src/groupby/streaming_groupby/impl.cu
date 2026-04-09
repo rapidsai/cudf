@@ -123,12 +123,8 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
                  std::invalid_argument);
   }
 
-  // Sparse agg results: 2 * max_groups to accommodate encoded index range.
-  _sparse_capacity =
-    static_cast<size_type>(std::min(static_cast<int64_t>(_max_groups) * 2,
-                                    static_cast<int64_t>(std::numeric_limits<size_type>::max())));
   _agg_results = detail::hash::create_results_table(
-    _sparse_capacity, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
+    _max_groups, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
 
   _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr);
 
@@ -160,9 +156,9 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
     }
   }
 
-  // Companion vectors: 2 * max_groups to accommodate encoded index range.
-  _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, mr);
-  _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_sparse_capacity, stream, mr);
+  // Companion vectors: max_groups to accommodate encoded index range.
+  _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
+  _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
 
   // Group-to-encoded-index map: sized to max_groups (one entry per distinct key).
   _encoded_indices = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
