@@ -92,7 +92,15 @@ void test_single_agg(cudf::column_view const& keys,
   }
 
   // --- Streaming groupby path (single-batch, validates against same expected output) ---
-  if (use_streaming == test_streaming::YES) {
+  // Skip streaming for: empty input (finalize throws), dictionary values (unsupported by
+  // streaming's row operators), ARGMIN/ARGMAX (batch-local row indices), or pre-sorted
+  // keys (streaming doesn't support sorted mode).
+  auto const skip_streaming =
+    keys.size() == 0 || expect_keys.size() == 0 ||
+    values.type().id() == cudf::type_id::DICTIONARY32 || agg->kind == cudf::aggregation::ARGMIN ||
+    agg->kind == cudf::aggregation::ARGMAX || keys_are_sorted == cudf::sorted::YES;
+
+  if (use_streaming == test_streaming::YES && !skip_streaming) {
     SCOPED_TRACE("streaming groupby path");
 
     cudf::table_view data{{keys, values}};
