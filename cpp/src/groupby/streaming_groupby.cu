@@ -627,6 +627,20 @@ struct streaming_groupby::impl {
         result.target_indices.begin(), _d_agg_kinds.data(), *d_values, *d_results_ptr});
   }
 
+  /// Gather the populated rows from the sparse agg results table into a dense table.
+  [[nodiscard]] std::unique_ptr<table> gather_agg_results(rmm::cuda_stream_view stream,
+                                                          rmm::device_async_resource_ref mr) const
+  {
+    return cudf::detail::gather(
+      _agg_results->view(),
+      device_span<size_type const>{_encoded_indices->data(),
+                                   static_cast<std::size_t>(_distinct_count)},
+      out_of_bounds_policy::DONT_CHECK,
+      cudf::negative_index_policy::NOT_ALLOWED,
+      stream,
+      mr);
+  }
+
   [[nodiscard]] std::unique_ptr<table> gather_distinct_keys(rmm::cuda_stream_view stream,
                                                             rmm::device_async_resource_ref mr) const
   {
@@ -647,19 +661,9 @@ struct streaming_groupby::impl {
   {
     CUDF_EXPECTS(_initialized, "Cannot finalize streaming_groupby with no accumulated data.");
 
-    auto keys_output = gather_distinct_keys(stream, mr);
+    auto keys = gather_distinct_keys(stream, mr);
 
-    // Gather sparse agg results at the encoded indices for each dense group.
-    // _encoded_indices[g] is the encoded index for group g.
-    auto const num_distinct = _distinct_count;
-    auto agg_gathered =
-      cudf::detail::gather(_agg_results->view(),
-                           device_span<size_type const>{_encoded_indices->data(),
-                                                        static_cast<std::size_t>(num_distinct)},
-                           out_of_bounds_policy::DONT_CHECK,
-                           cudf::negative_index_policy::NOT_ALLOWED,
-                           stream,
-                           mr);
+    auto agg_gathered = gather_agg_results(stream, mr);
 
     if (_has_compound_aggs) {
       cudf::detail::result_cache cache(_agg_kinds.size());
@@ -691,7 +695,7 @@ struct streaming_groupby::impl {
         }
       }
 
-      return {std::move(keys_output),
+      return {std::move(keys),
               detail::extract_results(
                 host_span<aggregation_request const>{agg_requests_fin}, cache, stream, mr)};
     }
@@ -706,7 +710,7 @@ struct streaming_groupby::impl {
       }
       results.push_back(std::move(agg_result));
     }
-    return {std::move(keys_output), std::move(results)};
+    return {std::move(keys), std::move(results)};
   }
 
   void do_merge(impl const& other, rmm::cuda_stream_view stream)
@@ -736,15 +740,7 @@ struct streaming_groupby::impl {
     auto const num_other_groups = other._distinct_count;
     if (num_other_groups == 0) { return; }
 
-    // Gather other's sparse agg results using its encoded indices.
-    auto other_aggs =
-      cudf::detail::gather(other._agg_results->view(),
-                           device_span<size_type const>{other._encoded_indices->data(),
-                                                        static_cast<std::size_t>(num_other_groups)},
-                           out_of_bounds_policy::DONT_CHECK,
-                           cudf::negative_index_policy::NOT_ALLOWED,
-                           stream,
-                           mr);
+    auto other_aggs = other.gather_agg_results(stream, mr);
 
     update_nullable_state(other_key_view);
 
