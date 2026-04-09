@@ -430,7 +430,9 @@ async def concat_batch(
             context=ir_context,
         )
         del batch
-    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
+    )
 
 
 async def evaluate_batch(
@@ -518,7 +520,10 @@ async def chunkwise_evaluate(
             sequence_number=msg.sequence_number,
         ):
             result = await evaluate_chunk(
-                context, TableChunk.from_message(msg), ir, ir_context=ir_context
+                context,
+                TableChunk.from_message(msg, br=context.br()),
+                ir,
+                ir_context=ir_context,
             )
         del msg, cd
         if tracer is not None:
@@ -905,6 +910,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
         empty_table,
         stream,
         exclusive_view=True,
+        br=context.br(),
     )
 
 
