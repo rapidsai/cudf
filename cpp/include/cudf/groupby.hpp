@@ -443,7 +443,7 @@ struct streaming_aggregation_request {
  *
  * Supported aggregation kinds:
  *   SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX,
- *   COUNT_VALID, COUNT_ALL, ARGMIN, ARGMAX, MEAN, M2, VARIANCE, STD
+ *   COUNT_VALID, COUNT_ALL, MEAN, M2, VARIANCE, STD
  *
  * @throws std::invalid_argument for unsupported aggregation kinds
  * @throws std::invalid_argument if a single batch exceeds `max_groups` rows
@@ -470,8 +470,13 @@ class streaming_groupby {
    *
    * @param key_indices Indices of columns in the data table that serve as groupby keys
    * @param requests The aggregations to perform and which columns to aggregate
-   * @param max_groups Upper bound on distinct key combinations and total key table capacity
+   * @param max_groups Upper bound on distinct key combinations. Also limits the
+   *        cumulative row count across batches: the sum of all batch sizes passed to
+   *        `aggregate()` must not exceed `2 * max_groups`.
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
+   *
+   * @throws std::invalid_argument if `max_groups <= 0`
+   * @throws std::invalid_argument if any requested aggregation kind is unsupported
    */
   explicit streaming_groupby(host_span<size_type const> key_indices,
                              host_span<streaming_aggregation_request const> requests,
@@ -481,20 +486,18 @@ class streaming_groupby {
   /**
    * @brief Feed a batch of data into the streaming aggregation.
    *
-   * Batch keys are copied into the internal key table and inserted into the persistent
-   * hash set. The input `data` table is not referenced after this call returns.
+   * Batch keys are inserted into the persistent hash set and aggregation results
+   * are updated atomically. The input `data` table is not referenced after this
+   * call returns.
    *
    * @param data Table containing both key and value columns
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used for allocations
    *
    * @throws std::invalid_argument if `data.num_rows() > max_groups`
-   * @throws std::overflow_error if accumulated rows + batch size exceed `max_groups`
+   * @throws std::overflow_error if cumulative row count exceeds `2 * max_groups`
    * @throws cudf::logic_error if distinct keys exceed `max_groups`
    */
-  void aggregate(table_view const& data,
-                 rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                 rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  void aggregate(table_view const& data, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Merge another streaming_groupby's accumulated partial state into this one.
@@ -506,15 +509,14 @@ class streaming_groupby {
    *
    * @param other The streaming_groupby whose partial state to merge
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used for allocations
    *
    * @throws std::invalid_argument if the other object has more distinct keys than `max_groups`
-   * @throws std::overflow_error if accumulated rows + merge groups exceed `max_groups`
+   * @throws std::overflow_error if cumulative row count exceeds `2 * max_groups`
+   * @throws cudf::logic_error if this object has not been initialized via `aggregate()`
    * @throws cudf::logic_error if distinct keys exceed `max_groups` after merge
    */
   void merge(streaming_groupby const& other,
-             rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+             rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Finalize the accumulated partial aggregates into final results.
@@ -528,6 +530,8 @@ class streaming_groupby {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns
    * @return Pair of distinct keys table and a vector of aggregation_results (one per request)
+   *
+   * @throws cudf::logic_error if no data has been accumulated
    */
   [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> finalize(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
