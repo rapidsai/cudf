@@ -148,7 +148,7 @@ def _register_accessor(name, cls):
         if hasattr(cls, name):
             msg = f"Attribute {name} will be overridden in {cls.__name__}"
             warnings.warn(msg)
-        cached_accessor = _CachedAccessor(name, accessor)
+        cached_accessor = _Accessor(name, accessor)
         cls._accessors.add(name)
         setattr(cls, name, cached_accessor)
 
