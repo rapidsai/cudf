@@ -10,6 +10,7 @@ from . cimport (
     orc,
     parquet,
     parquet_metadata,
+    protobuf,
     text,
     timezone,
     types,
