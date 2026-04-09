@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import contextlib
-import gc
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -394,7 +393,6 @@ def evaluate_pipeline(
             # Ensure these are dropped even if a node raises
             # an exception in run_actor_network
             del nodes, output
-            gc.collect()
 
             # Restore the initial RMM memory resource
             if _original_mr is not None:
