@@ -367,6 +367,17 @@ struct streaming_groupby::impl {
     _is_agg_intermediate = std::move(is_intermediate);
     _has_compound_aggs   = has_compound;
 
+    // Reject ARGMIN/ARGMAX intermediates produced by extract_single_pass_aggs.
+    // This happens when MIN/MAX is requested on string columns — the hash groupby
+    // decomposes them to ARGMIN/ARGMAX which require the original value column for
+    // finalization, but streaming doesn't preserve value columns across batches.
+    for (auto k : _agg_kinds) {
+      CUDF_EXPECTS(k != aggregation::ARGMIN && k != aggregation::ARGMAX,
+                   "Streaming groupby does not support MIN/MAX on variable-width types "
+                   "(internally decomposed to ARGMIN/ARGMAX).",
+                   std::invalid_argument);
+    }
+
     // Sparse agg results: 2 * max_groups to accommodate encoded index range.
     _sparse_capacity =
       static_cast<size_type>(std::min(static_cast<int64_t>(_max_groups) * 2,
@@ -558,6 +569,11 @@ struct streaming_groupby::impl {
       _compacted_batches.push_back(std::move(compacted));
       _pp_batches.push_back(pp_compacted);
 
+      // Check bounds BEFORE writing to companion vectors and group_encoded_indices.
+      CUDF_EXPECTS(_distinct_count + new_distinct_count <= _max_groups,
+                   "Distinct key count (" + std::to_string(_distinct_count + new_distinct_count) +
+                     ") would exceed max_groups (" + std::to_string(_max_groups) + ").");
+
       // Scatter companion vectors and record encoded indices in a single pass.
       thrust::for_each_n(rmm::exec_policy_nosync(stream),
                          cuda::counting_iterator<size_type>(0),
@@ -578,13 +594,6 @@ struct streaming_groupby::impl {
     _num_stored += batch_size;
 
     return {std::move(target_indices), new_distinct_count, std::move(bitmask_buffer)};
-  }
-
-  void check_distinct_count()
-  {
-    CUDF_EXPECTS(_distinct_count <= _max_groups,
-                 "Distinct key count (" + std::to_string(_distinct_count) +
-                   ") exceeded max_groups (" + std::to_string(_max_groups) + ").");
   }
 
   void do_aggregate(table_view const& data, rmm::cuda_stream_view stream)
@@ -630,8 +639,6 @@ struct streaming_groupby::impl {
       static_cast<int64_t>(batch_size) * num_agg_cols,
       detail::hash::compute_single_pass_aggs_dense_output_fn{
         result.target_indices.begin(), _d_agg_kinds.data(), *d_values, *d_results_ptr});
-
-    check_distinct_count();
   }
 
   [[nodiscard]] std::unique_ptr<table> gather_all_distinct_keys(
@@ -763,8 +770,6 @@ struct streaming_groupby::impl {
                        static_cast<int64_t>(num_other_groups) * num_agg_cols,
                        merge_single_pass_aggs_fn{
                          result.target_indices.begin(), _d_agg_kinds.data(), *d_source, *d_target});
-
-    check_distinct_count();
   }
 };
 
