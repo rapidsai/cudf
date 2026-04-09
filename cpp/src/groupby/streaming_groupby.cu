@@ -205,9 +205,10 @@ void validate_requests(host_span<streaming_aggregation_request const> requests)
 {
   for (auto const& req : requests) {
     for (auto const& agg : req.aggregations) {
-      CUDF_EXPECTS(detail::is_hash_aggregation(agg->kind),
+      CUDF_EXPECTS(detail::is_hash_aggregation(agg->kind) && agg->kind != aggregation::ARGMIN &&
+                     agg->kind != aggregation::ARGMAX,
                    "Unsupported aggregation kind for streaming groupby. "
-                   "Only hash-based aggregations are supported.",
+                   "ARGMIN/ARGMAX are not supported because row indices are batch-local.",
                    std::invalid_argument);
     }
   }
@@ -335,7 +336,7 @@ struct streaming_groupby::impl {
        null_policy null_handling)
     : _max_groups{max_groups},
       _null_handling{null_handling},
-      _d_agg_kinds{0, cudf::get_default_stream(), cudf::get_current_device_resource_ref()}
+      _d_agg_kinds{0, rmm::cuda_stream_default, cudf::get_current_device_resource_ref()}
   {
     CUDF_EXPECTS(max_groups > 0, "max_groups must be positive.", std::invalid_argument);
     if (!key_indices.empty()) { _key_indices.assign(key_indices.begin(), key_indices.end()); }
@@ -494,8 +495,9 @@ struct streaming_groupby::impl {
                                              : std::pair<rmm::device_buffer, bitmask_type const*>{
                                                  rmm::device_buffer{0, stream}, nullptr};
 
-    // Build comparator.  When num_stored == 0 and _pp_batches is empty,
-    // the n_table_comparator only enters the batch-self branch.
+    // Build comparator.  O(num_compacted_batches) host work + H2D copy per batch.
+    // When num_stored == 0 and _pp_batches is empty, the comparator only enters
+    // the batch-self branch.
     auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{pp_batch};
     auto const batch_self_eq  = batch_self_cmp.equal_to<false>(has_null, null_equality::EQUAL);
 
@@ -724,6 +726,9 @@ struct streaming_groupby::impl {
                  "Merge source distinct count (" + std::to_string(other._distinct_count) +
                    ") exceeds max_groups (" + std::to_string(_max_groups) + ").",
                  std::invalid_argument);
+    CUDF_EXPECTS(other._agg_kinds == _agg_kinds,
+                 "Cannot merge streaming_groupby objects with different aggregation schemas.",
+                 std::invalid_argument);
 
     auto const mr = cudf::get_current_device_resource_ref();
 
@@ -777,17 +782,13 @@ streaming_groupby::streaming_groupby(streaming_groupby&&) noexcept = default;
 
 streaming_groupby& streaming_groupby::operator=(streaming_groupby&&) noexcept = default;
 
-void streaming_groupby::aggregate(table_view const& data,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::device_async_resource_ref mr)
+void streaming_groupby::aggregate(table_view const& data, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   _impl->do_aggregate(data, stream);
 }
 
-void streaming_groupby::merge(streaming_groupby const& other,
-                              rmm::cuda_stream_view stream,
-                              rmm::device_async_resource_ref mr)
+void streaming_groupby::merge(streaming_groupby const& other, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   _impl->do_merge(*other._impl, stream);

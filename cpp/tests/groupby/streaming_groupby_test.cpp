@@ -21,8 +21,6 @@
 
 #include <vector>
 
-using namespace cudf::test;
-
 static std::vector<cudf::size_type> const KEY_COL{0};
 static cudf::size_type constexpr DEFAULT_MAX_GROUPS = 1024;
 
@@ -32,7 +30,7 @@ void sort_and_compare(std::unique_ptr<cudf::table>& lhs_keys,
                       std::vector<cudf::groupby::aggregation_result>& lhs_results,
                       std::unique_ptr<cudf::table>& rhs_keys,
                       std::vector<cudf::groupby::aggregation_result>& rhs_results,
-                      std::vector<cudf::null_order> const& null_prec = {cudf::null_order::AFTER})
+                      std::vector<cudf::null_order> const& null_prec = {})
 {
   auto const lhs_order = cudf::sorted_order(lhs_keys->view(), {}, null_prec);
   auto const rhs_order = cudf::sorted_order(rhs_keys->view(), {}, null_prec);
@@ -143,11 +141,11 @@ TEST_F(StreamingGroupbyTest, SumTwoBatches)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 3, 1};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30, 40};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 3, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30, 40};
 
-  fixed_width_column_wrapper<K> keys2{2, 3, 1, 4};
-  fixed_width_column_wrapper<V> vals2{5, 15, 25, 35};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 3, 1, 4};
+  cudf::test::fixed_width_column_wrapper<V> vals2{5, 15, 25, 35};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -167,11 +165,11 @@ TEST_F(StreamingGroupbyTest, MinMaxTwoBatches)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<V> vals1{5.0, 2.0, 8.0};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{5.0, 2.0, 8.0};
 
-  fixed_width_column_wrapper<K> keys2{1, 2, 3};
-  fixed_width_column_wrapper<V> vals2{3.0, 9.0, 1.0};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<V> vals2{3.0, 9.0, 1.0};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -195,11 +193,11 @@ TEST_F(StreamingGroupbyTest, CountValidTwoBatches)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1, 2};
-  fixed_width_column_wrapper<V> vals1{{10, 20, 30, 40}, {true, false, true, true}};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{{10, 20, 30, 40}, {true, false, true, true}};
 
-  fixed_width_column_wrapper<K> keys2{1, 2};
-  fixed_width_column_wrapper<V> vals2{{50, 60}, {false, true}};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{{50, 60}, {false, true}};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -220,11 +218,11 @@ TEST_F(StreamingGroupbyTest, MeanTwoBatches)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
 
-  fixed_width_column_wrapper<K> keys2{1, 2};
-  fixed_width_column_wrapper<V> vals2{50.0, 40.0};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{50.0, 40.0};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -244,11 +242,11 @@ TEST_F(StreamingGroupbyTest, ProductTwoBatches)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2};
-  fixed_width_column_wrapper<V> vals1{3, 5};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{3, 5};
 
-  fixed_width_column_wrapper<K> keys2{1, 2};
-  fixed_width_column_wrapper<V> vals2{4, 2};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{4, 2};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -267,11 +265,11 @@ TEST_F(StreamingGroupbyTest, MaxMinOnIntegers)
 {
   using K = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2};
-  fixed_width_column_wrapper<int32_t> vals1{0, 1};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2};
+  cudf::test::fixed_width_column_wrapper<int32_t> vals1{0, 1};
 
-  fixed_width_column_wrapper<K> keys2{1, 2};
-  fixed_width_column_wrapper<int32_t> vals2{1, 1};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2};
+  cudf::test::fixed_width_column_wrapper<int32_t> vals2{1, 1};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -296,11 +294,11 @@ TEST_F(StreamingGroupbyTest, MergeTwoObjects)
   using V = int32_t;
   using R = int64_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30};
 
-  fixed_width_column_wrapper<K> keys2{2, 3};
-  fixed_width_column_wrapper<V> vals2{40, 50};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 3};
+  cudf::test::fixed_width_column_wrapper<V> vals2{40, 50};
 
   auto reqs1 = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
   cudf::groupby::streaming_groupby worker1(KEY_COL, reqs1, DEFAULT_MAX_GROUPS);
@@ -313,8 +311,8 @@ TEST_F(StreamingGroupbyTest, MergeTwoObjects)
   worker1.merge(worker2);
   auto [keys, results] = worker1.finalize();
 
-  fixed_width_column_wrapper<K> ek{1, 2, 3};
-  fixed_width_column_wrapper<R> ev{40, 60, 50};
+  cudf::test::fixed_width_column_wrapper<K> ek{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<R> ev{40, 60, 50};
   check(keys, results, cudf::table_view{{ek}}, {ev});
 }
 
@@ -324,11 +322,11 @@ TEST_F(StreamingGroupbyTest, EmptyBatch)
   using V = int32_t;
   using R = int64_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
-  fixed_width_column_wrapper<K> keys_empty{};
-  fixed_width_column_wrapper<V> vals_empty{};
+  cudf::test::fixed_width_column_wrapper<K> keys_empty{};
+  cudf::test::fixed_width_column_wrapper<V> vals_empty{};
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
@@ -337,8 +335,8 @@ TEST_F(StreamingGroupbyTest, EmptyBatch)
   streaming_agg.aggregate(cudf::table_view{{keys1, vals1}});
   auto [keys, results] = streaming_agg.finalize();
 
-  fixed_width_column_wrapper<K> ek{1, 2};
-  fixed_width_column_wrapper<R> ev{10, 20};
+  cudf::test::fixed_width_column_wrapper<K> ek{1, 2};
+  cudf::test::fixed_width_column_wrapper<R> ev{10, 20};
   check(keys, results, cudf::table_view{{ek}}, {ev});
 }
 
@@ -347,8 +345,8 @@ TEST_F(StreamingGroupbyTest, SingleBatch)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1, 3, 2};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30, 40, 50};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1, 3, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30, 40, 50};
 
   cudf::table_view batch1{{keys1, vals1}};
 
@@ -366,14 +364,14 @@ TEST_F(StreamingGroupbyTest, NewKeysInLaterBatches)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
-  fixed_width_column_wrapper<K> keys2{3, 4};
-  fixed_width_column_wrapper<V> vals2{30, 40};
+  cudf::test::fixed_width_column_wrapper<K> keys2{3, 4};
+  cudf::test::fixed_width_column_wrapper<V> vals2{30, 40};
 
-  fixed_width_column_wrapper<K> keys3{1, 4};
-  fixed_width_column_wrapper<V> vals3{50, 60};
+  cudf::test::fixed_width_column_wrapper<K> keys3{1, 4};
+  cudf::test::fixed_width_column_wrapper<V> vals3{50, 60};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -394,13 +392,13 @@ TEST_F(StreamingGroupbyTest, MultipleRequestsOnDifferentColumns)
 {
   using K = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<int32_t> col_a1{10, 20, 30};
-  fixed_width_column_wrapper<double> col_b1{1.0, 2.0, 3.0};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_a1{10, 20, 30};
+  cudf::test::fixed_width_column_wrapper<double> col_b1{1.0, 2.0, 3.0};
 
-  fixed_width_column_wrapper<K> keys2{2, 1};
-  fixed_width_column_wrapper<int32_t> col_a2{40, 50};
-  fixed_width_column_wrapper<double> col_b2{4.0, 5.0};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_a2{40, 50};
+  cudf::test::fixed_width_column_wrapper<double> col_b2{4.0, 5.0};
 
   cudf::table_view batch1{{keys1, col_a1, col_b1}};
   cudf::table_view batch2{{keys2, col_a2, col_b2}};
@@ -431,11 +429,11 @@ TEST_F(StreamingGroupbyTest, FinalizeDoesNotModifyState)
   using V = int32_t;
   using R = int64_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
-  fixed_width_column_wrapper<K> keys2{1};
-  fixed_width_column_wrapper<V> vals2{30};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1};
+  cudf::test::fixed_width_column_wrapper<V> vals2{30};
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
@@ -449,8 +447,8 @@ TEST_F(StreamingGroupbyTest, FinalizeDoesNotModifyState)
   streaming_agg.aggregate(cudf::table_view{{keys2, vals2}});
   auto [keys, results] = streaming_agg.finalize();
 
-  fixed_width_column_wrapper<K> ek{1, 2};
-  fixed_width_column_wrapper<R> ev{40, 20};
+  cudf::test::fixed_width_column_wrapper<K> ek{1, 2};
+  cudf::test::fixed_width_column_wrapper<R> ev{40, 20};
   check(keys, results, cudf::table_view{{ek}}, {ev});
 }
 
@@ -459,11 +457,11 @@ TEST_F(StreamingGroupbyTest, NullKeysExcluded)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{{1, 2, 3}, {true, false, true}};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30};
+  cudf::test::fixed_width_column_wrapper<K> keys1{{1, 2, 3}, {true, false, true}};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30};
 
-  fixed_width_column_wrapper<K> keys2{{1, 2}, {true, false}};
-  fixed_width_column_wrapper<V> vals2{40, 50};
+  cudf::test::fixed_width_column_wrapper<K> keys2{{1, 2}, {true, false}};
+  cudf::test::fixed_width_column_wrapper<V> vals2{40, 50};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -486,11 +484,11 @@ TEST_F(StreamingGroupbyTest, NullKeysIncluded)
   using V = int32_t;
   using R = int64_t;
 
-  fixed_width_column_wrapper<K> keys1{{1, 2, 3}, {true, false, true}};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30};
+  cudf::test::fixed_width_column_wrapper<K> keys1{{1, 2, 3}, {true, false, true}};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30};
 
-  fixed_width_column_wrapper<K> keys2{{1, 2}, {true, false}};
-  fixed_width_column_wrapper<V> vals2{40, 50};
+  cudf::test::fixed_width_column_wrapper<K> keys2{{1, 2}, {true, false}};
+  cudf::test::fixed_width_column_wrapper<V> vals2{40, 50};
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
@@ -506,8 +504,8 @@ TEST_F(StreamingGroupbyTest, NullKeysIncluded)
   auto const sorted_keys = cudf::gather(keys->view(), *order);
   auto const sorted_vals = cudf::gather(cudf::table_view{{results[0].results[0]->view()}}, *order);
 
-  fixed_width_column_wrapper<K> ek{{1, 3, 2}, {true, true, false}};
-  fixed_width_column_wrapper<R> ev{50, 30, 70};
+  cudf::test::fixed_width_column_wrapper<K> ek{{1, 3, 2}, {true, true, false}};
+  cudf::test::fixed_width_column_wrapper<R> ev{50, 30, 70};
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{ek}}, sorted_keys->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(ev, sorted_vals->get_column(0));
 }
@@ -517,8 +515,8 @@ TEST_F(StreamingGroupbyTest, AllNullKeysExcluded)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{{1, 2}, {false, false}};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::fixed_width_column_wrapper<K> keys1{{1, 2}, {false, false}};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
@@ -545,11 +543,11 @@ TYPED_TEST(StreamingGroupbySumTypedTest, TwoBatches)
   using K = int32_t;
   using V = TypeParam;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  fixed_width_column_wrapper<K> keys2{1, 2, 3};
-  fixed_width_column_wrapper<V> vals2{10, 20, 30};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<V> vals2{10, 20, 30};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -578,11 +576,11 @@ TYPED_TEST(StreamingGroupbyMinTypedTest, TwoBatches)
   using K = int32_t;
   using V = TypeParam;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<V> vals1{5, 2, 8};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{5, 2, 8};
 
-  fixed_width_column_wrapper<K> keys2{1, 2};
-  fixed_width_column_wrapper<V> vals2{3, 9};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{3, 9};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -602,11 +600,11 @@ TEST_F(StreamingGroupbyTest, VarianceBasic)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
-  fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
 
-  fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
-  fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -626,11 +624,11 @@ TEST_F(StreamingGroupbyTest, StdBasic)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
-  fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
 
-  fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
-  fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -657,8 +655,8 @@ TEST_F(StreamingGroupbyTest, BatchExceedsMaxGroupsThrows)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys{1, 2, 3, 4, 5};
-  fixed_width_column_wrapper<V> vals{10, 20, 30, 40, 50};
+  cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 4, 5};
+  cudf::test::fixed_width_column_wrapper<V> vals{10, 20, 30, 40, 50};
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
@@ -671,11 +669,11 @@ TEST_F(StreamingGroupbyTest, DisjointKeysAcrossBatches)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
-  fixed_width_column_wrapper<K> keys2{3, 4};
-  fixed_width_column_wrapper<V> vals2{30, 40};
+  cudf::test::fixed_width_column_wrapper<K> keys2{3, 4};
+  cudf::test::fixed_width_column_wrapper<V> vals2{30, 40};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -695,14 +693,14 @@ TEST_F(StreamingGroupbyTest, AllDuplicateKeysAcrossBatches)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
-  fixed_width_column_wrapper<K> keys2{1, 2};
-  fixed_width_column_wrapper<V> vals2{30, 40};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{30, 40};
 
-  fixed_width_column_wrapper<K> keys3{1, 2};
-  fixed_width_column_wrapper<V> vals3{50, 60};
+  cudf::test::fixed_width_column_wrapper<K> keys3{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals3{50, 60};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -732,8 +730,8 @@ TEST_F(StreamingGroupbyTest, SingleRowBatches)
   std::vector<std::unique_ptr<cudf::column>> val_owners;
 
   for (int32_t i = 0; i < 10; ++i) {
-    auto k = std::make_unique<cudf::column>(fixed_width_column_wrapper<K>{i % 3});
-    auto v = std::make_unique<cudf::column>(fixed_width_column_wrapper<V>{i * 10});
+    auto k = std::make_unique<cudf::column>(cudf::test::fixed_width_column_wrapper<K>{i % 3});
+    auto v = std::make_unique<cudf::column>(cudf::test::fixed_width_column_wrapper<V>{i * 10});
     cudf::table_view batch{{k->view(), v->view()}};
     streaming_agg.aggregate(batch);
     key_owners.push_back(std::move(k));
@@ -756,11 +754,11 @@ TEST_F(StreamingGroupbyTest, InternalDuplicatesDoNotCorruptStaging)
   // Batch 1: key 1 is a duplicate at position 1, so key 3 ends up at position 3
   // (_num_unique_keys == 3).  Without the fix, batch 2 writes at offset 3, overwriting
   // the canonical slot for key 3 with key 4, making them appear identical.
-  fixed_width_column_wrapper<K> keys1{1, 1, 2, 3};
-  fixed_width_column_wrapper<V> vals1{10, 10, 20, 30};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 10, 20, 30};
 
-  fixed_width_column_wrapper<K> keys2{4, 5};
-  fixed_width_column_wrapper<V> vals2{40, 50};
+  cudf::test::fixed_width_column_wrapper<K> keys2{4, 5};
+  cudf::test::fixed_width_column_wrapper<V> vals2{40, 50};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -780,11 +778,11 @@ TEST_F(StreamingGroupbyTest, SumAndMeanOnSameColumn)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
 
-  fixed_width_column_wrapper<K> keys2{2, 1};
-  fixed_width_column_wrapper<V> vals2{40.0, 50.0};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals2{40.0, 50.0};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -819,9 +817,9 @@ TEST_F(StreamingGroupbyTest, ManySmallBatches)
 
   for (int32_t b = 0; b < 10; ++b) {
     auto k = std::make_unique<cudf::column>(
-      fixed_width_column_wrapper<K>{b % 8, (b + 1) % 8, (b + 2) % 8, (b + 3) % 8});
+      cudf::test::fixed_width_column_wrapper<K>{b % 8, (b + 1) % 8, (b + 2) % 8, (b + 3) % 8});
     auto v = std::make_unique<cudf::column>(
-      fixed_width_column_wrapper<V>{b * 10, b * 10 + 1, b * 10 + 2, b * 10 + 3});
+      cudf::test::fixed_width_column_wrapper<V>{b * 10, b * 10 + 1, b * 10 + 2, b * 10 + 3});
     cudf::table_view batch{{k->view(), v->view()}};
     streaming_agg.aggregate(batch);
     batches.push_back(batch);
@@ -844,14 +842,14 @@ TEST_F(StreamingGroupbyTest, ExceedsKeyTableCapacityThrows)
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 4);
 
   // First batch with 4 unique keys fills capacity.
-  fixed_width_column_wrapper<K> k1{0, 1, 2, 3};
-  fixed_width_column_wrapper<V> v1{10, 20, 30, 40};
+  cudf::test::fixed_width_column_wrapper<K> k1{0, 1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<V> v1{10, 20, 30, 40};
   cudf::table_view batch1{{k1, v1}};
   streaming_agg.aggregate(batch1);
 
   // Second batch introduces a 5th unique key (4), exceeding max_groups=4.
-  fixed_width_column_wrapper<K> k2{0, 1, 4};
-  fixed_width_column_wrapper<V> v2{50, 60, 70};
+  cudf::test::fixed_width_column_wrapper<K> k2{0, 1, 4};
+  cudf::test::fixed_width_column_wrapper<V> v2{50, 60, 70};
   EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k2, v2}}), cudf::logic_error);
 }
 
@@ -861,8 +859,8 @@ TEST_F(StreamingGroupbyTest, SlicedInputColumns)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> full_keys{0, 1, 2, 3, 1, 2};
-  fixed_width_column_wrapper<V> full_vals{10, 20, 30, 40, 50, 60};
+  cudf::test::fixed_width_column_wrapper<K> full_keys{0, 1, 2, 3, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> full_vals{10, 20, 30, 40, 50, 60};
 
   // Slice to get a view with offset=2: keys={2,3,1,2}, vals={30,40,50,60}
   auto sliced = cudf::slice(cudf::table_view{{full_keys, full_vals}}, {2, 6});
@@ -890,11 +888,11 @@ TEST_F(StreamingGroupbyTest, MergeMeanTwoBatches)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10.0, 20.0, 30.0};
 
-  fixed_width_column_wrapper<K> keys2{2, 1, 3};
-  fixed_width_column_wrapper<V> vals2{40.0, 50.0, 60.0};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1, 3};
+  cudf::test::fixed_width_column_wrapper<V> vals2{40.0, 50.0, 60.0};
 
   auto reqs1 = single_agg_req(1, cudf::make_mean_aggregation<cudf::groupby_aggregation>());
   cudf::groupby::streaming_groupby worker1(KEY_COL, reqs1, DEFAULT_MAX_GROUPS);
@@ -918,11 +916,11 @@ TEST_F(StreamingGroupbyTest, MergeCountTwoBatches)
   using K = int32_t;
   using V = int32_t;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1, 1};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30, 40};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30, 40};
 
-  fixed_width_column_wrapper<K> keys2{2, 1, 2};
-  fixed_width_column_wrapper<V> vals2{50, 60, 70};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{50, 60, 70};
 
   auto reqs1 = single_agg_req(
     1, cudf::make_count_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE));
@@ -948,11 +946,11 @@ TEST_F(StreamingGroupbyTest, MergeVarianceTwoBatches)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
-  fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 3, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{0, 1, 2, 3, 4};
 
-  fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
-  fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1, 3, 3, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{5, 6, 7, 8, 9};
 
   auto reqs1 = single_agg_req(1, cudf::make_variance_aggregation<cudf::groupby_aggregation>());
   cudf::groupby::streaming_groupby worker1(KEY_COL, reqs1, DEFAULT_MAX_GROUPS);
@@ -975,11 +973,11 @@ TEST_F(StreamingGroupbyTest, SumOfSquaresBasic)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1};
-  fixed_width_column_wrapper<V> vals1{3.0, 4.0, 5.0};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{3.0, 4.0, 5.0};
 
-  fixed_width_column_wrapper<K> keys2{2, 1};
-  fixed_width_column_wrapper<V> vals2{6.0, 7.0};
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals2{6.0, 7.0};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -999,11 +997,11 @@ TEST_F(StreamingGroupbyTest, M2Basic)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1, 2};
-  fixed_width_column_wrapper<V> vals1{1.0, 2.0, 3.0, 4.0};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{1.0, 2.0, 3.0, 4.0};
 
-  fixed_width_column_wrapper<K> keys2{1, 2};
-  fixed_width_column_wrapper<V> vals2{5.0, 6.0};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals2{5.0, 6.0};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -1023,11 +1021,11 @@ TEST_F(StreamingGroupbyTest, StdWithNullValues)
   using K = int32_t;
   using V = double;
 
-  fixed_width_column_wrapper<K> keys1{1, 2, 1, 2};
-  fixed_width_column_wrapper<V> vals1{{1.0, 2.0, 3.0, 4.0}, {true, true, false, true}};
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> vals1{{1.0, 2.0, 3.0, 4.0}, {true, true, false, true}};
 
-  fixed_width_column_wrapper<K> keys2{1, 2, 1};
-  fixed_width_column_wrapper<V> vals2{{5.0, 6.0, 7.0}, {true, false, true}};
+  cudf::test::fixed_width_column_wrapper<K> keys2{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals2{{5.0, 6.0, 7.0}, {true, false, true}};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -1048,11 +1046,11 @@ TEST_F(StreamingGroupbyTest, StringKeySumTwoBatches)
 {
   using V = int32_t;
 
-  strings_column_wrapper keys1{"a", "b", "c", "a"};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30, 40};
+  cudf::test::strings_column_wrapper keys1{"a", "b", "c", "a"};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30, 40};
 
-  strings_column_wrapper keys2{"b", "c", "a", "d"};
-  fixed_width_column_wrapper<V> vals2{5, 15, 25, 35};
+  cudf::test::strings_column_wrapper keys2{"b", "c", "a", "d"};
+  cudf::test::fixed_width_column_wrapper<V> vals2{5, 15, 25, 35};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -1069,11 +1067,11 @@ TEST_F(StreamingGroupbyTest, StringKeySumTwoBatches)
 
 TEST_F(StreamingGroupbyTest, StringKeyMinMaxTwoBatches)
 {
-  strings_column_wrapper keys1{"cat", "dog", "cat"};
-  fixed_width_column_wrapper<double> vals1{5.0, 2.0, 8.0};
+  cudf::test::strings_column_wrapper keys1{"cat", "dog", "cat"};
+  cudf::test::fixed_width_column_wrapper<double> vals1{5.0, 2.0, 8.0};
 
-  strings_column_wrapper keys2{"cat", "dog", "bird"};
-  fixed_width_column_wrapper<double> vals2{3.0, 9.0, 1.0};
+  cudf::test::strings_column_wrapper keys2{"cat", "dog", "bird"};
+  cudf::test::fixed_width_column_wrapper<double> vals2{3.0, 9.0, 1.0};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -1107,8 +1105,9 @@ TEST_F(StreamingGroupbyTest, StringKeyManySmallBatches)
 
   for (int32_t b = 0; b < 8; ++b) {
     auto k = std::make_unique<cudf::column>(
-      strings_column_wrapper{key_universe[b % 4], key_universe[(b + 1) % 4]});
-    auto v = std::make_unique<cudf::column>(fixed_width_column_wrapper<V>{b * 10, b * 10 + 1});
+      cudf::test::strings_column_wrapper{key_universe[b % 4], key_universe[(b + 1) % 4]});
+    auto v =
+      std::make_unique<cudf::column>(cudf::test::fixed_width_column_wrapper<V>{b * 10, b * 10 + 1});
     cudf::table_view batch{{k->view(), v->view()}};
     streaming_agg.aggregate(batch);
     batches.push_back(batch);
@@ -1124,14 +1123,14 @@ TEST_F(StreamingGroupbyTest, StringKeyDisjointBatches)
 {
   using V = int32_t;
 
-  strings_column_wrapper keys1{"x", "y"};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::strings_column_wrapper keys1{"x", "y"};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
-  strings_column_wrapper keys2{"z", "w"};
-  fixed_width_column_wrapper<V> vals2{30, 40};
+  cudf::test::strings_column_wrapper keys2{"z", "w"};
+  cudf::test::fixed_width_column_wrapper<V> vals2{30, 40};
 
-  strings_column_wrapper keys3{"x", "w"};
-  fixed_width_column_wrapper<V> vals3{50, 60};
+  cudf::test::strings_column_wrapper keys3{"x", "w"};
+  cudf::test::fixed_width_column_wrapper<V> vals3{50, 60};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -1152,11 +1151,11 @@ TEST_F(StreamingGroupbyTest, StringKeyNullKeysExcluded)
 {
   using V = int32_t;
 
-  strings_column_wrapper keys1{{"a", "b", "c"}, {true, false, true}};
-  fixed_width_column_wrapper<V> vals1{10, 20, 30};
+  cudf::test::strings_column_wrapper keys1{{"a", "b", "c"}, {true, false, true}};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20, 30};
 
-  strings_column_wrapper keys2{{"a", "b"}, {true, false}};
-  fixed_width_column_wrapper<V> vals2{40, 50};
+  cudf::test::strings_column_wrapper keys2{{"a", "b"}, {true, false}};
+  cudf::test::fixed_width_column_wrapper<V> vals2{40, 50};
 
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
@@ -1177,11 +1176,11 @@ TEST_F(StreamingGroupbyTest, StringKeyMerge)
 {
   using V = int32_t;
 
-  strings_column_wrapper keys1{"a", "b"};
-  fixed_width_column_wrapper<V> vals1{10, 20};
+  cudf::test::strings_column_wrapper keys1{"a", "b"};
+  cudf::test::fixed_width_column_wrapper<V> vals1{10, 20};
 
-  strings_column_wrapper keys2{"b", "c"};
-  fixed_width_column_wrapper<V> vals2{30, 40};
+  cudf::test::strings_column_wrapper keys2{"b", "c"};
+  cudf::test::fixed_width_column_wrapper<V> vals2{30, 40};
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
@@ -1199,4 +1198,78 @@ TEST_F(StreamingGroupbyTest, StringKeyMerge)
                          {cudf::table_view{{keys1, vals1}}, cudf::table_view{{keys2, vals2}}},
                          KEY_COL,
                          reqs);
+}
+
+TEST_F(StreamingGroupbyTest, CountAllTwoBatches)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  cudf::test::fixed_width_column_wrapper<K> keys1{1, 2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals1{{10, 20, 30}, {true, false, true}};
+
+  cudf::test::fixed_width_column_wrapper<K> keys2{2, 1};
+  cudf::test::fixed_width_column_wrapper<V> vals2{{40, 50}, {false, true}};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_count_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, MultiColumnKeys)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  cudf::test::fixed_width_column_wrapper<K> k1a{1, 1, 2};
+  cudf::test::fixed_width_column_wrapper<K> k1b{10, 20, 10};
+  cudf::test::fixed_width_column_wrapper<V> v1{100, 200, 300};
+
+  cudf::test::fixed_width_column_wrapper<K> k2a{1, 2};
+  cudf::test::fixed_width_column_wrapper<K> k2b{10, 10};
+  cudf::test::fixed_width_column_wrapper<V> v2{400, 500};
+
+  cudf::table_view batch1{{k1a, k1b, v1}};
+  cudf::table_view batch2{{k2a, k2b, v2}};
+
+  std::vector<cudf::size_type> key_cols{0, 1};
+  auto reqs = single_agg_req(2, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(key_cols, reqs, DEFAULT_MAX_GROUPS);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, key_cols, reqs);
+}
+
+TEST_F(StreamingGroupbyTest, EncodingOverflowThrows)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+  // max_groups=4, so sparse capacity = 8. Three batches of 3 rows each = 9 > 8.
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 4);
+
+  cudf::test::fixed_width_column_wrapper<K> k1{0, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> v1{10, 20, 30};
+  streaming_agg.aggregate(cudf::table_view{{k1, v1}});
+
+  cudf::test::fixed_width_column_wrapper<K> k2{0, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> v2{10, 20, 30};
+  streaming_agg.aggregate(cudf::table_view{{k2, v2}});
+
+  // Third batch: num_stored=6, batch_size=3, 6+3=9 > 8 = sparse_capacity.
+  cudf::test::fixed_width_column_wrapper<K> k3{0, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> v3{10, 20, 30};
+  EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k3, v3}}), std::overflow_error);
 }
