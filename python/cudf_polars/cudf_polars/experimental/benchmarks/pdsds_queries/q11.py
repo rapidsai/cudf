@@ -161,14 +161,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_second = date_dim.filter(pl.col("d_year") == year_second).select("d_date_sk")
 
     # Aggregate by customer_sk only — no customer table join needed yet.
-    t_s_first = build_year_total(
-        store_sales,
-        "ss_customer_sk",
-        "ss_sold_date_sk",
-        "ss_ext_list_price",
-        "ss_ext_discount_amt",
-        date_first,
-    ).rename({"ss_customer_sk": "customer_sk", "year_total": "s_first_year_total"})
+    t_s_first = (
+        build_year_total(
+            store_sales,
+            "ss_customer_sk",
+            "ss_sold_date_sk",
+            "ss_ext_list_price",
+            "ss_ext_discount_amt",
+            date_first,
+        )
+        .rename({"ss_customer_sk": "customer_sk", "year_total": "s_first_year_total"})
+        .filter(pl.col("s_first_year_total") > 0)
+    )
 
     t_s_sec = build_year_total(
         store_sales,
@@ -179,14 +183,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         date_second,
     ).rename({"ss_customer_sk": "customer_sk", "year_total": "s_sec_year_total"})
 
-    t_w_first = build_year_total(
-        web_sales,
-        "ws_bill_customer_sk",
-        "ws_sold_date_sk",
-        "ws_ext_list_price",
-        "ws_ext_discount_amt",
-        date_first,
-    ).rename({"ws_bill_customer_sk": "customer_sk", "year_total": "w_first_year_total"})
+    t_w_first = (
+        build_year_total(
+            web_sales,
+            "ws_bill_customer_sk",
+            "ws_sold_date_sk",
+            "ws_ext_list_price",
+            "ws_ext_discount_amt",
+            date_first,
+        )
+        .rename(
+            {"ws_bill_customer_sk": "customer_sk", "year_total": "w_first_year_total"}
+        )
+        .filter(pl.col("w_first_year_total") > 0)
+    )
 
     t_w_sec = build_year_total(
         web_sales,
@@ -204,16 +214,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .join(t_w_first, on="customer_sk")
             .join(t_w_sec, on="customer_sk")
             .filter(
-                (pl.col("s_first_year_total") > 0)
-                & (pl.col("w_first_year_total") > 0)
-                & (
-                    pl.when(pl.col("w_first_year_total") > 0)
-                    .then(pl.col("w_sec_year_total") / pl.col("w_first_year_total"))
-                    .otherwise(0.0)
-                    > pl.when(pl.col("s_first_year_total") > 0)
-                    .then(pl.col("s_sec_year_total") / pl.col("s_first_year_total"))
-                    .otherwise(0.0)
-                )
+                pl.col("w_sec_year_total") / pl.col("w_first_year_total")
+                > pl.col("s_sec_year_total") / pl.col("s_first_year_total")
             )
             .join(customer, left_on="customer_sk", right_on="c_customer_sk")
             .select(
