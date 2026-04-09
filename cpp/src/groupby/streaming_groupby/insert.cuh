@@ -49,7 +49,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 
   // Precompute batch hash values.
   rmm::device_uvector<hash_value_type> batch_hash_cache(batch_size, stream, temp_mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                     cuda::counting_iterator<size_type>(0),
                     cuda::counting_iterator<size_type>(batch_size),
                     batch_hash_cache.begin(),
@@ -80,7 +80,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
   rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
                     cuda::counting_iterator<size_type>(0),
                     cuda::counting_iterator<size_type>(batch_size),
                     target_indices.begin(),
@@ -88,12 +88,12 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
 
   // Count newly inserted keys.
   auto const new_distinct_count = static_cast<size_type>(thrust::count(
-    rmm::exec_policy_nosync(stream), inserted_flags.begin(), inserted_flags.end(), true));
+    rmm::exec_policy_nosync(stream, temp_mr), inserted_flags.begin(), inserted_flags.end(), true));
 
   if (new_distinct_count > 0) {
     // Stream compact: get the batch-local indices of newly inserted keys.
     rmm::device_uvector<size_type> batch_local_indices(new_distinct_count, stream, temp_mr);
-    thrust::copy_if(rmm::exec_policy_nosync(stream),
+    thrust::copy_if(rmm::exec_policy_nosync(stream, temp_mr),
                     cuda::counting_iterator<size_type>(0),
                     cuda::counting_iterator<size_type>(batch_size),
                     inserted_flags.begin(),
@@ -122,7 +122,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     _preprocessed_batches.push_back(preprocessed_compacted);
 
     // Scatter companion vectors and record encoded indices in a single pass.
-    thrust::for_each_n(rmm::exec_policy_nosync(stream),
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
                        cuda::counting_iterator<size_type>(0),
                        new_distinct_count,
                        scatter_new_key_metadata{batch_local_indices.data(),
