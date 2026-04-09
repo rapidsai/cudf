@@ -1273,3 +1273,31 @@ TEST_F(StreamingGroupbyTest, EncodingOverflowThrows)
   cudf::test::fixed_width_column_wrapper<V> v3{10, 20, 30};
   EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k3, v3}}), std::overflow_error);
 }
+
+TEST_F(StreamingGroupbyTest, StructKeySumTwoBatches)
+{
+  using V = int32_t;
+
+  // Struct key: {int, int}
+  cudf::test::fixed_width_column_wrapper<int32_t> s1a{1, 1, 2};
+  cudf::test::fixed_width_column_wrapper<int32_t> s1b{10, 20, 10};
+  auto keys1 = cudf::test::structs_column_wrapper{{s1a, s1b}};
+  cudf::test::fixed_width_column_wrapper<V> vals1{100, 200, 300};
+
+  cudf::test::fixed_width_column_wrapper<int32_t> s2a{1, 2};
+  cudf::test::fixed_width_column_wrapper<int32_t> s2b{10, 10};
+  auto keys2 = cudf::test::structs_column_wrapper{{s2a, s2b}};
+  cudf::test::fixed_width_column_wrapper<V> vals2{400, 500};
+
+  cudf::table_view batch1{{keys1, vals1}};
+  cudf::table_view batch2{{keys2, vals2}};
+
+  auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
+  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(batch2);
+  auto [keys, results] = streaming_agg.finalize();
+
+  verify_against_groupby(keys, results, {batch1, batch2}, KEY_COL, reqs);
+}

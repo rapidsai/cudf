@@ -442,8 +442,8 @@ struct streaming_aggregation_request {
  * Only hash-based aggregation kinds are supported.
  *
  * Supported aggregation kinds:
- *   SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX,
- *   COUNT_VALID, COUNT_ALL, MEAN, M2, VARIANCE, STD
+ *   SUM, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL,
+ *   MEAN, M2, VARIANCE, STD
  *
  * @throws std::invalid_argument for unsupported aggregation kinds
  * @throws std::invalid_argument if a single batch exceeds `max_groups` rows
