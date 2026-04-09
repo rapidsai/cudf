@@ -38,7 +38,6 @@ from cudf_polars.utils.config import (
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_dask_cuda_stream,
-    get_new_cuda_stream,
 )
 
 
@@ -461,7 +460,7 @@ def test_config_option_from_env(
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
         m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
         m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
-        m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+        m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
         if rapidsmpf_distributed_available:
             m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
@@ -480,7 +479,7 @@ def test_config_option_from_env(
         assert config.executor.broadcast_join_limit == 44
         assert config.executor.rapidsmpf_spill is True
         assert config.executor.sink_to_directory is True
-        assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+        assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
 
         if rapidsmpf_distributed_available:
             assert config.executor.shuffle_method == "rapidsmpf"
@@ -649,7 +648,6 @@ def test_memory_resource_config_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
     "cuda_stream_policy, expected",
     [
         (CUDAStreamPolicy.DEFAULT, get_cuda_stream),
-        (CUDAStreamPolicy.NEW, get_new_cuda_stream),
     ],
 )
 def test_ir_execution_context_from_config_options(
@@ -686,28 +684,14 @@ def test_cuda_stream_policy_default(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
 
     # Default from env
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+    assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor_options={"runtime": "tasks"})
     )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
-
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(cuda_stream_policy=CUDAStreamPolicy.NEW)
-    )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
-
-    # Default from user argument
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor_options={"runtime": "tasks"},
-            cuda_stream_policy=CUDAStreamPolicy.NEW,
-        )
-    )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+    assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
 
 
 def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> None:
@@ -782,12 +766,12 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
     assert config.cuda_stream_policy.pool_size == 16
     assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
 
-    # "new" user argument
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+    # "default" user argument overrides pool default
+    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
     )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+    assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
 
 
 @pytest.mark.parametrize(

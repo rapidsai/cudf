@@ -952,18 +952,16 @@ class CUDAStreamPolicy(enum.StrEnum):
     The policy to use for acquiring new CUDA streams.
 
     * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
-    * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
     """
 
     DEFAULT = "default"
-    NEW = "new"
 
 
 def _convert_cuda_stream_policy(
     user_cuda_stream_policy: dict | str,
 ) -> CUDAStreamPolicy | CUDAStreamPoolConfig:
     match user_cuda_stream_policy:
-        case "default" | "new":
+        case "default":
             return CUDAStreamPolicy(user_cuda_stream_policy)
         case "pool":
             return CUDAStreamPoolConfig()

@@ -47,7 +47,6 @@ from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
-    get_new_cuda_stream,
     join_cuda_streams,
 )
 from cudf_polars.utils.versions import (
@@ -126,8 +125,6 @@ class IRExecutionContext:
         match config_options.cuda_stream_policy:
             case CUDAStreamPolicy.DEFAULT:
                 return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
-            case CUDAStreamPolicy.NEW:
-                return cls(get_cuda_stream=get_new_cuda_stream, query_id=query_id)
             case _:  # pragma: no cover
                 raise ValueError(
                     f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
