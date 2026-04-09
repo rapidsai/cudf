@@ -253,6 +253,10 @@ def read_csv(
 
     if parse_dates is not None:
         options.set_parse_dates(list(parse_dates))
+        # Match pandas 3's default datetime resolution of microseconds
+        options.set_timestamp_type(
+            plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+        )
 
     if hex_cols is not None:
         options.set_parse_hex(list(hex_cols))
