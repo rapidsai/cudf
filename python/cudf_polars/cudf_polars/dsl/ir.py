@@ -43,7 +43,6 @@ from cudf_polars.dsl.utils.windows import (
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
@@ -123,7 +122,7 @@ class IRExecutionContext:
         """Create an IRExecutionContext from ConfigOptions."""
         query_id = query_id or uuid.uuid4()
         match config_options.cuda_stream_policy:
-            case CUDAStreamPolicy.DEFAULT:
+            case "default":
                 return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
             case _:  # pragma: no cover
                 raise ValueError(
