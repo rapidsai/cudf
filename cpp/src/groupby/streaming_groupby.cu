@@ -661,8 +661,7 @@ struct streaming_groupby::impl {
   {
     CUDF_EXPECTS(_initialized, "Cannot finalize streaming_groupby with no accumulated data.");
 
-    auto keys = gather_distinct_keys(stream, mr);
-
+    auto keys         = gather_distinct_keys(stream, mr);
     auto agg_gathered = gather_agg_results(stream, mr);
 
     if (_has_compound_aggs) {
@@ -687,13 +686,13 @@ struct streaming_groupby::impl {
 
       detail::hash::finalize_output(values_view_fin, agg_objects_fin, agg_gathered, &cache, stream);
 
-      for (auto const& req : agg_requests_fin) {
+      std::for_each(agg_requests_fin.begin(), agg_requests_fin.end(), [&](auto const& req) {
         auto const finalizer =
           detail::hash::hash_compound_agg_finalizer(req.values, &cache, nullptr, stream, mr);
-        for (auto const& agg : req.aggregations) {
+        std::for_each(req.aggregations.begin(), req.aggregations.end(), [&](auto const& agg) {
           cudf::detail::aggregation_dispatcher(agg->kind, finalizer, *agg);
-        }
-      }
+        });
+      });
 
       return {std::move(keys),
               detail::extract_results(
@@ -701,13 +700,13 @@ struct streaming_groupby::impl {
     }
 
     auto released_cols = agg_gathered->release();
+    auto col_it        = std::make_move_iterator(released_cols.begin());
     std::vector<aggregation_result> results;
-    size_type col_idx = 0;
+    results.reserve(_aggs_per_request.size());
     for (auto num_aggs : _aggs_per_request) {
       aggregation_result agg_result;
-      for (size_type a = 0; a < num_aggs; ++a) {
-        agg_result.results.push_back(std::move(released_cols[col_idx++]));
-      }
+      agg_result.results.assign(col_it, col_it + num_aggs);
+      col_it += num_aggs;
       results.push_back(std::move(agg_result));
     }
     return {std::move(keys), std::move(results)};
