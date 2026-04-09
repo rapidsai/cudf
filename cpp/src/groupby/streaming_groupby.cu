@@ -48,8 +48,9 @@
 namespace cudf::groupby {
 namespace {
 
-// Concrete device_row_comparator type used throughout streaming groupby.
-using row_eq_t = detail::hash::row_comparator_t;
+// device_row_comparator types for non-nested and nested key columns.
+using row_eq_t        = detail::hash::row_comparator_t;
+using nested_row_eq_t = detail::hash::nullable_row_comparator_t;
 
 // ---------------------------------------------------------------------------
 // Functors
@@ -63,9 +64,10 @@ using row_eq_t = detail::hash::row_comparator_t;
 ///
 /// Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
 /// and stored in a device array.  Self-comparisons use batch_self_eq.
+template <typename RowEqT>
 struct n_table_comparator {
-  row_eq_t batch_self_eq;      ///< Self-comparator on the current batch table
-  row_eq_t const* cross_eqs;   ///< Device array [num_compacted_batches]: batch vs compacted[k]
+  RowEqT batch_self_eq;        ///< Self-comparator on the current batch table
+  RowEqT const* cross_eqs;     ///< Device array [num_compacted_batches]: batch vs compacted[k]
   size_type const* key_batch;  ///< Companion vector: compacted batch index per stored entry
   size_type const* key_row;    ///< Companion vector: row index within compacted batch
   size_type num_stored;        ///< Threshold: idx >= num_stored is a batch row
@@ -255,21 +257,27 @@ std::pair<rmm::device_buffer, bitmask_type const*> compute_row_bitmask(table_vie
 // Helper: build N cross-comparators on host and copy to device
 // ---------------------------------------------------------------------------
 
-rmm::device_uvector<row_eq_t> build_cross_comparators(
+template <bool has_nested_columns>
+auto build_cross_comparators(
   std::shared_ptr<cudf::detail::row::equality::preprocessed_table> const& pp_batch,
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>> const& pp_batches,
   cudf::nullate::DYNAMIC has_null,
   rmm::cuda_stream_view stream)
 {
+  using eq_t = cudf::detail::row::equality::device_row_comparator<
+    has_nested_columns,
+    cudf::nullate::DYNAMIC,
+    cudf::detail::row::equality::nan_equal_physical_equality_comparator>;
+
   auto const n       = static_cast<size_type>(pp_batches.size());
   auto const temp_mr = cudf::get_current_device_resource_ref();
 
-  std::vector<row_eq_t> h_eqs;
+  std::vector<eq_t> h_eqs;
   h_eqs.reserve(n);
   for (size_type k = 0; k < n; ++k) {
     auto const cross_cmp =
       cudf::detail::row::equality::two_table_comparator{pp_batch, pp_batches[k]};
-    auto const adapter = cross_cmp.equal_to<false>(has_null, null_equality::EQUAL);
+    auto const adapter = cross_cmp.equal_to<has_nested_columns>(has_null, null_equality::EQUAL);
     h_eqs.push_back(adapter.comparator);
   }
 
@@ -296,6 +304,7 @@ struct streaming_groupby::impl {
   /// advances by batch_size (the full encoding range, not just distinct count).
   size_type _num_stored{0};
   bool _has_nullable_keys{false};
+  bool _has_nested_keys{false};
 
   // -- Compacted batch storage --
   std::vector<std::unique_ptr<table>> _compacted_batches;
@@ -358,6 +367,14 @@ struct streaming_groupby::impl {
   {
     auto const mr = cudf::get_current_device_resource_ref();
 
+    // Detect nested key columns (struct, list) for comparator template dispatch.
+    std::vector<column_view> key_cols;
+    key_cols.reserve(_key_indices.size());
+    for (auto idx : _key_indices) {
+      key_cols.push_back(data.column(idx));
+    }
+    _has_nested_keys = cudf::detail::has_nested_columns(table_view{key_cols});
+
     auto agg_requests = build_aggregation_requests(_requests_clone, data);
     auto [values_view, agg_kinds_hv, agg_objects, is_intermediate, has_compound] =
       detail::hash::extract_single_pass_aggs(agg_requests, stream);
@@ -367,14 +384,20 @@ struct streaming_groupby::impl {
     _is_agg_intermediate = std::move(is_intermediate);
     _has_compound_aggs   = has_compound;
 
-    // Reject ARGMIN/ARGMAX intermediates produced by extract_single_pass_aggs.
-    // This happens when MIN/MAX is requested on string columns — the hash groupby
-    // decomposes them to ARGMIN/ARGMAX which require the original value column for
-    // finalization, but streaming doesn't preserve value columns across batches.
+    // Reject aggregation kinds that are unsupported in streaming after decomposition.
+    // - ARGMIN/ARGMAX: produced when MIN/MAX is requested on string columns. The hash
+    //   groupby decomposes them to ARGMIN/ARGMAX which require the original value column
+    //   for finalization, but streaming doesn't preserve value columns across batches.
+    // - SUM_WITH_OVERFLOW: intermediate is a STRUCT<sum, overflow> that cannot be
+    //   merged atomically by merge_element_aggregator.
     for (auto k : _agg_kinds) {
       CUDF_EXPECTS(k != aggregation::ARGMIN && k != aggregation::ARGMAX,
                    "Streaming groupby does not support MIN/MAX on variable-width types "
                    "(internally decomposed to ARGMIN/ARGMAX).",
+                   std::invalid_argument);
+      CUDF_EXPECTS(k != aggregation::SUM_WITH_OVERFLOW,
+                   "Streaming groupby does not support SUM_WITH_OVERFLOW "
+                   "(struct intermediate cannot be merged across batches).",
                    std::invalid_argument);
     }
 
@@ -387,15 +410,21 @@ struct streaming_groupby::impl {
 
     _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr);
 
+    // Build column-index mapping from expanded agg columns to source data columns.
+    // Match by data pointer AND offset to handle sliced columns correctly.
     _value_col_indices.reserve(values_view.num_columns());
     for (size_type c = 0; c < values_view.num_columns(); ++c) {
-      auto const* col_head = values_view.column(c).head();
+      auto const& vcol = values_view.column(c);
+      bool found       = false;
       for (size_type j = 0; j < static_cast<size_type>(agg_requests.size()); ++j) {
-        if (agg_requests[j].values.head() == col_head) {
+        auto const& req_col = agg_requests[j].values;
+        if (req_col.head() == vcol.head() && req_col.offset() == vcol.offset()) {
           _value_col_indices.push_back(_requests_clone[j].column_index);
+          found = true;
           break;
         }
       }
+      CUDF_EXPECTS(found, "Internal error: expanded agg column not found in requests.");
     }
 
     size_type offset = 0;
@@ -510,90 +539,103 @@ struct streaming_groupby::impl {
     // When num_stored == 0 and _pp_batches is empty, the comparator only enters
     // the batch-self branch.
     auto const batch_self_cmp = cudf::detail::row::equality::self_comparator{pp_batch};
-    auto const batch_self_eq  = batch_self_cmp.equal_to<false>(has_null, null_equality::EQUAL);
 
-    auto d_cross_eqs = build_cross_comparators(pp_batch, _pp_batches, has_null, stream);
+    auto const do_insert = [&]<bool has_nested>(std::bool_constant<has_nested>) {
+      auto const batch_self_eq =
+        batch_self_cmp.equal_to<has_nested>(has_null, null_equality::EQUAL);
 
-    auto const eq = n_table_comparator{
-      batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), num_stored};
-    auto const hasher = offset_cache_hasher{batch_hash_cache.data(), num_stored};
+      auto d_cross_eqs =
+        build_cross_comparators<has_nested>(pp_batch, _pp_batches, has_null, stream);
 
-    auto iaf_ref =
-      _key_set->ref(cuco::op::insert_and_find).rebind_key_eq(eq).rebind_hash_function(hasher);
+      auto const eq = n_table_comparator{
+        batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), num_stored};
+      auto const hasher = offset_cache_hasher{batch_hash_cache.data(), num_stored};
 
-    // insert_and_find for all batch rows.
-    rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
-    rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
+      auto iaf_ref =
+        _key_set->ref(cuco::op::insert_and_find).rebind_key_eq(eq).rebind_hash_function(hasher);
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator<size_type>(0),
-                      cuda::counting_iterator<size_type>(batch_size),
-                      target_indices.begin(),
-                      insert_and_map_fn{iaf_ref, batch_bitmask, num_stored, inserted_flags.data()});
+      // insert_and_find for all batch rows.
+      rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
+      rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
 
-    // Count newly inserted keys.
-    auto const new_distinct_count = static_cast<size_type>(thrust::count(
-      rmm::exec_policy_nosync(stream), inserted_flags.begin(), inserted_flags.end(), true));
+      thrust::transform(
+        rmm::exec_policy_nosync(stream),
+        cuda::counting_iterator<size_type>(0),
+        cuda::counting_iterator<size_type>(batch_size),
+        target_indices.begin(),
+        insert_and_map_fn{iaf_ref, batch_bitmask, num_stored, inserted_flags.data()});
 
-    if (new_distinct_count > 0) {
-      // Stream compact: get the batch-local indices of newly inserted keys.
-      rmm::device_uvector<size_type> batch_local_indices(new_distinct_count, stream, temp_mr);
-      thrust::copy_if(rmm::exec_policy_nosync(stream),
-                      cuda::counting_iterator<size_type>(0),
-                      cuda::counting_iterator<size_type>(batch_size),
-                      inserted_flags.begin(),
-                      batch_local_indices.begin(),
-                      cuda::std::identity{});
+      // Count newly inserted keys.
+      auto const new_distinct_count = static_cast<size_type>(thrust::count(
+        rmm::exec_policy_nosync(stream), inserted_flags.begin(), inserted_flags.end(), true));
 
-      // Build encoded indices from batch-local: encoded = num_stored + batch_local.
-      rmm::device_uvector<size_type> deduped_encoded(new_distinct_count, stream, temp_mr);
-      thrust::transform(rmm::exec_policy_nosync(stream),
+      if (new_distinct_count > 0) {
+        // Stream compact: get the batch-local indices of newly inserted keys.
+        rmm::device_uvector<size_type> batch_local_indices(new_distinct_count, stream, temp_mr);
+        thrust::copy_if(rmm::exec_policy_nosync(stream),
+                        cuda::counting_iterator<size_type>(0),
+                        cuda::counting_iterator<size_type>(batch_size),
+                        inserted_flags.begin(),
                         batch_local_indices.begin(),
-                        batch_local_indices.end(),
-                        deduped_encoded.begin(),
-                        offset_adder{num_stored});
+                        cuda::std::identity{});
 
-      // Gather compacted distinct keys from the batch.
-      auto compacted = cudf::detail::gather(batch_keys,
-                                            batch_local_indices,
-                                            out_of_bounds_policy::DONT_CHECK,
-                                            cudf::negative_index_policy::NOT_ALLOWED,
-                                            stream,
-                                            temp_mr);
+        // Build encoded indices from batch-local: encoded = num_stored + batch_local.
+        rmm::device_uvector<size_type> deduped_encoded(new_distinct_count, stream, temp_mr);
+        thrust::transform(rmm::exec_policy_nosync(stream),
+                          batch_local_indices.begin(),
+                          batch_local_indices.end(),
+                          deduped_encoded.begin(),
+                          offset_adder{num_stored});
 
-      auto pp_compacted =
-        cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
+        // Check bounds BEFORE any persistent state mutation.
+        CUDF_EXPECTS(_distinct_count + new_distinct_count <= _max_groups,
+                     "Distinct key count (" + std::to_string(_distinct_count + new_distinct_count) +
+                       ") would exceed max_groups (" + std::to_string(_max_groups) + ").");
 
-      // Store the compacted batch.
-      auto const new_batch_id = static_cast<size_type>(_compacted_batches.size());
-      _compacted_batches.push_back(std::move(compacted));
-      _pp_batches.push_back(pp_compacted);
+        // Gather compacted distinct keys from the batch.
+        auto compacted = cudf::detail::gather(batch_keys,
+                                              batch_local_indices,
+                                              out_of_bounds_policy::DONT_CHECK,
+                                              cudf::negative_index_policy::NOT_ALLOWED,
+                                              stream,
+                                              temp_mr);
 
-      // Check bounds BEFORE writing to companion vectors and group_encoded_indices.
-      CUDF_EXPECTS(_distinct_count + new_distinct_count <= _max_groups,
-                   "Distinct key count (" + std::to_string(_distinct_count + new_distinct_count) +
-                     ") would exceed max_groups (" + std::to_string(_max_groups) + ").");
+        auto pp_compacted =
+          cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
 
-      // Scatter companion vectors and record encoded indices in a single pass.
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                         cuda::counting_iterator<size_type>(0),
-                         new_distinct_count,
-                         scatter_new_key_metadata{deduped_encoded.data(),
-                                                  _key_batch->data(),
-                                                  _key_row->data(),
-                                                  _group_encoded_indices->data(),
-                                                  new_batch_id,
-                                                  _distinct_count});
+        // Store the compacted batch.
+        auto const new_batch_id = static_cast<size_type>(_compacted_batches.size());
+        _compacted_batches.push_back(std::move(compacted));
+        _pp_batches.push_back(pp_compacted);
 
-      _distinct_count += new_distinct_count;
+        // Scatter companion vectors and record encoded indices in a single pass.
+        thrust::for_each_n(rmm::exec_policy_nosync(stream),
+                           cuda::counting_iterator<size_type>(0),
+                           new_distinct_count,
+                           scatter_new_key_metadata{deduped_encoded.data(),
+                                                    _key_batch->data(),
+                                                    _key_row->data(),
+                                                    _group_encoded_indices->data(),
+                                                    new_batch_id,
+                                                    _distinct_count});
+
+        _distinct_count += new_distinct_count;
+      }
+
+      // Advance encoding offset by the full batch size — the entire range
+      // [num_stored, num_stored + batch_size) is consumed, even for rows that
+      // were duplicates or null-excluded.  The next batch must encode after this range.
+      _num_stored += batch_size;
+
+      return batch_insert_result{
+        std::move(target_indices), new_distinct_count, std::move(bitmask_buffer)};
+    };  // end do_insert lambda
+
+    if (_has_nested_keys) {
+      return do_insert(std::bool_constant<true>{});
+    } else {
+      return do_insert(std::bool_constant<false>{});
     }
-
-    // Advance encoding offset by the full batch size — the entire range
-    // [num_stored, num_stored + batch_size) is consumed, even for rows that
-    // were duplicates or null-excluded.  The next batch must encode after this range.
-    _num_stored += batch_size;
-
-    return {std::move(target_indices), new_distinct_count, std::move(bitmask_buffer)};
   }
 
   void do_aggregate(table_view const& data, rmm::cuda_stream_view stream)
@@ -735,6 +777,12 @@ struct streaming_groupby::impl {
                  std::invalid_argument);
     CUDF_EXPECTS(other._agg_kinds == _agg_kinds,
                  "Cannot merge streaming_groupby objects with different aggregation schemas.",
+                 std::invalid_argument);
+    CUDF_EXPECTS(other._key_indices == _key_indices,
+                 "Cannot merge streaming_groupby objects with different key column indices.",
+                 std::invalid_argument);
+    CUDF_EXPECTS(other._null_handling == _null_handling,
+                 "Cannot merge streaming_groupby objects with different null handling policies.",
                  std::invalid_argument);
 
     auto const mr = cudf::get_current_device_resource_ref();
