@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -423,18 +423,20 @@ def test_alltypes_plain_avro():
 
     data = [{column: row[column] for column in columns} for row in records]
 
-    # discard timezone information as we don't support it:
     expected = pd.DataFrame(data)
-    expected["timestamp_col"].dt.tz_localize(None)
 
     # The fastavro.reader supports the `'logicalType': 'timestamp-micros'` used
     # by the 'timestamp_col' column, which is converted into Python
     # datetime.datetime() objects (see output of pprint(records[0]) above).
-    # As we don't support that logical type yet in cudf, we need to convert to
-    # int64, then divide by 1000 to convert from nanoseconds to microseconds.
-    timestamps = expected["timestamp_col"].astype("int64")
-    timestamps //= 1000
-    expected["timestamp_col"] = timestamps
+    # cudf reads this column as int64 (raw microseconds) because the logical
+    # type appears inside a union schema (['timestamp-micros', 'null']), so we
+    # convert the expected datetime values to int64 microseconds to match.
+    expected["timestamp_col"] = (
+        expected["timestamp_col"]
+        .dt.tz_convert(None)
+        .astype("datetime64[us]")
+        .astype("int64")
+    )
 
     # Furthermore, we need to force the 'int_col' into an int32, per the schema
     # definition.  (It ends up as an int64 due to cudf.DataFrame() defaulting
