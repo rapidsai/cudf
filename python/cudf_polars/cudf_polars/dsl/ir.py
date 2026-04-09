@@ -66,7 +66,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 __all__ = [
@@ -112,16 +112,8 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     """
 
-    get_cuda_stream: Callable[[], Stream]
+    get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-
-    @classmethod
-    def from_config_options(
-        cls, config_options: ConfigOptions, query_id: uuid.UUID | None = None
-    ) -> IRExecutionContext:
-        """Create an IRExecutionContext from ConfigOptions."""
-        query_id = query_id or uuid.uuid4()
-        return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:

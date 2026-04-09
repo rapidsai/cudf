@@ -643,11 +643,8 @@ def test_memory_resource_config_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
         }
 
 
-def test_ir_execution_context_from_config_options() -> None:
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(cuda_stream_policy="default")
-    )
-    context = IRExecutionContext.from_config_options(config)
+def test_ir_execution_context() -> None:
+    context = IRExecutionContext()
     assert context.get_cuda_stream is get_cuda_stream
     context.get_cuda_stream()  # no exception
 
@@ -711,7 +708,6 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
     "env",
     [
         "default",
-        "new",
         "pool",
         '{"pool_size": 32, "flags": "SYNC_DEFAULT"}',
         '{"pool_size": 32, "flags": 0}',
@@ -722,7 +718,7 @@ def test_cuda_stream_policy_from_env(
     monkeypatch: pytest.MonkeyPatch, env: str, *, rapidsmpf_single_available: bool
 ) -> None:
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", env)
-    runtime = "tasks" if env in {"default", "new"} else "rapidsmpf"
+    runtime = "tasks" if env == "default" else "rapidsmpf"
     engine = pl.GPUEngine(executor="streaming", executor_options={"runtime": runtime})
     if runtime == "rapidsmpf" and rapidsmpf_single_available:
         config = ConfigOptions.from_polars_engine(engine)
@@ -737,7 +733,7 @@ def test_cuda_stream_policy_from_env(
             ConfigOptions.from_polars_engine(engine)
     else:
         config = ConfigOptions.from_polars_engine(engine)
-        assert config.cuda_stream_policy == env
+        assert config.cuda_stream_policy is None
 
 
 def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
