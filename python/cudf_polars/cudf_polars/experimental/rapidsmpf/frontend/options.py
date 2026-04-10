@@ -15,12 +15,13 @@ from typing import TYPE_CHECKING, Any, Literal
 from rapidsmpf.config import Options
 from rapidsmpf.utils.string import parse_boolean
 
+from cudf_polars.utils.config import MemoryResourceConfig
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
-        MemoryResourceConfig,
         ParquetOptions,
     )
 
@@ -115,6 +116,11 @@ def _category_opts(
         else:
             result[f.name] = v
     return result
+
+
+def _parse_memory_resource_config(value: str) -> MemoryResourceConfig:
+    """Argparse ``type`` callback: parse a JSON string into a :class:`MemoryResourceConfig`."""
+    return MemoryResourceConfig(**json.loads(value))
 
 
 @dataclasses.dataclass
@@ -300,9 +306,7 @@ class StreamingOptions:
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
-    memory_resource_config: dict[str, Any] | MemoryResourceConfig | Unspecified = _opt(
-        "engine"
-    )
+    memory_resource_config: MemoryResourceConfig | Unspecified = _opt("engine")
     cuda_stream_policy: (
         Literal["default", "new", "pool"] | dict[str, Any] | Unspecified
     ) = _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
@@ -686,7 +690,7 @@ class StreamingOptions:
             "--memory-resource-config",
             dest="memory_resource_config",
             default=None,
-            type=json.loads,
+            type=_parse_memory_resource_config,
             help=textwrap.dedent("""\
                 RMM memory resource configuration as a JSON object.
                 Env: CUDF_POLARS__MEMORY_RESOURCE_CONFIG__*."""),
