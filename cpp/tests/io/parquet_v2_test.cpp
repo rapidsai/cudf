@@ -291,7 +291,7 @@ TEST_P(ParquetV2Test, SlicedTable)
   // [[[]]]
   // [NULL, [], NULL, [[]]]
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
   lcw col4{{
              {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
              {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
@@ -384,7 +384,7 @@ TEST_P(ParquetV2Test, ListColumn)
   auto const is_v2 = GetParam();
 
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -499,7 +499,7 @@ TEST_P(ParquetV2Test, StructOfList)
     {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
 
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
