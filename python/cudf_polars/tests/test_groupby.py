@@ -328,6 +328,13 @@ def test_groupby_nunique(df: pl.LazyFrame, column):
     assert_gpu_result_equal(q, check_row_order=False)
 
 
+@pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
+def test_groupby_nunique_drop_nulls(df: pl.LazyFrame, column):
+    q = df.group_by("key1").agg(pl.col(column).drop_nulls().n_unique())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
 def test_groupby_null_count(df: pl.LazyFrame):
     q = df.group_by("key1").agg(pl.col("uint16_with_null").null_count())
 
