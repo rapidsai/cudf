@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
@@ -328,7 +328,15 @@ class SPMDEngine(StreamingEngine):
             if rapidsmpf_options is not None
             else Options(get_environment_variables())
         )
-        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
+        base_mr = (
+            mr_config.create_memory_resource()
+            if mr_config is not None
+            else rmm.mr.get_current_device_resource()
+        )
+        mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
@@ -337,7 +345,10 @@ class SPMDEngine(StreamingEngine):
                     options=rapidsmpf_options,
                 )
             else:
-                comm = single_communicator(rapidsmpf_options, ProgressThread())
+                comm = single_communicator(
+                    progress_thread=ProgressThread(),
+                    options=rapidsmpf_options,
+                )
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
