@@ -267,18 +267,6 @@ RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH: Mapping[str, str] = {
 }
 
 RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
-    "tests/unit/sql/test_group_by.py::test_group_by_having_misc_02[ABS(SUM(b)) + ABS(AVG(b)) > 100-expected4]": "Crashes pytest worker",
-    "tests/unit/operations/test_group_by.py::test_grouped_agg_parametric[drop_nulls-True-False-False-False]": "Crashes pytest worker",
-    "tests/unit/io/test_hive.py::test_hive_partition_directory_scan[False-scan_parquet-write_parquet]": "Crashes pytest worker",
-    "tests/unit/operations/test_queries.py::test_sorted_group_by_optimization[True-True-True]": "Crashes pytest worker",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_statistics": "Crashes pytest worker",
-    "tests/unit/streaming/test_streaming_join.py::test_merge_join[right_left-True-False-True-True-left-on0]": "Crashes pytest worker",
-    "tests/unit/operations/test_group_by.py::test_grouped_agg_parametric[unique-False-False-False-False]": "Crashes pytest worker",
-    "tests/unit/sql/test_distinct.py::test_distinct_with_expressions": "Crashes pytest worker",
-    "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "Crashes pytest worker",
-    "tests/unit/lazyframe/test_schema.py::test_lazy_collect_schema_matches_computed_schema[Date-dtype110-expr2]": "Crashes pytest worker",
-    "tests/unit/io/test_lazy_parquet.py::test_sink_parquet_arrow_schema_logical_types": "Crashes pytest worker",
-    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Crashes pytest worker",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --blocksize-mode small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --blocksize-mode small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --blocksize-mode small",
@@ -290,6 +278,7 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --blocksize-mode small",
     "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --blocksize-mode small",
     "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --blocksize-mode small",
     "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --blocksize-mode small",
     "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --blocksize-mode small",
     "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-async]": "Too slow with --blocksize-mode small",
