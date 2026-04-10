@@ -3400,7 +3400,9 @@ class DatetimeIndex(Index):
             uniques_host = uniques.to_arrow().to_pylist()
         if uniques.size() == 1:
             # base case of a fixed frequency
-            freq = uniques_host[0]
+            # Arrow to_pylist() returns datetime.timedelta; wrap in pd.Timedelta
+            # so .components and comparisons work correctly.
+            freq = pd.Timedelta(uniques_host[0])
 
             # special case of YS-JAN, YS-FEB, etc
             # 365 days is allowable, but if it's the first of the month, pandas
@@ -3412,7 +3414,6 @@ class DatetimeIndex(Index):
             elif freq == pd.Timedelta("7 days"):
                 raise NotImplementedError("Can't infer anchored week")
 
-            assert isinstance(freq, pd.Timedelta)  # pacify mypy
             cmps = freq.components
 
             kwds = {}
