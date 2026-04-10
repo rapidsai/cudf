@@ -16,6 +16,11 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
 
+def _assert_stable_ids_match(orig, loaded) -> None:
+    for a, b in zip(traversal([orig]), traversal([loaded]), strict=True):
+        assert a.get_stable_id() == b.get_stable_id()
+
+
 @pytest.fixture(scope="module")
 def df():
     return pl.LazyFrame(
@@ -65,39 +70,30 @@ def test_dataframescan_concat(df, engine):
 
 
 def test_join_in_memory_lazy_stable_id_pickle():
-    """Join over collect().lazy() uses DataFrameScan children; IDs must survive pickle."""
-    left = pl.LazyFrame({"k": [1, 2, 3], "x": [10, 20, 30]}).collect().lazy()
-    right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect().lazy()
-    q = left.join(right, on="k", how="inner")
-    _engine = pl.GPUEngine(
+    engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={"max_rows_per_partition": 1_000},
     )
-    ir = Translator(q._ldf.visit(), _engine).translate_ir()
-    ir, _, _ = lower_ir_graph(ir, ConfigOptions.from_polars_engine(_engine))
-    ir2 = pickle.loads(pickle.dumps(ir))
-    for orig, loaded in zip(traversal([ir]), traversal([ir2]), strict=True):
-        assert orig.get_stable_id() == loaded.get_stable_id()
+    left = pl.LazyFrame({"k": [1, 2, 3], "x": [10, 20, 30]}).collect().lazy()
+    right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect().lazy()
+    ir, _, _ = lower_ir_graph(
+        Translator(left.join(right, on="k")._ldf.visit(), engine).translate_ir(),
+        ConfigOptions.from_polars_engine(engine),
+    )
+    _assert_stable_ids_match(ir, pickle.loads(pickle.dumps(ir)))
 
 
 def test_dataframescan_pickle(df):
-    _engine = pl.GPUEngine(
+    engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={"max_rows_per_partition": 1_000},
     )
-    qir = Translator(df._ldf.visit(), _engine).translate_ir()
-    ir, _, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(_engine))
+    qir = Translator(df._ldf.visit(), engine).translate_ir()
+    ir, _, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
 
-    # Pickle and unpickle the IR (which contains DataFrameScan)
-    pickled = pickle.dumps(ir)
-    unpickled_ir = pickle.loads(pickled)
-
-    # Verify the unpickled IR is equivalent
-    assert type(unpickled_ir) is type(ir)
-    assert unpickled_ir.schema == ir.schema
-
-    # Stable IDs must match after unpickle (plan logging vs distributed workers).
-    for orig, loaded in zip(traversal([ir]), traversal([unpickled_ir]), strict=True):
-        assert orig.get_stable_id() == loaded.get_stable_id()
+    clone = pickle.loads(pickle.dumps(ir))
+    assert type(clone) is type(ir)
+    assert clone.schema == ir.schema
+    _assert_stable_ids_match(ir, clone)
