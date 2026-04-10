@@ -2832,20 +2832,13 @@ class RangeIndex(Index):
             raise ValueError(f"invalid na_position: {na_position}")
 
         sorted_index = self
-        indexer = RangeIndex(range(len(self)))
-
-        sorted_index = self
-        if ascending:
-            if self.step < 0:
-                sorted_index = self[::-1]
-                indexer = indexer[::-1]
-        else:
-            if self.step > 0:
-                sorted_index = self[::-1]
-                indexer = indexer = indexer[::-1]
+        if (ascending and self.step < 0) or (not ascending and self.step > 0):
+            sorted_index = self[::-1]
 
         if return_indexer:
-            return sorted_index, indexer
+            return sorted_index, self.argsort(
+                ascending=ascending, na_position=na_position
+            )
         else:
             return sorted_index
 
@@ -3407,7 +3400,9 @@ class DatetimeIndex(Index):
             uniques_host = uniques.to_arrow().to_pylist()
         if uniques.size() == 1:
             # base case of a fixed frequency
-            freq = uniques_host[0]
+            # Arrow to_pylist() returns datetime.timedelta; wrap in pd.Timedelta
+            # so .components and comparisons work correctly.
+            freq = pd.Timedelta(uniques_host[0])
 
             # special case of YS-JAN, YS-FEB, etc
             # 365 days is allowable, but if it's the first of the month, pandas
@@ -3419,7 +3414,6 @@ class DatetimeIndex(Index):
             elif freq == pd.Timedelta("7 days"):
                 raise NotImplementedError("Can't infer anchored week")
 
-            assert isinstance(freq, pd.Timedelta)  # pacify mypy
             cmps = freq.components
 
             kwds = {}
