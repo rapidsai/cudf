@@ -43,6 +43,11 @@ struct operator_functor<ast_operator::ADD, false> {
   {
     return lhs + rhs;
   }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs)
+  {
+    return cuda::std::min(lhs, rhs);
+  }
 };
 
 template <>
@@ -53,6 +58,11 @@ struct operator_functor<ast_operator::SUB, false> {
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs - rhs)
   {
     return lhs - rhs;
+  }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs)
+  {
+    return cuda::std::min(lhs, rhs);
   }
 };
 
@@ -65,6 +75,8 @@ struct operator_functor<ast_operator::MUL, false> {
   {
     return lhs * rhs;
   }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs) { return lhs + rhs; }
 };
 
 template <>
@@ -76,6 +88,8 @@ struct operator_functor<ast_operator::DIV, false> {
   {
     return lhs / rhs;
   }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs) { return lhs - rhs; }
 };
 
 template <>

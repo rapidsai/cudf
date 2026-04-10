@@ -88,7 +88,11 @@ std::unique_ptr<column> merge_m2(column_view const& values,
                                        count_valid.template begin<count_type>(),
                                        mean_values.template begin<result_type>(),
                                        M2_values.template begin<result_type>()};
-  thrust::transform(rmm::exec_policy_nosync(stream), iter, iter + num_groups, out_iter, fn);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    iter,
+                    iter + num_groups,
+                    out_iter,
+                    fn);
 
   // Output is a structs column containing the merged values of `COUNT_VALID`, `MEAN`, and `M2`.
   std::vector<std::unique_ptr<column>> out_columns;

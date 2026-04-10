@@ -103,7 +103,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     if (!cudf::is_dictionary(values.type())) {
       auto values_iter = values_view->begin<T>();
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<cudf::size_type>{0},
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
@@ -117,7 +117,7 @@ struct quantiles_functor {
                            null_count.data()});
     } else {
       auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_view);
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<cudf::size_type>{0},
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
