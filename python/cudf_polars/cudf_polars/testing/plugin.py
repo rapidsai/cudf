@@ -261,11 +261,6 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     # Add tests that are expected to fail with the streaming executor
 }
 
-RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH: Mapping[str, str] = {
-    # "tests/unit/io/test_hive.py": "A failure in this file causes segfaults later in the test suite",
-    # "tests/unit/io/test_partition.py": "A failure in this file causes segfaults later in the test suite",
-}
-
 RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --blocksize-mode small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --blocksize-mode small",
@@ -363,15 +358,6 @@ def pytest_collection_modifyitems(
             and (reason := RAPIDSMPF_TESTS_TO_SKIP.get(item.nodeid, None)) is not None
         ):
             item.add_marker(pytest.mark.skip(reason=reason))
-        elif with_rapidsmpf and any(
-            item.nodeid.startswith(file_path)
-            for file_path in RAPIDSMPF_TESTS_TO_SKIP_FILE_PATH
-        ):
-            item.add_marker(
-                pytest.mark.skip(
-                    reason="A failure in this file causes segfaults later in the test suite"
-                )
-            )
         elif (
             with_rapidsmpf
             and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
