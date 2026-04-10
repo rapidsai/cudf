@@ -16,8 +16,8 @@
 #include <vector>
 
 // All patterns are Glushkov-compatible (no anchors ^ $ \b \B, all < 64 NFA positions).
-// No capture groups — replace_with_backrefs requires capture groups but is currently
-// commented out; if re-enabled, use a separate patterns array with capture groups.
+// No capture groups in the patterns — for replace_with_backrefs the benchmark wraps
+// each pattern in a capture group at runtime so \1 references the whole match.
 // Match-rate estimates for 32-char random ASCII strings (chars 32-126, ~90% ASCII):
 //   \d+              : ~97% of strings contain ≥1 digit run  (~3 matches/string)
 //   [a-z]+[A-Z]+     : ~92% of strings contain ≥1 lower→upper transition (~2 matches)
@@ -42,6 +42,12 @@ static void bench_replace(nvbench::state& state)
   auto const rtype         = state.get_string("type");
   auto const engine        = state.get_string("engine");
 
+  // replace_with_backrefs requires capture groups; Glushkov doesn't support extract/backrefs
+  if (engine == "glushkov" && rtype == "backref") {
+    state.skip("backref replace — Glushkov doesn't support capture groups");
+    return;
+  }
+
   data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
@@ -49,7 +55,10 @@ static void bench_replace(nvbench::state& state)
 
   auto flags   = (engine == "glushkov") ? cudf::strings::regex_flags::GLUSHKOV
                                         : cudf::strings::regex_flags::DEFAULT;
-  auto program = cudf::strings::regex_program::create(patterns[pattern_index], flags);
+  // Wrap in a capture group for backref replace so \1 references the whole match
+  auto const pat =
+    (rtype == "backref") ? "(" + patterns[pattern_index] + ")" : patterns[pattern_index];
+  auto program = cudf::strings::regex_program::create(pat, flags);
 
   auto const data_size = column->alloc_size();
   state.add_global_memory_reads<nvbench::int8_t>(data_size);
@@ -74,5 +83,5 @@ NVBENCH_BENCH(bench_replace)
   .add_int64_axis("max_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5})
-  .add_string_axis("type", {"replace"/*, "backref"*/})
+  .add_string_axis("type", {"replace", "backref"})
   .add_string_axis("engine", {"thompson", "glushkov"});

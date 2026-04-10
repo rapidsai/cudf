@@ -43,6 +43,12 @@ static void bench_contains(nvbench::state& state)
   auto const hit_rate      = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
   auto const engine        = state.get_string("engine");
 
+  // Patterns 0-1 contain anchors (^ $) which Glushkov doesn't support
+  if (engine == "glushkov" && pattern_index <= 1) {
+    state.skip("anchor pattern — Glushkov falls back to Thompson");
+    return;
+  }
+
   auto col   = create_string_column(num_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
 
@@ -62,5 +68,5 @@ NVBENCH_BENCH(bench_contains)
   .add_int64_axis("row_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("hit_rate", {50, 100})  // percentage
-  .add_int64_axis("pattern", {/*0, 1, */2, 3, 4, 5, 6, 7, 8})
+  .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6, 7, 8})
   .add_string_axis("engine", {"thompson", "glushkov"});
