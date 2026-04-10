@@ -91,12 +91,12 @@ if COUNT_DTYPE is not None:
             pl.col("sum_profit").cast(pl.Decimal(38, 2)),
         ],
         10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-        11: [pl.col("value").cast(pl.Decimal(15, 2))],
+        11: [pl.col("value").cast(pl.Decimal(38, 2))],
         15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
-        18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
+        18: [pl.col("sum(l_quantity)").cast(pl.Decimal(38, 2))],
         19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
         22: [
-            pl.col("totacctbal").cast(pl.Decimal(15, 2)),
+            pl.col("totacctbal").cast(pl.Decimal(38, 2)),
         ],
     }
 

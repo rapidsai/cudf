@@ -1477,6 +1477,10 @@ def run_polars_query_iteration(
         result = prepare_validation_result(result)
 
     if expected is not None and result_casts:
+        # Applying the casts to the polars result is
+        # a workaround we need because of a polars bug
+        # See https://github.com/pola-rs/polars/issues/27269
+        # Once we support polars 1.40, we should remove this
         result = result.with_columns(*result_casts)
 
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
