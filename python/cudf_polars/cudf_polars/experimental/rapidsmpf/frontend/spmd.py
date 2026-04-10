@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
@@ -328,7 +328,9 @@ class SPMDEngine(StreamingEngine):
             if rapidsmpf_options is not None
             else Options(get_environment_variables())
         )
-        mr_config = engine_options.pop("memory_resource_config", None)
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
         base_mr = (
             mr_config.create_memory_resource()
             if mr_config is not None

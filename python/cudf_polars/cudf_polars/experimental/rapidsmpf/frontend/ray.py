@@ -455,7 +455,9 @@ class RayEngine(StreamingEngine):
 
         check_reserved_keys(executor_options, engine_options)
 
-        mr_config = engine_options.pop("memory_resource_config", None)
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
 
         rapidsmpf_options = (
             rapidsmpf_options
