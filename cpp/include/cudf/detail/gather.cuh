@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -812,7 +813,12 @@ std::unique_ptr<table> gather(table_view const& source_table,
   // the passed in stream while other streams are gathering. Skip joining if
   // only one column, since it used the passed in stream rather than forking.
   // if (num_columns > 1) { cudf::detail::join_streams(streams, stream); }
-  if (num_streams > 1) { cudf::detail::join_streams(streams, stream); }
+  if (num_streams > 1) {
+    cudf::detail::join_streams(streams, stream);
+    for (auto& col : result) {
+      col = cudf::rebind_stream(std::move(*col), stream);
+    }
+  }
 
   return std::make_unique<table>(std::move(result));
 }
