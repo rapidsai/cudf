@@ -17,7 +17,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/iterator>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scatter.h>
 
 namespace cudf {
@@ -64,7 +64,7 @@ std::unique_ptr<column> scatter(SourceIterator begin,
 
   // this ensures empty strings are not mapped to nulls in the make_strings_column function
   auto const size = cuda::std::distance(begin, end);
-  auto itr        = thrust::make_transform_iterator(
+  auto itr        = cuda::transform_iterator(
     begin, cuda::proclaim_return_type<string_view>([] __device__(string_view const sv) {
       return sv.empty() ? string_view{} : sv;
     }));

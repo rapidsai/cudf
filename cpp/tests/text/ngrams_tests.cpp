@@ -15,7 +15,7 @@
 
 #include <nvtext/generate_ngrams.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
 

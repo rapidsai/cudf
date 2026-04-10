@@ -18,7 +18,6 @@
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -326,7 +325,7 @@ struct list_child_constructor {
 
     // child_list_views should now have been populated, with source and target references.
 
-    auto begin = thrust::make_transform_iterator(
+    auto begin = cuda::transform_iterator(
       child_list_views.begin(),
       cuda::proclaim_return_type<size_type>([] __device__(auto const& row) { return row.size(); }));
 
@@ -400,7 +399,7 @@ struct list_child_constructor {
                                            {structs_list_offsets, structs_member}));
     };
 
-    auto const iter_source_member_as_list = thrust::make_transform_iterator(
+    auto const iter_source_member_as_list = cuda::transform_iterator(
       cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
         return project_member_as_list_view(source_structs.child(child_idx),
                                            source_lists_column_view.size(),
@@ -409,7 +408,7 @@ struct list_child_constructor {
                                            source_lists_column_view.null_count());
       });
 
-    auto const iter_target_member_as_list = thrust::make_transform_iterator(
+    auto const iter_target_member_as_list = cuda::transform_iterator(
       cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
         return project_member_as_list_view(target_structs.child(child_idx),
                                            target_lists_column_view.size(),

@@ -8,6 +8,8 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/strings/attributes.hpp>
+
+#include <cuda/iterator>
 #include <cudf/strings/strings_column_view.hpp>
 
 struct StringsAttributesTest : public cudf::test::BaseFixture {};
@@ -18,7 +20,7 @@ TEST_F(StringsAttributesTest, CodePoints)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::code_points(strings_view, cudf::test::get_default_stream());
@@ -41,7 +43,7 @@ TEST_F(StringsAttributesTest, CountBytes)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::count_bytes(strings_view, cudf::test::get_default_stream());

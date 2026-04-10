@@ -17,7 +17,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <stdexcept>
 
@@ -42,8 +42,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
     auto idx_converter     = cuda::proclaim_return_type<size_type>(
       [n_rows] __device__(size_type in) { return in < 0 ? in + n_rows : in; });
     return gather(source_table,
-                  thrust::make_transform_iterator(map_begin, idx_converter),
-                  thrust::make_transform_iterator(map_end, idx_converter),
+                  cuda::transform_iterator(map_begin, idx_converter),
+                  cuda::transform_iterator(map_end, idx_converter),
                   bounds_policy,
                   stream,
                   mr);

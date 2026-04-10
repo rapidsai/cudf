@@ -11,7 +11,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <type_traits>
 
@@ -55,7 +55,7 @@ auto hex(InItT it)
 {
   using value_t  = typename std::iterator_traits<InItT>::value_type;
   using tagged_t = hex_t<value_t>;
-  return thrust::make_transform_iterator(it, ToTaggedType<tagged_t>{});
+  return cuda::transform_iterator(it, ToTaggedType<tagged_t>{});
 }
 
 template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T>&& std::is_signed_v<T>)>

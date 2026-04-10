@@ -8,7 +8,7 @@
 #include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <type_traits>
 
@@ -29,7 +29,7 @@ TYPED_TEST(ColumnDebugTestIntegral, PrintColumnNumeric)
 
   std::stringstream tmp;
   auto string_iter =
-    thrust::make_transform_iterator(std::begin(std_col), [](auto e) { return std::to_string(e); });
+    cuda::transform_iterator(std::begin(std_col), [](auto e) { return std::to_string(e); });
 
   std::copy(string_iter,
             string_iter + std_col.size() - 1,
@@ -104,7 +104,7 @@ TEST_F(ColumnDebugStringsTest, StringsToString)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   std::ostringstream tmp;
   tmp << h_strings[0] << delimiter << h_strings[1] << delimiter << "NULL" << delimiter

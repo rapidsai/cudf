@@ -12,7 +12,7 @@
 
 #include <nvtext/stemmer.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -35,7 +35,7 @@ TEST_F(TextStemmerTest, PorterStemmer)
                                      "private",
                                      "orrery"};
   auto validity =
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
 
   cudf::test::fixed_width_column_wrapper<int32_t> expected(
@@ -61,7 +61,7 @@ TEST_F(TextStemmerTest, IsLetterIndex)
                                      "private",
                                      "orrery"};
   auto validity =
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
 
   cudf::strings_column_view sv(strings);
@@ -120,7 +120,7 @@ TEST_F(TextStemmerTest, IsLetterIndices)
                                      "private",
                                      "orrery"};
   auto validity =
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
   cudf::test::fixed_width_column_wrapper<int32_t> indices(
     {0, 1, 2, 3, 4, 5, 4, 3, 2, 1, -1, -2, -3, -4});

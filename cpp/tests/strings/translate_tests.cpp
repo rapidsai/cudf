@@ -13,7 +13,7 @@
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -34,7 +34,7 @@ TEST_F(StringsTranslateTest, Translate)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> translate_table{
@@ -45,7 +45,7 @@ TEST_F(StringsTranslateTest, Translate)
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -65,7 +65,7 @@ TEST_F(StringsTranslateTest, FilterCharacters)
 {
   std::vector<char const*> h_strings{"eee ddd", "bb cc", nullptr, "", "12309", "débd"};
   auto validity =
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; });
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end(), validity);
   auto strings_view = cudf::strings_column_view(strings);
 

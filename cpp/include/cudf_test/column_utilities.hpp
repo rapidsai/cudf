@@ -16,7 +16,7 @@
 #include <cudf/utilities/export.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 namespace CUDF_EXPORT cudf {
 namespace test {

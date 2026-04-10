@@ -27,7 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <iterator>
@@ -197,7 +197,7 @@ struct create_column_from_view {
     requires(cudf::is_fixed_width<ColumnType>())
   {
     auto op       = [&](auto const& child) { return std::make_unique<column>(child, stream, mr); };
-    auto begin    = thrust::make_transform_iterator(view.child_begin(), op);
+    auto begin    = cuda::transform_iterator(view.child_begin(), op);
     auto children = std::vector<std::unique_ptr<column>>(begin, begin + view.num_children());
 
     return std::make_unique<column>(

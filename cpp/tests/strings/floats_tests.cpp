@@ -11,7 +11,7 @@
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -63,7 +63,7 @@ TEST_F(StringsConvertTest, ToFloats32)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   std::vector<float> h_expected;
   std::for_each(h_strings.begin(), h_strings.end(), [&](char const* str) {
@@ -76,7 +76,7 @@ TEST_F(StringsConvertTest, ToFloats32)
   cudf::test::fixed_width_column_wrapper<float> expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
@@ -97,14 +97,14 @@ TEST_F(StringsConvertTest, FromFloats32)
   cudf::test::fixed_width_column_wrapper<float> floats(
     h_floats.begin(),
     h_floats.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   auto results = cudf::strings::from_floats(floats);
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
@@ -160,14 +160,14 @@ TEST_F(StringsConvertTest, FromFloats64)
   cudf::test::fixed_width_column_wrapper<double> floats(
     h_floats.begin(),
     h_floats.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   auto results = cudf::strings::from_floats(floats);
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }

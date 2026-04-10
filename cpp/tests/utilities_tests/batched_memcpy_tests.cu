@@ -17,7 +17,6 @@
 #include <rmm/device_vector.hpp>
 
 #include <cuda/iterator>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <iterator>
 #include <numeric>
