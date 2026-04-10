@@ -14,7 +14,7 @@
 
 #include <nvtext/tokenize.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -31,7 +31,7 @@ TEST_F(TextTokenizeTest, Tokenize)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   cudf::strings_column_view strings_view(strings);
 
@@ -63,7 +63,7 @@ TEST_F(TextTokenizeTest, TokenizeMulti)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::strings_column_view strings_view(strings);
 
   cudf::test::strings_column_wrapper delimiters{"the ", "over "};

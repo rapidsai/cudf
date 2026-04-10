@@ -16,7 +16,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <thrust/host_vector.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <array>
 #include <numeric>
@@ -78,13 +78,13 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckWithNulls)
   auto const strings = cudf::test::strings_column_wrapper(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto const results = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                                  cudf::data_type{cudf::type_id::INT32});
   // Input has null elements then the output should have the same null mask
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>(
     std::initializer_list<int8_t>{0, 1, NULL_VAL, 0, 1, 0, 0, NULL_VAL},
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -191,13 +191,13 @@ TEST_F(StringsConvertTest, ToInteger)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   auto results            = cudf::strings::to_integers(cudf::strings_column_view(strings),
                                             cudf::data_type{cudf::type_id::INT16});
   auto const expected_i16 = cudf::test::fixed_width_column_wrapper<int16_t>(
     std::initializer_list<int16_t>{0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, -1, 0, 0},
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i16);
 
   results                 = cudf::strings::to_integers(cudf::strings_column_view(strings),
@@ -205,7 +205,7 @@ TEST_F(StringsConvertTest, ToInteger)
   auto const expected_i32 = cudf::test::fixed_width_column_wrapper<int32_t>(
     std::initializer_list<int32_t>{
       0, 1234, NULL_VAL, 0, -9832, 93, 765, NULL_VAL, -1, 2147483647, -2147483648, -2147483648},
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_i32);
 
   results                 = cudf::strings::to_integers(cudf::strings_column_view(strings),
@@ -223,7 +223,7 @@ TEST_F(StringsConvertTest, ToInteger)
                                     2147483647,
                                     2147483648,
                                     2147483648},
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_u32);
 }
 
@@ -238,14 +238,14 @@ TEST_F(StringsConvertTest, FromInteger)
   cudf::test::fixed_width_column_wrapper<int32_t> integers(
     h_integers.begin(),
     h_integers.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   auto results = cudf::strings::from_integers(integers);
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -330,7 +330,7 @@ TEST_F(StringsConvertTest, HexToInteger)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   {
     std::vector<int32_t> h_expected;
@@ -346,7 +346,7 @@ TEST_F(StringsConvertTest, HexToInteger)
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       h_expected.begin(),
       h_expected.end(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+      cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -363,7 +363,7 @@ TEST_F(StringsConvertTest, HexToInteger)
     cudf::test::fixed_width_column_wrapper<int64_t> expected(
       h_expected.begin(),
       h_expected.end(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+      cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
@@ -385,7 +385,7 @@ TEST_F(StringsConvertTest, IsHex)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::test::fixed_width_column_wrapper<bool> expected(
     {0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
     {true, true, false, true, true, true, true, true, true, true, true, true});

@@ -39,7 +39,6 @@
 #include <cuda/std/limits>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/remove.h>
 
 namespace nvtext {
@@ -258,7 +257,7 @@ wordpiece_vocabulary::wordpiece_vocabulary(cudf::strings_column_view const& inpu
     rmm::mr::polymorphic_allocator<char>{},
     stream.value());
   // insert them without the '##' prefix since that is how they will be looked up
-  auto iter_sub = thrust::make_transform_iterator(sub_map_indices.begin(), key_pair{});
+  auto iter_sub = cuda::transform_iterator(sub_map_indices.begin(), key_pair{});
   vocab_sub_map->insert_async(iter_sub, iter_sub + sub_map_indices.size(), stream.value());
 
   // prefetch the [unk] vocab entry

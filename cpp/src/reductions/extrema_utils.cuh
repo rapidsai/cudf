@@ -128,7 +128,7 @@ class arg_minmax_dispatcher {
       auto const d_input     = column_device_view::create(input, stream);
       auto const transformer = Op{}.template get_null_replacing_element_transformer<ElementType>();
       auto const it =
-        thrust::make_transform_iterator(d_input->pair_begin<ElementType, true>(), transformer);
+        cuda::transform_iterator(d_input->pair_begin<ElementType, true>(), transformer);
       return find_extremum_idx(it, input.size(), stream);
     } else {
       return find_extremum_idx(input.begin<ElementType>(), input.size(), stream);

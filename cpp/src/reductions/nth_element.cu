@@ -16,7 +16,7 @@
 
 #include <cuda/functional>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scan.h>
 
 namespace cudf::reduction::detail {
@@ -35,7 +35,7 @@ std::unique_ptr<cudf::scalar> nth_element(column_view const& col,
     CUDF_EXPECTS(n >= 0 and n < valid_count, "Index out of bounds");
     auto dcol = column_device_view::create(col, stream);
     auto bitmask_iterator =
-      thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*dcol),
+      cuda::transform_iterator(cudf::detail::make_validity_iterator(*dcol),
                                       cuda::proclaim_return_type<size_type>([] __device__(auto b) {
                                         return static_cast<size_type>(b);
                                       }));

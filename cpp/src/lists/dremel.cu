@@ -293,7 +293,7 @@ dremel_data get_encoding(column_view h_col,
 
     auto input_parent_rep_it = cuda::make_constant_iterator(level);
     auto input_parent_def_it =
-      thrust::make_transform_iterator(empties_idx.begin(),
+      cuda::transform_iterator(empties_idx.begin(),
                                       def_level_fn{d_nesting_levels + level,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level],
@@ -303,7 +303,7 @@ dremel_data get_encoding(column_view h_col,
     // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
     auto input_child_rep_it = cuda::make_constant_iterator(nesting_levels.size() - 1);
     auto input_child_def_it =
-      thrust::make_transform_iterator(cuda::counting_iterator{column_offsets[level + 1]},
+      cuda::transform_iterator(cuda::counting_iterator{column_offsets[level + 1]},
                                       def_level_fn{d_nesting_levels + level + 1,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level + 1],
@@ -389,11 +389,11 @@ dremel_data get_encoding(column_view h_col,
     std::swap(temp_def_vals, def_level);
 
     // Merge empty at parent level with the rep, def level vals at current level
-    auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
+    auto transformed_empties = cuda::transform_iterator(empties.begin(), offset_transformer);
 
     auto input_parent_rep_it = cuda::make_constant_iterator(level);
     auto input_parent_def_it =
-      thrust::make_transform_iterator(empties_idx.begin(),
+      cuda::transform_iterator(empties_idx.begin(),
                                       def_level_fn{d_nesting_levels + level,
                                                    d_nullability.data(),
                                                    start_at_sub_level[level],

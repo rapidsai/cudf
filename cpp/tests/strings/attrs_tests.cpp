@@ -11,7 +11,7 @@
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -23,7 +23,7 @@ TEST_F(StringsAttributesTest, CodePoints)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   {
@@ -57,7 +57,7 @@ TEST_F(StringsAttributesTest, StringsLengths)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   {
@@ -66,7 +66,7 @@ TEST_F(StringsAttributesTest, StringsLengths)
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       h_expected.begin(),
       h_expected.end(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+      cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
@@ -75,7 +75,7 @@ TEST_F(StringsAttributesTest, StringsLengths)
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       h_expected.begin(),
       h_expected.end(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+      cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }

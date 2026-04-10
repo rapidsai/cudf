@@ -16,7 +16,6 @@
 #include <cuda/iterator>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -344,7 +343,7 @@ struct indexalator_factory {
    */
   static auto make_input_optional_iterator(scalar const& input, rmm::cuda_stream_view stream)
   {
-    return thrust::make_transform_iterator(cuda::make_constant_iterator<size_type>(0),
+    return cuda::transform_iterator(cuda::make_constant_iterator<size_type>(0),
                                            scalar_optional_index_accessor{input, stream});
   }
 };

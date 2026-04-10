@@ -13,7 +13,7 @@
 
 #include <nvtext/normalize.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -32,7 +32,7 @@ TEST_F(TextNormalizeTest, NormalizeSpaces)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   cudf::strings_column_view strings_view(strings);
 
@@ -47,7 +47,7 @@ TEST_F(TextNormalizeTest, NormalizeSpaces)
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   auto const results = nvtext::normalize_spaces(strings_view);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);

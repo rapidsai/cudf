@@ -28,7 +28,6 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/iterator/permutation_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 #include <memory>
@@ -106,7 +105,7 @@ struct quantile_functor {
     }
 
     if (input.nullable()) {
-      auto sorted_validity = thrust::make_transform_iterator(
+      auto sorted_validity = cuda::transform_iterator(
         ordered_indices,
         cuda::proclaim_return_type<bool>(
           [input = *d_input] __device__(size_type idx) { return input.is_valid_nocheck(idx); }));

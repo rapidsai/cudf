@@ -13,7 +13,7 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -32,7 +32,7 @@ TEST_F(StringsDatetimeTest, ToTimestamp)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   std::vector<cudf::timestamp_s::rep> h_expected{
     131246625, 1563399277, 0, 0, 1553085296, 1582934400, -1545730073, -15};
 
@@ -43,7 +43,7 @@ TEST_F(StringsDatetimeTest, ToTimestamp)
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::is_timestamp(strings_view, "%Y-%m-%dT%H:%M:%SZ");
@@ -331,14 +331,14 @@ TEST_F(StringsDatetimeTest, FromTimestamp)
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> timestamps(
     h_timestamps.begin(),
     h_timestamps.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
   auto results = cudf::strings::from_timestamps(timestamps);
 
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

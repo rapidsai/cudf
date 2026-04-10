@@ -17,7 +17,7 @@
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 namespace cudf {
 namespace detail {

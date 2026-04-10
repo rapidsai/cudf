@@ -4,11 +4,11 @@
  */
 
 /**
- * @brief unary functions for thrust::transform_iterator
+ * @brief unary functions for cuda::transform_iterator
  * @file transform_unary_functions.cuh
  *
  * These are designed for using as AdaptableUnaryFunction
- * for thrust::transform_iterator.
+ * for cuda::transform_iterator.
  * For the detail of example cases,
  * @see iterator.cuh iterator_test.cu
  */
@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cuda/std/utility>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 namespace cudf {
 /**

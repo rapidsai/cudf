@@ -11,7 +11,7 @@
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <array>
 #include <vector>
@@ -60,7 +60,7 @@ TEST_P(CharsTypes, AllTypes)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::all_characters_of_type(strings_view, is_parm);
@@ -75,7 +75,7 @@ TEST_P(CharsTypes, AllTypes)
   cudf::test::fixed_width_column_wrapper<bool> expected(
     sub_expected,
     sub_expected + strings_count,
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -132,7 +132,7 @@ TEST_F(StringsCharsTest, Alphanumeric)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::all_characters_of_type(
@@ -157,7 +157,7 @@ TEST_F(StringsCharsTest, Alphanumeric)
   cudf::test::fixed_width_column_wrapper<bool> expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -183,7 +183,7 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto types =
@@ -210,7 +210,7 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
   cudf::test::fixed_width_column_wrapper<bool> expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -236,7 +236,7 @@ TEST_F(StringsCharsTest, Numerics)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto types = cudf::strings::string_character_types::DIGIT |
@@ -264,7 +264,7 @@ TEST_F(StringsCharsTest, Numerics)
   cudf::test::fixed_width_column_wrapper<bool> expected(
     h_expected.begin(),
     h_expected.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

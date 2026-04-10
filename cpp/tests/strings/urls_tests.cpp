@@ -10,7 +10,7 @@
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 #include <random>
 #include <vector>
@@ -31,7 +31,7 @@ TEST_F(StringsConvertTest, UrlEncode)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    thrust::make_transform_iterator(h_strings.cbegin(),
+    cuda::transform_iterator(h_strings.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
@@ -49,7 +49,7 @@ TEST_F(StringsConvertTest, UrlEncode)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    thrust::make_transform_iterator(h_expected.cbegin(),
+    cuda::transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -67,7 +67,7 @@ TEST_F(StringsConvertTest, UrlDecode)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    thrust::make_transform_iterator(h_strings.cbegin(),
+    cuda::transform_iterator(h_strings.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
@@ -84,7 +84,7 @@ TEST_F(StringsConvertTest, UrlDecode)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    thrust::make_transform_iterator(h_expected.cbegin(),
+    cuda::transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -101,7 +101,7 @@ TEST_F(StringsConvertTest, UrlDecodeNop)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    thrust::make_transform_iterator(h_strings.cbegin(),
+    cuda::transform_iterator(h_strings.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
@@ -123,7 +123,7 @@ TEST_F(StringsConvertTest, UrlDecodeSliced)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    thrust::make_transform_iterator(h_strings.cbegin(),
+    cuda::transform_iterator(h_strings.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
   std::vector<char const*> h_expected{"www.nvidia.com/rapids/?p=é%",
@@ -137,7 +137,7 @@ TEST_F(StringsConvertTest, UrlDecodeSliced)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    thrust::make_transform_iterator(h_expected.cbegin(),
+    cuda::transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
   std::vector<cudf::size_type> slice_indices{0, 3, 3, 6, 6, 8};
@@ -197,7 +197,7 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
     h_strings.cend(),
-    thrust::make_transform_iterator(h_strings.cbegin(),
+    cuda::transform_iterator(h_strings.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
   auto strings_view = cudf::strings_column_view(strings);
@@ -207,7 +207,7 @@ TEST_F(StringsConvertTest, UrlDecodeLargeStrings)
   cudf::test::strings_column_wrapper expected(
     h_expected.cbegin(),
     h_expected.cend(),
-    thrust::make_transform_iterator(h_expected.cbegin(),
+    cuda::transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);

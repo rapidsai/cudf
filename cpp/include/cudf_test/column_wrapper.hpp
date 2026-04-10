@@ -32,7 +32,6 @@
 #include <cuda/std/functional>
 #include <thrust/copy.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 #include <iterator>
@@ -157,7 +156,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
   auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
-  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto transform_begin = cuda::transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
   return rmm::device_buffer{
@@ -187,7 +186,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using RepType        = typename ElementTo::rep;
   auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
-  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto transform_begin = cuda::transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
   return rmm::device_buffer{
@@ -218,7 +217,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
                "Only zero-scale fixed-point values are supported");
 
   auto to_rep            = [](ElementTo fp) { return fp.value(); };
-  auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
+  auto transformer_begin = cuda::transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
   return rmm::device_buffer{
@@ -518,10 +517,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements)
   {
     auto begin =
-      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
+      cuda::transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
     auto end = begin + elements.size();
     auto v =
-      thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
+      cuda::transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
     wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(begin, end, v).release();
   }
 };
@@ -906,10 +905,10 @@ class strings_column_wrapper : public detail::column_wrapper {
   strings_column_wrapper(std::initializer_list<std::pair<std::string, bool>> strings)
   {
     auto begin =
-      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
+      cuda::transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
     auto end = begin + strings.size();
     auto v =
-      thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
+      cuda::transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
     wrapped = strings_column_wrapper(begin, end, v).release();
   }
 };

@@ -16,7 +16,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/std/tuple>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/zip_iterator.h>
 
 #include <type_traits>

@@ -20,7 +20,7 @@
 
 #include <cuda/functional>
 #include <cuda/std/utility>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scan.h>
 #include <thrust/uninitialized_fill.h>
 
@@ -216,7 +216,7 @@ std::unique_ptr<column> make_strings_column(device_span<string_view const> strin
   CUDF_FUNC_RANGE();
 
   auto it_pair =
-    thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
+    cuda::transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
   return cudf::strings::detail::make_strings_column(
     it_pair, it_pair + string_views.size(), stream, mr);
 }

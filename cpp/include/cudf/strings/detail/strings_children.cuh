@@ -70,7 +70,7 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
   auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
 
-  auto const src_ptrs = thrust::make_transform_iterator(
+  auto const src_ptrs = cuda::transform_iterator(
     cuda::counting_iterator<uint32_t>{0},
     cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
       // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
@@ -78,11 +78,11 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
       // This should be fine as long as we only read but not write anything to the source.
       return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
     }));
-  auto const src_sizes = thrust::make_transform_iterator(
+  auto const src_sizes = cuda::transform_iterator(
     cuda::counting_iterator<uint32_t>{0},
     cuda::proclaim_return_type<size_type>(
       [begin] __device__(uint32_t idx) { return begin[idx].second; }));
-  auto const dst_ptrs = thrust::make_transform_iterator(
+  auto const dst_ptrs = cuda::transform_iterator(
     cuda::counting_iterator<uint32_t>{0},
     cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
                                         uint32_t idx) { return output + offsets[idx]; }));

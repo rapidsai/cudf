@@ -13,7 +13,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 struct JoinStringsTest : public cudf::test::BaseFixture {};
 
@@ -23,7 +23,7 @@ TEST_F(JoinStringsTest, Join)
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   auto view1 = cudf::strings_column_view(strings);
 
   {
