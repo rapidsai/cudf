@@ -1087,8 +1087,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                         orig_dtype, np.dtype(np.int64)
                     )
                 elif (
-                    self.obj.empty
-                    and (
+                    (
                         isinstance(agg_name, str)
                         and agg_name in Reducible._SUPPORTED_REDUCTIONS
                     )

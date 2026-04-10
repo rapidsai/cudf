@@ -144,6 +144,7 @@ def test_unique():
     # See: https://github.com/dask/dask/pull/11040
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=Warning, message="Port")
+        warnings.filterwarnings("ignore", category=ResourceWarning)
 
         with dask_cuda.LocalCUDACluster(
             n_workers=3, dashboard_address=None
