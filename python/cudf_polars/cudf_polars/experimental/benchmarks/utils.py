@@ -1468,12 +1468,16 @@ def run_polars_query_iteration(
     query_result: Any,
     client: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+    result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
     result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
 
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
+
+    if expected is not None and result_casts:
+        result = result.with_columns(*result_casts)
 
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
         from rapidsmpf.integrations.dask.shuffler import (
@@ -1598,6 +1602,7 @@ def run_polars_query(
                 query_result=query_result,
                 client=client,
                 prepare_validation_result=prepare_validation_result,
+                result_casts=casts if casts else None,
             )
         except Exception:
             print(f"❌ query={q_id} iteration={i} failed!")
