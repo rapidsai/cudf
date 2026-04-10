@@ -225,7 +225,6 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach(
  * Semantics match reprog_device::find (Thompson NFA) as closely as possible:
  *   - Leftmost start position.
  *   - Greedy (longest match from that start).
- *   - Nullable patterns produce zero-length matches.
  *
  * For unanchored patterns, uses a two-phase O(n) algorithm:
  * Phase 1 injects first_set at every character and extends greedily; when
