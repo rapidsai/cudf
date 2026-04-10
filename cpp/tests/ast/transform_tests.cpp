@@ -1273,7 +1273,7 @@ TYPED_TEST(DecimalTests, DecimalDivide)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
-TYPED_TEST(DecimalTests, DecimalLexicographic)
+TYPED_TEST(DecimalTests, DecimalComparator)
 {
   using decimalXX = TypeParam;
   using RepType   = cudf::device_storage_type_t<decimalXX>;
@@ -1320,12 +1320,13 @@ TYPED_TEST(DecimalTests, DecimalScaleMismatch)
   using decimalXX = TypeParam;
   using RepType   = cudf::device_storage_type_t<decimalXX>;
 
-  auto scale1   = numeric::scale_type{-1};
-  auto scale2   = numeric::scale_type{-2};
+  auto scale1 = numeric::scale_type{-1};
+  auto scale2 = numeric::scale_type{-2};
+
+  auto value0   = cudf::fixed_point_scalar<decimalXX>(RepType{100}, scale1, true);
+  auto literal0 = cudf::ast::literal(value0);
   auto c_0      = cudf::test::fixed_point_column_wrapper<RepType>({1000, 2000, 3000, 4000}, scale2);
   auto table    = cudf::table_view({c_0});
-  auto value0   = cudf::fixed_point_scalar<decimalXX>(RepType{100}, scale1, true);  // 10
-  auto literal0 = cudf::ast::literal(value0);
   auto col_ref_0 = cudf::ast::column_reference(0);
 
   cudf::ast::tree tree{};
