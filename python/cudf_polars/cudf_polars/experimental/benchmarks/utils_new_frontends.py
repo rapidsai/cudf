@@ -28,8 +28,6 @@ import nvtx
 
 import polars as pl
 
-import rmm.mr
-
 __all__: list[str] = [
     "COUNT_DTYPE",
     "QueryResult",
@@ -715,9 +713,7 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
-                context = IRExecutionContext.from_config_options(
-                    translator.config_options
-                )
+                context = IRExecutionContext()
                 if run_config.executor == "in-memory":
                     t0 = time.monotonic()
                     result = ir.evaluate(
@@ -1085,7 +1081,6 @@ def run_polars_spmd(
     # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
-    rmm.mr.set_current_device_resource(rmm.mr.CudaAsyncMemoryResource())
     engine_options = {
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,

@@ -96,6 +96,44 @@ opts = StreamingOptions.from_dict({
 })
 ```
 
+### Memory resource configuration
+
+Use `memory_resource_config` to control the RMM memory resource used by the
+engine. It accepts a `MemoryResourceConfig` object that specifies the fully
+qualified class name and optional constructor arguments:
+
+```python
+from cudf_polars.utils.config import MemoryResourceConfig
+
+opts = StreamingOptions(
+    memory_resource_config=MemoryResourceConfig(
+        qualname="rmm.mr.CudaAsyncMemoryResource",
+    ),
+)
+```
+
+Nested resources (e.g. a pool wrapping a managed resource) are supported:
+
+```python
+opts = StreamingOptions(
+    memory_resource_config=MemoryResourceConfig(
+        qualname="rmm.mr.PoolMemoryResource",
+        options={
+            "upstream_mr": {
+                "qualname": "rmm.mr.ManagedMemoryResource",
+            },
+        },
+    ),
+)
+```
+
+When no `memory_resource_config` is provided:
+
+- **SPMDEngine** uses `rmm.mr.get_current_device_resource()` (the in-process
+  default — useful when user code has already configured a resource).
+benchm- **DaskEngine** and **RayEngine** default to `rmm.mr.CudaAsyncMemoryResource()`
+  (workers start in a fresh process with no pre-configured resource).
+
 ---
 
 ## Ray execution mode
@@ -601,7 +639,6 @@ Prefer `SPMDEngine.from_options()` with a `StreamingOptions` object (see
 fine-grained control, the `__init__` parameters accept raw dicts:
 
 ```python
-import rmm
 from rapidsmpf.config import Options
 
 with SPMDEngine(
@@ -615,12 +652,12 @@ with SPMDEngine(
     ...
 ```
 
-**Memory resource:** `SPMDEngine` captures `rmm.mr.get_current_device_resource()`
-at construction, wraps it in `RmmResourceAdaptor` (so libcudf temporary allocations and the
-RapidsMPF `Context` share the same resource), sets the wrapped resource as current, and
-restores the original resource on shutdown. To use a custom allocator, call
-`rmm.mr.set_current_device_resource(your_mr)` **before** constructing `SPMDEngine`.
-Do not pre-wrap it in `RmmResourceAdaptor`.
+**Memory resource:** All engines accept a `memory_resource_config` option (via
+`StreamingOptions` or `engine_options`) that controls the RMM memory resource.
+See [Memory resource configuration](#memory-resource-configuration) for details.
+When no config is provided, `SPMDEngine` falls back to
+`rmm.mr.get_current_device_resource()`, while `DaskEngine` and `RayEngine`
+default to `rmm.mr.CudaAsyncMemoryResource()`.
 
 `comm` is an already-bootstrapped communicator. When provided, the bootstrap step
 is skipped and the caller retains ownership (see

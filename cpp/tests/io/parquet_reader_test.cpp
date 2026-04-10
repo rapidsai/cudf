@@ -752,8 +752,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
         reinterpret_cast<std::byte const*>(decimals_parquet.data()), decimals_parquet.size()}});
     auto result = cudf::io::read_parquet(read_opts);
 
-    auto validity =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 50; });
+    auto validity = cudf::test::iterators::null_at(50);
 
     EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
