@@ -2832,20 +2832,13 @@ class RangeIndex(Index):
             raise ValueError(f"invalid na_position: {na_position}")
 
         sorted_index = self
-        indexer = RangeIndex(range(len(self)))
-
-        sorted_index = self
-        if ascending:
-            if self.step < 0:
-                sorted_index = self[::-1]
-                indexer = indexer[::-1]
-        else:
-            if self.step > 0:
-                sorted_index = self[::-1]
-                indexer = indexer = indexer[::-1]
+        if (ascending and self.step < 0) or (not ascending and self.step > 0):
+            sorted_index = self[::-1]
 
         if return_indexer:
-            return sorted_index, indexer
+            return sorted_index, self.argsort(
+                ascending=ascending, na_position=na_position
+            )
         else:
             return sorted_index
 
