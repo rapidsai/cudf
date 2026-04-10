@@ -4,5 +4,5 @@
 import pandas as pd
 from packaging import version
 
-PANDAS_CURRENT_SUPPORTED_VERSION = version.parse("3.0.1")
+PANDAS_CURRENT_SUPPORTED_VERSION = version.parse("3.0.2")
 PANDAS_VERSION = version.parse(pd.__version__)
