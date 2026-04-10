@@ -22,10 +22,8 @@ def _expand_hashable(obj: Any) -> Any:
     """Expand nested Node instances to their hashable form."""
     if isinstance(obj, Node):
         return _expand_hashable(obj.get_hashable())
-    elif isinstance(obj, (tuple, list)):
+    elif isinstance(obj, tuple):
         return tuple(_expand_hashable(x) for x in obj)
-    elif isinstance(obj, dict):
-        return tuple(sorted((k, _expand_hashable(v)) for k, v in obj.items()))
     return obj
 
 
