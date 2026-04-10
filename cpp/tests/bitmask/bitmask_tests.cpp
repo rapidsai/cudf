@@ -696,9 +696,8 @@ TEST_F(MergeBitmaskTest, TestBitmaskOr)
   EXPECT_EQ(result2_null_count, 1);
   EXPECT_EQ(result3_null_count, 0);
 
-  auto all_but_index3 =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
-  auto null3 = std::get<0>(
+  auto all_but_index3 = cudf::test::iterators::null_at(3);
+  auto null3          = std::get<0>(
     cudf::test::detail::make_null_mask(all_but_index3, all_but_index3 + input2.num_rows()));
 
   EXPECT_EQ(nullptr, result1_mask.data());

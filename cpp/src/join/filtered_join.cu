@@ -387,6 +387,8 @@ filtered_join::filtered_join(cudf::table_view const& build,
 {
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
                              set_as_build_table reuse_tbl,
@@ -405,6 +407,7 @@ filtered_join::filtered_join(cudf::table_view const& build,
   : filtered_join(build, compare_nulls, reuse_tbl, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
 {
 }
+#pragma GCC diagnostic pop
 
 std::unique_ptr<rmm::device_uvector<size_type>> filtered_join::semi_join(
   cudf::table_view const& probe,

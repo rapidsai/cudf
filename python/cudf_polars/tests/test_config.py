@@ -33,6 +33,7 @@ from cudf_polars.utils.config import (
     ConfigOptions,
     MemoryResourceConfig,
     StreamingExecutor,
+    _default_cuda_stream_policy,
 )
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
@@ -680,6 +681,15 @@ def test_cuda_stream_policy_default(monkeypatch: pytest.MonkeyPatch) -> None:
         pl.GPUEngine(executor_options={"runtime": "tasks"})
     )
     assert config.cuda_stream_policy is None
+
+
+def test_default_cuda_stream_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CUDF_POLARS__CUDA_STREAM_POLICY", raising=False)
+    assert _default_cuda_stream_policy() is None
+
+    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "pool")
+    result = _default_cuda_stream_policy()
+    assert isinstance(result, CUDAStreamPoolConfig)
 
 
 def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> None:
