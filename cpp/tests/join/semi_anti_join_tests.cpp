@@ -65,8 +65,7 @@ std::unique_ptr<cudf::table> left_semi_join(
   auto right_selected = right_input.select(right_on);
 
   if (!use_mark_join(implementation)) {
-    cudf::filtered_join obj(
-      right_selected, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    cudf::filtered_join obj(right_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.semi_join(
       left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
@@ -95,8 +94,7 @@ std::unique_ptr<cudf::table> left_anti_join(
   auto right_selected = right_input.select(right_on);
 
   if (!use_mark_join(implementation)) {
-    cudf::filtered_join obj(
-      right_selected, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    cudf::filtered_join obj(right_selected, compare_nulls, cudf::get_default_stream());
     auto const join_indices = obj.anti_join(
       left_selected, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
@@ -444,11 +442,8 @@ TEST_P(SemiAntiJoinTest, AntiSemiJoinLargeExtentOverflowPrevention)
 
   // Test with load factors that would cause overflow in int32_t extent
   EXPECT_NO_THROW({
-    cudf::filtered_join obj(build_table,
-                            cudf::null_equality::EQUAL,
-                            cudf::set_as_build_table::RIGHT,
-                            load_factor,
-                            cudf::get_default_stream());
+    cudf::filtered_join obj(
+      build_table, cudf::null_equality::EQUAL, load_factor, cudf::get_default_stream());
     auto result = obj.semi_join(
       empty_probe_table, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
     result = obj.anti_join(
