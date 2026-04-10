@@ -16,9 +16,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
-#include <cuda/iterator>
 
 namespace cudf {
 namespace strings {

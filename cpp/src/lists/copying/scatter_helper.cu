@@ -399,8 +399,8 @@ struct list_child_constructor {
                                            {structs_list_offsets, structs_member}));
     };
 
-    auto const iter_source_member_as_list = cuda::transform_iterator(
-      cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
+    auto const iter_source_member_as_list =
+      cuda::transform_iterator(cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
         return project_member_as_list_view(source_structs.child(child_idx),
                                            source_lists_column_view.size(),
                                            source_lists_column_view.offsets(),
@@ -408,8 +408,8 @@ struct list_child_constructor {
                                            source_lists_column_view.null_count());
       });
 
-    auto const iter_target_member_as_list = cuda::transform_iterator(
-      cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
+    auto const iter_target_member_as_list =
+      cuda::transform_iterator(cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
         return project_member_as_list_view(target_structs.child(child_idx),
                                            target_lists_column_view.size(),
                                            target_lists_column_view.offsets(),

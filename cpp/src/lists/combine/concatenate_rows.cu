@@ -72,9 +72,9 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
 
   auto keys =
     cuda::transform_iterator(cuda::counting_iterator<std::size_t>{0},
-                                    cuda::proclaim_return_type<size_type>(
-                                      [num_columns = input.num_columns()] __device__(
-                                        std::size_t i) -> size_type { return i / num_columns; }));
+                             cuda::proclaim_return_type<size_type>(
+                               [num_columns = input.num_columns()] __device__(
+                                 std::size_t i) -> size_type { return i / num_columns; }));
 
   // generate sizes for the regrouped rows
   auto values = cuda::transform_iterator(
@@ -153,9 +153,9 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
 
   auto keys =
     cuda::transform_iterator(cuda::counting_iterator<std::size_t>{0},
-                                    cuda::proclaim_return_type<size_type>(
-                                      [num_columns = input.num_columns()] __device__(
-                                        std::size_t i) -> size_type { return i / num_columns; }));
+                             cuda::proclaim_return_type<size_type>(
+                               [num_columns = input.num_columns()] __device__(
+                                 std::size_t i) -> size_type { return i / num_columns; }));
 
   auto null_values = cuda::transform_iterator(
     cuda::counting_iterator<std::size_t>{0},

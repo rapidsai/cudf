@@ -381,7 +381,7 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
   CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
   CUDF_EXPECTS(scalar_value.is_valid(), "the scalar value must be valid");
   return cuda::transform_iterator(cuda::make_constant_iterator<size_type>(0),
-                                         scalar_value_accessor<Element>{scalar_value});
+                                  scalar_value_accessor<Element>{scalar_value});
 }
 
 /**
@@ -608,7 +608,7 @@ auto inline make_pair_iterator(scalar const& scalar_value)
   CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),
                "the data type mismatch");
   return cuda::transform_iterator(cuda::make_constant_iterator<size_type>(0),
-                                         scalar_pair_accessor<Element>{scalar_value});
+                                  scalar_pair_accessor<Element>{scalar_value});
 }
 
 /**

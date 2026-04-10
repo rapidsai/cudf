@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -394,16 +394,16 @@ TEST_F(StringsDurationsTest, ParseSingle)
                                                 ""};  // error
   auto size = cudf::column_view(string_src).size();
   std::array expected_v{0, 0, 1, -1, 23, -23, 59, -59, 99, -99, 0, 1, 0};
-  auto it1 = cuda::transform_iterator(expected_v.data(),
-                                             [](auto i) { return cudf::duration_s{i * 3600}; });
+  auto it1 =
+    cuda::transform_iterator(expected_v.data(), [](auto i) { return cudf::duration_s{i * 3600}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_s> expected_s1(it1, it1 + size);
   auto results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
                                              cudf::data_type(cudf::type_to_id<cudf::duration_s>()),
                                              "%H");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
 
-  auto it2 = cuda::transform_iterator(expected_v.data(),
-                                             [](auto i) { return cudf::duration_s{i * 60}; });
+  auto it2 =
+    cuda::transform_iterator(expected_v.data(), [](auto i) { return cudf::duration_s{i * 60}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_s> expected_s2(it2, it2 + size);
   results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
                                         cudf::data_type(cudf::type_to_id<cudf::duration_s>()),
@@ -419,7 +419,7 @@ TEST_F(StringsDurationsTest, ParseSingle)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s3);
 
   auto it4 = cuda::transform_iterator(expected_v.data(),
-                                             [](auto i) { return cudf::duration_ms{i * 60000}; });
+                                      [](auto i) { return cudf::duration_ms{i * 60000}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_ms> expected_ms(it4, it4 + size);
   results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
                                         cudf::data_type(cudf::type_to_id<cudf::duration_ms>()),
@@ -465,8 +465,8 @@ TEST_F(StringsDurationsTest, ParseMultiple)
                                              "%H:%M:%S");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
 
-  auto it2 = cuda::transform_iterator(
-    expected_v.data(), [](auto i) { return cudf::duration_D{i / (24 * 3600)}; });
+  auto it2 = cuda::transform_iterator(expected_v.data(),
+                                      [](auto i) { return cudf::duration_D{i / (24 * 3600)}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_D> expected_D2(it2, it2 + size);
   results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
                                         cudf::data_type(cudf::type_to_id<cudf::duration_D>()),
@@ -520,7 +520,7 @@ TEST_F(StringsDurationsTest, ParseSubsecond)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ns1);
 
   auto it2 = cuda::transform_iterator(expected_v.data(),
-                                             [](auto i) { return cudf::duration_ms{i / 1000000}; });
+                                      [](auto i) { return cudf::duration_ms{i / 1000000}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_ms> expected_ms2(it2, it2 + size);
   results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
                                         cudf::data_type(cudf::type_to_id<cudf::duration_ms>()),
@@ -574,8 +574,8 @@ TEST_F(StringsDurationsTest, ParseAMPM)
                                              "%H:%M:%S %p");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
 
-  auto it2 = cuda::transform_iterator(
-    expected_v.data(), [](auto i) { return cudf::duration_D{i / (24 * 3600)}; });
+  auto it2 = cuda::transform_iterator(expected_v.data(),
+                                      [](auto i) { return cudf::duration_D{i / (24 * 3600)}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_D> expected_D2(it2, it2 + size);
   results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
                                         cudf::data_type(cudf::type_to_id<cudf::duration_D>()),
@@ -631,8 +631,8 @@ TEST_F(StringsDurationsTest, ParseCompoundSpecifier)
                                         "%OI:%OM:%OS %p");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_s1);
 
-  auto it2 = cuda::transform_iterator(expected_v.data(),
-                                             [](auto i) { return cudf::duration_ms{i * 1000}; });
+  auto it2 =
+    cuda::transform_iterator(expected_v.data(), [](auto i) { return cudf::duration_ms{i * 1000}; });
   cudf::test::fixed_width_column_wrapper<cudf::duration_ms> expected_s2(it2, it2 + size);
   results = cudf::strings::to_durations(cudf::strings_column_view(string_src),
                                         cudf::data_type(cudf::type_to_id<cudf::duration_ms>()),

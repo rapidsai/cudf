@@ -289,8 +289,8 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
 
   auto gather_map_it =
     cuda::transform_iterator(group_offsets(stream).begin(),
-                                    cuda::proclaim_return_type<size_type>(
-                                      [idx_data] __device__(size_type i) { return idx_data[i]; }));
+                             cuda::proclaim_return_type<size_type>(
+                               [idx_data] __device__(size_type i) { return idx_data[i]; }));
 
   return cudf::detail::gather(_keys,
                               gather_map_it,

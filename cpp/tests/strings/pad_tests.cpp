@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,9 +24,9 @@ TEST_F(StringsPadTest, Padding)
 {
   std::vector<char const*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "bbb", "ééé", "o"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   cudf::size_type width = 6;
   std::string phil      = "+";
   auto strings_view     = cudf::strings_column_view(strings);
@@ -123,9 +123,9 @@ TEST_F(StringsPadTest, ZFill)
   std::vector<char const*> h_strings{
     "654321", "-12345", nullptr, "", "-5", "0987", "4", "+8.5", "éé", "+abé", "é+a", "100-"};
   cudf::test::strings_column_wrapper input(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   auto strings_view = cudf::strings_column_view(input);
 
   auto results = cudf::strings::zfill(strings_view, 6);
@@ -191,9 +191,9 @@ TEST_F(StringsPadTest, Wrap1)
 {
   std::vector<char const*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   cudf::size_type width = 3;
 
   auto strings_view = cudf::strings_column_view(strings);
@@ -213,9 +213,9 @@ TEST_F(StringsPadTest, Wrap2)
   std::vector<char const*> h_strings{"the quick brown fox jumped over the lazy brown dog",
                                      "hello, world"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   cudf::size_type width = 12;
 
   auto strings_view = cudf::strings_column_view(strings);
@@ -235,9 +235,9 @@ TEST_F(StringsPadTest, WrapExpectFailure)
 {
   std::vector<char const*> h_strings{"12345", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
 
   cudf::size_type width = 0;  // this should trigger failure
 

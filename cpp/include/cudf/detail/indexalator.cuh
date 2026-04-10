@@ -344,7 +344,7 @@ struct indexalator_factory {
   static auto make_input_optional_iterator(scalar const& input, rmm::cuda_stream_view stream)
   {
     return cuda::transform_iterator(cuda::make_constant_iterator<size_type>(0),
-                                           scalar_optional_index_accessor{input, stream});
+                                    scalar_optional_index_accessor{input, stream});
   }
 };
 

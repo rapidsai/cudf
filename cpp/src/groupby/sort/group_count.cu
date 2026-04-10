@@ -43,9 +43,8 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
     // so we need to transform it to cast it to an integer type
     auto bitmask_iterator =
       cuda::transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      cuda::proclaim_return_type<size_type>([] __device__(auto b) {
-                                        return static_cast<size_type>(b);
-                                      }));
+                               cuda::proclaim_return_type<size_type>(
+                                 [] __device__(auto b) { return static_cast<size_type>(b); }));
 
     cudf::detail::reduce_by_key_async(group_labels.begin(),
                                       group_labels.end(),
