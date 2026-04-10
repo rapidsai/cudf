@@ -27,7 +27,6 @@ import functools
 import importlib.util
 import json
 import os
-import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
@@ -58,7 +57,6 @@ __all__ = [
     "RayContext",
     "Runtime",
     "SPMDContext",
-    "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -181,20 +179,6 @@ class Cluster(enum.StrEnum):
     DASK = "dask"
 
 
-class Scheduler(enum.StrEnum):
-    """
-    **Deprecated**: Use :class:`Cluster` instead.
-
-    The scheduler to use for the task-based streaming executor.
-
-    * ``Scheduler.SYNCHRONOUS`` : Single-GPU execution (use ``Cluster.SINGLE`` instead)
-    * ``Scheduler.DISTRIBUTED`` : Multi-GPU execution (use ``Cluster.DISTRIBUTED`` instead)
-    """
-
-    SYNCHRONOUS = "synchronous"
-    DISTRIBUTED = "distributed"
-
-
 class ShuffleMethod(enum.StrEnum):
     """
     The method to use for shuffling data between workers with the streaming executor.
@@ -279,7 +263,7 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used when the rapidsmpf runtime is enabled.
-        Default is True.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -318,7 +302,7 @@ class ParquetOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
             _bool_converter,
-            default=True,
+            default=False,
         )
     )
 
@@ -625,12 +609,6 @@ class StreamingExecutor:
         * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
           an active Dask cluster)
 
-    scheduler
-        **Deprecated**: Use ``cluster`` instead.
-
-        For backward compatibility:
-        * ``Scheduler.SYNCHRONOUS`` maps to ``Cluster.SINGLE``
-        * ``Scheduler.DISTRIBUTED`` maps to ``Cluster.DISTRIBUTED``
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
@@ -711,7 +689,7 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
-    rapidsmpf_py_executor_max_workers
+    num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor used by
         the rapidsmpf runtime. Default is None, which uses ThreadPoolExecutor's
         default behavior. This option is only used by the "rapidsmpf" runtime.
@@ -738,13 +716,6 @@ class StreamingExecutor:
         default_factory=_make_default_factory(
             f"{_env_prefix}__CLUSTER",
             Cluster.__call__,
-            default=None,
-        )
-    )
-    scheduler: Scheduler | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SCHEDULER",
-            Scheduler.__call__,
             default=None,
         )
     )
@@ -815,9 +786,9 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    rapidsmpf_py_executor_max_workers: int | None = dataclasses.field(
+    num_py_executors: int | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
+            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=None
         )
     )
     spmd_context: SPMDContext | None = None
@@ -831,30 +802,7 @@ class StreamingExecutor:
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
 
-        # Handle backward compatibility for deprecated scheduler parameter
-        if self.scheduler is not None:
-            if self.cluster is not None:
-                raise ValueError(
-                    "Cannot specify both 'scheduler' and 'cluster'. "
-                    "The 'scheduler' parameter is deprecated. "
-                    "Please use only 'cluster' instead."
-                )
-            else:
-                warnings.warn(
-                    """The 'scheduler' parameter is deprecated. Please use 'cluster' instead.
-                    Use 'cluster="single"' instead of 'scheduler="synchronous"' and "
-                    'cluster="distributed"' instead of 'scheduler="distributed"'.""",
-                    FutureWarning,
-                    stacklevel=2,
-                )
-            # Map old scheduler values to new cluster values
-            if self.scheduler == "synchronous":
-                object.__setattr__(self, "cluster", Cluster.SINGLE)
-            elif self.scheduler == "distributed":
-                object.__setattr__(self, "cluster", Cluster.DISTRIBUTED)
-            # Clear scheduler to avoid confusion
-            object.__setattr__(self, "scheduler", None)
-        elif self.cluster is None:
+        if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
@@ -942,8 +890,8 @@ class StreamingExecutor:
             raise TypeError("max_io_threads must be an int")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
-        if not isinstance(self.rapidsmpf_py_executor_max_workers, (int, type(None))):
-            raise TypeError("rapidsmpf_py_executor_max_workers must be int or None")
+        if not isinstance(self.num_py_executors, (int, type(None))):
+            raise TypeError("num_py_executors must be int or None")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -1129,19 +1077,6 @@ class ConfigOptions(Generic[ExecutorType]):
             user_memory_resource_config = MemoryResourceConfig(
                 **user_memory_resource_config
             )
-
-        # Backward compatibility for "cardinality_factor"
-        # TODO: Remove this in 25.10
-        if "cardinality_factor" in user_executor_options:
-            warnings.warn(
-                "The 'cardinality_factor' configuration is deprecated. "
-                "Please use 'unique_fraction' instead.",
-                FutureWarning,
-                stacklevel=2,
-            )
-            cardinality_factor = user_executor_options.pop("cardinality_factor")
-            if "unique_fraction" not in user_executor_options:
-                user_executor_options["unique_fraction"] = cardinality_factor
 
         # These are user-provided options, so we need to actually validate
         # them.
