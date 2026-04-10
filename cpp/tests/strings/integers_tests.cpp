@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,8 +15,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/host_vector.h>
 #include <cuda/iterator>
+#include <thrust/host_vector.h>
 
 #include <array>
 #include <numeric>
@@ -76,9 +76,9 @@ TEST_F(StringsConvertTest, IsIntegerBoundCheckWithNulls)
   std::vector<char const*> const h_strings{
     "eee", "1234", nullptr, "", "-9832", "93.24", "765é", nullptr};
   auto const strings = cudf::test::strings_column_wrapper(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   auto const results = cudf::strings::is_integer(cudf::strings_column_view(strings),
                                                  cudf::data_type{cudf::type_id::INT32});
   // Input has null elements then the output should have the same null mask
@@ -189,9 +189,9 @@ TEST_F(StringsConvertTest, ToInteger)
                                      "-2147483648",
                                      "2147483648"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
 
   auto results            = cudf::strings::to_integers(cudf::strings_column_view(strings),
                                             cudf::data_type{cudf::type_id::INT16});
@@ -328,9 +328,9 @@ TEST_F(StringsConvertTest, HexToInteger)
   std::vector<char const*> h_strings{
     "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
 
   {
     std::vector<int32_t> h_expected;
@@ -383,9 +383,9 @@ TEST_F(StringsConvertTest, IsHex)
                                      "0x",
                                      "x"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   cudf::test::fixed_width_column_wrapper<bool> expected(
     {0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0},
     {true, true, false, true, true, true, true, true, true, true, true, true});

@@ -241,8 +241,7 @@ TEST_F(HashPartition, LargePartitionCountWithNulls)
   auto const valids = cuda::transform_iterator(iter, [](auto i) { return i % 4 != 0; });
 
   fixed_width_column_wrapper<int32_t> ints(iter, iter + num_rows, valids);
-  auto const str_iter =
-    cuda::transform_iterator(iter, [](auto i) { return std::to_string(i); });
+  auto const str_iter = cuda::transform_iterator(iter, [](auto i) { return std::to_string(i); });
   strings_column_wrapper strings(str_iter, str_iter + num_rows, valids);
   auto const input = cudf::table_view({ints, strings});
 

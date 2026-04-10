@@ -1341,7 +1341,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
                                                  rmm::cuda_stream_view stream)
 {
   auto stripe_size_iter = cuda::transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
-                                                          [](auto const& s) { return s.size(); });
+                                                   [](auto const& s) { return s.size(); });
 
   auto const num_columns = footer.types.size() - 1;
   auto const num_stripes = footer.stripes.size();

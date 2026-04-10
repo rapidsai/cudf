@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -30,9 +30,9 @@ TEST_F(StringsDatetimeTest, ToTimestamp)
                                      "1921-01-07T14:32:07Z",
                                      "1969-12-31T23:59:45Z"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   std::vector<cudf::timestamp_s::rep> h_expected{
     131246625, 1563399277, 0, 0, 1553085296, 1582934400, -1545730073, -15};
 
@@ -41,9 +41,9 @@ TEST_F(StringsDatetimeTest, ToTimestamp)
     strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, "%Y-%m-%dT%H:%M:%SZ");
 
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> expected(
-    h_expected.begin(),
-    h_expected.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_expected.begin(), h_expected.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::is_timestamp(strings_view, "%Y-%m-%dT%H:%M:%SZ");

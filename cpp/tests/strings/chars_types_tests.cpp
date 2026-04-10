@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,9 +58,9 @@ TEST_P(CharsTypes, AllTypes)
   auto is_parm = GetParam();
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::all_characters_of_type(strings_view, is_parm);
@@ -130,9 +130,9 @@ TEST_F(StringsCharsTest, Alphanumeric)
                                      "\t\r\n\f "};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto results = cudf::strings::all_characters_of_type(
@@ -155,9 +155,9 @@ TEST_F(StringsCharsTest, Alphanumeric)
                                true,
                                false};
   cudf::test::fixed_width_column_wrapper<bool> expected(
-    h_expected.begin(),
-    h_expected.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_expected.begin(), h_expected.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -181,9 +181,9 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
                                      "\t\r\n\f "};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto types =
@@ -208,9 +208,9 @@ TEST_F(StringsCharsTest, AlphaNumericSpace)
                                true,
                                true};
   cudf::test::fixed_width_column_wrapper<bool> expected(
-    h_expected.begin(),
-    h_expected.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_expected.begin(), h_expected.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -234,9 +234,9 @@ TEST_F(StringsCharsTest, Numerics)
                                      "\t\r\n\f "};
 
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   auto strings_view = cudf::strings_column_view(strings);
 
   auto types = cudf::strings::string_character_types::DIGIT |
@@ -262,9 +262,9 @@ TEST_F(StringsCharsTest, Numerics)
                                false,
                                false};
   cudf::test::fixed_width_column_wrapper<bool> expected(
-    h_expected.begin(),
-    h_expected.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_expected.begin(), h_expected.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

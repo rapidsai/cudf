@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,9 +28,9 @@ TEST_F(TextReplaceTest, ReplaceTokens)
                                      "no change",
                                      "thé is the cheese is"};
   cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    cuda::transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin(), h_strings.end(), cuda::transform_iterator(h_strings.begin(), [](auto str) {
+      return str != nullptr;
+    }));
   cudf::test::strings_column_wrapper targets({"is", "the"});
   cudf::test::strings_column_wrapper repls({"___", ""});
   std::vector<char const*> h_expected{" fox jumped over  dog",

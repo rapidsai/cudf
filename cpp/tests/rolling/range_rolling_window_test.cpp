@@ -173,8 +173,8 @@ void verify_results_for_descending(WindowExecT exec)
 {
   auto const all_valid     = cuda::make_constant_iterator<bool>(true);
   auto const all_invalid   = cuda::make_constant_iterator<bool>(false);
-  auto const first_invalid = cuda::transform_iterator(
-    cuda::counting_iterator<cudf::size_type>{0}, [](auto i) { return i != 0; });
+  auto const first_invalid = cuda::transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
+                                                      [](auto i) { return i != 0; });
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     exec(cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE))

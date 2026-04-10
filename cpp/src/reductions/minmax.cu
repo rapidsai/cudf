@@ -20,10 +20,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
-#include <cuda/iterator>
 #include <thrust/transform_reduce.h>
 
 #include <type_traits>
@@ -150,12 +150,11 @@ struct minmax_functor {
     auto device_col = column_device_view::create(col, stream);
     // compute minimum and maximum values
     if (col.has_nulls()) {
-      auto pair_to_minmax = cuda::transform_iterator(
-        make_pair_iterator<T, true>(*device_col), create_minmax_with_nulls<T>{});
+      auto pair_to_minmax = cuda::transform_iterator(make_pair_iterator<T, true>(*device_col),
+                                                     create_minmax_with_nulls<T>{});
       return reduce_device(pair_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
     } else {
-      auto col_to_minmax =
-        cuda::transform_iterator(device_col->begin<T>(), create_minmax<T>{});
+      auto col_to_minmax = cuda::transform_iterator(device_col->begin<T>(), create_minmax<T>{});
       return reduce_device(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream);
     }
   }

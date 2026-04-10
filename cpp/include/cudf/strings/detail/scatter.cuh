@@ -16,8 +16,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
 #include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/scatter.h>
 
 namespace cudf {

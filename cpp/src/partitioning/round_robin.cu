@@ -77,12 +77,12 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
   auto nrows = input.num_rows();
 
   // iterator for partition index rotated right by start_partition positions:
-  auto rotated_iter_begin = cuda::transform_iterator(
-    cuda::counting_iterator<cudf::size_type>{0},
-    cuda::proclaim_return_type<cudf::size_type>(
-      [num_partitions, start_partition] __device__(auto index) {
-        return (index + num_partitions - start_partition) % num_partitions;
-      }));
+  auto rotated_iter_begin =
+    cuda::transform_iterator(cuda::counting_iterator<cudf::size_type>{0},
+                             cuda::proclaim_return_type<cudf::size_type>(
+                               [num_partitions, start_partition] __device__(auto index) {
+                                 return (index + num_partitions - start_partition) % num_partitions;
+                               }));
 
   if (num_partitions == nrows) {
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions + 1, stream);

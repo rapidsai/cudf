@@ -261,13 +261,13 @@ struct page_stats_caster : public stats_caster_base {
         }));
 
     // Iterator for output (row-level) string chars
-    auto dst_iter = cuda::transform_iterator(
-      cuda::counting_iterator<std::size_t>{0},
-      cuda::proclaim_return_type<char*>(
-        [chars   = reinterpret_cast<char*>(row_str_chars.data()),
-         offsets = row_str_offsets.begin()] __device__(std::size_t index) {
-          return chars + offsets[index];
-        }));
+    auto dst_iter =
+      cuda::transform_iterator(cuda::counting_iterator<std::size_t>{0},
+                               cuda::proclaim_return_type<char*>(
+                                 [chars   = reinterpret_cast<char*>(row_str_chars.data()),
+                                  offsets = row_str_offsets.begin()] __device__(std::size_t index) {
+                                   return chars + offsets[index];
+                                 }));
 
     // Iterator for string sizes
     auto size_iter = cuda::transform_iterator(
