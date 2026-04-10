@@ -15,7 +15,7 @@
  * One thread processes one input string.  The NFA state is a single g_state_t
  * (uint64_t) bitmask held in a register – no global working memory required.
  *
- * Unanchored non-nullable search: two-phase O(n) per match.
+ * Unanchored search: two-phase O(n) per match.
  *   Phase 1 (forward scan): inject first_set at every character; track the
  *     earliest injection position (inject_start_pos) since state was last 0.
  *     When state & accept_mask fires, record the match end; continue extending
@@ -26,8 +26,10 @@
  *   END_ONLY (contains_re, matches_re): phase 1 result is returned directly;
  *     the start position is not needed so phase 2 is skipped.
  *
- * Anchored (end >= 0) or nullable: original inner-loop from start_pos.
- * Both are already O(n) per string.
+ * Anchored (end >= 0): inner-loop from start_pos, already O(n) per string.
+ *
+ * Note: nullable patterns are rejected at compile time by build_glushkov_program
+ * (they fall back to Thompson NFA), so prog.nullable is always false here.
  *
  * The shift-and follow computation (Hyperscan-style):
  *   follow(state) ≈ OR_k( (state & shift_masks[k]) << shift_amounts[k] )
@@ -225,11 +227,14 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach(
  *   - Greedy (longest match from that start).
  *   - Nullable patterns produce zero-length matches.
  *
- * For unanchored non-nullable patterns, uses a two-phase O(n) algorithm:
+ * For unanchored patterns, uses a two-phase O(n) algorithm:
  * Phase 1 injects first_set at every character and extends greedily; when
  * state & accept_mask fires, the match end is recorded.  Phase 2 (BEGIN_END
  * only) rescans from inject_start_pos (the earliest injection position since
  * state was last 0) to find the leftmost valid start for that match end.
+ *
+ * Nullable patterns are rejected at compile time by build_glushkov_program,
+ * so prog.nullable is always false when this function is called.
  *
  * @tparam P          Positional mode (BEGIN_END or END_ONLY).
  * @tparam DataSource glushkov_global_source or glushkov_shmem_source.
@@ -255,50 +260,29 @@ __device__ __forceinline__ match_result glushkov_find_impl(
 
   int32_t const start_pos = begin.position();
 
-  // Nullable patterns can match zero-length at end-of-string.  If begin is
-  // already at or past the last byte, return immediately without scanning.
-  if (prog.nullable && begin.byte_offset() >= size_bytes) {
-    if constexpr (P == positional::BEGIN_END) {
-      return match_pair{start_pos, start_pos};
-    } else {
-      return match_pair{-1, start_pos};
-    }
-  }
-
-  // --- Anchored (end >= 0) or nullable: the inner-loop approach, O(n) ---
-  // Anchored: outer loop runs at most (end - start_pos) iterations (typically 1).
-  // Nullable: pre-seeded zero-length match returns after first inner loop.
-  // Both are already O(n) per string.
-  if (end >= 0 || prog.nullable) {
+  // --- Anchored (end >= 0): inner-loop approach, O(n) ---
+  // Outer loop runs at most (end - start_pos) iterations (typically 1 for matches_re).
+  if (end >= 0) {
     auto outer_itr = begin;
     for (int32_t start = start_pos; ; ++start, ++outer_itr) {
-      if (end >= 0 && start >= end) { break; }
+      if (start >= end) { break; }
       if (outer_itr.byte_offset() >= size_bytes) { break; }
 
-      if (!prog.nullable) {
-        if (prog.has_startchar) {
-          while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar) {
-            ++outer_itr;
-            ++start;
-          }
-          if (outer_itr.byte_offset() >= size_bytes) { break; }
-          if (end >= 0 && start >= end) { break; }
-        } else {
-          char32_t const first_c = *outer_itr;
-          if ((glushkov_compute_reach_impl(first_c, prog, src) & prog.first_set) == 0) {
-            continue;
-          }
+      if (prog.has_startchar) {
+        while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar) {
+          ++outer_itr;
+          ++start;
+        }
+        if (outer_itr.byte_offset() >= size_bytes) { break; }
+        if (start >= end) { break; }
+      } else {
+        char32_t const first_c = *outer_itr;
+        if ((glushkov_compute_reach_impl(first_c, prog, src) & prog.first_set) == 0) {
+          continue;
         }
       }
 
       match_result cur_match{};
-      if (prog.nullable) {
-        if constexpr (P == positional::BEGIN_END) {
-          cur_match = match_pair{start, start};
-        } else {
-          cur_match = match_pair{-1, start};
-        }
-      }
 
       g_state_t state = prog.first_set;
       auto inner_itr  = outer_itr;
@@ -325,7 +309,7 @@ __device__ __forceinline__ match_result glushkov_find_impl(
     return {};
   }
 
-  // --- Non-nullable unanchored: two-phase O(n) search ---
+  // --- Unanchored: two-phase O(n) search ---
   //
   // Phase 1 (forward scan): inject first_set at every step; detect match END
   // via state & accept_mask (any active seed reaching accept); greedy extension

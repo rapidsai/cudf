@@ -30,8 +30,8 @@ static std::vector<std::string> const patterns = {
   "5W4{1,3}",      // 5: bounded repetition (5 positions)
   "(?:5W){1,2}",   // 6: non-capturing group + bounded rep (4 positions)
   "5.4.",           // 7: dot wildcard (4 positions)
-  ".+5W",           // 8: late-failure stress (dot prefix, quadratic for Glushkov):
-                    //    '.' matches everything → inner loop runs full string from every start;
+  ".+5W",           // 8: late-failure stress (dot prefix):
+                    //    '.' matches everything → phase 1 state never dies until "5W" found;
                     //    only row 0 has "5W" → hit_rate controls match frequency correctly
 };
 

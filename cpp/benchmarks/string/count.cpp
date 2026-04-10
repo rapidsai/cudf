@@ -30,11 +30,11 @@ static std::vector<std::string> const patterns = {
   "[a-f]+|[0-5]+",           // 3: alternation (comparable density to \d+)
   "[a-z][0-9]{0,3}[A-Z]",   // 4: bounded repetition / gap transitions (7 positions)
   ".+[0-9]",                 // 5: late-failure stress (~97% hit rate, ~1 match/string):
-                             //    '.' matches all ASCII → inner loop never dead-states →
-                             //    extreme O(n²) per string for Glushkov vs O(n) for Thompson
+                             //    '.' matches all ASCII → phase 1 state never dies until digit
+                             //    found; O(n) two-phase search for both engines
   "[a-z]+Z",                 // 6: late-failure + low hit rate (~23% on 32-char strings,
                              //    ~79% on 256-char strings); Glushkov skips ~73% of start
-                             //    positions via reach filter but still exhibits quadratic growth
+                             //    positions via reach filter
 };
 
 static void bench_count(nvbench::state& state)
