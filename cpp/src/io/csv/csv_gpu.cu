@@ -101,6 +101,9 @@ __device__ __inline__ bool is_datetime(
       (dash_count == 0 && slash_count > 0 && slash_count < 3)) {
     return true;
   }
+  // Space-separated dates with named months: "1 Jan", "Feb 2002", "2 January 1994"
+  // len counts alphabetic chars and spaces; no dashes or slashes means space is the separator
+  if (dash_count == 0 && slash_count == 0 && len >= 3) { return true; }
 
   return false;
 }
