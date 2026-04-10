@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -164,7 +165,7 @@ class RankActor:
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options produced by
         :meth:`rapidsmpf.config.Options.serialize`.
-    py_executor_max_workers
+    num_py_executors
         Maximum number of threads for the actor's Python thread-pool executor.
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
     """
@@ -174,7 +175,7 @@ class RankActor:
         *,
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
-        py_executor_max_workers: int,
+        num_py_executors: int,
     ) -> None:
         self._mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
         self._rapidsmpf_options: Options = Options.deserialize(
@@ -185,7 +186,7 @@ class RankActor:
         )
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
-            max_workers=py_executor_max_workers,
+            max_workers=num_py_executors,
             thread_name_prefix="ray-executor",
         )
         self._comm: Communicator | None = None
@@ -373,6 +374,12 @@ class RayEngine(StreamingEngine):
     Creates a RapidsMPF Ray cluster and returns an engine that can be passed
     to ``LazyFrame.collect(engine=engine)``.
 
+    Prefer :meth:`from_options` for typical use — pass a
+    :class:`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`
+    instance for a unified, typed interface. The ``__init__`` parameters
+    (``rapidsmpf_options``, ``executor_options``, ``engine_options``) are
+    intended for advanced use when fine-grained control is needed.
+
     Prefer the context-manager form in scripts: it guarantees that actors and
     Ray are shut down even if an exception is raised. In interactive environments
     such as Jupyter notebooks, the direct form lets the cluster persist across
@@ -468,9 +475,9 @@ class RayEngine(StreamingEngine):
                 RankActor.remote(  # type: ignore[attr-defined]
                     nranks=num_gpus,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
-                    py_executor_max_workers=cast(
+                    num_py_executors=cast(
                         int,
-                        executor_options.get("rapidsmpf_py_executor_max_workers", 1),
+                        executor_options.get("num_py_executors", 1),
                     ),
                 )
                 for _ in range(num_gpus)
@@ -502,6 +509,50 @@ class RayEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    @classmethod
+    def from_options(
+        cls,
+        options: StreamingOptions,
+        *,
+        ray_init_options: dict[str, object] | None = None,
+    ) -> RayEngine:
+        """
+        Create a :class:`RayEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct a ``RayEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+        ray_init_options
+            Keyword arguments forwarded to :func:`ray.init` when Ray is not
+            already initialized. These are Ray infrastructure settings and are
+            kept separate from streaming behavior options.
+
+        Returns
+        -------
+        A new :class:`RayEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=4, fallback_mode="silent")
+        >>> with RayEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+        """
+        return cls(
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+            ray_init_options=ray_init_options,
+        )
 
     @property
     def rank_actors(self) -> list[ActorHandle[RankActor]]:

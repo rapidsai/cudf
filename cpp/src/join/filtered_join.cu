@@ -373,17 +373,29 @@ filtered_join::~filtered_join() = default;
 
 filtered_join::filtered_join(cudf::table_view const& build,
                              null_equality compare_nulls,
+                             double load_factor,
+                             rmm::cuda_stream_view stream)
+  : _impl{std::make_unique<cudf::detail::distinct_filtered_join>(
+      build, compare_nulls, load_factor, stream)}
+{
+}
+
+filtered_join::filtered_join(cudf::table_view const& build,
+                             null_equality compare_nulls,
+                             rmm::cuda_stream_view stream)
+  : filtered_join(build, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
+{
+}
+
+filtered_join::filtered_join(cudf::table_view const& build,
+                             null_equality compare_nulls,
                              set_as_build_table reuse_tbl,
                              double load_factor,
                              rmm::cuda_stream_view stream)
+  : filtered_join(build, compare_nulls, load_factor, stream)
 {
-  CUDF_EXPECTS(
-    reuse_tbl == set_as_build_table::RIGHT,
-    "Left table reuse is yet to be implemented. Filtered join requires the right table to be the "
-    "build table");
-  _reuse_tbl = reuse_tbl;
-  _impl      = std::make_unique<cudf::detail::distinct_filtered_join>(
-    build, compare_nulls, load_factor, stream);
+  CUDF_EXPECTS(reuse_tbl == set_as_build_table::RIGHT,
+               "Left table reuse is not supported. Use cudf::mark_join for left table reuse.");
 }
 
 filtered_join::filtered_join(cudf::table_view const& build,
