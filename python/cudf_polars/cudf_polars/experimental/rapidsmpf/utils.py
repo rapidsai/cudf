@@ -581,7 +581,7 @@ def names_to_indices(
     try:
         return tuple(keys.index(n) for n in str_names)
     except ValueError as e:
-        raise ValueError(f"Not all {str_names} not found {schema}; {names}") from e
+        raise ValueError(f"Not all {str_names} not found {schema}") from e
 
 
 async def replay_buffered_channel(
