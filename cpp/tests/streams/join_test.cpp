@@ -73,19 +73,13 @@ TEST_F(JoinTest, FullJoin)
 
 TEST_F(JoinTest, LeftSemiJoin)
 {
-  cudf::filtered_join obj(table1,
-                          cudf::null_equality::EQUAL,
-                          cudf::set_as_build_table::RIGHT,
-                          cudf::test::get_default_stream());
+  cudf::filtered_join obj(table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
   [[maybe_unused]] auto join_result = obj.semi_join(table0, cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, LeftAntiJoin)
 {
-  cudf::filtered_join obj(table1,
-                          cudf::null_equality::EQUAL,
-                          cudf::set_as_build_table::RIGHT,
-                          cudf::test::get_default_stream());
+  cudf::filtered_join obj(table1, cudf::null_equality::EQUAL, cudf::test::get_default_stream());
   [[maybe_unused]] auto join_result = obj.anti_join(table0, cudf::test::get_default_stream());
 }
 
