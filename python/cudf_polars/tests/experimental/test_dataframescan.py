@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
@@ -63,6 +64,23 @@ def test_dataframescan_concat(df, engine):
     assert_gpu_result_equal(df2, engine=engine)
 
 
+def test_join_in_memory_lazy_stable_id_pickle():
+    """Join over collect().lazy() uses DataFrameScan children; IDs must survive pickle."""
+    left = pl.LazyFrame({"k": [1, 2, 3], "x": [10, 20, 30]}).collect().lazy()
+    right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect().lazy()
+    q = left.join(right, on="k", how="inner")
+    _engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"max_rows_per_partition": 1_000},
+    )
+    ir = Translator(q._ldf.visit(), _engine).translate_ir()
+    ir, _, _ = lower_ir_graph(ir, ConfigOptions.from_polars_engine(_engine))
+    ir2 = pickle.loads(pickle.dumps(ir))
+    for orig, loaded in zip(traversal([ir]), traversal([ir2]), strict=True):
+        assert orig.get_stable_id() == loaded.get_stable_id()
+
+
 def test_dataframescan_pickle(df):
     _engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -79,3 +97,7 @@ def test_dataframescan_pickle(df):
     # Verify the unpickled IR is equivalent
     assert type(unpickled_ir) is type(ir)
     assert unpickled_ir.schema == ir.schema
+
+    # Stable IDs must match after unpickle (plan logging vs distributed workers).
+    for orig, loaded in zip(traversal([ir]), traversal([unpickled_ir]), strict=True):
+        assert orig.get_stable_id() == loaded.get_stable_id()
