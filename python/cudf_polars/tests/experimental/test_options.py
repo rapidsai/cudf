@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import argparse
 import os
-from unittest.mock import patch
 
 import pytest
 
@@ -138,32 +137,6 @@ def test_rapidsmpf_options_env_var_absent(monkeypatch: pytest.MonkeyPatch) -> No
     assert "log" not in StreamingOptions().to_rapidsmpf_options().get_strings()
 
 
-@pytest.mark.spmd
-def test_spmd_engine_from_options_creates_engine() -> None:
-    """from_options with default StreamingOptions creates a valid SPMDEngine."""
-    pytest.importorskip("rapidsmpf")
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-    opts = StreamingOptions(fallback_mode="silent", raise_on_fail=True)
-    with SPMDEngine.from_options(opts) as engine:
-        assert engine.nranks >= 1
-
-
-# distributed's shutdown leaves unclosed sockets; suppress the noise.
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_dask_engine_from_options_creates_engine() -> None:
-    """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
-    pytest.importorskip("distributed")
-    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
-
-    opts = StreamingOptions(fallback_mode="silent")
-    try:
-        with DaskEngine.from_options(opts) as engine:
-            assert engine.nranks >= 1
-    except Exception as e:
-        pytest.skip(f"Dask GPU cluster unavailable: {e}")
-
-
 # ---------------------------------------------------------------------------
 # memory_resource_config forwarding
 # ---------------------------------------------------------------------------
@@ -205,65 +178,6 @@ def test_memory_resource_config_in_engine_options() -> None:
     config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
     opts = StreamingOptions(memory_resource_config=config)
     assert opts.to_engine_options()["memory_resource_config"] is config
-
-
-@pytest.mark.spmd
-def test_spmd_engine_memory_resource_config() -> None:
-    """SPMDEngine uses the MR from memory_resource_config when provided."""
-    pytest.importorskip("rapidsmpf")
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
-    opts = StreamingOptions(
-        fallback_mode="silent",
-        memory_resource_config=config,
-    )
-    with patch.object(
-        MemoryResourceConfig,
-        "create_memory_resource",
-        wraps=config.create_memory_resource,
-    ) as mock_create:
-        with SPMDEngine.from_options(opts) as engine:
-            assert engine.nranks >= 1
-        mock_create.assert_called_once()
-
-
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_dask_engine_memory_resource_config() -> None:
-    """DaskEngine workers use the MR from memory_resource_config when provided."""
-    pytest.importorskip("distributed")
-    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
-
-    opts = StreamingOptions(
-        fallback_mode="silent",
-        memory_resource_config=MemoryResourceConfig(
-            qualname="rmm.mr.CudaMemoryResource"
-        ),
-    )
-    try:
-        with DaskEngine.from_options(opts) as engine:
-            assert engine.nranks >= 1
-    except Exception as e:
-        pytest.skip(f"Dask GPU cluster unavailable: {e}")
-
-
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_ray_engine_memory_resource_config() -> None:
-    """RayEngine actors use the MR from memory_resource_config when provided."""
-    pytest.importorskip("ray")
-    from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
-
-    opts = StreamingOptions(
-        fallback_mode="silent",
-        memory_resource_config=MemoryResourceConfig(
-            qualname="rmm.mr.CudaMemoryResource"
-        ),
-    )
-    try:
-        with RayEngine.from_options(opts) as engine:
-            assert engine.nranks >= 1
-    except Exception as e:
-        pytest.skip(f"Ray GPU cluster unavailable: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -127,17 +127,11 @@ opts = StreamingOptions(
 )
 ```
 
-From the CLI, pass JSON via `--memory-resource-config`:
-
-```bash
---memory-resource-config '{"qualname": "rmm.mr.CudaAsyncMemoryResource"}'
-```
-
 When no `memory_resource_config` is provided:
 
 - **SPMDEngine** uses `rmm.mr.get_current_device_resource()` (the in-process
   default — useful when user code has already configured a resource).
-- **DaskEngine** and **RayEngine** default to `rmm.mr.CudaAsyncMemoryResource()`
+benchm- **DaskEngine** and **RayEngine** default to `rmm.mr.CudaAsyncMemoryResource()`
   (workers start in a fresh process with no pre-configured resource).
 
 ---
