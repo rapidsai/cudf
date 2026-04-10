@@ -312,9 +312,7 @@ def evaluate_pipeline(
                 get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
             )
         else:
-            ir_context = IRExecutionContext.from_config_options(
-                config_options, query_id=query_id
-            )
+            ir_context = IRExecutionContext(query_id=query_id)
 
         # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
