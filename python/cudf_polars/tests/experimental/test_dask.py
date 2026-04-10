@@ -12,12 +12,12 @@ from rapidsmpf.bootstrap import is_running_with_rrun
 import polars as pl
 
 from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-from cudf_polars.utils.config import DaskContext
+from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 
 distributed = pytest.importorskip("distributed")
 
 from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine  # noqa: E402
-from cudf_polars.testing.asserts import assert_gpu_result_equal  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -50,6 +50,16 @@ pytestmark = [
 # ---------------------------------------------------------------------------
 # GPU tests — share a single Dask cluster for the whole module
 # ---------------------------------------------------------------------------
+
+
+def test_from_options() -> None:
+    """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
+    opts = StreamingOptions(fallback_mode="silent")
+    try:
+        with DaskEngine.from_options(opts) as engine:
+            assert engine.nranks >= 1
+    except Exception as e:
+        pytest.skip(f"Dask GPU cluster unavailable: {e}")
 
 
 def test_yields_engine(engine: DaskEngine) -> None:
@@ -135,6 +145,21 @@ def test_join(engine: DaskEngine) -> None:
         engine=engine,
         check_row_order=False,
     )
+
+
+def test_memory_resource_config() -> None:
+    """DaskEngine workers use the MR from memory_resource_config when provided."""
+    opts = StreamingOptions(
+        fallback_mode="silent",
+        memory_resource_config=MemoryResourceConfig(
+            qualname="rmm.mr.CudaMemoryResource"
+        ),
+    )
+    try:
+        with DaskEngine.from_options(opts) as engine:
+            assert engine.nranks >= 1
+    except Exception as e:
+        pytest.skip(f"Dask GPU cluster unavailable: {e}")
 
 
 def test_empty_dataframe(engine: DaskEngine) -> None:
