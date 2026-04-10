@@ -33,11 +33,12 @@ def dask_client(worker_id: str):
         scheduler_port = 8800 + worker_index
         dashboard_address = 8900 + worker_index
     else:
-        scheduler_port = None
+        scheduler_port = 0
         dashboard_address = None
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=Warning, message="Port")
+        warnings.filterwarnings("ignore", category=ResourceWarning)
 
         with dask_cuda.LocalCUDACluster(
             n_workers=1,
@@ -138,13 +139,13 @@ def test_p2p_shuffle():
     not at_least_n_gpus(3),
     reason="Machine does not have three GPUs",
 )
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
 def test_unique():
     # Using `"p2p"` can produce dispatching problems
     # TODO: Test "p2p" after dask > 2024.4.1 is required
     # See: https://github.com/dask/dask/pull/11040
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=Warning, message="Port")
-        warnings.filterwarnings("ignore", category=ResourceWarning)
 
         with dask_cuda.LocalCUDACluster(
             n_workers=3, dashboard_address=None
