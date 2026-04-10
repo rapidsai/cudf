@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-from libc.stdint cimport int32_t, int64_t, uint8_t
+from libc.stdint cimport int64_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -47,7 +47,7 @@ cpdef Column decode_protobuf(
     Parameters
     ----------
     binary_input : Column
-        LIST<INT8> or LIST<UINT8> column where each row is a serialized protobuf message.
+        LIST<INT8/UINT8> column of serialized protobuf messages.
     schema : list of tuples
         Each tuple is (field_number, parent_idx, depth, wire_type, output_type_id,
         encoding, is_repeated, is_required, has_default_value).
