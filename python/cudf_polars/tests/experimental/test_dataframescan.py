@@ -85,15 +85,19 @@ def test_join_in_memory_lazy_stable_id_pickle():
 
 
 def test_dataframescan_pickle(df):
-    engine = pl.GPUEngine(
+    _engine = pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={"max_rows_per_partition": 1_000},
     )
-    qir = Translator(df._ldf.visit(), engine).translate_ir()
-    ir, _, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(engine))
+    qir = Translator(df._ldf.visit(), _engine).translate_ir()
+    ir, _, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(_engine))
 
-    clone = pickle.loads(pickle.dumps(ir))
-    assert type(clone) is type(ir)
-    assert clone.schema == ir.schema
-    _assert_stable_ids_match(ir, clone)
+    # Pickle and unpickle the IR (which contains DataFrameScan)
+    pickled = pickle.dumps(ir)
+    unpickled_ir = pickle.loads(pickled)
+
+    # Verify the unpickled IR is equivalent
+    assert type(unpickled_ir) is type(ir)
+    assert unpickled_ir.schema == ir.schema
+    _assert_stable_ids_match(ir, unpickled_ir)
