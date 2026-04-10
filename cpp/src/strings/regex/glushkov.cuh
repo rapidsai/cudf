@@ -68,7 +68,7 @@ struct glushkov_program_device {
 
   // ---- device-memory array pointers (set during device program creation) ---
   uint8_t const* _codepoint_flags{};     ///< Character-type lookup table (shared with Thompson)
-  reclass_device const* _classes{};      ///< Character class data (shared with Thompson)
+  reclass_device const* _classes{};      ///< Character class data
   glushkov_position const* _positions{}; ///< [num_states] per-position descriptors
   g_state_t const* _shift_masks{};       ///< [shift_count] shift-and source masks
   uint8_t const* _shift_amounts{};       ///< [shift_count] shift amounts

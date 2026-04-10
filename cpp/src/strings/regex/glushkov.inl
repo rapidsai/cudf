@@ -50,6 +50,7 @@ namespace detail {
 __host__ __device__ __forceinline__ uint32_t glushkov_ctz64(uint64_t x)
 {
 #ifdef __CUDA_ARCH__
+  assert(x != 0ull);
   return static_cast<uint32_t>(__ffsll(static_cast<long long>(x)) - 1);
 #else
   return static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(x)));
