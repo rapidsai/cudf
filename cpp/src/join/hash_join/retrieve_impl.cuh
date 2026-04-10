@@ -10,12 +10,20 @@
 #include "join/join_common_utils.hpp"
 #include "size_impl.cuh"
 
+#include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/prefetch.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <cuda/iterator>
+#include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 namespace cudf::detail {
 
@@ -188,6 +196,98 @@ hash_join<Hasher>::join_retrieve(cudf::table_view const& probe,
   } else {
     return join_indices;
   }
+}
+
+template <typename Hasher>
+template <join_kind Join>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const& context,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+
+  static_assert(Join == join_kind::INNER_JOIN || Join == join_kind::LEFT_JOIN ||
+                Join == join_kind::FULL_JOIN);
+
+  auto const& match_ctx     = *context.left_table_context;
+  auto const left_start_idx = context.left_start_idx;
+  auto const left_end_idx   = context.left_end_idx;
+
+  // Empty partition
+  if (left_start_idx >= left_end_idx) {
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
+
+  auto const partition_size = left_end_idx - left_start_idx;
+
+  // Trivial case: build table is empty
+  if (_is_empty) {
+    if constexpr (Join == join_kind::INNER_JOIN) {
+      return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                       std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+    } else {
+      auto left_indices =
+        std::make_unique<rmm::device_uvector<size_type>>(partition_size, stream, mr);
+      auto right_indices =
+        std::make_unique<rmm::device_uvector<size_type>>(partition_size, stream, mr);
+      thrust::sequence(rmm::exec_policy_nosync(stream),
+                       left_indices->begin(),
+                       left_indices->end(),
+                       left_start_idx);
+      thrust::fill(
+        rmm::exec_policy_nosync(stream), right_indices->begin(), right_indices->end(), JoinNoMatch);
+      return std::pair(std::move(left_indices), std::move(right_indices));
+    }
+  }
+
+  // Compute output size from pre-computed match counts
+  auto const output_size = thrust::reduce(rmm::exec_policy_nosync(stream),
+                                          match_ctx._match_counts->begin() + left_start_idx,
+                                          match_ctx._match_counts->begin() + left_end_idx,
+                                          std::size_t{0});
+
+  if (output_size == 0) {
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
+
+  // Slice the probe table to the partition range
+  auto const probe_partition_view =
+    cudf::slice(match_ctx._left_table, {left_start_idx, left_end_idx})[0];
+
+  validate_hash_join_probe(_build, probe_partition_view, _has_nulls);
+
+  auto const preprocessed_probe =
+    cudf::detail::row::equality::preprocessed_table::create(probe_partition_view, stream);
+
+  // For FULL_JOIN, probe with LEFT_JOIN semantics (no complement here)
+  constexpr auto probe_join = Join == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : Join;
+
+  auto join_indices = cudf::detail::probe_join_hash_table<probe_join>(_build,
+                                                                      probe_partition_view,
+                                                                      _preprocessed_build,
+                                                                      preprocessed_probe,
+                                                                      _impl->_hash_table,
+                                                                      _has_nulls,
+                                                                      _nulls_equal,
+                                                                      output_size,
+                                                                      stream,
+                                                                      mr);
+
+  // Offset left indices to be relative to the original complete probe table
+  if (left_start_idx > 0 && join_indices.first->size() > 0) {
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      join_indices.first->begin(),
+                      join_indices.first->end(),
+                      cuda::make_constant_iterator(left_start_idx),
+                      join_indices.first->begin(),
+                      cuda::std::plus<size_type>{});
+  }
+
+  return join_indices;
 }
 
 }  // namespace cudf::detail

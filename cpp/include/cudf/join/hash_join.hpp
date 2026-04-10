@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -307,6 +308,102 @@ class hash_join {
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Performs an inner join on a partition of the probe table.
+   *
+   * This method executes an inner join between a specific partition of the probe table
+   * (defined by the join_partition_context) and the build table. The context must have been
+   * previously created by calling inner_join_match_context().
+   *
+   * The returned left_indices are relative to the original complete probe table, not just the
+   * partition, so they can be used directly with the original probe table.
+   *
+   * @param context The partition context containing match information and partition bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] for this partition
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_inner_join(
+    cudf::join_partition_context const& context,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Performs a left join on a partition of the probe table.
+   *
+   * This method executes a left join between a specific partition of the probe table
+   * (defined by the join_partition_context) and the build table. The context must have been
+   * previously created by calling left_join_match_context().
+   *
+   * The returned left_indices are relative to the original complete probe table.
+   *
+   * @param context The partition context containing match information and partition bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] for this partition
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_left_join(
+    cudf::join_partition_context const& context,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Performs a full join probe on a partition of the probe table.
+   *
+   * This method executes the probe-side of a full join between a specific partition of the probe
+   * table (defined by the join_partition_context) and the build table. The context must have been
+   * previously created by calling full_join_match_context().
+   *
+   * @note This method does NOT include unmatched build rows (the complement). Since the complement
+   * is a global property across all partitions, it must be computed separately after all partitions
+   * are processed using full_join_complement().
+   *
+   * The returned left_indices are relative to the original complete probe table.
+   *
+   * @param context The partition context containing match information and partition bounds
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the join indices' device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] for this partition
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_full_join(
+    cudf::join_partition_context const& context,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Computes the full join complement: unmatched build rows.
+   *
+   * After performing partitioned_full_join() on all partitions, call this method with the
+   * concatenated right_indices from all partitions to obtain the unmatched build table rows.
+   * The result can be concatenated with the partitioned results to form the complete full join.
+   *
+   * @param right_indices Concatenated right (build) indices from all partitioned_full_join() calls
+   * @param probe_table_num_rows Total number of rows in the probe table
+   * @param build_table_num_rows Total number of rows in the build table
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the result device memory
+   *
+   * @return A pair of device vectors [`left_indices`, `right_indices`] for unmatched build rows,
+   *         where left_indices are all JoinNoMatch and right_indices are the unmatched build row
+   *         indices
+   */
+  [[nodiscard]] static std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                                 std::unique_ptr<rmm::device_uvector<size_type>>>
+  full_join_complement(cudf::device_span<size_type const> right_indices,
+                       size_type probe_table_num_rows,
+                       size_type build_table_num_rows,
+                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   std::unique_ptr<impl_type const> _impl;
