@@ -28,8 +28,6 @@ import nvtx
 
 import polars as pl
 
-import rmm.mr
-
 __all__: list[str] = [
     "COUNT_DTYPE",
     "QueryResult",
@@ -715,9 +713,7 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
-                context = IRExecutionContext.from_config_options(
-                    translator.config_options
-                )
+                context = IRExecutionContext()
                 if run_config.executor == "in-memory":
                     t0 = time.monotonic()
                     result = ir.evaluate(
@@ -818,12 +814,20 @@ def run_polars_query_iteration(
     query_result: Any,
     client: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+    result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
     result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
 
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
+
+    if expected is not None and result_casts:
+        # Applying the casts to the polars result is
+        # a workaround we need because of a polars bug
+        # See https://github.com/pola-rs/polars/issues/27269
+        # Once we support polars 1.40, we should remove this
+        result = result.with_columns(*result_casts)
 
     # TODO: shuffle stats collection is not yet wired up for the new
     # frontends. The Dask-specific gather_shuffle_statistics API does
@@ -942,6 +946,7 @@ def run_polars_query(
                 query_result=query_result,
                 client=client,
                 prepare_validation_result=prepare_validation_result,
+                result_casts=casts if casts else None,
             )
         except Exception:
             print(f"❌ query={q_id} iteration={i} failed!")
@@ -1085,7 +1090,6 @@ def run_polars_spmd(
     # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
-    rmm.mr.set_current_device_resource(rmm.mr.CudaAsyncMemoryResource())
     engine_options = {
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
