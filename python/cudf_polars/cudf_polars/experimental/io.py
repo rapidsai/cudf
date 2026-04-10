@@ -363,23 +363,25 @@ def _(
 class StreamingSink(IR):
     """Sink a dataframe in streaming mode."""
 
-    __slots__ = ("executor_options", "sink")
-    _non_child = ("schema", "sink", "executor_options")
+    __slots__ = ("sink", "sink_to_directory")
+    _non_child = ("schema", "sink", "sink_to_directory")
     _n_non_child_args = 0
 
     sink: Sink
-    executor_options: StreamingExecutor
+    sink_to_directory: bool
 
     def __init__(
         self,
         schema: Schema,
         sink: Sink,
-        executor_options: StreamingExecutor,
+        sink_to_directory: bool,  # noqa: FBT001
         df: IR,
-    ):
+    ) -> None:
+        # Order must match ``_non_child`` + ``children`` so :meth:`Node.__reduce__`
+        # / ``reconstruct`` round-trip over pickling (e.g. Dask workers).
         self.schema = schema
         self.sink = sink
-        self.executor_options = executor_options
+        self.sink_to_directory = sink_to_directory
         self._non_child_args = ()
         self.children = (df,)
 
@@ -407,10 +409,12 @@ def _(
             "please remove the target directory before calling 'collect'. "
         )
 
+    sink_to_directory = executor_options.sink_to_directory
+    assert sink_to_directory is not None  # set in StreamingExecutor.__post_init__
     new_node = StreamingSink(
         ir.schema,
         ir.reconstruct([child]),
-        executor_options,
+        sink_to_directory,
         child,
     )
     partition_info[new_node] = partition_info[child]
@@ -621,7 +625,7 @@ def _(
     partition_info: MutableMapping[IR, PartitionInfo],
     context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
-    if ir.executor_options.sink_to_directory:
+    if ir.sink_to_directory:
         return _directory_sink_graph(ir, partition_info, context=context)
     else:
         return _file_sink_graph(ir, partition_info, context=context)

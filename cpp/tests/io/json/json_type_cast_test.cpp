@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,7 +49,7 @@ TEST_F(JSONTypeCastTest, String)
   auto mr           = cudf::get_current_device_resource_ref();
   auto const type   = cudf::data_type{cudf::type_id::STRING};
 
-  auto in_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+  auto in_valids = null_at(4);
   std::vector<char const*> input_values{"this", "is", "null", "of", "", "strings", R"("null")"};
   cudf::test::strings_column_wrapper input(input_values.begin(), input_values.end(), in_valids);
 
@@ -72,8 +72,7 @@ TEST_F(JSONTypeCastTest, String)
     stream,
     mr);
 
-  auto out_valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2 and i != 4; });
+  auto out_valids = nulls_at({2, 4});
   std::vector<char const*> expected_values{"this", "is", "", "of", "", "strings", "null"};
   cudf::test::strings_column_wrapper expected(
     expected_values.begin(), expected_values.end(), out_valids);
