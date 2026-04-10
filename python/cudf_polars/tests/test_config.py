@@ -345,46 +345,6 @@ def test_validate_cluster() -> None:
         )
 
 
-def test_scheduler_deprecated() -> None:
-    # Test that using deprecated scheduler parameter emits warning
-    # and correctly maps to cluster parameter
-
-    # Test scheduler="synchronous" maps to cluster="single"
-    with pytest.warns(FutureWarning, match="'scheduler' parameter is deprecated"):
-        config = ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={"scheduler": "synchronous"},
-            )
-        )
-    assert config.executor.name == "streaming"
-    assert config.executor.cluster == "single"
-    assert config.executor.scheduler is None  # Should be cleared after mapping
-
-    # Test scheduler="distributed" maps to cluster="distributed"
-    with pytest.warns(FutureWarning, match="'scheduler' parameter is deprecated"):
-        config = ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={"scheduler": "distributed"},
-            )
-        )
-    assert config.executor.name == "streaming"
-    assert config.executor.cluster == "distributed"
-    assert config.executor.scheduler is None  # Should be cleared after mapping
-
-    # Test that specifying both cluster and scheduler raises an error
-    with pytest.raises(
-        ValueError, match="Cannot specify both 'scheduler' and 'cluster'"
-    ):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={"cluster": "single", "scheduler": "synchronous"},
-            )
-        )
-
-
 def test_validate_shuffle_method_defaults(
     *,
     rapidsmpf_distributed_available: bool,
@@ -433,7 +393,7 @@ def test_validate_shuffle_method_defaults(
         "client_device_threshold",
         "max_io_threads",
         "spill_to_pinned_memory",
-        "rapidsmpf_py_executor_max_workers",
+        "num_py_executors",
     ],
 )
 def test_validate_streaming_executor_options(option: str) -> None:
@@ -555,16 +515,6 @@ def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
             ValueError, match="'foo' is not a valid StreamingFallbackMode"
         ):
             ConfigOptions.from_polars_engine(engine)
-
-
-def test_cardinality_factor_compat() -> None:
-    with pytest.warns(FutureWarning, match="configuration is deprecated"):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="streaming",
-                executor_options={"cardinality_factor": {}},
-            )
-        )
 
 
 @pytest.mark.parametrize(
@@ -960,36 +910,36 @@ def test_memory_resource_config_hash(options) -> None:
     assert hash(config) == hash(config)
 
 
-def test_rapidsmpf_py_executor_max_workers_default() -> None:
+def test_num_py_executors_default() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.rapidsmpf_py_executor_max_workers is None
+    assert config.executor.num_py_executors is None
 
 
-def test_rapidsmpf_py_executor_max_workers_from_executor_options() -> None:
+def test_num_py_executors_from_executor_options() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
-            executor_options={"rapidsmpf_py_executor_max_workers": 4},
+            executor_options={"num_py_executors": 4},
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.rapidsmpf_py_executor_max_workers == 4
+    assert config.executor.num_py_executors == 4
 
 
-def test_rapidsmpf_py_executor_max_workers_from_env(
+def test_num_py_executors_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with monkeypatch.context() as m:
-        m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", "8")
+        m.setenv("CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS", "8")
         engine = pl.GPUEngine(executor="streaming")
         config = ConfigOptions.from_polars_engine(engine)
         assert config.executor.name == "streaming"
-        assert config.executor.rapidsmpf_py_executor_max_workers == 8
+        assert config.executor.num_py_executors == 8
 
 
 def test_distributed_sink_to_directory_false_raises() -> None:

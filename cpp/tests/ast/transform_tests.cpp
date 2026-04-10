@@ -1174,6 +1174,61 @@ TEST_F(ComputeColumnTest, PowIntegerNegativeExponent)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+template <typename T>
+struct DecimalArithmeticTest : public cudf::test::BaseFixture {};
+
+// decimal128 intermediates exceed the 8-byte IntermediateDataType limit, so
+// only test decimal32 and decimal64 here.
+using DecimalArithmeticTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+TYPED_TEST_SUITE(DecimalArithmeticTest, DecimalArithmeticTypes);
+
+// Regression test for https://github.com/rapidsai/cudf/issues/21980
+// Nested decimal expressions lose scale in intermediate return types,
+// causing "non-matching operand types" at parse time.
+TYPED_TEST(DecimalArithmeticTest, NestedDecimalArithmetic)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+
+  // col0 = {10.00, 20.00, 30.00, 40.00}  (rep values: 1000, 2000, 3000, 4000)
+  // col1 = {0.05,  0.10,  0.15,  0.20}   (rep values: 5, 10, 15, 20)
+  auto c_0   = cudf::test::fixed_point_column_wrapper<RepType>({1000, 2000, 3000, 4000}, scale);
+  auto c_1   = cudf::test::fixed_point_column_wrapper<RepType>({5, 10, 15, 20}, scale);
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  // AST: col0 * (literal - col1)
+  // literal = 1.00 (rep=100, scale=-2)
+  // SUB result scale = min(-2, -2) = -2
+  // MUL result scale = -2 + -2 = -4
+  auto literal_value = cudf::fixed_point_scalar<decimalXX>(RepType{100}, scale, true);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto col_ref_1     = cudf::ast::column_reference(1);
+
+  cudf::ast::tree tree{};
+  auto const& sub_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::SUB, literal, col_ref_1));
+  auto const& mul_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::MUL, col_ref_0, sub_expr));
+
+  auto result = cudf::compute_column(table, mul_expr);
+
+  // Expected: col0 * (1.00 - col1)
+  // Row 0: 10.00 * (1.00 - 0.05) = 10.00 * 0.95 = 9.5000  => rep 95000 at scale -4
+  // Row 1: 20.00 * (1.00 - 0.10) = 20.00 * 0.90 = 18.0000 => rep 180000 at scale -4
+  // Row 2: 30.00 * (1.00 - 0.15) = 30.00 * 0.85 = 25.5000 => rep 255000 at scale -4
+  // Row 3: 40.00 * (1.00 - 0.20) = 40.00 * 0.80 = 32.0000 => rep 320000 at scale -4
+  auto const expected_scale = numeric::scale_type{-4};
+  auto expected             = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{95000}, RepType{180000}, RepType{255000}, RepType{320000}}, expected_scale);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  result = cudf::compute_column_jit(table, mul_expr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TYPED_TEST(TransformTest, NonDefaultStream)
 {
   // This test ensures that the algorithm is stream safe when a nondefault

@@ -72,7 +72,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
     udf_agg._output_type, input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
-  cudf::detail::device_scalar<size_type> device_valid_count{0, stream};
+  cudf::detail::device_scalar<size_type> device_valid_count{
+    0, stream, cudf::get_current_device_resource_ref()};
 
   std::string kernel_reflection =
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
