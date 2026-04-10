@@ -12,7 +12,9 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/prefetch.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -20,6 +22,7 @@
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
+#include <thrust/fill.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/sequence.h>
@@ -233,21 +236,24 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
         std::make_unique<rmm::device_uvector<size_type>>(partition_size, stream, mr);
       auto right_indices =
         std::make_unique<rmm::device_uvector<size_type>>(partition_size, stream, mr);
-      thrust::sequence(rmm::exec_policy_nosync(stream),
+      thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        left_indices->begin(),
                        left_indices->end(),
                        left_start_idx);
-      thrust::fill(
-        rmm::exec_policy_nosync(stream), right_indices->begin(), right_indices->end(), JoinNoMatch);
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   right_indices->begin(),
+                   right_indices->end(),
+                   JoinNoMatch);
       return std::pair(std::move(left_indices), std::move(right_indices));
     }
   }
 
   // Compute output size from pre-computed match counts
-  auto const output_size = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                          match_ctx._match_counts->begin() + left_start_idx,
-                                          match_ctx._match_counts->begin() + left_end_idx,
-                                          std::size_t{0});
+  auto const output_size =
+    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   match_ctx._match_counts->begin() + left_start_idx,
+                   match_ctx._match_counts->begin() + left_end_idx,
+                   std::size_t{0});
 
   if (output_size == 0) {
     return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -279,7 +285,7 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
 
   // Offset left indices to be relative to the original complete probe table
   if (left_start_idx > 0 && join_indices.first->size() > 0) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       join_indices.first->begin(),
                       join_indices.first->end(),
                       cuda::make_constant_iterator(left_start_idx),

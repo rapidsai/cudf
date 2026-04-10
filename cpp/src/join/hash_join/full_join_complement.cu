@@ -6,6 +6,7 @@
 #include <cudf/join/hash_join.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -44,21 +45,22 @@ hash_join::full_join_complement(cudf::device_span<size_type const> right_indices
 
   if (probe_table_num_rows == 0) {
     // All build rows are unmatched
-    thrust::sequence(rmm::exec_policy_nosync(stream),
+    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      right_indices_complement->begin(),
                      right_indices_complement->end(),
                      0);
   } else {
     auto invalid_index_map =
       std::make_unique<rmm::device_uvector<size_type>>(build_table_num_rows, stream);
-    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                               invalid_index_map->begin(),
-                               invalid_index_map->end(),
-                               int32_t{1});
+    thrust::uninitialized_fill(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      invalid_index_map->begin(),
+      invalid_index_map->end(),
+      int32_t{1});
 
     valid_range<size_type> valid{0, build_table_num_rows};
 
-    thrust::scatter_if(rmm::exec_policy_nosync(stream),
+    thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        cuda::make_constant_iterator(0),
                        cuda::make_constant_iterator(0) + right_indices.size(),
                        right_indices.begin(),
@@ -69,22 +71,24 @@ hash_join::full_join_complement(cudf::device_span<size_type const> right_indices
     auto const begin_counter = static_cast<size_type>(0);
     auto const end_counter   = static_cast<size_type>(build_table_num_rows);
 
-    size_type const indices_count = thrust::copy_if(rmm::exec_policy_nosync(stream),
-                                                    cuda::counting_iterator{begin_counter},
-                                                    cuda::counting_iterator{end_counter},
-                                                    invalid_index_map->begin(),
-                                                    right_indices_complement->begin(),
-                                                    cuda::std::identity{}) -
-                                    right_indices_complement->begin();
+    size_type const indices_count =
+      thrust::copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator{begin_counter},
+                      cuda::counting_iterator{end_counter},
+                      invalid_index_map->begin(),
+                      right_indices_complement->begin(),
+                      cuda::std::identity{}) -
+      right_indices_complement->begin();
     right_indices_complement->resize(indices_count, stream);
   }
 
   auto left_invalid_indices =
     std::make_unique<rmm::device_uvector<size_type>>(right_indices_complement->size(), stream, mr);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             left_invalid_indices->begin(),
-                             left_invalid_indices->end(),
-                             cudf::JoinNoMatch);
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    left_invalid_indices->begin(),
+    left_invalid_indices->end(),
+    cudf::JoinNoMatch);
 
   return std::pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
