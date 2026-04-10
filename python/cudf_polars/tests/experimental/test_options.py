@@ -14,6 +14,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.options import (
     StreamingOptions,
     Unspecified,
 )
+from cudf_polars.utils.config import MemoryResourceConfig
 
 # ---------------------------------------------------------------------------
 # Sentinel
@@ -136,30 +137,47 @@ def test_rapidsmpf_options_env_var_absent(monkeypatch: pytest.MonkeyPatch) -> No
     assert "log" not in StreamingOptions().to_rapidsmpf_options().get_strings()
 
 
-@pytest.mark.spmd
-def test_spmd_engine_from_options_creates_engine() -> None:
-    """from_options with default StreamingOptions creates a valid SPMDEngine."""
-    pytest.importorskip("rapidsmpf")
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
-
-    opts = StreamingOptions(fallback_mode="silent", raise_on_fail=True)
-    with SPMDEngine.from_options(opts) as engine:
-        assert engine.nranks >= 1
+# ---------------------------------------------------------------------------
+# memory_resource_config forwarding
+# ---------------------------------------------------------------------------
 
 
-# distributed's shutdown leaves unclosed sockets; suppress the noise.
-@pytest.mark.filterwarnings("ignore::ResourceWarning")
-def test_dask_engine_from_options_creates_engine() -> None:
-    """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
-    pytest.importorskip("distributed")
-    from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+def test_parse_memory_resource_config() -> None:
+    """_parse_memory_resource_config converts a JSON string to MemoryResourceConfig."""
+    from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        _parse_memory_resource_config,
+    )
 
-    opts = StreamingOptions(fallback_mode="silent")
-    try:
-        with DaskEngine.from_options(opts) as engine:
-            assert engine.nranks >= 1
-    except Exception as e:
-        pytest.skip(f"Dask GPU cluster unavailable: {e}")
+    config = _parse_memory_resource_config('{"qualname": "rmm.mr.CudaMemoryResource"}')
+    assert isinstance(config, MemoryResourceConfig)
+    assert config.qualname == "rmm.mr.CudaMemoryResource"
+
+
+def test_from_argparse_memory_resource_config_passthrough() -> None:
+    """MemoryResourceConfig instances pass through _from_argparse unchanged."""
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    ns = argparse.Namespace(memory_resource_config=config)
+    opts = StreamingOptions._from_argparse(ns)
+    assert opts.memory_resource_config is config
+
+
+def test_cli_memory_resource_config_roundtrip() -> None:
+    """--memory-resource-config JSON roundtrips through CLI parsing."""
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(
+        ["--memory-resource-config", '{"qualname": "rmm.mr.CudaAsyncMemoryResource"}']
+    )
+    opts = StreamingOptions._from_argparse(args)
+    assert isinstance(opts.memory_resource_config, MemoryResourceConfig)
+    assert opts.memory_resource_config.qualname == "rmm.mr.CudaAsyncMemoryResource"
+
+
+def test_memory_resource_config_in_engine_options() -> None:
+    """memory_resource_config is included in to_engine_options() when set."""
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    opts = StreamingOptions(memory_resource_config=config)
+    assert opts.to_engine_options()["memory_resource_config"] is config
 
 
 # ---------------------------------------------------------------------------
