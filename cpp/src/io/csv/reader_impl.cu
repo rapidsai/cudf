@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/codec.hpp>
@@ -248,6 +249,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   bool load_whole_file,
   rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range rng{"csv::load_data_and_gather_row_offsets"};
   constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
 
   auto const data_size      = data.has_value() ? data->size() : source->size();
@@ -442,6 +444,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
   parse_options const& parse_opts,
   rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range rng{"csv::select_data_and_row_offsets"};
   auto range_offset  = reader_opts.get_byte_range_offset();
   auto range_size    = reader_opts.get_byte_range_size();
   auto skip_rows     = reader_opts.get_skiprows();
@@ -578,6 +581,7 @@ void infer_column_types(parse_options const& parse_opts,
                         host_span<data_type> column_types,
                         rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range rng{"csv::infer_column_types"};
   if (num_records == 0) {
     for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
       if (column_flags[col_idx] & column_parse::inferred) {
@@ -757,6 +761,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
                              rmm::cuda_stream_view stream,
                              rmm::device_async_resource_ref mr)
 {
+  CUDF_FUNC_RANGE();
   std::vector<char> header;
 
   auto const data_row_offsets =
@@ -929,8 +934,10 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   if (num_active_columns == 0) { return {std::make_unique<table>(), {}}; }
 
   // Exclude the end-of-data row from number of rows with actual data
-  auto const num_records  = std::max(row_offsets.size(), 1ul) - 1;
-  auto const column_types = determine_column_types(reader_opts,
+  auto const num_records = std::max(row_offsets.size(), 1ul) - 1;
+  auto const column_types = [&] {
+    cudf::scoped_range rng{"csv::determine_column_types"};
+    return determine_column_types(reader_opts,
                                                    parse_opts,
                                                    column_names,
                                                    data,
@@ -939,11 +946,13 @@ table_with_metadata read_csv(cudf::io::datasource* source,
                                                    column_flags,
                                                    num_active_columns,
                                                    stream);
+  }();
 
   auto metadata    = table_metadata{};
   auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
   out_columns.reserve(column_types.size());
   if (num_records != 0) {
+    cudf::scoped_range rng{"csv::decode_data"};
     auto decode_result = decode_data(  //
       parse_opts,
       column_flags,

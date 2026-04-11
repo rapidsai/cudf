@@ -14,8 +14,8 @@ fi
 devcontainer up \
     --workspace-folder "${WORKSPACE_FOLDER}" \
     --config "${CONFIG_FILE}" \
-    --mount "type=bind,source=${HOME}/.claude,target=/home/coder/.claude,consistency=consistent" \
-    --mount "type=bind,source=${HOME}/.claude.json,target=/home/coder/.claude.json,consistency=consistent"
+    --mount "type=bind,source=${HOME}/.claude,target=/home/coder/.claude" \
+    --mount "type=bind,source=${HOME}/.claude.json,target=/home/coder/.claude.json"
 
 # Exec into the container
 if [ "$1" = "--claude" ]; then
