@@ -40,6 +40,10 @@ grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run.log
 - `program.md` — the full autoresearch protocol (source of truth)
 - `results.tsv` — experiment log (untracked)
 
+## Working with Tools and CLIs
+
+Before writing custom logic to work around a perceived limitation, check whether the tool already handles it. Run `--help` or read the docs first. Don't wrap, guard, or re-implement behavior that the tool provides natively.
+
 ## Critical Rules
 
 1. Never modify files in `cpp/benchmarks/` or `cpp/tests/`
