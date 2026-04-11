@@ -6,6 +6,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
@@ -35,7 +36,7 @@
 namespace cudf {
 namespace {
 
-struct mut_fixed_width_column_view {
+struct mutable_fixed_width_column_view {
   mutable_column_view _view;
 
   auto to_device(rmm::cuda_stream_view stream) const
@@ -58,7 +59,7 @@ struct fixed_width_column {
       make_fixed_width_column(type, size, std::move(null_mask), null_count, stream, mr)};
   }
 
-  auto mutable_view() const { return mut_fixed_width_column_view{_col->mutable_view()}; }
+  auto mutable_view() const { return mutable_fixed_width_column_view{_col->mutable_view()}; }
 
   void set_null_count(size_type count) { _col->set_null_count(count); }
 
@@ -67,7 +68,7 @@ struct fixed_width_column {
   bitmask_type* null_mask() { return _col->mutable_view().null_mask(); }
 };
 
-struct mut_string_views_column_view {
+struct mutable_string_views_column_view {
   void* _data{nullptr};
   size_type _size{0};
   bitmask_type const* _null_mask{nullptr};
@@ -79,7 +80,7 @@ struct mut_string_views_column_view {
     using view = mutable_column_device_view;
     return std::unique_ptr<view, std::function<void(view*)>>(
       new view{
-        view::from_parts(data_type{type_id::EMPTY}, _size, _data, _null_mask, _offset, nullptr, 0)},
+        view::create(data_type{type_id::EMPTY}, _size, _data, _null_mask, _offset, nullptr, 0)},
       [](auto* p) { delete p; });
   }
 };
@@ -102,9 +103,9 @@ struct string_views_column {
 
   auto mutable_view() const
   {
-    return mut_string_views_column_view{
+    return mutable_string_views_column_view{
       const_cast<void*>(_data.data()),
-      static_cast<size_type>(_data.size()),
+      _size,
       static_cast<bitmask_type*>(const_cast<void*>(_null_mask.data())),
       0,
       _null_count};
@@ -117,7 +118,7 @@ struct string_views_column {
   bitmask_type* null_mask() { return static_cast<bitmask_type*>(_null_mask.data()); }
 };
 
-struct mut_strings_column_view {
+struct mutable_strings_column_view {
   mutable_column_view _view;
 
   auto to_device(rmm::cuda_stream_view stream) const
@@ -126,7 +127,7 @@ struct mut_strings_column_view {
   }
 };
 
-struct mut_strings_column {
+struct mutable_strings_column {
   std::unique_ptr<column> _col = nullptr;
 
   static auto make(size_type size,
@@ -135,11 +136,11 @@ struct mut_strings_column {
                    rmm::device_buffer null_mask,
                    size_type null_count)
   {
-    return mut_strings_column{make_strings_column(
+    return mutable_strings_column{make_strings_column(
       size, std::move(offsets), std::move(chars), null_count, std::move(null_mask))};
   }
 
-  auto mutable_view() const { return mut_strings_column_view{_col->mutable_view()}; }
+  auto mutable_view() const { return mutable_strings_column_view{_col->mutable_view()}; }
 
   void set_null_count(size_type count) { _col->set_null_count(count); }
 
@@ -149,10 +150,10 @@ struct mut_strings_column {
 };
 
 using input_column_view = transform_input;
-using output_column     = std::variant<fixed_width_column, string_views_column, mut_strings_column>;
-using handle            = std::variant<
-             std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
-             std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
+using output_column = std::variant<fixed_width_column, string_views_column, mutable_strings_column>;
+using handle        = std::variant<
+         std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
+         std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
 
 namespace jit_transform {
 
@@ -205,7 +206,10 @@ std::string reflect_output_element(fixed_width_column const& c)
 
 std::string reflect_output_element(string_views_column const&) { return "cudf::string_view"; }
 
-std::string reflect_output_element(mut_strings_column const&) { return "cuda::std::span<char>"; }
+std::string reflect_output_element(mutable_strings_column const&)
+{
+  return "cuda::std::span<char>";
+}
 
 std::string reflect_input_column(column_view const&) { return "cudf::column_device_view_core"; }
 
@@ -224,7 +228,7 @@ std::string reflect_output_column(string_views_column const&)
   return "cudf::jit::mutable_vector_device_view";
 }
 
-std::string reflect_output_column(mut_strings_column const&)
+std::string reflect_output_column(mutable_strings_column const&)
 {
   return "cudf::jit::mutable_strings_column_device_view";
 }
@@ -261,7 +265,7 @@ auto reflect(udf_source_type source_type,
     auto optional_element  = std::format("cuda::std::optional<{}>", element);
     bool as_scalar         = false;  // never scalar
     bool may_be_nullable   = output_may_be_nullable[i];
-    auto is_strings_output = std::holds_alternative<mut_strings_column>(out);
+    auto is_strings_output = std::holds_alternative<mutable_strings_column>(out);
     auto accessor =
       jitify2::reflection::Template("cudf::jit::column_accessor")
         .instantiate(
@@ -367,6 +371,21 @@ void run(null_aware is_null_aware,
 
 }  // namespace jit_transform
 
+CUDF_KERNEL void copy_offset_bitmask(bitmask_type* __restrict__ destination,
+                                     bitmask_type const* __restrict__ source,
+                                     size_type source_begin_bit,
+                                     size_type source_end_bit,
+                                     size_type number_of_mask_words)
+{
+  auto const stride = cudf::detail::grid_1d::grid_stride();
+  for (thread_index_type destination_word_index = grid_1d::global_thread_id();
+       destination_word_index < number_of_mask_words;
+       destination_word_index += stride) {
+    destination[destination_word_index] = detail::get_mask_offset_word(
+      source, destination_word_index, source_begin_bit, source_end_bit);
+  }
+}
+
 size_type inplace_null_mask_and(bitmask_type* null_mask,
                                 size_type row_size,
                                 std::span<transform_input const> inputs,
@@ -431,11 +450,25 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
     return 0;
   }
 
-  auto num_words = num_bitmask_words(row_size);
-  auto num_bytes = num_words * sizeof(bitmask_type);
+  auto num_words               = num_bitmask_words(row_size);
+  auto num_bytes               = num_words * sizeof(bitmask_type);
+  constexpr auto bits_per_word = sizeof(bitmask_type) * 8;
 
   if (nullable_masks.size() == 1) {
     // only 1 mask provided, copy it directly to the output
+    if (nullable_offsets[0] % bits_per_word == 0) {
+      CUDF_CUDA_TRY(detail::memcpy_async(
+        null_mask, nullable_masks[0] + (nullable_offsets[0] / bits_per_word), num_bytes, stream));
+    } else {
+      cudf::detail::grid_1d config(row_size, 256);
+      copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+        static_cast<bitmask_type*>(null_mask),
+        nullable_masks[0],
+        nullable_offsets[0],
+        nullable_offsets[0] + row_size,
+        num_words);
+      CUDF_CHECK_CUDA(stream.value());
+    }
     CUDF_CUDA_TRY(detail::memcpy_async(null_mask, nullable_masks[0], num_bytes, stream));
     return nullable_null_counts[0];
   }
@@ -702,7 +735,7 @@ auto make_outputs(null_aware is_null_aware,
         auto chars_size =
           strings::detail::get_offset_value(string_offsets[i]->view(), row_size, stream);
         auto chars = rmm::device_buffer{static_cast<size_t>(chars_size), stream, mr};
-        auto col   = mut_strings_column::make(
+        auto col   = mutable_strings_column::make(
           row_size, std::move(chars), std::move(string_offsets[i]), std::move(null_mask), 0);
         cols.emplace_back(std::move(col));
       }
@@ -751,7 +784,9 @@ auto finalize_output(fixed_width_column&& c, rmm::cuda_stream_view, rmm::device_
   return std::move(c._col);
 }
 
-auto finalize_output(mut_strings_column&& c, rmm::cuda_stream_view, rmm::device_async_resource_ref)
+auto finalize_output(mutable_strings_column&& c,
+                     rmm::cuda_stream_view,
+                     rmm::device_async_resource_ref)
 {
   return std::move(c._col);
 }

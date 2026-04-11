@@ -763,13 +763,13 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
    * @return A `mutable_column_device_view` instance representing the specified column data
    * in device memory
    */
-  static auto from_parts(data_type type,
-                         size_type size,
-                         void const* data,
-                         bitmask_type const* null_mask,
-                         size_type offset,
-                         mutable_column_device_view* children,
-                         size_type num_children)
+  [[nodiscard]] static auto create(data_type type,
+                                   size_type size,
+                                   void const* data,
+                                   bitmask_type const* null_mask,
+                                   size_type offset,
+                                   mutable_column_device_view* children,
+                                   size_type num_children)
   {
     return mutable_column_device_view{type, size, data, null_mask, offset, children, num_children};
   }

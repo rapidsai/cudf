@@ -105,7 +105,8 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       });
 
       Outs::map([&]<typename... A>() {
-        (warp_compact_validity<A>(output_cols, element_idx, is_valid[A::index]), ...);
+        auto active_mask = __ballot_sync(0xFFFF'FFFFU, element_idx < row_size);
+        (warp_compact_validity<A>(active_mask, output_cols, element_idx, is_valid[A::index]), ...);
       });
     }
   }

@@ -12,7 +12,7 @@
 #include <cuda/std/optional>
 #include <cuda/std/span>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace jit {
 
 /**
@@ -123,4 +123,4 @@ struct mutable_strings_column_device_view : private mutable_column_device_view_c
 };
 
 }  // namespace jit
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
