@@ -8,7 +8,6 @@
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 find_package(zstd REQUIRED)
 
-
 # This function registers a directory of include files to be embedded for JIT compilation. It
 # gathers the specified files, their destinations, and include directories, and stores them in
 # target-specific variables for later use when generating the embed.

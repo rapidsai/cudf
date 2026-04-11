@@ -326,18 +326,15 @@ endif()
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
-
-
 jit_add_include_directory(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DEST_DIRECTORY cudf/cpp/include
-  INCLUDE_DIRECTORIES cudf/cpp/include
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
+  cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
 )
-
 
 jit_add_include_directory(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY cudf/cpp/src/jit
@@ -345,24 +342,23 @@ jit_add_include_directory(
 )
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY cudf/cpp/src/binaryop/jit
-  INCLUDE_DIRECTORIES cudf/cpp/src
-)
-
-
-jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY cudf/cpp/src/join/jit
-  INCLUDE_DIRECTORIES cudf/cpp/src
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
+  cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling/jit DEST_DIRECTORY cudf/cpp/src/rolling/jit
-  INCLUDE_DIRECTORIES cudf/cpp/src
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
+  cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY cudf/cpp/src/transform/jit
-  INCLUDE_DIRECTORIES cudf/cpp/src
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling/jit DEST_DIRECTORY
+  cudf/cpp/src/rolling/jit INCLUDE_DIRECTORIES cudf/cpp/src
+)
+
+jit_add_include_directory(
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
+  cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
 get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)

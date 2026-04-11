@@ -1,4 +1,7 @@
-
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <fcntl.h>
 #include <openssl/evp.h>
@@ -341,13 +344,13 @@ void generate_embed(std::string_view id,
                  static_cast<std::streamsize>(output.bin_file_data.size()));
 }
 
-std::vector<std::string_view> split_string(std::string_view str, char delimeter)
+std::vector<std::string_view> split_string(std::string_view str, char delimiter)
 {
   std::vector<std::string_view> tokens;
   std::size_t start = 0;
 
   while (start <= str.size()) {
-    auto const pos = str.find(delimeter, start);
+    auto const pos = str.find(delimiter, start);
     if (pos == std::string_view::npos) {
       tokens.push_back(str.substr(start));
       break;
