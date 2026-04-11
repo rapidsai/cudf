@@ -80,6 +80,7 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 #        --executor streaming
 
 echo "Run polars tests with the streaming executor and rapidsmpf runtime"
+PYTHONASYNCIODEBUG=1 \
 CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
