@@ -275,6 +275,9 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
 def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
     paths = node.paths
+    # Local Iceberg tables store file paths as file:// URIs.  Strip the scheme
+    # so cudf-polars can open them as plain filesystem paths.
+    paths = [p.removeprefix("file://") if p.startswith("file://") else p for p in paths]
     # Polars can produce a Scan with an empty ``node.paths`` (eg. the native
     # Iceberg reader on a table with no data files yet). In this case, polars returns an
     # empty DataFrame with the declared schema. Mirror that here by
