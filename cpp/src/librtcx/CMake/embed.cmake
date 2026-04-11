@@ -5,10 +5,9 @@
 # cmake-format: on
 # =============================================================================
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+find_package(zstd REQUIRED)
 
-# TODO: add glob restrictions:exclude .cpp .cc, .cmake and .cxx source files, only include .h .hpp
-# .cuh .cu files
 
 # This function registers a directory of include files to be embedded for JIT compilation. It
 # gathers the specified files, their destinations, and include directories, and stores them in
@@ -65,9 +64,9 @@ function(jit_add_include_directory)
 
   # Set scope variables to accumulate results
 
-  set(SOURCE_FILES ${jitembed_${TARGET}_incdir__source_files})
-  set(SOURCE_FILE_DESTS ${jitembed_${TARGET}_incdir__source_file_dests})
-  set(INCLUDE_DIRECTORIES ${jitembed_${TARGET}_incdir__include_directories})
+  set(SOURCE_FILES ${${TARGET}__jitembed_incdir__source_files})
+  set(SOURCE_FILE_DESTS ${${TARGET}__jitembed_incdir__source_file_dests})
+  set(INCLUDE_DIRECTORIES ${${TARGET}__jitembed_incdir__include_directories})
 
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
     list(APPEND SOURCE_FILES "${ARG_COPY_DIRECTORY}/${SOURCE_FILE}")
@@ -76,15 +75,15 @@ function(jit_add_include_directory)
 
   list(APPEND INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES})
 
-  set(jitembed_${TARGET}_incdir__source_files
+  set(${TARGET}__jitembed_incdir__source_files
       ${SOURCE_FILES}
       PARENT_SCOPE
   )
-  set(jitembed_${TARGET}_incdir__source_file_dests
+  set(${TARGET}__jitembed_incdir__source_file_dests
       ${SOURCE_FILE_DESTS}
       PARENT_SCOPE
   )
-  set(jitembed_${TARGET}_incdir__include_directories
+  set(${TARGET}__jitembed_incdir__include_directories
       ${INCLUDE_DIRECTORIES}
       PARENT_SCOPE
   )
@@ -111,7 +110,7 @@ function(jit_embed)
     message(FATAL_ERROR "COMPRESSION argument must be either none or zstd")
   endif()
 
-  if(NOT DEFINED jitembed_${TARGET}_incdir__source_files)
+  if(NOT DEFINED ${TARGET}__jitembed_incdir__source_files)
     message(
       FATAL_ERROR
         "No source files registered for target '${TARGET}'. Call jit_add_include_directory() first"
@@ -119,23 +118,31 @@ function(jit_embed)
   endif()
 
   set(OUTPUT_DIR "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
-  set(CONFIGURED_EMBED_PY "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_embed.py")
-  set(EMBED_PY_IN "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.py")
+  set(CONFIGURED_EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed.cpp")
+  set(EMBED_SCRIPT_IN "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.cpp")
 
-  set(RTCX_EMBED_PY_ARG__ID "${TARGET}")
-  set(RTCX_EMBED_PY_ARG__FILE_PATHS "${jitembed_${TARGET}_incdir__source_files}")
-  set(RTCX_EMBED_PY_ARG__FILE_DESTS "${jitembed_${TARGET}_incdir__source_file_dests}")
-  set(RTCX_EMBED_PY_ARG__INCLUDE_DIRS "${jitembed_${TARGET}_incdir__include_directories}")
-  set(RTCX_EMBED_PY_ARG__COMPRESSION "${ARG_COMPRESSION}")
-  set(RTCX_EMBED_PY_ARG__OUTPUT_DIR "${OUTPUT_DIR}")
+  set(RTCX_EMBED_SCRIPT_ARG__ID "${TARGET}")
+  set(RTCX_EMBED_SCRIPT_ARG__FILE_PATHS "${${TARGET}__jitembed_incdir__source_files}")
+  set(RTCX_EMBED_SCRIPT_ARG__FILE_DESTS "${${TARGET}__jitembed_incdir__source_file_dests}")
+  set(RTCX_EMBED_SCRIPT_ARG__INCLUDE_DIRS "${${TARGET}__jitembed_incdir__include_directories}")
+  set(RTCX_EMBED_SCRIPT_ARG__COMPRESSION "${ARG_COMPRESSION}")
+  set(RTCX_EMBED_SCRIPT_ARG__OUTPUT_DIR "${OUTPUT_DIR}")
 
-  configure_file("${EMBED_PY_IN}" "${CONFIGURED_EMBED_PY}" @ONLY)
+  configure_file("${EMBED_SCRIPT_IN}" "${CONFIGURED_EMBED_SCRIPT}" @ONLY)
+
+  add_executable("${TARGET}__jit_embed_run" EXCLUDE_FROM_ALL "${CONFIGURED_EMBED_SCRIPT}")
+  target_include_directories("${TARGET}__jit_embed_run" PRIVATE ${ZSTD_INCLUDE_DIR})
+  target_link_libraries("${TARGET}__jit_embed_run" PRIVATE ${CMAKE_DL_LIBS} zstd OpenSSL::Crypto)
+  set_target_properties(
+    "${TARGET}__jit_embed_run" PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
+  )
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
     BYPRODUCTS ${OUTPUT_DIR}/*
-    COMMAND ${Python3_EXECUTABLE} "${CONFIGURED_EMBED_PY}"
-    DEPENDS "${EMBED_PY_IN}" "${CONFIGURED_EMBED_PY}" ${jitembed_${TARGET}_incdir__source_files}
+    COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${TARGET}__jit_embed_run>
+    DEPENDS "${EMBED_SCRIPT_IN}" "${CONFIGURED_EMBED_SCRIPT}"
+            ${${TARGET}__jitembed_incdir__source_files}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating JIT embed for ${TARGET} into ${OUTPUT_DIR}"
     VERBATIM

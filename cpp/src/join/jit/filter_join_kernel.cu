@@ -31,12 +31,12 @@ namespace cudf::join::jit {
 constexpr cudf::size_type JoinNoMatch = cuda::std::numeric_limits<cudf::size_type>::min();
 
 template <bool has_user_data, null_aware is_null_aware, typename... InputAccessors>
-CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
-                                    cudf::jit::device_span<cudf::size_type const> right_indices,
-                                    cudf::column_device_view_core const* left_tables,
-                                    cudf::column_device_view_core const* right_tables,
-                                    bool* predicate_results,
-                                    void* user_data)
+__device__ void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
+                                   cudf::jit::device_span<cudf::size_type const> right_indices,
+                                   cudf::column_device_view_core const* left_tables,
+                                   cudf::column_device_view_core const* right_tables,
+                                   bool* predicate_results,
+                                   void* user_data)
 {
   auto const start  = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
@@ -92,3 +92,14 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
 }
 
 }  // namespace cudf::join::jit
+
+extern "C" __global__ void kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
+                                  cudf::jit::device_span<cudf::size_type const> right_indices,
+                                  cudf::column_device_view_core const* left_tables,
+                                  cudf::column_device_view_core const* right_tables,
+                                  bool* predicate_results,
+                                  void* user_data)
+{
+  KERNEL_INSTANCE(
+    left_indices, right_indices, left_tables, right_tables, predicate_results, user_data);
+}

@@ -154,7 +154,7 @@ void binary_operation(mutable_column_view& out,
                                            {2, cudf::type_to_name(rhs.type())},
                                          });
 
-  auto kernel_reflection = rtcx::reflect_template("cudf::binops::jit::kernel_v_v",
+  auto kernel_reflection = rtcx::reflect_template("cudf::binops::jit::binaryop_kernel",
                                                   output_type_name,
                                                   cudf::type_to_name(lhs.type()),
                                                   cudf::type_to_name(rhs.type()),

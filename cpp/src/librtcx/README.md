@@ -12,8 +12,8 @@ RTCX (runtime-compiler extended) is a wrapper around NVRTC and NVJitLink designe
 
 ## Build-Scripting Requirements
 - CMake
-- python 3
-- python-zstd
+- LibOpenSSL - for binary hashing
+- LibZSTD - for binary compression
 
 ## Runtime Requirements
-- CUDA >= 12.4.0
+- CUDA >= 11.8

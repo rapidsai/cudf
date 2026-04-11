@@ -5,7 +5,6 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cuda_runtime.h>
@@ -73,40 +72,6 @@ void install_file(char const* dst_path, std::span<std::uint8_t const> contents)
   if (write(dst_file, contents.data(), contents.size()) == -1) {
     throw_posix(std::format("Failed to write file ({})", dst_path), "write");
   }
-}
-
-/**
- * @brief Reads the contents of a file into a byte buffer and null-terminates it to allow for safe
- * usage as a C-string.
- */
-rtcx::byte_buffer read_blob_cstring(char const* path)
-{
-  int32_t fd = open(path, O_RDONLY);
-  if (fd == -1) { throw_posix(std::format("Failed to open file ({})", path), "open"); }
-
-  RTCX_DEFER([&] {
-    if (close(fd) == -1) { throw_posix(std::format("Failed to close file ({})", path), "close"); }
-  });
-
-  auto file_size = lseek(fd, 0, SEEK_END);
-  if (file_size == -1) {
-    throw_posix(std::format("Failed to determine size of file ({})", path), "lseek");
-  }
-  // TODO: make all read/write syscalls call read/write in a loop
-
-  if (lseek(fd, 0, SEEK_SET) == -1) {
-    throw_posix(std::format("Failed to reset file offset for file ({})", path), "lseek");
-  }
-
-  auto contents = rtcx::byte_buffer::make(file_size + 1U);  // +1 for null terminator
-
-  if (read(fd, contents.data(), file_size) == -1) {
-    throw_posix(std::format("Failed to read file ({})", path), "read");
-  }
-
-  contents.data()[file_size] = '\0';  // null-terminate the buffer
-
-  return contents;
 }
 
 rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
@@ -214,7 +179,6 @@ void jit_bundle_t::ensure_installed() const
       throw_posix(std::format("Failed to get stat for directory ({})", expected_path), "lstat");
     } else {
       // ensure base install directory exists
-      CUDF_LOG_INFO("Creating JIT install directory at (%s)", expected_path.c_str());
       std::filesystem::create_directories(install_dir_);
       install_cudf_jit_files(expected_path.c_str(), cache_->get_tmp_dir());
     }
@@ -289,7 +253,6 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   CUDF_FUNC_RANGE();
 
   auto& bundle = cudf::get_context().jit_bundle();
-  auto begin   = std::chrono::steady_clock::now();
   auto sm      = get_current_device_physical_model();
 
   auto include_dirs = bundle.get_include_directories();
@@ -307,7 +270,6 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   // --restrict
   // --relocatable-device-code
   // --extensible-whole-program
-  // --use_fast_math
   // --dlink-time-opt
   // --gen-opt-lto
   // --create-pch
@@ -339,7 +301,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   for (auto const& option : options) {
     options_cstr.emplace_back(option.c_str());
   }
-  for (auto const& option : extra_options) {
+  for (auto* option : extra_options) {
     options_cstr.emplace_back(option);
   }
 
@@ -351,20 +313,9 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
                                      .name_expressions     = name_expressions,
                                      .target_type          = rtcx::binary_type::CUBIN};
 
-  auto cubin = rtcx::compile(params);
-
-  auto end = std::chrono::steady_clock::now();
-
-  auto duration = end - begin;
-
-  CUDF_LOG_INFO(
-    "Compiled CUDA library `%s` in %f ms",
-    name,
-    std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(duration).count());
-
+  auto cubin   = rtcx::compile(params);
   auto library = rtcx::load_library(cubin);
-
-  auto blob = rtcx::blob_t::from_buffer(std::move(cubin));
+  auto blob    = rtcx::blob_t::from_buffer(std::move(cubin));
 
   return std::make_tuple(library, std::make_shared<rtcx::blob_t>(std::move(blob)));
 }
@@ -415,35 +366,35 @@ kernel_instance={}
   auto cache_key_sha256 = hash_string(cache_key);
 
   auto compile = [&] {
-    auto bundle_dir                = cudf::get_context().jit_bundle().get_directory();
-    auto source_file_path          = std::format("{}/{}", bundle_dir, source_file);
-    auto source                    = read_blob_cstring(source_file_path.c_str());
-    char const* name_expressions[] = {kernel_instance.c_str()};
+    auto bundle_dir             = cudf::get_context().jit_bundle().get_directory();
+    auto source                 = std::format(R"***(
+#include "{}"
+    )***",
+                              source_file);
+    auto kernel_instance_define = std::format("-DKERNEL_INSTANCE=\"{}\"", kernel_instance);
+
+    char const* options[] = {kernel_instance_define.c_str()};
 
     return compile_library_uncached(name.c_str(),
                                     reinterpret_cast<char const*>(source.data()),
                                     header_include_names,
                                     headers,
+                                    options,
                                     {},
-                                    name_expressions,
                                     use_pch,
                                     log_pch);
   };
 
   if (!use_cache) {
     auto [lib, blob] = compile();
-    auto kernels     = lib->enumerate_kernels();
-    CUDF_EXPECTS(kernels.size() == 1, "Unexpected kernel count", std::logic_error);
-    return kernel{lib, kernels[0]};
+    return kernel{lib, lib->get_kernel("kernel")};
   }
 
   auto fut =
     cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
 
-  auto lib     = fut.get();
-  auto kernels = lib->enumerate_kernels();
-  CUDF_EXPECTS(kernels.size() == 1, "Unexpected kernel count", std::logic_error);
-  return kernel{lib, kernels[0]};
+  auto lib = fut.get();
+  return kernel{lib, lib->get_kernel("kernel")};
 }
 
 }  // namespace CUDF_EXPORT cudf

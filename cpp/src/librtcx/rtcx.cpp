@@ -222,8 +222,6 @@ sha256 sha256_context::finalize()
   DO_IT(LibraryLoadData)                \
   DO_IT(LibraryLoadFromFile)            \
   DO_IT(LibraryGetKernel)               \
-  DO_IT(LibraryGetKernelCount)          \
-  DO_IT(LibraryEnumerateKernels)        \
   DO_IT(LibraryUnload)
 
 #define FOR_EACH_NVRTC_FUNC(DO_IT) \
@@ -880,24 +878,6 @@ kernel_ref library_t::get_kernel(char const* name) const
   return kernel_ref{kernel};
 }
 
-std::vector<kernel_ref> library_t::enumerate_kernels() const
-{
-  std::uint32_t num_kernels;
-  RTCX_CHECK_CUDA(cu->LibraryGetKernelCount(&num_kernels, handle_));
-
-  std::vector<CUkernel> kernels;
-  kernels.resize(num_kernels);
-
-  RTCX_CHECK_CUDA(cu->LibraryEnumerateKernels(kernels.data(), num_kernels, handle_));
-
-  std::vector<kernel_ref> result;
-  for (CUkernel k : kernels) {
-    result.emplace_back(k);
-  }
-
-  return result;
-}
-
 std::string demangle_cuda_symbol(char const* mangled_name)
 {
   std::int32_t status;
@@ -961,16 +941,18 @@ std::optional<blob_t> blob_t::from_file(char const* path)
     }
   }
 
+  RTCX_DEFER([&] {
+    if (::close(fd) == -1) {
+      throw_posix("Failed to close RTCX cache file after memory-mapping", "close");
+    }
+  });
+
   auto file_size = ::lseek(fd, 0, SEEK_END);
   if (file_size == -1) { throw_posix("Failed to determine size of RTCX cache file", "lseek"); }
 
   void* map = ::mmap(nullptr, file_size, PROT_READ, MAP_SHARED, fd, 0);
 
   if (map == MAP_FAILED) { throw_posix("Failed to memory-map RTCX cache file", "mmap"); }
-
-  if (::close(fd) == -1) {
-    throw_posix("Failed to close RTCX cache file after memory-mapping", "close");
-  }
 
   auto deleter = +[](std::uint8_t const* buffer, std::size_t size) {
     if (::munmap(static_cast<void*>(const_cast<std::uint8_t*>(buffer)), size) == -1) {

@@ -149,11 +149,11 @@ struct [[nodiscard]] sha256_hasher {
       alignas(16) std::uint64_t v[4];
     };
 
-    auto value    = std::bit_cast<u64x4>(obj);
-    auto const h0 = value.v[0];
-    auto const h1 = value.v[1];
-    auto const h2 = value.v[2];
-    auto const h3 = value.v[3];
+    auto value = std::bit_cast<u64x4>(obj);
+    auto h0    = value.v[0];
+    auto h1    = value.v[1];
+    auto h2    = value.v[2];
+    auto h3    = value.v[3];
 
     auto mix = [](std::uint64_t seed, std::uint64_t v) {
       seed ^= v + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
@@ -481,12 +481,6 @@ struct [[nodiscard]] library_t {
    * @brief Retrieve a kernel from the library by name
    */
   [[nodiscard]] kernel_ref get_kernel(char const* name) const;
-
-  /**
-   * @brief Enumerate all kernels contained in the library, returning a vector of kernel references
-   * @return A vector of kernel_ref objects representing all kernels contained in the library
-   */
-  [[nodiscard]] std::vector<kernel_ref> enumerate_kernels() const;
 };
 
 using library = std::shared_ptr<library_t>;
@@ -562,13 +556,12 @@ struct alignas(CACHELINE_ALIGNMENT) lru_memory_cache {
     std::vector<std::pair<sha256, std::uint64_t>> rankings;
     rankings.reserve(entries_.size());
 
-    for (auto const& [key, entry] : entries_) {
+    for (auto& [key, entry] : entries_) {
       rankings.emplace_back(key, entry.last_touched_tick);
     }
 
-    std::sort(rankings.begin(), rankings.end(), [](auto const& a, auto const& b) {
-      return a.second < b.second;
-    });
+    std::sort(
+      rankings.begin(), rankings.end(), [](auto& a, auto& b) { return a.second < b.second; });
 
     // purge least recently used half
     rankings.resize(num_to_purge);

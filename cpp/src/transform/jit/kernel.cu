@@ -35,10 +35,10 @@ template <null_aware is_null_aware,
           bool has_user_data,
           typename Out,
           typename... In>
-CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
-                        cudf::column_device_view_core const* inputs,
-                        bool* intermediate_null_mask,
-                        void* user_data)
+__device__ void kernel(cudf::mutable_column_device_view_core const* outputs,
+                       cudf::column_device_view_core const* inputs,
+                       bool* intermediate_null_mask,
+                       void* user_data)
 {
   // inputs to JITIFY kernels have to be either sized-integral types or pointers. Structs or
   // references can't be passed directly/correctly as they will be crossing an ABI boundary
@@ -80,10 +80,10 @@ template <null_aware is_null_aware,
           bool has_user_data,
           typename Out,
           typename... In>
-CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
-                                    cudf::column_device_view_core const* inputs,
-                                    bool* intermediate_null_mask,
-                                    void* user_data)
+__device__ void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
+                                   cudf::column_device_view_core const* inputs,
+                                   bool* intermediate_null_mask,
+                                   void* user_data)
 {
   auto const start        = cudf::detail::grid_1d::global_thread_id();
   auto const stride       = cudf::detail::grid_1d::grid_stride();
@@ -128,10 +128,10 @@ template <null_aware is_null_aware,
           bool has_user_data,
           typename Out,
           typename... In>
-CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
-                             cudf::column_device_view_core const* inputs,
-                             bool* intermediate_null_mask,
-                             void* user_data)
+__device__ void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
+                            cudf::column_device_view_core const* inputs,
+                            bool* intermediate_null_mask,
+                            void* user_data)
 {
   auto const start  = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
@@ -167,3 +167,11 @@ CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type>
 }  // namespace jit
 }  // namespace transformation
 }  // namespace cudf
+
+extern "C" __global__ void kernel(cudf::mutable_column_device_view_core const* outputs,
+                                  cudf::column_device_view_core const* inputs,
+                                  bool* intermediate_null_mask,
+                                  void* user_data)
+{
+  KERNEL_INSTANCE(outputs, inputs, intermediate_null_mask, user_data);
+}

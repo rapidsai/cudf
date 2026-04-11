@@ -56,11 +56,14 @@ struct UserDefinedOp {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-CUDF_KERNEL void kernel_v_v(cudf::size_type size,
-                            TypeOut* out_data,
-                            TypeLhs* lhs_data,
-                            TypeRhs* rhs_data)
+__device__ void binaryop_kernel(cudf::size_type size,
+                                void* p_out_data,
+                                void* p_lhs_data,
+                                void* p_rhs_data)
 {
+  auto out_data    = static_cast<TypeOut*>(p_out_data);
+  auto lhs_data    = static_cast<TypeLhs*>(p_lhs_data);
+  auto rhs_data    = static_cast<TypeRhs*>(p_rhs_data);
   auto const start = cudf::detail::grid_1d::global_thread_id();
   auto const step  = cudf::detail::grid_1d::grid_stride();
 
@@ -72,3 +75,11 @@ CUDF_KERNEL void kernel_v_v(cudf::size_type size,
 }  // namespace jit
 }  // namespace binops
 }  // namespace cudf
+
+extern "C" __global__ void kernel(cudf::size_type size,
+                                  void* out_data,
+                                  void* lhs_data,
+                                  void* rhs_data)
+{
+  KERNEL_INSTANCE(size, out_data, lhs_data, rhs_data);
+}
