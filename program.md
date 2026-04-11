@@ -154,7 +154,7 @@ exp	commit	metric	improvement_pct	status	benchmark	description
 
 1. exp: sequential experiment number (1, 2, 3, ...)
 2. commit: short git hash (7 chars)
-3. metric: benchmark throughput (e.g. `1234 bytes/s` or `5.6 GiB/s`)
+3. metric: benchmark throughput (e.g. `5.2 GiB/s`). For `realistic`, include per-type breakdown if useful: `5.2 GiB/s (INT:7.1 FLT:6.9 TS:6.0)`
 4. improvement_pct: vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes
 5. status: `keep`, `discard`, `crash`, or `idea`
 6. benchmark: `realistic`, `type_inference`, or `quoting`
@@ -330,15 +330,50 @@ As an example, a user might leave you running while they sleep. Each experiment 
 
 Always use Opus 4.6 (1M context) at maximum effort for all work including subagents. Do unlimited web searches. Context auto-compacts as needed — don't worry about window limits.
 
+## WARNING: Micro-benchmark tunnel vision
+
+**The single-type benchmarks can mislead optimization direction.** Each single-type benchmark measures one data type in isolation with clean, pre-typed, large data — essentially the best case. This can cause the agent to:
+
+1. **Write specialized per-type kernels** instead of optimizing the common mixed-type path
+2. **Tunnel-vision on one technique** (e.g. "fused delimiter scan + type conversion" for every type)
+3. **Miss cross-type interactions** — warp divergence when threads in the same warp process different column types, register pressure from multiple type-specific code paths, etc.
+
+**The REALISTIC benchmark (TAXI/LOGS/ANALYTICS) is the ground truth** because real CSV files have mixed types. An optimization that looks great on single-type benchmarks may not help (or may hurt) the mixed-type case due to instruction cache pressure, register spilling, or warp divergence.
+
+**If you find yourself applying the same technique to each type one by one, STOP.** You are optimizing micro-benchmarks, not real-world performance. Step back and think about what matters for the mixed-type workload.
+
+## Research: real-world CSV characteristics
+
+During research phases, understand how **real-world CSVs differ from synthetic benchmarks.** The NVBench suite uses clean, pre-typed, uniform data. Real CSV files have:
+- Mixed types in the same file (the common case)
+- Type inference overhead (not pre-typed)
+- Quoted fields with special characters
+- Variable-length string columns
+- NULL/NA values scattered throughout
+- Headers, comments, BOM markers
+
+Keep this gap in mind when evaluating optimization ideas — a technique that wins on clean synthetic data may not help on messy real data. Actively search for GPU-accelerated CSV/text parsing papers and implementations, and compare cuDF's approach to what others do — especially how they handle mixed types, type inference, and quoted fields on GPU.
+
 ## CSV parser optimization areas to consider
 
-When researching, look for opportunities in these CSV-specific areas:
+Prioritize by impact tier — architecture-level changes have the highest payoff.
+
+**Architecture-level (highest impact, explore FIRST):**
+- **Mixed-type warp divergence**: When threads in a warp process columns of different types, divergence kills throughput. Can we reorganize work to reduce this?
+- **Multi-pass vs single-pass architecture**: Is the current multi-kernel approach (row detection → field detection → type conversion) optimal, or can phases be overlapped/fused at a higher level?
+- **Memory bandwidth utilization**: The raw CSV data is read multiple times across kernels. Can we reduce total memory traffic?
+- **Host-side overhead**: Memory allocation, column construction, metadata processing — what fraction of wall time is non-GPU?
+- **Multi-stream pipelining**: For large files, overlap H2D transfer with compute
+
+**Kernel-level (moderate impact):**
 - **Delimiter/newline scanning**: Parallel character scanning, SIMD-style operations on GPU, shared memory for scan state
-- **Field parsing**: Vectorized type conversion (string→int, string→float, string→datetime), reducing warp divergence across different column types
+- **Field parsing**: Vectorized type conversion (string→int, string→float, string→datetime)
 - **Memory access patterns**: Coalesced reads of raw CSV text, minimizing scattered writes during column extraction
 - **Kernel fusion**: Combining delimiter detection + field extraction + type conversion to reduce memory round-trips
 - **Quote handling**: Efficient parallel handling of quoted fields with escaped characters
 - **Row/column decomposition**: Better strategies for splitting work across thread blocks when rows vary in length
+
+**Type-specific (lower impact, only after architecture is optimized):**
 - **Data type conversion**: Optimizing the hot path for common types (integers, floats, strings, dates)
 - **Duration/datetime parsing**: GPU-specific optimizations in `durations.cu` and `datetime.cuh`
 

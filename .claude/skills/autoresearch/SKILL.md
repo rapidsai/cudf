@@ -140,14 +140,24 @@ Each experiment should be research-informed, not just intuition. Small focused r
 
 ## CSV Parser Optimization Techniques to Consider
 
-When researching, look for opportunities in these CSV-specific areas:
+Prioritize by impact tier — architecture-level changes have the highest payoff.
+
+**Architecture-level (highest impact, explore FIRST):**
+- Mixed-type warp divergence — reorganize work to reduce divergence when threads process different column types
+- Multi-pass vs single-pass — can phases (row detect → field detect → type convert) be overlapped/fused?
+- Memory bandwidth — reduce total memory traffic (raw CSV data is read multiple times across kernels)
+- Host-side overhead — memory allocation, column construction, metadata processing
+- Multi-stream pipelining — overlap H2D transfer with compute for large files
+
+**Kernel-level (moderate impact):**
 - Delimiter/newline scanning — parallel character scanning, shared memory for scan state
 - Field parsing — vectorized type conversion (string→int, string→float, string→datetime)
 - Memory access patterns — coalesced reads of raw CSV text, minimizing scattered writes
 - Kernel fusion — combining delimiter detection + field extraction + type conversion
 - Quote handling — efficient parallel handling of quoted fields with escaped characters
-- Row/column decomposition — better work distribution when rows vary in length
-- Data type conversion — optimizing the hot path for common types (integers, floats, strings, dates)
+
+**Type-specific (lower impact, only after architecture is optimized):**
+- Data type conversion — optimizing the hot path for common types
 - Duration/datetime parsing — GPU-specific optimizations
-- Warp-level primitives (shuffle, vote, match) for text processing
-- Reducing warp divergence across different column types
+
+**WARNING**: If you find yourself applying the same technique to each type one by one, STOP. You are optimizing micro-benchmarks, not the mixed-type workload. See "Micro-benchmark tunnel vision" warning in program.md.
