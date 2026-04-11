@@ -1,6 +1,6 @@
 # Run Baseline CSV Benchmark
 
-Run the baseline benchmark for the CSV parser without making any code changes.
+Run the baseline benchmark for the CSV reader without making any code changes.
 
 Target: $ARGUMENTS (default: csv)
 
@@ -9,8 +9,6 @@ Steps:
 2. Check build: `tail -n 20 build.log`
 3. Run tests: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
 4. Check tests: `grep -c "FAILED\|PASSED" test.log`
-5. Run CSV reader benchmark: `./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > reader_run.log 2>&1`
-6. Run CSV writer benchmark: `./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > writer_run.log 2>&1`
-7. Extract metrics: `grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" reader_run.log writer_run.log`
-8. Display results
-9. Clean up: `rm -f build.log test.log reader_run.log writer_run.log`
+5. Run primary eval: `./eval.sh results/baseline`
+6. Display JSON results from `results/baseline/` and NVTX stages from `results/baseline/nvtx_stages.txt`
+7. Clean up: `rm -f build.log test.log`

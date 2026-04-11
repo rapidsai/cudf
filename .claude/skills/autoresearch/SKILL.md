@@ -14,7 +14,7 @@ You are an autonomous research agent that optimizes the cuDF C++ CSV parser for 
 
 **`program.md` is the source of truth.** Read it first. This skill reinforces the workflow; constraints and discipline rules are enforced by `.claude/rules/`.
 
-**Budget**: Unlimited. Cost is not a concern — the only goal is performance improvements. Use Opus 4.6 (1M context) at maximum effort for all work including subagents. Do unlimited web searches. Don't hold back to save cost. Context auto-compacts as needed.
+**Goal** is performance improvements. Use Opus 4.6 (1M context) at maximum effort for all work including subagents. Do unlimited web searches. Don't hold back to save cost. Context auto-compacts as needed.
 
 ## Reference
 
@@ -24,7 +24,7 @@ Read `references/modules.md` for the CSV benchmark binaries, file lists, and res
 
 When starting a new experiment run:
 
-1. **Agree on a run tag** with the user — propose one based on today's date (e.g. `apr05-csv`). Branch `autoresearch/<tag>` must not exist yet.
+1. **Pick a run tag** based on today's date (e.g. `apr11-csv`). Branch `autoresearch/<tag>` must not exist yet.
 
 2. **Create branch**: `git checkout -b autoresearch/<tag>`
 
@@ -48,28 +48,35 @@ When starting a new experiment run:
    cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1
    ```
 
-7. **Establish baseline with noise floor** — run both benchmarks **3 times** to measure variance:
+7. **Establish baseline with noise floor** — run `eval.sh` **3 times** to measure variance:
    ```bash
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run1.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run2.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run3.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run1.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run2.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run3.log 2>&1
+   ./eval.sh results/baseline_run1
+   ./eval.sh results/baseline_run2
+   ./eval.sh results/baseline_run3
    ```
-   Extract key metrics from all 3 runs. Record the average AND variance. Any future improvement must exceed this noise floor to count as real.
+   Compare JSON results across the 3 runs. Record the average AND variance for each benchmark. Any future improvement must exceed this noise floor to count as real. Also review `nvtx_stages.txt` to understand which CSV reader stages dominate baseline time.
 
-8. **Initialize results.tsv** — see `references/modules.md` for the format. Record baseline as first entry.
+8. **Initialize results.tsv** — see `references/modules.md` for the format. Record baseline as exp 0 (3 rows, one per benchmark).
 
-9. **Confirm with user**, then begin the loop.
+9. **Initialize AGENT_LOG.md** — create with run header. This is the append-only narrative log.
+
+10. **Begin the loop** immediately.
 
 ## Phase 2: The Experiment Loop
 
 **Run indefinitely. Never ask "should I continue?"**
 
+**You are the research head.** You maintain the strategic direction across all experiments. Before each experiment:
+1. Read the latest `nvtx_stages.txt` — which CSV reader stage dominates?
+2. Read the last few entries of `AGENT_LOG.md` — what worked, what failed, what was learned?
+3. Spawn **1-2 small focused researcher agents** with a specific question (not broad surveys) targeting the bottleneck you're attacking.
+4. Use their findings to form your hypothesis — only then implement.
+
+Each experiment should be research-informed, not just intuition. Small focused research per experiment beats large unfocused research at the start.
+
 ### Each Iteration
 
-1. **Objective check**: "I am optimizing the CSV parser for lower benchmark time / higher throughput as measured by `CSV_READER_NVBENCH` and `CSV_WRITER_NVBENCH`." If your change doesn't target this — pick a different idea.
+1. **Objective check**: "I am optimizing the CSV reader for maximum throughput on mixed-type workloads. The primary target is `CSV_READER_REALISTIC_NVBENCH` (TAXI/LOGS/ANALYTICS). All 3 primary benchmarks must be measured for every experiment via `./eval.sh`." If your change doesn't target this — pick a different idea.
 
 2. **Hypothesize** — before writing any code, state explicitly:
    - What you're changing and why (grounded in GPU architecture or algorithm theory, or backed by a paper you found)
@@ -91,33 +98,45 @@ When starting a new experiment run:
    Check: `tail -n 30 test.log` and `grep -c "FAILED\|PASSED" test.log`
    Tests must ALL pass — non-negotiable.
 
-8. **Benchmark**: Run whichever benchmark is relevant to the change:
+8. **Benchmark**: Run the primary eval:
    ```bash
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > run.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > run.log 2>&1
+   ./eval.sh results/<experiment_tag>
    ```
-   Extract: `grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run.log`
+   This runs the 3 primary benchmarks (REALISTIC, TYPE_INFERENCE, QUOTING) + NVTX stage profiling. JSON results are saved to the results directory.
+
+   **Every 3rd experiment**, also run all CSV reader benchmarks for a holistic view:
+   ```bash
+   RESULTS_DIR="results/<experiment_tag>_full" && mkdir -p "$RESULTS_DIR"
+   for f in cpp/build/latest/benchmarks/CSV_READER_*; do
+     name=$(basename "$f")
+     "$f" --timeout 5 --json "$RESULTS_DIR/$name.json"
+   done
+   ```
 
 9. **Validate results**:
    - Is the improvement larger than the baseline noise floor? If not, it's noise — discard.
    - Is the improvement >20% from a minor change? Re-run twice to confirm it's real.
    - Does the improvement hold across ALL benchmark configurations (different data types, row counts, column counts)?
 
-10. **Record** in results.tsv (don't commit it).
+10. **Record** in results.tsv — 3 rows for this experiment (one per primary benchmark). Don't commit it.
 
-11. **Decision**:
+11. **Log to AGENT_LOG.md** — append one section for this experiment: hypothesis, result, what worked, what didn't, what you learned, and the research head's planned next direction.
+
+12. **Decision**:
     - Improved beyond noise floor, or simpler at equal perf → **keep**
     - Within noise floor, regressed, or more complex at equal perf → **discard** with `git reset --hard HEAD~1`
 
-12. **Clean up**: `rm -f build.log test.log run.log`
+12. **Clean up**: `rm -f build.log test.log`
+    JSON results in `results/` persist across experiments — do not delete them.
 
-13. **Check for drift or exhaustion**:
-    - **3 consecutive discards** or **3+ variations of same technique** → circuit breaker (Rule 6 & 7 in discipline.md). Time for a completely different strategy.
+14. **Check for drift or exhaustion**:
+    - **Stall detection**: 3+ experiments without improvement across ANY primary benchmark? Enter **deep research phase** — STOP experimenting, spawn 2-3 deep researchers with full history (results.tsv + AGENT_LOG.md), require a high-confidence idea before next experiment.
+    - **Force diversity**: 3+ variations of same technique → circuit breaker (Rule 6 & 7 in discipline.md). Try a completely different algorithm.
     - **Idea backlog running low** (fewer than 2-3 ideas left) → time to respawn researchers.
     
-    When respawning researchers, **always pass the current results.tsv** so they know what's been tried. They will avoid suggesting already-failed approaches and search in genuinely new directions.
+    When respawning researchers, **always pass results.tsv + AGENT_LOG.md** so they know what's been tried and what was learned. They will avoid suggesting already-failed approaches and search in genuinely new directions.
 
-14. **Repeat**.
+15. **Repeat**.
 
 ## CSV Parser Optimization Techniques to Consider
 

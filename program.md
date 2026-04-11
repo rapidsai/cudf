@@ -4,9 +4,9 @@ This is an experiment to have the LLM autonomously optimize the cuDF C++ CSV par
 
 ## Setup
 
-To set up a new experiment, work with the user to:
+To set up a new experiment:
 
-1. **Agree on a run tag**: propose a tag based on today's date (e.g. `apr05-csv`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
+1. **Pick a run tag** based on today's date (e.g. `apr11-csv`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
 2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current main.
 3. **Read the in-scope files** — read every file for full context:
 
@@ -27,9 +27,14 @@ To set up a new experiment, work with the user to:
    - `cpp/include/cudf/io/detail/csv.hpp` — Detail/private API
 
    **Benchmarks (read-only, understand what's measured):**
-   - `cpp/benchmarks/io/csv/csv_reader_input.cpp` — Reader input benchmark
-   - `cpp/benchmarks/io/csv/csv_reader_options.cpp` — Reader options benchmark
+   - `cpp/benchmarks/io/csv/csv_reader_input.cpp` — Reader input benchmark (original)
+   - `cpp/benchmarks/io/csv/csv_reader_options.cpp` — Reader options benchmark (original)
+   - `cpp/benchmarks/io/csv/csv_read_realistic.cpp` — Realistic mixed-type profiles (TAXI, LOGS, ANALYTICS) — **primary**
+   - `cpp/benchmarks/io/csv/csv_read_type_inference.cpp` — Type inference vs explicit dtypes — **primary**
+   - `cpp/benchmarks/io/csv/csv_read_quoting.cpp` — Quoting density (0%, 25%, 100%) — **primary**
+   - `cpp/benchmarks/io/csv/csv_read_scale.cpp` — Scale benchmark (256MB–4GB)
    - `cpp/benchmarks/io/csv/csv_writer.cpp` — Writer benchmark
+   - `cpp/benchmarks/io/csv/csv_write_scale.cpp` — Writer scale benchmark
 
    **Tests (read-only, understand correctness constraints):**
    - `cpp/tests/io/csv_test.cpp` — Main CSV tests
@@ -43,18 +48,16 @@ To set up a new experiment, work with the user to:
    While they run, read the source code yourself. When all return, merge ideas into a ranked backlog.
 5. **Build baseline**: `build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1`
 6. **Run baseline tests**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
-7. **Establish noise floor** — run both benchmarks **3 times** without code changes:
+7. **Establish noise floor** — run `eval.sh` **3 times** without code changes:
    ```bash
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run1.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run2.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > baseline_reader_run3.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run1.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run2.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > baseline_writer_run3.log 2>&1
+   ./eval.sh results/baseline_run1
+   ./eval.sh results/baseline_run2
+   ./eval.sh results/baseline_run3
    ```
-   Extract key metrics from all 3 runs of each. Record the average AND variance. Any future improvement must exceed this noise floor to count as real.
-8. **Initialize results.tsv** with the header row and baseline entry.
-9. **Confirm and go**: Confirm setup looks good, then begin the loop.
+   Compare JSON results across the 3 runs. Record the average AND variance for each benchmark. Any future improvement must exceed this noise floor to count as real.
+8. **Initialize results.tsv** with the header row and baseline entry (exp 0).
+9. **Initialize AGENT_LOG.md** with the run header.
+10. **Begin the loop** immediately.
 
 ## What you CAN and CANNOT do
 
@@ -63,18 +66,22 @@ To set up a new experiment, work with the user to:
 - Add new internal/detail helper functions.
 - Do unlimited web searches for papers, CUDA docs, optimization guides.
 - Spawn researcher agents freely for new ideas.
+- Install MCP servers or Claude Code plugins on the fly if they help with analysis, profiling, or research (see "MCP / Plugin Installation" below).
 
 **What you CANNOT do:**
 - Modify `cpp/benchmarks/` — benchmarks define what is measured.
 - Modify `cpp/tests/` — tests define correctness. If tests fail, the code is wrong, not the tests.
-- Install new packages or add dependencies.
+- Modify `eval.sh` — the eval script is fixed.
+- Install new C++ packages or add build dependencies.
 - Download or execute code from the internet — read and learn only, write all code from scratch.
 
 ## The Goal
 
-**Get the highest throughput / lowest time for the CSV reader and writer as measured by `CSV_READER_NVBENCH` and `CSV_WRITER_NVBENCH`.** Everything is fair game: change parsing algorithms, GPU kernel implementations, memory access patterns, thread configurations, data type conversion. The only constraint is that all tests pass.
+**Optimize the CSV reader for maximum throughput on mixed-type workloads.** The primary optimization target is `CSV_READER_REALISTIC_NVBENCH` — it parses multiple data types (ints, floats, timestamps, strings) in a single `read_csv` call, which is the real-world use case. The other two primary benchmarks (`CSV_READER_TYPE_INFERENCE_NVBENCH`, `CSV_READER_QUOTING_NVBENCH`) provide coverage for type inference overhead and quoting/FSM paths.
 
-**Primary focus: CSV reader.** The reader (`reader_impl.cu`, `csv_gpu.cu`) is the performance-critical path — CSV writing is simpler and less commonly benchmarked. Prioritize reader optimizations, but don't ignore writer wins if they're easy.
+All 3 primary benchmarks are run via `./eval.sh` after every experiment. **Every experiment must report results for ALL 3 benchmarks** — not just the one you expect to improve. A change that speeds up one benchmark but regresses another is not a win.
+
+**Focus: CSV reader only.** The reader (`reader_impl.cu`, `csv_gpu.cu`) is the performance-critical path. Writer benchmarks are out of scope for this run.
 
 **Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Removing something and getting equal or better results is a great outcome — that's a simplification win.
 
@@ -83,42 +90,123 @@ To set up a new experiment, work with the user to:
 - 1% gain from deleting code = **definitely keep**
 - 0% gain + much simpler code = **keep**
 
+## Research Head Role
+
+You are not just an experiment runner — you are the **research head**. You maintain the strategic direction of the entire optimization effort.
+
+**Before every experiment**, act as research head:
+1. Read the latest `nvtx_stages.txt` — which CSV reader stage dominates? (`load_data`, `decode_data`, `infer_column_types`, etc.)
+2. Read the last few entries of `AGENT_LOG.md` — what worked, what failed, what was learned?
+3. Assess: is the current optimization direction still productive, or is it time to pivot?
+4. Spawn **1-2 small focused researcher agents** with a specific question (not broad surveys). Examples:
+   - "The decode_data stage is 70% of runtime. Find papers on GPU-parallel type conversion for mixed int/float/string columns."
+   - "Warp divergence is high in csv_gpu.cu:decode_field. Find techniques for reducing divergence when threads process different column types."
+   - "The last 2 experiments targeting shared memory tiling both regressed. Find a completely different approach to memory access optimization."
+5. Use their findings to form your hypothesis — only then proceed to implement.
+
+**Key principle**: Each experiment should be informed by research, not just intuition. Small focused research before each experiment beats large unfocused research at the start. The research head always knows WHY the next experiment is worth trying.
+
+**Researcher spawning cadence**:
+- **Start of run**: 2-3 broad researchers (algorithmic survey, GPU optimization, competing implementations)
+- **Each experiment**: 1-2 small focused researchers (targeted at the specific bottleneck you're attacking)
+- **After stall (3+ experiments without improvement)**: 2-3 deep researchers (find a fundamentally new direction)
+
 ## Output format
 
-Benchmarks print NVBench results. Extract key metrics from the log:
+`eval.sh` saves JSON results to `results/<timestamp>/` for each benchmark. It also runs NVTX stage profiling and saves the output to `nvtx_stages.txt`.
 
 ```bash
-grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run.log
+# Primary eval (every experiment)
+./eval.sh results/<tag>
+
+# Results are in:
+#   results/<tag>/CSV_READER_REALISTIC_NVBENCH.json
+#   results/<tag>/CSV_READER_TYPE_INFERENCE_NVBENCH.json
+#   results/<tag>/CSV_READER_QUOTING_NVBENCH.json
+#   results/<tag>/nvtx_stages.txt
 ```
+
+## NVTX stage profiling
+
+`eval.sh` includes NVTX stage profiling using `nsys` on the TAXI/256MB realistic benchmark. This profiles 5 instrumented stages in the CSV reader:
+
+- `csv::load_data_and_gather_row_offsets` — host-to-device data transfer and row offset detection
+- `csv::select_data_and_row_offsets` — byte range / row range selection
+- `csv::infer_column_types` — type inference pass (skipped when explicit dtypes are provided)
+- `csv::determine_column_types` — final column type determination
+- `csv::decode_data` — the main GPU parsing/decoding pass
+
+Use NVTX stage timings to identify which stage dominates before forming your hypothesis. The profiling output is in `results/<tag>/nvtx_stages.txt`.
 
 ## Logging results
 
+### results.tsv
+
 When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated).
 
-The TSV has a header row and 6 columns:
+Every experiment gets a sequential number. **Each experiment produces 3 rows** — one per primary benchmark. This ensures you always see the full picture, not just the benchmark you expected to improve.
+
+The TSV has a header row and 7 columns:
 
 ```
-commit	metric	improvement_pct	status	benchmark	description
+exp	commit	metric	improvement_pct	status	benchmark	description
 ```
 
-1. commit: short git hash (7 chars)
-2. metric: primary benchmark number (e.g. `1234 Elem/s` or `5.6 GiB/s`)
-3. improvement_pct: vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes
-4. status: `keep`, `discard`, `crash`, or `idea`
-5. benchmark: which benchmark (`csv_reader` or `csv_writer`)
-6. description: short text of what was tried
+1. exp: sequential experiment number (1, 2, 3, ...)
+2. commit: short git hash (7 chars)
+3. metric: benchmark throughput (e.g. `1234 bytes/s` or `5.6 GiB/s`)
+4. improvement_pct: vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes
+5. status: `keep`, `discard`, `crash`, or `idea`
+6. benchmark: `realistic`, `type_inference`, or `quoting`
+7. description: short text of what was tried
 
 Example:
 
 ```
-commit	metric	improvement_pct	status	benchmark	description
-a1b2c3d	1234 Elem/s	0.0	keep	csv_reader	baseline
-b2c3d4e	1358 Elem/s	+10.0	keep	csv_reader	vectorized field delimiter scanning with shared memory
-c3d4e5f	1180 Elem/s	-4.4	discard	csv_reader	warp-per-row parsing (too much divergence)
-d4e5f6g	0	0.0	crash	csv_reader	custom SIMD-style parser (compile error)
+exp	commit	metric	improvement_pct	status	benchmark	description
+0	a1b2c3d	1234 bytes/s	0.0	keep	realistic	baseline
+0	a1b2c3d	980 bytes/s	0.0	keep	type_inference	baseline
+0	a1b2c3d	1100 bytes/s	0.0	keep	quoting	baseline
+1	b2c3d4e	1358 bytes/s	+10.0	keep	realistic	vectorized field delimiter scanning
+1	b2c3d4e	1078 bytes/s	+10.0	keep	type_inference	vectorized field delimiter scanning
+1	b2c3d4e	1210 bytes/s	+10.0	keep	quoting	vectorized field delimiter scanning
+2	c3d4e5f	1180 bytes/s	-4.4	discard	realistic	warp-per-row parsing
+2	c3d4e5f	940 bytes/s	-4.1	discard	type_inference	warp-per-row parsing
+2	c3d4e5f	1050 bytes/s	-4.5	discard	quoting	warp-per-row parsing
 ```
 
 Do NOT commit results.tsv — leave it untracked.
+
+### AGENT_LOG.md
+
+Append-only narrative log. After every experiment, append one section:
+
+```markdown
+## Experiment N: <short title>
+
+**Hypothesis**: <what you changed and why>
+**Result**: <keep/discard/crash> — <one-line summary of numbers>
+
+### What worked
+- <bullet points>
+
+### What didn't
+- <bullet points>
+
+### What I learned
+- <bullet points — insights about the parser, GPU behavior, or algorithm>
+
+### Next direction
+- <what the research head plans to try next and why>
+```
+
+This file is the long-term narrative record. results.tsv is compact metrics; AGENT_LOG.md is the reasoning. Both are untracked — do NOT commit either.
+
+Initialize AGENT_LOG.md at the start of a run with a header:
+```markdown
+# Agent Log — <run tag>
+# Append-only. One section per experiment.
+```
 
 ## The experiment loop
 
@@ -142,21 +230,33 @@ LOOP FOREVER:
    Check: `tail -n 30 test.log` and `grep -c "FAILED\|PASSED" test.log`
    All tests must pass — non-negotiable.
 
-6. **Benchmark**: Run whichever benchmark is relevant to the change:
+6. **Benchmark**: Run the primary eval:
    ```bash
-   ./cpp/build/latest/benchmarks/CSV_READER_NVBENCH --devices 0 > run.log 2>&1
-   ./cpp/build/latest/benchmarks/CSV_WRITER_NVBENCH --devices 0 > run.log 2>&1
+   ./eval.sh results/<experiment_tag>
    ```
-   Extract: `grep -E "Elem/s|Bytes/s|GlobalMem BW|BWUtil|time" run.log`
+   This runs the 3 primary benchmarks (REALISTIC, TYPE_INFERENCE, QUOTING) + NVTX stage profiling. JSON results are saved to the results directory.
+
+   **Every 3rd experiment**, also run all CSV reader benchmarks for a holistic view:
+   ```bash
+   RESULTS_DIR="results/<experiment_tag>_full"
+   mkdir -p "$RESULTS_DIR"
+   for f in cpp/build/latest/benchmarks/CSV_READER_*; do
+     name=$(basename "$f")
+     "$f" --timeout 5 --json "$RESULTS_DIR/$name.json"
+   done
+   ```
 
 7. **Validate results**:
    - Is the improvement larger than the noise floor? If not, it's noise — discard.
-   - Is the improvement >20% from a minor change? Re-run twice to confirm it's real.
-   - Does it hold across ALL benchmark configs (different data types, row counts, column counts), or only one?
+   - Is the improvement >20% from a minor change? Re-run `./eval.sh` twice more to confirm it's real.
+   - Does it hold across ALL 3 primary benchmarks and their configs (different profiles, type mixes, quoting levels), or only one?
+   - Check `nvtx_stages.txt` — did the expected stage speed up, or did the gain come from elsewhere?
 
-8. **Record** in results.tsv.
+8. **Record** in results.tsv — 3 rows for this experiment (one per primary benchmark).
 
-9. **Save to memory** — after each significant discovery, use `/memory` to persist insights that will be valuable in future sessions:
+9. **Log to AGENT_LOG.md** — append one section for this experiment (see format in "Logging results" above). Include what worked, what didn't, what you learned, and where the research head plans to go next.
+
+10. **Save to memory** — after each significant discovery, use `/memory` to persist insights that will be valuable in future sessions:
    - Which optimization approaches worked and why (with specific speedup numbers)
    - Which approaches failed and why (so future sessions don't repeat them)
    - Bottlenecks discovered in the CSV parser (e.g. "delimiter scanning is memory-bound, not compute-bound")
@@ -169,13 +269,18 @@ LOOP FOREVER:
     - Improved beyond noise floor, or simpler at equal perf → **keep**
     - Within noise floor, regressed, or more complex at equal perf → **discard** with `git reset --hard HEAD~1`
 
-11. **Clean up**: `rm -f build.log test.log run.log`
+11. **Clean up**: `rm -f build.log test.log`
+    JSON results in `results/` persist across experiments — do not delete them.
 
 12. **Discipline checks** (before next iteration):
-    - **Circuit breaker**: 3 consecutive `discard` or `crash` results? You're going down the wrong path. STOP. Re-read the source code from disk, re-read results.tsv, do fresh web research, and pick a fundamentally different approach.
+    - **Stall detection**: 3+ experiments without improvement across ANY primary benchmark (including within-noise-floor results)? Enter **deep research phase**:
+      1. STOP experimenting.
+      2. Re-read source code from disk, AGENT_LOG.md, results.tsv, and NVTX stages.
+      3. Spawn **2-3 deep researcher agents** with full experiment history — they must find a fundamentally new direction.
+      4. Require a HIGH-confidence idea (backed by a paper or clear architectural insight) before the next experiment. Don't start another build cycle on a hunch.
     - **Force diversity**: 3+ variations of the same technique (e.g. different thread block sizes, different shared memory tile configs)? You're stuck in a local optimum. Try a completely different algorithm. The biggest gains come from algorithmic changes, not parameter sweeps.
-    - **Re-anchor every 5 experiments**: Re-read results.tsv end-to-end, check `/memory` for past discoveries, re-state your objective, summarize what worked and what failed, only THEN propose your next hypothesis. Long sessions cause context rot — memory is your hedge against it.
-    - **Idea backlog low** (fewer than 2-3 ideas)? Respawn 2-3 researcher agents with the current results.tsv so they know what's been tried and search in new directions.
+    - **Re-anchor every 5 experiments**: Re-read results.tsv end-to-end, AGENT_LOG.md, check `/memory` for past discoveries, re-state your objective, summarize what worked and what failed, only THEN propose your next hypothesis. Long sessions cause context rot — memory is your hedge against it.
+    - **Idea backlog low** (fewer than 2-3 ideas)? Respawn 2-3 researcher agents with results.tsv + AGENT_LOG.md so they know what's been tried and search in new directions.
 
 13. **Repeat.**
 
@@ -183,7 +288,7 @@ LOOP FOREVER:
 
 **Crashes**: If something dumb and easy to fix (typo, missing include), fix and re-run. If fundamentally broken, log `crash`, discard, move on.
 
-**Output hygiene**: Always redirect to log files. Build output can be thousands of lines:
+**Output hygiene**: Always redirect build/test output to log files. Build output can be thousands of lines:
 ```bash
 # Correct
 build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1
@@ -192,6 +297,7 @@ tail -n 20 build.log
 # Wrong — floods context
 build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON
 ```
+`eval.sh` handles its own output — JSON results go to `results/` and stdout is minimal.
 
 ## Memory — Persist Discoveries Across Sessions
 
@@ -222,7 +328,7 @@ As an example, a user might leave you running while they sleep. Each experiment 
 
 ## Budget
 
-**Unlimited.** Cost is not a concern — the only goal is maximizing performance improvements. Always use Opus 4.6 (1M context) at maximum effort for all work including subagents. Do unlimited web searches. Context auto-compacts as needed — don't worry about window limits.
+Always use Opus 4.6 (1M context) at maximum effort for all work including subagents. Do unlimited web searches. Context auto-compacts as needed — don't worry about window limits.
 
 ## CSV parser optimization areas to consider
 
@@ -235,6 +341,25 @@ When researching, look for opportunities in these CSV-specific areas:
 - **Row/column decomposition**: Better strategies for splitting work across thread blocks when rows vary in length
 - **Data type conversion**: Optimizing the hot path for common types (integers, floats, strings, dates)
 - **Duration/datetime parsing**: GPU-specific optimizations in `durations.cu` and `datetime.cuh`
+
+## MCP / Plugin Installation
+
+You may install MCP servers or Claude Code plugins on the fly during a run if they help with analysis, profiling, visualization, or research. Examples: a JSON analysis MCP, a benchmark comparison tool, a documentation fetcher.
+
+**If the MCP/plugin works without user intervention**: install it and use it immediately.
+
+**If it requires user auth, API keys, or manual setup**: do NOT block on it. Instead:
+1. Note the requirement in `SETUP_REQUIRED.md` (create if it doesn't exist):
+   ```markdown
+   ## <MCP/Plugin Name>
+   - **What**: <what it does>
+   - **Why**: <why it would help>
+   - **Setup needed**: <what the user needs to do — auth, API key, etc.>
+   - **Install command**: <the exact command to run>
+   ```
+2. Continue with the experiment loop — the user will set it up before the next session.
+
+Do NOT install MCP servers that download and execute arbitrary code from the internet. Read-only data sources and analysis tools are fine.
 
 ## Quick start
 
