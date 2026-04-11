@@ -282,6 +282,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   std::span<char const* const> extra_options,
   std::span<char const* const> name_expressions,
   bool use_pch,
+  bool use_minimal,
   bool log_pch)
 {
   CUDF_FUNC_RANGE();
@@ -311,7 +312,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   // --pch-dir
 
   options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
-  options.emplace_back("--minimal");
+
   options.emplace_back("--diag-suppress=47");
   options.emplace_back("--device-int128");
 
@@ -321,6 +322,8 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
   options.emplace_back("--device-as-default-execution-space");
   options.emplace_back("--generate-line-info");
   options.emplace_back("--dopt=on");
+
+  if (use_minimal) { options.emplace_back("--minimal"); }
 
   if (use_pch) {
     options.emplace_back("--pch");
@@ -357,13 +360,15 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
 }  // namespace
 
 kernel get_kernel(std::string const& name,
-                  std::string const& source_file_rel,
+                  std::string const& source_file_id,
                   std::span<char const* const> header_include_names,
                   std::span<char const* const> headers,
                   std::string const& kernel_instance,
                   bool use_cache,
                   bool use_pch,
-                  bool log_pch)
+                  bool use_minimal,
+                  bool log_pch,
+                  std::span<std::string const>  extra_options)
 {
   CUDF_FUNC_RANGE();
 
@@ -376,7 +381,7 @@ kernel get_kernel(std::string const& name,
   auto header_include_names_hash = hash_strings(header_include_names).to_hex_string();
   auto headers_hash              = hash_strings(headers).to_hex_string();
   auto bundle_hash               = bundle.get_hash();
-  auto source_file = std::format("{}/cudf/cpp/src/{}", bundle.get_directory(), source_file_rel);
+  auto source_file = std::format("{}/cudf/cpp/src/{}", bundle.get_directory(), source_file_id);
 
   auto cache_key = std::format(R"***(cuLibrary
 name={}
@@ -405,14 +410,19 @@ kernel_instance={}
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
     auto source     = read_blob_cstring(source_file.c_str());
+    std::vector<char const*> extra_options_cstr;
+    for (auto const& option : extra_options) {
+      extra_options_cstr.emplace_back(option.c_str());
+    }
 
     return compile_library_uncached(name.c_str(),
                                     reinterpret_cast<char const*>(source.data()),
                                     header_include_names,
                                     headers,
-                                    {},
+                                    extra_options_cstr,
                                     {},
                                     use_pch,
+                                    use_minimal,
                                     log_pch);
   };
 

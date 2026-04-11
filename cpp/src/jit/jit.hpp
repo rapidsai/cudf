@@ -76,8 +76,10 @@ kernel get_kernel(std::string const& name,
                   std::span<char const* const> header_include_names,
                   std::span<char const* const> headers,
                   std::string const& kernel_instance,
-                  bool use_cache = true,
-                  bool use_pch   = true,
-                  bool log_pch   = false);
+                  bool use_cache                             = true,
+                  bool use_pch                               = true,
+                  bool use_minimal                           = true,
+                  bool log_pch                               = false,
+                  std::span<std::string const> extra_options = {});
 
 }  // namespace CUDF_EXPORT cudf
