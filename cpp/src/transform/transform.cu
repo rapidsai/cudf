@@ -158,13 +158,13 @@ using handle        = std::variant<
 namespace jit_transform {
 
 cudf::kernel instantiate(null_aware is_null_aware,
-                            bool has_user_data,
-                            std::string const& ins,
-                            std::string const& outs,
-                            std::vector<std::string> const& ptx_input_types,
-                            std::vector<std::string> const& ptx_output_types,
-                            std::string const& udf,
-                            udf_source_type source_type)
+                         bool has_user_data,
+                         std::string const& ins,
+                         std::string const& outs,
+                         std::vector<std::string> const& ptx_input_types,
+                         std::vector<std::string> const& ptx_output_types,
+                         std::string const& udf,
+                         udf_source_type source_type)
 {
   CUDF_FUNC_RANGE();
   auto cuda_source = (source_type == udf_source_type::PTX)
@@ -175,10 +175,13 @@ cudf::kernel instantiate(null_aware is_null_aware,
                        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
-                 rtcx::reflect_enum(is_null_aware),rtcx::reflect_bool(has_user_data), ins, outs);
+                                       rtcx::reflect_enum(is_null_aware),
+                                       rtcx::reflect_bool(has_user_data),
+                                       ins,
+                                       outs);
 
   return jit::get_udf_kernel(
-   "transform/jit/kernel.cu", kernel, cuda_source, {"-restrict", "--dopt=on"});
+    "transform/jit/kernel.cu", kernel, cuda_source, {"-restrict", "--dopt=on"});
 }
 
 void launch(cudf::kernel const& kernel_obj,
@@ -192,8 +195,8 @@ void launch(cudf::kernel const& kernel_obj,
 {
   CUDF_FUNC_RANGE();
   void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &input_cols, &output_cols};
-  auto kernel = kernel_obj.get();
-  auto cfg = kernel.max_occupancy_config(0, 0);
+  auto kernel  = kernel_obj.get();
+  auto cfg     = kernel.max_occupancy_config(0, 0);
   kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 

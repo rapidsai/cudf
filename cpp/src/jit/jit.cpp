@@ -368,7 +368,7 @@ kernel get_kernel(std::string const& name,
                   bool use_pch,
                   bool use_minimal,
                   bool log_pch,
-                  std::span<std::string const>  extra_options)
+                  std::span<std::string const> extra_options)
 {
   CUDF_FUNC_RANGE();
 
