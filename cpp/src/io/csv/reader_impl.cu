@@ -26,6 +26,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/codec.hpp>
@@ -248,6 +249,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   bool load_whole_file,
   rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range rng{"csv::load_data_and_gather_row_offsets"};
   constexpr size_t default_chunk_bytes = 64 * 1024 * 1024;  // 64MB
 
   auto const data_size      = data.has_value() ? data->size() : source->size();
@@ -444,6 +446,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
   parse_options const& parse_opts,
   rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range rng{"csv::select_data_and_row_offsets"};
   auto range_offset  = reader_opts.get_byte_range_offset();
   auto range_size    = reader_opts.get_byte_range_size();
   auto skip_rows     = reader_opts.get_skiprows();
@@ -580,6 +583,7 @@ void infer_column_types(parse_options const& parse_opts,
                         host_span<data_type> column_types,
                         rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range rng{"csv::infer_column_types"};
   if (num_records == 0) {
     for (auto col_idx = 0u; col_idx < column_flags.size(); ++col_idx) {
       if (column_flags[col_idx] & column_parse::inferred) {
@@ -653,6 +657,7 @@ decode_result decode_data(parse_options const& parse_opts,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
+  cudf::scoped_range rng{"csv::decode_data"};
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
   out_buffers.reserve(column_types.size());
@@ -728,6 +733,7 @@ cudf::detail::host_vector<data_type> determine_column_types(
   cudf::size_type num_active_columns,
   rmm::cuda_stream_view stream)
 {
+  cudf::scoped_range rng{"csv::determine_column_types"};
   std::vector<data_type> column_types(column_flags.size());
 
   std::visit(cudf::detail::visitor_overload{
