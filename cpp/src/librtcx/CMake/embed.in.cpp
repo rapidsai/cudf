@@ -187,7 +187,7 @@ embed_output generate_cxx_source_files_data(std::string_view id,
 
   if (compress) {
     std::cout << std::format(
-      "-- Compressed {}'s  binary from {} bytes to {} bytes (compression ratio: {:.2f})\n",
+      "-- Compressed {}'s binary from {} bytes to {} bytes (compression ratio: {:.2f})\n",
       id,
       uncompressed_files_bytes.size(),
       compressed_files_bytes.size(),
