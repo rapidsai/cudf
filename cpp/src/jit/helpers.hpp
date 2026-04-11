@@ -89,8 +89,7 @@ input_reflection reflect_input(std::variant<column_view, scalar_column_view> con
 std::vector<input_reflection> reflect_inputs(
   std::span<std::variant<column_view, scalar_column_view> const> inputs);
 
-kernel get_udf_kernel(std::string const& name,
-                      std::string const& source_file,
+kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
                       std::string const& udf_cuda_source);
 

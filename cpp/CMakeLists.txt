@@ -352,8 +352,8 @@ jit_add_include_directory(
 )
 
 jit_add_include_directory(
-  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling/jit DEST_DIRECTORY
-  cudf/cpp/src/rolling/jit INCLUDE_DIRECTORIES cudf/cpp/src
+  cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
+  cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
 jit_add_include_directory(

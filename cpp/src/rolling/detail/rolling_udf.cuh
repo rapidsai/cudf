@@ -42,7 +42,7 @@ std::string reflect_window_wrapper()
 }
 
 // Applies a user-defined rolling window function to the values in a column.
-std::unique_ptr<column> rolling_window_udf(
+static std::unique_ptr<column> rolling_window_udf(
   column_view const& input,
   std::string const& preceding_window_str,
   cudf::detail::window_wrapper_base const& preceding_window,
@@ -95,10 +95,7 @@ std::unique_ptr<column> rolling_window_udf(
                            preceding_window_str,
                            following_window_str);
 
-  auto kernel = cudf::jit::get_udf_kernel("cudf/cpp/src/rolling/jit/kernel.cu",
-                                          "cudf/cpp/src/rolling/jit/kernel.cu",
-                                          kernel_reflection,
-                                          cuda_source);
+  auto kernel = cudf::jit::get_udf_kernel("rolling/jit/kernel.cu", kernel_reflection, cuda_source);
   auto cfg    = kernel.max_occupancy_config(0, 0);
   kernel.launch_with({cfg.min_grid_size},
                      {cfg.block_size},

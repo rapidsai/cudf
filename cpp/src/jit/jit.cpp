@@ -74,6 +74,40 @@ void install_file(char const* dst_path, std::span<std::uint8_t const> contents)
   }
 }
 
+/**
+ * @brief Reads the contents of a file into a byte buffer and null-terminates it to allow for safe
+ * usage as a C-string.
+ */
+rtcx::byte_buffer read_blob_cstring(char const* path)
+{
+  int32_t fd = open(path, O_RDONLY);
+  if (fd == -1) { throw_posix(std::format("Failed to open file ({})", path), "open"); }
+
+  RTCX_DEFER([&] {
+    if (close(fd) == -1) { throw_posix(std::format("Failed to close file ({})", path), "close"); }
+  });
+
+  auto file_size = lseek(fd, 0, SEEK_END);
+  if (file_size == -1) {
+    throw_posix(std::format("Failed to determine size of file ({})", path), "lseek");
+  }
+  // TODO: make all read/write syscalls call read/write in a loop
+
+  if (lseek(fd, 0, SEEK_SET) == -1) {
+    throw_posix(std::format("Failed to reset file offset for file ({})", path), "lseek");
+  }
+
+  auto contents = rtcx::byte_buffer::make(file_size + 1U);  // +1 for null terminator
+
+  if (read(fd, contents.data(), file_size) == -1) {
+    throw_posix(std::format("Failed to read file ({})", path), "read");
+  }
+
+  contents.data()[file_size] = '\0';  // null-terminate the buffer
+
+  return contents;
+}
+
 rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
                                   size_t uncompressed_size,
                                   std::string_view compression)
@@ -323,7 +357,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
 }  // namespace
 
 kernel get_kernel(std::string const& name,
-                  std::string const& source_file,
+                  std::string const& source_file_rel,
                   std::span<char const* const> header_include_names,
                   std::span<char const* const> headers,
                   std::string const& kernel_instance,
@@ -342,8 +376,10 @@ kernel get_kernel(std::string const& name,
   auto header_include_names_hash = hash_strings(header_include_names).to_hex_string();
   auto headers_hash              = hash_strings(headers).to_hex_string();
   auto bundle_hash               = bundle.get_hash();
+  auto source_file = std::format("{}/cudf/cpp/src/{}", bundle.get_directory(), source_file_rel);
 
   auto cache_key = std::format(R"***(cuLibrary
+name={}
 binary_type=CUBIN
 cuda_runtime={}
 cuda_driver={}
@@ -354,6 +390,7 @@ header_include_names={}
 headers={}
 kernel_instance={}
 )***",
+                               name,
                                runtime,
                                driver,
                                sm,
@@ -366,20 +403,14 @@ kernel_instance={}
   auto cache_key_sha256 = hash_string(cache_key);
 
   auto compile = [&] {
-    auto bundle_dir             = cudf::get_context().jit_bundle().get_directory();
-    auto source                 = std::format(R"***(
-#include "{}"
-    )***",
-                              source_file);
-    auto kernel_instance_define = std::format("-DKERNEL_INSTANCE=\"{}\"", kernel_instance);
-
-    char const* options[] = {kernel_instance_define.c_str()};
+    auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
+    auto source     = read_blob_cstring(source_file.c_str());
 
     return compile_library_uncached(name.c_str(),
                                     reinterpret_cast<char const*>(source.data()),
                                     header_include_names,
                                     headers,
-                                    options,
+                                    {},
                                     {},
                                     use_pch,
                                     log_pch);

@@ -115,10 +115,7 @@ kernel build_join_filter_kernel(std::string const& predicate_code,
   auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
 
   // Get compiled kernel
-  return cudf::jit::get_udf_kernel("cudf/cpp/src/join/jit/filter_join_kernel.cu",
-                                   "cudf/cpp/src/join/jit/filter_join_kernel.cu",
-                                   kernel_name,
-                                   cuda_source);
+  return cudf::jit::get_udf_kernel("join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
 }
 
 // Launch the JIT kernel for join filtering
@@ -509,10 +506,8 @@ filter_join_indices_jit(cudf::table_view const& left,
     cudf::jit::parse_single_function_cuda(filter_result.udf, "GENERIC_JOIN_FILTER_OP");
 
   auto kernel_name = rtcx::reflect_template("cudf::join::jit::filter_join_kernel", template_args);
-  auto kernel      = cudf::jit::get_udf_kernel("cudf/cpp/src/join/jit/filter_join_kernel.cu",
-                                          "cudf/cpp/src/join/jit/filter_join_kernel.cu",
-                                          kernel_name,
-                                          cuda_source);
+  auto kernel =
+    cudf::jit::get_udf_kernel("join/jit/filter_join_kernel.cu", kernel_name, cuda_source);
 
   // Collect scalar columns to append to left device views so join_scalar_accessor
   // can read them at indices >= left.num_columns().

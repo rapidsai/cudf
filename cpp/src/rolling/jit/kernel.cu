@@ -13,6 +13,7 @@
                     // it. Each UDF will have a different operation-udf.hpp generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 
 struct rolling_udf_ptx {

@@ -102,10 +102,7 @@ kernel build_transform_kernel(std::string_view kernel_name,
     build_jit_template_params(
       is_null_aware, may_evaluate_null, has_user_data, {}, output_typenames, input_reflections));
 
-  return cudf::jit::get_udf_kernel("cudf/cpp/src/transform/jit/kernel.cu",
-                                   "cudf/cpp/src/transform/jit/kernel.cu",
-                                   kernel_reflection,
-                                   cuda_source);
+  return cudf::jit::get_udf_kernel("transform/jit/kernel.cu", kernel_reflection, cuda_source);
 }
 
 kernel build_span_kernel(std::string_view kernel_name,
@@ -137,10 +134,7 @@ kernel build_span_kernel(std::string_view kernel_name,
     build_jit_template_params(
       is_null_aware, may_evaluate_null, has_user_data, span_outputs, {}, input_reflections));
 
-  return cudf::jit::get_udf_kernel("cudf/cpp/src/transform/jit/kernel.cu",
-                                   "cudf/cpp/src/transform/jit/kernel.cu",
-                                   kernel_reflection,
-                                   cuda_source);
+  return cudf::jit::get_udf_kernel("transform/jit/kernel.cu", kernel_reflection, cuda_source);
 }
 
 column_view to_column_view(column_view const& col) { return col; }

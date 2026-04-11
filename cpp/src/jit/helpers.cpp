@@ -133,22 +133,26 @@ std::vector<input_reflection> reflect_inputs(
   return reflections;
 }
 
-kernel get_udf_kernel(std::string const& name,
-                      std::string const& source_file,
+kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
                       std::string const& udf_cuda_source)
 {
   CUDF_FUNC_RANGE();
 
-  char const* include_names[]   = {"cudf/detail/operation-udf.hpp"};
-  char const* include_headers[] = {udf_cuda_source.c_str()};
+  auto kernel_instance_source   = std::format(R"***(
+#define KERNEL_INSTANCE {}
+)***",
+                                            kernel_name);
+  char const* include_names[]   = {"cudf/detail/operation-udf.hpp",
+                                   "cudf/detail/kernel-instance.hpp"};
+  char const* include_headers[] = {udf_cuda_source.c_str(), kernel_instance_source.c_str()};
 
   int constexpr min_pch_runtime_version = 12800;  // CUDA 12.8
 
   int runtime_version;
   CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
 
-  return get_kernel(name,
+  return get_kernel(std::format("{}.jit.cu", source_file),
                     source_file,
                     include_names,
                     include_headers,

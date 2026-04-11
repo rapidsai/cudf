@@ -23,6 +23,7 @@
 // clang-format off
 // This header is an inlined header that defines the GENERIC_FILTER_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 

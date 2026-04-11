@@ -37,6 +37,7 @@
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
