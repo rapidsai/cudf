@@ -35,7 +35,7 @@ import rmm.mr
 import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.dsl.ir import Cache, Filter, Join, Projection, Select
+from cudf_polars.dsl.ir import Cache, Filter, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
@@ -211,6 +211,16 @@ def _remap_scheme_simple(
     return scheme  # None or "inherit" passes through unchanged
 
 
+def _hstack_to_select(hstack: HStack) -> Select:
+    """Translate HStack to the equivalent Select node."""
+    col_map = {ne.name: ne for ne in hstack.columns}
+    exprs = tuple(
+        col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+        for name, dtype in hstack.schema.items()
+    )
+    return Select(hstack.schema, exprs, hstack.should_broadcast, hstack.children[0])
+
+
 def maybe_remap_partitioning(
     ir: IR, partitioning: Partitioning | None, *, child_ir: IR | None = None
 ) -> Partitioning | None:
@@ -241,7 +251,10 @@ def maybe_remap_partitioning(
     """
     if partitioning is None:
         return None  # Nothing to preserve
-    if isinstance(ir, Select):
+    if isinstance(ir, (Select, HStack)):
+        if isinstance(ir, HStack):
+            # HStack is a special case of Select
+            ir = _hstack_to_select(ir)
         return Partitioning(
             inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
             local=_remap_scheme_select(ir, partitioning.local),
@@ -507,11 +520,11 @@ async def chunkwise_evaluate(
     if tracer is not None and metadata.duplicated:
         tracer.set_duplicated()
 
-    seq_num = 0
     received_any = False
     while (msg := await ch_in.recv(context)) is not None:
         received_any = True
         cd = msg.get_content_description()
+        seq_num = msg.sequence_number
         with cudf_polars.dsl.tracing.bound_contextvars(
             content_sizes=cd.content_sizes,
             spillable=cd.spillable,
@@ -524,7 +537,6 @@ async def chunkwise_evaluate(
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
         await ch_out.send(context, Message(seq_num, result))
-        seq_num += 1
 
     if handle_empty_input and not received_any:
         chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
@@ -532,7 +544,7 @@ async def chunkwise_evaluate(
         del chunk
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
+        await ch_out.send(context, Message(0, result))
 
     await ch_out.drain(context)
 

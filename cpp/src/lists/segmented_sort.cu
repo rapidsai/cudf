@@ -37,7 +37,7 @@ std::unique_ptr<column> build_output_offsets(lists_column_view const& input,
 {
   auto output_offset = make_numeric_column(
     input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input.offsets_begin(),
                     input.offsets_end(),
                     output_offset->mutable_view().begin<size_type>(),

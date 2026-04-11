@@ -32,7 +32,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_numeric_column(data_type{type_id::BOOL8}, 0, mask_state::UNALLOCATED, stream);
+    return make_numeric_column(data_type{type_id::BOOL8}, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   CUDF_EXPECTS(true_string.is_valid(stream) && true_string.size() > 0,

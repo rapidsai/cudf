@@ -85,7 +85,8 @@ static std::unique_ptr<column> rolling_window_udf(
     udf_agg._output_type, input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
-  cudf::detail::device_scalar<size_type> device_valid_count{0, stream};
+  cudf::detail::device_scalar<size_type> device_valid_count{
+    0, stream, cudf::get_current_device_resource_ref()};
 
   auto kernel_reflection =
     rtcx::reflect_template("cudf::rolling::jit::rolling_window_kernel",

@@ -816,7 +816,7 @@ async def sink_node(
         count_width = math.ceil(math.log10(metadata.local_count))
         count_width = max(count_width, 6)
 
-        if ir.executor_options.sink_to_directory:
+        if ir.sink_to_directory:
             _prepare_sink_directory(ir.sink.path)
             i = 0
             while (msg := await ch_in.recv(context)) is not None:

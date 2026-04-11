@@ -697,8 +697,8 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - clang==20.1.4
-          - clang-tools==20.1.4
+          - clang==20.1.8
+          - clang-tools==20.1.8
   iwyu:
     common:
       - output_types: conda

@@ -54,15 +54,6 @@ size_type get_projection_size(std::span<std::variant<column_view, scalar_column_
                            thrust::make_transform_iterator(inputs.end(), get_size));
 }
 
-std::string input_reflection::accessor(int32_t index) const
-{
-  auto column_accessor =
-    rtcx::reflect_template("cudf::jit::column_accessor", type_name, rtcx::reflect_int(index));
-
-  return is_scalar ? rtcx::reflect_template("cudf::jit::scalar_accessor", column_accessor)
-                   : column_accessor;
-}
-
 std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> output_typenames,
                                                  std::span<std::string const> input_typenames,
                                                  bool has_user_data)
@@ -86,56 +77,22 @@ std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> ou
   return params;
 }
 
-std::vector<std::string> output_type_names(std::span<mutable_column_view const> views)
-{
-  std::vector<std::string> names;
-
-  std::transform(views.begin(), views.end(), std::back_inserter(names), [](auto const& view) {
-    return type_to_name(view.type());
-  });
-
-  return names;
-}
-
 std::vector<std::string> input_type_names(
   std::span<std::variant<column_view, scalar_column_view> const> views)
 {
   std::vector<std::string> names;
-  auto get_type_name = [](auto const& var) {
-    return std::visit([](auto& a) { return type_to_name(a.type()); }, var);
-  };
 
   std::transform(views.begin(), views.end(), std::back_inserter(names), [&](auto const& view) {
-    return get_type_name(view);
+    return std::visit([](auto& a) { return type_to_name(a.type()); }, view);
   });
 
   return names;
 }
 
-input_reflection reflect_input(std::variant<column_view, scalar_column_view> const& input)
-{
-  auto get_type_name = [](auto const& var) {
-    return std::visit([](auto& a) { return type_to_name(a.type()); }, var);
-  };
-
-  return input_reflection{get_type_name(input), std::holds_alternative<scalar_column_view>(input)};
-}
-
-std::vector<input_reflection> reflect_inputs(
-  std::span<std::variant<column_view, scalar_column_view> const> inputs)
-{
-  std::vector<input_reflection> reflections;
-  std::transform(
-    inputs.begin(), inputs.end(), std::back_inserter(reflections), [&](auto const& view) {
-      return reflect_input(view);
-    });
-
-  return reflections;
-}
-
 kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
-                      std::string const& udf_cuda_source)
+                      std::string const& udf_cuda_source,
+                               std::vector<std::string> const& extra_options)
 {
   CUDF_FUNC_RANGE();
 
@@ -147,19 +104,29 @@ kernel get_udf_kernel(std::string const& source_file,
                                    "cudf/detail/kernel-instance.hpp"};
   char const* include_headers[] = {udf_cuda_source.c_str(), kernel_instance_source.c_str()};
 
-  int constexpr min_pch_runtime_version = 12800;  // CUDA 12.8
+  constexpr int  min_pch_cuda_version = 12800;  // CUDA 12.8
+  constexpr int min_minimal_cuda_version = 12800;  // CUDA 12.8
 
   int runtime_version;
   CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
 
-  return get_kernel(std::format("{}.jit.cu", source_file),
+  std::vector<std::string> options;
+  options.emplace_back("-arch=sm_.");
+
+
+
+
+
+  return   get_kernel(std::format("{}.jit.cu", source_file),
                     source_file,
                     include_names,
                     include_headers,
                     kernel_name,
                     true,  // TODO: use context config
-                    runtime_version >= min_pch_runtime_version,
-                    false  // TODO: use context config
+                    runtime_version >= min_pch_cuda_version,
+                    runtime_version >= min_minimal_cuda_version,
+                    false,  // TODO: use context config
+                    extra_options
   );
 }
 

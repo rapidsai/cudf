@@ -976,8 +976,10 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     auto const num_string_cols = string_col_indices.size();
     if (num_string_cols > 0) {
       auto const quotechar = parse_opts.quotechar;
-      cudf::string_scalar quotechar_scalar(std::string(1, quotechar), true, stream);
-      cudf::string_scalar dblquotechar_scalar(std::string(2, quotechar), true, stream);
+      cudf::string_scalar quotechar_scalar(
+        std::string(1, quotechar), true, stream, cudf::get_current_device_resource_ref());
+      cudf::string_scalar dblquotechar_scalar(
+        std::string(2, quotechar), true, stream, cudf::get_current_device_resource_ref());
       constexpr size_t max_tasks = 4;
       auto const cols_per_task   = cudf::util::div_rounding_up_safe(num_string_cols, max_tasks);
       auto const num_tasks       = cudf::util::div_rounding_up_safe(num_string_cols, cols_per_task);
@@ -996,7 +998,9 @@ table_with_metadata read_csv(cudf::io::datasource* source,
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);
         } else {
           auto replaced_all_col = cudf::strings::detail::replace(
-            cudf::make_strings_column(*buffer->_strings, col_stream)->view(),
+            cudf::make_strings_column(
+              *buffer->_strings, col_stream, cudf::get_current_device_resource_ref())
+              ->view(),
             dblquotechar_scalar,
             quotechar_scalar,
             -1,
