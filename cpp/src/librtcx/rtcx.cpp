@@ -22,17 +22,12 @@
 
 #include <atomic>
 #include <cerrno>
-#include <charconv>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <format>
 #include <numeric>
 #include <source_location>
-
-extern "C" {
-#include <openssl/evp.h>
-}
 
 #define RTCX_EXPECTS(_condition, _reason, _exception_type)                               \
   do {                                                                                   \
@@ -107,7 +102,7 @@ extern "C" {
     }                                                                                          \
   } while (0)
 
-namespace RTCX_EXPORT rtcx {
+namespace rtcx {
 
 namespace {
 
@@ -156,58 +151,6 @@ void log_trace(std::string_view message)
 {
   ::fprintf(
     stdout, "[RTCX TRACE] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
-}
-
-sha256 sha256::parse(std::string_view hex)
-{
-  RTCX_EXPECTS(
-    hex.size() == 64,
-    std::format(
-      "Invalid SHA256 hex string length, expected 64 got {} (sha: `{}`)", hex.size(), hex),
-    std::invalid_argument);
-  sha256 hash;
-  for (std::size_t i = 0; i < 32; ++i) {
-    auto hex_byte  = hex.substr(i * 2, 2);
-    auto [ptr, ec] = std::from_chars(hex_byte.begin(), hex_byte.end(), hash.data_[i], 16);
-    RTCX_EXPECTS(
-      ec == std::errc(), "Invalid hex character in SHA256 string", std::invalid_argument);
-  }
-  return hash;
-}
-
-sha256_context::sha256_context() : ectx_(nullptr)
-{
-  const EVP_MD* type = EVP_sha256();
-  ectx_              = EVP_MD_CTX_new();
-  RTCX_EXPECTS(ectx_ != nullptr, "EVP_MD_CTX_new failed", std::runtime_error);
-  RTCX_EXPECTS(
-    EVP_DigestInit_ex(ectx_, type, nullptr) == 1, "EVP_DigestInit_ex failed", std::runtime_error);
-}
-
-sha256_context::~sha256_context()
-{
-  if (ectx_ != nullptr) { EVP_MD_CTX_free(ectx_); }
-}
-
-void sha256_context::update(std::span<std::uint8_t const> data)
-{
-  RTCX_EXPECTS(EVP_DigestUpdate(ectx_, data.data(), data.size()) == 1,
-               "EVP_DigestUpdate failed",
-               std::runtime_error);
-}
-
-sha256 sha256_context::finalize()
-{
-  sha256 hash;
-  std::uint32_t length = 0;
-  RTCX_EXPECTS(EVP_DigestFinal_ex(ectx_, hash.data_, &length) == 1,
-               "EVP_DigestFinal_ex failed",
-               std::runtime_error);
-  RTCX_EXPECTS(length == sizeof(sha256::data_), "Unexpected SHA256 length", std::runtime_error);
-  EVP_MD const* type = EVP_sha256();
-  RTCX_EXPECTS(
-    EVP_DigestInit_ex(ectx_, type, nullptr) == 1, "EVP_DigestInit_ex failed", std::runtime_error);
-  return hash;
 }
 
 #define FOR_EACH_CUDA_FUNC(DO_IT)       \
@@ -1428,4 +1371,4 @@ std::string reflect_template(std::string_view template_name,
   return std::format("{}<{}>", template_name, join_strings(template_args, ", "));
 }
 
-}  // namespace RTCX_EXPORT rtcx
+}  // namespace rtcx

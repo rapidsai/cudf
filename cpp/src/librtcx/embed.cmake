@@ -5,8 +5,11 @@
 # cmake-format: on
 # =============================================================================
 
-find_package(OpenSSL REQUIRED COMPONENTS Crypto)
-find_package(zstd REQUIRED)
+if(NOT TARGET zstd)
+  message(
+    FATAL_ERROR "zstd library is required for JIT embedding. Please ensure it is found by CMake."
+  )
+endif()
 
 # This function registers a directory of include files to be embedded for JIT compilation. It
 # gathers the specified files, their destinations, and include directories, and stores them in
@@ -131,10 +134,11 @@ function(jit_embed)
 
   add_executable("${TARGET}__jit_embed_run" EXCLUDE_FROM_ALL "${CONFIGURED_EMBED_SCRIPT}")
   target_include_directories("${TARGET}__jit_embed_run" PRIVATE ${ZSTD_INCLUDE_DIR})
-  target_link_libraries("${TARGET}__jit_embed_run" PRIVATE ${CMAKE_DL_LIBS} zstd OpenSSL::Crypto)
+  target_link_libraries("${TARGET}__jit_embed_run" PRIVATE ${CMAKE_DL_LIBS} zstd)
   set_target_properties(
     "${TARGET}__jit_embed_run" PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
   )
+  target_include_directories("${TARGET}__jit_embed_run" PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin

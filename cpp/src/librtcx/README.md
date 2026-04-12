@@ -12,7 +12,6 @@ RTCX (runtime-compiler extended) is a wrapper around NVRTC and NVJitLink designe
 
 ## Build-Scripting Requirements
 - CMake
-- LibOpenSSL - for binary hashing
 - LibZSTD - for binary compression
 
 ## Runtime Requirements

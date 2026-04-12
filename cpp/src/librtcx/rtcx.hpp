@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "sha256.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
@@ -20,8 +22,6 @@
 #include <utility>
 #include <vector>
 
-#define RTCX_EXPORT __attribute__((visibility("default")))
-
 #define RTCX_DEFER__CONCATENATE_DETAIL(x, y) x##y
 #define RTCX_DEFER__CONCATENATE(x, y)        RTCX_DEFER__CONCATENATE_DETAIL(x, y)
 #define RTCX_DEFER(...)                      ::rtcx::defer RTCX_DEFER__CONCATENATE(defer_, __COUNTER__)(__VA_ARGS__)
@@ -34,7 +34,7 @@ typedef struct CUkern_st* CUkernel;
 typedef struct CUstream_st* CUstream;
 }
 
-namespace RTCX_EXPORT rtcx {
+namespace rtcx {
 
 inline constexpr std::size_t CACHELINE_ALIGNMENT =
   64;  // = std::hardware_destructive_interference_size */
@@ -106,42 +106,6 @@ func(void*, R (*)(void*, Args...)) -> func<R(Args...)>;
 template <typename R, typename... Args>
 func(R (*)(Args...)) -> func<R(Args...)>;
 
-struct [[nodiscard]] sha256_hex_string {
-  char data_[65];
-
-  constexpr std::string_view view() const { return std::string_view{data_, 64}; }
-
-  constexpr operator std::string_view() const { return view(); }
-
-  [[nodiscard]] char const* data() const { return data_; }
-
-  [[nodiscard]] char const* c_str() const { return data_; }
-
-  static constexpr std::size_t size() { return 64; }
-
-  static sha256_hex_string make(std::span<std::uint8_t const, 32> input)
-  {
-    constexpr char const HEX_CHARS[] = "0123456789abcdef";
-    sha256_hex_string hex;
-    for (std::size_t i = 0; i < 32; ++i) {
-      hex.data_[i * 2]     = HEX_CHARS[(input[i] >> 4) & 0x0F];
-      hex.data_[i * 2 + 1] = HEX_CHARS[input[i] & 0x0F];
-    }
-    hex.data_[64] = '\0';
-    return hex;
-  }
-};
-
-struct [[nodiscard]] sha256 {
-  alignas(16) std::uint8_t data_[32];
-
-  constexpr bool operator==(sha256 const&) const = default;
-
-  sha256_hex_string to_hex_string() const { return sha256_hex_string::make(data_); }
-
-  static sha256 parse(std::string_view hex);
-};
-
 struct [[nodiscard]] sha256_hasher {
   constexpr std::uint64_t operator()(sha256 const& obj) const
   {
@@ -162,31 +126,6 @@ struct [[nodiscard]] sha256_hasher {
 
     return mix(mix(mix(h0, h1), h2), h3);
   }
-};
-
-struct [[nodiscard]] sha256_context {
- private:
-  EVP_MD_CTX* ectx_;
-
- public:
-  sha256_context();
-  sha256_context(sha256_context const& other)            = delete;
-  sha256_context& operator=(sha256_context const& other) = delete;
-  sha256_context(sha256_context&& other) : ectx_(other.ectx_) { other.ectx_ = nullptr; }
-
-  sha256_context& operator=(sha256_context&& other)
-  {
-    if (this == &other) [[unlikely]] { return *this; }
-    this->~sha256_context();
-    new (this) sha256_context(std::move(other));
-    return *this;
-  }
-
-  ~sha256_context();
-
-  void update(std::span<std::uint8_t const> data);
-
-  sha256 finalize();
 };
 
 enum class binary_type : std::int8_t { LTO_IR = 0, CUBIN = 2, FATBIN = 3, PTX = 4 };
@@ -1028,4 +967,4 @@ std::string reflect_template(std::string_view template_name, TemplateArgs&&... t
   return reflect_template(template_name, tparams);
 }
 
-}  // namespace RTCX_EXPORT rtcx
+}  // namespace rtcx

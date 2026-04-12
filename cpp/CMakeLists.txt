@@ -300,11 +300,11 @@ include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
 
-# JIT Embedding helper functions
-include(src/librtcx/CMake/embed.cmake)
-
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
+
+# JIT Embedding helper functions
+include(src/librtcx/embed.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -908,7 +908,9 @@ add_library(
 )
 
 add_dependencies(cudf cudf_jit_embed)
-target_include_directories(cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIRS})
+target_include_directories(
+  cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/src/librtcx
+)
 
 foreach(incbin_dir IN LISTS cudf_jit_embed_INCLUDE_DIRS)
   target_compile_options(cudf PRIVATE $<$<COMPILE_LANGUAGE:ASM>:-Wa,-I${incbin_dir}>)

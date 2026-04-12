@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "sha256.hpp"
+
 #include <fcntl.h>
-#include <openssl/evp.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <zstd.h>
@@ -73,7 +74,6 @@ struct embed_output {
   std::string asm_source;
   std::string bin_file_name;
   std::vector<uint8_t> bin_file_data;
-  std::vector<uint8_t> hash;
 };
 
 std::vector<uint8_t> load_file_bytes(std::string_view file_path)
@@ -119,38 +119,17 @@ std::vector<uint8_t> compress_bytes(std::span<uint8_t const> bytes, std::string_
   return compressed;
 }
 
-std::vector<uint8_t> compute_embed_hash(std::span<uint8_t const> uncompressed_files_bytes,
-                                        std::span<uint8_t const> merged_dests_bytes,
-                                        std::span<uint8_t const> merged_include_dirs_bytes,
-                                        std::string_view compression)
+rtcx::sha256 compute_embed_hash(std::span<uint8_t const> uncompressed_files_bytes,
+                                std::span<uint8_t const> merged_dests_bytes,
+                                std::span<uint8_t const> merged_include_dirs_bytes,
+                                std::string_view compression)
 {
-  std::vector<uint8_t> hash(EVP_MD_size(EVP_sha256()));
-  EVP_MD_CTX* sha = EVP_MD_CTX_new();
-  if (sha == nullptr) { throw std::runtime_error("Failed to allocate EVP_MD_CTX"); }
-
-  DEFER([&] { EVP_MD_CTX_free(sha); });
-
-  if (EVP_DigestInit_ex(sha, EVP_sha256(), nullptr) != 1) {
-    throw std::runtime_error("EVP_DigestInit_ex failed");
-  }
-
-  if (EVP_DigestUpdate(sha, uncompressed_files_bytes.data(), uncompressed_files_bytes.size()) !=
-        1 ||
-      EVP_DigestUpdate(sha, merged_dests_bytes.data(), merged_dests_bytes.size()) != 1 ||
-      EVP_DigestUpdate(sha, merged_include_dirs_bytes.data(), merged_include_dirs_bytes.size()) !=
-        1 ||
-      EVP_DigestUpdate(sha, compression.data(), compression.size()) != 1) {
-    throw std::runtime_error("EVP_DigestUpdate failed");
-  }
-
-  auto hash_size = static_cast<unsigned>(hash.size());
-  if (EVP_DigestFinal_ex(sha, hash.data(), &hash_size) != 1) {
-    throw std::runtime_error("EVP_DigestFinal_ex failed");
-  }
-
-  hash.resize(hash_size);
-
-  return hash;
+  rtcx::sha256_context ctx;
+  ctx.update(uncompressed_files_bytes);
+  ctx.update(merged_dests_bytes);
+  ctx.update(merged_include_dirs_bytes);
+  ctx.update(std::span{reinterpret_cast<const uint8_t*>(compression.data()), compression.size()});
+  return ctx.finalize();
 }
 
 template <typename Container, typename Formatter>
@@ -315,9 +294,7 @@ rtcx_embed_{}_files_begin:
     .cxx_source    = "",
     .asm_source    = asm_source,
     .bin_file_name = binary_file_name,
-    .bin_file_data = compress ? compressed_files_bytes : uncompressed_files_bytes,
-    .hash          = std::move(hash),
-  };
+    .bin_file_data = compress ? compressed_files_bytes : uncompressed_files_bytes};
 }
 
 void generate_embed(std::string_view id,
