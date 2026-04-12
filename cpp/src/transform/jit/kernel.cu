@@ -35,7 +35,10 @@ namespace cudf {
 namespace jit {
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
-template <null_aware is_null_aware, bool has_user_data, typename Ins, typename Outs>
+template <null_aware is_null_aware,
+          bool has_user_data,
+          typename InputAccessors,
+          typename OutputAccessors>
 CUDF_KERNEL void transform_kernel(size_type row_size,
                                   bitmask_type const* __restrict__ stencil,
                                   bool stencil_has_nulls,
@@ -51,14 +54,14 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
     if constexpr (is_null_aware == null_aware::NO) {
       if (stencil_has_nulls && !bit_is_set(stencil, element_idx)) { continue; }
 
-      auto outs = Outs::map([&]<typename... A>() {
+      auto outs = OutputAccessors::map([&]<typename... A>() {
         return cuda::std::tuple{A::output_arg(output_cols, element_idx)...};
       });
 
       auto out_ptrs =
         cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      auto inputs = Ins::map(
+      auto inputs = InputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, element_idx)...}; });
 
       if constexpr (has_user_data) {
@@ -72,20 +75,20 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
         cuda::std::apply([](auto&&... a) { GENERIC_TRANSFORM_OP(a...); }, args);
       }
 
-      Outs::map([&]<typename... A>() {
+      OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, element_idx, cuda::std::get<A::index>(outs)), ...);
       });
     } else {
-      bool is_valid[Outs::size];
+      bool is_valid[OutputAccessors::size];
 
-      auto outs = Outs::map([&]<typename... A>() {
+      auto outs = OutputAccessors::map([&]<typename... A>() {
         return cuda::std::tuple{A::null_output_arg(output_cols, element_idx)...};
       });
 
       auto out_ptrs =
         cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      auto inputs = Ins::map([&]<typename... A>() {
+      auto inputs = InputAccessors::map([&]<typename... A>() {
         return cuda::std::tuple{A::nullable_element(input_cols, element_idx)...};
       });
 
@@ -99,12 +102,12 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
         cuda::std::apply([](auto&&... a) { GENERIC_TRANSFORM_OP(a...); }, args);
       }
 
-      Outs::map([&]<typename... A>() {
+      OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, element_idx, *cuda::std::get<A::index>(outs)), ...);
         ((is_valid[A::index] = cuda::std::get<A::index>(outs).has_value()), ...);
       });
 
-      Outs::map([&]<typename... A>() {
+      OutputAccessors::map([&]<typename... A>() {
         auto active_mask = __ballot_sync(0xFFFF'FFFFU, element_idx < row_size);
         (warp_compact_validity<A>(active_mask, output_cols, element_idx, is_valid[A::index]), ...);
       });
