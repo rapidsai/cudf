@@ -32,6 +32,7 @@ import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
+    bind_to_gpu,
     check_reserved_keys,
     execute_ir_on_rank,
 )
@@ -66,6 +67,7 @@ def _setup_root(
     rapidsmpf_options_as_bytes: bytes,
     *,
     uid: str,
+    verbose_hardware_binding: bool = False,
     memory_resource_config: MemoryResourceConfig | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> bytes:
@@ -85,6 +87,8 @@ def _setup_root(
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
+    verbose_hardware_binding
+        Print warnings to stderr on topology binding failures.
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
         :class:`rmm.mr.CudaAsyncMemoryResource`.
@@ -97,6 +101,7 @@ def _setup_root(
     """
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
+    bind_to_gpu(verbose=verbose_hardware_binding)
     base_mr = (
         memory_resource_config.create_memory_resource()
         if memory_resource_config is not None
@@ -128,6 +133,7 @@ def _setup_worker(
     executor_options: dict[str, object],
     *,
     uid: str,
+    verbose_hardware_binding: bool = False,
     memory_resource_config: MemoryResourceConfig | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
@@ -150,11 +156,14 @@ def _setup_worker(
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
+    verbose_hardware_binding
+        Print warnings to stderr on topology binding failures.
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
         :class:`rmm.mr.CudaAsyncMemoryResource`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
+
     """
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
@@ -163,6 +172,7 @@ def _setup_worker(
 
     if mp_ctx is None:
         # Non-root worker: create communicator now.
+        bind_to_gpu(verbose=verbose_hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
             if memory_resource_config is not None
@@ -454,6 +464,9 @@ class DaskEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
+        verbose_hw_bind = cast(
+            bool, executor_options.get("verbose_hardware_binding", False)
+        )
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
@@ -486,7 +499,12 @@ class DaskEngine(StreamingEngine):
 
         # Phase 1: initialize root communicator on one worker.
         root_result = dask_client.run(
-            functools.partial(_setup_root, uid=uid, memory_resource_config=mr_config),
+            functools.partial(
+                _setup_root,
+                uid=uid,
+                verbose_hardware_binding=verbose_hw_bind,
+                memory_resource_config=mr_config,
+            ),
             nranks,
             rapidsmpf_options_as_bytes,
             workers=[root_worker],
@@ -496,7 +514,12 @@ class DaskEngine(StreamingEngine):
         # Phase 2: complete bootstrap on all workers concurrently.
         # All workers call barrier() so they must all run simultaneously.
         dask_client.run(
-            functools.partial(_setup_worker, uid=uid, memory_resource_config=mr_config),
+            functools.partial(
+                _setup_worker,
+                uid=uid,
+                verbose_hardware_binding=verbose_hw_bind,
+                memory_resource_config=mr_config,
+            ),
             root_ucxx_address_as_bytes,
             nranks,
             rapidsmpf_options_as_bytes,

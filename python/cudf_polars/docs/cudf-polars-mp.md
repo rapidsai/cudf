@@ -43,11 +43,11 @@ This document describes these three execution modes.
 It provides a single typed object covering all configuration knobs across three
 categories:
 
-| Category    | Controls                                                   |
-| ----------- | ---------------------------------------------------------- |
-| `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level  |
-| `executor`  | Partitioning, fallback behavior, dynamic planning          |
-| `engine`    | Polars integration, IO options, RMM memory resource        |
+| Category    | Controls                                                              |
+| ----------- | --------------------------------------------------------------------- |
+| `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level             |
+| `executor`  | Partitioning, fallback behavior, dynamic planning, hardware binding   |
+| `engine`    | Polars integration, IO options, RMM memory resource                   |
 
 All fields default to `UNSPECIFIED`, which means: use the corresponding
 environment variable if set, otherwise let the underlying library apply its
@@ -131,8 +131,25 @@ When no `memory_resource_config` is provided:
 
 - **SPMDEngine** uses `rmm.mr.get_current_device_resource()` (the in-process
   default — useful when user code has already configured a resource).
-benchm- **DaskEngine** and **RayEngine** default to `rmm.mr.CudaAsyncMemoryResource()`
+- **DaskEngine** and **RayEngine** default to `rmm.mr.CudaAsyncMemoryResource()`
   (workers start in a fresh process with no pre-configured resource).
+
+### Hardware binding
+
+All three engines automatically bind each worker process to the CPU cores,
+NUMA memory nodes, and network devices that are topologically close to the
+worker's GPU. This is done via `rapidsmpf.rrun.rrun.bind()` and improves
+performance by ensuring memory allocations and network traffic stay local to
+the GPU's NUMA node.
+
+To see warnings when individual binding subsystems (CPU, memory, network) fail,
+set `verbose_hardware_binding`:
+
+```python
+opts = StreamingOptions(verbose_hardware_binding=True)
+```
+
+Or via the environment variable `CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING=true`.
 
 ---
 

@@ -30,6 +30,7 @@ import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
+    bind_to_gpu,
     check_reserved_keys,
     execute_ir_on_rank,
 )
@@ -168,6 +169,15 @@ class RankActor:
     num_py_executors
         Maximum number of threads for the actor's Python thread-pool executor.
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
+    verbose_hardware_binding
+        Print warnings to stderr on topology binding failures.
+
+    Notes
+    -----
+    Calls :func:`~cudf_polars.experimental.rapidsmpf.frontend.core.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.
     """
 
     def __init__(
@@ -176,8 +186,10 @@ class RankActor:
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
         num_py_executors: int,
+        verbose_hardware_binding: bool = False,
         memory_resource_config: MemoryResourceConfig | None = None,
     ) -> None:
+        bind_to_gpu(verbose=verbose_hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
             if memory_resource_config is not None
@@ -454,6 +466,9 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
+        verbose_hw_bind = cast(
+            bool, executor_options.get("verbose_hardware_binding", False)
+        )
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
@@ -489,6 +504,7 @@ class RayEngine(StreamingEngine):
                         int,
                         executor_options.get("num_py_executors", 1),
                     ),
+                    verbose_hardware_binding=verbose_hw_bind,
                     memory_resource_config=mr_config,
                 )
                 for _ in range(num_gpus)

@@ -28,6 +28,7 @@ from pylibcudf.contiguous_split import pack
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
+    bind_to_gpu,
     check_reserved_keys,
     execute_ir_on_rank,
 )
@@ -293,6 +294,16 @@ class SPMDEngine(StreamingEngine):
     TypeError
         If ``executor_options`` or ``engine_options`` contains a reserved key.
 
+    Notes
+    -----
+    When not running under ``rrun``, calls
+    :func:`~cudf_polars.experimental.rapidsmpf.frontend.core.bind_to_gpu` at
+    construction time, before RMM and communicator initialisation, so that CPU
+    affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early as
+    possible.  If ``CUDA_VISIBLE_DEVICES`` is not set, falls back to
+    ``gpu_id=0``.  Under ``rrun`` the launcher already performs binding, so
+    the call is skipped.
+
     Examples
     --------
     Context-manager style (recommended for scripts):
@@ -322,6 +333,12 @@ class SPMDEngine(StreamingEngine):
         engine_options = engine_options or {}
 
         check_reserved_keys(executor_options, engine_options)
+        verbose_hw_bind = cast(
+            bool, executor_options.get("verbose_hardware_binding", False)
+        )
+
+        if not bootstrap.is_running_with_rrun():
+            bind_to_gpu(verbose=verbose_hw_bind)
 
         rapidsmpf_options = (
             rapidsmpf_options

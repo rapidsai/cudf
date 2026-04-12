@@ -191,6 +191,12 @@ class StreamingOptions:
         Env: ``RAPIDSMPF_PERIODIC_SPILL_CHECK``.
         Default: ``"1ms"``.
         Category: rapidsmpf.
+    verbose_hardware_binding
+        Print warnings to stderr when topology binding fails for
+        individual subsystems (CPU, memory, network).
+        Env: ``CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING``.
+        Default: ``False``.
+        Category: executor.
     num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
         Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
@@ -282,6 +288,9 @@ class StreamingOptions:
         "rapidsmpf", "RAPIDSMPF_PERIODIC_SPILL_CHECK"
     )
     # ---- Executor ----
+    verbose_hardware_binding: bool | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING", parse_boolean
+    )
     num_py_executors: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS", int
     )
@@ -467,6 +476,7 @@ class StreamingOptions:
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
+            verbose_hardware_binding=_get("verbose_hardware_binding"),
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
@@ -590,6 +600,16 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Interval between periodic spill checks (e.g. "1ms").
                 Env: RAPIDSMPF_PERIODIC_SPILL_CHECK. Built-in default: 1ms."""),
+        )
+        g.add_argument(
+            "--verbose-hardware-binding",
+            dest="verbose_hardware_binding",
+            default=None,
+            action=argparse.BooleanOptionalAction,
+            help=textwrap.dedent("""\
+                Print warnings to stderr when topology binding fails for
+                individual subsystems (CPU, memory, network).
+                Env: CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING. Built-in default: false."""),
         )
         g.add_argument(
             "--num-py-executors",

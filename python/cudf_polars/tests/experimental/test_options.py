@@ -323,3 +323,35 @@ def test_to_dict_roundtrip() -> None:
 def test_to_dict_roundtrip_empty() -> None:
     opts = StreamingOptions()
     assert StreamingOptions.from_dict(opts.to_dict()) == opts
+
+
+# ---------------------------------------------------------------------------
+# verbose_hardware_binding
+# ---------------------------------------------------------------------------
+
+
+def test_executor_options_verbose_hardware_binding() -> None:
+    result = StreamingOptions(verbose_hardware_binding=True).to_executor_options()
+    assert result["verbose_hardware_binding"] is True
+
+
+def test_verbose_hardware_binding_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING", "true")
+    result = StreamingOptions().to_executor_options()
+    assert result["verbose_hardware_binding"] is True
+
+
+def test_verbose_hardware_binding_cli() -> None:
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(["--verbose-hardware-binding"])
+    opts = StreamingOptions._from_argparse(args)
+    assert opts.verbose_hardware_binding is True
+
+
+def test_no_verbose_hardware_binding_cli() -> None:
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(["--no-verbose-hardware-binding"])
+    opts = StreamingOptions._from_argparse(args)
+    assert opts.verbose_hardware_binding is False
