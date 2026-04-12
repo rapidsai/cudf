@@ -99,7 +99,7 @@ def execute_ir_on_rank(
 
     messages = output.release()
     chunks = [
-        TableChunk.from_message(msg).make_available_and_spill(
+        TableChunk.from_message(msg, br=ctx.br()).make_available_and_spill(
             ctx.br(), allow_overbooking=True
         )
         for msg in messages
