@@ -104,3 +104,19 @@ The bottleneck is ARCHITECTURAL: the row-oriented, monolithic-kernel design with
 1. Column-oriented conversion with field index (CUDAFastCSV approach) — multi-day effort, estimated 2-3x potential gain
 2. Writer optimization — completely untouched, 2.5x slower than reader
 3. Multi-stream pipelining for FILEPATH path — moderate effort, 10-20% potential on file I/O
+
+## Experiment 13: NONE-only single-pass (8 bytes) with validation fallback
+
+**Hypothesis**: Use compact 8-byte tile state (NONE-context only), validate correctness by running Phase 1 + GPU prefix scan, fall back to two-phase if validation fails.
+**Result**: DISCARD — -30% TAXI/256. The validation reads data 3x total (single-pass + Phase1 + prefix scan) vs 2x baseline. 50% more data reads = 30% slower.
+
+### The fundamental problem
+ANY validation scheme that requires a Phase 1 count to verify single-pass correctness will read data at least 3x — making it strictly worse than the 2x baseline. The only way single-pass helps is if it reads data exactly 1x. But with the NONE-only context type, correctness is only guaranteed when no block boundaries fall inside quoted fields, which can't be verified without a separate Phase 1.
+
+### Session conclusion
+The single-pass row offset approach cannot work for the CSV parser:
+- Full context (24 bytes): correct but tile state overhead = data pass savings
+- NONE-only (8 bytes): fast but incorrect for >262K rows, validation adds 3rd pass
+- The two-phase design is the optimal architecture for this 3-state FSM
+
+13 experiments total this session. 0 kept. The reader remains at the Session 1-2 plateau: ~6.8 GiB/s for TAXI/256.

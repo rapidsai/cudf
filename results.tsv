@@ -28,3 +28,4 @@ Exp24	d90ab1c	3.64 GiB/s	-33.9	discard	csv_read_io	register limit min_blocks=8 (
 Exp25	f1ceb49	2.17 GiB/s	-60.6	discard	csv_read_io	__noinline__ fused parsers (function call overhead)
 Exp26	-	-	0.0	idea	csv_read_io	column-oriented split conversion (cancelled — type_dispatcher fallback inflates all instantiations)
 Exp31	c7a3bfa	5.33 GiB/s	+0.0	discard	csv_read_io	L2 persistent cache for NA trie (within noise — L1 already handles it)
+13	b268b62a	4.74 GiB/s (TAXI:4.74 LOGS:4.79 ANAL:6.60)	-30.4	discard	realistic	Exp13: NONE-only single-pass + validation = 3 data reads, worse than 2-phase
