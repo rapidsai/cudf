@@ -21,13 +21,12 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
-#include <bitset>
 #include <iterator>
-#include <limits>
 #include <numeric>
+#include <utility>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -386,7 +385,8 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_all_true_row_mask(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
   auto const num_rows = total_rows_in_row_groups(row_group_indices);
-  auto true_scalar    = cudf::numeric_scalar<bool>(true, true, stream);
+  auto true_scalar =
+    cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
   return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
 }
 
@@ -414,11 +414,11 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
 {
   // Descriptors for all the chunks that make up the selected columns
   auto const num_input_columns = _input_columns.size();
-  auto const num_row_groups =
-    std::accumulate(row_group_indices.begin(),
-                    row_group_indices.end(),
-                    size_t{0},
-                    [](size_t sum, auto const& row_groups) { return sum + row_groups.size(); });
+  auto const num_row_groups    = std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    std::size_t{0},
+    [](std::size_t sum, auto const& row_groups) { return sum + row_groups.size(); });
   auto const num_chunks = num_row_groups * num_input_columns;
 
   // Association between each column chunk and its source
@@ -429,8 +429,8 @@ hybrid_scan_reader_impl::get_input_column_chunk_byte_ranges(
   auto column_chunk_byte_ranges = std::vector<byte_range_info>{};
   column_chunk_byte_ranges.reserve(num_chunks);
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const source_idx) {
                   auto const& row_groups = row_group_indices[source_idx];
                   for (auto const row_group_index : row_groups) {
@@ -723,6 +723,62 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns_chunk()
   return result;
 }
 
+std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row_group_passes(
+  cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+
+  // If pass_read_limit is 0 or there is only one row group, return all in a single pass
+  if (pass_read_limit == 0 or row_group_indices.size() == 1) {
+    return {{row_group_indices.begin(), row_group_indices.end()}};
+  }
+
+  // TODO(mh): Need to handle multiple sources in the future
+  auto constexpr source_index = 0;
+
+  // Construct row group information
+  auto row_groups_info = std::vector<row_group_info>{};
+  row_groups_info.reserve(row_group_indices.size());
+  size_t start_row = 0;
+  std::transform(row_group_indices.begin(),
+                 row_group_indices.end(),
+                 std::back_inserter(row_groups_info),
+                 [&](auto const& rg_index) {
+                   auto const& row_group =
+                     _extended_metadata->get_row_group(rg_index, source_index);
+                   auto const [compressed_size, total_size, num_rows, max_leaf_values] =
+                     _extended_metadata->get_row_group_properties(row_group);
+                   auto rg_info = row_group_info{.index               = rg_index,
+                                                 .start_row           = start_row,
+                                                 .unadjusted_num_rows = num_rows,
+                                                 .source_index        = source_index,
+                                                 .compressed_size     = compressed_size,
+                                                 .max_leaf_values     = max_leaf_values};
+                   start_row += num_rows;
+                   return rg_info;
+                 });
+
+  auto const comp_read_limit = static_cast<std::size_t>(
+    pass_read_limit * cudf::io::parquet::detail::input_limit_compression_reserve);
+
+  auto const pass_data =
+    cudf::io::parquet::detail::compute_row_group_passes(row_groups_info, comp_read_limit, 0);
+
+  // Convert offset-based pass boundaries back to vectors of row group indices
+  auto const& offsets = pass_data.pass_row_group_offsets;
+  auto passes         = std::vector<std::vector<cudf::size_type>>{};
+  passes.reserve(offsets.size() - 1);
+  std::transform(offsets.begin(),
+                 offsets.end() - 1,
+                 offsets.begin() + 1,
+                 std::back_inserter(passes),
+                 [&](auto const start, auto const end) {
+                   return std::vector<cudf::size_type>{row_group_indices.begin() + start,
+                                                       row_group_indices.begin() + end};
+                 });
+  return passes;
+}
+
 bool hybrid_scan_reader_impl::has_next_table_chunk()
 {
   CUDF_EXPECTS(_file_preprocessed, "Chunking not yet setup");
@@ -861,7 +917,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
     if (include_output_num_rows_per_source()) {
       // Empty dataframe case: Simply initialize to a list of zeros
       out_metadata.num_rows_per_source =
-        std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
+        std::vector<std::size_t>(_file_itm_data.num_rows_per_source.size(), 0);
     }
 
     // Finalize output
@@ -898,7 +954,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   decode_page_data(mode, read_info.skip_rows, read_info.num_rows);
 
   // Create the final output cudf columns.
-  for (size_t i = 0; i < _output_buffers.size(); ++i) {
+  for (std::size_t i = 0; i < _output_buffers.size(); ++i) {
     auto metadata           = _reader_column_schema.has_value()
                                 ? std::make_optional<reader_column_schema>((*_reader_column_schema)[i])
                                 : std::nullopt;
@@ -951,7 +1007,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to
   // read)
-  for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
+  for (std::size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
     if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], &col_name, _stream, _mr));
@@ -1045,12 +1101,12 @@ void hybrid_scan_reader_impl::set_pass_page_mask(cudf::host_span<bool const> dat
     return;
   }
 
-  size_t num_inserted_data_pages = 0;
+  std::size_t num_inserted_data_pages = 0;
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(_input_columns.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{_input_columns.size()},
     [&](auto col_idx) {
-      for (size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
+      for (std::size_t chunk_idx = col_idx; chunk_idx < chunks.size(); chunk_idx += num_columns) {
         // Insert a true value for each dictionary page
         if (chunks[chunk_idx].num_dict_pages > 0) { _pass_page_mask.push_back(true); }
 

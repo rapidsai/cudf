@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
@@ -217,11 +216,12 @@ async def _local_aggregation(
         chunks_received += 1
         chunk = await evaluate_chunk(
             context,
-            TableChunk.from_message(msg),
+            TableChunk.from_message(msg, br=context.br()),
             decomposed.piecewise_ir,
             ir_context=ir_context,
         )
-        total_size += chunk.data_alloc_size(MemoryType.DEVICE)
+        chunk = _enforce_schema(chunk, decomposed.piecewise_ir.schema)
+        total_size += chunk.data_alloc_size()
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
             evaluated_chunks = [
@@ -232,7 +232,7 @@ async def _local_aggregation(
                     ir_context=ir_context,
                 )
             ]
-            total_size = evaluated_chunks[0].data_alloc_size(MemoryType.DEVICE)
+            total_size = evaluated_chunks[0].data_alloc_size()
         if total_size > target_partition_size and allow_early_exit:
             break
 
@@ -321,6 +321,7 @@ async def _tree_reduce(
                 await allgather.extract_concatenated(stream),
                 stream,
                 exclusive_view=True,
+                br=context.br(),
             ),
             decomposed.reduction_ir,
             ir_context=ir_context,
@@ -429,15 +430,15 @@ async def _shuffle_reduce(
         shuffle_context,
         shuffle_comm,
         modulus,
-        decomposed.shuffle_indices,
         collective_id,
     )
 
-    shuffle.insert_chunk(
+    shuffle.insert_hash(
         _enforce_schema(
             aggregated,
             decomposed.reduction_ir.schema,
-        )
+        ),
+        decomposed.shuffle_indices,
     )
     del aggregated
 
@@ -449,8 +450,9 @@ async def _shuffle_reduce(
             ch_in,
             target_partition_size,
         )
-        shuffle.insert_chunk(
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema)
+        shuffle.insert_hash(
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema),
+            decomposed.shuffle_indices,
         )
         del aggregated
 
@@ -464,6 +466,7 @@ async def _shuffle_reduce(
             shuffle.extract_chunk(partition_id, stream),
             stream,
             exclusive_view=True,
+            br=context.br(),
         )
         partition_chunk = await evaluate_chunk(
             context,
@@ -576,7 +579,7 @@ async def _choose_strategy(
     -------
     The output count.
     """
-    aggregated_size = aggregated.data_alloc_size(MemoryType.DEVICE)
+    aggregated_size = aggregated.data_alloc_size()
     local_estimated_size = (aggregated_size // max(1, chunks_received)) * local_count
 
     if skip_global_comm:

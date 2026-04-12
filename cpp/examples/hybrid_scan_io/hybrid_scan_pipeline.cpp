@@ -20,6 +20,7 @@
 #include <rmm/cuda_stream_pool.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
 
 #include <filesystem>
@@ -258,8 +259,8 @@ auto hybrid_scan_pipelined(io_source const& io_source,
   std::vector<hybrid_scan_fn> read_tasks;
   read_tasks.reserve(num_partitions);
   std::for_each(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_partitions),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{num_partitions},
     [&](auto task_id) {
       read_tasks.emplace_back(hybrid_scan_fn{.table              = std::ref(tables[task_id]),
                                              .reader             = std::move(readers[task_id]),

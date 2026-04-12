@@ -43,11 +43,9 @@ from cudf_polars.dsl.utils.windows import (
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
-    get_new_cuda_stream,
     join_cuda_streams,
 )
 from cudf_polars.utils.versions import (
@@ -68,7 +66,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 __all__ = [
@@ -114,24 +112,8 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     """
 
-    get_cuda_stream: Callable[[], Stream]
+    get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-
-    @classmethod
-    def from_config_options(
-        cls, config_options: ConfigOptions, query_id: uuid.UUID | None = None
-    ) -> IRExecutionContext:
-        """Create an IRExecutionContext from ConfigOptions."""
-        query_id = query_id or uuid.uuid4()
-        match config_options.cuda_stream_policy:
-            case CUDAStreamPolicy.DEFAULT:
-                return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
-            case CUDAStreamPolicy.NEW:
-                return cls(get_cuda_stream=get_new_cuda_stream, query_id=query_id)
-            case _:  # pragma: no cover
-                raise ValueError(
-                    f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
-                )
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
@@ -1837,11 +1819,6 @@ class GroupBy(IR):
                 raise NotImplementedError(
                     "value_counts is not supported in groupby"
                 )  # pragma: no cover; Nested list[struct] types not supported
-            if any(
-                isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
-                for child in expr.children
-            ):
-                raise NotImplementedError("value_counts is not supported in groupby")
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
@@ -1888,7 +1865,9 @@ class GroupBy(IR):
         )
         requests = []
         names = []
+        cast_to_schema = []
         for request in agg_requests:
+            should_cast = False
             name = request.name
             value = request.value
             if isinstance(value, expr.Len):
@@ -1899,7 +1878,12 @@ class GroupBy(IR):
                     child = value.children[0]
                 else:
                     (child,) = value.children
+                # libcudf will return int64 when summing integers
+                # but the schema may be a lower bit width
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                should_cast = value.name == "sum" and plc.traits.is_integral_not_bool(
+                    col.type()
+                )
             else:
                 # Anything else, we pre-evaluate
                 column = value.evaluate(df, context=ExecutionContext.GROUPBY)
@@ -1910,13 +1894,18 @@ class GroupBy(IR):
                 col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
+            cast_to_schema.append(should_cast)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
         results = [
             Column(column, name=name, dtype=schema[name])
-            for name, column, request in zip(
+            if not should_cast
+            else Column(column, name=name, dtype=schema[name]).astype(
+                schema[name], stream=df.stream
+            )
+            for name, column, should_cast in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
-                agg_requests,
+                cast_to_schema,
                 strict=True,
             )
         ]

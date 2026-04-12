@@ -33,6 +33,17 @@ cdef extern from "cudf/partitioning.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
+        hash_partition "cudf::hash_partition" (
+        const table_view& input,
+        const table_view& keys,
+        int num_partitions,
+        hash_id hash_function,
+        uint32_t seed,
+        cuda_stream_view stream,
+        device_memory_resource* mr
+    ) except +libcudf_exception_handler
+
+    cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] \
         partition "cudf::partition" (
         const table_view& t,
         const column_view& partition_map,

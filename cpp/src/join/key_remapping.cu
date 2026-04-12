@@ -30,10 +30,10 @@
 #include <cooperative_groups.h>
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/atomic>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/replace.h>
@@ -325,7 +325,7 @@ class key_remap_table : public key_remap_table_interface {
       auto set_ref = _hash_table.ref(cuco::op::insert);
       thrust::for_each_n(
         rmm::exec_policy_nosync(stream),
-        thrust::make_counting_iterator<cudf::size_type>(0),
+        cuda::counting_iterator<cudf::size_type>{0},
         build_num_rows,
         insert_only_fn<decltype(set_ref), decltype(key_iter)>{set_ref, key_iter, bitmask_ptr});
     }
@@ -341,7 +341,8 @@ class key_remap_table : public key_remap_table_interface {
     rmm::device_uvector<cudf::size_type> counts(build_num_rows, stream);
     thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
 
-    cudf::detail::device_scalar<cudf::size_type> d_distinct_count{0, stream};
+    cudf::detail::device_scalar<cudf::size_type> d_distinct_count{
+      0, stream, cudf::get_current_device_resource_ref()};
 
     auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
@@ -451,7 +452,7 @@ class key_remap_table : public key_remap_table_interface {
       _hash_table.find_async(
         iter, iter + probe_num_rows, d_equal, key_hasher{}, found_begin, stream.value());
     } else {
-      auto stencil = thrust::counting_iterator<cudf::size_type>{0};
+      auto stencil = cuda::counting_iterator<cudf::size_type>{0};
       auto const row_bitmask =
         cudf::detail::bitmask_and(probe_keys, stream, cudf::get_current_device_resource_ref())
           .first;

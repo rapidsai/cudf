@@ -21,9 +21,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <vector>
@@ -123,16 +123,19 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
 
   auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
 
-  auto gather_map_column =
-    make_numeric_column(size_data_type, input.size(), mask_state::UNALLOCATED, stream);
-  auto gather_map = gather_map_column->mutable_view();
+  auto gather_map_column = make_numeric_column(size_data_type,
+                                               input.size(),
+                                               mask_state::UNALLOCATED,
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
+  auto gather_map        = gather_map_column->mutable_view();
 
   auto const input_size = input.size();
   auto const null_index = input.size();
   if (op == aggregation::LEAD) {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(size_type{0}),
-                      thrust::make_counting_iterator(size_type{input.size()}),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       gather_map.begin<size_type>(),
                       cuda::proclaim_return_type<size_type>(
                         [following, input_size, null_index, row_offset] __device__(size_type i) {
@@ -140,8 +143,8 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                         }));
   } else {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(size_type{0}),
-                      thrust::make_counting_iterator(size_type{input.size()}),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       gather_map.begin<size_type>(),
                       cuda::proclaim_return_type<size_type>(
                         [preceding, input_size, null_index, row_offset] __device__(size_type i) {
@@ -163,8 +166,8 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
 
   // Find all indices at which LEAD/LAG computed nulls previously.
   auto scatter_map_end =
-    cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
-                          thrust::counting_iterator(size_type{input.size()}),
+    cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
+                          cuda::counting_iterator<size_type>{input.size()},
                           scatter_map.begin(),
                           is_null_index_predicate(input.size(), gather_map.begin<size_type>()),
                           stream);

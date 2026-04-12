@@ -11,8 +11,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
@@ -82,13 +82,17 @@ std::unique_ptr<column> merge_m2(column_view const& values,
   auto const count_valid = values.child(0);
   auto const mean_values = values.child(1);
   auto const M2_values   = values.child(2);
-  auto const iter        = thrust::make_counting_iterator<size_type>(0);
+  auto const iter        = cuda::counting_iterator<size_type>{0};
 
   auto const fn = merge_fn<count_type>{group_offsets.data(),
                                        count_valid.template begin<count_type>(),
                                        mean_values.template begin<result_type>(),
                                        M2_values.template begin<result_type>()};
-  thrust::transform(rmm::exec_policy_nosync(stream), iter, iter + num_groups, out_iter, fn);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    iter,
+                    iter + num_groups,
+                    out_iter,
+                    fn);
 
   // Output is a structs column containing the merged values of `COUNT_VALID`, `MEAN`, and `M2`.
   std::vector<std::unique_ptr<column>> out_columns;

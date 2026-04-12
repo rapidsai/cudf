@@ -18,6 +18,7 @@
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <cuda/memory_resource>
 
 namespace {
@@ -94,7 +95,7 @@ TEST_F(PinnedMemoryTest, MemoryResourceGetAndSet)
   constexpr int num_rows = 32 * 1024;
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 2; });
-  auto values = thrust::make_counting_iterator(0);
+  auto values = cuda::counting_iterator<int>{0};
 
   cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
 
