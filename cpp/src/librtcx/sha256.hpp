@@ -55,15 +55,15 @@ std::uint32_t get_be32(void const* ptr)
 struct [[nodiscard]] sha256_hex_string {
   char data_[65];
 
-  constexpr std::string_view view() const { return std::string_view{data_, 64}; }
+  [[nodiscard]] constexpr std::string_view view() const { return std::string_view{data_, 64}; }
 
-  constexpr operator std::string_view() const { return view(); }
+  [[nodiscard]] constexpr operator std::string_view() const { return view(); }
 
   [[nodiscard]] char const* data() const { return data_; }
 
   [[nodiscard]] char const* c_str() const { return data_; }
 
-  static constexpr std::size_t size() { return 64; }
+  [[nodiscard]] static constexpr std::size_t size() { return 64; }
 
   static sha256_hex_string make(std::span<std::uint8_t const, 32> input)
   {
@@ -81,13 +81,13 @@ struct [[nodiscard]] sha256_hex_string {
 struct [[nodiscard]] sha256 {
   alignas(16) std::uint8_t data_[32];
 
-  std::uint8_t operator[](std::size_t index) const { return data_[index]; }
+  [[nodiscard]] std::uint8_t operator[](std::size_t index) const { return data_[index]; }
 
-  std::size_t size() const { return 32; }
+  [[nodiscard]] std::size_t size() const { return 32; }
 
-  std::uint8_t const* data() const { return data_; }
+  [[nodiscard]] std::uint8_t const* data() const { return data_; }
 
-  constexpr bool operator==(sha256 const&) const = default;
+  [[nodiscard]] constexpr bool operator==(sha256 const&) const = default;
 
   sha256_hex_string to_hex_string() const { return sha256_hex_string::make(data_); }
 
@@ -113,26 +113,19 @@ struct [[nodiscard]] sha256 {
 struct sha256_context {
  private:
   static constexpr size_t BLOCK_SIZE = 64;
-  std::uint32_t state_[8];
-  std::uint64_t size_;
-  std::uint32_t offset_;
-  std::uint8_t buf_[BLOCK_SIZE];
+  std::uint32_t state_[8]            = {0x6a09'e667ul,
+                                        0xbb67'ae85ul,
+                                        0x3c6e'f372ul,
+                                        0xa54f'f53aul,
+                                        0x510e'527ful,
+                                        0x9b05'688cul,
+                                        0x1f83'd9abul,
+                                        0x5be0'cd19ul};
+  std::uint64_t size_                = 0;
+  std::uint8_t buf_[BLOCK_SIZE]      = {};
 
  public:
-  sha256_context()
-    : state_{0x6a09'e667ul,
-             0xbb67'ae85ul,
-             0x3c6e'f372ul,
-             0xa54f'f53aul,
-             0x510e'527ful,
-             0x9b05'688cul,
-             0x1f83'd9abul,
-             0x5be0'cd19ul},
-      size_{0},
-      offset_{0},
-      buf_{}
-  {
-  }
+  sha256_context()                                 = default;
   sha256_context(sha256_context const&)            = delete;
   sha256_context& operator=(sha256_context const&) = delete;
   sha256_context(sha256_context&&)                 = delete;
