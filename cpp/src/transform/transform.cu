@@ -10,6 +10,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -299,7 +300,8 @@ auto to_args(std::span<input_column_view const> inputs,
              rmm::device_async_resource_ref mr)
 {
   std::vector<handle> handles;
-  std::vector<detail::column_device_view_base> h_args;
+  auto h_args = detail::make_pinned_vector_async<detail::column_view_base>(
+    inputs.size() + outputs.size(), stream);
 
   for (auto& in : inputs) {
     if (auto* col = std::get_if<column_view>(&in)) {
@@ -324,14 +326,7 @@ auto to_args(std::span<input_column_view const> inputs,
       out);
   }
 
-  rmm::device_buffer d_args{h_args.size() * sizeof(detail::column_device_view_base), stream, mr};
-
-  CUDF_CUDA_TRY(detail::memcpy_async(
-    d_args.data(), h_args.data(), h_args.size() * sizeof(detail::column_device_view_base), stream));
-
-  // ensure the device buffer copy is complete before `h_args` goes out of scope and its destructors
-  // are called
-  stream.synchronize();
+  auto d_args = detail::make_device_uvector_async(h_args, stream, mr);
 
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
