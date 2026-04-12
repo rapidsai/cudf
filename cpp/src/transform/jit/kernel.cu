@@ -44,7 +44,6 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
                                   column_device_view_core const* __restrict__ input_cols,
                                   mutable_column_device_view_core const* __restrict__ output_cols)
 {
-  // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
   auto start  = detail::grid_1d::global_thread_id();
   auto stride = detail::grid_1d::grid_stride();
 

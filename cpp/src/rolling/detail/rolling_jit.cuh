@@ -29,7 +29,12 @@ struct fixed_window_wrapper : public window_wrapper_base {
   {
   }
 
-  __device__ __host__ cudf::size_type operator[](cudf::size_type) { return window; }
+  __device__ __host__ fixed_window_wrapper(window_wrapper_base const& base)
+    : window_wrapper_base(base)
+  {
+  }
+
+  __device__ __host__ cudf::size_type operator[](cudf::size_type) const { return window; }
 };
 
 struct variable_window_wrapper : public window_wrapper_base {
@@ -38,7 +43,15 @@ struct variable_window_wrapper : public window_wrapper_base {
   {
   }
 
-  __device__ __host__ cudf::size_type operator[](cudf::size_type idx) { return group_offsets[idx]; }
+  __device__ __host__ variable_window_wrapper(window_wrapper_base const& base)
+    : window_wrapper_base(base)
+  {
+  }
+
+  __device__ __host__ cudf::size_type operator[](cudf::size_type idx) const
+  {
+    return group_offsets[idx];
+  }
 };
 
 struct preceding_window_wrapper : public window_wrapper_base {
@@ -49,7 +62,12 @@ struct preceding_window_wrapper : public window_wrapper_base {
   {
   }
 
-  __device__ cudf::size_type operator[](cudf::size_type idx)
+  __device__ __host__ preceding_window_wrapper(window_wrapper_base const& base)
+    : window_wrapper_base(base)
+  {
+  }
+
+  __device__ cudf::size_type operator[](cudf::size_type idx) const
   {
     auto group_label = group_labels[idx];
     auto group_start = group_offsets[group_label];
@@ -65,7 +83,12 @@ struct following_window_wrapper : public window_wrapper_base {
   {
   }
 
-  __device__ cudf::size_type operator[](cudf::size_type idx)
+  __device__ __host__ following_window_wrapper(window_wrapper_base const& base)
+    : window_wrapper_base(base)
+  {
+  }
+
+  __device__ cudf::size_type operator[](cudf::size_type idx) const
   {
     auto group_label = group_labels[idx];
     auto group_end =

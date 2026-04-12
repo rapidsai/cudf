@@ -96,9 +96,9 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return cudf::detail::rolling_window_udf(
       input,
       cudf::detail::preceding_window_wrapper{
-        group_labels.data(), group_offsets.data(), preceding_window},
+        group_offsets.data(), group_labels.data(), preceding_window},
       cudf::detail::following_window_wrapper{
-        group_labels.data(), group_offsets.data(), following_window},
+        group_offsets.data(), group_labels.data(), following_window},
       min_periods,
       aggr,
       stream,

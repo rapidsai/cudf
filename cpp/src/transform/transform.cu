@@ -198,6 +198,7 @@ void launch(cudf::kernel const& kernel,
   void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &input_cols, &output_cols};
   auto kernel_ref = kernel.get();
   auto cfg        = kernel_ref.max_occupancy_config(0, 0);
+  // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
   kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 

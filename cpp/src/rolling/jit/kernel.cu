@@ -55,21 +55,19 @@ __device__ void rolling_window_kernel(cudf::size_type nrows,
                                       detail::window_wrapper_base b_following_window_begin,
                                       cudf::size_type min_periods)
 {
-  auto i            = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const preceding_window_begin =
-    reinterpret_cast<PrecedingWindowType const&>(b_preceding_window_begin);
-  auto const following_window_begin =
-    reinterpret_cast<FollowingWindowType const&>(b_following_window_begin);
-  auto const* __restrict__ in_col = static_cast<InType const*>(p_in_col);
-  auto* __restrict__ out_col      = static_cast<OutType*>(p_in_col);
+  auto i                                           = cudf::detail::grid_1d::global_thread_id();
+  auto const stride                                = cudf::detail::grid_1d::grid_stride();
+  PrecedingWindowType const preceding_window_begin = b_preceding_window_begin;
+  FollowingWindowType const following_window_begin = b_following_window_begin;
+  auto const* __restrict__ in_col                  = static_cast<InType const*>(p_in_col);
+  auto* __restrict__ out_col                       = static_cast<OutType*>(p_out_col);
 
   cudf::size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffff'ffffu, i < nrows);
   while (i < nrows) {
-    int64_t const preceding_window = preceding_window_begin[static_cast<cudf::size_type>(i)];
-    int64_t const following_window = following_window_begin[static_cast<cudf::size_type>(i)];
+    int64_t const preceding_window = preceding_window_begin[i];
+    int64_t const following_window = following_window_begin[i];
 
     // compute bounds
     auto const start = static_cast<cudf::size_type>(

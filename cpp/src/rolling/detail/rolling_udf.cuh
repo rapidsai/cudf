@@ -42,7 +42,7 @@ std::string reflect_window_wrapper()
 }
 
 // Applies a user-defined rolling window function to the values in a column.
-static std::unique_ptr<column> rolling_window_udf(
+static std::unique_ptr<column> rolling_window_udf_impl(
   column_view const& input,
   std::string const& preceding_window_str,
   cudf::detail::window_wrapper_base const& preceding_window,
@@ -130,15 +130,15 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  return rolling_window_udf(input,
-                            reflect_window_wrapper<PrecedingWindowIterator>(),
-                            preceding_window,
-                            reflect_window_wrapper<FollowingWindowIterator>(),
-                            following_window,
-                            min_periods,
-                            agg,
-                            stream,
-                            mr);
+  return rolling_window_udf_impl(input,
+                                 reflect_window_wrapper<PrecedingWindowIterator>(),
+                                 preceding_window,
+                                 reflect_window_wrapper<FollowingWindowIterator>(),
+                                 following_window,
+                                 min_periods,
+                                 agg,
+                                 stream,
+                                 mr);
 }
 
 }  // namespace detail
