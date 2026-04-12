@@ -45,15 +45,15 @@ template <typename InType,
           class agg_op,
           typename PrecedingWindowType,
           typename FollowingWindowType>
-__device__ void rolling_window_kernel(cudf::size_type nrows,
-                                      void const* __restrict__ p_in_col,
-                                      cudf::bitmask_type const* __restrict__ in_col_valid,
-                                      void* __restrict__ p_out_col,
-                                      cudf::bitmask_type* __restrict__ out_col_valid,
-                                      cudf::size_type* __restrict__ output_valid_count,
-                                      detail::window_wrapper_base b_preceding_window_begin,
-                                      detail::window_wrapper_base b_following_window_begin,
-                                      cudf::size_type min_periods)
+CUDF_KERNEL void rolling_window_kernel(cudf::size_type nrows,
+                                       void const* __restrict__ p_in_col,
+                                       cudf::bitmask_type const* __restrict__ in_col_valid,
+                                       void* __restrict__ p_out_col,
+                                       cudf::bitmask_type* __restrict__ out_col_valid,
+                                       cudf::size_type* __restrict__ output_valid_count,
+                                       detail::window_wrapper_base b_preceding_window_begin,
+                                       detail::window_wrapper_base b_following_window_begin,
+                                       cudf::size_type min_periods)
 {
   auto i                                           = cudf::detail::grid_1d::global_thread_id();
   auto const stride                                = cudf::detail::grid_1d::grid_stride();

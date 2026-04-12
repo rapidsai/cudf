@@ -33,12 +33,12 @@ namespace cudf::join::jit {
 constexpr cudf::size_type JoinNoMatch = cuda::std::numeric_limits<cudf::size_type>::min();
 
 template <bool has_user_data, null_aware is_null_aware, typename... InputAccessors>
-__device__ void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
-                                   cudf::jit::device_span<cudf::size_type const> right_indices,
-                                   cudf::column_device_view_core const* left_tables,
-                                   cudf::column_device_view_core const* right_tables,
-                                   bool* predicate_results,
-                                   void* user_data)
+CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
+                                    cudf::jit::device_span<cudf::size_type const> right_indices,
+                                    cudf::column_device_view_core const* left_tables,
+                                    cudf::column_device_view_core const* right_tables,
+                                    bool* predicate_results,
+                                    void* user_data)
 {
   auto const start  = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();

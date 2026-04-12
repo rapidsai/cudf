@@ -57,10 +57,10 @@ struct UserDefinedOp {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-__device__ void binaryop_kernel(cudf::size_type size,
-                                void* p_out_data,
-                                void* p_lhs_data,
-                                void* p_rhs_data)
+CUDF_KERNEL void binaryop_kernel(cudf::size_type size,
+                                 void* p_out_data,
+                                 void* p_lhs_data,
+                                 void* p_rhs_data)
 {
   auto out_data    = static_cast<TypeOut*>(p_out_data);
   auto lhs_data    = static_cast<TypeLhs*>(p_lhs_data);
