@@ -116,12 +116,13 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 }  // namespace jit
 }  // namespace cudf
 
-extern "C" __global__ void kernel(size_type row_size,
-                                  bitmask_type const* __restrict__ stencil,
-                                  bool stencil_has_nulls,
-                                  void* __restrict__ user_data,
-                                  column_device_view_core const* __restrict__ input_cols,
-                                  mutable_column_device_view_core const* __restrict__ output_cols)
+extern "C" __global__ void kernel(
+  cudf::size_type row_size,
+  cudf::bitmask_type const* __restrict__ stencil,
+  bool stencil_has_nulls,
+  void* __restrict__ user_data,
+  cudf::column_device_view_core const* __restrict__ input_cols,
+  cudf::mutable_column_device_view_core const* __restrict__ output_cols)
 {
   KERNEL_INSTANCE(row_size, stencil, stencil_has_nulls, user_data, input_cols, output_cols);
 }

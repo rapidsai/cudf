@@ -175,7 +175,7 @@ cudf::kernel instantiate(null_aware is_null_aware,
                        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
-                                       rtcx::reflect_enum(is_null_aware),
+                                       rtcx::reflect_enum("cudf::null_aware", is_null_aware),
                                        rtcx::reflect_bool(has_user_data),
                                        ins,
                                        outs);
@@ -184,7 +184,7 @@ cudf::kernel instantiate(null_aware is_null_aware,
     "transform/jit/kernel.cu", kernel, cuda_source, {"-restrict", "--dopt=on"});
 }
 
-void launch(cudf::kernel const& kernel_obj,
+void launch(cudf::kernel const& kernel,
             size_type row_size,
             bitmask_type const* stencil,
             bool stencil_has_nulls,
@@ -195,9 +195,9 @@ void launch(cudf::kernel const& kernel_obj,
 {
   CUDF_FUNC_RANGE();
   void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &input_cols, &output_cols};
-  auto kernel  = kernel_obj.get();
-  auto cfg     = kernel.max_occupancy_config(0, 0);
-  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
+  auto kernel_ref = kernel.get();
+  auto cfg        = kernel_ref.max_occupancy_config(0, 0);
+  kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 std::string reflect_input_element(column_view const& c) { return type_to_name(c.type()); }
@@ -254,10 +254,14 @@ auto reflect(udf_source_type source_type,
     bool as_scalar         = std::holds_alternative<scalar_column_view>(in);
     bool may_be_nullable   = input_may_be_nullable[i];
     auto is_strings_output = false;
-    auto accessor =
-      jitify2::reflection::Template("cudf::jit::column_accessor")
-        .instantiate(
-          i, column, element, optional_element, as_scalar, may_be_nullable, is_strings_output);
+    auto accessor          = rtcx::reflect_template("cudf::jit::column_accessor",
+                                           rtcx::reflect_int(i),
+                                           column,
+                                           element,
+                                           optional_element,
+                                           rtcx::reflect_bool(as_scalar),
+                                           rtcx::reflect_bool(may_be_nullable),
+                                           rtcx::reflect_bool(is_strings_output));
     in_types.push_back(accessor);
   }
 
@@ -271,16 +275,20 @@ auto reflect(udf_source_type source_type,
     bool as_scalar         = false;  // never scalar
     bool may_be_nullable   = output_may_be_nullable[i];
     auto is_strings_output = std::holds_alternative<mutable_strings_column>(out);
-    auto accessor =
-      jitify2::reflection::Template("cudf::jit::column_accessor")
-        .instantiate(
-          i, column, element, optional_element, as_scalar, may_be_nullable, is_strings_output);
+    auto accessor          = rtcx::reflect_template("cudf::jit::column_accessor",
+                                           rtcx::reflect_int(i),
+                                           column,
+                                           element,
+                                           optional_element,
+                                           rtcx::reflect_bool(as_scalar),
+                                           rtcx::reflect_bool(may_be_nullable),
+                                           rtcx::reflect_bool(is_strings_output));
 
     out_types.push_back(accessor);
   }
 
-  auto ins  = jitify2::reflection::Template("cudf::jit::type_list").instantiate(in_types);
-  auto outs = jitify2::reflection::Template("cudf::jit::type_list").instantiate(out_types);
+  auto ins  = rtcx::reflect_template("cudf::jit::type_list", in_types);
+  auto outs = rtcx::reflect_template("cudf::jit::type_list", out_types);
 
   std::vector<std::string> ptx_in_types;
   std::vector<std::string> ptx_out_types;
@@ -382,8 +390,8 @@ CUDF_KERNEL void copy_offset_bitmask(bitmask_type* __restrict__ destination,
                                      size_type source_end_bit,
                                      size_type number_of_mask_words)
 {
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  for (thread_index_type destination_word_index = grid_1d::global_thread_id();
+  auto const stride = detail::grid_1d::grid_stride();
+  for (thread_index_type destination_word_index = detail::grid_1d::global_thread_id();
        destination_word_index < number_of_mask_words;
        destination_word_index += stride) {
     destination[destination_word_index] = detail::get_mask_offset_word(

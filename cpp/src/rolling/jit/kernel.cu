@@ -68,8 +68,8 @@ __device__ void rolling_window_kernel(cudf::size_type nrows,
 
   auto active_threads = __ballot_sync(0xffff'ffffu, i < nrows);
   while (i < nrows) {
-    int64_t const preceding_window = preceding_window_begin[i];
-    int64_t const following_window = following_window_begin[i];
+    int64_t const preceding_window = preceding_window_begin[static_cast<cudf::size_type>(i)];
+    int64_t const following_window = following_window_begin[static_cast<cudf::size_type>(i)];
 
     // compute bounds
     auto const start = static_cast<cudf::size_type>(
