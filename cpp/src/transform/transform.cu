@@ -10,6 +10,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -312,7 +313,9 @@ auto to_args(std::span<input_column_view const> inputs,
              rmm::device_async_resource_ref mr)
 {
   std::vector<handle> handles;
-  std::vector<detail::column_device_view_base> h_args;
+  auto h_args =
+    detail::host_vector<detail::column_device_view_base>({get_pinned_memory_resource(), stream});
+  h_args.reserve(inputs.size() + outputs.size());
 
   for (auto& in : inputs) {
     if (auto* col = std::get_if<column_view>(&in)) {
@@ -337,14 +340,7 @@ auto to_args(std::span<input_column_view const> inputs,
       out);
   }
 
-  rmm::device_buffer d_args{h_args.size() * sizeof(detail::column_device_view_base), stream, mr};
-
-  CUDF_CUDA_TRY(detail::memcpy_async(
-    d_args.data(), h_args.data(), h_args.size() * sizeof(detail::column_device_view_base), stream));
-
-  // ensure the device buffer copy is complete before `h_args` goes out of scope and its destructors
-  // are called
-  stream.synchronize();
+  auto d_args = detail::make_device_uvector_async(h_args, stream, mr);
 
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
@@ -469,20 +465,17 @@ size_type inplace_null_mask_and(bitmask_type* null_mask,
 
   if (nullable_masks.size() == 1) {
     // only 1 mask provided, copy it directly to the output
-    if (nullable_offsets[0] % bits_per_word == 0) {
+    auto src_begin = nullable_offsets[0];
+    auto src_end   = src_begin + row_size;
+    if (src_begin % bits_per_word == 0) {
       CUDF_CUDA_TRY(detail::memcpy_async(
-        null_mask, nullable_masks[0] + (nullable_offsets[0] / bits_per_word), num_bytes, stream));
+        null_mask, nullable_masks[0] + (src_begin / bits_per_word), num_bytes, stream));
     } else {
-      cudf::detail::grid_1d config(row_size, 256);
+      detail::grid_1d config(row_size, 256);
       copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-        static_cast<bitmask_type*>(null_mask),
-        nullable_masks[0],
-        nullable_offsets[0],
-        nullable_offsets[0] + row_size,
-        num_words);
+        static_cast<bitmask_type*>(null_mask), nullable_masks[0], src_begin, src_end, num_words);
       CUDF_CHECK_CUDA(stream.value());
     }
-    CUDF_CUDA_TRY(detail::memcpy_async(null_mask, nullable_masks[0], num_bytes, stream));
     return nullable_null_counts[0];
   }
 
@@ -661,19 +654,19 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets_view,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr)
 {
-  auto offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_view);
+  auto offsets = detail::offsetalator_factory::make_input_iterator(offsets_view);
   auto chars   = rmm::device_uvector<char>(chars_size, stream, mr);
 
-  auto srcs = cudf::detail::make_counting_transform_iterator(
+  auto srcs = detail::make_counting_transform_iterator(
     size_type{0}, [begin] __device__(size_type idx) -> void const* { return begin[idx].data(); });
 
-  auto src_sizes = cudf::detail::make_counting_transform_iterator(
+  auto src_sizes = detail::make_counting_transform_iterator(
     size_type{0}, [begin, stencil] __device__(size_type idx) -> size_type {
       if (stencil != nullptr && !bit_is_set(stencil, idx)) { return 0; }
       return static_cast<size_type>(begin[idx].size_bytes());
     });
 
-  auto dsts = cudf::detail::make_counting_transform_iterator(
+  auto dsts = detail::make_counting_transform_iterator(
     size_type{0}, [offsets, chars = chars.data()] __device__(size_type idx) -> void* {
       return chars + offsets[idx];
     });
@@ -701,15 +694,14 @@ std::unique_ptr<column> make_strings_column(device_span<string_view const> strin
   auto stencil = static_cast<bitmask_type const*>(null_mask.data());
 
   // build offsets column from the strings sizes
-  auto sizes = cudf::detail::make_counting_transform_iterator(
-    cudf::size_type{0},
-    [stencil, strings = strings.data()] __device__(cudf::size_type index) -> size_type {
+  auto sizes = detail::make_counting_transform_iterator(
+    size_type{0}, [stencil, strings = strings.data()] __device__(size_type index) -> size_type {
       if (stencil != nullptr && !bit_is_set(stencil, index)) { return 0; }
       return static_cast<size_type>(strings[index].size_bytes());
     });
 
   auto [offsets, bytes] =
-    cudf::strings::detail::make_offsets_child_column(sizes, sizes + size, stream, mr);
+    strings::detail::make_offsets_child_column(sizes, sizes + size, stream, mr);
 
   auto chars = make_chars_buffer(offsets->view(), bytes, strings.data(), stencil, size, stream, mr);
 

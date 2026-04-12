@@ -216,7 +216,7 @@ async def _local_aggregation(
         chunks_received += 1
         chunk = await evaluate_chunk(
             context,
-            TableChunk.from_message(msg),
+            TableChunk.from_message(msg, br=context.br()),
             decomposed.piecewise_ir,
             ir_context=ir_context,
         )
@@ -321,6 +321,7 @@ async def _tree_reduce(
                 await allgather.extract_concatenated(stream),
                 stream,
                 exclusive_view=True,
+                br=context.br(),
             ),
             decomposed.reduction_ir,
             ir_context=ir_context,
@@ -465,6 +466,7 @@ async def _shuffle_reduce(
             shuffle.extract_chunk(partition_id, stream),
             stream,
             exclusive_view=True,
+            br=context.br(),
         )
         partition_chunk = await evaluate_chunk(
             context,
