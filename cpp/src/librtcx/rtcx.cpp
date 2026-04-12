@@ -181,8 +181,7 @@ void log_trace(std::string_view message)
   DO_IT(GetProgramLogSize)         \
   DO_IT(GetProgramLog)             \
   DO_IT(AddNameExpression)         \
-  DO_IT(GetLoweredName)            \
-  DO_IT(SetFlowCallback)
+  DO_IT(GetLoweredName)
 
 #define FOR_EACH_NVJITLINK_FUNC(DO_IT) \
   DO_IT(Create)                        \
