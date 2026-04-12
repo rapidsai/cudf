@@ -300,8 +300,9 @@ auto to_args(std::span<input_column_view const> inputs,
              rmm::device_async_resource_ref mr)
 {
   std::vector<handle> handles;
-  auto h_args = detail::make_pinned_vector_async<detail::column_device_view_base>(
-    inputs.size() + outputs.size(), stream);
+  auto h_args =
+    detail::host_vector<detail::column_device_view_base>({get_pinned_memory_resource(), stream});
+  h_args.reserve(inputs.size() + outputs.size());
 
   for (auto& in : inputs) {
     if (auto* col = std::get_if<column_view>(&in)) {
