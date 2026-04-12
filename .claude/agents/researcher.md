@@ -33,6 +33,7 @@ The main agent MUST provide you with:
 1. **Target module** — which cuDF module is being optimized (e.g. sort, join, groupby)
 2. **Your research focus** — a specific angle to search (e.g. algorithmic alternatives, memory patterns, competing implementations)
 3. **Experiment history** — the current contents of `results.tsv` showing every experiment tried so far, with their outcomes (keep/discard/crash) and descriptions
+4. **Known dead ends** — approaches that have been explicitly ruled out (from program.md's "Known Dead Ends" section or prior session failures). Do NOT suggest anything on this list.
 
 On the first spawn (start of run), the experiment history will be empty. On later spawns, it will contain all prior results.
 

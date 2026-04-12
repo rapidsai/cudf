@@ -2,12 +2,33 @@
 
 This is an experiment to have the LLM autonomously optimize the cuDF C++ CSV parser for maximum GPU performance through systematic research-driven experimentation.
 
+## Run Configuration
+
+- **Base branch**: `origin/dev_autoresearch_v2`
+- **Run tag pattern**: `<monthday>-csv` (e.g. `apr12-csv`)
+
+## Research Seeds
+
+Starting directions for this run. These are NOT prescriptive — validate each idea against profiling data before implementing.
+
+- (Add per-run research seeds here before starting a run)
+
+### Known Dead Ends (do NOT retry)
+
+- (Add known failed approaches here before starting a run)
+
 ## Setup
 
 To set up a new experiment:
 
-1. **Pick a run tag** based on today's date (e.g. `apr11-csv`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
-2. **Create the branch**: `git checkout -b autoresearch/<tag>` from current main.
+1. **Pick a run tag** based on today's date (e.g. `apr12-csv`). The branch `autoresearch/<tag>` must not already exist — this is a fresh run.
+2. **Validate and create branch**:
+   ```bash
+   git fetch origin
+   git rev-parse --verify <base_branch> || { echo "ERROR: base branch does not exist. STOP."; exit 1; }
+   git checkout -b autoresearch/<tag> <base_branch>
+   ```
+   where `<base_branch>` is from "Run Configuration" above. If the base branch does not exist, **STOP and tell the user** — do not fall back to a different branch.
 3. **Read the in-scope files** — read every file for full context:
 
    **Primary CSV source files (start here):**
@@ -40,24 +61,27 @@ To set up a new experiment:
    - `cpp/tests/io/csv_test.cpp` — Main CSV tests
    - `cpp/tests/streams/io/csv_test.cpp` — Stream-based CSV tests
 
-4. **Deep research phase** — before touching any code, spawn **2-3 researcher agents in parallel**, each with a different focus:
+4. **Read the "Research Seeds" and "Known Dead Ends" sections** at the top of this file. Use the seeds to focus initial research. Do NOT retry anything listed as a dead end.
+
+5. **Deep research phase** — before touching any code, spawn **2-3 researcher agents in parallel**, each with a different focus:
    - **Researcher 1**: CSV parsing algorithms — papers on GPU-accelerated CSV/text parsing, SIMD-style parsing, parallel field detection
    - **Researcher 2**: GPU kernel/memory optimization — coalescing patterns for text processing, shared memory for delimiter scanning, warp-level string operations
    - **Researcher 3**: Competing implementations — how cuIO, RAPIDS, DuckDB, Apache Arrow CSV, ParaText, or other GPU databases parse CSV
 
    While they run, read the source code yourself. When all return, merge ideas into a ranked backlog.
-5. **Build baseline**: `build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1`
-6. **Run baseline tests**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
-7. **Establish noise floor** — run `eval.sh` **3 times** without code changes:
+6. **Build baseline**: `build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1`
+   If the build hangs or OOMs with `-j0` (unlimited parallelism), retry with `-j$(nproc)` or lower.
+7. **Run baseline tests**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
+8. **Establish noise floor** — run `eval.sh` **3 times** without code changes:
    ```bash
    ./eval.sh results/baseline_run1
    ./eval.sh results/baseline_run2
    ./eval.sh results/baseline_run3
    ```
    Compare JSON results across the 3 runs. Record the average AND variance for each benchmark. Any future improvement must exceed this noise floor to count as real.
-8. **Initialize results.tsv** with the header row and baseline entry (exp 0).
-9. **Initialize AGENT_LOG.md** with the run header.
-10. **Begin the loop** immediately.
+9. **Initialize results.tsv** with the header row and baseline entry (exp 0).
+10. **Initialize AGENT_LOG.md** with the run header.
+11. **Begin the loop** immediately.
 
 ## What you CAN and CANNOT do
 
@@ -175,7 +199,7 @@ exp	commit	metric	improvement_pct	status	benchmark	description
 2	c3d4e5f	1050 bytes/s	-4.5	discard	quoting	warp-per-row parsing
 ```
 
-Do NOT commit results.tsv — leave it untracked.
+results.tsv is **untracked and append-only**. Never edit or delete existing rows. Because it is untracked, you must ensure code reverts never destroy it — see experiment-safety.md for the safe revert procedure.
 
 ### AGENT_LOG.md
 
@@ -200,7 +224,9 @@ Append-only narrative log. After every experiment, append one section:
 - <what the research head plans to try next and why>
 ```
 
-This file is the long-term narrative record. results.tsv is compact metrics; AGENT_LOG.md is the reasoning. Both are untracked — do NOT commit either.
+This file is the long-term narrative record. results.tsv is compact metrics; AGENT_LOG.md is the reasoning.
+
+**Both files are untracked and append-only.** Never edit or delete existing content — only append new entries. Because they are untracked, they are vulnerable to destructive git operations. This is why `git reset` is strictly forbidden — see experiment-safety.md.
 
 Initialize AGENT_LOG.md at the start of a run with a header:
 ```markdown
@@ -221,14 +247,39 @@ LOOP FOREVER:
 
 2. **Implement**: Modify files in `cpp/src/` and `cpp/include/` as needed — the primary target is `cpp/src/io/csv/` but dependencies may require changes elsewhere. One idea per experiment — don't mix unrelated changes. If an experiment with mixed ideas fails, you won't know which caused it and you've wasted a full build cycle.
 
-3. **Commit**: `git add -A && git commit -m "<description>"`
+3. **Commit**: Stage only code files you changed, then commit. Do NOT use `git add -A` or `git add .` — these can accidentally stage untracked files like AGENT_LOG.md and results.tsv.
+   ```bash
+   git add cpp/src/ cpp/include/
+   # If you also modified CMakeLists.txt (e.g. added a new source file):
+   # git add cpp/benchmarks/CMakeLists.txt
+   git commit -m "<description>"
+   ```
 
 4. **Build**: `build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1`
    Check: `tail -n 20 build.log` — if it fails, max 3 fix attempts, then abandon.
+   
+   **While the build runs**, use the wait time productively:
+   - Spawn 1-2 researcher agents in the background for the NEXT experiment's hypothesis
+   - Read source code or profiling data to deepen understanding
+   - Do NOT edit any source files while the build is in progress
+   - When the build completes, proceed to Test immediately — do not wait for background research to finish. Research results feed the next experiment, not the current one.
 
-5. **Test**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
-   Check: `tail -n 30 test.log` and `grep -c "FAILED\|PASSED" test.log`
-   All tests must pass — non-negotiable.
+5. **Test + Verify** (non-negotiable gate — must pass before ANY benchmarking):
+
+   a. **Unit tests**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
+      Check: `tail -n 30 test.log` and `grep -c "FAILED\|PASSED" test.log`
+      All tests must pass.
+
+   b. **Benchmark crash check**: Run ALL CSV nvbench benchmarks in `--profile` mode (runs every config once):
+      ```bash
+      for f in cpp/build/latest/benchmarks/CSV_*; do
+        "$f" --profile --timeout 10 > /tmp/bench_check.log 2>&1 || echo "CRASH: $(basename $f)"
+        grep -qi "error\|illegal\|misaligned\|fault" /tmp/bench_check.log && echo "CUDA ERROR in $(basename $f)"
+      done
+      ```
+      Run every binary as-is — do NOT add axis filters or sub-benchmark flags. Every benchmark must complete without CUDA errors or crashes. This catches correctness bugs that unit tests miss (e.g. issues that only manifest at scale with generated data).
+
+   If either gate fails, the experiment is **immediately rejected**. Revert the code (see experiment-safety.md), log as `crash` in results.tsv and AGENT_LOG.md, and move on. Do NOT proceed to benchmarking with broken code — a CUDA error poisons the driver state for all subsequent runs.
 
 6. **Benchmark**: Run the primary eval:
    ```bash
@@ -265,14 +316,14 @@ LOOP FOREVER:
    
    Memory persists across sessions — even if context compacts or a new session starts, these notes survive. Reference memory at the start of each session and during re-anchoring to recall past discoveries.
 
-10. **Decision**:
+11. **Decision**:
     - Improved beyond noise floor, or simpler at equal perf → **keep**
-    - Within noise floor, regressed, or more complex at equal perf → **discard** with `git reset --hard HEAD~1`
+    - Within noise floor, regressed, or more complex at equal perf → **discard** with `git revert HEAD --no-edit` (see experiment-safety.md). NEVER use `git reset` (any mode).
 
-11. **Clean up**: `rm -f build.log test.log`
+12. **Clean up**: `rm -f build.log test.log`
     JSON results in `results/` persist across experiments — do not delete them.
 
-12. **Discipline checks** (before next iteration):
+13. **Discipline checks** (before next iteration):
     - **Stall detection**: 3+ experiments without improvement across ANY primary benchmark (including within-noise-floor results)? Enter **deep research phase**:
       1. STOP experimenting.
       2. Re-read source code from disk, AGENT_LOG.md, results.tsv, and NVTX stages.
@@ -282,7 +333,7 @@ LOOP FOREVER:
     - **Re-anchor every 5 experiments**: Re-read results.tsv end-to-end, AGENT_LOG.md, check `/memory` for past discoveries, re-state your objective, summarize what worked and what failed, only THEN propose your next hypothesis. Long sessions cause context rot — memory is your hedge against it.
     - **Idea backlog low** (fewer than 2-3 ideas)? Respawn 2-3 researcher agents with results.tsv + AGENT_LOG.md so they know what's been tried and search in new directions.
 
-13. **Repeat.**
+14. **Repeat.**
 
 **Timeout**: Build > 30 min, test > 10 min, or benchmark > 30 min → kill and treat as failure.
 
@@ -303,7 +354,7 @@ build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON
 
 Claude Code has a persistent memory system (`/memory`) that survives across sessions and context compaction. Use it actively:
 
-**When starting a session**: Check `/memory` for notes from prior sessions — which approaches were tried, what bottlenecks were found, what worked. Don't re-discover what's already known.
+**When starting a session**: Check `/memory` for notes from prior sessions — which approaches were tried, what bottlenecks were found, what worked. Don't re-discover what's already known. However, evaluate whether prior memories still apply — if the base branch has changed since the last session, prior profiling data and bottleneck analysis may be stale. Re-profile before trusting old numbers.
 
 **During experiments**: Save significant discoveries — successful optimizations, failed approaches with reasons, architectural insights about the CSV parser, useful papers/techniques. This is especially important because context auto-compacts during long runs.
 

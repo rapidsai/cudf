@@ -26,20 +26,7 @@ When starting a new experiment run:
 
 1. **Pick a run tag** based on today's date (e.g. `apr11-csv`). Branch `autoresearch/<tag>` must not exist yet.
 
-2. **Create branch**: `git checkout -b autoresearch/<tag>`
-
-3. **Read in-scope files** — see `references/modules.md` for the full file list. Read every CSV source file in `cpp/src/io/csv/`. Understand the current implementation deeply before proposing any changes.
-
-4. **Deep research phase** — do this before touching any code. Spawn **2-3 researcher agents in parallel**, each with a different focus area:
-   - **Researcher 1**: CSV parsing algorithms — papers on GPU-accelerated CSV/text parsing, SIMD-style parsing, parallel field detection
-   - **Researcher 2**: GPU kernel/memory optimization — coalescing patterns for text processing, shared memory for delimiter scanning, warp-level string operations
-   - **Researcher 3**: Competing implementations — how cuIO, DuckDB, Apache Arrow CSV, ParaText parse CSV
-
-   Since this is the first spawn, experiment history is empty — tell each researcher that.
-   
-   While researchers run in parallel, read the source code yourself to understand current algorithmic choices and trade-offs.
-   
-   When all researchers return, **merge and rank** all ideas into a single prioritized backlog. This is your experiment plan.
+2. **Follow the Setup steps in `program.md`** (steps 2–11). That is the source of truth for branch creation, validation, reading seeds/dead-ends, research, baseline, and initialization. Do not skip any step.
 
 5. **Build baseline**: `build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1`
 
@@ -89,14 +76,25 @@ Each experiment should be research-informed, not just intuition. Small focused r
 
 4. **Implement**: Modify files in `cpp/src/` and `cpp/include/` as needed — the primary target is `cpp/src/io/csv/` but dependencies may require changes elsewhere. Don't mix unrelated ideas. Don't remove working code outside the optimization hot path.
 
-5. **Commit**: `git add -A && git commit -m "<description>"`
+5. **Commit**: `git add cpp/src/ cpp/include/ && git commit -m "<description>"`
+   Only stage code files. Do NOT use `git add -A`.
 
 6. **Build**: `build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON > build.log 2>&1`
    Check: `tail -n 20 build.log` — max 3 fix attempts, then abandon.
 
-7. **Test**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
-   Check: `tail -n 30 test.log` and `grep -c "FAILED\|PASSED" test.log`
-   Tests must ALL pass — non-negotiable.
+7. **Test + Verify** (non-negotiable gate):
+
+   a. **Unit tests**: `cd cpp/build/latest && ctest -R "CSV" --output-on-failure -j $(nproc) > ../../test.log 2>&1`
+      All tests must pass.
+
+   b. **Benchmark crash check**: Run ALL CSV nvbench benchmarks in `--profile` mode (every config once):
+      ```bash
+      for f in cpp/build/latest/benchmarks/CSV_*; do
+        "$f" --profile --timeout 10 > /tmp/bench_check.log 2>&1 || echo "CRASH: $(basename $f)"
+        grep -qi "error\|illegal\|misaligned\|fault" /tmp/bench_check.log && echo "CUDA ERROR in $(basename $f)"
+      done
+      ```
+      Run every binary as-is — do NOT add axis filters or flags. If any crash, the experiment is immediately rejected — revert code, log as `crash`, move on.
 
 8. **Benchmark**: Run the primary eval:
    ```bash
@@ -118,15 +116,15 @@ Each experiment should be research-informed, not just intuition. Small focused r
    - Is the improvement >20% from a minor change? Re-run twice to confirm it's real.
    - Does the improvement hold across ALL benchmark configurations (different data types, row counts, column counts)?
 
-10. **Record** in results.tsv — 3 rows for this experiment (one per primary benchmark). Don't commit it.
+10. **Record** in results.tsv — 3 rows for this experiment (one per primary benchmark). Do not commit it (untracked), but never delete or edit existing rows.
 
 11. **Log to AGENT_LOG.md** — append one section for this experiment: hypothesis, result, what worked, what didn't, what you learned, and the research head's planned next direction.
 
 12. **Decision**:
     - Improved beyond noise floor, or simpler at equal perf → **keep**
-    - Within noise floor, regressed, or more complex at equal perf → **discard** with `git reset --hard HEAD~1`
+    - Within noise floor, regressed, or more complex at equal perf → **discard** with `git revert HEAD --no-edit` (see experiment-safety.md). NEVER use `git reset` (any mode).
 
-12. **Clean up**: `rm -f build.log test.log`
+13. **Clean up**: `rm -f build.log test.log`
     JSON results in `results/` persist across experiments — do not delete them.
 
 14. **Check for drift or exhaustion**:

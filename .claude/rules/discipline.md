@@ -10,8 +10,10 @@ These prevent drift during long-running autonomous GPU optimization sessions.
 ## Rule 1 — Stay on objective
 Every experiment must directly target the optimization goal for the current module. If you're thinking "this is interesting, let me explore..." — STOP. Log the idea in results.tsv as an `idea` status row and move on.
 
-## Rule 2 — One idea per experiment
+## Rule 2 — One idea per experiment, clear numbering
 Related changes (e.g. a new algorithm + the memory layout it requires) belong together. Unrelated ideas must be separate experiments. Each build-test-benchmark cycle costs 10-30 minutes — if an experiment with mixed ideas fails, you won't know which idea caused it and you've wasted that entire cycle.
+
+**Naming**: Experiments are numbered sequentially: Exp1, Exp2, Exp3, etc. This is the ONLY numbering system. Researcher agents produce ranked idea lists (e.g. "Idea A", "Idea B" or "Tier 1, Tier 2") — these are NOT experiment numbers. An idea becomes an experiment only when you commit code for it and assign the next Exp number. Fix-up commits within an experiment keep the same number (e.g. "Exp6: fix compile error" is still Exp6, not Exp7).
 
 ## Rule 3 — Establish baseline noise floor
 On your first run, run the baseline benchmark **3 times** without code changes. Record the variance in key metrics (Elem/s, time). Any future improvement smaller than this variance is benchmark noise, not a real improvement. Do not keep changes within the noise floor.
@@ -20,7 +22,7 @@ On your first run, run the baseline benchmark **3 times** without code changes. 
 If a result looks too good (>20% gain from a minor change), re-run the benchmark twice more. NVBench measurements have natural variance from GPU thermal throttling, memory allocation timing, and other factors. Only trust reproducible numbers across multiple runs.
 
 ## Rule 5 — Clean state between experiments
-After every experiment (keep or discard), delete temporary files: `rm -f build.log test.log run.log`. Stale logs from prior experiments accumulate in context and contribute to drift over many iterations.
+After every experiment (keep or discard), delete temporary files: `rm -f build.log test.log run.log`. Stale logs from prior experiments accumulate in context and contribute to drift over many iterations. To discard a failed experiment's code, follow the revert procedure in `experiment-safety.md` — never use `git reset` (any mode).
 
 ## Rule 6 — Stall detection and deep research phase
 If 3+ experiments show no improvement across ANY primary benchmark (including within-noise-floor results, not just `discard`/`crash`), you are stalled. STOP experimenting and enter **deep research phase**:

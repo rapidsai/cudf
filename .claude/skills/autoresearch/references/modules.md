@@ -93,7 +93,7 @@ exp	commit	metric	improvement_pct	status	benchmark	description
 - benchmark: `realistic`, `type_inference`, or `quoting`
 - description: short text of what was tried
 
-Do NOT commit results.tsv — leave it untracked.
+Do NOT commit results.tsv — leave it untracked. It is append-only — never edit or delete existing rows.
 
 ## AGENT_LOG.md Format
 
@@ -118,7 +118,7 @@ Append-only narrative log. One section per experiment:
 - <what the research head plans to try next and why>
 ```
 
-Do NOT commit AGENT_LOG.md — leave it untracked.
+Do NOT commit AGENT_LOG.md — leave it untracked. It is append-only — never edit or delete existing entries.
 
 ## Timeouts
 

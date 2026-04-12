@@ -11,6 +11,7 @@ These directories define ground truth. Modifying them invalidates all experiment
 
 - **`cpp/benchmarks/**`** — Benchmarks define what is measured. Never modify.
 - **`cpp/tests/**`** — Tests define correctness. If tests fail, the code is wrong, not the tests.
+- **`eval.sh`** — The eval script is fixed. Never modify.
 
 ## Editable Zone
 
@@ -39,3 +40,24 @@ build-cudf-cpp -j0 -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=ON
 ```
 
 Clean up logs after each experiment: `rm -f build.log test.log run.log`
+
+## Reverting Failed Experiments
+
+**NEVER use `git reset` (any mode: `--hard`, `--soft`, `--mixed`) to undo an experiment.** This rewrites commit history and can destroy untracked files like AGENT_LOG.md and results.tsv.
+
+**NEVER use `git rebase`, `git checkout .`, or any other history-rewriting or bulk-restore command.**
+
+To discard a failed experiment:
+```bash
+git revert HEAD --no-edit
+```
+This creates a new commit that is the exact inverse of the experiment. It handles modified files, new files, and deleted files automatically. Since experiment commits only contain code files (`cpp/src/`, `cpp/include/`), the revert only touches code — untracked files (AGENT_LOG.md, results.tsv) are untouched.
+
+This produces a clean forward-only history: experiment commit → revert commit. No commits are ever lost.
+
+**Append-only files (untracked but must be preserved):**
+- `AGENT_LOG.md` — never edit or delete existing entries, only append
+- `results.tsv` — never edit or delete existing rows, only append
+- `results/` directory — never delete previous benchmark results
+
+These files survive code reverts because the revert procedure only touches `cpp/src/` and `cpp/include/` files. The reason `git reset` is forbidden is precisely because it CAN destroy these untracked files.

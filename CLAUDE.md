@@ -9,6 +9,7 @@ This project is set up for autonomous performance optimization of the cuDF C++ C
 - **Auto-compact context** — let context auto-compact as needed. Don't worry about context window limits.
 - All subagents (researcher, etc.) should also use Opus 4.6 1M unless there's a strong reason for a faster model.
 - Do not hold back on web searches, research depth, or experiment count to save cost.
+- When possible, prefer brevity in status updates — the detailed record goes in AGENT_LOG.md.
 
 ## What This Is
 
@@ -43,8 +44,8 @@ done
 - `eval.sh` — primary eval script: runs 3 benchmarks + NVTX profiling (DO NOT EDIT)
 - `results/` — JSON benchmark results from eval.sh runs (untracked)
 - `program.md` — the full autoresearch protocol (source of truth)
-- `results.tsv` — experiment metrics log, 3 rows per experiment (untracked)
-- `AGENT_LOG.md` — append-only narrative log of experiments (untracked)
+- `results.tsv` — experiment metrics log, 3 rows per experiment (untracked, append-only)
+- `AGENT_LOG.md` — append-only narrative log of experiments (untracked, append-only)
 - `SETUP_REQUIRED.md` — MCP/plugin setup notes for user (created on demand)
 
 ## Working with Tools and CLIs
