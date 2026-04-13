@@ -359,7 +359,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto const is_negative = (fused.int_value < 0);
         // Use the existing infer_integral_field_counter to pick the right size bucket
         // We need the trimmed begin/end for the digit counting — approximate from value
-        auto const trimmed_begin = field_start;
         // Walk from field_start to find trimmed numeric content for digit counting
         auto p = field_start;
         while (p < next_delimiter && (*p == ' ' || *p == '\t')) ++p;
