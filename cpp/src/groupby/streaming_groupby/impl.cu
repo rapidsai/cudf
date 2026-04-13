@@ -38,13 +38,15 @@ namespace {
 void validate_requests(host_span<streaming_aggregation_request const> requests)
 {
   for (auto const& req : requests) {
-    for (auto const& agg : req.aggregations) {
-      CUDF_EXPECTS(detail::is_hash_aggregation(agg->kind) && agg->kind != aggregation::ARGMIN &&
-                     agg->kind != aggregation::ARGMAX,
-                   "Unsupported aggregation kind for streaming groupby. "
-                   "ARGMIN/ARGMAX are not supported because row indices are batch-local.",
-                   std::invalid_argument);
-    }
+    CUDF_EXPECTS(req.aggregation != nullptr,
+                 "streaming_aggregation_request must have a non-null aggregation.",
+                 std::invalid_argument);
+    CUDF_EXPECTS(detail::is_hash_aggregation(req.aggregation->kind) &&
+                   req.aggregation->kind != aggregation::ARGMIN &&
+                   req.aggregation->kind != aggregation::ARGMAX,
+                 "Unsupported aggregation kind for streaming groupby. "
+                 "ARGMIN/ARGMAX are not supported because row indices are batch-local.",
+                 std::invalid_argument);
   }
 }
 
@@ -55,10 +57,8 @@ std::vector<aggregation_request> build_aggregation_requests(
   for (auto const& req : requests) {
     aggregation_request ar;
     ar.values = data.column(req.column_index);
-    for (auto const& agg : req.aggregations) {
-      ar.aggregations.push_back(std::unique_ptr<groupby_aggregation>{
-        dynamic_cast<groupby_aggregation*>(agg->clone().release())});
-    }
+    ar.aggregations.push_back(std::unique_ptr<groupby_aggregation>{
+      dynamic_cast<groupby_aggregation*>(req.aggregation->clone().release())});
     result.push_back(std::move(ar));
   }
   return result;
@@ -79,13 +79,10 @@ streaming_groupby::impl::impl(host_span<size_type const> key_indices,
   validate_requests(requests);
 
   for (auto const& req : requests) {
-    _aggs_per_request.push_back(static_cast<size_type>(req.aggregations.size()));
     streaming_aggregation_request clone;
     clone.column_index = req.column_index;
-    for (auto const& agg : req.aggregations) {
-      clone.aggregations.push_back(std::unique_ptr<groupby_aggregation>{
-        dynamic_cast<groupby_aggregation*>(agg->clone().release())});
-    }
+    clone.aggregation  = std::unique_ptr<groupby_aggregation>{
+      dynamic_cast<groupby_aggregation*>(req.aggregation->clone().release())};
     _requests_clone.push_back(std::move(clone));
   }
 }
@@ -149,11 +146,8 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   for (auto const& req : _requests_clone) {
     _request_first_agg_offset.push_back(offset);
     auto const values_type = data.column(req.column_index).type();
-    for (auto const& agg : req.aggregations) {
-      auto const& ga = dynamic_cast<groupby_aggregation const&>(*agg);
-      offset +=
-        static_cast<size_type>(detail::hash::get_simple_aggregations(ga, values_type).size());
-    }
+    auto const& ga         = dynamic_cast<groupby_aggregation const&>(*req.aggregation);
+    offset += static_cast<size_type>(detail::hash::get_simple_aggregations(ga, values_type).size());
   }
 
   // Companion vectors: max_groups to accommodate encoded index range.
@@ -235,10 +229,8 @@ streaming_groupby::impl::do_finalize(rmm::cuda_stream_view stream,
     for (size_t i = 0; i < _requests_clone.size(); ++i) {
       aggregation_request ar;
       ar.values = agg_gathered->view().column(_request_first_agg_offset[i]);
-      for (auto const& agg : _requests_clone[i].aggregations) {
-        ar.aggregations.push_back(std::unique_ptr<groupby_aggregation>{
-          dynamic_cast<groupby_aggregation*>(agg->clone().release())});
-      }
+      ar.aggregations.push_back(std::unique_ptr<groupby_aggregation>{
+        dynamic_cast<groupby_aggregation*>(_requests_clone[i].aggregation->clone().release())});
       agg_requests_fin.push_back(std::move(ar));
     }
 
@@ -261,13 +253,11 @@ streaming_groupby::impl::do_finalize(rmm::cuda_stream_view stream,
   }
 
   auto released_cols = agg_gathered->release();
-  auto col_it        = std::make_move_iterator(released_cols.begin());
   std::vector<aggregation_result> results;
-  results.reserve(_aggs_per_request.size());
-  for (auto num_aggs : _aggs_per_request) {
+  results.reserve(_requests_clone.size());
+  for (auto& col : released_cols) {
     aggregation_result agg_result;
-    agg_result.results.assign(col_it, col_it + num_aggs);
-    col_it += num_aggs;
+    agg_result.results.push_back(std::move(col));
     results.push_back(std::move(agg_result));
   }
   return {std::move(keys), std::move(results)};

@@ -120,7 +120,7 @@ void bench_groupby_max_cardinality(nvbench::state& state, nvbench::type_list<Typ
     for (int64_t i = 0; i < num_aggregations; i++) {
       cudf::groupby::streaming_aggregation_request req;
       req.column_index = static_cast<cudf::size_type>(3 + i);
-      req.aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
+      req.aggregation  = cudf::make_max_aggregation<cudf::groupby_aggregation>();
       requests.push_back(std::move(req));
     }
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {

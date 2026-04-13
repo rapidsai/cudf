@@ -108,8 +108,8 @@ void test_single_agg(cudf::column_view const& keys,
 
     cudf::groupby::streaming_aggregation_request sreq;
     sreq.column_index = 1;
-    sreq.aggregations.push_back(std::unique_ptr<cudf::groupby_aggregation>{
-      dynamic_cast<cudf::groupby_aggregation*>(agg->clone().release())});
+    sreq.aggregation  = std::unique_ptr<cudf::groupby_aggregation>{
+      dynamic_cast<cudf::groupby_aggregation*>(agg->clone().release())};
 
     std::vector<cudf::groupby::streaming_aggregation_request> sreqs;
     sreqs.push_back(std::move(sreq));
