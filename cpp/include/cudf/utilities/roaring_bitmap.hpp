@@ -71,13 +71,34 @@ class roaring_bitmap {
   explicit roaring_bitmap(roaring_bitmap_type type,
                           cudf::host_span<cuda::std::byte const> serialized_bitmap_data);
 
+  /**
+   * @brief Destructor for the roaring bitmap class
+   */
   ~roaring_bitmap();
 
+  /**
+   * @brief Move constructor for the roaring bitmap class
+   *
+   * @param other Roaring bitmap to move from
+   */
   roaring_bitmap(roaring_bitmap&&) noexcept;
-  roaring_bitmap& operator=(roaring_bitmap&&) noexcept;
 
-  roaring_bitmap(roaring_bitmap const&)            = delete;
-  roaring_bitmap& operator=(roaring_bitmap const&) = delete;
+  /**
+   * @brief Move assignment operator for the roaring bitmap class
+   *
+   * @param other Roaring bitmap to move from
+   */
+  roaring_bitmap& operator=(roaring_bitmap&& other) noexcept;
+
+  /**
+   * @brief Deleted copy constructor for the roaring bitmap class
+   */
+  roaring_bitmap(roaring_bitmap const& other) = delete;
+
+  /**
+   * @brief Deleted copy assignment operator for the roaring bitmap class
+   */
+  roaring_bitmap& operator=(roaring_bitmap const& other) = delete;
 
   /**
    * @brief Materalize the underlying cuco roaring bitmap.
