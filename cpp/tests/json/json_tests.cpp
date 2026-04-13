@@ -443,7 +443,7 @@ TEST_F(JsonPathTests, GetJsonObjectNullInputs)
 {
   {
     std::string str(R"({"a" : "b"})");
-    cudf::test::strings_column_wrapper input({str, str, str, str}, {true, false, true, false});
+    cudf::test::strings_column_wrapper input({str, "", str, ""}, {true, false, true, false});
 
     std::string_view json_path("$.a");
     auto result_raw = cudf::get_json_object(cudf::strings_column_view(input), json_path);
