@@ -129,14 +129,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    t_s_first = _year_total_sk(
-        store_sales,
-        date_dim,
-        "ss_sold_date_sk",
-        "ss_customer_sk",
-        "ss_net_paid",
-        year,
-    ).rename({"year_total": "s_first_total"})
+    t_s_first = (
+        _year_total_sk(
+            store_sales,
+            date_dim,
+            "ss_sold_date_sk",
+            "ss_customer_sk",
+            "ss_net_paid",
+            year,
+        )
+        .rename({"year_total": "s_first_total"})
+        .filter(pl.col("s_first_total") > 0)
+    )
     t_s_sec = _year_total_sk(
         store_sales,
         date_dim,
@@ -145,14 +149,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         "ss_net_paid",
         year + 1,
     ).rename({"year_total": "s_sec_total"})
-    t_w_first = _year_total_sk(
-        web_sales,
-        date_dim,
-        "ws_sold_date_sk",
-        "ws_bill_customer_sk",
-        "ws_net_paid",
-        year,
-    ).rename({"year_total": "w_first_total"})
+    t_w_first = (
+        _year_total_sk(
+            web_sales,
+            date_dim,
+            "ws_sold_date_sk",
+            "ws_bill_customer_sk",
+            "ws_net_paid",
+            year,
+        )
+        .rename({"year_total": "w_first_total"})
+        .filter(pl.col("w_first_total") > 0)
+    )
     t_w_sec = _year_total_sk(
         web_sales,
         date_dim,
@@ -177,12 +185,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             joined.filter(
-                (pl.col("s_first_total") > 0)
-                & (pl.col("w_first_total") > 0)
-                & (
-                    pl.col("w_sec_total") / pl.col("w_first_total")
-                    > pl.col("s_sec_total") / pl.col("s_first_total")
-                )
+                pl.col("w_sec_total") / pl.col("w_first_total")
+                > pl.col("s_sec_total") / pl.col("s_first_total")
             )
             .join(
                 customer.select(
