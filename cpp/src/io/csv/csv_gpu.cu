@@ -147,141 +147,6 @@ __device__ __inline__ bool is_floatingpoint(long len,
   return true;
 }
 
-/*
- * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
- *
- * Data is processed in one row/record at a time, so the number of total
- * threads (tid) is equal to the number of rows.
- *
- * @param opts A set of parsing options
- * @param csv_text The entire CSV data to read
- * @param column_flags Per-column parsing behavior flags
- * @param row_offsets The start the CSV data of interest
- * @param d_column_data The count for each column data type
- */
-CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
-  data_type_detection(parse_options_view const opts,
-                      device_span<char const> csv_text,
-                      device_span<column_parse::flags const> const column_flags,
-                      device_span<uint64_t const> const row_offsets,
-                      device_span<column_type_histogram> d_column_data)
-{
-  auto const raw_csv = csv_text.data();
-
-  // ThreadIds range per block, so also need the blockId
-  // This is entry into the fields; threadId is an element within `num_records`
-  auto const rec_id      = grid_1d::global_thread_id();
-  auto const rec_id_next = rec_id + 1;
-
-  // we can have more threads than data, make sure we are not past the end of the data
-  if (rec_id_next >= row_offsets.size()) { return; }
-
-  auto field_start   = raw_csv + row_offsets[rec_id];
-  auto const row_end = raw_csv + row_offsets[rec_id_next];
-
-  auto next_field = field_start;
-  int col         = 0;
-  int actual_col  = 0;
-
-  // Going through all the columns of a given record
-  while (col < column_flags.size() && field_start < row_end) {
-    auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
-
-    // Checking if this is a column that the user wants --- user can filter columns
-    if (column_flags[col] & column_parse::inferred) {
-      // points to last character in the field
-      auto const field_len = static_cast<size_t>(next_delimiter - field_start);
-      if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
-        atomicAdd(&d_column_data[actual_col].null_count, 1);
-      } else if (serialized_trie_contains(opts.trie_true, {field_start, field_len}) ||
-                 serialized_trie_contains(opts.trie_false, {field_start, field_len})) {
-        atomicAdd(&d_column_data[actual_col].bool_count, 1);
-      } else if (cudf::io::is_infinity(field_start, next_delimiter)) {
-        atomicAdd(&d_column_data[actual_col].float_count, 1);
-      } else {
-        long count_number    = 0;
-        long count_decimal   = 0;
-        long count_thousands = 0;
-        long count_slash     = 0;
-        long count_dash      = 0;
-        long count_plus      = 0;
-        long count_colon     = 0;
-        long count_string    = 0;
-        long count_exponent  = 0;
-
-        // Modify field_start & end to ignore whitespace and quotechars
-        // This could possibly result in additional empty fields
-        auto const trimmed_field_range = trim_whitespaces_quotes(field_start, next_delimiter);
-        auto const trimmed_field_len   = trimmed_field_range.second - trimmed_field_range.first;
-
-        for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
-          if (is_digit(*cur)) {
-            count_number++;
-            continue;
-          }
-          if (*cur == opts.decimal) {
-            count_decimal++;
-            continue;
-          }
-          if (*cur == opts.thousands) {
-            count_thousands++;
-            continue;
-          }
-          // Looking for unique characters that will help identify column types.
-          switch (*cur) {
-            case '-': count_dash++; break;
-            case '+': count_plus++; break;
-            case '/': count_slash++; break;
-            case ':': count_colon++; break;
-            case 'e':
-            case 'E':
-              if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
-                count_exponent++;
-              break;
-            default: count_string++; break;
-          }
-        }
-
-        // Integers have to have the length of the string
-        // Off by one if they start with a minus sign
-        auto const int_req_number_cnt =
-          trimmed_field_len - count_thousands -
-          ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
-           trimmed_field_len > 1);
-
-        if (column_flags[col] & column_parse::as_datetime) {
-          // PANDAS uses `object` dtype if the date is unparseable
-          if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
-            atomicAdd(&d_column_data[actual_col].datetime_count, 1);
-          } else {
-            atomicAdd(&d_column_data[actual_col].string_count, 1);
-          }
-        } else if (count_number == int_req_number_cnt) {
-          auto const is_negative = (*trimmed_field_range.first == '-');
-          auto const data_begin =
-            trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
-          cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
-            data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
-          atomicAdd(ptr, 1);
-        } else if (is_floatingpoint(trimmed_field_len,
-                                    count_number,
-                                    count_decimal,
-                                    count_thousands,
-                                    count_dash + count_plus,
-                                    count_exponent)) {
-          atomicAdd(&d_column_data[actual_col].float_count, 1);
-        } else {
-          atomicAdd(&d_column_data[actual_col].string_count, 1);
-        }
-      }
-      actual_col++;
-    }
-    next_field  = next_delimiter + 1;
-    field_start = next_field;
-    col++;
-  }
-}
-
 /**
  * @brief Result of a unified fused field scan + numeric parse attempt.
  *
@@ -439,6 +304,168 @@ __device__ __forceinline__ fused_numeric_result try_fused_numeric_scan(
   result.float_value =
     (is_negative ? -1.0 : 1.0) * static_cast<double>(mantissa) * pow10_neg[frac_digits];
   return result;
+}
+
+/*
+ * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
+ *
+ * Data is processed in one row/record at a time, so the number of total
+ * threads (tid) is equal to the number of rows.
+ *
+ * @param opts A set of parsing options
+ * @param csv_text The entire CSV data to read
+ * @param column_flags Per-column parsing behavior flags
+ * @param row_offsets The start the CSV data of interest
+ * @param d_column_data The count for each column data type
+ */
+CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
+  data_type_detection(parse_options_view const opts,
+                      device_span<char const> csv_text,
+                      device_span<column_parse::flags const> const column_flags,
+                      device_span<uint64_t const> const row_offsets,
+                      device_span<column_type_histogram> d_column_data)
+{
+  auto const raw_csv = csv_text.data();
+
+  // ThreadIds range per block, so also need the blockId
+  // This is entry into the fields; threadId is an element within `num_records`
+  auto const rec_id      = grid_1d::global_thread_id();
+  auto const rec_id_next = rec_id + 1;
+
+  // we can have more threads than data, make sure we are not past the end of the data
+  if (rec_id_next >= row_offsets.size()) { return; }
+
+  auto field_start   = raw_csv + row_offsets[rec_id];
+  auto const row_end = raw_csv + row_offsets[rec_id_next];
+
+  auto next_field = field_start;
+  int col         = 0;
+  int actual_col  = 0;
+
+  // Going through all the columns of a given record
+  while (col < column_flags.size() && field_start < row_end) {
+    // Checking if this is a column that the user wants --- user can filter columns
+    if (column_flags[col] & column_parse::inferred) {
+      // Try fused numeric scan first — handles the common case of integer/float fields
+      // in a single pass (finds delimiter + classifies type simultaneously)
+      auto const fused = try_fused_numeric_scan(field_start, row_end, opts);
+      auto next_delimiter = fused.delimiter_pos;
+
+      if (fused.is_null) {
+        // Empty field — count as null
+        atomicAdd(&d_column_data[actual_col].null_count, 1);
+      } else if (fused.parsed_ok && !fused.has_decimal) {
+        // Pure integer — determine which integer counter to increment
+        auto const is_negative = (fused.int_value < 0);
+        // Use the existing infer_integral_field_counter to pick the right size bucket
+        // We need the trimmed begin/end for the digit counting — approximate from value
+        auto const trimmed_begin = field_start;
+        // Walk from field_start to find trimmed numeric content for digit counting
+        auto p = field_start;
+        while (p < next_delimiter && (*p == ' ' || *p == '\t')) ++p;
+        if (*p == '-' || *p == '+') ++p;
+        auto digit_begin = p;
+        while (p < next_delimiter && *p >= '0' && *p <= '9') ++p;
+        cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
+          digit_begin, p, is_negative, d_column_data[actual_col]);
+        atomicAdd(ptr, 1);
+      } else if (fused.parsed_ok && fused.has_decimal) {
+        // Float (has decimal point, no exponent — exponent bails to fallback)
+        atomicAdd(&d_column_data[actual_col].float_count, 1);
+      } else {
+        // Fused scan failed — fall back to the original character classification
+        auto const field_len = static_cast<size_t>(next_delimiter - field_start);
+        if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
+          atomicAdd(&d_column_data[actual_col].null_count, 1);
+        } else if (serialized_trie_contains(opts.trie_true, {field_start, field_len}) ||
+                   serialized_trie_contains(opts.trie_false, {field_start, field_len})) {
+          atomicAdd(&d_column_data[actual_col].bool_count, 1);
+        } else if (cudf::io::is_infinity(field_start, next_delimiter)) {
+          atomicAdd(&d_column_data[actual_col].float_count, 1);
+        } else {
+          long count_number    = 0;
+          long count_decimal   = 0;
+          long count_thousands = 0;
+          long count_slash     = 0;
+          long count_dash      = 0;
+          long count_plus      = 0;
+          long count_colon     = 0;
+          long count_string    = 0;
+          long count_exponent  = 0;
+
+          auto const trimmed_field_range = trim_whitespaces_quotes(field_start, next_delimiter);
+          auto const trimmed_field_len   = trimmed_field_range.second - trimmed_field_range.first;
+
+          for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
+            if (is_digit(*cur)) {
+              count_number++;
+              continue;
+            }
+            if (*cur == opts.decimal) {
+              count_decimal++;
+              continue;
+            }
+            if (*cur == opts.thousands) {
+              count_thousands++;
+              continue;
+            }
+            switch (*cur) {
+              case '-': count_dash++; break;
+              case '+': count_plus++; break;
+              case '/': count_slash++; break;
+              case ':': count_colon++; break;
+              case 'e':
+              case 'E':
+                if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
+                  count_exponent++;
+                break;
+              default: count_string++; break;
+            }
+          }
+
+          auto const int_req_number_cnt =
+            trimmed_field_len - count_thousands -
+            ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
+             trimmed_field_len > 1);
+
+          if (column_flags[col] & column_parse::as_datetime) {
+            if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
+              atomicAdd(&d_column_data[actual_col].datetime_count, 1);
+            } else {
+              atomicAdd(&d_column_data[actual_col].string_count, 1);
+            }
+          } else if (count_number == int_req_number_cnt) {
+            auto const is_negative = (*trimmed_field_range.first == '-');
+            auto const data_begin =
+              trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
+            cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
+              data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
+            atomicAdd(ptr, 1);
+          } else if (is_floatingpoint(trimmed_field_len,
+                                      count_number,
+                                      count_decimal,
+                                      count_thousands,
+                                      count_dash + count_plus,
+                                      count_exponent)) {
+            atomicAdd(&d_column_data[actual_col].float_count, 1);
+          } else {
+            atomicAdd(&d_column_data[actual_col].string_count, 1);
+          }
+        }
+      }
+      actual_col++;
+      next_field  = fused.delimiter_pos + 1;
+      field_start = next_field;
+    } else {
+      // Column not inferred — still need to advance past the field
+      auto next_delimiter = (next_field < row_end && *next_field == opts.quotechar)
+                              ? cudf::io::gpu::seek_field_end(next_field, row_end, opts)
+                              : scan_to_delimiter(next_field, row_end, opts);
+      next_field  = next_delimiter + 1;
+      field_start = next_field;
+    }
+    col++;
+  }
 }
 
 /**
