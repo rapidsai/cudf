@@ -406,6 +406,134 @@ __device__ __forceinline__ fused_parse_result try_fused_int_scan(
 }
 
 /**
+ * @brief Result of a fused field scan + float parse attempt.
+ */
+struct fused_float_result {
+  char const* delimiter_pos;
+  double value;
+  bool parsed_ok;
+  bool is_null;
+};
+
+/// Power-of-10 lookup for fractional digit scaling (up to 18 fractional digits)
+__device__ constexpr double pow10_neg[] = {
+  1e0,  1e-1,  1e-2,  1e-3,  1e-4,  1e-5,  1e-6,  1e-7,  1e-8, 1e-9,
+  1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18};
+
+/**
+ * @brief Fused field scan + float parse.
+ *
+ * Scans from field_start to find the delimiter/terminator, simultaneously
+ * accumulating an integer mantissa and tracking the decimal point position.
+ * At the end, one multiply converts to the final double value.
+ *
+ * Handles: sign, integer part, decimal point, fractional part.
+ * Falls back (parsed_ok=false) for: exponent notation (e/E), quoted fields,
+ * infinity, NaN, thousand separators, or fields that need the general parser.
+ */
+__device__ __forceinline__ fused_float_result try_fused_float_scan(
+  char const* field_start, char const* row_end, cudf::io::parse_options_view const& opts)
+{
+  fused_float_result result;
+  result.parsed_ok = false;
+  result.is_null   = false;
+  result.value     = 0.0;
+
+  auto cur = field_start;
+
+  // Skip leading whitespace
+  while (cur < row_end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  // Check for empty field
+  if (cur >= row_end || *cur == opts.delimiter || *cur == opts.terminator) {
+    result.delimiter_pos = cur;
+    result.is_null       = true;
+    return result;
+  }
+
+  // Bail on quoted fields
+  if (*cur == opts.quotechar) {
+    result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+    return result;
+  }
+
+  // Handle sign
+  double sign = 1.0;
+  if (*cur == '-') {
+    sign = -1.0;
+    ++cur;
+  } else if (*cur == '+') {
+    ++cur;
+  }
+
+  // Accumulate integer mantissa across integer and fractional parts
+  int64_t mantissa    = 0;
+  int digit_count     = 0;
+  int frac_digits     = 0;
+  bool seen_dot       = false;
+  bool seen_any_digit = false;
+
+  while (cur < row_end) {
+    char c = *cur;
+    if (c >= '0' && c <= '9') {
+      if (digit_count < 18) {  // int64_t overflow guard
+        mantissa = mantissa * 10 + (c - '0');
+        ++digit_count;
+        if (seen_dot) { ++frac_digits; }
+      } else if (!seen_dot) {
+        // Too many digits in integer part — bail to general parser
+        result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+        return result;
+      }
+      // else: extra fractional digits beyond precision are silently dropped
+      seen_any_digit = true;
+      ++cur;
+    } else if (c == opts.decimal && !seen_dot) {
+      seen_dot = true;
+      ++cur;
+    } else if (c == 'e' || c == 'E' || c == opts.thousands) {
+      // Exponent notation or thousands separator — fall back to general parser
+      result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+      return result;
+    } else {
+      break;
+    }
+  }
+
+  // Skip trailing whitespace
+  while (cur < row_end && (*cur == ' ' || *cur == '\t')) {
+    ++cur;
+  }
+
+  // Must end at delimiter, terminator, or row_end
+  if (cur < row_end && *cur != opts.delimiter && *cur != opts.terminator &&
+      !(*cur == '\r' && cur + 1 < row_end && *(cur + 1) == '\n')) {
+    // Unexpected character (e.g., infinity, letters) — fall back
+    result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+    return result;
+  }
+
+  result.delimiter_pos = cur;
+
+  if (!seen_any_digit) {
+    // Just a sign or decimal point with no digits
+    if (sign == -1.0 || seen_dot) {
+      // "-" or "." alone — not a valid float, treat as invalid
+      return result;
+    }
+    result.is_null = true;
+    return result;
+  }
+
+  // Convert mantissa to double with single multiply
+  result.parsed_ok = true;
+  result.value     = sign * static_cast<double>(mantissa) * pow10_neg[frac_digits];
+  return result;
+}
+
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -531,7 +659,58 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
       continue;
     }
 
-    // === GENERAL PATH (non-integer columns) ===
+    // Check for float column eligible for fused fast path
+    bool const is_float_col =
+      col_enabled && (col_type == cudf::type_id::FLOAT32 || col_type == cudf::type_id::FLOAT64);
+
+    if (is_float_col) {
+      // === FUSED FLOAT FAST PATH ===
+      // Single scan: find delimiter + parse float value simultaneously using integer mantissa
+      auto const fused = try_fused_float_scan(field_start, row_end, options);
+      auto next_delimiter = fused.delimiter_pos;
+
+      if (fused.parsed_ok) {
+        // Successfully parsed float — write value directly
+        if (col_type == cudf::type_id::FLOAT64) {
+          static_cast<double*>(columns[actual_col])[rec_id] = fused.value;
+        } else {
+          static_cast<float*>(columns[actual_col])[rec_id] = static_cast<float>(fused.value);
+        }
+        set_bit(valids[actual_col], rec_id);
+        atomicAdd(&valid_counts[actual_col], 1);
+      } else if (!fused.is_null) {
+        // Fused parse failed (exponent notation, infinity, etc.)
+        // Fall back to the general path with delimiter already found
+        auto const field_len = static_cast<size_t>(next_delimiter - field_start);
+        auto const is_valid =
+          !serialized_trie_contains(options.trie_na, {field_start, field_len});
+        if (is_valid) {
+          auto const trimmed_field =
+            trim_whitespaces_quotes(field_start, next_delimiter, options.quotechar);
+          if (cudf::type_dispatcher(dtypes[actual_col],
+                                    ConvertFunctor{},
+                                    trimmed_field.first,
+                                    trimmed_field.second,
+                                    columns[actual_col],
+                                    rec_id,
+                                    dtypes[actual_col],
+                                    options,
+                                    false)) {
+            set_bit(valids[actual_col], rec_id);
+            atomicAdd(&valid_counts[actual_col], 1);
+          }
+        }
+      }
+      // else: is_null — leave as invalid (null)
+
+      ++actual_col;
+      next_field  = next_delimiter + 1;
+      field_start = next_field;
+      ++col;
+      continue;
+    }
+
+    // === GENERAL PATH (non-integer, non-float columns) ===
     auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
 
     if (col_enabled) {
