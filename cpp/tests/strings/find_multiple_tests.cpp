@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,7 +59,7 @@ TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn)
 
 TEST_F(StringsFindMultipleTest, ErrorTest)
 {
-  cudf::test::strings_column_wrapper strings({"this string intentionally left blank"}, {false});
+  cudf::test::strings_column_wrapper strings({""}, {false});
   auto strings_view = cudf::strings_column_view(strings);
 
   auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
