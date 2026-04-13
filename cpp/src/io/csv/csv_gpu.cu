@@ -45,7 +45,7 @@ namespace csv {
 namespace gpu {
 
 /// Block dimension for dtype detection and conversion kernels
-constexpr uint32_t csvparse_block_dim = 128;
+constexpr uint32_t csvparse_block_dim = 256;
 
 /*
  * @brief Returns true is the input character is a valid digit.
