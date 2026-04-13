@@ -17,7 +17,6 @@
 #include <rmm/device_buffer.hpp>
 
 #include <cuda/iterator>
-#include <thrust/iterator/transform_iterator.h>
 
 struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
 template <typename T>
@@ -158,7 +157,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
   // Children :
   //    0, 1, 2, 3, 4
   //
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{sequence,
                                                                                     sequence + 5};
@@ -192,7 +191,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   // Children :
   //    0, NULL, 2, NULL, 4
   //
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{
     sequence, sequence + 5, valids};
