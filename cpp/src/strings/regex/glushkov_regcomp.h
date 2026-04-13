@@ -53,10 +53,10 @@ using g_state_t = uint64_t;
  * character-consuming instructions in the Thompson NFA.
  */
 struct glushkov_host_program {
-  uint32_t num_states{};     ///< Number of character-consuming positions
-  g_state_t first_set{};     ///< Bitmask: positions reachable before first character
-  g_state_t accept_mask{};   ///< Bitmask: positions whose match completes the pattern
-  bool nullable{};           ///< True if the empty string satisfies the pattern
+  uint32_t num_states{};    ///< Number of character-consuming positions
+  g_state_t first_set{};    ///< Bitmask: positions reachable before first character
+  g_state_t accept_mask{};  ///< Bitmask: positions whose match completes the pattern
+  bool nullable{};          ///< True if the empty string satisfies the pattern
 
   /// follow_table[p] = bitmask of positions that can immediately follow position p.
   std::array<g_state_t, GLUSHKOV_MAX_STATES> follow_table{};
@@ -64,9 +64,9 @@ struct glushkov_host_program {
   // ---- Per-position character-matching descriptors ----
   // Using struct-of-arrays to avoid a separate shared struct that would need
   // to be visible in the CUDA device header.
-  std::array<int32_t, GLUSHKOV_MAX_STATES>  pos_inst_type{};  ///< CHAR/ANY/ANYNL/CCLASS/NCCLASS
-  std::array<char32_t, GLUSHKOV_MAX_STATES> pos_ch{};          ///< Literal char (CHAR only)
-  std::array<int32_t, GLUSHKOV_MAX_STATES>  pos_cls_idx{};     ///< Class index (CCLASS/NCCLASS)
+  std::array<int32_t, GLUSHKOV_MAX_STATES> pos_inst_type{};  ///< CHAR/ANY/ANYNL/CCLASS/NCCLASS
+  std::array<char32_t, GLUSHKOV_MAX_STATES> pos_ch{};        ///< Literal char (CHAR only)
+  std::array<int32_t, GLUSHKOV_MAX_STATES> pos_cls_idx{};    ///< Class index (CCLASS/NCCLASS)
 
   // ---- Shift-and transition optimisation (Hyperscan-style) ----
   //
