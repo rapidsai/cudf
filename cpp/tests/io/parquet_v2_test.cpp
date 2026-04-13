@@ -291,7 +291,7 @@ TEST_P(ParquetV2Test, SlicedTable)
   // [[[]]]
   // [NULL, [], NULL, [[]]]
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
   lcw col4{{
              {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
              {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
@@ -384,7 +384,7 @@ TEST_P(ParquetV2Test, ListColumn)
   auto const is_v2 = GetParam();
 
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -499,7 +499,7 @@ TEST_P(ParquetV2Test, StructOfList)
     {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
 
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -899,7 +899,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
   auto col2_data = random_values<int32_t>(num_rows);
 
   // col1 is all nulls
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto valids = cudf::test::iterators::all_nulls();
   auto col1 =
     cudf::test::fixed_width_column_wrapper<int32_t>(col1_data.begin(), col1_data.end(), valids);
   auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(col2_data.begin(), col2_data.end());
@@ -1401,7 +1401,7 @@ TEST_P(ParquetV2Test, CheckEncodings)
   // data should be PLAIN for v1, DELTA_BINARY_PACKED for v2
   auto col1_data = random_values<int32_t>(num_rows);
   // data should be PLAIN_DICTIONARY for v1, PLAIN and RLE_DICTIONARY for v2
-  auto col2_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+  auto col2_data = cuda::constant_iterator{1};
 
   cudf::test::fixed_width_column_wrapper<bool> col0{col0_data, col0_data + num_rows, validity};
   column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), validity};

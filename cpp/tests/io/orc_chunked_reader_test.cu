@@ -35,7 +35,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace {
 enum class output_limit : std::size_t {};
@@ -187,7 +186,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
 
   auto const generate_input = [num_rows](bool nullable, std::size_t stripe_rows) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = thrust::make_counting_iterator(0);
+    auto const value_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
 
@@ -233,7 +232,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
 
   auto const [expected, filepath] = [num_rows]() {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = thrust::make_counting_iterator(0);
+    auto const value_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     return write_file(input_columns, "chunked_read_simple_boundary");
   }();
@@ -348,7 +347,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithString)
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const value_iter = thrust::make_counting_iterator(0);
+    auto const value_iter = cuda::counting_iterator<int32_t>{0};
 
     // ints                               Granularity Segment  total bytes   cumulative bytes
     // 20000 rows of 4 bytes each               = A0           80000         80000
@@ -453,7 +452,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructs)
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = thrust::make_counting_iterator(0);
+    auto const int_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
     input_columns.emplace_back([=] {
       auto child1 = int32s_col(int_iter, int_iter + num_rows);
@@ -704,7 +703,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructsOfLists)
   // and from 456k to 473k (with nulls).
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = thrust::make_counting_iterator(0);
+    auto const int_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
     input_columns.emplace_back([=] {
       std::vector<std::unique_ptr<cudf::column>> child_columns;
@@ -829,7 +828,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsOfStructs)
   // and from 330k to 380k (with nulls).
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
-    auto const int_iter = thrust::make_counting_iterator(0);
+    auto const int_iter = cuda::counting_iterator<int32_t>{0};
     input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
 
     auto offsets = std::vector<cudf::size_type>{};
@@ -957,7 +956,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNullCount)
 {
   auto constexpr num_rows = 100'000;
 
-  auto const sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+  auto const sequence = cuda::constant_iterator(1);
   auto const validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 4 != 3; });
   std::vector<std::unique_ptr<cudf::column>> cols;
@@ -1081,11 +1080,12 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
 {
   auto constexpr num_rows = 1'000'000;
 
-  auto const iter1 = thrust::make_counting_iterator<int>(0);
+  auto const iter1 = cuda::counting_iterator<int>{0};
   auto const col1  = int32s_col(iter1, iter1 + num_rows);
 
-  auto const iter2 = thrust::make_counting_iterator<double>(0);
-  auto const col2  = doubles_col(iter2, iter2 + num_rows);
+  auto const iter2 =
+    cudf::detail::make_counting_transform_iterator(0, [](int i) { return static_cast<double>(i); });
+  auto const col2 = doubles_col(iter2, iter2 + num_rows);
 
   auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
   auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
@@ -1145,7 +1145,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   int constexpr list_size = 4;
 
   auto const stream = cudf::get_default_stream();
-  auto const iter   = thrust::make_counting_iterator(0);
+  auto const iter   = cuda::counting_iterator<int32_t>{0};
 
   auto offset_col = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
@@ -1203,7 +1203,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   int constexpr str_size  = 3;
 
   auto const stream = cudf::get_default_stream();
-  auto const iter   = thrust::make_counting_iterator(0);
+  auto const iter   = cuda::counting_iterator<int32_t>{0};
 
   // list<int>
   auto offset_col = cudf::make_fixed_width_column(
@@ -1288,7 +1288,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   static_assert(num_rows % rows_per_stripe != 0,
                 "`num_rows` should not be divisible by `stripe_size_rows`.");
 
-  auto const it    = thrust::make_counting_iterator(0);
+  auto const it    = cuda::counting_iterator<int32_t>{0};
   auto const col   = int32s_col(it, it + num_rows);
   auto const input = cudf::table_view{{col}};
 
@@ -1364,8 +1364,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   int64_t constexpr total_rows  = num_rows * num_reps;
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
-  auto const it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int64_t>(0), [num_rows](int64_t i) {
+  auto const it =
+    thrust::make_transform_iterator(cuda::counting_iterator<int64_t>{0}, [num_rows](int64_t i) {
       return (i % num_rows) % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
     });
   auto const col         = data_col(it, it + num_rows);

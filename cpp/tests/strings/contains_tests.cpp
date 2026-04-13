@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,8 +16,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
@@ -277,11 +277,10 @@ TEST_F(StringsContainsTests, OctalTest)
 TEST_F(StringsContainsTests, HexTest)
 {
   std::vector<char> ascii_chars(  // all possible matchable chars
-    {thrust::make_counting_iterator<char>(0), thrust::make_counting_iterator<char>(127)});
+    {cuda::counting_iterator<char>{0}, cuda::counting_iterator<char>{127}});
   auto const count = static_cast<cudf::size_type>(ascii_chars.size());
-  std::vector<cudf::size_type> offsets(
-    {thrust::make_counting_iterator<cudf::size_type>(0),
-     thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
+  std::vector<cudf::size_type> offsets({cuda::counting_iterator<cudf::size_type>{0},
+                                        cuda::counting_iterator<cudf::size_type>{0} + count + 1});
   auto d_chars = cudf::detail::make_device_uvector(
     ascii_chars, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
@@ -364,6 +363,8 @@ TEST_F(StringsContainsTests, Errors)
 
   EXPECT_THROW(cudf::strings::regex_program::create("aaaa{1234,5678}"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::regex_program::create("aaaa{123,5678}"), cudf::logic_error);
+
+  EXPECT_THROW(cudf::strings::regex_program::create("[a-C]"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, CountTest)
@@ -796,6 +797,32 @@ TEST_F(StringsContainsTests, ASCII)
     results           = cudf::strings::contains_re(view, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
   }
+}
+
+TEST_F(StringsContainsTests, IgnoreCase)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc", "ABC", "aBc", "123áéſ", "ÁÉS123"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 0});
+  auto prog = cudf::strings::regex_program::create("abc", cudf::strings::regex_flags::IGNORECASE);
+  auto results = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 0});
+  prog     = cudf::strings::regex_program::create("[a-c]", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1});
+  prog     = cudf::strings::regex_program::create("áéſ", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1});
+  prog     = cudf::strings::regex_program::create("[á-é]", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsContainsTests, MediumRegex)

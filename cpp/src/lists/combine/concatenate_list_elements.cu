@@ -22,9 +22,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -55,8 +55,8 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   // Concatenating the lists at the same row by converting the entry offsets from the child column
   // into row offsets of the root column. Those entry offsets are subtracted by the first entry
   // offset to output zero-based offsets.
-  auto const iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  auto const iter = cuda::counting_iterator<size_type>{0};
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     iter,
                     iter + num_rows + 1,
                     d_out_offsets,
@@ -132,7 +132,7 @@ generate_list_offsets_and_validities(column_view const& input,
         return size_type{0};
       }
       // The output row will not be null only if all lists on the input row are not null.
-      auto const iter = thrust::make_counting_iterator<size_type>(0);
+      auto const iter = cuda::counting_iterator<size_type>{0};
       auto const is_valid =
         thrust::all_of(thrust::seq,
                        iter + d_row_offsets[idx],
@@ -171,8 +171,8 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
 
   // Fill the gather map with indices of the lists from the child column of the input column.
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     num_rows,
     [d_row_offsets,
      d_list_offsets,

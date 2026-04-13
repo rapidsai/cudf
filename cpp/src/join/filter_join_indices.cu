@@ -19,6 +19,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -150,7 +151,7 @@ filter_join_indices(cudf::table_view const& left,
   auto left_ptr              = left_indices.data();
   auto right_ptr             = right_indices.data();
 
-  auto make_result_vectors = [&](size_t size) {
+  auto make_result_vectors = [&](std::size_t size) {
     return std::pair{std::make_unique<rmm::device_uvector<size_type>>(size, stream, mr),
                      std::make_unique<rmm::device_uvector<size_type>>(size, stream, mr)};
   };
@@ -161,8 +162,8 @@ filter_join_indices(cudf::table_view const& left,
     auto valid_predicate = [=] __device__(size_type i) -> bool { return predicate_results_ptr[i]; };
 
     auto const num_valid =
-      cudf::detail::count_if(thrust::counting_iterator<size_type>(0),
-                             thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+      cudf::detail::count_if(cuda::counting_iterator<size_type>{0},
+                             cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                              valid_predicate,
                              stream);
 
@@ -178,7 +179,7 @@ filter_join_indices(cudf::table_view const& left,
     cudf::detail::copy_if_async(
       input_iter,
       input_iter + left_indices.size(),
-      thrust::counting_iterator<size_type>{0},
+      cuda::counting_iterator<size_type>{0},
       output_iter,
       [valid_predicate] __device__(size_type idx) { return valid_predicate(idx); },
       stream);
@@ -205,13 +206,13 @@ filter_join_indices(cudf::table_view const& left,
                                    {},
                                    stream.value()};
 
-    auto predicate_func = [predicate_results_ptr] __device__(size_t idx) {
+    auto predicate_func = [predicate_results_ptr] __device__(std::size_t idx) {
       return static_cast<bool>(predicate_results_ptr[idx]);
     };
     auto const num_filter_passing =
       filter_passing_indices.insert_if(left_ptr,
                                        left_ptr + left_indices.size(),
-                                       cuda::counting_iterator<size_t>(0),
+                                       cuda::counting_iterator<std::size_t>{0},
                                        predicate_func,
                                        stream.value());
 
@@ -220,13 +221,14 @@ filter_join_indices(cudf::table_view const& left,
     // Find the number of indices passing the filter i.e. rows that are valid according to the
     // predicate CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of
     // size greater than integer limits
-    cudf::detail::device_scalar<size_t> d_num_valid(stream);
+    cudf::detail::device_scalar<std::size_t> d_num_valid(stream,
+                                                         cudf::get_current_device_resource_ref());
     {
       auto const predicate_it =
         cuda::transform_iterator{predicate_results_ptr,
-                                 cuda::proclaim_return_type<size_t>(
-                                   [] __device__(auto val) -> size_t { return val ? 1 : 0; })};
-      size_t temp_storage_bytes = 0;
+                                 cuda::proclaim_return_type<std::size_t>(
+                                   [] __device__(auto val) -> std::size_t { return val ? 1 : 0; })};
+      std::size_t temp_storage_bytes = 0;
       cub::DeviceReduce::Sum(nullptr,
                              temp_storage_bytes,
                              predicate_it,
@@ -260,7 +262,7 @@ filter_join_indices(cudf::table_view const& left,
       // greater than integer limits
       cudf::detail::copy_if_async(input_iter,
                                   input_iter + left_indices.size(),
-                                  cuda::counting_iterator<size_t>(0),
+                                  cuda::counting_iterator<std::size_t>{0},
                                   output_iter,
                                   valid_predicate,
                                   stream);
@@ -275,11 +277,12 @@ filter_join_indices(cudf::table_view const& left,
           auto is_unmatched = !filter_passing_indices_ref.contains(idx);
           return is_unmatched;
         };
-        cudf::detail::copy_if_async(cuda::counting_iterator<size_t>(0),
-                                    cuda::counting_iterator<size_t>(left.num_rows()),
-                                    filtered_left_indices->begin() + num_valid,
-                                    is_unmatched_idx,
-                                    stream);
+        cudf::detail::copy_if_async(
+          cuda::counting_iterator<std::size_t>{0},
+          cuda::counting_iterator{static_cast<std::size_t>(left.num_rows())},
+          filtered_left_indices->begin() + num_valid,
+          is_unmatched_idx,
+          stream);
       }
       cub::DeviceTransform::Fill(
         filtered_right_indices->begin() + num_valid, num_invalid, JoinNoMatch, stream.value());
@@ -298,8 +301,8 @@ filter_join_indices(cudf::table_view const& left,
 
     // Count failed matches for output sizing
     auto const failed_matched_count =
-      cudf::detail::count_if(thrust::counting_iterator{0},
-                             thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+      cudf::detail::count_if(cuda::counting_iterator<cudf::size_type>{0},
+                             cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                              is_failed_matched_pair,
                              stream);
     auto const output_size = left_indices.size() + failed_matched_count;
@@ -310,9 +313,9 @@ filter_join_indices(cudf::table_view const& left,
 
     // Use two-step approach with optimized memory management
     // Step 1: Handle primary pairs
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator{0},
-                      thrust::counting_iterator{static_cast<size_type>(left_indices.size())},
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{static_cast<size_type>(left_indices.size())},
                       thrust::make_zip_iterator(cuda::std::tuple{filtered_left_indices->begin(),
                                                                  filtered_right_indices->begin()}),
                       [=] __device__(size_type i) -> cuda::std::tuple<size_type, size_type> {
@@ -339,7 +342,7 @@ filter_join_indices(cudf::table_view const& left,
         });
       cudf::detail::copy_if_async(failed_match_iter,
                                   failed_match_iter + left_indices.size(),
-                                  thrust::counting_iterator{0},
+                                  cuda::counting_iterator<cudf::size_type>{0},
                                   secondary_iter,
                                   is_failed_matched_pair,
                                   stream);

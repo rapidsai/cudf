@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,6 +27,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <cuda/iterator>
 
 #include <array>
 #include <numeric>
@@ -168,7 +170,7 @@ struct SkipRowTest {
                                              int file_num_rows,
                                              int read_num_rows)
   {
-    auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+    auto sequence = cuda::counting_iterator{0};
     column_wrapper<int32_t, typename decltype(sequence)::value_type> input_col(
       sequence, sequence + file_num_rows);
     table_view input_table({input_col});
@@ -222,7 +224,7 @@ struct SkipRowTest {
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(sequence,
@@ -243,7 +245,7 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
 
   constexpr auto num_rows = 100;
@@ -458,7 +460,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
 
 TEST_F(OrcWriterTest, ReadZeroRows)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   constexpr auto num_rows = 10;
   column_wrapper<int64_t, typename decltype(sequence)::value_type> col(sequence,
@@ -996,7 +998,7 @@ TEST_F(OrcReaderTest, CombinedSkipRowTest)
 
 TEST_F(OrcStatisticsTest, Basic)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
   auto ts_sequence =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i - 4) * 1000002; });
   auto dec_sequence =
@@ -1371,9 +1373,8 @@ TEST_P(OrcWriterTestStripes, StripeSize)
   constexpr auto num_rows            = 1000000;
   auto const [size_bytes, size_rows] = GetParam();
 
-  auto const seq_col = random_values<int>(num_rows);
-  auto const validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto const seq_col  = random_values<int>(num_rows);
+  auto const validity = cudf::test::iterators::no_nulls();
   column_wrapper<int64_t> col{seq_col.begin(), seq_col.end(), validity};
 
   std::vector<std::unique_ptr<column>> cols;
@@ -1856,7 +1857,7 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
 
 TEST_F(OrcWriterTest, NoNullsAsNonNullable)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto valids = cudf::test::iterators::no_nulls();
   column_wrapper<int32_t> col{{1, 2, 3}, valids};
   table_view expected({col});
 
@@ -2208,8 +2209,8 @@ TEST_F(OrcChunkedWriterTest, FailedWriteCloseNotThrow)
     size_t bytes_written() override { return 0; }
   };
 
-  auto sequence = thrust::make_counting_iterator(0);
-  column_wrapper<int8_t> col(sequence, sequence + 10);
+  auto sequence = cuda::counting_iterator<int32_t>{0};
+  column_wrapper<int8_t, int32_t> col(sequence, sequence + 10);
   table_view table({col});
 
   throw_sink sink;

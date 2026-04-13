@@ -8,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -21,7 +22,7 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <array>
@@ -221,7 +222,7 @@ void split_custom_column(SplitFunc Split,
   std::vector<std::string> base_strings(
     {"banana", "pear", "apple", "pecans", "vanilla", "cat", "mouse", "green"});
   auto string_randomizer = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<cudf::size_type>{0},
     [&base_strings](cudf::size_type i) { return base_strings[rand() % base_strings.size()]; });
 
   auto rvalids = cudf::detail::make_counting_transform_iterator(start, [include_validity](auto i) {
@@ -243,8 +244,8 @@ void split_custom_column(SplitFunc Split,
     create_expected_columns_for_splits<T>(splits, size, valids);
   std::vector<cudf::test::strings_column_wrapper> expected_strings =
     create_expected_string_columns_for_splits(strings, splits, valids2);
-  std::transform(thrust::make_counting_iterator(static_cast<size_t>(0)),
-                 thrust::make_counting_iterator(expected_fixed.size()),
+  std::transform(cuda::counting_iterator{static_cast<size_t>(0)},
+                 cuda::counting_iterator{expected_fixed.size()},
                  std::back_inserter(expected),
                  [&expected_fixed, &expected_strings](size_t i) {
                    return cudf::table_view({expected_fixed[i], expected_strings[i]});
@@ -267,8 +268,8 @@ TYPED_TEST(SplitTest, LongColumn)
       return cudf::split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::table_view const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i), result.column(i));
                     });
@@ -283,8 +284,8 @@ TYPED_TEST(SplitTest, LongColumn)
       return cudf::split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::table_view const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i), result.column(i));
                     });
@@ -673,7 +674,7 @@ void split_empty_output_strings_column_value(SplitFunc Split,
 template <typename SplitFunc, typename CompareFunc>
 void split_null_input_strings_column_value(SplitFunc Split, CompareFunc Compare)
 {
-  auto no_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto no_valids = cudf::test::iterators::all_nulls();
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
@@ -1434,8 +1435,8 @@ TYPED_TEST(ContiguousSplitTest, LongColumn)
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::packed_table const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                           result.table.column(i));
@@ -1451,8 +1452,8 @@ TYPED_TEST(ContiguousSplitTest, LongColumn)
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::packed_table const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                           result.table.column(i));
@@ -1471,8 +1472,8 @@ TYPED_TEST(ContiguousSplitTest, LongColumnChunked)
       return do_chunked_pack(t);
     },
     [](cudf::table_view const& expected, cudf::packed_table const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                           result.table.column(i));
@@ -1487,8 +1488,8 @@ TYPED_TEST(ContiguousSplitTest, LongColumnChunked)
       return do_chunked_pack(t);
     },
     [](cudf::table_view const& expected, cudf::packed_table const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                           result.table.column(i));
@@ -1506,8 +1507,8 @@ TYPED_TEST(ContiguousSplitTest, LongColumnBigSplits)
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::packed_table const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                           result.table.column(i));
@@ -1522,8 +1523,8 @@ TYPED_TEST(ContiguousSplitTest, LongColumnBigSplits)
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::packed_table const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i) {
                       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                           result.table.column(i));
@@ -1538,16 +1539,16 @@ TYPED_TEST(ContiguousSplitTest, LongColumnBigSplits)
 /*
 TYPED_TEST(ContiguousSplitTest, LongColumnTinySplits)
 {
-  std::vector<cudf::size_type> splits(thrust::make_counting_iterator(0),
-thrust::make_counting_iterator(10000));
+  std::vector<cudf::size_type> splits(cuda::counting_iterator<cudf::size_type>{0},
+cuda::counting_iterator{10000});
 
   split_custom_column<TypeParam>(
     [](cudf::table_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::contiguous_split(t, splits);
     },
     [](cudf::table_view const& expected, cudf::packed_table const& result) {
-      std::for_each(thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(expected.num_columns()),
+      std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{expected.num_columns()},
                     [&expected, &result](cudf::size_type i){
 
         CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i), result.table.column(i));
@@ -1571,8 +1572,8 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
         return cudf::contiguous_split(t, splits);
       },
       [](cudf::table_view const& expected, cudf::packed_table const& result) {
-        std::for_each(thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(expected.num_columns()),
+        std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{expected.num_columns()},
                       [&expected, &result](cudf::size_type i) {
                         CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                             result.table.column(i));
@@ -1587,8 +1588,8 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
         return cudf::contiguous_split(t, splits);
       },
       [](cudf::table_view const& expected, cudf::packed_table const& result) {
-        std::for_each(thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(expected.num_columns()),
+        std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{expected.num_columns()},
                       [&expected, &result](cudf::size_type i) {
                         CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                             result.table.column(i));
@@ -1611,8 +1612,8 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizesChunked)
         return do_chunked_pack(t);
       },
       [](cudf::table_view const& expected, cudf::packed_table const& result) {
-        std::for_each(thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(expected.num_columns()),
+        std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{expected.num_columns()},
                       [&expected, &result](cudf::size_type i) {
                         CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                             result.table.column(i));
@@ -1627,8 +1628,8 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizesChunked)
         return do_chunked_pack(t);
       },
       [](cudf::table_view const& expected, cudf::packed_table const& result) {
-        std::for_each(thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(expected.num_columns()),
+        std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{expected.num_columns()},
                       [&expected, &result](cudf::size_type i) {
                         CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected.column(i),
                                                             result.table.column(i));
@@ -2005,11 +2006,11 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
 
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  auto iter0 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i); });
+  auto iter0 = cuda::counting_iterator{0};
   auto c0    = cudf::test::fixed_width_column_wrapper<int>(iter0, iter0 + 10, valids);
   cols.push_back(c0.release());
 
-  auto iter1 = cudf::detail::make_counting_transform_iterator(10, [](auto i) { return (i); });
+  auto iter1 = cuda::counting_iterator{10};
   auto c1    = cudf::test::fixed_width_column_wrapper<int>(iter1, iter1 + 10, valids);
   cols.push_back(c1.release());
 
@@ -2019,7 +2020,7 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
   auto c3 = cudf::test::strings_column_wrapper(strings[1].begin(), strings[1].end(), valids);
   cols.push_back(c3.release());
 
-  auto iter4 = cudf::detail::make_counting_transform_iterator(20, [](auto i) { return (i); });
+  auto iter4 = cuda::counting_iterator{20};
   auto c4    = cudf::test::fixed_width_column_wrapper<int>(iter4, iter4 + 10, valids);
   cols.push_back(c4.release());
 
@@ -2054,7 +2055,7 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypesChunked)
 
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  auto iter0 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i); });
+  auto iter0 = cuda::counting_iterator{0};
   auto c0    = cudf::test::fixed_width_column_wrapper<int>(iter0, iter0 + num_rows, valids);
   cols.push_back(c0.release());
 
@@ -2086,7 +2087,7 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypesSingleRowChunked)
 
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  auto iter0 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i); });
+  auto iter0 = cuda::counting_iterator{0};
   auto c0    = cudf::test::fixed_width_column_wrapper<int32_t>(iter0, iter0 + num_rows, valids);
   cols.push_back(c0.release());
 
@@ -2182,7 +2183,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTableLarge)
 
   auto const post_split_start = start + presplit_pos;
   auto const post_split_size  = size - presplit_pos;
-  auto el_iter                = thrust::make_counting_iterator(post_split_start);
+  auto el_iter                = cuda::counting_iterator{post_split_start};
   std::vector<int> post_split_elements{el_iter, el_iter + post_split_size};
   std::vector<bool> post_split_valids{
     pre_split_valids.begin() + post_split_start,
@@ -2219,7 +2220,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
     auto result   = cudf::contiguous_split(t, {3, 4});
     auto expected = cudf::split(t, {3, 4});
 
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
       CUDF_TEST_EXPECT_TABLES_EQUAL(result[index].table, expected[index]);
     });
@@ -2241,7 +2242,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
     auto result   = cudf::contiguous_split(t, {3, 4});
     auto expected = cudf::split(t, {3, 4});
 
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
       CUDF_TEST_EXPECT_TABLES_EQUAL(result[index].table, expected[index]);
     });
@@ -2275,7 +2276,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
 
     auto pre_split = cudf::split(s, {4});
 
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::for_each(iter, iter + pre_split.size(), [&](cudf::size_type index) {
       cudf::table_view t({pre_split[index]});
       auto result   = cudf::contiguous_split(t, {1});
@@ -2307,7 +2308,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
     auto result   = cudf::contiguous_split(t, {3, 4});
     auto expected = cudf::split(t, {3, 4});
 
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
       CUDF_TEST_EXPECT_TABLES_EQUAL(result[index].table, expected[index]);
     });

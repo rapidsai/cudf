@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,8 +15,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <vector>
 
@@ -627,7 +627,7 @@ TYPED_TEST(FixedPointTests, CastToIntLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
 
-  auto begin  = thrust::make_counting_iterator(0);
+  auto begin  = cuda::counting_iterator<RepType>{0};
   auto begin2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 10 * i; });
   auto const input    = fp_wrapper{begin, begin + 2000, scale_type{1}};
   auto const expected = fw_wrapper(begin2, begin2 + 2000);
@@ -728,7 +728,7 @@ TYPED_TEST(FixedPointTests, CastFromIntLarge)
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
 
   auto begin  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1000 * i; });
-  auto begin2 = thrust::make_counting_iterator(0);
+  auto begin2 = cuda::counting_iterator<RepType>{0};
   auto const input    = fw_wrapper(begin, begin + 2000);
   auto const expected = fp_wrapper{begin2, begin2 + 2000, scale_type{3}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(3));
