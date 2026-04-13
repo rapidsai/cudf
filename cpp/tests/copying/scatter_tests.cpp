@@ -12,6 +12,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 
+#include <cuda/iterator>
+
 #include <stdexcept>
 
 class ScatterUntypedTests : public cudf::test::BaseFixture {};
@@ -405,11 +407,11 @@ TYPED_TEST(ScatterDataTypeTests, ScatterSourceNullsLarge)
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> source({0, 0, 0, 0}, {0, 0, 0, 0});
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map({0, 1, 2, 3});
-  auto target_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto target_data = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(target_data)::value_type>
     target(target_data, target_data + N);
 
-  auto expect_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto expect_data = cuda::counting_iterator{0};
   auto expect_valid =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i > 3; });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(expect_data)::value_type>
