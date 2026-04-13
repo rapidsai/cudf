@@ -662,8 +662,7 @@ TYPED_TEST(TransformTest, StringScalarComparison)
 {
   using Executor = TypeParam;
 
-  auto c_0 =
-    cudf::test::strings_column_wrapper({"1", "12", "123", "23"}, {true, true, false, true});
+  auto c_0   = cudf::test::strings_column_wrapper({"1", "12", "", "23"}, {true, true, false, true});
   auto table = cudf::table_view{{c_0}};
 
   auto literal_value = cudf::string_scalar("2");

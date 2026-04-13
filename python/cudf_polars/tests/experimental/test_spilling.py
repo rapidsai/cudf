@@ -83,7 +83,9 @@ def test_make_spill_function(
         for msg_idx in range(count):
             # Create 1MB messages
             table = create_test_table(1024 * 1024, stream)
-            chunk = TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
+            chunk = TableChunk.from_pylibcudf_table(
+                table, stream, exclusive_view=True, br=context.br()
+            )
             msg = Message(msg_idx, chunk)
             mid = sm.insert(msg)
             message_ids[buffer_idx].append(mid)
@@ -132,7 +134,7 @@ def test_make_spill_function(
         spilled_mid = message_ids[1][4]  # Newest message from longest queue
         spilled_msg = buffers[1].extract(mid=spilled_mid)
 
-        chunk = TableChunk.from_message(spilled_msg)
+        chunk = TableChunk.from_message(spilled_msg, br=context.br())
         assert not chunk.is_available()  # Should be on host
 
         # Make it available should bring it back to device

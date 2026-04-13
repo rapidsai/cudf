@@ -87,7 +87,9 @@ async def union_node(
                     context,
                     Message(
                         msg.sequence_number + seq_num_offset,
-                        TableChunk.from_message(msg).make_available_and_spill(
+                        TableChunk.from_message(
+                            msg, br=context.br()
+                        ).make_available_and_spill(
                             context.br(), allow_overbooking=True
                         ),
                     ),
