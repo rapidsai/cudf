@@ -9,6 +9,8 @@
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
+#include <cuda/std/span>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace jit {
@@ -18,16 +20,18 @@ template <int32_t Index,
           typename Element,
           typename OptionalElement,
           bool AsScalar,
-          bool MayBeNullable,
-          bool IsStringsOutput>
+          bool MayBeNullable>
 struct column_accessor {
-  static constexpr int32_t index          = Index;
-  using column_type                       = Column;
-  using element_type                      = Element;
-  using optional_element_type             = OptionalElement;
-  static constexpr bool as_scalar         = AsScalar;
-  static constexpr bool may_be_nullable   = MayBeNullable;
-  static constexpr bool is_strings_output = IsStringsOutput;
+  static constexpr int32_t index = Index;
+  using column_type              = Column;
+  using element_type             = Element;
+  using optional_element_type    = OptionalElement;
+
+  static constexpr bool as_scalar       = AsScalar;
+  static constexpr bool may_be_nullable = MayBeNullable;
+
+  static constexpr bool is_strings_output =
+    cuda::std::is_same_v<element_type, cuda::std::span<char>>;
 
   static __device__ constexpr size_type map_index(size_type row)
   {
