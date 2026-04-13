@@ -1,0 +1,158 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
+#include <cudf/utilities/roaring_bitmap.hpp>
+
+#include <rmm/mr/polymorphic_allocator.hpp>
+
+#include <cuco/roaring_bitmap.cuh>
+
+namespace cudf {
+
+namespace {
+
+using roaring_bitmap_32_type =
+  cuco::experimental::roaring_bitmap<cuda::std::uint32_t, rmm::mr::polymorphic_allocator<char>>;
+using roaring_bitmap_64_type =
+  cuco::experimental::roaring_bitmap<cuda::std::uint64_t, rmm::mr::polymorphic_allocator<char>>;
+
+}  // namespace
+
+struct roaring_bitmap::roaring_bitmap_impl {
+  cudf::host_span<cuda::std::byte const> serialized_bitmap_data_;
+  std::unique_ptr<roaring_bitmap_32_type> bitmap32_;
+  std::unique_ptr<roaring_bitmap_64_type> bitmap64_;
+
+  roaring_bitmap_impl(cudf::host_span<cuda::std::byte const> serialized_bitmap_data)
+    : serialized_bitmap_data_{serialized_bitmap_data}
+  {
+  }
+
+  roaring_bitmap_impl(roaring_bitmap_impl&&)            = default;
+  roaring_bitmap_impl& operator=(roaring_bitmap_impl&&) = default;
+
+  template <roaring_bitmap_type Type>
+  void materialize(rmm::cuda_stream_view stream)
+    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
+  {
+    auto const bytes = serialized_bitmap_data_.data();
+
+    if constexpr (Type == roaring_bitmap_type::BITS_32) {
+      if (bitmap32_) { return; }
+      bitmap32_ = std::make_unique<roaring_bitmap_32_type>(
+        bytes, rmm::mr::polymorphic_allocator<char>{}, stream);
+    } else {
+      if (bitmap64_) { return; }
+      bitmap64_ = std::make_unique<roaring_bitmap_64_type>(
+        bytes, rmm::mr::polymorphic_allocator<char>{}, stream);
+    }
+
+    serialized_bitmap_data_ = {};
+  }
+
+  template <roaring_bitmap_type Type, typename InputIt, typename OutputIt>
+  void contains_async(InputIt first, InputIt last, OutputIt output, rmm::cuda_stream_view stream)
+    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
+  {
+    materialize<Type>(stream);
+
+    if constexpr (Type == roaring_bitmap_type::BITS_32) {
+      CUDF_EXPECTS(bitmap32_,
+                   "Roaring bitmap has not been materialized. Call materialize() first.");
+      bitmap32_->contains_async(first, last, output, stream);
+    } else {
+      CUDF_EXPECTS(bitmap64_,
+                   "Roaring bitmap has not been materialized. Call materialize() first.");
+      bitmap64_->contains_async(first, last, output, stream);
+    }
+  }
+};
+
+roaring_bitmap::roaring_bitmap(roaring_bitmap_type type,
+                               cudf::host_span<cuda::std::byte const> serialized_bitmap_data)
+  : type_{type}
+{
+  CUDF_EXPECTS(not serialized_bitmap_data.empty(),
+               "Encountered empty serialized roaring bitmap data",
+               std::invalid_argument);
+  impl_ = std::make_unique<roaring_bitmap_impl>(serialized_bitmap_data);
+}
+
+roaring_bitmap::~roaring_bitmap() = default;
+
+roaring_bitmap::roaring_bitmap(roaring_bitmap&&) noexcept = default;
+
+roaring_bitmap& roaring_bitmap::operator=(roaring_bitmap&&) noexcept = default;
+
+void roaring_bitmap::materialize(rmm::cuda_stream_view stream) const
+{
+  if (type_ == roaring_bitmap_type::BITS_32) {
+    impl_->materialize<roaring_bitmap_type::BITS_32>(stream);
+  } else {
+    impl_->materialize<roaring_bitmap_type::BITS_64>(stream);
+  }
+}
+
+std::unique_ptr<cudf::column> roaring_bitmap::contains_async(
+  cudf::column_view const& keys,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  auto result = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::BOOL8}, keys.size(), cudf::mask_state::UNALLOCATED, stream, mr);
+
+  if (type_ == roaring_bitmap_type::BITS_32) {
+    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT32,
+                 "Key column must be UINT32 for a 32-bit roaring bitmap",
+                 std::invalid_argument);
+    impl_->contains_async<roaring_bitmap_type::BITS_32>(keys.begin<cuda::std::uint32_t>(),
+                                                        keys.end<cuda::std::uint32_t>(),
+                                                        result->mutable_view().begin<bool>(),
+                                                        stream);
+  } else {
+    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT64,
+                 "Key column must be UINT64 for a 64-bit roaring bitmap",
+                 std::invalid_argument);
+    impl_->contains_async<roaring_bitmap_type::BITS_64>(keys.begin<cuda::std::uint64_t>(),
+                                                        keys.end<cuda::std::uint64_t>(),
+                                                        result->mutable_view().begin<bool>(),
+                                                        stream);
+  }
+
+  return result;
+}
+
+void roaring_bitmap::contains_async(cudf::column_view const& keys,
+                                    cudf::mutable_column_view const& output,
+                                    rmm::cuda_stream_view stream) const
+{
+  CUDF_EXPECTS(output.type().id() == cudf::type_id::BOOL8, "Output column must be BOOL8");
+  CUDF_EXPECTS(output.size() >= keys.size(), "Output column size must be >= keys column size");
+
+  if (type_ == roaring_bitmap_type::BITS_32) {
+    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT32,
+                 "Key column must be UINT32 for a 32-bit roaring bitmap",
+                 std::invalid_argument);
+    impl_->contains_async<roaring_bitmap_type::BITS_32>(keys.begin<cuda::std::uint32_t>(),
+                                                        keys.end<cuda::std::uint32_t>(),
+                                                        output.begin<bool>(),
+                                                        stream);
+  } else {
+    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT64,
+                 "Key column must be UINT64 for a 64-bit roaring bitmap",
+                 std::invalid_argument);
+    impl_->contains_async<roaring_bitmap_type::BITS_64>(keys.begin<cuda::std::uint64_t>(),
+                                                        keys.end<cuda::std::uint64_t>(),
+                                                        output.begin<bool>(),
+                                                        stream);
+  }
+}
+
+roaring_bitmap_type roaring_bitmap::type() const { return type_; }
+
+}  // namespace cudf
