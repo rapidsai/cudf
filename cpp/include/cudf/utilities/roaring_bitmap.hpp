@@ -25,6 +25,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup utility_roaring_bitmap
  * @{
  * @file
+ * @brief Roaring bitmap APIs
  */
 
 /**
