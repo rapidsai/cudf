@@ -81,11 +81,8 @@ void verify_against_groupby(
   for (auto const& req : requests) {
     cudf::groupby::aggregation_request ref_req;
     ref_req.values = all_data->view().column(req.column_index);
-    for (auto const& agg : req.aggregations) {
-      auto cloned = agg->clone();
-      ref_req.aggregations.push_back(std::unique_ptr<cudf::groupby_aggregation>{
-        dynamic_cast<cudf::groupby_aggregation*>(cloned.release())});
-    }
+    ref_req.aggregations.push_back(std::unique_ptr<cudf::groupby_aggregation>{
+      dynamic_cast<cudf::groupby_aggregation*>(req.aggregation->clone().release())});
     ref_requests.push_back(std::move(ref_req));
   }
 
@@ -114,11 +111,11 @@ void check(std::unique_ptr<cudf::table>& keys,
 }
 
 cudf::groupby::streaming_aggregation_request make_req(
-  cudf::size_type col_idx, std::vector<std::unique_ptr<cudf::groupby_aggregation>>&& aggs)
+  cudf::size_type col_idx, std::unique_ptr<cudf::groupby_aggregation>&& agg)
 {
   cudf::groupby::streaming_aggregation_request req;
   req.column_index = col_idx;
-  req.aggregations = std::move(aggs);
+  req.aggregation  = std::move(agg);
   return req;
 }
 
@@ -126,9 +123,7 @@ std::vector<cudf::groupby::streaming_aggregation_request> single_agg_req(
   cudf::size_type col_idx, std::unique_ptr<cudf::groupby_aggregation>&& agg)
 {
   std::vector<cudf::groupby::streaming_aggregation_request> reqs;
-  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
-  aggs.push_back(std::move(agg));
-  reqs.push_back(make_req(col_idx, std::move(aggs)));
+  reqs.push_back(make_req(col_idx, std::move(agg)));
   return reqs;
 }
 
@@ -175,10 +170,8 @@ TEST_F(StreamingGroupbyTest, MinMaxTwoBatches)
   cudf::table_view batch2{{keys2, vals2}};
 
   std::vector<cudf::groupby::streaming_aggregation_request> reqs;
-  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
-  aggs.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
-  aggs.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
-  reqs.push_back(make_req(1, std::move(aggs)));
+  reqs.push_back(make_req(1, cudf::make_min_aggregation<cudf::groupby_aggregation>()));
+  reqs.push_back(make_req(1, cudf::make_max_aggregation<cudf::groupby_aggregation>()));
 
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
   streaming_agg.aggregate(batch1);
@@ -275,10 +268,8 @@ TEST_F(StreamingGroupbyTest, MaxMinOnIntegers)
   cudf::table_view batch2{{keys2, vals2}};
 
   std::vector<cudf::groupby::streaming_aggregation_request> reqs;
-  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
-  aggs.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
-  aggs.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
-  reqs.push_back(make_req(1, std::move(aggs)));
+  reqs.push_back(make_req(1, cudf::make_max_aggregation<cudf::groupby_aggregation>()));
+  reqs.push_back(make_req(1, cudf::make_min_aggregation<cudf::groupby_aggregation>()));
 
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
   streaming_agg.aggregate(batch1);
@@ -404,16 +395,8 @@ TEST_F(StreamingGroupbyTest, MultipleRequestsOnDifferentColumns)
   cudf::table_view batch2{{keys2, col_a2, col_b2}};
 
   std::vector<cudf::groupby::streaming_aggregation_request> reqs;
-  {
-    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
-    aggs.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-    reqs.push_back(make_req(1, std::move(aggs)));
-  }
-  {
-    std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
-    aggs.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
-    reqs.push_back(make_req(2, std::move(aggs)));
-  }
+  reqs.push_back(make_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+  reqs.push_back(make_req(2, cudf::make_min_aggregation<cudf::groupby_aggregation>()));
 
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
   streaming_agg.aggregate(batch1);
@@ -788,10 +771,8 @@ TEST_F(StreamingGroupbyTest, SumAndMeanOnSameColumn)
   cudf::table_view batch2{{keys2, vals2}};
 
   std::vector<cudf::groupby::streaming_aggregation_request> reqs;
-  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
-  aggs.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  aggs.push_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
-  reqs.push_back(make_req(1, std::move(aggs)));
+  reqs.push_back(make_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>()));
+  reqs.push_back(make_req(1, cudf::make_mean_aggregation<cudf::groupby_aggregation>()));
 
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
   streaming_agg.aggregate(batch1);
@@ -1075,11 +1056,9 @@ TEST_F(StreamingGroupbyTest, StringKeyMinMaxTwoBatches)
   cudf::table_view batch1{{keys1, vals1}};
   cudf::table_view batch2{{keys2, vals2}};
 
-  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggs;
-  aggs.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
-  aggs.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
   std::vector<cudf::groupby::streaming_aggregation_request> reqs;
-  reqs.push_back(make_req(1, std::move(aggs)));
+  reqs.push_back(make_req(1, cudf::make_min_aggregation<cudf::groupby_aggregation>()));
+  reqs.push_back(make_req(1, cudf::make_max_aggregation<cudf::groupby_aggregation>()));
 
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, DEFAULT_MAX_GROUPS);
   streaming_agg.aggregate(batch1);

@@ -409,17 +409,20 @@ class groupby {
 };
 
 /**
- * @brief Request for streaming groupby aggregation(s) on a column.
+ * @brief Request for a single streaming groupby aggregation on a column.
  *
  * Analogous to `aggregation_request` but identifies the value column by index rather than
- * by `column_view`, since data arrives in batches after construction.
+ * by `column_view`, since data arrives in batches after construction, and carries exactly
+ * one aggregation per request.
  *
  * `column_index` refers to the position of the value column in the `table_view` passed
- * to `streaming_groupby::aggregate()`.
+ * to `streaming_groupby::aggregate()`.  Multiple aggregations on the same column are
+ * expressed as separate requests (e.g., `[{col, sum}, {col, mean}]`).  Internal
+ * deduplication ensures redundant computations are shared automatically.
  */
 struct streaming_aggregation_request {
-  size_type column_index;                                          ///< Index of the value column
-  std::vector<std::unique_ptr<groupby_aggregation>> aggregations;  ///< Desired aggregations
+  size_type column_index;                            ///< Index of the value column
+  std::unique_ptr<groupby_aggregation> aggregation;  ///< Desired aggregation
 };
 
 /**

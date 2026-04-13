@@ -155,7 +155,6 @@ auto build_cross_comparators(
 struct streaming_groupby::impl {
   std::vector<size_type> _key_indices;
   std::vector<streaming_aggregation_request> _requests_clone;
-  std::vector<size_type> _aggs_per_request;
   size_type _max_groups;
   null_policy _null_handling;
 
