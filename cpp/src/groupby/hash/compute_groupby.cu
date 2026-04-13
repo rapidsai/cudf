@@ -102,7 +102,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
 
     rmm::device_uvector<hash_value_type> hashes(
       num_keys, stream, cudf::get_current_device_resource_ref());
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      hashes.begin(),
                      hashes.end(),
                      [d_row_hash, row_bitmask] __device__(size_type const idx) {
@@ -137,7 +137,7 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
   // In case of no requests, we still need to generate a set of unique keys.
   if (requests.empty()) {
     thrust::for_each_n(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       cuda::counting_iterator<cudf::size_type>{0},
       num_keys,
       [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {

@@ -7,6 +7,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/io/parquet.hpp>
@@ -142,7 +143,7 @@ TEST_F(ParquetChunkedWriterTest, Strings)
 TEST_F(ParquetChunkedWriterTest, ListColumn)
 {
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -261,7 +262,7 @@ TEST_F(ParquetChunkedWriterTest, ListOfStruct)
 TEST_F(ParquetChunkedWriterTest, ListOfStructOfStructOfListOfList)
 {
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -413,7 +414,7 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
 TEST_F(ParquetChunkedWriterTest, MismatchedStructureList)
 {
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
@@ -556,7 +557,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   srand(31337);
 
   auto valids  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-  auto valids2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  auto valids2 = cudf::test::iterators::null_at(3);
 
   using lcw = cudf::test::lists_column_wrapper<int32_t>;
 
