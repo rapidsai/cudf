@@ -3,23 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "roaring_bitmap_utils.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/roaring_bitmap_test_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/roaring_bitmap.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
-#include <numeric>
 #include <vector>
-
-using cudf::test::serialize_roaring32;
-using cudf::test::serialize_roaring64;
 
 template <typename T>
 struct RoaringBitmapTest : public cudf::test::BaseFixture {};
@@ -42,11 +37,11 @@ TYPED_TEST(RoaringBitmapTest, Basics)
 
   auto const [serialized_bitmap_data, bitmap_type, col_type] = [&]() {
     if constexpr (std::is_same_v<Key, cuda::std::uint64_t>) {
-      return std::make_tuple(serialize_roaring64(insert_keys),
+      return std::make_tuple(serialize_roaring_bitmap<Key>(insert_keys),
                              cudf::roaring_bitmap_type::BITS_64,
                              cudf::type_id::UINT64);
     } else {
-      return std::make_tuple(serialize_roaring32(insert_keys),
+      return std::make_tuple(serialize_roaring_bitmap<Key>(insert_keys),
                              cudf::roaring_bitmap_type::BITS_32,
                              cudf::type_id::UINT32);
     }
@@ -89,7 +84,7 @@ struct RoaringBitmapErrorTest : public cudf::test::BaseFixture {};
 TEST_F(RoaringBitmapErrorTest, TypeMismatch)
 {
   auto keys                   = std::vector<cuda::std::uint64_t>{1, 2, 3};
-  auto serialized_bitmap_data = serialize_roaring64(keys);
+  auto serialized_bitmap_data = serialize_roaring_bitmap<cuda::std::uint64_t>(keys);
   auto const stream           = cudf::get_default_stream();
   auto bitmap = cudf::roaring_bitmap(cudf::roaring_bitmap_type::BITS_64, serialized_bitmap_data);
   bitmap.materialize(stream);

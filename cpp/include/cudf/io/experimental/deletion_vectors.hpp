@@ -61,7 +61,6 @@ struct deletion_vector_info {
  */
 class chunked_parquet_reader {
  public:
-
   /**
    * @brief Constructor for the chunked reader
    *
