@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """CUDA stream utilities."""
@@ -8,10 +8,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
-from rmm.pylibrmm.stream import DEFAULT_STREAM, Stream
+from rmm.pylibrmm.stream import DEFAULT_STREAM
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from rmm.pylibrmm.stream import Stream
 
 
 def get_dask_cuda_stream() -> Stream:
@@ -22,11 +24,6 @@ def get_dask_cuda_stream() -> Stream:
 def get_cuda_stream() -> Stream:
     """Get the default CUDA stream for the current thread."""
     return DEFAULT_STREAM
-
-
-def get_new_cuda_stream() -> Stream:
-    """Get a new CUDA stream for the current thread."""
-    return Stream()
 
 
 def join_cuda_streams(
