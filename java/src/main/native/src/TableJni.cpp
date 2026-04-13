@@ -46,7 +46,9 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/device_memory_resource.hpp>
+#include "jni_rmm_resource.hpp"
+
+#include <rmm/resource_ref.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
@@ -4313,7 +4315,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
     // and scratch memory only.
     auto temp_mr = memoryResourceHandle != 0
-                     ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
+                     ? cudf::jni::get_resource_ref(memoryResourceHandle)
                      : cudf::get_current_device_resource_ref();
     auto chunked_pack =
       cudf::chunked_pack::create(*n_table, bounce_buffer_size, cudf::get_default_stream(), temp_mr);
