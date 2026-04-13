@@ -9,6 +9,9 @@ import traceback
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, call, patch
 
+import distributed
+import pytest
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -237,3 +240,70 @@ def test_bind_explicit_gpu_id() -> None:
             mock_bind.assert_called_once_with(gpu_id=3, verbose=False)
 
     _run_in_subprocess(body)
+
+
+# ---------------------------------------------------------------------------
+# _rotate_devices / dask_setup (nanny preload)
+# ---------------------------------------------------------------------------
+
+
+def test_rotate_devices() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.dask import _rotate_devices
+
+    assert _rotate_devices(0, ["0", "1", "2", "3"]) == "0,1,2,3"
+    assert _rotate_devices(2, ["0", "1", "2", "3"]) == "2,3,0,1"
+    assert _rotate_devices(0, ["0"]) == "0"
+
+
+def test_get_visible_gpu_ids_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.dask import _get_visible_gpu_ids
+
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,1,4")
+    assert _get_visible_gpu_ids() == ["3", "1", "4"]
+
+
+def test_dask_setup_assigns_gpus(monkeypatch: pytest.MonkeyPatch) -> None:
+    """dask_setup assigns round-robin CUDA_VISIBLE_DEVICES to each nanny."""
+    import cudf_polars.experimental.rapidsmpf.frontend.dask as dask_mod
+
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1")
+    monkeypatch.setattr(dask_mod, "_nanny_preload_counter", 0)
+
+    nanny0 = MagicMock(spec=distributed.Nanny)
+    nanny0.env = {}
+    dask_mod.dask_setup(nanny0)
+    assert nanny0.env["CUDA_VISIBLE_DEVICES"] == "0,1"
+
+    nanny1 = MagicMock(spec=distributed.Nanny)
+    nanny1.env = {}
+    dask_mod.dask_setup(nanny1)
+    assert nanny1.env["CUDA_VISIBLE_DEVICES"] == "1,0"
+
+
+def test_dask_setup_wraps_around(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Counter wraps around when workers exceed GPUs."""
+    import cudf_polars.experimental.rapidsmpf.frontend.dask as dask_mod
+
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1")
+    monkeypatch.setattr(dask_mod, "_nanny_preload_counter", 0)
+
+    nannies = []
+    for _ in range(4):
+        n = MagicMock(spec=distributed.Nanny)
+        n.env = {}
+        dask_mod.dask_setup(n)
+        nannies.append(n)
+
+    assert nannies[0].env["CUDA_VISIBLE_DEVICES"] == "0,1"
+    assert nannies[1].env["CUDA_VISIBLE_DEVICES"] == "1,0"
+    assert nannies[2].env["CUDA_VISIBLE_DEVICES"] == "0,1"  # wraps
+    assert nannies[3].env["CUDA_VISIBLE_DEVICES"] == "1,0"  # wraps
+
+
+def test_dask_setup_rejects_worker() -> None:
+    """dask_setup raises TypeError when used with --preload instead of --preload-nanny."""
+    import cudf_polars.experimental.rapidsmpf.frontend.dask as dask_mod
+
+    worker = MagicMock(spec=distributed.Worker)
+    with pytest.raises(TypeError, match="--preload-nanny"):
+        dask_mod.dask_setup(worker)

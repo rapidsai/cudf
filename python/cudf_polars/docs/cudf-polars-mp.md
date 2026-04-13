@@ -463,6 +463,35 @@ with DaskEngine(
     ...
 ```
 
+### Manually launched Dask clusters
+
+When launching workers manually (e.g. on a multi-node HPC cluster), use the
+built-in nanny preload to assign one GPU per worker. The preload sets
+`CUDA_VISIBLE_DEVICES` on each worker before the process spawns:
+
+```bash
+# On each node — launch one worker per GPU with a single thread each:
+dask worker SCHEDULER:8786 --nworkers N --nthreads 1 \
+    --preload-nanny cudf_polars.experimental.rapidsmpf.frontend.dask
+```
+
+Then connect from the client:
+
+```python
+from distributed import Client
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+with Client("SCHEDULER:8786") as dc:
+    with DaskEngine(dask_client=dc) as engine:
+        result = lf.collect(engine=engine)
+```
+
+Hardware binding (CPU affinity, NUMA, network) is handled automatically by
+`DaskEngine` via `HardwareBindingPolicy` — the nanny preload only handles
+GPU assignment.
+
+See the [Dask CLI deployment guide][dask-cli] for more on `dask worker` options.
+
 ### Cluster diagnostics
 
 ```python
@@ -758,6 +787,7 @@ pass `engine_options={"parquet_options": {"use_rapidsmpf_native": True}}` to ena
 native Parquet reads.
 
 <!-- Reference links -->
+[dask-cli]: https://docs.dask.org/en/latest/deploying-cli.html
 [dask-distributed]: https://distributed.dask.org/
 [spmd-wiki]: https://en.wikipedia.org/wiki/Single_program,_multiple_data
 [ray-docs]: https://docs.ray.io/

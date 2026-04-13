@@ -89,6 +89,43 @@ def _rotate_devices(i: int, devices: list[str]) -> str:
     return ",".join(rotated)
 
 
+_nanny_preload_counter = 0
+
+
+def dask_setup(nanny: distributed.Nanny) -> None:
+    r"""
+    Nanny preload: assign one GPU per worker via ``CUDA_VISIBLE_DEVICES``.
+
+    The name ``dask_setup`` is required by Dask's preload protocol — it is
+    discovered by name via ``--preload-nanny``. The function runs inside the
+    Nanny process *before* the worker subprocess is spawned, so the
+    environment variable is inherited by the worker.
+
+    Each call increments a module-level counter to assign GPUs in round-robin
+    order across workers on the same node.
+
+    Usage::
+
+        dask worker SCHEDULER:8786 --nworkers N --nthreads 1 \
+            --preload-nanny cudf_polars.experimental.rapidsmpf.frontend.dask
+
+    Parameters
+    ----------
+    nanny
+        The :class:`distributed.Nanny` instance (injected by Dask).
+    """
+    if not isinstance(nanny, distributed.Nanny):
+        raise TypeError(
+            "dask_setup() must be used with --preload-nanny, not --preload. "
+            f"Expected a Nanny instance, got {type(nanny).__name__}."
+        )
+    global _nanny_preload_counter  # noqa: PLW0603
+    gpu_ids = _get_visible_gpu_ids()
+    worker_index = _nanny_preload_counter % len(gpu_ids)
+    _nanny_preload_counter += 1
+    nanny.env["CUDA_VISIBLE_DEVICES"] = _rotate_devices(worker_index, gpu_ids)
+
+
 @dataclasses.dataclass
 class _WorkerContext:
     """Per-worker GPU resources stored on each Dask worker."""
@@ -424,7 +461,7 @@ def evaluate_pipeline_dask_mode(
 
 
 class DaskEngine(StreamingEngine):
-    """
+    r"""
     Multi-GPU Polars engine for Dask distributed execution backed by RapidsMPF.
 
     Bootstraps a RapidsMPF UCXX cluster on top of a Dask distributed cluster
@@ -499,6 +536,19 @@ class DaskEngine(StreamingEngine):
     ...     },
     ... ) as engine:
     ...     ...
+
+    For manually launched Dask clusters, use the nanny preload to assign
+    one GPU per worker before the worker process spawns::
+
+        dask worker SCHEDULER:8786 --nworkers N --nthreads 1 \\
+            --preload-nanny cudf_polars.experimental.rapidsmpf.frontend.dask
+
+    Then connect from the client::
+
+        >>> from distributed import Client  # doctest: +SKIP
+        >>> with Client("SCHEDULER:8786") as dc:  # doctest: +SKIP
+        ...     with DaskEngine(dask_client=dc) as engine:
+        ...         result = lf.collect(engine=engine)
     """
 
     def __init__(
