@@ -142,7 +142,7 @@ def task_graph(
     --------
     generate_ir_tasks
     """
-    context = IRExecutionContext.from_config_options(config_options)
+    context = IRExecutionContext()
     graph = reduce(
         operator.or_,
         (
