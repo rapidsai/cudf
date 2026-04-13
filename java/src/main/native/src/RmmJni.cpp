@@ -83,7 +83,6 @@ namespace {
 
 using cudf::jni::delete_jni_resource;
 using cudf::jni::get_resource_ref;
-using cudf::jni::jni_resource_wrapper;
 using cudf::jni::make_jni_resource;
 
 constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
