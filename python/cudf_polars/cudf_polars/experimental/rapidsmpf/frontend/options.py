@@ -15,6 +15,9 @@ from typing import TYPE_CHECKING, Any, Literal
 from rapidsmpf.config import Options
 from rapidsmpf.utils.string import parse_boolean
 
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
 from cudf_polars.utils.config import MemoryResourceConfig
 
 if TYPE_CHECKING:
@@ -123,13 +126,23 @@ def _parse_memory_resource_config(value: str) -> MemoryResourceConfig:
     return MemoryResourceConfig(**json.loads(value))
 
 
+def _parse_hardware_binding(value: str) -> HardwareBindingPolicy:
+    """
+    Parse a JSON string into a :class:`HardwareBindingPolicy`.
+
+    Examples: ``'{"enabled": false}'``, ``'{"gpu_id": 2, "raise_on_fail": true}'``.
+    """
+    return HardwareBindingPolicy(**json.loads(value))
+
+
 @dataclasses.dataclass
 class StreamingOptions:
     """
     High-level configuration for the cudf-polars streaming executor and RapidsMPF.
 
-    Options are grouped into three categories:
+    Options are grouped into four categories:
       - **RapidsMPF**: runtime and memory behavior (e.g. spilling, threading).
+      - **Frontend**: options consumed by the frontends (e.g. hardware binding).
       - **Executor**: query execution and partitioning behavior.
       - **Engine**: Polars integration and IO configuration.
 
@@ -191,17 +204,19 @@ class StreamingOptions:
         Env: ``RAPIDSMPF_PERIODIC_SPILL_CHECK``.
         Default: ``"1ms"``.
         Category: rapidsmpf.
-    verbose_hardware_binding
-        Print warnings to stderr when topology binding fails for
-        individual subsystems (CPU, memory, network).
-        Env: ``CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING``.
-        Default: ``False``.
-        Category: executor.
+    hardware_binding
+        Hardware binding policy. Pass a
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.HardwareBindingPolicy`
+        instance for fine-grained control.
+        Env: ``CUDF_POLARS__FRONTEND__HARDWARE_BINDING`` (JSON object,
+        e.g. ``'{"enabled": false}'`` or ``'{"gpu_id": 2}'``).
+        Default: ``HardwareBindingPolicy()``.
+        Category: frontend.
     num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
-        Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
+        Env: ``CUDF_POLARS__FRONTEND__NUM_PY_EXECUTORS``.
         Default: ``1``.
-        Category: executor.
+        Category: frontend.
     fallback_mode
         Fallback behavior (``"warn"``, ``"raise"``, ``"silent"``).
         Env: ``CUDF_POLARS__EXECUTOR__FALLBACK_MODE``.
@@ -287,13 +302,17 @@ class StreamingOptions:
     periodic_spill_check: str | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_PERIODIC_SPILL_CHECK"
     )
-    # ---- Executor ----
-    verbose_hardware_binding: bool | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING", parse_boolean
+    # ---- Frontend (consumed by Dask/Ray/SPMD engines, not by Polars) ----
+    hardware_binding: HardwareBindingPolicy = dataclasses.field(
+        default_factory=lambda: _parse_hardware_binding(
+            os.environ.get("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", "{}")
+        ),
+        metadata={"category": "frontend"},
     )
     num_py_executors: int | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS", int
+        "frontend", "CUDF_POLARS__FRONTEND__NUM_PY_EXECUTORS", int
     )
+    # ---- Executor ----
     fallback_mode: str | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__FALLBACK_MODE"
     )
@@ -336,6 +355,16 @@ class StreamingOptions:
         return Options(
             {k: str(v) for k, v in _category_opts(self, "rapidsmpf").items()}
         )
+
+    def to_frontend_options(self) -> dict[str, Any]:
+        """
+        Build a dict of options consumed by the frontends.
+
+        These options (e.g. ``hardware_binding``, ``num_py_executors``) are
+        consumed by the Dask, Ray, and SPMD engines during initialization
+        and are **not** forwarded to ``StreamingExecutor`` or Polars.
+        """
+        return _category_opts(self, "frontend")
 
     def to_executor_options(self) -> dict[str, Any]:
         """
@@ -414,7 +443,7 @@ class StreamingOptions:
         >>> StreamingOptions.from_dict({})  # all fields UNSPECIFIED
         StreamingOptions(...)
         """
-        return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in data.items()})
+        return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in data.items()})  # type: ignore[arg-type]
 
     @classmethod
     def _from_argparse(cls, args: argparse.Namespace) -> StreamingOptions:
@@ -453,6 +482,13 @@ class StreamingOptions:
         dyn = getattr(args, "dynamic_planning", None)
         dynamic_planning: Any = None if dyn is False else UNSPECIFIED
 
+        # Special: hardware_binding is already a HardwareBindingPolicy
+        # (parsed by _parse_hardware_binding) or None (absent).
+        hw_raw = getattr(args, "hardware_binding", None)
+        hardware_binding: Any = (
+            hw_raw if hw_raw is not None else HardwareBindingPolicy()
+        )
+
         # Special: stream_policy "auto" or absent → UNSPECIFIED
         sp = getattr(args, "stream_policy", None)
         cuda_stream_policy: Any = UNSPECIFIED if (sp is None or sp == "auto") else sp
@@ -476,7 +512,7 @@ class StreamingOptions:
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
-            verbose_hardware_binding=_get("verbose_hardware_binding"),
+            hardware_binding=hardware_binding,
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
@@ -602,14 +638,15 @@ class StreamingOptions:
                 Env: RAPIDSMPF_PERIODIC_SPILL_CHECK. Built-in default: 1ms."""),
         )
         g.add_argument(
-            "--verbose-hardware-binding",
-            dest="verbose_hardware_binding",
+            "--hardware-binding",
+            dest="hardware_binding",
             default=None,
-            action=argparse.BooleanOptionalAction,
+            type=_parse_hardware_binding,
             help=textwrap.dedent("""\
-                Print warnings to stderr when topology binding fails for
-                individual subsystems (CPU, memory, network).
-                Env: CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING. Built-in default: false."""),
+                Hardware binding policy as a JSON object
+                (e.g. '{"gpu_id": 2}', '{"enabled": false}').
+                Env: CUDF_POLARS__FRONTEND__HARDWARE_BINDING.
+                Built-in default: enabled with auto GPU detection."""),
         )
         g.add_argument(
             "--num-py-executors",
@@ -618,7 +655,7 @@ class StreamingOptions:
             type=int,
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
-                Env: CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS.
+                Env: CUDF_POLARS__FRONTEND__NUM_PY_EXECUTORS.
                 Built-in default: 1."""),
         )
         g.add_argument(

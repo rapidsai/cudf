@@ -150,10 +150,10 @@ def test_allgather_polars_dataframe(spmd_comm: Communicator) -> None:
 
 
 def test_num_py_executors(spmd_comm: Communicator) -> None:
-    """executor_options forwards num_py_executors to the thread pool."""
+    """frontend_options forwards num_py_executors to the thread pool."""
     with SPMDEngine(
         comm=spmd_comm,
-        executor_options={"num_py_executors": 2},
+        frontend_options={"num_py_executors": 2},
     ) as engine:
         result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
     assert result.shape == (3, 1)

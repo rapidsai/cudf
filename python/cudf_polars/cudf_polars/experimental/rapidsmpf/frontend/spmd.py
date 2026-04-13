@@ -28,9 +28,12 @@ from pylibcudf.contiguous_split import pack
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
-    bind_to_gpu,
     check_reserved_keys,
     execute_ir_on_rank,
+)
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
 )
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
 from cudf_polars.utils.config import SPMDContext
@@ -296,13 +299,13 @@ class SPMDEngine(StreamingEngine):
 
     Notes
     -----
-    When not running under ``rrun``, calls
-    :func:`~cudf_polars.experimental.rapidsmpf.frontend.core.bind_to_gpu` at
-    construction time, before RMM and communicator initialisation, so that CPU
-    affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early as
-    possible.  If ``CUDA_VISIBLE_DEVICES`` is not set, falls back to
-    ``gpu_id=0``.  Under ``rrun`` the launcher already performs binding, so
-    the call is skipped.
+    Calls
+    :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.  By default, binding is skipped under ``rrun`` (which already
+    performs its own binding) — see
+    :attr:`HardwareBindingPolicy.skip_under_rrun`.
 
     Examples
     --------
@@ -326,19 +329,20 @@ class SPMDEngine(StreamingEngine):
         *,
         comm: Communicator | None = None,
         rapidsmpf_options: Options | None = None,
+        frontend_options: dict[str, Any] | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
     ) -> None:
+        frontend_options = frontend_options or {}
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
         check_reserved_keys(executor_options, engine_options)
-        verbose_hw_bind = cast(
-            bool, executor_options.get("verbose_hardware_binding", False)
+        hw_binding = cast(
+            HardwareBindingPolicy,
+            frontend_options.get("hardware_binding", HardwareBindingPolicy()),
         )
-
-        if not bootstrap.is_running_with_rrun():
-            bind_to_gpu(verbose=verbose_hw_bind)
+        bind_to_gpu(hw_binding)
 
         rapidsmpf_options = (
             rapidsmpf_options
@@ -369,7 +373,7 @@ class SPMDEngine(StreamingEngine):
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(int, executor_options.get("num_py_executors", 1)),
+            max_workers=cast(int, frontend_options.get("num_py_executors", 1)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
@@ -431,6 +435,7 @@ class SPMDEngine(StreamingEngine):
         """
         return cls(
             rapidsmpf_options=options.to_rapidsmpf_options(),
+            frontend_options=options.to_frontend_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
         )

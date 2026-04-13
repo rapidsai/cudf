@@ -32,9 +32,12 @@ import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
-    bind_to_gpu,
     check_reserved_keys,
     execute_ir_on_rank,
+)
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
 )
 from cudf_polars.utils.config import DaskContext
 
@@ -49,6 +52,41 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
+
+
+def _get_visible_gpu_ids() -> list[str]:
+    """
+    Return the list of visible GPU identifiers.
+
+    Reads ``CUDA_VISIBLE_DEVICES`` if set, otherwise queries NVML for the
+    total device count and returns ``["0", "1", ...]``.
+    """
+    cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if cvd is not None:
+        return [d.strip() for d in cvd.split(",") if d.strip()]
+    import pynvml
+
+    pynvml.nvmlInit()
+    return [str(i) for i in range(pynvml.nvmlDeviceGetCount())]
+
+
+def _rotate_devices(i: int, devices: list[str]) -> str:
+    """
+    Return a ``CUDA_VISIBLE_DEVICES`` string with device *i* first.
+
+    Following the dask-cuda convention, the device list is rotated so
+    that worker *i*'s primary GPU appears first, and all other GPUs
+    remain visible in round-robin order.
+
+    Examples
+    --------
+    >>> _rotate_devices(0, ["0", "1", "2", "3"])
+    '0,1,2,3'
+    >>> _rotate_devices(2, ["0", "1", "2", "3"])
+    '2,3,0,1'
+    """
+    rotated = devices[i:] + devices[:i]
+    return ",".join(rotated)
 
 
 @dataclasses.dataclass
@@ -67,8 +105,8 @@ def _setup_root(
     rapidsmpf_options_as_bytes: bytes,
     *,
     uid: str,
-    verbose_hardware_binding: bool = False,
-    memory_resource_config: MemoryResourceConfig | None = None,
+    hardware_binding: HardwareBindingPolicy,
+    memory_resource_config: MemoryResourceConfig | None,
     dask_worker: distributed.Worker | None = None,
 ) -> bytes:
     """
@@ -87,8 +125,8 @@ def _setup_root(
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
-    verbose_hardware_binding
-        Print warnings to stderr on topology binding failures.
+    hardware_binding
+        Policy controlling topology-aware hardware binding.
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
         :class:`rmm.mr.CudaAsyncMemoryResource`.
@@ -101,7 +139,7 @@ def _setup_root(
     """
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    bind_to_gpu(verbose=verbose_hardware_binding)
+    bind_to_gpu(hardware_binding)
     base_mr = (
         memory_resource_config.create_memory_resource()
         if memory_resource_config is not None
@@ -130,11 +168,11 @@ def _setup_worker(
     root_ucxx_address_as_bytes: bytes,
     nranks: int,
     rapidsmpf_options_as_bytes: bytes,
-    executor_options: dict[str, object],
+    frontend_options: dict[str, object],
     *,
     uid: str,
-    verbose_hardware_binding: bool = False,
-    memory_resource_config: MemoryResourceConfig | None = None,
+    hardware_binding: HardwareBindingPolicy,
+    memory_resource_config: MemoryResourceConfig | None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -151,13 +189,13 @@ def _setup_worker(
         Total number of workers.
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options.
-    executor_options
-        Additional executor options.
+    frontend_options
+        Frontend options (e.g. ``num_py_executors``).
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
-    verbose_hardware_binding
-        Print warnings to stderr on topology binding failures.
+    hardware_binding
+        Policy controlling topology-aware hardware binding.
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
         :class:`rmm.mr.CudaAsyncMemoryResource`.
@@ -172,7 +210,7 @@ def _setup_worker(
 
     if mp_ctx is None:
         # Non-root worker: create communicator now.
-        bind_to_gpu(verbose=verbose_hardware_binding)
+        bind_to_gpu(hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
             if memory_resource_config is not None
@@ -203,7 +241,7 @@ def _setup_worker(
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int | None,
-            executor_options.get("num_py_executors"),
+            frontend_options.get("num_py_executors"),
         ),
         thread_name_prefix="dask-executor",
     )
@@ -394,7 +432,7 @@ class DaskEngine(StreamingEngine):
 
     If ``dask_client`` is provided, it is used directly and its lifetime is
     managed by the caller. If ``dask_client`` is ``None``, a
-    :class:`dask_cuda.LocalCUDACluster` is created automatically (one worker
+    :class:`distributed.LocalCluster` is created automatically (one worker
     per visible GPU) and torn down by :meth:`shutdown`.
 
     Prefer the context-manager form in scripts: it guarantees that workers are
@@ -406,8 +444,8 @@ class DaskEngine(StreamingEngine):
     ----------
     dask_client
         An existing :class:`~distributed.Client` to use. If ``None``, a
-        :class:`~dask_cuda.LocalCUDACluster` and a new client are created and
-        owned by this engine.
+        :class:`~distributed.LocalCluster` (one worker per visible GPU)
+        and a new client are created and owned by this engine.
     rapidsmpf_options
         RapidsMPF options forwarded to every worker. If ``None``, defaults to
         ``Options(get_environment_variables())``.
@@ -443,6 +481,24 @@ class DaskEngine(StreamingEngine):
     >>> engine = DaskEngine()  # doctest: +SKIP
     >>> result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)  # doctest: +SKIP
     >>> engine.shutdown()  # doctest: +SKIP
+
+    Notes
+    -----
+    When using a pre-configured cluster that already performs its own hardware
+    binding (e.g. :class:`dask_cuda.LocalCUDACluster`, which pins CPU affinity
+    and sets ``CUDA_VISIBLE_DEVICES`` per worker), disable some or all of the
+    built-in binding to avoid conflicts:
+
+    >>> from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    ...     HardwareBindingPolicy,
+    ... )
+    >>> with DaskEngine(  # doctest: +SKIP
+    ...     dask_client=dc,
+    ...     frontend_options={
+    ...         "hardware_binding": HardwareBindingPolicy(enabled=False),
+    ...     },
+    ... ) as engine:
+    ...     ...
     """
 
     def __init__(
@@ -450,9 +506,11 @@ class DaskEngine(StreamingEngine):
         *,
         dask_client: distributed.Client | None = None,
         rapidsmpf_options: Options | None = None,
+        frontend_options: dict[str, Any] | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
     ) -> None:
+        frontend_options = frontend_options or {}
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
@@ -464,8 +522,9 @@ class DaskEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
-        verbose_hw_bind = cast(
-            bool, executor_options.get("verbose_hardware_binding", False)
+        hw_binding = cast(
+            HardwareBindingPolicy,
+            frontend_options.get("hardware_binding", HardwareBindingPolicy()),
         )
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
@@ -487,9 +546,19 @@ class DaskEngine(StreamingEngine):
         owned_cluster: Any = None
         owned_client: distributed.Client | None = None
         if dask_client is None:
-            import dask_cuda
-
-            owned_cluster = dask_cuda.LocalCUDACluster()
+            gpu_ids = _get_visible_gpu_ids()
+            worker_spec: dict[str, Any] = {}
+            for i, gpu_id in enumerate(gpu_ids):
+                worker_spec[str(gpu_id)] = {
+                    "cls": distributed.Nanny,
+                    "options": {
+                        "nthreads": 1,
+                        "env": {
+                            "CUDA_VISIBLE_DEVICES": _rotate_devices(i, gpu_ids),
+                        },
+                    },
+                }
+            owned_cluster = distributed.SpecCluster(workers=worker_spec)
             owned_client = distributed.Client(owned_cluster)
             dask_client = owned_client
 
@@ -502,7 +571,7 @@ class DaskEngine(StreamingEngine):
             functools.partial(
                 _setup_root,
                 uid=uid,
-                verbose_hardware_binding=verbose_hw_bind,
+                hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
             ),
             nranks,
@@ -517,13 +586,13 @@ class DaskEngine(StreamingEngine):
             functools.partial(
                 _setup_worker,
                 uid=uid,
-                verbose_hardware_binding=verbose_hw_bind,
+                hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
             ),
             root_ucxx_address_as_bytes,
             nranks,
             rapidsmpf_options_as_bytes,
-            executor_options,
+            frontend_options,
         )
 
         dask_ctx = DaskContext(
@@ -627,7 +696,7 @@ class DaskEngine(StreamingEngine):
             Unified streaming configuration.
         dask_client
             An existing :class:`distributed.Client` to use. If ``None``, a
-            :class:`dask_cuda.LocalCUDACluster` is created automatically.
+            :class:`distributed.LocalCluster` is created automatically.
 
         Returns
         -------
@@ -645,6 +714,7 @@ class DaskEngine(StreamingEngine):
         return cls(
             dask_client=dask_client,
             rapidsmpf_options=options.to_rapidsmpf_options(),
+            frontend_options=options.to_frontend_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
         )

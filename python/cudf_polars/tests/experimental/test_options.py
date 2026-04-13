@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import pytest
@@ -70,8 +71,8 @@ def test_executor_options_unique_fraction() -> None:
     assert result["unique_fraction"] == {"col_a": 0.5}
 
 
-def test_executor_options_num_py_executors() -> None:
-    result = StreamingOptions(num_py_executors=4).to_executor_options()
+def test_frontend_options_num_py_executors() -> None:
+    result = StreamingOptions(num_py_executors=4).to_frontend_options()
     assert result["num_py_executors"] == 4
 
 
@@ -300,14 +301,26 @@ def test_add_cli_args_then_from_argparse_roundtrip() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_to_dict_empty_when_all_unspecified() -> None:
-    assert StreamingOptions().to_dict() == {}
+def test_to_dict_default_has_hardware_binding_only() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    assert StreamingOptions().to_dict() == {"hardware_binding": HardwareBindingPolicy()}
 
 
 def test_to_dict_contains_only_set_fields() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
     opts = StreamingOptions(fallback_mode="silent", num_streaming_threads=4)
     d = opts.to_dict()
-    assert d == {"fallback_mode": "silent", "num_streaming_threads": 4}
+    assert d == {
+        "fallback_mode": "silent",
+        "num_streaming_threads": 4,
+        "hardware_binding": HardwareBindingPolicy(),
+    }
 
 
 def test_to_dict_roundtrip() -> None:
@@ -326,32 +339,68 @@ def test_to_dict_roundtrip_empty() -> None:
 
 
 # ---------------------------------------------------------------------------
-# verbose_hardware_binding
+# hardware_binding
 # ---------------------------------------------------------------------------
 
 
-def test_executor_options_verbose_hardware_binding() -> None:
-    result = StreamingOptions(verbose_hardware_binding=True).to_executor_options()
-    assert result["verbose_hardware_binding"] is True
+def test_hardware_binding_in_frontend_options() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    result = StreamingOptions(
+        hardware_binding=HardwareBindingPolicy(enabled=False)
+    ).to_frontend_options()
+    assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
 
 
-def test_verbose_hardware_binding_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING", "true")
-    result = StreamingOptions().to_executor_options()
-    assert result["verbose_hardware_binding"] is True
+def test_hardware_binding_env_var_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    monkeypatch.setenv("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", '{"enabled": false}')
+    result = StreamingOptions().to_frontend_options()
+    assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
 
 
-def test_verbose_hardware_binding_cli() -> None:
+def test_hardware_binding_env_var_gpu_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    monkeypatch.setenv("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", '{"gpu_id": 3}')
+    result = StreamingOptions().to_frontend_options()
+    assert result["hardware_binding"] == HardwareBindingPolicy(gpu_id=3)
+
+
+def test_hardware_binding_cli_json() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
     parser = argparse.ArgumentParser()
     StreamingOptions._add_cli_args(parser)
-    args = parser.parse_args(["--verbose-hardware-binding"])
+    args = parser.parse_args(
+        ["--hardware-binding", '{"gpu_id": 2, "raise_on_fail": true}']
+    )
     opts = StreamingOptions._from_argparse(args)
-    assert opts.verbose_hardware_binding is True
+    assert opts.hardware_binding == HardwareBindingPolicy(gpu_id=2, raise_on_fail=True)
 
 
-def test_no_verbose_hardware_binding_cli() -> None:
+def test_hardware_binding_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", "not json")
+    with pytest.raises(json.JSONDecodeError):
+        StreamingOptions()
+
+
+def test_hardware_binding_cli_disabled() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
     parser = argparse.ArgumentParser()
     StreamingOptions._add_cli_args(parser)
-    args = parser.parse_args(["--no-verbose-hardware-binding"])
+    args = parser.parse_args(["--hardware-binding", '{"enabled": false}'])
     opts = StreamingOptions._from_argparse(args)
-    assert opts.verbose_hardware_binding is False
+    assert opts.hardware_binding == HardwareBindingPolicy(enabled=False)

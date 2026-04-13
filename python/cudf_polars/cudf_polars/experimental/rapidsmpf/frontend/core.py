@@ -5,10 +5,8 @@
 from __future__ import annotations
 
 import contextlib
-import threading
 from typing import TYPE_CHECKING, Any, Self
 
-from rapidsmpf.rrun.rrun import bind
 from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -32,46 +30,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
-
-
-_bind_lock = threading.Lock()
-_bind_done = False
-
-
-def bind_to_gpu(*, verbose: bool) -> None:
-    """
-    Bind the calling process to resources topologically close to a GPU.
-
-    Thread-safe wrapper around :func:`rapidsmpf.rrun.rrun.bind` that
-    guarantees the underlying function is called **at most once per
-    process**, regardless of how many frontend engines are constructed or
-    from how many threads.
-
-    Uses double-checked locking with a module-level :data:`_bind_lock` so
-    that the first caller performs the bind while concurrent callers block
-    briefly and all subsequent callers return immediately.
-
-    If ``CUDA_VISIBLE_DEVICES`` is not set (common in single-GPU / local-dev
-    environments), falls back to ``gpu_id=0``.
-
-    Parameters
-    ----------
-    verbose
-        Forward to :func:`rapidsmpf.rrun.rrun.bind`. When ``True``,
-        warnings about individual binding failures (CPU, memory, network)
-        are printed to stderr.
-    """
-    global _bind_done  # noqa: PLW0603
-    if _bind_done:
-        return
-    with _bind_lock:
-        if _bind_done:
-            return
-        try:
-            bind(verbose=verbose)
-        except RuntimeError:
-            bind(gpu_id=0, verbose=verbose)
-        _bind_done = True
 
 
 def execute_ir_on_rank(

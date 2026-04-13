@@ -786,11 +786,6 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    num_py_executors: int | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=None
-        )
-    )
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
@@ -890,9 +885,6 @@ class StreamingExecutor:
             raise TypeError("max_io_threads must be an int")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
-        if not isinstance(self.num_py_executors, (int, type(None))):
-            raise TypeError("num_py_executors must be int or None")
-
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
         # (See https://github.com/rapidsai/rapidsmpf/issues/439)

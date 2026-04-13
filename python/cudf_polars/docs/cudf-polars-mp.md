@@ -46,7 +46,8 @@ categories:
 | Category    | Controls                                                              |
 | ----------- | --------------------------------------------------------------------- |
 | `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level             |
-| `executor`  | Partitioning, fallback behavior, dynamic planning, hardware binding   |
+| `frontend`  | Hardware binding, thread-pool sizing (consumed by Dask/Ray/SPMD)      |
+| `executor`  | Partitioning, fallback behavior, dynamic planning                     |
 | `engine`    | Polars integration, IO options, RMM memory resource                   |
 
 All fields default to `UNSPECIFIED`, which means: use the corresponding
@@ -142,14 +143,55 @@ worker's GPU. This is done via `rapidsmpf.rrun.rrun.bind()` and improves
 performance by ensuring memory allocations and network traffic stay local to
 the GPU's NUMA node.
 
-To see warnings when individual binding subsystems (CPU, memory, network) fail,
-set `verbose_hardware_binding`:
+Binding is controlled by the `hardware_binding` executor option, which accepts
+a `HardwareBindingPolicy` instance:
 
 ```python
-opts = StreamingOptions(verbose_hardware_binding=True)
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
 ```
 
-Or via the environment variable `CUDF_POLARS__EXECUTOR__VERBOSE_HARDWARE_BINDING=true`.
+The default policy (`HardwareBindingPolicy()`) skips binding under `rrun`
+(which already binds at launch), and otherwise binds once per process using
+`CUDA_VISIBLE_DEVICES` to resolve the GPU.
+
+| Field             | Default | Description                                                                                                         |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `skip_under_rrun` | `True`  | Skip binding when launched via `rrun` (which already performs binding). If skipped, all other options are ignored.  |
+| `enabled`         | `True`  | Enable or disable hardware binding.                                                                                 |
+| `enable_once`     | `True`  | Perform binding at most once per process. Subsequent calls are no-ops.                                              |
+| `gpu_id`          | `None`  | Physical GPU index. If `None`, read from `CUDA_VISIBLE_DEVICES`, falling back to `0`.                               |
+| `raise_on_fail`   | `False` | Surface binding failures by enabling `verbose=True` in `rrun.bind()`.                                               |
+
+
+Examples:
+
+```python
+# Disable binding entirely:
+opts = StreamingOptions(hardware_binding=HardwareBindingPolicy(enabled=False))
+
+# Bind to a specific GPU with failure reporting:
+opts = StreamingOptions(
+    hardware_binding=HardwareBindingPolicy(gpu_id=2, raise_on_fail=True),
+)
+```
+
+Via the environment variable (JSON):
+
+```bash
+# Disable binding:
+export CUDF_POLARS__FRONTEND__HARDWARE_BINDING='{"enabled": false}'
+
+# Bind to GPU 2:
+export CUDF_POLARS__FRONTEND__HARDWARE_BINDING='{"gpu_id": 2}'
+```
+
+Via the CLI:
+
+```bash
+python my_script.py --hardware-binding '{"gpu_id": 2, "raise_on_fail": true}'
+```
 
 ---
 
@@ -288,15 +330,16 @@ from rapidsmpf.config import Options
 
 with RayEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    executor_options={
-        "max_rows_per_partition": 500_000,
-        "num_py_executors": 2,
-    },
+    frontend_options={"num_py_executors": 2},
+    executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
 ) as engine:
     ...
 ```
+
+`frontend_options` are consumed by the engine during initialization (e.g.
+hardware binding, thread-pool sizing) and are not forwarded to Polars.
 
 `ray_init_options` is forwarded to `ray.init()` when Ray is not already
 initialized. It is kept separate from streaming behavior options and has no
@@ -341,14 +384,14 @@ Conceptually the system looks like this:
 
 ### Prerequisites
 
-* Dask distributed (`distributed`) and `dask-cuda` installed
+* Dask distributed (`distributed`) installed
 * RapidsMPF and UCXX available on all GPU nodes
 
 ### Running in Dask mode
 
 `DaskEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.dask`. On construction it:
 
-1. If `dask_client` is `None`, creates a `dask_cuda.LocalCUDACluster` (one worker per GPU) and a `distributed.Client`
+1. If `dask_client` is `None`, creates a `distributed.LocalCluster` (one worker per visible GPU) and a `distributed.Client`
 2. Bootstraps a UCXX communicator across all workers
 
 `DaskEngine` is a `StreamingEngine` subclass (and therefore a `pl.GPUEngine`) that can be used directly or as a context manager.
@@ -398,6 +441,28 @@ engine.shutdown()
 
 `DaskEngine` raises `RuntimeError` if created inside an `rrun` cluster.
 
+### Hardware binding with pre-configured clusters
+
+When using a pre-configured cluster that already performs its own hardware
+binding — such as `dask_cuda.LocalCUDACluster`, which pins CPU affinity and
+sets `CUDA_VISIBLE_DEVICES` per worker — disable the built-in binding to
+avoid conflicts:
+
+```python
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
+
+with DaskEngine(
+    dask_client=dc,
+    frontend_options={
+        "hardware_binding": HardwareBindingPolicy(enabled=False),
+    },
+) as engine:
+    ...
+```
+
 ### Cluster diagnostics
 
 ```python
@@ -423,14 +488,15 @@ from rapidsmpf.config import Options
 
 with DaskEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    executor_options={
-        "max_rows_per_partition": 500_000,
-        "num_py_executors": 2,
-    },
+    frontend_options={"num_py_executors": 2},
+    executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
 ) as engine:
     ...
 ```
+
+`frontend_options` are consumed by the engine during initialization (e.g.
+hardware binding, thread-pool sizing) and are not forwarded to Polars.
 
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
 argument; user-supplied keys are merged with reserved entries set by `DaskEngine`.
@@ -660,14 +726,15 @@ from rapidsmpf.config import Options
 
 with SPMDEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    executor_options={
-        "max_rows_per_partition": 500_000,
-        "num_py_executors": 2,
-    },
+    frontend_options={"num_py_executors": 2},
+    executor_options={"max_rows_per_partition": 500_000},
     engine_options={"parquet_options": {"use_rapidsmpf_native": True}},
 ) as engine:
     ...
 ```
+
+`frontend_options` are consumed by the engine during initialization (e.g.
+hardware binding, thread-pool sizing) and are not forwarded to Polars.
 
 **Memory resource:** All engines accept a `memory_resource_config` option (via
 `StreamingOptions` or `engine_options`) that controls the RMM memory resource.

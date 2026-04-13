@@ -30,9 +30,12 @@ import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     StreamingEngine,
-    bind_to_gpu,
     check_reserved_keys,
     execute_ir_on_rank,
+)
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
 )
 from cudf_polars.utils.config import RayContext
 
@@ -169,12 +172,12 @@ class RankActor:
     num_py_executors
         Maximum number of threads for the actor's Python thread-pool executor.
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
-    verbose_hardware_binding
-        Print warnings to stderr on topology binding failures.
+    hardware_binding
+        Policy controlling topology-aware hardware binding.
 
     Notes
     -----
-    Calls :func:`~cudf_polars.experimental.rapidsmpf.frontend.core.bind_to_gpu`
+    Calls :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
     at construction time, before RMM and communicator initialisation, so that
     CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
     as possible.
@@ -186,10 +189,10 @@ class RankActor:
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
         num_py_executors: int,
-        verbose_hardware_binding: bool = False,
-        memory_resource_config: MemoryResourceConfig | None = None,
+        hardware_binding: HardwareBindingPolicy,
+        memory_resource_config: MemoryResourceConfig | None,
     ) -> None:
-        bind_to_gpu(verbose=verbose_hardware_binding)
+        bind_to_gpu(hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
             if memory_resource_config is not None
@@ -450,10 +453,12 @@ class RayEngine(StreamingEngine):
         self,
         *,
         rapidsmpf_options: Options | None = None,
+        frontend_options: dict[str, Any] | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
         ray_init_options: dict[str, Any] | None = None,
     ) -> None:
+        frontend_options = frontend_options or {}
         executor_options = executor_options or {}
         engine_options = engine_options or {}
         ray_init_options = ray_init_options or {}
@@ -466,8 +471,9 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
-        verbose_hw_bind = cast(
-            bool, executor_options.get("verbose_hardware_binding", False)
+        hw_binding = cast(
+            HardwareBindingPolicy,
+            frontend_options.get("hardware_binding", HardwareBindingPolicy()),
         )
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
@@ -502,9 +508,9 @@ class RayEngine(StreamingEngine):
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
                         int,
-                        executor_options.get("num_py_executors", 1),
+                        frontend_options.get("num_py_executors", 1),
                     ),
-                    verbose_hardware_binding=verbose_hw_bind,
+                    hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
                 )
                 for _ in range(num_gpus)
@@ -576,6 +582,7 @@ class RayEngine(StreamingEngine):
         """
         return cls(
             rapidsmpf_options=options.to_rapidsmpf_options(),
+            frontend_options=options.to_frontend_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
             ray_init_options=ray_init_options,

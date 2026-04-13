@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for bind_to_gpu() thread-safe wrapper."""
+"""Tests for bind_to_gpu() and HardwareBindingPolicy."""
 
 from __future__ import annotations
 
@@ -60,9 +60,9 @@ def _run_in_subprocess(target: Callable[[], None]) -> None:
 
 def _reset_bind_state() -> None:
     """Reset the module-level bind state so each subprocess starts clean."""
-    from cudf_polars.experimental.rapidsmpf.frontend import core
+    from cudf_polars.experimental.rapidsmpf.frontend import hardware_binding
 
-    core._bind_done = False
+    hardware_binding._bind_done = False
 
 
 def test_bind_called_once() -> None:
@@ -71,14 +71,16 @@ def test_bind_called_once() -> None:
     def body() -> None:
         _reset_bind_state()
         with patch(
-            "cudf_polars.experimental.rapidsmpf.frontend.core.bind"
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
         ) as mock_bind:
-            from cudf_polars.experimental.rapidsmpf.frontend.core import (
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
                 bind_to_gpu,
             )
 
-            bind_to_gpu(verbose=False)
-            bind_to_gpu(verbose=False)
+            policy = HardwareBindingPolicy()
+            bind_to_gpu(policy)
+            bind_to_gpu(policy)
             assert mock_bind.call_count == 1
 
     _run_in_subprocess(body)
@@ -92,12 +94,16 @@ def test_bind_falls_back_to_gpu_0() -> None:
         mock_bind = MagicMock(
             side_effect=[RuntimeError("no CUDA_VISIBLE_DEVICES"), None]
         )
-        with patch("cudf_polars.experimental.rapidsmpf.frontend.core.bind", mock_bind):
-            from cudf_polars.experimental.rapidsmpf.frontend.core import (
+        with patch(
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind",
+            mock_bind,
+        ):
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
                 bind_to_gpu,
             )
 
-            bind_to_gpu(verbose=False)
+            bind_to_gpu(HardwareBindingPolicy())
             assert mock_bind.call_count == 2
             assert mock_bind.call_args_list == [
                 call(verbose=False),
@@ -107,19 +113,20 @@ def test_bind_falls_back_to_gpu_0() -> None:
     _run_in_subprocess(body)
 
 
-def test_bind_forwards_verbose() -> None:
-    """The verbose parameter is forwarded to bind()."""
+def test_bind_raise_on_fail_sets_verbose() -> None:
+    """raise_on_fail=True forwards verbose=True to bind()."""
 
     def body() -> None:
         _reset_bind_state()
         with patch(
-            "cudf_polars.experimental.rapidsmpf.frontend.core.bind"
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
         ) as mock_bind:
-            from cudf_polars.experimental.rapidsmpf.frontend.core import (
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
                 bind_to_gpu,
             )
 
-            bind_to_gpu(verbose=True)
+            bind_to_gpu(HardwareBindingPolicy(raise_on_fail=True))
             mock_bind.assert_called_once_with(verbose=True)
 
     _run_in_subprocess(body)
@@ -133,17 +140,19 @@ def test_bind_thread_safe() -> None:
 
         _reset_bind_state()
         with patch(
-            "cudf_polars.experimental.rapidsmpf.frontend.core.bind"
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
         ) as mock_bind:
-            from cudf_polars.experimental.rapidsmpf.frontend.core import (
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
                 bind_to_gpu,
             )
 
+            policy = HardwareBindingPolicy()
             barrier = threading.Barrier(8)
 
             def _call_bind() -> None:
                 barrier.wait()
-                bind_to_gpu(verbose=False)
+                bind_to_gpu(policy)
 
             threads = [threading.Thread(target=_call_bind) for _ in range(8)]
             for t in threads:
@@ -160,12 +169,71 @@ def test_bind_done_flag_set() -> None:
     """_bind_done is True after bind_to_gpu() succeeds."""
 
     def body() -> None:
-        from cudf_polars.experimental.rapidsmpf.frontend import core
+        from cudf_polars.experimental.rapidsmpf.frontend import hardware_binding
 
         _reset_bind_state()
-        assert not core._bind_done
-        with patch("cudf_polars.experimental.rapidsmpf.frontend.core.bind"):
-            core.bind_to_gpu(verbose=False)
-            assert core._bind_done
+        assert not hardware_binding._bind_done
+        with patch("cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"):
+            hardware_binding.bind_to_gpu(hardware_binding.HardwareBindingPolicy())
+            assert hardware_binding._bind_done
+
+    _run_in_subprocess(body)
+
+
+def test_bind_disabled() -> None:
+    """enabled=False skips binding entirely."""
+
+    def body() -> None:
+        _reset_bind_state()
+        with patch(
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
+        ) as mock_bind:
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
+                bind_to_gpu,
+            )
+
+            bind_to_gpu(HardwareBindingPolicy(enabled=False))
+            mock_bind.assert_not_called()
+
+    _run_in_subprocess(body)
+
+
+def test_bind_enable_once_false() -> None:
+    """enable_once=False allows repeated bind() calls."""
+
+    def body() -> None:
+        _reset_bind_state()
+        with patch(
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
+        ) as mock_bind:
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
+                bind_to_gpu,
+            )
+
+            policy = HardwareBindingPolicy(enable_once=False)
+            bind_to_gpu(policy)
+            bind_to_gpu(policy)
+            assert mock_bind.call_count == 2
+
+    _run_in_subprocess(body)
+
+
+def test_bind_explicit_gpu_id() -> None:
+    """gpu_id is forwarded to bind() directly, no fallback."""
+
+    def body() -> None:
+        _reset_bind_state()
+        with patch(
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
+        ) as mock_bind:
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
+                bind_to_gpu,
+            )
+
+            bind_to_gpu(HardwareBindingPolicy(gpu_id=3))
+            mock_bind.assert_called_once_with(gpu_id=3, verbose=False)
 
     _run_in_subprocess(body)
