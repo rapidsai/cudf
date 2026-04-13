@@ -78,9 +78,9 @@ class Agg(Expr):
                 if not options
                 else plc.types.NullPolicy.INCLUDE
             )
-        elif name == "m2":
+        elif name == "m2": # pragma: no cover; doesn't have a direct polars equivalent
             req = plc.aggregation.m2()
-        elif name == "merge_m2":
+        elif name == "merge_m2": # pragma: no cover; doesn't have a direct polars equivalent
             req = plc.aggregation.merge_m2()
         elif name == "quantile":
             child, quantile = self.children
