@@ -81,15 +81,32 @@ TYPED_TEST(RoaringBitmapTest, Basics)
 }
 struct RoaringBitmapErrorTest : public cudf::test::BaseFixture {};
 
+TEST_F(RoaringBitmapErrorTest, EmptySerializedBitmapData)
+{
+  EXPECT_THROW(auto bitmap = cudf::roaring_bitmap(cudf::roaring_bitmap_type::BITS_64, {}),
+               std::invalid_argument);
+}
+
 TEST_F(RoaringBitmapErrorTest, TypeMismatch)
 {
-  auto keys                   = std::vector<cuda::std::uint64_t>{1, 2, 3};
-  auto serialized_bitmap_data = serialize_roaring_bitmap<cuda::std::uint64_t>(keys);
+  auto insert_keys            = std::vector<cuda::std::uint64_t>{1, 2, 3};
+  auto serialized_bitmap_data = serialize_roaring_bitmap<cuda::std::uint64_t>(insert_keys);
   auto const stream           = cudf::get_default_stream();
   auto bitmap = cudf::roaring_bitmap(cudf::roaring_bitmap_type::BITS_64, serialized_bitmap_data);
   bitmap.materialize(stream);
-  auto keys_col32 = cudf::test::fixed_width_column_wrapper<cuda::std::uint32_t>{1, 2, 3};
-  EXPECT_THROW(std::ignore =
-                 bitmap.contains_async(keys_col32, stream, cudf::get_current_device_resource_ref()),
+  auto probe_keys = cudf::test::fixed_width_column_wrapper<cuda::std::uint32_t>{1, 2, 3}.release();
+  EXPECT_THROW(std::ignore = bitmap.contains_async(
+                 probe_keys->view(), stream, cudf::get_current_device_resource_ref()),
                std::invalid_argument);
+}
+
+TEST_F(RoaringBitmapErrorTest, EmptyProbeKeys)
+{
+  auto insert_keys            = std::vector<cuda::std::uint64_t>{1, 2, 3};
+  auto serialized_bitmap_data = serialize_roaring_bitmap<cuda::std::uint64_t>(insert_keys);
+  auto const stream           = cudf::get_default_stream();
+  auto bitmap = cudf::roaring_bitmap(cudf::roaring_bitmap_type::BITS_64, serialized_bitmap_data);
+  auto probe_keys = cudf::make_empty_column(cudf::data_type{cudf::type_id::UINT64});
+  EXPECT_NO_THROW(std::ignore = bitmap.contains_async(
+                    probe_keys->view(), stream, cudf::get_current_device_resource_ref()));
 }

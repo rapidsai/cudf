@@ -107,7 +107,6 @@ class roaring_bitmap {
    * @return A BOOL8 column indicating positions of the present keys
    *
    * @throws std::invalid_argument if the key column dtype is invalid
-   * @throws cudf::logic_error if the bitmap has not yet been materialized
    */
   [[nodiscard]] std::unique_ptr<cudf::column> contains_async(
     cudf::column_view const& keys,
@@ -126,7 +125,6 @@ class roaring_bitmap {
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @throws std::invalid_argument if the key or output column dtypes are invalid
-   * @throws cudf::logic_error if the bitmap has not yet been materialized
    */
   void contains_async(cudf::column_view const& keys,
                       cudf::mutable_column_view const& output,

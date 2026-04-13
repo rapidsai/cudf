@@ -255,7 +255,6 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
                       row_mask_view.end<bool>(),
                       row_mask_view.begin<bool>(),
                       cuda::std::logical_not<bool>{});
-    stream.synchronize();
     return row_mask_column;
   }
 
@@ -303,8 +302,6 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
                     row_mask_view.end<bool>(),
                     row_mask_view.begin<bool>(),
                     cuda::std::logical_not<bool>{});
-  stream.synchronize();
-
   return row_mask_column;
 }
 

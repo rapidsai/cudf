@@ -59,6 +59,9 @@ struct roaring_bitmap::roaring_bitmap_impl {
   void contains_async(InputIt first, InputIt last, OutputIt output, rmm::cuda_stream_view stream)
     requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
   {
+    // Return early if the input range is empty
+    if (first == last) { return; }
+
     materialize<Type>(stream);
 
     if constexpr (Type == roaring_bitmap_type::BITS_32) {
@@ -106,23 +109,7 @@ std::unique_ptr<cudf::column> roaring_bitmap::contains_async(
   auto result = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::BOOL8}, keys.size(), cudf::mask_state::UNALLOCATED, stream, mr);
 
-  if (type_ == roaring_bitmap_type::BITS_32) {
-    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT32,
-                 "Key column must be UINT32 for a 32-bit roaring bitmap",
-                 std::invalid_argument);
-    impl_->contains_async<roaring_bitmap_type::BITS_32>(keys.begin<cuda::std::uint32_t>(),
-                                                        keys.end<cuda::std::uint32_t>(),
-                                                        result->mutable_view().begin<bool>(),
-                                                        stream);
-  } else {
-    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT64,
-                 "Key column must be UINT64 for a 64-bit roaring bitmap",
-                 std::invalid_argument);
-    impl_->contains_async<roaring_bitmap_type::BITS_64>(keys.begin<cuda::std::uint64_t>(),
-                                                        keys.end<cuda::std::uint64_t>(),
-                                                        result->mutable_view().begin<bool>(),
-                                                        stream);
-  }
+  contains_async(keys, result->mutable_view(), stream);
 
   return result;
 }
