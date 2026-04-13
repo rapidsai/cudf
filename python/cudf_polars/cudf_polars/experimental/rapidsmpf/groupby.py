@@ -39,6 +39,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
+    maybe_remap_partitioning,
     process_children,
     recv_metadata,
     send_metadata,
@@ -690,13 +691,20 @@ async def groupby_actor(
         if fully_partitioned or fallback_case:
             if tracer is not None:
                 tracer.decision = "chunkwise"
+            metadata_out = ChannelMetadata(
+                local_count=metadata_in.local_count,
+                partitioning=maybe_remap_partitioning(
+                    ir, metadata_in.partitioning, child_ir=ir.children[0]
+                ),
+                duplicated=metadata_in.duplicated,
+            )
             await chunkwise_evaluate(
                 context,
                 ir,
                 ir_context,
                 ch_out,
                 ch_in,
-                metadata_in,
+                metadata_out,
                 tracer=tracer,
             )
             return
