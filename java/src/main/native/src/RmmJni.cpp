@@ -35,49 +35,7 @@
 
 using rmm::mr::logging_resource_adaptor;
 
-/**
- * @brief A pinned pool that owns both the upstream pinned resource and the pool.
- *
- * With the CCCL migration, pool_memory_resource takes a non-owning resource_ref,
- * so we need a wrapper to keep the upstream alive.
- */
-struct pinned_pool_wrapper {
-  rmm::mr::pinned_host_memory_resource pinned_mr;
-  rmm::mr::pool_memory_resource pool;
-
-  pinned_pool_wrapper(std::size_t initial_size, std::optional<std::size_t> max_size)
-    : pinned_mr{}, pool{rmm::device_async_resource_ref{pinned_mr}, initial_size, max_size}
-  {
-  }
-
-  [[nodiscard]] std::size_t pool_size() const noexcept { return pool.pool_size(); }
-
-  void* allocate(cuda::stream_ref stream,
-                 std::size_t bytes,
-                 std::size_t alignment = alignof(std::max_align_t))
-  {
-    return pool.allocate(stream, bytes, alignment);
-  }
-
-  void deallocate(cuda::stream_ref stream,
-                  void* ptr,
-                  std::size_t bytes,
-                  std::size_t alignment = alignof(std::max_align_t))
-  {
-    pool.deallocate(stream, ptr, bytes, alignment);
-  }
-
-  void* allocate_sync(std::size_t bytes, std::size_t alignment = alignof(std::max_align_t))
-  {
-    return pool.allocate_sync(bytes, alignment);
-  }
-
-  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment = alignof(std::max_align_t))
-  {
-    pool.deallocate_sync(ptr, bytes, alignment);
-  }
-};
-using rmm_pinned_pool_t = pinned_pool_wrapper;
+using rmm_pinned_pool_t = rmm::mr::pool_memory_resource;
 
 namespace {
 
@@ -1093,7 +1051,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = new rmm_pinned_pool_t(init, max);
+    auto pool = new rmm_pinned_pool_t(
+        rmm::device_async_resource_ref{rmm::mr::pinned_host_memory_resource{}}, init, max);
     return reinterpret_cast<jlong>(pool);
   }
   JNI_CATCH(env, 0);
