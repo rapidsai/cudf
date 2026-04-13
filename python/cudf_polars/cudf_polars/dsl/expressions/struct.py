@@ -59,7 +59,6 @@ class StructFunction(Expr):
     _non_child = ("dtype", "name", "options")
 
     _supported_ops: ClassVar[set[Name]] = {
-        Name.FieldByIndex,
         Name.FieldByName,
         Name.RenameFields,
         Name.PrefixFields,
