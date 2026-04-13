@@ -243,34 +243,30 @@ auto reflect(udf_source_type source_type,
   std::vector<std::string> in_types;
 
   for (size_t i = 0; i < inputs.size(); i++) {
-    auto& in               = inputs[i];
-    auto column            = std::visit([](auto& c) { return reflect_input_column(c); }, in);
-    auto element           = std::visit([](auto& c) { return reflect_input_element(c); }, in);
-    auto optional_element  = std::format("cuda::std::optional<{}>", element);
-    bool as_scalar         = std::holds_alternative<scalar_column_view>(in);
-    bool may_be_nullable   = input_may_be_nullable[i];
-    auto is_strings_output = false;
+    auto& in              = inputs[i];
+    auto column           = std::visit([](auto& c) { return reflect_input_column(c); }, in);
+    auto element          = std::visit([](auto& c) { return reflect_input_element(c); }, in);
+    auto optional_element = std::format("cuda::std::optional<{}>", element);
+    bool as_scalar        = std::holds_alternative<scalar_column_view>(in);
+    bool may_be_nullable  = input_may_be_nullable[i];
     auto accessor =
       jitify2::reflection::Template("cudf::jit::column_accessor")
-        .instantiate(
-          i, column, element, optional_element, as_scalar, may_be_nullable, is_strings_output);
+        .instantiate(i, column, element, optional_element, as_scalar, may_be_nullable);
     in_types.push_back(accessor);
   }
 
   std::vector<std::string> out_types;
 
   for (size_t i = 0; i < outputs.size(); i++) {
-    auto& out              = outputs[i];
-    auto column            = std::visit([](auto& c) { return reflect_output_column(c); }, out);
-    auto element           = std::visit([](auto& c) { return reflect_output_element(c); }, out);
-    auto optional_element  = std::format("cuda::std::optional<{}>", element);
-    bool as_scalar         = false;  // never scalar
-    bool may_be_nullable   = output_may_be_nullable[i];
-    auto is_strings_output = std::holds_alternative<mutable_strings_column>(out);
+    auto& out             = outputs[i];
+    auto column           = std::visit([](auto& c) { return reflect_output_column(c); }, out);
+    auto element          = std::visit([](auto& c) { return reflect_output_element(c); }, out);
+    auto optional_element = std::format("cuda::std::optional<{}>", element);
+    bool as_scalar        = false;  // never scalar
+    bool may_be_nullable  = output_may_be_nullable[i];
     auto accessor =
       jitify2::reflection::Template("cudf::jit::column_accessor")
-        .instantiate(
-          i, column, element, optional_element, as_scalar, may_be_nullable, is_strings_output);
+        .instantiate(i, column, element, optional_element, as_scalar, may_be_nullable);
 
     out_types.push_back(accessor);
   }
