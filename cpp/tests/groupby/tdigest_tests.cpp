@@ -721,12 +721,9 @@ TEST_F(TDigestMergeTest, AllValuesAreNull)
   // See `aggregate_result_functor::operator()<aggregation::TDIGEST>` for details.
   auto const keys      = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 0, 1, 1, 2}};
   auto const keys_view = cudf::column_view(keys);
-  auto val_elems  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto val_valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    // All values are null
-    return false;
-  });
-  auto const vals = cudf::test::fixed_width_column_wrapper<int32_t>{
+  auto val_elems       = cuda::counting_iterator(0);
+  auto val_valids      = cudf::test::iterators::all_nulls();
+  auto const vals      = cudf::test::fixed_width_column_wrapper<int32_t>{
     val_elems, val_elems + keys_view.size(), val_valids};
 
   auto const delta = 1000;
