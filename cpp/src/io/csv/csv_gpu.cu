@@ -575,7 +575,11 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
     }
 
     // === GENERAL PATH (STRING, TIMESTAMP, DURATION, BOOL, etc.) ===
-    auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
+    // Fast path: for non-quoted fields, use a simple delimiter scan instead of the
+    // full seek_field_end which checks quote state on every character.
+    auto next_delimiter = (next_field < row_end && *next_field == options.quotechar)
+                            ? cudf::io::gpu::seek_field_end(next_field, row_end, options)
+                            : scan_to_delimiter(next_field, row_end, options);
 
     if (col_enabled) {
       // check if the entire field is a NaN string - consistent with pandas
