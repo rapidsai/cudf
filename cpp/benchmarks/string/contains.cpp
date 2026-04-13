@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,17 +22,17 @@
 // longer pattern lengths demand more working memory per string
 // patterns 0 and 1 contain anchors (^ $) so Glushkov falls back to Thompson for those
 static std::vector<std::string> const patterns = {
-  "^\\d+ [a-z]+",  // 0: anchor pattern (anchors ^ $)
-  "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$", // 1: anchor pattern (anchors ^ $)
-  "5W43",           // 2: simple literal (baseline)
-  "5[A-Z]\\d+",    // 3: char class + quantifier (3 positions)
-  "5W43|X9Z8",     // 4: alternation (8 positions; only "5W43" branch matches)
-  "5W4{1,3}",      // 5: bounded repetition (5 positions)
-  "(?:5W){1,2}",   // 6: non-capturing group + bounded rep (4 positions)
-  "5.4.",           // 7: dot wildcard (4 positions)
-  ".+5W",           // 8: late-failure stress (dot prefix):
-                    //    '.' matches everything → phase 1 state never dies until "5W" found;
-                    //    only row 0 has "5W" → hit_rate controls match frequency correctly
+  "^\\d+ [a-z]+",                  // 0: anchor pattern (anchors ^ $)
+  "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$",  // 1: anchor pattern (anchors ^ $)
+  "5W43",                          // 2: simple literal (baseline)
+  "5[A-Z]\\d+",                    // 3: char class + quantifier (3 positions)
+  "5W43|X9Z8",                     // 4: alternation (8 positions; only "5W43" branch matches)
+  "5W4{1,3}",                      // 5: bounded repetition (5 positions)
+  "(?:5W){1,2}",                   // 6: non-capturing group + bounded rep (4 positions)
+  "5.4.",                          // 7: dot wildcard (4 positions)
+  ".+5W",                          // 8: late-failure stress (dot prefix):
+           //    '.' matches everything → phase 1 state never dies until "5W" found;
+           //    only row 0 has "5W" → hit_rate controls match frequency correctly
 };
 
 static void bench_contains(nvbench::state& state)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,13 +24,13 @@
 //   [a-f]+|[0-5]+    : similar density to \d+ (~2 matches/string) -- exercises alternation
 //   [a-z][0-9]{0,3}[A-Z]: ~92% via the zero-digit case alone -- exercises gap transitions
 static std::vector<std::string> const patterns = {
-  "\\d+",                    // 0: char class + quantifier (baseline)
-  "[a-z]+[A-Z]+",            // 1: multi char-class sequence
-  "[a-f]+|[0-5]+",           // 2: alternation (comparable density to \d+)
-  "[a-z][0-9]{0,3}[A-Z]",   // 3: bounded repetition / gap transitions (7 positions)
-  ".+[0-9]",                 // 4: late-failure stress (~97% hit rate — quadratic for Glushkov):
-                             //    '.' matches all ASCII → inner loop runs full string from every start
-  "[a-z]+Z",                 // 5: late-failure + low hit rate (~23% on 32-char, ~79% on 256-char)
+  "\\d+",                  // 0: char class + quantifier (baseline)
+  "[a-z]+[A-Z]+",          // 1: multi char-class sequence
+  "[a-f]+|[0-5]+",         // 2: alternation (comparable density to \d+)
+  "[a-z][0-9]{0,3}[A-Z]",  // 3: bounded repetition / gap transitions (7 positions)
+  ".+[0-9]",               // 4: late-failure stress (~97% hit rate — quadratic for Glushkov):
+              //    '.' matches all ASCII → inner loop runs full string from every start
+  "[a-z]+Z",  // 5: late-failure + low hit rate (~23% on 32-char, ~79% on 256-char)
 };
 
 static void bench_replace(nvbench::state& state)
@@ -53,8 +53,8 @@ static void bench_replace(nvbench::state& state)
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   cudf::strings_column_view input(column->view());
 
-  auto flags   = (engine == "glushkov") ? cudf::strings::regex_flags::GLUSHKOV
-                                        : cudf::strings::regex_flags::DEFAULT;
+  auto flags = (engine == "glushkov") ? cudf::strings::regex_flags::GLUSHKOV
+                                      : cudf::strings::regex_flags::DEFAULT;
   // Wrap in a capture group for backref replace so \1 references the whole match
   auto const pat =
     (rtype == "backref") ? "(" + patterns[pattern_index] + ")" : patterns[pattern_index];

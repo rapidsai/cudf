@@ -89,11 +89,10 @@ __host__ __device__ __forceinline__ g_state_t glushkov_priority_kill(g_state_t c
  *
  * Mirrors the character-dispatch logic in the Thompson NFA regexec loop.
  */
-__device__ __forceinline__ bool glushkov_position_matches(
-  glushkov_position const& pos,
-  char32_t const c,
-  reclass_device const* classes,
-  uint8_t const* codepoint_flags)
+__device__ __forceinline__ bool glushkov_position_matches(glushkov_position const& pos,
+                                                          char32_t const c,
+                                                          reclass_device const* classes,
+                                                          uint8_t const* codepoint_flags)
 {
   switch (pos.inst_type) {
     case CHAR: return c == pos.ch;
@@ -120,10 +119,7 @@ struct glushkov_global_source {
   {
     return prog._reach_ascii[c];
   }
-  __device__ __forceinline__ g_state_t shift_mask(uint32_t k) const
-  {
-    return prog._shift_masks[k];
-  }
+  __device__ __forceinline__ g_state_t shift_mask(uint32_t k) const { return prog._shift_masks[k]; }
   __device__ __forceinline__ uint8_t shift_amount(uint32_t k) const
   {
     return prog._shift_amounts[k];
@@ -200,8 +196,7 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach_impl(
   // Non-ASCII fallback: must use prog._positions (global memory)
   g_state_t reach = 0;
   for (uint32_t p = 0; p < prog.num_states; ++p) {
-    if (glushkov_position_matches(prog._positions[p], c, prog._classes,
-                                  prog._codepoint_flags)) {
+    if (glushkov_position_matches(prog._positions[p], c, prog._classes, prog._codepoint_flags)) {
       reach |= g_state_t(1) << p;
     }
   }
@@ -209,8 +204,8 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach_impl(
 }
 
 /// Public overload: reads from global device memory.
-__device__ __forceinline__ g_state_t glushkov_compute_reach(
-  char32_t const c, glushkov_program_device const& prog)
+__device__ __forceinline__ g_state_t glushkov_compute_reach(char32_t const c,
+                                                            glushkov_program_device const& prog)
 {
   return glushkov_compute_reach_impl(c, prog, glushkov_global_source{prog});
 }
@@ -248,12 +243,11 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach(
  * @return       Match pair or nullopt.
  */
 template <positional P = positional::BEGIN_END, typename DataSource>
-__device__ __forceinline__ match_result glushkov_find_impl(
-  glushkov_program_device const& prog,
-  string_view const d_str,
-  string_view::const_iterator begin,
-  cudf::size_type end,
-  DataSource const& src)
+__device__ __forceinline__ match_result glushkov_find_impl(glushkov_program_device const& prog,
+                                                           string_view const d_str,
+                                                           string_view::const_iterator begin,
+                                                           cudf::size_type end,
+                                                           DataSource const& src)
 {
   auto const size_bytes = static_cast<int32_t>(d_str.size_bytes());  // O(1)
 
@@ -263,7 +257,7 @@ __device__ __forceinline__ match_result glushkov_find_impl(
   // Outer loop runs at most (end - start_pos) iterations (typically 1 for matches_re).
   if (end >= 0) {
     auto outer_itr = begin;
-    for (int32_t start = start_pos; ; ++start, ++outer_itr) {
+    for (int32_t start = start_pos;; ++start, ++outer_itr) {
       if (start >= end) { break; }
       if (outer_itr.byte_offset() >= size_bytes) { break; }
 
@@ -276,9 +270,7 @@ __device__ __forceinline__ match_result glushkov_find_impl(
         if (start >= end) { break; }
       } else {
         char32_t const first_c = *outer_itr;
-        if ((glushkov_compute_reach_impl(first_c, prog, src) & prog.first_set) == 0) {
-          continue;
-        }
+        if ((glushkov_compute_reach_impl(first_c, prog, src) & prog.first_set) == 0) { continue; }
       }
 
       match_result cur_match{};
@@ -328,7 +320,7 @@ __device__ __forceinline__ match_result glushkov_find_impl(
   match_result cur_match{};
 
   // Earliest position where seeds were injected since state was last 0.
-  int32_t inject_start_pos                    = start_pos;
+  int32_t inject_start_pos                     = start_pos;
   string_view::const_iterator inject_start_itr = begin;
 
   auto itr = begin;
@@ -348,11 +340,11 @@ __device__ __forceinline__ match_result glushkov_find_impl(
       inject_start_itr = itr;
     }
 
-    char32_t const c     = *itr;
-    auto const     reach = glushkov_compute_reach_impl(c, prog, src);
+    char32_t const c = *itr;
+    auto const reach = glushkov_compute_reach_impl(c, prog, src);
 
-    g_state_t state_next = (state != 0) ? glushkov_compute_follow_impl(state, prog, src)
-                                        : g_state_t{0};
+    g_state_t state_next =
+      (state != 0) ? glushkov_compute_follow_impl(state, prog, src) : g_state_t{0};
 
     // Inject fresh starts unless in greedy-extension mode.
     if (!cur_match) { state_next |= prog.first_set; }
@@ -390,16 +382,16 @@ __device__ __forceinline__ match_result glushkov_find_impl(
 
   auto rescan_itr = inject_start_itr;
   for (int32_t s = inject_start_pos; s < cur_match->second; ++s, ++rescan_itr) {
-    char32_t const c     = *rescan_itr;
-    auto const     reach = glushkov_compute_reach_impl(c, prog, src);
-    g_state_t seed       = prog.first_set & reach;
+    char32_t const c = *rescan_itr;
+    auto const reach = glushkov_compute_reach_impl(c, prog, src);
+    g_state_t seed   = prog.first_set & reach;
     if (seed == 0) { continue; }
 
     // Check immediate accept (single-position pattern, e.g. `\d`).
     int32_t greedy_end = -1;
     if (seed & prog.accept_mask) {
       greedy_end = s + 1;
-      seed = glushkov_priority_kill(seed, prog.accept_mask);
+      seed       = glushkov_priority_kill(seed, prog.accept_mask);
     }
 
     // Advance the single-seed NFA forward.
@@ -428,11 +420,10 @@ __device__ __forceinline__ match_result glushkov_find_impl(
  * Reads all program arrays from global device memory.
  */
 template <positional P = positional::BEGIN_END>
-__device__ __forceinline__ match_result glushkov_find(
-  glushkov_program_device const& prog,
-  string_view const d_str,
-  string_view::const_iterator begin,
-  cudf::size_type end)
+__device__ __forceinline__ match_result glushkov_find(glushkov_program_device const& prog,
+                                                      string_view const d_str,
+                                                      string_view::const_iterator begin,
+                                                      cudf::size_type end)
 {
   return glushkov_find_impl<P>(prog, d_str, begin, end, glushkov_global_source{prog});
 }
@@ -471,9 +462,8 @@ struct glushkov_shmem_source {
  * Must be called by ALL threads in the block.  After return (includes a
  * __syncthreads), the @p cache is ready for use.
  */
-__device__ __forceinline__ void glushkov_load_shmem(
-  glushkov_program_device const& prog,
-  glushkov_shmem_cache* cache)
+__device__ __forceinline__ void glushkov_load_shmem(glushkov_program_device const& prog,
+                                                    glushkov_shmem_cache* cache)
 {
   // Cooperative load: each thread handles a strided portion of each array.
   for (uint32_t i = threadIdx.x; i < 128u; i += blockDim.x) {
@@ -490,19 +480,17 @@ __device__ __forceinline__ void glushkov_load_shmem(
 }
 
 /// Overload of glushkov_compute_follow that reads from the shared-memory cache.
-__device__ __forceinline__ g_state_t glushkov_compute_follow(
-  g_state_t const state,
-  glushkov_program_device const& prog,
-  glushkov_shmem_cache const* cache)
+__device__ __forceinline__ g_state_t glushkov_compute_follow(g_state_t const state,
+                                                             glushkov_program_device const& prog,
+                                                             glushkov_shmem_cache const* cache)
 {
   return glushkov_compute_follow_impl(state, prog, glushkov_shmem_source{prog, cache});
 }
 
 /// Overload of glushkov_compute_reach that reads from the shared-memory cache.
-__device__ __forceinline__ g_state_t glushkov_compute_reach(
-  char32_t const c,
-  glushkov_program_device const& prog,
-  glushkov_shmem_cache const* cache)
+__device__ __forceinline__ g_state_t glushkov_compute_reach(char32_t const c,
+                                                            glushkov_program_device const& prog,
+                                                            glushkov_shmem_cache const* cache)
 {
   return glushkov_compute_reach_impl(c, prog, glushkov_shmem_source{prog, cache});
 }
@@ -515,12 +503,11 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach(
  * shared memory instead of global/L2 cache.
  */
 template <positional P = positional::BEGIN_END>
-__device__ __forceinline__ match_result glushkov_find(
-  glushkov_program_device const& prog,
-  string_view const d_str,
-  string_view::const_iterator begin,
-  cudf::size_type end,
-  glushkov_shmem_cache const* cache)
+__device__ __forceinline__ match_result glushkov_find(glushkov_program_device const& prog,
+                                                      string_view const d_str,
+                                                      string_view::const_iterator begin,
+                                                      cudf::size_type end,
+                                                      glushkov_shmem_cache const* cache)
 {
   return glushkov_find_impl<P>(prog, d_str, begin, end, glushkov_shmem_source{prog, cache});
 }

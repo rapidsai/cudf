@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "regex_program_impl.h"
 #include "glushkov_regcomp.h"
+#include "regex_program_impl.h"
 
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/regex/regex_program.hpp>
@@ -38,9 +38,7 @@ regex_program::regex_program(std::string_view pattern, regex_flags flags, captur
   // (e.g. has assertions or >64 positions), in which case we transparently
   // fall back to the Thompson NFA.  extract() bypasses Glushkov at the
   // device dispatch level (regex.inl) since Glushkov does not track groups.
-  if (is_glushkov(flags)) {
-    _impl->glushkov_prog = detail::build_glushkov_program(_impl->prog);
-  }
+  if (is_glushkov(flags)) { _impl->glushkov_prog = detail::build_glushkov_program(_impl->prog); }
 }
 
 std::string regex_program::pattern() const { return _pattern; }

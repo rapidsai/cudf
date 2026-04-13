@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -78,12 +78,12 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   off += sizeof(glushkov_program_device);
 
   // _positions: 4-byte aligned (int32_t / char32_t fields)
-  off = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
+  off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
   std::size_t const pos_off = off;
   off += num_states * sizeof(glushkov_position);
 
   // _shift_masks: 8-byte aligned
-  off = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  off                          = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const smasks_off = off;
   off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t);
 
@@ -92,19 +92,19 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t);
 
   // _reach_ascii: 8-byte aligned (128 × g_state_t = 1 KB)
-  off = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  off                               = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const reach_ascii_off = off;
   off += 128 * sizeof(g_state_t);
 
   // _exception_succs: 8-byte aligned
-  off = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  off                       = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const exc_off = off;
   off += num_states * sizeof(g_state_t);
 
   // _classes: 16-byte aligned (reclass_device is alignas(16))
-  off = cudf::util::round_up_unsafe(off, alignof(reclass_device));
+  off                       = cudf::util::round_up_unsafe(off, alignof(reclass_device));
   std::size_t const cls_off = off;
-  std::size_t cls_size = static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  std::size_t cls_size      = static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
   for (auto const& cls : h_gp.classes) {
     cls_size += cls.literals.size() * sizeof(reclass_range);
   }
@@ -122,7 +122,7 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   u_char* const d_base = d_raw->data();
 
   // ---- Place glushkov_program_device header --------------------------------
-  auto* h_gp_dev = new (h_base + hdr_off) glushkov_program_device{};
+  auto* h_gp_dev             = new (h_base + hdr_off) glushkov_program_device{};
   h_gp_dev->num_states       = num_states;
   h_gp_dev->shift_count      = num_shifts;
   h_gp_dev->first_set        = h_gp.first_set;
@@ -136,18 +136,20 @@ create_glushkov_device(glushkov_host_program const& h_gp,
 
   // ---- _positions ---------------------------------------------------------
   h_gp_dev->_positions = reinterpret_cast<glushkov_position const*>(d_base + pos_off);
-  auto* pos_arr = reinterpret_cast<glushkov_position*>(h_base + pos_off);
+  auto* pos_arr        = reinterpret_cast<glushkov_position*>(h_base + pos_off);
   for (uint32_t i = 0; i < num_states; ++i) {
     pos_arr[i] = {h_gp.pos_inst_type[i], h_gp.pos_ch[i], h_gp.pos_cls_idx[i]};
   }
 
   // ---- _shift_masks --------------------------------------------------------
   h_gp_dev->_shift_masks = reinterpret_cast<g_state_t const*>(d_base + smasks_off);
-  std::memcpy(h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t));
+  std::memcpy(
+    h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t));
 
   // ---- _shift_amounts ------------------------------------------------------
   h_gp_dev->_shift_amounts = reinterpret_cast<uint8_t const*>(d_base + samts_off);
-  std::memcpy(h_base + samts_off, h_gp.shift_amounts.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t));
+  std::memcpy(
+    h_base + samts_off, h_gp.shift_amounts.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t));
 
   // ---- _reach_ascii -------------------------------------------------------
   h_gp_dev->_reach_ascii = reinterpret_cast<g_state_t const*>(d_base + reach_ascii_off);
@@ -160,11 +162,11 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   // ---- _classes (variable-length, same layout as Thompson reprog_device) --
   h_gp_dev->_classes = reinterpret_cast<reclass_device const*>(d_base + cls_off);
   auto* h_cls        = reinterpret_cast<reclass_device*>(h_base + cls_off);
-  u_char* h_lit      = h_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
-  u_char* d_lit      = d_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  u_char* h_lit = h_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  u_char* d_lit = d_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
   for (int32_t ci = 0; ci < classes_cnt; ++ci) {
-    auto const& src = h_gp.classes[ci];
-    *h_cls++ = reclass_device{src.builtins,
+    auto const& src             = h_gp.classes[ci];
+    *h_cls++                    = reclass_device{src.builtins,
                               static_cast<int32_t>(src.literals.size()),
                               reinterpret_cast<reclass_range const*>(d_lit)};
     std::size_t const lit_bytes = src.literals.size() * sizeof(reclass_range);
@@ -193,9 +195,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
 }
 
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  reprog const& h_prog,
-  glushkov_host_program const* h_glushkov,
-  rmm::cuda_stream_view stream)
+  reprog const& h_prog, glushkov_host_program const* h_glushkov, rmm::cuda_stream_view stream)
 {
   // ---- Thompson NFA: existing layout ----
   auto const insts_count   = h_prog.insts_count();
@@ -272,10 +272,9 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // ---- Optional Glushkov program ------------------------------------------
   rmm::device_uvector<u_char>* d_glushkov_buffer = nullptr;
   if (h_glushkov) {
-    auto [d_gp_ptr, d_gb] =
-      create_glushkov_device(*h_glushkov, d_prog->_codepoint_flags, stream);
-    d_prog->_glushkov   = d_gp_ptr;
-    d_glushkov_buffer   = d_gb;
+    auto [d_gp_ptr, d_gb] = create_glushkov_device(*h_glushkov, d_prog->_codepoint_flags, stream);
+    d_prog->_glushkov     = d_gp_ptr;
+    d_glushkov_buffer     = d_gb;
   }
 
   // create a deleter to free both device buffers

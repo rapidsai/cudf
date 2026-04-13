@@ -1,11 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
-#include "regcomp.h"
 #include "glushkov_regcomp.h"
+#include "regcomp.h"
 #include "regex.cuh"
 
 #include <cudf/strings/regex/regex_program.hpp>
@@ -41,9 +41,7 @@ struct regex_device_builder {
                                  bool use_glushkov = true)
   {
     return detail::reprog_device::create(
-      p._impl->prog,
-      use_glushkov ? p._impl->glushkov_prog.get() : nullptr,
-      stream);
+      p._impl->prog, use_glushkov ? p._impl->glushkov_prog.get() : nullptr, stream);
   }
 };
 

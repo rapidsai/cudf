@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -23,7 +23,7 @@
 // ---- constants (must match glushkov_regcomp.h) ----------------------------
 static constexpr int32_t GLUSHKOV_MAX_STATES_DEV = 64;
 static constexpr int32_t GLUSHKOV_MAX_SHIFTS_DEV = 8;
-using g_state_t = uint64_t;
+using g_state_t                                  = uint64_t;
 
 // ---------------------------------------------------------------------------
 // Per-position character-matching descriptor (device-side)
@@ -55,25 +55,25 @@ struct glushkov_position {
  */
 struct glushkov_program_device {
   // ---- scalar fields -------------------------------------------------------
-  uint32_t num_states{};   ///< Number of Glushkov positions (≤ 64)
-  uint32_t shift_count{};  ///< Number of shift slots (≤ GLUSHKOV_MAX_SHIFTS_DEV)
-  g_state_t first_set{};   ///< Initial active positions (before first character)
-  g_state_t accept_mask{}; ///< Positions whose match completes the pattern
+  uint32_t num_states{};       ///< Number of Glushkov positions (≤ 64)
+  uint32_t shift_count{};      ///< Number of shift slots (≤ GLUSHKOV_MAX_SHIFTS_DEV)
+  g_state_t first_set{};       ///< Initial active positions (before first character)
+  g_state_t accept_mask{};     ///< Positions whose match completes the pattern
   g_state_t exception_mask{};  ///< Positions with non-shift follow transitions
-  bool nullable{};         ///< Pattern matches empty string
+  bool nullable{};             ///< Pattern matches empty string
   /// When true every first_set position is CHAR(startchar): enables a tight
   /// first-character byte-scan skip (mirrors Thompson NFA's find_char).
   bool has_startchar{};
-  char32_t startchar{};    ///< The common literal (valid only when has_startchar)
+  char32_t startchar{};  ///< The common literal (valid only when has_startchar)
 
   // ---- device-memory array pointers (set during device program creation) ---
-  uint8_t const* _codepoint_flags{};     ///< Character-type lookup table (shared with Thompson)
-  reclass_device const* _classes{};      ///< Character class data
-  glushkov_position const* _positions{}; ///< [num_states] per-position descriptors
-  g_state_t const* _shift_masks{};       ///< [shift_count] shift-and source masks
-  uint8_t const* _shift_amounts{};       ///< [shift_count] shift amounts
-  g_state_t const* _reach_ascii{};       ///< [128] precomputed reach bitmasks for ASCII chars
-  g_state_t const* _exception_succs{};   ///< [num_states] exception successor masks
+  uint8_t const* _codepoint_flags{};      ///< Character-type lookup table (shared with Thompson)
+  reclass_device const* _classes{};       ///< Character class data
+  glushkov_position const* _positions{};  ///< [num_states] per-position descriptors
+  g_state_t const* _shift_masks{};        ///< [shift_count] shift-and source masks
+  uint8_t const* _shift_amounts{};        ///< [shift_count] shift amounts
+  g_state_t const* _reach_ascii{};        ///< [128] precomputed reach bitmasks for ASCII chars
+  g_state_t const* _exception_succs{};    ///< [num_states] exception successor masks
 
   std::size_t _prog_size{};  ///< Total buffer size (for potential shmem loading)
 };

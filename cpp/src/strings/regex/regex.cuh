@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -111,9 +111,7 @@ class alignas(16) reprog_device {
    * @return The program device object
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    reprog const& prog,
-    glushkov_host_program const* h_glushkov,
-    rmm::cuda_stream_view stream);
+    reprog const& prog, glushkov_host_program const* h_glushkov, rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().
@@ -191,7 +189,10 @@ class alignas(16) reprog_device {
   /**
    * @brief Returns true if this program has a Glushkov engine.
    */
-  [[nodiscard]] __host__ __device__ inline bool has_glushkov() const { return _glushkov != nullptr; }
+  [[nodiscard]] __host__ __device__ inline bool has_glushkov() const
+  {
+    return _glushkov != nullptr;
+  }
 
   /**
    * @brief Returns the Glushkov device program pointer (may be nullptr).
@@ -318,10 +319,7 @@ class alignas(16) reprog_device {
   glushkov_shmem_cache const* _glushkov_cache{};
 
  public:
-  __device__ inline void set_glushkov_cache(glushkov_shmem_cache const* c)
-  {
-    _glushkov_cache = c;
-  }
+  __device__ inline void set_glushkov_cache(glushkov_shmem_cache const* c) { _glushkov_cache = c; }
 };
 
 // Include Glushkov device functions after both reclass_device and

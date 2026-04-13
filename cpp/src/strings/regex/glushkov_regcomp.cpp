@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -73,12 +73,12 @@ bool host_reclass_match_ascii(reclass const& cls, uint8_t const c)
   bool const is_space = (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v');
   bool const is_digit = (c >= '0' && c <= '9');
 
-  if ((cls.builtins & CCLASS_W)  && (c == '_' || is_alnum))              return true;
-  if ((cls.builtins & CCLASS_S)  && is_space)                            return true;
-  if ((cls.builtins & CCLASS_D)  && is_digit)                            return true;
+  if ((cls.builtins & CCLASS_W) && (c == '_' || is_alnum)) return true;
+  if ((cls.builtins & CCLASS_S) && is_space) return true;
+  if ((cls.builtins & CCLASS_D) && is_digit) return true;
   if ((cls.builtins & NCCLASS_W) && (c != '\n' && c != '_' && !is_alnum)) return true;
-  if ((cls.builtins & NCCLASS_S) && !is_space)                           return true;
-  if ((cls.builtins & NCCLASS_D) && (c != '\n' && !is_digit))            return true;
+  if ((cls.builtins & NCCLASS_S) && !is_space) return true;
+  if ((cls.builtins & NCCLASS_D) && (c != '\n' && !is_digit)) return true;
   return false;
 }
 
@@ -124,7 +124,9 @@ void eps_closure(int32_t const inst_id,
 
     // ε-transitions: follow without consuming
     case LBRA:
-    case RBRA: eps_closure(inst.u2.next_id, prog, seen, char_positions, is_accept, has_assert); break;
+    case RBRA:
+      eps_closure(inst.u2.next_id, prog, seen, char_positions, is_accept, has_assert);
+      break;
 
     case OR:
       eps_closure(inst.u2.left_id, prog, seen, char_positions, is_accept, has_assert);
@@ -186,16 +188,12 @@ void ordered_eps_frontier(int32_t const inst_id,
     case ANY:
     case ANYNL:
     case CCLASS:
-    case NCCLASS:
-      items.push_back({frontier_item::CHAR_POS, inst_to_pos[inst_id]});
-      break;
+    case NCCLASS: items.push_back({frontier_item::CHAR_POS, inst_to_pos[inst_id]}); break;
 
     case END: items.push_back({frontier_item::ACCEPT, -1}); break;
 
     case LBRA:
-    case RBRA:
-      ordered_eps_frontier(inst.u2.next_id, prog, inst_to_pos, seen, items);
-      break;
+    case RBRA: ordered_eps_frontier(inst.u2.next_id, prog, inst_to_pos, seen, items); break;
 
     case OR:
       // Thompson priority: right_id (first alternative) before left_id (second)
@@ -214,8 +212,7 @@ bool position_matches_char(glushkov_host_program const& gp, uint32_t const p, ui
 {
   switch (gp.pos_inst_type[p]) {
     case CHAR: return gp.pos_ch[p] == static_cast<char32_t>(c);
-    case ANY:
-      return (gp.pos_ch[p] == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
+    case ANY: return (gp.pos_ch[p] == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
     case ANYNL: return true;
     case CCLASS:
     case NCCLASS: {
@@ -233,9 +230,7 @@ bool position_matches_char(glushkov_host_program const& gp, uint32_t const p, ui
  * function is conservative: if either side is a wildcard type (ANY/ANYNL/
  * CCLASS/NCCLASS) it may match non-ASCII code points, so overlap is assumed.
  */
-bool positions_chars_overlap(glushkov_host_program const& gp,
-                             uint32_t const p,
-                             uint32_t const q)
+bool positions_chars_overlap(glushkov_host_program const& gp, uint32_t const p, uint32_t const q)
 {
   for (int c = 0; c < 128; ++c) {
     if (position_matches_char(gp, p, static_cast<uint8_t>(c)) &&
@@ -248,12 +243,8 @@ bool positions_chars_overlap(glushkov_host_program const& gp,
   bool const q_nonascii = (gp.pos_inst_type[q] != CHAR) || (gp.pos_ch[q] >= 128);
   if (p_nonascii && q_nonascii) { return true; }
   // One side is a non-ASCII CHAR literal; if the other is a wildcard it might match
-  if (gp.pos_inst_type[p] == CHAR && gp.pos_ch[p] >= 128) {
-    return (gp.pos_inst_type[q] != CHAR);
-  }
-  if (gp.pos_inst_type[q] == CHAR && gp.pos_ch[q] >= 128) {
-    return (gp.pos_inst_type[p] != CHAR);
-  }
+  if (gp.pos_inst_type[p] == CHAR && gp.pos_ch[p] >= 128) { return (gp.pos_inst_type[q] != CHAR); }
+  if (gp.pos_inst_type[q] == CHAR && gp.pos_ch[q] >= 128) { return (gp.pos_inst_type[p] != CHAR); }
   return false;
 }
 
@@ -276,7 +267,7 @@ bool frontier_has_priority_conflict(std::vector<frontier_item> const& items,
   // Rule 1: ACCEPT before any CHAR_POS, but only when the frontier also
   // contains at least one CHAR_POS.  An ACCEPT-only frontier (the normal
   // "end of pattern" case) is not a priority conflict.
-  bool seen_char        = false;
+  bool seen_char          = false;
   bool accept_before_char = false;
   for (auto const& item : items) {
     if (item.kind == frontier_item::CHAR_POS) {
@@ -328,7 +319,8 @@ void build_shift_masks(glushkov_host_program& gp)
   for (uint32_t p = 0; p < gp.num_states; ++p) {
     g_state_t follow = gp.follow_table[p];
     while (follow) {
-      uint32_t const q = static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(follow)));
+      uint32_t const q =
+        static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(follow)));
       follow &= follow - 1;
 
       int32_t const span = static_cast<int32_t>(q) - static_cast<int32_t>(p);
@@ -366,7 +358,8 @@ void build_shift_masks(glushkov_host_program& gp)
     g_state_t src   = span_list[i].second;
     int32_t const s = span_list[i].first;
     while (src) {
-      uint32_t const p = static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(src)));
+      uint32_t const p =
+        static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(src)));
       src &= src - 1;
       uint32_t const q = static_cast<uint32_t>(static_cast<int32_t>(p) + s);
       gp.exception_mask |= g_state_t(1) << p;
@@ -414,8 +407,8 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
 
   // ---- Step 3: Per-position character-matching descriptors ----------------
   for (uint32_t idx = 0; idx < gp->num_states; ++idx) {
-    int32_t const inst_id = char_insts[idx];
-    auto const& inst      = prog.insts_data()[inst_id];
+    int32_t const inst_id  = char_insts[idx];
+    auto const& inst       = prog.insts_data()[inst_id];
     gp->pos_inst_type[idx] = inst.type;
     if (inst.type == CHAR) {
       gp->pos_ch[idx] = inst.u1.c;
@@ -437,10 +430,9 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
 
   // ---- Step 4: first_set = ε_closure(startinst) ∩ {char-consuming} ------
   {
-    bool is_accept  = false;
-    bool has_assert = false;
-    auto const plist =
-      eps_closure_from(prog.get_start_inst(), prog, is_accept, has_assert);
+    bool is_accept   = false;
+    bool has_assert  = false;
+    auto const plist = eps_closure_from(prog.get_start_inst(), prog, is_accept, has_assert);
     if (has_assert) { return nullptr; }
     for (int32_t iid : plist) {
       int32_t const pos = inst_to_pos[iid];
@@ -460,8 +452,8 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
     int32_t const inst_id = char_insts[idx];
     int32_t const next_id = prog.insts_data()[inst_id].u2.next_id;
 
-    bool is_accept  = false;
-    bool has_assert = false;
+    bool is_accept          = false;
+    bool has_assert         = false;
     auto const follow_insts = eps_closure_from(next_id, prog, is_accept, has_assert);
     if (has_assert) { return nullptr; }
 
@@ -507,18 +499,18 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
     for (uint32_t p = 0; p < gp->num_states; ++p) {
       bool matches = false;
       switch (gp->pos_inst_type[p]) {
-        case CHAR:   matches = (gp->pos_ch[p] == static_cast<char32_t>(c)); break;
+        case CHAR: matches = (gp->pos_ch[p] == static_cast<char32_t>(c)); break;
         case ANY: {
           // 'N' = EXT_NEWLINE: reject all ASCII newlines (\n, \r)
           // default: reject only \n (matches Thompson NFA behaviour)
           matches = (gp->pos_ch[p] == 'N') ? (c != '\n' && c != '\r') : (c != '\n');
           break;
         }
-        case ANYNL:  matches = true; break;
+        case ANYNL: matches = true; break;
         case CCLASS:
         case NCCLASS: {
           bool const m = host_reclass_match_ascii(gp->classes[gp->pos_cls_idx[p]], c);
-          matches = (gp->pos_inst_type[p] == CCLASS) ? m : !m;
+          matches      = (gp->pos_inst_type[p] == CCLASS) ? m : !m;
           break;
         }
         default: break;
@@ -532,16 +524,25 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
   // literal, record that character so glushkov_find can use a tight byte-scan
   // (like Thompson NFA's find_char) instead of a reach-table lookup per byte.
   if (!gp->nullable && gp->first_set != 0) {
-    g_state_t fs      = gp->first_set;
-    char32_t common   = 0;
-    bool all_char     = true;
-    bool seen_first   = false;
+    g_state_t fs    = gp->first_set;
+    char32_t common = 0;
+    bool all_char   = true;
+    bool seen_first = false;
     while (fs) {
-      uint32_t const p = static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(fs)));
+      uint32_t const p =
+        static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(fs)));
       fs &= fs - 1;
-      if (gp->pos_inst_type[p] != CHAR) { all_char = false; break; }
-      if (!seen_first) { common = gp->pos_ch[p]; seen_first = true; }
-      else if (gp->pos_ch[p] != common) { all_char = false; break; }
+      if (gp->pos_inst_type[p] != CHAR) {
+        all_char = false;
+        break;
+      }
+      if (!seen_first) {
+        common     = gp->pos_ch[p];
+        seen_first = true;
+      } else if (gp->pos_ch[p] != common) {
+        all_char = false;
+        break;
+      }
     }
     if (all_char) {
       gp->has_startchar = true;

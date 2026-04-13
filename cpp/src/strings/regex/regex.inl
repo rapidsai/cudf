@@ -128,7 +128,6 @@ struct reljunk {
   }
 };
 
-
 /**
  * @brief Utility to check a specific character against this class instance.
  *
@@ -426,9 +425,7 @@ __device__ __forceinline__ match_result reprog_device::find(int32_t const thread
   // Dispatch to Glushkov bit-parallel engine when available.
   // extract() always uses Thompson (Glushkov does not track capture groups).
   if (_glushkov) {
-    if (_glushkov_cache) {
-      return glushkov_find<P>(*_glushkov, dstr, begin, end, _glushkov_cache);
-    }
+    if (_glushkov_cache) { return glushkov_find<P>(*_glushkov, dstr, begin, end, _glushkov_cache); }
     return glushkov_find<P>(*_glushkov, dstr, begin, end);
   }
   return call_regexec<P>(thread_idx, dstr, begin, end);

@@ -24,12 +24,12 @@ namespace strings {
  * and to match the Python flag values.
  */
 enum regex_flags : uint32_t {
-  DEFAULT     = 0,    ///< default
-  IGNORECASE  = 2,    ///< ignore case on matching all literal characters
-  MULTILINE   = 8,    ///< the '^' and '$' honor new-line characters
-  DOTALL      = 16,   ///< the '.' matching includes new-line characters
-  ASCII       = 256,  ///< use only ASCII when matching built-in character classes
-  EXT_NEWLINE = 512,  ///< new-line matches extended characters
+  DEFAULT     = 0,     ///< default
+  IGNORECASE  = 2,     ///< ignore case on matching all literal characters
+  MULTILINE   = 8,     ///< the '^' and '$' honor new-line characters
+  DOTALL      = 16,    ///< the '.' matching includes new-line characters
+  ASCII       = 256,   ///< use only ASCII when matching built-in character classes
+  EXT_NEWLINE = 512,   ///< new-line matches extended characters
   GLUSHKOV    = 1024,  ///< prefer Glushkov NFA (bit-parallel, no working memory);
                        ///< automatically falls back to Thompson NFA when the pattern
                        ///< contains assertions (^ $ \\b \\B) or has >64 positions

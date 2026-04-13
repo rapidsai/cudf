@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -71,8 +71,7 @@ TEST_F(GlushkovRegexTests, BasicLiteral)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, CharacterClasses)
 {
-  cudf::test::strings_column_wrapper strings{
-    "abc", "ABC", "123", "a1b", "!@#", "aaa", "zzz", ""};
+  cudf::test::strings_column_wrapper strings{"abc", "ABC", "123", "a1b", "!@#", "aaa", "zzz", ""};
   auto sv = cudf::strings_column_view(strings);
   check_parity(sv, "[a-z]+");
   check_parity(sv, "[A-Z]+");
@@ -113,8 +112,7 @@ TEST_F(GlushkovRegexTests, Alternation)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, Repetition)
 {
-  cudf::test::strings_column_wrapper strings{
-    "a", "aa", "aaa", "b", "ba", "aaab", "", "aab"};
+  cudf::test::strings_column_wrapper strings{"a", "aa", "aaa", "b", "ba", "aaab", "", "aab"};
   auto sv = cudf::strings_column_view(strings);
   check_parity(sv, "a+");
   check_parity(sv, "a?b");
@@ -127,8 +125,7 @@ TEST_F(GlushkovRegexTests, Repetition)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, DotAny)
 {
-  cudf::test::strings_column_wrapper strings{
-    "abc", "a\nbc", "xyz", "\n", "a", ""};
+  cudf::test::strings_column_wrapper strings{"abc", "a\nbc", "xyz", "\n", "a", ""};
   auto sv = cudf::strings_column_view(strings);
   check_parity(sv, "a.c");
   check_parity(sv, ".+");
@@ -141,8 +138,7 @@ TEST_F(GlushkovRegexTests, DotAny)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, AssertionFallback)
 {
-  cudf::test::strings_column_wrapper strings{
-    "hello", "world", "hello world", "say hello", ""};
+  cudf::test::strings_column_wrapper strings{"hello", "world", "hello world", "say hello", ""};
   auto sv = cudf::strings_column_view(strings);
   // ^ and $ — Glushkov will fall back to Thompson; results must match.
   check_parity(sv, "^hello");
@@ -158,8 +154,7 @@ TEST_F(GlushkovRegexTests, AssertionFallback)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, MatchParity)
 {
-  cudf::test::strings_column_wrapper strings{
-    "abc123", "abc", "123", "HELLO", "hello world", ""};
+  cudf::test::strings_column_wrapper strings{"abc123", "abc", "123", "HELLO", "hello world", ""};
   auto sv = cudf::strings_column_view(strings);
 
   std::vector<std::string> patterns{"[a-z]+\\d+", "[a-z]+", "\\d+", "[A-Z]+"};
@@ -188,16 +183,16 @@ TEST_F(GlushkovRegexTests, MatchParity)
 TEST_F(GlushkovRegexTests, AlternationWithEmptyBranch)
 {
   cudf::test::strings_column_wrapper strings{
-    "ah",       // matches: empty branch → "ah"
-    "abch",     // matches: bc branch
-    "adeh",     // matches: de branch
-    "afghh",    // matches: fg branch (note extra h at end; contains still finds it)
-    "abcde",    // no h at the end → no match
-    "a",        // incomplete
-    "h",        // missing a
-    "",         // empty string
-    "abcdefgh", // longer string; contains "afgh" substring? No – but check parity
-    "xabchx",   // embedded match
+    "ah",        // matches: empty branch → "ah"
+    "abch",      // matches: bc branch
+    "adeh",      // matches: de branch
+    "afghh",     // matches: fg branch (note extra h at end; contains still finds it)
+    "abcde",     // no h at the end → no match
+    "a",         // incomplete
+    "h",         // missing a
+    "",          // empty string
+    "abcdefgh",  // longer string; contains "afgh" substring? No – but check parity
+    "xabchx",    // embedded match
   };
   auto sv = cudf::strings_column_view(strings);
   check_parity(sv, "a(bc|de|fg|)h");
@@ -269,12 +264,10 @@ TEST_F(GlushkovRegexTests, LargePatternFallback)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, DotallGlushkov)
 {
-  cudf::test::strings_column_wrapper strings{
-    "hello\nworld", "one\ntwo\nthree", "no newline", ""};
+  cudf::test::strings_column_wrapper strings{"hello\nworld", "one\ntwo\nthree", "no newline", ""};
   auto sv = cudf::strings_column_view(strings);
 
-  auto flags_thompson =
-    static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::DOTALL);
+  auto flags_thompson = static_cast<cudf::strings::regex_flags>(cudf::strings::regex_flags::DOTALL);
   auto flags_glushkov = static_cast<cudf::strings::regex_flags>(
     cudf::strings::regex_flags::DOTALL | cudf::strings::regex_flags::GLUSHKOV);
 
@@ -310,8 +303,7 @@ TEST_F(GlushkovRegexTests, ZeroWorkingMemory)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, AssertionFallbackWorkingMemory)
 {
-  auto prog = cudf::strings::regex_program::create(
-    "^\\d+$", cudf::strings::regex_flags::GLUSHKOV);
+  auto prog = cudf::strings::regex_program::create("^\\d+$", cudf::strings::regex_flags::GLUSHKOV);
   // Should fall back to Thompson → non-zero working memory.
   EXPECT_GT(prog->compute_working_memory_size(1024), 0u);
 }
@@ -319,8 +311,7 @@ TEST_F(GlushkovRegexTests, AssertionFallbackWorkingMemory)
 // ---------------------------------------------------------------------------
 // Helper: matches_re parity (exercises the end >= 0 code path: end=1).
 // ---------------------------------------------------------------------------
-static void check_matches_parity(cudf::strings_column_view const& sv,
-                                  std::string const& pattern)
+static void check_matches_parity(cudf::strings_column_view const& sv, std::string const& pattern)
 {
   auto prog_thompson =
     cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
@@ -343,14 +334,14 @@ static void check_matches_parity(cudf::strings_column_view const& sv,
 TEST_F(GlushkovRegexTests, MatchesReEndGe0)
 {
   cudf::test::strings_column_wrapper strings{
-    "abc123",   // starts with [a-z] → matches [a-z]+\d+
-    "123abc",   // starts with digit → does NOT match [a-z]+\d+
-    "abc",      // only letters → matches [a-z]+, not [a-z]+\d+
-    "xyz999",   // starts with [a-z] → matches [a-z]+\d+
-    "  abc",    // starts with space → no match
-    "",         // empty
-    "a",        // single letter
-    "1",        // single digit
+    "abc123",  // starts with [a-z] → matches [a-z]+\d+
+    "123abc",  // starts with digit → does NOT match [a-z]+\d+
+    "abc",     // only letters → matches [a-z]+, not [a-z]+\d+
+    "xyz999",  // starts with [a-z] → matches [a-z]+\d+
+    "  abc",   // starts with space → no match
+    "",        // empty
+    "a",       // single letter
+    "1",       // single digit
   };
   auto sv = cudf::strings_column_view(strings);
   // has_startchar=false (character class): exercises reach-table skip with end >= 0
@@ -373,9 +364,10 @@ TEST_F(GlushkovRegexTests, MatchesReEndGe0)
 TEST_F(GlushkovRegexTests, MatchesReUtf8EndGe0)
 {
   cudf::test::strings_column_wrapper strings{
-    "caf\xc3\xa9",          // "café"  — 5 bytes, 4 chars (é = 2 bytes)
-    "na\xc3\xaf""ve",       // "naïve" — 6 bytes, 5 chars (ï = 2 bytes)
-    "abc",                  // pure ASCII
+    "caf\xc3\xa9",  // "café"  — 5 bytes, 4 chars (é = 2 bytes)
+    "na\xc3\xaf"
+    "ve",                                    // "naïve" — 6 bytes, 5 chars (ï = 2 bytes)
+    "abc",                                   // pure ASCII
     "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",  // "日本語" — 9 bytes, 3 chars
     "",
   };
@@ -410,8 +402,7 @@ static void check_ext_newline_parity(cudf::strings_column_view const& sv,
 // ---------------------------------------------------------------------------
 // Helper: run count_re with both DEFAULT and GLUSHKOV flags and compare.
 // ---------------------------------------------------------------------------
-static void check_count_parity(cudf::strings_column_view const& sv,
-                                std::string const& pattern)
+static void check_count_parity(cudf::strings_column_view const& sv, std::string const& pattern)
 {
   auto prog_thompson =
     cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
@@ -435,17 +426,21 @@ static void check_count_parity(cudf::strings_column_view const& sv,
 TEST_F(GlushkovRegexTests, ExtNewlineGlushkov)
 {
   cudf::test::strings_column_wrapper strings{
-    "abc",                                       // pure ASCII, no newlines
-    "a\nb",                                      // \n (0x0A)
-    "a\rb",                                      // \r (0x0D)
-    "a\xc2\x85" "b",                             // U+0085 NEL (UTF-8: C2 85)
-    "a\xe2\x80\xa8" "b",                         // U+2028 LINE SEPARATOR (UTF-8: E2 80 A8)
-    "a\xe2\x80\xa9" "b",                         // U+2029 PARAGRAPH SEPARATOR (UTF-8: E2 80 A9)
-    "a\n\r\xc2\x85" "b",                         // multiple newline types
-    "\xc2\x85\xe2\x80\xa8\xe2\x80\xa9",          // only extended newlines
-    "",                                           // empty
-    "hello world",                                // no newlines at all
-    "x\xc2\x85y\xe2\x80\xa8z",                   // mixed content with extended newlines
+    "abc",   // pure ASCII, no newlines
+    "a\nb",  // \n (0x0A)
+    "a\rb",  // \r (0x0D)
+    "a\xc2\x85"
+    "b",  // U+0085 NEL (UTF-8: C2 85)
+    "a\xe2\x80\xa8"
+    "b",  // U+2028 LINE SEPARATOR (UTF-8: E2 80 A8)
+    "a\xe2\x80\xa9"
+    "b",  // U+2029 PARAGRAPH SEPARATOR (UTF-8: E2 80 A9)
+    "a\n\r\xc2\x85"
+    "b",                                 // multiple newline types
+    "\xc2\x85\xe2\x80\xa8\xe2\x80\xa9",  // only extended newlines
+    "",                                  // empty
+    "hello world",                       // no newlines at all
+    "x\xc2\x85y\xe2\x80\xa8z",           // mixed content with extended newlines
   };
   auto sv = cudf::strings_column_view(strings);
 
@@ -466,10 +461,12 @@ TEST_F(GlushkovRegexTests, ExtNewlineGlushkov)
 TEST_F(GlushkovRegexTests, ExtNewlineDotallGlushkov)
 {
   cudf::test::strings_column_wrapper strings{
-    "a\xc2\x85" "b",           // U+0085 NEL
-    "a\xe2\x80\xa8" "b",       // U+2028 LINE SEPARATOR
-    "a\nb",                     // \n
-    "abc",                      // no newlines
+    "a\xc2\x85"
+    "b",  // U+0085 NEL
+    "a\xe2\x80\xa8"
+    "b",     // U+2028 LINE SEPARATOR
+    "a\nb",  // \n
+    "abc",   // no newlines
     "",
   };
   auto sv = cudf::strings_column_view(strings);
@@ -515,8 +512,7 @@ TEST_F(GlushkovRegexTests, FindallParity)
 // ---------------------------------------------------------------------------
 TEST_F(GlushkovRegexTests, CountParity)
 {
-  cudf::test::strings_column_wrapper strings{
-    "aaa", "abab", "bbb", "a", "", "abc123def456"};
+  cudf::test::strings_column_wrapper strings{"aaa", "abab", "bbb", "a", "", "abc123def456"};
   auto sv = cudf::strings_column_view(strings);
 
   check_count_parity(sv, "a");
@@ -560,18 +556,18 @@ TEST_F(GlushkovRegexTests, ReplaceParity)
 TEST_F(GlushkovRegexTests, ShiftOverflowToExceptions)
 {
   cudf::test::strings_column_wrapper strings{
-    "abz",              // span 1: a→b→z
-    "accz",             // span 2: a→cc→z
-    "adddz",            // span 3: a→ddd→z
-    "aeeee z",          // span 4 but trailing space — no match (space before z)
-    "aeeeez",           // span 4: a→eeee→z
-    "afffffz",          // span 5
-    "aggggggz",         // span 6
-    "ahhhhhhhz",        // span 7
-    "aiiiiiiiiz",       // span 8
-    "ajjjjjjjjjz",     // span 9: the overflow span
-    "az",               // no match: no branch is empty
-    "xyz",              // no match
+    "abz",          // span 1: a→b→z
+    "accz",         // span 2: a→cc→z
+    "adddz",        // span 3: a→ddd→z
+    "aeeee z",      // span 4 but trailing space — no match (space before z)
+    "aeeeez",       // span 4: a→eeee→z
+    "afffffz",      // span 5
+    "aggggggz",     // span 6
+    "ahhhhhhhz",    // span 7
+    "aiiiiiiiiz",   // span 8
+    "ajjjjjjjjjz",  // span 9: the overflow span
+    "az",           // no match: no branch is empty
+    "xyz",          // no match
     "",
   };
   auto sv = cudf::strings_column_view(strings);
@@ -584,11 +580,12 @@ TEST_F(GlushkovRegexTests, ShiftOverflowToExceptions)
 TEST_F(GlushkovRegexTests, NonAsciiCharacterClasses)
 {
   cudf::test::strings_column_wrapper strings{
-    "caf\xc3\xa9",                                // "café"
-    "na\xc3\xaf""ve",                             // "naïve"
-    "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",      // "日本語"
-    "hello",                                       // ASCII only
-    "\xc3\xa9\xc3\xa9\xc3\xa9",                   // "ééé"
+    "caf\xc3\xa9",  // "café"
+    "na\xc3\xaf"
+    "ve",                                    // "naïve"
+    "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e",  // "日本語"
+    "hello",                                 // ASCII only
+    "\xc3\xa9\xc3\xa9\xc3\xa9",              // "ééé"
     "",
   };
   auto sv = cudf::strings_column_view(strings);
@@ -617,15 +614,12 @@ TEST_F(GlushkovRegexTests, NonAsciiCharacterClasses)
 // ---------------------------------------------------------------------------
 // Helper: run findall with both engines and compare.
 // ---------------------------------------------------------------------------
-static void check_findall_parity(cudf::strings_column_view const& sv,
-                                 std::string const& pattern)
+static void check_findall_parity(cudf::strings_column_view const& sv, std::string const& pattern)
 {
-  auto prog_t =
-    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
-  auto prog_g =
-    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::GLUSHKOV);
-  auto r_t = cudf::strings::findall(sv, *prog_t);
-  auto r_g = cudf::strings::findall(sv, *prog_g);
+  auto prog_t = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
+  auto prog_g = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::GLUSHKOV);
+  auto r_t    = cudf::strings::findall(sv, *prog_t);
+  auto r_g    = cudf::strings::findall(sv, *prog_g);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*r_t, *r_g);
 }
 
@@ -636,10 +630,8 @@ static void check_replace_parity(cudf::strings_column_view const& sv,
                                  std::string const& pattern,
                                  std::string const& repl = "X")
 {
-  auto prog_t =
-    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
-  auto prog_g =
-    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::GLUSHKOV);
+  auto prog_t = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
+  auto prog_g = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::GLUSHKOV);
   cudf::string_scalar rep(repl);
   auto r_t = cudf::strings::replace_re(sv, *prog_t, rep);
   auto r_g = cudf::strings::replace_re(sv, *prog_g, rep);
@@ -649,15 +641,12 @@ static void check_replace_parity(cudf::strings_column_view const& sv,
 // ---------------------------------------------------------------------------
 // Helper: run split_record_re with both engines and compare.
 // ---------------------------------------------------------------------------
-static void check_split_parity(cudf::strings_column_view const& sv,
-                                std::string const& pattern)
+static void check_split_parity(cudf::strings_column_view const& sv, std::string const& pattern)
 {
-  auto prog_t =
-    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
-  auto prog_g =
-    cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::GLUSHKOV);
-  auto r_t = cudf::strings::split_record_re(sv, *prog_t);
-  auto r_g = cudf::strings::split_record_re(sv, *prog_g);
+  auto prog_t = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::DEFAULT);
+  auto prog_g = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::GLUSHKOV);
+  auto r_t    = cudf::strings::split_record_re(sv, *prog_t);
+  auto r_g    = cudf::strings::split_record_re(sv, *prog_g);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*r_t, *r_g);
 }
 
@@ -887,13 +876,13 @@ TEST_F(GlushkovRegexTests, NullableDotAlternation)
 TEST_F(GlushkovRegexTests, DotStarLiteral)
 {
   cudf::test::strings_column_wrapper strings{
-    "foo",       // match "foo"
-    "xfoo",     // match "xfoo"
-    "xxfoo",    // match "xxfoo"
-    "foobar",   // match "foo" (or "foo" prefix depending on greedy)
-    "xfooyfooz", // match
-    "bar",      // no match
-    "",         // no match
+    "foo",        // match "foo"
+    "xfoo",       // match "xfoo"
+    "xxfoo",      // match "xxfoo"
+    "foobar",     // match "foo" (or "foo" prefix depending on greedy)
+    "xfooyfooz",  // match
+    "bar",        // no match
+    "",           // no match
   };
   auto sv = cudf::strings_column_view(strings);
 
@@ -914,7 +903,8 @@ TEST_F(GlushkovRegexTests, DotStarLiteral)
 TEST_F(GlushkovRegexTests, NullableSecondAlt)
 {
   cudf::test::strings_column_wrapper strings{
-    "a",    // match "a" (first alt 'a' wins inside group + consumes it; but the outer 'a' needs another)
+    "a",    // match "a" (first alt 'a' wins inside group + consumes it; but the outer 'a' needs
+            // another)
     "aa",   // match "aa"
     "aaa",  // matches
     "b",    // no match
