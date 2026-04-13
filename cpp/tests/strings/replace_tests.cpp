@@ -693,6 +693,19 @@ TEST_F(StringsReplaceTest, ReplaceColumnEmpty)
   cudf::test::expect_column_empty(result->view());
 }
 
+TEST_F(StringsReplaceTest, ReplaceColumnEmptyInputMismatchedSizes)
+{
+  // Empty input with mismatched targets/repls sizes must throw, not silently succeed.
+  // The size contract (targets.size() == input.size()) holds even when input is empty.
+  auto const empty   = cudf::test::strings_column_wrapper();
+  auto const nonzero = cudf::test::strings_column_wrapper({"x"});
+  auto const ev      = cudf::strings_column_view(empty);
+  auto const nv      = cudf::strings_column_view(nonzero);
+
+  EXPECT_THROW(cudf::strings::replace(ev, nv, ev), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace(ev, ev, nv), cudf::logic_error);
+}
+
 TEST_F(StringsReplaceTest, ReplaceColumnCombinedNulls)
 {
   // Nulls at different positions across input, targets, and repls.

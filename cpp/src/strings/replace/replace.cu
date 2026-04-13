@@ -505,11 +505,11 @@ std::unique_ptr<column> replace(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
-  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
   CUDF_EXPECTS(targets.size() == input.size(),
                "targets column must have the same number of rows as input");
   CUDF_EXPECTS(repls.size() == input.size(),
                "repls column must have the same number of rows as input");
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   // Compute the combined null mask up-front so the kernel produces zero-size
   // output for null rows, preventing non-empty nulls in the result.
