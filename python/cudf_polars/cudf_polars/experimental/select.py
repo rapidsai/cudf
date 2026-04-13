@@ -46,12 +46,15 @@ def _hstack_chain_to_select(ir: Select) -> Select | None:
     """
     hstack_chain: list[HStack] = []
     current: IR = ir.children[0]
+    all_broadcasted = True
     while isinstance(current, HStack):
+        if not current.should_broadcast:
+            all_broadcasted = False
         hstack_chain.append(current)
         current = current.children[0]
     base_input = current
 
-    if not any(not h.should_broadcast for h in hstack_chain):
+    if all_broadcasted:
         return None
 
     col_defs: dict[str, expr.Expr] = {}
@@ -375,7 +378,7 @@ def _(
         if (normalized := _hstack_chain_to_select(ir)) is not None:
             return lower_ir_node(normalized, rec)
     elif all(isinstance(e.value, Col) and e.name == e.value.name for e in ir.exprs):
-        # Fast path: pure column selection (no renames) — equivalent to Projection.
+        # Fast path: Equivalent to Projection.
         # We can only do this if the child is NOT HStack.
         return lower_ir_node(
             Projection(ir.schema, ir.children[0]),
@@ -491,9 +494,7 @@ def _inline_hstack_false(ir: IR) -> IR:
     base_input = current
     if not cse_map or child is base_input:
         return ir
-    if isinstance(
-        ir, HStack
-    ):  # pragma: no cover; safety net - not reached in standard Polars IR
+    if isinstance(ir, HStack):  # pragma: no cover
         new_cols = tuple(
             expr.NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.columns
         )
