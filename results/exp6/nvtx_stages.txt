@@ -1,0 +1,9 @@
+Generating SQLite file results/exp6/nvtx_profile.sqlite from results/exp6/nvtx_profile.nsys-rep
+Processing [results/exp6/nvtx_profile.sqlite] with [/opt/nvidia/nsight-systems/2025.1.3/host-linux-armv8/reports/nvtx_pushpop_sum.py] to process [@grep -E (-|csv::|read_csv)]...  --------  ---------------  ---------  -------------  -------------  -----------  -----------  -----------  ---------------------------------------------
+     18.4      136,294,192          2   68,147,096.0   68,147,096.0   67,895,712   68,398,480    355,510.7  libcudf:read_csv                             
+      6.1       45,358,448          1   45,358,448.0   45,358,448.0   45,358,448   45,358,448          0.0  libcudf:csv::decode_data                     
+      3.0       22,518,480          1   22,518,480.0   22,518,480.0   22,518,480   22,518,480          0.0  libcudf:csv::select_data_and_row_offsets     
+      3.0       22,117,984          1   22,117,984.0   22,117,984.0   22,117,984   22,117,984          0.0  libcudf:csv::load_data_and_gather_row_offsets
+      0.0            3,808          1        3,808.0        3,808.0        3,808        3,808          0.0  libcudf:csv::determine_column_types          
+      0.0              496          1          496.0          496.0          496          496          0.0  libcudf:csv::infer_column_types              
+
