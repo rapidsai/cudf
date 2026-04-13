@@ -359,9 +359,8 @@ __device__ __forceinline__ fused_parse_result try_fused_int_scan(
   }
 
   // Accumulate digits
-  int64_t acc       = 0;
-  int digit_count   = 0;
-  auto digits_start = cur;
+  int64_t acc     = 0;
+  int digit_count = 0;
   while (cur < row_end) {
     char c = *cur;
     if (c >= '0' && c <= '9') {
