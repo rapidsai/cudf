@@ -101,8 +101,7 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
   // and 1 device memory allocation, replacing them with a single lightweight kernel.
   constexpr int block_size = 256;
   auto const grid_size =
-    cudf::util::div_rounding_up_safe(static_cast<size_t>(strings_count),
-                                     static_cast<size_t>(block_size));
+    (static_cast<size_t>(strings_count) + block_size - 1) / block_size;
   scatter_strings_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     begin, d_offsets, chars_data.data(), strings_count);
 
