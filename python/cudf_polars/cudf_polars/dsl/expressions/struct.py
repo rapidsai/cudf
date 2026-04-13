@@ -91,13 +91,7 @@ class StructFunction(Expr):
         columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
         # Type checker doesn't know polars only calls StructFunction with struct types
-        if self.name == StructFunction.Name.FieldByIndex:
-            (field_index,) = self.options
-            return Column(
-                column.obj.children()[field_index],
-                dtype=self.dtype,
-            )
-        elif self.name == StructFunction.Name.FieldByName:
+        if self.name == StructFunction.Name.FieldByName:
             field_index = next(
                 (
                     i
