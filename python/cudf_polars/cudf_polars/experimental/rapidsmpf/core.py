@@ -344,7 +344,7 @@ def evaluate_pipeline(
             # use-after-free with stream-ordered allocations
             messages = output.release()
             chunks = [
-                TableChunk.from_message(msg).make_available_and_spill(
+                TableChunk.from_message(msg, br=br).make_available_and_spill(
                     br, allow_overbooking=True
                 )
                 for msg in messages
