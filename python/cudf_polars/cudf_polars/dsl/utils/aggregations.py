@@ -166,6 +166,16 @@ def decompose_single_agg(
             child = agg.children[0]
         else:
             (child,) = agg.children
+        # Fuse drop_nulls().n_unique() into nunique(null_handling=EXCLUDE)
+        # rather than materializing a filtered intermediate column.
+        if (
+            agg.name == "n_unique"
+            and isinstance(child, expr.UnaryFunction)
+            and child.name == "drop_nulls"
+        ):
+            (child,) = child.children
+            agg = expr.Agg(agg.dtype, "n_unique", (True,), agg.context, child)
+            named_expr = named_expr.reconstruct(agg)
         needs_masking = agg.name in {"min", "max"} and plc.traits.is_floating_point(
             child.dtype.plc_type
         )

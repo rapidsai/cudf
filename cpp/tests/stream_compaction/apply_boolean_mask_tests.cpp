@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -337,9 +338,8 @@ TEST_F(ApplyBooleanMask, StructOfListsFiltering)
 {
   using namespace cudf::test;
 
-  auto lists_column = lists_column_wrapper<int32_t>{
-    {{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 2; })};
+  auto lists_column =
+    lists_column_wrapper<int32_t>{{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}}, iterators::null_at(2)};
 
   auto structs_column = structs_column_wrapper{{lists_column}};
 
@@ -350,9 +350,8 @@ TEST_F(ApplyBooleanMask, StructOfListsFiltering)
 
   // Compare against expected values;
 
-  auto expected_lists_column = lists_column_wrapper<int32_t>{
-    {{0, 0}, {2, 2}, {4, 4}},
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+  auto expected_lists_column =
+    lists_column_wrapper<int32_t>{{{0, 0}, {2, 2}, {4, 4}}, iterators::null_at(1)};
 
   auto expected_structs_column = structs_column_wrapper{{expected_lists_column}};
 

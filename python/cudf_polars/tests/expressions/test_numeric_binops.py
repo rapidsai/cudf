@@ -133,3 +133,17 @@ def test_multiply_with_decimals():
 
     q = df.select(pl.col("x") * pl.col("y"))
     assert_gpu_result_equal(q, check_dtypes=True)
+
+
+def test_sum_decimal_widens_precision(request) -> None:
+    request.applymarker(
+        pytest.mark.xfail(
+            # Should be fixed in polars 1.40
+            reason="Polars does not widen precision for sum of decimals."
+        )
+    )
+    df = pl.LazyFrame(
+        {"x": [Decimal("5000000000000.00"), Decimal("5000000000000.00")]},
+        schema={"x": pl.Decimal(15, 2)},
+    )
+    assert df.select(pl.sum("x")).collect_schema()["x"] == pl.Decimal(38, 2)

@@ -12,8 +12,8 @@ dependencies:
 - breathe>=4.35.0
 - c-compiler
 - cachetools
-- clang-tools==20.1.4
-- clang==20.1.4
+- clang-tools==20.1.8
+- clang==20.1.8
 - cmake>=3.30.4
 - cramjam
 - cuda-cudart-dev
