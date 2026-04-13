@@ -81,7 +81,7 @@ class roaring_bitmap {
    *
    * @param other Roaring bitmap to move from
    */
-  roaring_bitmap(roaring_bitmap&&) noexcept;
+  roaring_bitmap(roaring_bitmap&& other) noexcept;
 
   /**
    * @brief Move assignment operator for the roaring bitmap class
@@ -93,12 +93,12 @@ class roaring_bitmap {
   /**
    * @brief Deleted copy constructor for the roaring bitmap class
    */
-  roaring_bitmap(roaring_bitmap const& other) = delete;
+  roaring_bitmap(roaring_bitmap const&) = delete;
 
   /**
    * @brief Deleted copy assignment operator for the roaring bitmap class
    */
-  roaring_bitmap& operator=(roaring_bitmap const& other) = delete;
+  roaring_bitmap& operator=(roaring_bitmap const&) = delete;
 
   /**
    * @brief Materalize the underlying cuco roaring bitmap.
