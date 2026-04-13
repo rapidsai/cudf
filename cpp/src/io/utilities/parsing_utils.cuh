@@ -218,14 +218,6 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
     // Only process quotes if field started with a quote
     if (field_starts_with_quote && *current == opts.quotechar && !escape_next) {
       quotation = !quotation;
-    } else if (quotation && !escape_char) {
-      // Fast path: inside a quoted region without escape chars, scan directly
-      // to the next quotechar. Delimiters/terminators inside quotes are literal.
-      ++current;
-      while (current < end && *current != opts.quotechar) {
-        ++current;
-      }
-      continue;  // Re-check the quotechar at the top of the loop
     } else if (!quotation) {
       if (*current == opts.delimiter) {
         while (opts.multi_delimiter && (current + 1 < end) && *(current + 1) == opts.delimiter) {
