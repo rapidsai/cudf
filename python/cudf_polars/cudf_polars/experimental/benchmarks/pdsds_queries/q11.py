@@ -117,48 +117,26 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def create_year_total(
-    customer_table: pl.LazyFrame,
+def build_year_total(
     sales_table: pl.LazyFrame,
     customer_sk_col: str,
     date_sk_col: str,
     list_price_col: str,
     discount_col: str,
-    year_filter: pl.LazyFrame,
+    year_dates: pl.LazyFrame,
 ) -> pl.LazyFrame:
-    """Computes per-customer yearly totals for a sales table and year."""
+    """
+    Aggregate sales per customer_sk for a single year.
+
+    Groups by c_customer_sk only (not the wide customer display columns)
+    to reduce intermediate cardinality. Customer display columns are
+    joined once at the end where needed.
+    """
     return (
-        customer_table.join(
-            sales_table, left_on="c_customer_sk", right_on=customer_sk_col, how="inner"
-        )
-        .join(year_filter, left_on=date_sk_col, right_on="d_date_sk", how="inner")
-        .group_by(
-            [
-                "c_customer_id",
-                "c_first_name",
-                "c_last_name",
-                "c_preferred_cust_flag",
-                "c_birth_country",
-                "c_login",
-                "c_email_address",
-                "d_year",
-            ]
-        )
+        sales_table.join(year_dates, left_on=date_sk_col, right_on="d_date_sk")
+        .group_by(customer_sk_col)
         .agg(
             [(pl.col(list_price_col) - pl.col(discount_col)).sum().alias("year_total")]
-        )
-        .select(
-            [
-                pl.col("c_customer_id").alias("customer_id"),
-                pl.col("c_first_name").alias("customer_first_name"),
-                pl.col("c_last_name").alias("customer_last_name"),
-                pl.col("c_preferred_cust_flag").alias("customer_preferred_cust_flag"),
-                pl.col("c_birth_country").alias("customer_birth_country"),
-                pl.col("c_login").alias("customer_login"),
-                pl.col("c_email_address").alias("customer_email_address"),
-                pl.col("d_year").alias("dyear"),
-                pl.col("year_total"),
-            ]
         )
     )
 
@@ -179,115 +157,73 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    date_first = date_dim.filter(pl.col("d_year") == year_first)
-    date_second = date_dim.filter(pl.col("d_year") == year_second)
+    date_first = date_dim.filter(pl.col("d_year") == year_first).select("d_date_sk")
+    date_second = date_dim.filter(pl.col("d_year") == year_second).select("d_date_sk")
 
-    # Total store sales 2001
-    t_s_firstyear = create_year_total(
-        customer,
-        store_sales,
-        "ss_customer_sk",
-        "ss_sold_date_sk",
-        "ss_ext_list_price",
-        "ss_ext_discount_amt",
-        date_first,
-    ).select(
-        [
-            pl.col("customer_id").alias("s_first_customer_id"),
-            pl.col("year_total").alias("s_first_year_total"),
-        ]
+    # Aggregate by customer_sk only — no customer table join needed yet.
+    t_s_first = (
+        build_year_total(
+            store_sales,
+            "ss_customer_sk",
+            "ss_sold_date_sk",
+            "ss_ext_list_price",
+            "ss_ext_discount_amt",
+            date_first,
+        )
+        .rename({"ss_customer_sk": "customer_sk", "year_total": "s_first_year_total"})
+        .filter(pl.col("s_first_year_total") > 0)
     )
 
-    # Total store sales 2002
-    t_s_secyear = create_year_total(
-        customer,
+    t_s_sec = build_year_total(
         store_sales,
         "ss_customer_sk",
         "ss_sold_date_sk",
         "ss_ext_list_price",
         "ss_ext_discount_amt",
         date_second,
-    ).select(
-        [
-            pl.col("customer_id").alias("s_sec_customer_id"),
-            pl.col("customer_first_name"),
-            pl.col("customer_last_name"),
-            pl.col("customer_birth_country"),
-            pl.col("year_total").alias("s_sec_year_total"),
-        ]
+    ).rename({"ss_customer_sk": "customer_sk", "year_total": "s_sec_year_total"})
+
+    t_w_first = (
+        build_year_total(
+            web_sales,
+            "ws_bill_customer_sk",
+            "ws_sold_date_sk",
+            "ws_ext_list_price",
+            "ws_ext_discount_amt",
+            date_first,
+        )
+        .rename(
+            {"ws_bill_customer_sk": "customer_sk", "year_total": "w_first_year_total"}
+        )
+        .filter(pl.col("w_first_year_total") > 0)
     )
 
-    # Total web sales 2001
-    t_w_firstyear = create_year_total(
-        customer,
-        web_sales,
-        "ws_bill_customer_sk",
-        "ws_sold_date_sk",
-        "ws_ext_list_price",
-        "ws_ext_discount_amt",
-        date_first,
-    ).select(
-        [
-            pl.col("customer_id").alias("w_first_customer_id"),
-            pl.col("year_total").alias("w_first_year_total"),
-        ]
-    )
-
-    # Total web sales 2002
-    t_w_secyear = create_year_total(
-        customer,
+    t_w_sec = build_year_total(
         web_sales,
         "ws_bill_customer_sk",
         "ws_sold_date_sk",
         "ws_ext_list_price",
         "ws_ext_discount_amt",
         date_second,
-    ).select(
-        [
-            pl.col("customer_id").alias("w_sec_customer_id"),
-            pl.col("year_total").alias("w_sec_year_total"),
-        ]
-    )
+    ).rename({"ws_bill_customer_sk": "customer_sk", "year_total": "w_sec_year_total"})
 
-    # Join the tables and filter to get customers whose web and store spending grew from 2001 -> 2002
+    # Join all four aggregates on customer_sk, then join customer once for display cols.
     return QueryResult(
         frame=(
-            t_s_secyear.join(
-                t_s_firstyear,
-                left_on="s_sec_customer_id",
-                right_on="s_first_customer_id",
-                how="inner",
-            )
-            .join(
-                t_w_firstyear,
-                left_on="s_sec_customer_id",
-                right_on="w_first_customer_id",
-                how="inner",
-            )
-            .join(
-                t_w_secyear,
-                left_on="s_sec_customer_id",
-                right_on="w_sec_customer_id",
-                how="inner",
-            )
+            t_s_sec.join(t_s_first, on="customer_sk")
+            .join(t_w_first, on="customer_sk")
+            .join(t_w_sec, on="customer_sk")
             .filter(
-                (pl.col("s_first_year_total") > 0)
-                & (pl.col("w_first_year_total") > 0)
-                & (
-                    pl.when(pl.col("w_first_year_total") > 0)
-                    .then(pl.col("w_sec_year_total") / pl.col("w_first_year_total"))
-                    .otherwise(0.0)
-                    > pl.when(pl.col("s_first_year_total") > 0)
-                    .then(pl.col("s_sec_year_total") / pl.col("s_first_year_total"))
-                    .otherwise(0.0)
-                )
+                pl.col("w_sec_year_total") / pl.col("w_first_year_total")
+                > pl.col("s_sec_year_total") / pl.col("s_first_year_total")
             )
+            .join(customer, left_on="customer_sk", right_on="c_customer_sk")
             .select(
                 [
-                    pl.col("s_sec_customer_id").alias("customer_id"),
-                    pl.col("customer_first_name"),
-                    pl.col("customer_last_name"),
-                    pl.col("customer_birth_country"),
+                    pl.col("c_customer_id").alias("customer_id"),
+                    pl.col("c_first_name").alias("customer_first_name"),
+                    pl.col("c_last_name").alias("customer_last_name"),
+                    pl.col("c_birth_country").alias("customer_birth_country"),
                 ]
             )
             .sort(

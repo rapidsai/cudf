@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
-from rapidsmpf.config import Options, get_environment_variables
 
 import polars as pl
 
@@ -737,6 +736,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if run_config.shuffle != "tasks":
         try:
+            from rapidsmpf.config import Options, get_environment_variables
             from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
             bootstrap_dask_cluster(
@@ -812,9 +812,7 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
-                context = IRExecutionContext.from_config_options(
-                    translator.config_options
-                )
+                context = IRExecutionContext()
                 if run_config.executor == "in-memory":
                     t0 = time.monotonic()
                     result = ir.evaluate(
@@ -1381,7 +1379,7 @@ def check_input_data_type(
         table, col = "item", "i_current_price"
     else:
         table, col = "customer", "c_acctbal"
-    path = (Path(run_config.dataset_path) / table).with_suffix(run_config.suffix)
+    path = f"{run_config.dataset_path}/{table}{run_config.suffix}"
     t = pl.scan_parquet(path).select(pl.col(col)).collect_schema()[col]
 
     num_type: Literal["decimal", "float"]
@@ -1394,7 +1392,7 @@ def check_input_data_type(
     if run_config.query_set == "pdsds":
         date_type = "date"
     else:
-        path = (Path(run_config.dataset_path) / "orders").with_suffix(run_config.suffix)
+        path = f"{run_config.dataset_path}/orders{run_config.suffix}"
         t = (
             pl.scan_parquet(path)
             .select(pl.col("o_orderdate"))
@@ -1420,12 +1418,20 @@ def run_polars_query_iteration(
     query_result: Any,
     client: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+    result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
     result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
 
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
+
+    if expected is not None and result_casts:
+        # Applying the casts to the polars result is
+        # a workaround we need because of a polars bug
+        # See https://github.com/pola-rs/polars/issues/27269
+        # Once we support polars 1.40, we should remove this
+        result = result.with_columns(*result_casts)
 
     if run_config.shuffle == "rapidsmpf" and run_config.gather_shuffle_stats:
         from rapidsmpf.integrations.dask.shuffler import (
@@ -1550,6 +1556,7 @@ def run_polars_query(
                 query_result=query_result,
                 client=client,
                 prepare_validation_result=prepare_validation_result,
+                result_casts=casts if casts else None,
             )
         except Exception:
             print(f"❌ query={q_id} iteration={i} failed!")
@@ -1935,7 +1942,7 @@ def print_duckdb_plan(
 
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
@@ -1971,7 +1978,7 @@ def execute_duckdb_query(
         tbl_names = PDSH_TABLE_NAMES
     with duckdb.connect() as conn:
         for name in tbl_names:
-            pattern = (Path(dataset_path) / name).as_posix() + suffix
+            pattern = f"{dataset_path}/{name}{suffix}"
             conn.execute(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
