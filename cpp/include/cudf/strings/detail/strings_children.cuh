@@ -47,26 +47,6 @@ struct string_offsets_fn {
 };
 
 /**
- * @brief Scatter kernel: each thread copies one string from source to destination
- * using device memcpy for efficient vectorized copying.
- */
-template <typename IndexPairIterator, typename OffsetsIterator>
-CUDF_KERNEL void scatter_strings_kernel(IndexPairIterator begin,
-                                        OffsetsIterator offsets,
-                                        char* output,
-                                        size_type strings_count)
-{
-  auto const idx = static_cast<size_type>(blockIdx.x) * blockDim.x + threadIdx.x;
-  if (idx >= strings_count) return;
-
-  auto const src     = begin[idx].first;
-  auto const src_len = begin[idx].second;
-  if (src == nullptr || src_len <= 0) return;
-
-  memcpy(output + offsets[idx], src, src_len);
-}
-
-/**
  * @brief Gather characters to create a strings column using the given string-index pair iterator
  *
  * @tparam IndexPairIterator iterator over type `pair<char const*,size_type>` values
@@ -90,14 +70,34 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
   auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
 
-  // Simple scatter kernel replaces cub::DeviceMemcpy::Batched.
-  // This eliminates 2 kernel launches (temp storage query + actual copy)
-  // and 1 device memory allocation. Uses device memcpy for efficient copying.
-  constexpr int block_size = 256;
-  auto const grid_size =
-    (static_cast<size_t>(strings_count) + block_size - 1) / block_size;
-  scatter_strings_kernel<<<grid_size, block_size, 0, stream.value()>>>(
-    begin, d_offsets, chars_data.data(), strings_count);
+  auto const src_ptrs = thrust::make_transform_iterator(
+    cuda::counting_iterator<uint32_t>{0},
+    cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
+      // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
+      // we have to use `const_cast` to remove `const` qualifier from the source pointer.
+      // This should be fine as long as we only read but not write anything to the source.
+      return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
+    }));
+  auto const src_sizes = thrust::make_transform_iterator(
+    cuda::counting_iterator<uint32_t>{0},
+    cuda::proclaim_return_type<size_type>(
+      [begin] __device__(uint32_t idx) { return begin[idx].second; }));
+  auto const dst_ptrs = thrust::make_transform_iterator(
+    cuda::counting_iterator<uint32_t>{0},
+    cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
+                                        uint32_t idx) { return output + offsets[idx]; }));
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
+    nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count, stream.value()));
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+  CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(d_temp_storage.data(),
+                                           temp_storage_bytes,
+                                           src_ptrs,
+                                           dst_ptrs,
+                                           src_sizes,
+                                           strings_count,
+                                           stream.value()));
 
   return chars_data;
 }
