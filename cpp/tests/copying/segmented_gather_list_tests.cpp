@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -108,6 +108,17 @@ TYPED_TEST(SegmentedGatherTest, GatherNothing)
     EXPECT_EQ(cudf::lists_column_view(cudf::lists_column_view(lcv.child()).child()).child().size(),
               0);
   }
+}
+
+using SegmentedGatherTestSingle = SegmentedGatherTest<int32_t>;
+TEST_F(SegmentedGatherTestSingle, GatherEmpty)
+{
+  auto const list       = LCW<int32_t>{};
+  auto const gather_map = LCW<cudf::size_type>{};
+  auto const expected   = LCW<int32_t>{};
+  auto const results    = cudf::lists::segmented_gather(cudf::lists_column_view{list},
+                                                     cudf::lists_column_view{gather_map});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TYPED_TEST(SegmentedGatherTest, GatherNulls)
