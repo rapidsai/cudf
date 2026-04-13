@@ -838,19 +838,18 @@ TEST_F(StreamingGroupbyTest, ExceedsKeyTableCapacityThrows)
   using V = int32_t;
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  // max_groups=4: can hold at most 4 distinct keys.
+  // max_groups=4: can hold at most 4 distinct keys and 4 cumulative rows.
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 4);
 
-  // First batch with 4 unique keys fills capacity.
+  // Batch with 4 unique keys fills both row and distinct-key capacity.
   cudf::test::fixed_width_column_wrapper<K> k1{0, 1, 2, 3};
   cudf::test::fixed_width_column_wrapper<V> v1{10, 20, 30, 40};
-  cudf::table_view batch1{{k1, v1}};
-  streaming_agg.aggregate(batch1);
+  streaming_agg.aggregate(cudf::table_view{{k1, v1}});
 
-  // Second batch introduces a 5th unique key (4), exceeding max_groups=4.
-  cudf::test::fixed_width_column_wrapper<K> k2{0, 1, 4};
-  cudf::test::fixed_width_column_wrapper<V> v2{50, 60, 70};
-  EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k2, v2}}), cudf::logic_error);
+  // Any further batch exceeds cumulative row capacity (4 + 1 > 4).
+  cudf::test::fixed_width_column_wrapper<K> k2{0};
+  cudf::test::fixed_width_column_wrapper<V> v2{50};
+  EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k2, v2}}), std::overflow_error);
 }
 
 // Test that sliced input columns with non-zero offsets work correctly.
@@ -1257,18 +1256,18 @@ TEST_F(StreamingGroupbyTest, EncodingOverflowThrows)
   using V = int32_t;
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  // max_groups=4, so sparse capacity = 8. Three batches of 3 rows each = 9 > 8.
-  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 4);
+  // max_groups=6: cumulative row count must not exceed 6.
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 6);
 
   cudf::test::fixed_width_column_wrapper<K> k1{0, 1, 2};
   cudf::test::fixed_width_column_wrapper<V> v1{10, 20, 30};
-  streaming_agg.aggregate(cudf::table_view{{k1, v1}});
+  streaming_agg.aggregate(cudf::table_view{{k1, v1}});  // num_stored=3
 
   cudf::test::fixed_width_column_wrapper<K> k2{0, 1, 2};
   cudf::test::fixed_width_column_wrapper<V> v2{10, 20, 30};
-  streaming_agg.aggregate(cudf::table_view{{k2, v2}});
+  streaming_agg.aggregate(cudf::table_view{{k2, v2}});  // num_stored=6
 
-  // Third batch: num_stored=6, batch_size=3, 6+3=9 > 8 = sparse_capacity.
+  // Third batch: num_stored=6, batch_size=3, 6+3=9 > 6 = max_groups.
   cudf::test::fixed_width_column_wrapper<K> k3{0, 1, 2};
   cudf::test::fixed_width_column_wrapper<V> v3{10, 20, 30};
   EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k3, v3}}), std::overflow_error);
