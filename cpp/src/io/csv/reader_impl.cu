@@ -250,7 +250,12 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   rmm::cuda_stream_view stream)
 {
   cudf::scoped_range rng{"csv::load_data_and_gather_row_offsets"};
-  constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
+  // Process data in chunks. Larger chunks reduce kernel launches and host syncs
+  // but use more device memory for row context. When loading the whole file,
+  // use a larger chunk to minimize round-trips.
+  auto const effective_max_chunk = load_whole_file ? size_t{1024} * 1024 * 1024  // 1GB
+                                                   : size_t{64} * 1024 * 1024;   // 64MB
+  auto const max_chunk_bytes     = effective_max_chunk;
 
   auto const data_size      = data.has_value() ? data->size() : source->size();
   auto const buffer_size    = std::min(max_chunk_bytes, data_size);
