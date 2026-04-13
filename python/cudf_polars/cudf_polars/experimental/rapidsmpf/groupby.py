@@ -310,9 +310,7 @@ async def _tree_reduce(
 
         allgather.insert(
             0,
-            _enforce_schema(
-                aggregated, decomposed.reduction_ir.schema, context.br()
-            ),
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
         )
 
         allgather.insert_finished()
@@ -455,9 +453,7 @@ async def _shuffle_reduce(
             target_partition_size,
         )
         shuffle.insert_hash(
-            _enforce_schema(
-                aggregated, decomposed.reduction_ir.schema, context.br()
-            ),
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
             decomposed.shuffle_indices,
         )
         del aggregated
