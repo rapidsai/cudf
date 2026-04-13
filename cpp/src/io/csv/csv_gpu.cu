@@ -304,6 +304,24 @@ __device__ constexpr double pow10_neg[] = {
   1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18};
 
 /**
+ * @brief Scan forward from the current position to find the delimiter/terminator.
+ *
+ * This is a simplified version of seek_field_end for non-quoted fields where we
+ * already know we're past any leading content. No quote handling needed since
+ * the fused scan already bailed on quoted fields before reaching this point.
+ */
+__device__ __forceinline__ char const* scan_to_delimiter(
+  char const* cur, char const* row_end, cudf::io::parse_options_view const& opts)
+{
+  while (cur < row_end) {
+    if (*cur == opts.delimiter || *cur == opts.terminator) break;
+    if (*cur == '\r' && cur + 1 < row_end && *(cur + 1) == '\n') break;
+    ++cur;
+  }
+  return cur;
+}
+
+/**
  * @brief Unified fused field scan + numeric parse (integers and floats).
  *
  * Scans from field_start to find the delimiter/terminator, simultaneously:
@@ -315,6 +333,8 @@ __device__ constexpr double pow10_neg[] = {
  * Returns both int and float results so the caller can pick based on column type.
  * Falls back (parsed_ok=false) for: quoted fields, exponent notation (e/E),
  * thousand separators, hex, or fields that need the general parser.
+ * When falling back, continues scanning from the current position (not from the
+ * start) to avoid re-scanning characters already processed.
  */
 __device__ __forceinline__ fused_numeric_result try_fused_numeric_scan(
   char const* field_start, char const* row_end, cudf::io::parse_options_view const& opts)
@@ -340,7 +360,7 @@ __device__ __forceinline__ fused_numeric_result try_fused_numeric_scan(
     return result;
   }
 
-  // Bail on quoted fields — need the general path
+  // Bail on quoted fields — need the full seek_field_end from the start
   if (*cur == opts.quotechar) {
     result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
     return result;
@@ -371,8 +391,8 @@ __device__ __forceinline__ fused_numeric_result try_fused_numeric_scan(
         ++digit_count;
         if (result.has_decimal) { ++frac_digits; }
       } else if (!result.has_decimal) {
-        // Too many digits in integer part — bail to general parser
-        result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+        // Too many digits in integer part — continue to find delimiter from here
+        result.delimiter_pos = scan_to_delimiter(cur, row_end, opts);
         return result;
       }
       // else: extra fractional digits beyond precision silently dropped
@@ -381,8 +401,8 @@ __device__ __forceinline__ fused_numeric_result try_fused_numeric_scan(
       result.has_decimal = true;
       ++cur;
     } else if (c == 'e' || c == 'E' || c == opts.thousands) {
-      // Exponent notation or thousands separator — fall back to general parser
-      result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+      // Exponent notation or thousands separator — continue scanning from here
+      result.delimiter_pos = scan_to_delimiter(cur, row_end, opts);
       return result;
     } else {
       break;
@@ -397,8 +417,8 @@ __device__ __forceinline__ fused_numeric_result try_fused_numeric_scan(
   // Must end at delimiter, terminator, or row_end
   if (cur < row_end && *cur != opts.delimiter && *cur != opts.terminator &&
       !(*cur == '\r' && cur + 1 < row_end && *(cur + 1) == '\n')) {
-    // Non-numeric characters found — fall back to seek_field_end
-    result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+    // Non-numeric characters — continue scanning from here (not from start)
+    result.delimiter_pos = scan_to_delimiter(cur, row_end, opts);
     return result;
   }
 
