@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 
 struct ApplyBooleanMask : public cudf::test::BaseFixture {};
@@ -246,9 +247,8 @@ TEST_F(ApplyBooleanMask, CorrectNullCount)
 {
   cudf::size_type inputRows = 471234;
 
-  auto seq1 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto valid_seq1 =
-    cudf::detail::make_counting_transform_iterator(0, [](auto row) { return true; });
+  auto seq1       = cuda::counting_iterator{0};
+  auto valid_seq1 = cudf::test::iterators::no_nulls();
   cudf::test::fixed_width_column_wrapper<int64_t, typename decltype(seq1)::value_type> col1(
     seq1, seq1 + inputRows, valid_seq1);
 

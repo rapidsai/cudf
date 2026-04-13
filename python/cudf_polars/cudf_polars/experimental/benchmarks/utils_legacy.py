@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
-from rapidsmpf.config import Options, get_environment_variables
 
 import polars as pl
 
@@ -737,6 +736,7 @@ def initialize_dask_cluster(run_config: RunConfig, args: argparse.Namespace):  #
 
     if run_config.shuffle != "tasks":
         try:
+            from rapidsmpf.config import Options, get_environment_variables
             from rapidsmpf.integrations.dask import bootstrap_dask_cluster
 
             bootstrap_dask_cluster(
