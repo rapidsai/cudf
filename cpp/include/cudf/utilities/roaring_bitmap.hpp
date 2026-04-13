@@ -52,9 +52,8 @@ enum class roaring_bitmap_type : uint8_t {
  */
 class roaring_bitmap {
  public:
-  /// @cond
+  //! Forward declaration of the opaque wrapper of cuco's roaring bitmap
   struct roaring_bitmap_impl;
-  /// @endcond
 
   /**
    * @brief Constructs a roaring_bitmap from serialized bitmap data (payload)
