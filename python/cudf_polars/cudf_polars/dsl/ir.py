@@ -50,6 +50,11 @@ from cudf_polars.utils.cuda_stream import (
     get_new_cuda_stream,
     join_cuda_streams,
 )
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_137,
+    POLARS_VERSION_LT_138,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
@@ -1034,8 +1039,8 @@ class Sink(IR):
                 raise NotImplementedError(
                     f"Compression type '{compression}' is not supported."
                 )
-        elif (
-            kind == "NDJson"
+        elif kind == (
+            "Json" if POLARS_VERSION_LT_137 else "NDJson"
         ):  # pragma: no cover; options are validated on the polars side
             if not all(
                 plc.io.json.is_supported_write_json(dtype.plc_type)
@@ -1219,11 +1224,13 @@ class Sink(IR):
         """Write the dataframe to a file."""
         target = plc.io.SinkInfo([path])
 
+        if POLARS_VERSION_LT_136 and options.get("mkdir", False):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)  # pragma: no cover
         if kind == "Csv":
             cls._write_csv(target, options, df)
         elif kind == "Parquet":
             cls._write_parquet(target, parquet_options, options, df)
-        elif kind == "NDJson":
+        elif kind == ("Json" if POLARS_VERSION_LT_137 else "NDJson"):
             cls._write_json(target, df)
 
         return DataFrame([], stream=df.stream)
@@ -2991,7 +2998,6 @@ class MapFunction(IR):
             "unpivot",
             "row_index",
             "fast_count",
-            "hint_sorted",
         ]
     )
 
@@ -3007,11 +3013,11 @@ class MapFunction(IR):
                 f"Unhandled map function {self.name}"
             )  # pragma: no cover
         if self.name == "explode":
-            if len(self.options) == 1:
+            if POLARS_VERSION_LT_136 or len(self.options) == 1:
                 (to_explode,) = self.options
             else:
                 (to_explode, empty_as_null, keep_nulls) = self.options
-                if not keep_nulls:
+                if (POLARS_VERSION_LT_136 and not empty_as_null) or not keep_nulls:
                     raise NotImplementedError(
                         "Explode an empty or null list/array"
                     )  # pragma: no cover
@@ -3025,6 +3031,9 @@ class MapFunction(IR):
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
             variable_name = "variable" if variable_name is None else variable_name
+            if POLARS_VERSION_LT_136 and len(pivotees) == 0:  # pragma: no cover
+                index = frozenset(indices)
+                pivotees = [name for name in df.schema if name not in index]
             if not all(
                 dtypes.can_cast(df.schema[p].plc_type, self.schema[value_name].plc_type)
                 for p in pivotees
@@ -3041,6 +3050,8 @@ class MapFunction(IR):
             )
         elif self.name == "row_index":
             col_name, offset = options
+            if POLARS_VERSION_LT_138 and col_name in df.schema:  # pragma: no cover
+                raise NotImplementedError("Duplicate row index name")
             self.options = (col_name, offset)
         elif self.name == "fast_count":
             # TODO: Remove this once all scan types support projections
@@ -3051,10 +3062,6 @@ class MapFunction(IR):
             raise NotImplementedError(
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
-        elif (
-            self.name == "hint_sorted"
-        ):  # pragma: no cover; polars prunes hints in some cases
-            raise NotImplementedError("Hint sorted unsupported")
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:

@@ -9,6 +9,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135, POLARS_VERSION_LT_136
 
 
 @pytest.mark.parametrize("descending", [False, True])
@@ -57,6 +58,12 @@ def test_sort_by_expression(descending, nulls_last, maintain_order):
 @pytest.mark.parametrize("nulls_last", [False, True])
 @pytest.mark.parametrize("with_nulls", ["no_nulls", "nulls"])
 def test_setsorted(request, descending, nulls_last, with_nulls):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not POLARS_VERSION_LT_135 and POLARS_VERSION_LT_136,
+            reason="HintIR not supported",
+        )
+    )
     values = sorted([1, 2, 3, 4, 5, 6, -2], reverse=descending)
     if with_nulls == "nulls":
         values[-1 if nulls_last else 0] = None

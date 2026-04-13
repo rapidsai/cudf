@@ -15,6 +15,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 
 @pytest.fixture
@@ -384,7 +385,7 @@ def test_groupby_aggs_keep_unsupported_as_null(
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
-            condition="sum" in str(agg_expr),
+            condition=not POLARS_VERSION_LT_136 and "sum" in str(agg_expr),
             reason="polars raises now",
         )
     )

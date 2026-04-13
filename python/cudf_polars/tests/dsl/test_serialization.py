@@ -13,6 +13,7 @@ from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.string import StringFunction
 from cudf_polars.dsl.expressions.struct import StructFunction
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.fixture(
@@ -48,6 +49,9 @@ def test_from_polars_all_names(function):
             "FieldByIndex",
             "MultipleFields",
         }
+    if function == StringFunction and POLARS_VERSION_LT_138:
+        # SplitRegex was added in polars 1.38
+        cudf_polars_names_set = cudf_polars_names_set - {"SplitRegex"}
     assert polars_names_set == cudf_polars_names_set
     names = function.Name
     if function == StructFunction:
@@ -55,6 +59,9 @@ def test_from_polars_all_names(function):
             StructFunction.Name.FieldByIndex,
             StructFunction.Name.MultipleFields,
         }
+    if function == StringFunction and POLARS_VERSION_LT_138:
+        # SplitRegex was added in polars 1.38
+        names = set(names) - {StringFunction.Name.SplitRegex}
     for name in names:
         attr = getattr(polars_function, name.name)
         assert function.Name.from_polars(attr) == name

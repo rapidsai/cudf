@@ -11,7 +11,13 @@ from packaging.version import parse
 from polars import __version__
 
 POLARS_VERSION = parse(__version__)
-POLARS_LOWER_BOUND = parse("1.39")
+POLARS_LOWER_BOUND = parse("1.35")
+
+POLARS_VERSION_LT_135 = POLARS_VERSION < parse("1.35")
+POLARS_VERSION_LT_136 = POLARS_VERSION < parse("1.36")
+POLARS_VERSION_LT_137 = POLARS_VERSION < parse("1.37")
+POLARS_VERSION_LT_138 = POLARS_VERSION < parse("1.38")
+POLARS_VERSION_LT_139 = POLARS_VERSION < parse("1.39")
 
 
 def _ensure_polars_version() -> None:

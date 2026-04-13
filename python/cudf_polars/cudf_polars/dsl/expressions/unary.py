@@ -242,7 +242,10 @@ class UnaryFunction(Expr):
             return column
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
-            descending, _nulls_last = self.options
+            if isinstance(self.options[0], str):
+                descending = self.options[0] == "descending"  # pragma: no cover
+            else:
+                descending, _ = self.options
             order = (
                 plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
             )

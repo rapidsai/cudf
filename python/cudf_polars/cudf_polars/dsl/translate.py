@@ -32,6 +32,10 @@ from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.dsl.utils.rolling import rewrite_rolling
 from cudf_polars.typing import Schema
 from cudf_polars.utils import config, sorting
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_138,
+)
 
 if TYPE_CHECKING:
     from polars import GPUEngine
@@ -611,7 +615,9 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
     payload = json.loads(node.payload)
     try:
         file = payload["File"]
-        sink_kind_options = file["file_format"]
+        sink_kind_options = file[
+            "file_type" if POLARS_VERSION_LT_136 else "file_format"
+        ]
     except KeyError as err:  # pragma: no cover
         raise NotImplementedError("Unsupported payload structure") from err
     if isinstance(sink_kind_options, dict):
@@ -623,22 +629,31 @@ def _(node: plrs._ir_nodes.Sink, translator: Translator, schema: Schema) -> ir.I
             "Unsupported sink options structure"
         )  # pragma: no cover
 
-    unified_args = file.get("unified_sink_args", {})
-    cloud_options = unified_args.get("cloud_options")
-    options = {} if sink_kind == "NDJson" else format_options.copy()
+    if POLARS_VERSION_LT_138:  # pragma: no cover
+        sink_options = file.get("sink_options", {})
+        cloud_options = file.get("cloud_options")
+        options = format_options.copy()
+        options.update(sink_options)
+    else:
+        unified_args = file.get("unified_sink_args", {})
+        cloud_options = unified_args.get("cloud_options")
+        options = {} if sink_kind == "NDJson" else format_options.copy()
 
-    for k, v in unified_args.items():
-        if k in {"mkdir", "maintain_order", "sync_on_close"}:
-            options[k] = v
+        for k, v in unified_args.items():
+            if k in {"mkdir", "maintain_order", "sync_on_close"}:
+                options[k] = v
 
-    if sink_kind in ("Csv", "NDJson"):
+    if sink_kind in ("Csv", "NDJson", "Json"):
         compression = format_options.get("compression")
         if compression and compression != "Uncompressed":
             raise NotImplementedError(
                 f"{sink_kind} compression ('{compression}') is not supported."
             )
 
-    path = file["target"]["inner"]
+    if POLARS_VERSION_LT_138:  # pragma: no cover
+        path = file["target"]["Local"]
+    else:
+        path = file["target"]["inner"]
 
     return ir.Sink(
         schema=schema,
@@ -822,7 +837,51 @@ def _(
     dtype: DataType,
     schema: Schema,
 ) -> expr.Expr:
-    if isinstance(node.options, plrs._expr_nodes.WindowMapping):
+    if hasattr(plrs._expr_nodes, "RollingGroupOptions") and isinstance(
+        node.options, plrs._expr_nodes.RollingGroupOptions
+    ):  # pragma: no cover; polars >=1.36 uses AExpr::Rolling now
+        # pl.col("a").rolling(...) in polars <1.36
+        with set_expr_context(translator, ExecutionContext.ROLLING):
+            agg = translator.translate_expr(n=node.function, schema=schema)
+        name_generator = unique_names(schema)
+        aggs, named_post_agg = decompose_single_agg(
+            expr.NamedExpr(next(name_generator), agg),
+            name_generator,
+            is_top=True,
+            context=ExecutionContext.ROLLING,
+        )
+        named_aggs = [agg for agg, _ in aggs]
+        orderby = node.options.index_column
+        orderby_dtype = schema[orderby].plc_type
+        if plc.traits.is_integral(orderby_dtype):
+            # Integer orderby column is cast in implementation to int64 in polars
+            orderby_dtype = plc.DataType(plc.TypeId.INT64)
+        closed_window = node.options.closed_window
+        if isinstance(named_post_agg.value, expr.Col):
+            (named_agg,) = named_aggs
+            return expr.RollingWindow(
+                named_agg.value.dtype,
+                orderby_dtype,
+                node.options.offset,
+                node.options.period,
+                closed_window,
+                orderby,
+                named_agg.value,
+            )
+        replacements: dict[expr.Expr, expr.Expr] = {
+            expr.Col(agg.value.dtype, agg.name): expr.RollingWindow(
+                agg.value.dtype,
+                orderby_dtype,
+                node.options.offset,
+                node.options.period,
+                closed_window,
+                orderby,
+                agg.value,
+            )
+            for agg in named_aggs
+        }
+        return replace([named_post_agg.value], replacements)[0]
+    elif isinstance(node.options, plrs._expr_nodes.WindowMapping):
         # pl.col("a").over(...)
         with set_expr_context(translator, ExecutionContext.WINDOW):
             agg = translator.translate_expr(n=node.function, schema=schema)
@@ -879,8 +938,7 @@ def _(
     assert_never(node.options)
 
 
-@_translate_expr.register
-def _(
+def _translate_rolling(
     node: plrs._expr_nodes.Rolling,
     translator: Translator,
     dtype: DataType,
@@ -925,6 +983,13 @@ def _(
         for a in named_aggs
     }
     return replace([named_post_agg.value], replacements)[0]
+
+
+# Rolling was added in polars 1.39. Use explicit registration (not annotation-based)
+# so that Python 3.14's stricter get_type_hints() resolution does not fail when
+# running on older polars versions that lack this node type.
+if hasattr(plrs._expr_nodes, "Rolling"):
+    _translate_expr.register(plrs._expr_nodes.Rolling)(_translate_rolling)
 
 
 @_translate_expr.register

@@ -14,6 +14,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_138
 
 
 @pytest.fixture
@@ -367,6 +368,10 @@ def test_replace_many_ascii_case(ldf):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_136,
+    reason="leftmost parameter requires polars >= 1.36",
+)
 def test_replace_many_leftmost(ldf):
     q = ldf.select(pl.col("a").str.replace_many(["a", "b"], "x", leftmost=True))
 
@@ -874,6 +879,10 @@ def test_concat_str_with_boolean():
     assert_gpu_result_equal(q)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138,
+    reason="str.split(literal=False) / SplitRegex requires polars >= 1.38",
+)
 def test_split_regex_not_supported():
     lf = pl.LazyFrame({"a": ["foo1bar", "baz456boo", "abc321"]})
 
