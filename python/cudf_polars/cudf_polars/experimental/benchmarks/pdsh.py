@@ -30,7 +30,9 @@ try:
         run_duckdb,
         run_polars,
     )
-except ImportError:
+except ImportError as e:
+    if e.name is not None and not e.name.startswith("cudf_polars"):
+        raise
     # We want to be able to import pdsh in a CPU-only environment.
     COUNT_DTYPE = None  # type: ignore[assignment]
 
