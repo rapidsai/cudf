@@ -237,8 +237,7 @@ TEST_F(FromArrowTest, StructColumn)
       "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
   auto str_col2 =
-    cudf::test::strings_column_wrapper{{"CUDF", "ROCKS", "EVERYWHERE"}, {false, true, false}}
-      .release();
+    cudf::test::strings_column_wrapper{{"", "ROCKS", ""}, {false, true, false}}.release();
   int num_rows{str_col->size()};
   auto int_col = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
   auto int_col2 =
