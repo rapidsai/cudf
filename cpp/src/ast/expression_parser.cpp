@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -227,9 +227,12 @@ cudf::size_type expression_parser::visit(operation const& expr)
   auto end      = begin + operand_data_ref_indices.size();
   auto const operand_types = std::vector<cudf::data_type>(begin, end);
 
-  // Validate types of operand data references match
-  if (std::adjacent_find(operand_types.cbegin(), operand_types.cend(), std::not_equal_to<>()) !=
-      operand_types.cend()) {
+  // Validate type_id's of operand data references match
+  // (decimal types with different scales are supported)
+  if (std::adjacent_find(
+        operand_types.cbegin(), operand_types.cend(), [](auto const& dt1, auto const& dt2) {
+          return dt1.id() != dt2.id();
+        }) != operand_types.cend()) {
     CUDF_FAIL("An AST expression was provided non-matching operand types.");
   }
 
