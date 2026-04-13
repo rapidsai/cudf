@@ -96,50 +96,14 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
   auto chars_data      = rmm::device_uvector<char>(chars_size, stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
 
-  // Choose between a simple scatter kernel and CUB's batched memcpy based on
-  // average string size. For short strings (< 64 bytes avg), the scatter kernel
-  // is faster because it avoids CUB's temp storage query + allocation overhead.
-  // For longer strings, CUB uses warp-cooperative copying which is more efficient.
-  auto const avg_string_size =
-    strings_count > 0 ? static_cast<size_t>(chars_size) / strings_count : 0;
-
-  if (avg_string_size < 64) {
-    // Simple scatter: 1 thread per string, byte-by-byte copy
-    constexpr int block_size = 256;
-    auto const grid_size =
-      (static_cast<size_t>(strings_count) + block_size - 1) / block_size;
-    scatter_strings_kernel<<<grid_size, block_size, 0, stream.value()>>>(
-      begin, d_offsets, chars_data.data(), strings_count);
-  } else {
-    // CUB batched memcpy for longer strings (warp-cooperative, better bandwidth)
-    auto const src_ptrs = thrust::make_transform_iterator(
-      cuda::counting_iterator<uint32_t>{0},
-      cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
-        return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
-      }));
-    auto const src_sizes = thrust::make_transform_iterator(
-      cuda::counting_iterator<uint32_t>{0},
-      cuda::proclaim_return_type<size_type>(
-        [begin] __device__(uint32_t idx) { return begin[idx].second; }));
-    auto const dst_ptrs = thrust::make_transform_iterator(
-      cuda::counting_iterator<uint32_t>{0},
-      cuda::proclaim_return_type<char*>(
-        [offsets = d_offsets, output = chars_data.data()] __device__(uint32_t idx) {
-          return output + offsets[idx];
-        }));
-
-    size_t temp_storage_bytes = 0;
-    CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(
-      nullptr, temp_storage_bytes, src_ptrs, dst_ptrs, src_sizes, strings_count, stream.value()));
-    rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
-    CUDF_CUDA_TRY(cub::DeviceMemcpy::Batched(d_temp_storage.data(),
-                                             temp_storage_bytes,
-                                             src_ptrs,
-                                             dst_ptrs,
-                                             src_sizes,
-                                             strings_count,
-                                             stream.value()));
-  }
+  // Use a simple scatter kernel instead of cub::DeviceMemcpy::Batched.
+  // This eliminates 2 kernel launches (temp storage query + actual copy)
+  // and 1 device memory allocation, replacing them with a single lightweight kernel.
+  constexpr int block_size = 256;
+  auto const grid_size =
+    (static_cast<size_t>(strings_count) + block_size - 1) / block_size;
+  scatter_strings_kernel<<<grid_size, block_size, 0, stream.value()>>>(
+    begin, d_offsets, chars_data.data(), strings_count);
 
   return chars_data;
 }
