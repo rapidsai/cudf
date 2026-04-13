@@ -5,6 +5,7 @@
 
 #include "csv_common.hpp"
 #include "csv_gpu.hpp"
+#include "datetime.cuh"
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/parsing_utils.cuh"
 #include "io/utilities/trie.cuh"
@@ -550,27 +551,29 @@ __device__ __forceinline__ fused_float_result try_fused_float_scan(
 }
 
 /**
- * @brief Fast field boundary scan for timestamp/general columns.
+ * @brief Fused field scan + timestamp parse for TIMESTAMP_MILLISECONDS.
  *
- * Finds the delimiter without the full seek_field_end overhead for non-quoted fields.
- * For non-quoted fields (the common case), this is a simple scan for delimiter/terminator.
- * For quoted fields, falls back to seek_field_end.
- * Also detects empty/null fields.
+ * Handles the common format: YYYY-MM-DD[T ]HH:MM:SS[.mmm]
+ * Simultaneously finds the delimiter and parses the timestamp.
+ * Falls back for other formats, quoted fields, or digit-only timestamps.
  */
-struct fast_field_result {
+struct fused_timestamp_result {
   char const* delimiter_pos;
-  char const* trimmed_begin;
-  char const* trimmed_end;
+  int64_t millis;  // milliseconds since epoch
+  bool parsed_ok;
   bool is_null;
-  bool is_quoted;
 };
 
-__device__ __forceinline__ fast_field_result fast_field_scan(
-  char const* field_start, char const* row_end, cudf::io::parse_options_view const& opts)
+__device__ __forceinline__ fused_timestamp_result try_fused_timestamp_scan(
+  char const* field_start,
+  char const* row_end,
+  cudf::io::parse_options_view const& opts,
+  bool dayfirst)
 {
-  fast_field_result result;
+  fused_timestamp_result result;
+  result.parsed_ok = false;
   result.is_null   = false;
-  result.is_quoted = false;
+  result.millis    = 0;
 
   auto cur = field_start;
 
@@ -582,44 +585,54 @@ __device__ __forceinline__ fast_field_result fast_field_scan(
   // Check for empty field
   if (cur >= row_end || *cur == opts.delimiter || *cur == opts.terminator) {
     result.delimiter_pos = cur;
-    result.trimmed_begin = cur;
-    result.trimmed_end   = cur;
     result.is_null       = true;
     return result;
   }
 
-  // Quoted fields need the full seek_field_end
+  // Bail on quoted fields
   if (*cur == opts.quotechar) {
     result.delimiter_pos = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
-    result.trimmed_begin = field_start;
-    result.trimmed_end   = result.delimiter_pos;
-    result.is_quoted     = true;
     return result;
   }
 
-  // Non-quoted: simple scan for delimiter/terminator
+  // Find the delimiter first to know field boundaries, then parse the timestamp
+  // We scan forward to find the end of the field
   auto field_end = cur;
-  while (field_end < row_end) {
-    if (*field_end == opts.delimiter || *field_end == opts.terminator) break;
+  while (field_end < row_end && *field_end != opts.delimiter && *field_end != opts.terminator) {
     if (*field_end == '\r' && field_end + 1 < row_end && *(field_end + 1) == '\n') break;
     ++field_end;
   }
   result.delimiter_pos = field_end;
 
-  // Trim trailing whitespace
+  // Skip trailing whitespace for the trimmed field end
   auto trimmed_end = field_end;
   while (trimmed_end > cur && (*(trimmed_end - 1) == ' ' || *(trimmed_end - 1) == '\t')) {
     --trimmed_end;
   }
 
-  result.trimmed_begin = cur;
-  result.trimmed_end   = trimmed_end;
+  auto trimmed_begin = cur;
 
-  // Check for effectively empty field after trimming
-  if (cur >= trimmed_end) {
+  // Field must have content
+  if (trimmed_begin >= trimmed_end) {
     result.is_null = true;
+    return result;
   }
 
+  // Use the existing to_timestamp function which handles all date formats
+  // The fused benefit here is: we already found the delimiter (no seek_field_end needed)
+  // and we can skip the NA trie check for non-empty numeric-looking content
+  // Check if first char looks like a date (digit or separator)
+  char fc = *trimmed_begin;
+  if (fc >= '0' && fc <= '9') {
+    // Looks numeric — call to_timestamp directly, skip NA trie
+    using ts_type = cudf::timestamp_ms;
+    auto ts       = cudf::io::to_timestamp<ts_type>(trimmed_begin, trimmed_end, dayfirst);
+    result.millis    = ts.time_since_epoch().count();
+    result.parsed_ok = true;
+    return result;
+  }
+
+  // Non-numeric start — could be NA string, fall back
   return result;
 }
 
@@ -800,48 +813,45 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
       continue;
     }
 
-    // Check for timestamp or duration column eligible for fast field scan
-    bool const is_ts_or_dur_col =
+    // Check for timestamp column eligible for fused fast path
+    bool const is_ts_col =
       col_enabled && (col_type == cudf::type_id::TIMESTAMP_MILLISECONDS ||
                       col_type == cudf::type_id::TIMESTAMP_SECONDS ||
                       col_type == cudf::type_id::TIMESTAMP_MICROSECONDS ||
-                      col_type == cudf::type_id::TIMESTAMP_NANOSECONDS ||
-                      col_type == cudf::type_id::DURATION_MILLISECONDS ||
-                      col_type == cudf::type_id::DURATION_SECONDS ||
-                      col_type == cudf::type_id::DURATION_MICROSECONDS ||
-                      col_type == cudf::type_id::DURATION_NANOSECONDS);
+                      col_type == cudf::type_id::TIMESTAMP_NANOSECONDS);
 
-    if (is_ts_or_dur_col) {
-      // === FAST FIELD SCAN FOR TIMESTAMP/DURATION ===
-      // Skip seek_field_end overhead for non-quoted fields.
-      // For non-null numeric-looking fields, skip the NA trie check too.
-      auto const ff = fast_field_scan(field_start, row_end, options);
-      auto next_delimiter = ff.delimiter_pos;
+    if (is_ts_col) {
+      // === FUSED TIMESTAMP FAST PATH ===
+      // Find delimiter + parse timestamp, skipping NA trie for numeric-looking fields
+      auto const fused =
+        try_fused_timestamp_scan(field_start, row_end, options, options.dayfirst);
+      auto next_delimiter = fused.delimiter_pos;
 
-      if (!ff.is_null) {
-        // Check if content starts with a digit — if so, skip the NA trie
-        bool is_valid;
-        if (!ff.is_quoted && ff.trimmed_begin < ff.trimmed_end &&
-            *ff.trimmed_begin >= '0' && *ff.trimmed_begin <= '9') {
-          is_valid = true;  // Numeric-looking, skip trie
-        } else {
-          auto const field_len = static_cast<size_t>(next_delimiter - field_start);
-          is_valid = !serialized_trie_contains(options.trie_na, {field_start, field_len});
+      if (fused.parsed_ok) {
+        // Scale milliseconds to the target timestamp resolution
+        int64_t val = fused.millis;
+        switch (col_type) {
+          case cudf::type_id::TIMESTAMP_SECONDS: val /= 1000; break;
+          case cudf::type_id::TIMESTAMP_MILLISECONDS: break;  // already in ms
+          case cudf::type_id::TIMESTAMP_MICROSECONDS: val *= 1000; break;
+          case cudf::type_id::TIMESTAMP_NANOSECONDS: val *= 1000000; break;
+          default: break;
         }
+        static_cast<int64_t*>(columns[actual_col])[rec_id] = val;
+        set_bit(valids[actual_col], rec_id);
+        atomicAdd(&valid_counts[actual_col], 1);
+      } else if (!fused.is_null) {
+        // Fall back to general path with delimiter already found
+        auto const field_len = static_cast<size_t>(next_delimiter - field_start);
+        auto const is_valid =
+          !serialized_trie_contains(options.trie_na, {field_start, field_len});
         if (is_valid) {
-          auto f_begin = ff.trimmed_begin;
-          auto f_end   = ff.trimmed_end;
-          if (ff.is_quoted) {
-            // Quoted field — need full trim
-            auto const trimmed =
-              trim_whitespaces_quotes(field_start, next_delimiter, options.quotechar);
-            f_begin = trimmed.first;
-            f_end   = trimmed.second;
-          }
+          auto const trimmed_field =
+            trim_whitespaces_quotes(field_start, next_delimiter, options.quotechar);
           if (cudf::type_dispatcher(dtypes[actual_col],
                                     ConvertFunctor{},
-                                    f_begin,
-                                    f_end,
+                                    trimmed_field.first,
+                                    trimmed_field.second,
                                     columns[actual_col],
                                     rec_id,
                                     dtypes[actual_col],
@@ -860,7 +870,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
       continue;
     }
 
-    // === GENERAL PATH (STRING and other columns) ===
+    // === GENERAL PATH (non-integer, non-float, non-timestamp columns) ===
     auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
 
     if (col_enabled) {
