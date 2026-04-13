@@ -784,11 +784,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseManagedMemoryResource(JNIE
   JNI_CATCH(env, );
 }
 
-rmm::device_async_resource_ref get_pool_ref(void* pool)
-{
-  return rmm::device_async_resource_ref{*static_cast<rmm::mr::pool_memory_resource*>(pool)};
-}
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPoolMemoryResource(
   JNIEnv* env, jclass clazz, jlong child, jlong init, jlong max)
 {
@@ -797,14 +792,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPoolMemoryResource(
   {
     cudf::jni::auto_set_device(env);
     auto upstream = get_resource_ref(child);
-    auto* pool    = new rmm::mr::pool_memory_resource{
-      upstream, static_cast<std::size_t>(init), static_cast<std::size_t>(max)};
-    auto handle = reinterpret_cast<jlong>(pool);
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map()[handle] = cudf::jni::raw_resource_entry{pool, get_pool_ref};
-    }
-    return handle;
+    return make_jni_resource(rmm::mr::pool_memory_resource{
+      upstream, static_cast<std::size_t>(init), static_cast<std::size_t>(max)});
   }
   JNI_CATCH(env, 0);
 }
@@ -816,24 +805,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePoolMemoryResource(JNIEnv*
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    rmm::mr::pool_memory_resource* pool = nullptr;
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      auto& map = cudf::jni::get_raw_resource_map();
-      auto it   = map.find(ptr);
-      if (it != map.end()) {
-        pool = static_cast<rmm::mr::pool_memory_resource*>(it->second.resource);
-        map.erase(it);
-      }
-    }
-    delete pool;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
-}
-
-rmm::device_async_resource_ref get_arena_ref(void* arena)
-{
-  return rmm::device_async_resource_ref{*static_cast<rmm::mr::arena_memory_resource*>(arena)};
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newArenaMemoryResource(
@@ -844,15 +818,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newArenaMemoryResource(
   {
     cudf::jni::auto_set_device(env);
     auto upstream = get_resource_ref(child);
-    auto* arena   = new rmm::mr::arena_memory_resource{
-      upstream, static_cast<std::size_t>(init), static_cast<bool>(dump_on_oom)};
-    auto handle = reinterpret_cast<jlong>(arena);
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map()[handle] =
-        cudf::jni::raw_resource_entry{arena, get_arena_ref};
-    }
-    return handle;
+    return make_jni_resource(rmm::mr::arena_memory_resource{
+      upstream, static_cast<std::size_t>(init), static_cast<bool>(dump_on_oom)});
   }
   JNI_CATCH(env, 0);
 }
@@ -864,24 +831,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(JNIEnv
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    rmm::mr::arena_memory_resource* arena = nullptr;
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      auto& map = cudf::jni::get_raw_resource_map();
-      auto it   = map.find(ptr);
-      if (it != map.end()) {
-        arena = static_cast<rmm::mr::arena_memory_resource*>(it->second.resource);
-        map.erase(it);
-      }
-    }
-    delete arena;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
-}
-
-rmm::device_async_resource_ref get_cuda_async_ref(void* res)
-{
-  return rmm::device_async_resource_ref{*static_cast<rmm::mr::cuda_async_memory_resource*>(res)};
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(
@@ -895,14 +847,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(
       fabric ? std::optional{rmm::mr::cuda_async_memory_resource::allocation_handle_type::fabric}
              : std::nullopt;
 
-    auto* res = new rmm::mr::cuda_async_memory_resource{init, release, handle_type};
-    auto handle = reinterpret_cast<jlong>(res);
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map()[handle] =
-        cudf::jni::raw_resource_entry{res, get_cuda_async_ref};
-    }
-    return handle;
+    return make_jni_resource(rmm::mr::cuda_async_memory_resource{init, release, handle_type});
   }
   JNI_CATCH(env, 0);
 }
@@ -914,24 +859,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseCudaAsyncMemoryResource(JN
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    rmm::mr::cuda_async_memory_resource* res = nullptr;
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      auto& map = cudf::jni::get_raw_resource_map();
-      auto it   = map.find(ptr);
-      if (it != map.end()) {
-        res = static_cast<rmm::mr::cuda_async_memory_resource*>(it->second.resource);
-        map.erase(it);
-      }
-    }
-    delete res;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
-}
-
-rmm::device_async_resource_ref get_limiting_ref(void* res)
-{
-  return rmm::device_async_resource_ref{*static_cast<rmm::mr::limiting_resource_adaptor*>(res)};
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLimitingResourceAdaptor(
@@ -942,15 +872,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLimitingResourceAdaptor(
   {
     cudf::jni::auto_set_device(env);
     auto upstream = get_resource_ref(child);
-    auto* res     = new rmm::mr::limiting_resource_adaptor{
-      upstream, static_cast<std::size_t>(limit), static_cast<std::size_t>(align)};
-    auto handle = reinterpret_cast<jlong>(res);
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map()[handle] =
-        cudf::jni::raw_resource_entry{res, get_limiting_ref};
-    }
-    return handle;
+    return make_jni_resource(rmm::mr::limiting_resource_adaptor{
+      upstream, static_cast<std::size_t>(limit), static_cast<std::size_t>(align)});
   }
   JNI_CATCH(env, 0);
 }
@@ -962,24 +885,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLimitingResourceAdaptor(JN
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    rmm::mr::limiting_resource_adaptor* res = nullptr;
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      auto& map = cudf::jni::get_raw_resource_map();
-      auto it   = map.find(ptr);
-      if (it != map.end()) {
-        res = static_cast<rmm::mr::limiting_resource_adaptor*>(it->second.resource);
-        map.erase(it);
-      }
-    }
-    delete res;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
-}
-
-rmm::device_async_resource_ref get_logging_ref(void* res)
-{
-  return rmm::device_async_resource_ref{*static_cast<logging_resource_adaptor*>(res)};
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
@@ -990,33 +898,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
   {
     cudf::jni::auto_set_device(env);
     auto upstream = get_resource_ref(child);
-    logging_resource_adaptor* res = nullptr;
     switch (type) {
       case 1:  // File
       {
         cudf::jni::native_jstring path(env, jpath);
-        res = new logging_resource_adaptor{upstream, path.get(), static_cast<bool>(auto_flush)};
-        break;
+        return make_jni_resource(
+          logging_resource_adaptor{upstream, path.get(), static_cast<bool>(auto_flush)});
       }
       case 2:  // stdout
-      {
-        res = new logging_resource_adaptor{upstream, std::cout, static_cast<bool>(auto_flush)};
-        break;
-      }
+        return make_jni_resource(
+          logging_resource_adaptor{upstream, std::cout, static_cast<bool>(auto_flush)});
       case 3:  // stderr
-      {
-        res = new logging_resource_adaptor{upstream, std::cerr, static_cast<bool>(auto_flush)};
-        break;
-      }
+        return make_jni_resource(
+          logging_resource_adaptor{upstream, std::cerr, static_cast<bool>(auto_flush)});
       default: throw std::logic_error("unsupported logging location type");
     }
-    auto handle = reinterpret_cast<jlong>(res);
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map()[handle] =
-        cudf::jni::raw_resource_entry{res, get_logging_ref};
-    }
-    return handle;
   }
   JNI_CATCH(env, 0);
 }
@@ -1028,37 +924,15 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLoggingResourceAdaptor(JNI
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    logging_resource_adaptor* res = nullptr;
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      auto& map = cudf::jni::get_raw_resource_map();
-      auto it   = map.find(ptr);
-      if (it != map.end()) {
-        res = static_cast<logging_resource_adaptor*>(it->second.resource);
-        map.erase(it);
-      }
-    }
-    delete res;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
 
 // Map to store tracking adaptors for metrics access.
-// We use raw pointers here because tracking_resource_adaptor can't be wrapped in any_resource.
+// tracking_resource_adaptor is copyable (via shared_ptr to impl), so copies share state.
 std::mutex tracking_adaptor_map_mutex;
-std::unordered_map<jlong, tracking_resource_adaptor*> tracking_adaptor_map;
-
-// Callback function for getting resource ref from event handler memory resource
-rmm::device_async_resource_ref get_event_handler_ref(void* res)
-{
-  return rmm::device_async_resource_ref{*static_cast<java_event_handler_memory_resource*>(res)};
-}
-
-// Callback to get resource ref from tracking adaptor
-rmm::device_async_resource_ref get_tracking_ref(void* adaptor)
-{
-  return rmm::device_async_resource_ref{*static_cast<tracking_resource_adaptor*>(adaptor)};
-}
+std::unordered_map<jlong, tracking_resource_adaptor> tracking_adaptor_map;
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newTrackingResourceAdaptor(JNIEnv* env,
                                                                            jclass clazz,
@@ -1070,19 +944,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newTrackingResourceAdaptor(JNIEn
   {
     cudf::jni::auto_set_device(env);
     auto upstream = get_resource_ref(child);
-    auto* adaptor = new tracking_resource_adaptor(upstream, static_cast<std::size_t>(align));
-    // Use pointer as handle - don't wrap in any_resource (causes issues with shared_resource)
-    auto handle = reinterpret_cast<jlong>(adaptor);
-    // Register in raw_resource_map so get_resource_ref can find it
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map()[handle] =
-        cudf::jni::raw_resource_entry{adaptor, get_tracking_ref};
-    }
-    // Also store in local map for metrics access
+    auto adaptor  = tracking_resource_adaptor(upstream, static_cast<std::size_t>(align));
+    auto handle   = make_jni_resource(adaptor);
+    // Store a copy in map for metrics access (copies share impl via shared_ptr)
     {
       std::lock_guard<std::mutex> lock(tracking_adaptor_map_mutex);
-      tracking_adaptor_map[handle] = adaptor;
+      tracking_adaptor_map.emplace(handle, adaptor);
     }
     return handle;
   }
@@ -1096,28 +963,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseTrackingResourceAdaptor(JN
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    tracking_resource_adaptor* adaptor = nullptr;
-    // Remove from raw_resource_map
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map().erase(ptr);
-    }
-    // Remove from tracking map and get pointer to delete
     {
       std::lock_guard<std::mutex> lock(tracking_adaptor_map_mutex);
-      auto it = tracking_adaptor_map.find(ptr);
-      if (it != tracking_adaptor_map.end()) {
-        adaptor = it->second;
-        tracking_adaptor_map.erase(it);
-      }
+      tracking_adaptor_map.erase(ptr);
     }
-    delete adaptor;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
 
 // Helper to get tracking adaptor from the map
-inline tracking_resource_adaptor* get_tracking_adaptor(jlong handle)
+inline tracking_resource_adaptor& get_tracking_adaptor(jlong handle)
 {
   std::lock_guard<std::mutex> lock(tracking_adaptor_map_mutex);
   auto it = tracking_adaptor_map.find(handle);
@@ -1135,8 +991,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetTotalBytesAllocated(JNI
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* mr = get_tracking_adaptor(ptr);
-    return mr->get_total_allocated();
+    auto& mr = get_tracking_adaptor(ptr);
+    return mr.get_total_allocated();
   }
   JNI_CATCH(env, 0);
 }
@@ -1149,8 +1005,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetMaxTotalBytesAllocated(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* mr = get_tracking_adaptor(ptr);
-    return mr->get_max_total_allocated();
+    auto& mr = get_tracking_adaptor(ptr);
+    return mr.get_max_total_allocated();
   }
   JNI_CATCH(env, 0);
 }
@@ -1164,8 +1020,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_nativeResetScopedMaxTotalBytesAll
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* mr = get_tracking_adaptor(ptr);
-    mr->reset_scoped_max_total_allocated(init);
+    auto& mr = get_tracking_adaptor(ptr);
+    mr.reset_scoped_max_total_allocated(init);
   }
   JNI_CATCH(env, );
 }
@@ -1178,8 +1034,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetScopedMaxTotalBytesAllo
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto* mr = get_tracking_adaptor(ptr);
-    return mr->get_scoped_max_total_allocated();
+    auto& mr = get_tracking_adaptor(ptr);
+    return mr.get_scoped_max_total_allocated();
   }
   JNI_CATCH(env, 0);
 }
@@ -1199,16 +1055,9 @@ Java_ai_rapids_cudf_Rmm_newEventHandlerResourceAdaptor(JNIEnv* env,
   JNI_TRY
   {
     auto upstream = get_resource_ref(child);
-    auto t        = reinterpret_cast<tracking_resource_adaptor*>(tracker);
-    auto ret      = new java_event_handler_memory_resource(
-      env, handler_obj, jalloc_thresholds, jdealloc_thresholds, upstream, t, enable_debug);
-    auto handle = reinterpret_cast<jlong>(ret);
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map()[handle] =
-        cudf::jni::raw_resource_entry{ret, get_event_handler_ref};
-    }
-    return handle;
+    auto& t       = get_tracking_adaptor(tracker);
+    return make_jni_resource(java_event_handler_memory_resource(
+      env, handler_obj, jalloc_thresholds, jdealloc_thresholds, upstream, &t, enable_debug));
   }
   JNI_CATCH(env, 0);
 }
@@ -1219,14 +1068,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseEventHandlerResourceAdapto
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    // Remove from raw_resource_map
-    {
-      std::lock_guard<std::mutex> lock(cudf::jni::get_raw_resource_map_mutex());
-      cudf::jni::get_raw_resource_map().erase(ptr);
-    }
-    // Single unified type now handles both debug and non-debug modes
-    auto mr = reinterpret_cast<java_event_handler_memory_resource*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
