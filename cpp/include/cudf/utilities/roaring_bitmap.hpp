@@ -109,7 +109,7 @@ class roaring_bitmap {
   void materialize(rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
   /**
-   * @brief Get the type of the roaring bitmap
+   * @brief Returns the roaring bitmap type
    *
    * @return Roaring bitmap type
    */
