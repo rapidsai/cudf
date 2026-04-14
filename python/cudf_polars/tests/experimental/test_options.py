@@ -364,16 +364,6 @@ def test_hardware_binding_env_var_disabled(monkeypatch: pytest.MonkeyPatch) -> N
     assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
 
 
-def test_hardware_binding_env_var_gpu_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
-        HardwareBindingPolicy,
-    )
-
-    monkeypatch.setenv("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", '{"gpu_id": 3}')
-    result = StreamingOptions().to_frontend_options()
-    assert result["hardware_binding"] == HardwareBindingPolicy(gpu_id=3)
-
-
 def test_hardware_binding_cli_json() -> None:
     from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
         HardwareBindingPolicy,
@@ -381,11 +371,9 @@ def test_hardware_binding_cli_json() -> None:
 
     parser = argparse.ArgumentParser()
     StreamingOptions._add_cli_args(parser)
-    args = parser.parse_args(
-        ["--hardware-binding", '{"gpu_id": 2, "raise_on_fail": true}']
-    )
+    args = parser.parse_args(["--hardware-binding", '{"raise_on_fail": true}'])
     opts = StreamingOptions._from_argparse(args)
-    assert opts.hardware_binding == HardwareBindingPolicy(gpu_id=2, raise_on_fail=True)
+    assert opts.hardware_binding == HardwareBindingPolicy(raise_on_fail=True)
 
 
 def test_hardware_binding_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:

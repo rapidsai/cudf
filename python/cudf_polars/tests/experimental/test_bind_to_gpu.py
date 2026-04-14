@@ -223,25 +223,6 @@ def test_bind_enable_once_false() -> None:
     _run_in_subprocess(body)
 
 
-def test_bind_explicit_gpu_id() -> None:
-    """gpu_id is forwarded to bind() directly, no fallback."""
-
-    def body() -> None:
-        _reset_bind_state()
-        with patch(
-            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
-        ) as mock_bind:
-            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
-                HardwareBindingPolicy,
-                bind_to_gpu,
-            )
-
-            bind_to_gpu(HardwareBindingPolicy(gpu_id=3))
-            mock_bind.assert_called_once_with(gpu_id=3, verbose=False)
-
-    _run_in_subprocess(body)
-
-
 # ---------------------------------------------------------------------------
 # _rotate_devices / dask_setup (nanny preload)
 # ---------------------------------------------------------------------------

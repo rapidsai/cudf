@@ -20,10 +20,14 @@ class HardwareBindingPolicy:
     to pin the calling process to CPU cores, NUMA memory nodes,
     and network devices local to the worker's GPU.
 
+    The GPU to bind to is resolved from ``CUDA_VISIBLE_DEVICES``.
+    Each frontend is responsible for setting this variable per worker
+    (Dask via the nanny preload or ``SpecCluster``, Ray via
+    ``num_gpus=1`` scheduling, SPMD via ``rrun``). If
+    ``CUDA_VISIBLE_DEVICES`` is unset, binding falls back to GPU 0.
+
     The default instance (``HardwareBindingPolicy()``) enables
-    binding once per process, using ``CUDA_VISIBLE_DEVICES`` to
-    resolve the GPU, with soft failure handling. This matches the
-    behavior of a plain ``bind()`` call.
+    binding once per process with soft failure handling.
 
     Parameters
     ----------
@@ -38,11 +42,6 @@ class HardwareBindingPolicy:
         When ``True``, binding is performed at most once per process;
         subsequent calls to :func:`bind_to_gpu` are no-ops. When
         ``False``, binding is attempted on every call.
-    gpu_id
-        Physical GPU device index (as reported by ``nvidia-smi``) to bind
-        to. When ``None``, the first entry of ``CUDA_VISIBLE_DEVICES`` is
-        used; if that environment variable is also unset, falls back to
-        ``0``.
     raise_on_fail
         When ``True``, binding failures raise an exception. Currently
         ``rrun.bind()`` only prints warnings to stderr on per-subsystem
@@ -51,23 +50,22 @@ class HardwareBindingPolicy:
 
     Examples
     --------
-    Default (skip under rrun, bind once, auto GPU):
+    Default (skip under rrun, bind once):
 
     >>> HardwareBindingPolicy()  # doctest: +NORMALIZE_WHITESPACE
     HardwareBindingPolicy(skip_under_rrun=True, enabled=True,
-                          enable_once=True, gpu_id=None, raise_on_fail=False)
+                          enable_once=True, raise_on_fail=False)
 
     Disabled:
 
     >>> HardwareBindingPolicy(enabled=False)  # doctest: +NORMALIZE_WHITESPACE
     HardwareBindingPolicy(skip_under_rrun=True, enabled=False,
-                          enable_once=True, gpu_id=None, raise_on_fail=False)
+                          enable_once=True, raise_on_fail=False)
     """
 
     skip_under_rrun: bool = True
     enabled: bool = True
     enable_once: bool = True
-    gpu_id: int | None = None
     raise_on_fail: bool = False
 
 
@@ -117,11 +115,8 @@ def _do_bind(policy: HardwareBindingPolicy) -> None:
     # verbose=True. When a return value or exception is available, check it
     # here and raise if policy.raise_on_fail is True.
     # See: https://github.com/rapidsai/rapidsmpf/issues/963
-    if policy.gpu_id is not None:
-        bind(gpu_id=policy.gpu_id, verbose=verbose)
-    else:
-        try:
-            bind(verbose=verbose)
-        except RuntimeError:
-            # CUDA_VISIBLE_DEVICES is unset; fall back to GPU 0.
-            bind(gpu_id=0, verbose=verbose)
+    try:
+        bind(verbose=verbose)
+    except RuntimeError:
+        # CUDA_VISIBLE_DEVICES is unset; fall back to GPU 0.
+        bind(gpu_id=0, verbose=verbose)

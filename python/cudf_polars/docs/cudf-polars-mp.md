@@ -156,13 +156,17 @@ The default policy (`HardwareBindingPolicy()`) skips binding under `rrun`
 (which already binds at launch), and otherwise binds once per process using
 `CUDA_VISIBLE_DEVICES` to resolve the GPU.
 
-| Field             | Default | Description                                                                                                         |
-| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
-| `skip_under_rrun` | `True`  | Skip binding when launched via `rrun` (which already performs binding). If skipped, all other options are ignored.  |
-| `enabled`         | `True`  | Enable or disable hardware binding.                                                                                 |
-| `enable_once`     | `True`  | Perform binding at most once per process. Subsequent calls are no-ops.                                              |
-| `gpu_id`          | `None`  | Physical GPU index. If `None`, read from `CUDA_VISIBLE_DEVICES`, falling back to `0`.                               |
-| `raise_on_fail`   | `False` | Surface binding failures by enabling `verbose=True` in `rrun.bind()`.                                               |
+The GPU to bind to is resolved from `CUDA_VISIBLE_DEVICES`. Each frontend
+sets this per worker (Dask via the nanny preload or `SpecCluster`, Ray via
+`num_gpus=1` scheduling, SPMD via `rrun`). If `CUDA_VISIBLE_DEVICES` is
+unset, binding falls back to GPU 0.
+
+| Field             | Default | Description                                                                                                        |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `skip_under_rrun` | `True`  | Skip binding when launched via `rrun` (which already performs binding). If skipped, all other options are ignored. |
+| `enabled`         | `True`  | Enable or disable hardware binding.                                                                                |
+| `enable_once`     | `True`  | Perform binding at most once per process. Subsequent calls are no-ops.                                             |
+| `raise_on_fail`   | `False` | Surface binding failures by enabling `verbose=True` in `rrun.bind()`.                                              |
 
 
 Examples:
@@ -171,9 +175,9 @@ Examples:
 # Disable binding entirely:
 opts = StreamingOptions(hardware_binding=HardwareBindingPolicy(enabled=False))
 
-# Bind to a specific GPU with failure reporting:
+# Enable failure reporting:
 opts = StreamingOptions(
-    hardware_binding=HardwareBindingPolicy(gpu_id=2, raise_on_fail=True),
+    hardware_binding=HardwareBindingPolicy(raise_on_fail=True),
 )
 ```
 
@@ -182,15 +186,12 @@ Via the environment variable (JSON):
 ```bash
 # Disable binding:
 export CUDF_POLARS__FRONTEND__HARDWARE_BINDING='{"enabled": false}'
-
-# Bind to GPU 2:
-export CUDF_POLARS__FRONTEND__HARDWARE_BINDING='{"gpu_id": 2}'
 ```
 
 Via the CLI:
 
 ```bash
-python my_script.py --hardware-binding '{"gpu_id": 2, "raise_on_fail": true}'
+python my_script.py --hardware-binding '{"raise_on_fail": true}'
 ```
 
 ---

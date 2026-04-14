@@ -209,7 +209,7 @@ class StreamingOptions:
         :class:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.HardwareBindingPolicy`
         instance for fine-grained control.
         Env: ``CUDF_POLARS__FRONTEND__HARDWARE_BINDING`` (JSON object,
-        e.g. ``'{"enabled": false}'`` or ``'{"gpu_id": 2}'``).
+        e.g. ``'{"enabled": false}'``).
         Default: ``HardwareBindingPolicy()``.
         Category: frontend.
     num_py_executors
