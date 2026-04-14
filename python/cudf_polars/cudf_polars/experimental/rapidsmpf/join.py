@@ -737,6 +737,7 @@ async def _shuffle_join(
     )
     await send_metadata(ch_out, context, metadata_out)
     left_rows, right_rows = row_counts
+    bloom_tag = collective_ids.pop(0)
     if use_bloom_filter(ir.options[0], left_rows, right_rows, bloom_threshold):
         ch_left, ch_right, filter_tasks, chs_to_shutdown = make_filter_tasks(
             context,
@@ -746,15 +747,11 @@ async def _shuffle_join(
             strategy=strategy,
             left_rows=left_rows,
             right_rows=right_rows,
-            tag=collective_ids.pop(),
+            tag=bloom_tag,
         )
     else:
-        collective_ids.pop()
         filter_tasks = []
         chs_to_shutdown = []
-    if len(collective_ids) == 3:
-        # Chunkwise path skips _aggregate_estimates; drop the reserved allgather id.
-        collective_ids.pop(0)
     # Construct a shuffle-shuffle-join pipeline.
     # The shuffle operations will pass chunks through unchanged
     # if the data is already partitioned correctly.
