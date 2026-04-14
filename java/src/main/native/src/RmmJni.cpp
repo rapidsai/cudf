@@ -507,7 +507,8 @@ static_assert(
 
 inline auto& prior_cudf_pinned_mr()
 {
-  static rmm::host_device_async_resource_ref _prior_cudf_pinned_mr =
+  static cuda::mr::resource_ref<cuda::mr::host_accessible, cuda::mr::device_accessible>
+    _prior_cudf_pinned_mr =
     cudf::get_pinned_memory_resource();
   return _prior_cudf_pinned_mr;
 }
