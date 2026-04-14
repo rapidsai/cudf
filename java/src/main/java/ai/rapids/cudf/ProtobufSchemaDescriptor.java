@@ -171,43 +171,59 @@ public final class ProtobufSchemaDescriptor implements java.io.Serializable {
 
     Set<Long> seenFieldNumbers = new HashSet<>();
     for (int i = 0; i < n; i++) {
-      if (fieldNumbers[i] <= 0 || fieldNumbers[i] > MAX_FIELD_NUMBER) {
+      validateFieldRange(i, fieldNumbers[i], depthLevels[i]);
+      validateParentChild(i, parentIndices[i], depthLevels, outputTypeIds);
+      validateUniqueFieldKey(i, parentIndices[i], fieldNumbers[i], seenFieldNumbers);
+      validateWireTypeAndEncoding(i, wireTypes[i], encodings[i]);
+    }
+  }
+
+  private static void validateFieldRange(int index, int fieldNumber, int depth) {
+    if (fieldNumber <= 0 || fieldNumber > MAX_FIELD_NUMBER) {
+      throw new IllegalArgumentException(
+          "Invalid field number at index " + index + ": " + fieldNumber);
+    }
+    if (depth < 0 || depth >= MAX_NESTING_DEPTH) {
+      throw new IllegalArgumentException(
+          "Invalid depth at index " + index + ": " + depth);
+    }
+  }
+
+  private static void validateParentChild(int index, int parentIndex,
+                                           int[] depthLevels, int[] outputTypeIds) {
+    if (parentIndex < -1 || parentIndex >= index) {
+      throw new IllegalArgumentException(
+          "Invalid parent index at index " + index + ": " + parentIndex);
+    }
+    if (parentIndex == -1) {
+      if (depthLevels[index] != 0) {
         throw new IllegalArgumentException(
-            "Invalid field number at index " + i + ": " + fieldNumbers[i]);
+            "Top-level field at index " + index + " must have depth 0");
       }
-      if (depthLevels[i] < 0 || depthLevels[i] >= MAX_NESTING_DEPTH) {
+    } else {
+      if (outputTypeIds[parentIndex] != STRUCT_TYPE_ID) {
         throw new IllegalArgumentException(
-            "Invalid depth at index " + i + ": " + depthLevels[i]);
+            "Parent at index " + parentIndex + " for field " + index + " must be STRUCT");
       }
-      int pi = parentIndices[i];
-      if (pi < -1 || pi >= i) {
-        throw new IllegalArgumentException(
-            "Invalid parent index at index " + i + ": " + pi);
-      }
-      if (pi == -1) {
-        if (depthLevels[i] != 0) {
-          throw new IllegalArgumentException(
-              "Top-level field at index " + i + " must have depth 0");
-        }
-      } else {
-        if (outputTypeIds[pi] != STRUCT_TYPE_ID) {
-          throw new IllegalArgumentException(
-              "Parent at index " + pi + " for field " + i + " must be STRUCT");
-        }
-      }
-      long fieldKey = (((long) pi) << 32) | (fieldNumbers[i] & 0xFFFFFFFFL);
-      if (!seenFieldNumbers.add(fieldKey)) {
-        throw new IllegalArgumentException(
-            "Duplicate field number " + fieldNumbers[i] + " under parent " + pi);
-      }
-      int wt = wireTypes[i];
-      if (wt != WT_VARINT && wt != WT_64BIT && wt != WT_LEN && wt != WT_32BIT) {
-        throw new IllegalArgumentException("Invalid wire type at index " + i + ": " + wt);
-      }
-      int enc = encodings[i];
-      if (enc < ENC_DEFAULT || enc > ENC_ENUM_STRING) {
-        throw new IllegalArgumentException("Invalid encoding at index " + i + ": " + enc);
-      }
+    }
+  }
+
+  private static void validateUniqueFieldKey(int index, int parentIndex,
+                                              int fieldNumber, Set<Long> seen) {
+    long fieldKey = (((long) parentIndex) << 32) | (fieldNumber & 0xFFFFFFFFL);
+    if (!seen.add(fieldKey)) {
+      throw new IllegalArgumentException(
+          "Duplicate field number " + fieldNumber + " under parent " + parentIndex);
+    }
+  }
+
+  private static void validateWireTypeAndEncoding(int index, int wireType, int encoding) {
+    if (wireType != WT_VARINT && wireType != WT_64BIT &&
+        wireType != WT_LEN && wireType != WT_32BIT) {
+      throw new IllegalArgumentException("Invalid wire type at index " + index + ": " + wireType);
+    }
+    if (encoding < ENC_DEFAULT || encoding > ENC_ENUM_STRING) {
+      throw new IllegalArgumentException("Invalid encoding at index " + index + ": " + encoding);
     }
   }
 }
