@@ -67,7 +67,7 @@ std::unique_ptr<table> unique(table_view const& input,
       auto d_results = rmm::device_uvector<bool>(num_rows, stream);
       auto itr       = cuda::counting_iterator<size_type>{0};
       thrust::transform(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         itr,
         itr + num_rows,
         d_results.begin(),

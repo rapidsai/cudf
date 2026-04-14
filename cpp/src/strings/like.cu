@@ -323,7 +323,7 @@ std::unique_ptr<column> like(strings_column_view const& input,
   if ((input.size() == input.null_count()) ||
       ((last_offset - first_offset) / (input.size() - input.null_count())) <
         AVG_CHAR_BYTES_THRESHOLD) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{input.size()},
                       results->mutable_view().data<bool>(),
