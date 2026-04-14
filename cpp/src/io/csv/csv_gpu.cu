@@ -341,6 +341,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
       bool* const is_quoted_output =
         is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
       if (is_valid) {
+        // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           auto end        = next_delimiter;
           bool was_quoted = false;
@@ -352,6 +353,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                 was_quoted = true;
               }
             } else {
+              // If the string is quoted, whitespace around the quotes get removed as well
               auto const trimmed_field = trim_whitespaces(field_start, end);
               if ((*trimmed_field.first == options.quotechar) &&
                   (*(trimmed_field.second - 1) == options.quotechar)) {
@@ -361,21 +363,22 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
               }
             }
           }
+          // Track whether this field was quoted (for doublequote unescaping)
           if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
           str_list[rec_id].first  = field_start;
           str_list[rec_id].second = end - field_start;
         } else {
-          if (!cudf::type_dispatcher(dtypes[actual_col],
-                                     ConvertFunctor{},
-                                     field_start,
-                                     field_end,
-                                     columns[actual_col],
-                                     rec_id,
-                                     dtypes[actual_col],
-                                     options,
-                                     column_flags[col] & column_parse::as_hexadecimal)) {
-            clear_bit(valids[actual_col], rec_id);
+          if (cudf::type_dispatcher(dtypes[actual_col],
+                                    ConvertFunctor{},
+                                    field_start,
+                                    field_end,
+                                    columns[actual_col],
+                                    rec_id,
+                                    dtypes[actual_col],
+                                    options,
+                                    column_flags[col] & column_parse::as_hexadecimal)) {
+            set_bit(valids[actual_col], rec_id);
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
@@ -383,8 +386,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
         if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
-      } else {
-        clear_bit(valids[actual_col], rec_id);
       }
       ++actual_col;
     }
