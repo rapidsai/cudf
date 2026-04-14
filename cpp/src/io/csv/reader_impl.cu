@@ -661,7 +661,12 @@ decode_result decode_data(parse_options const& parse_opts,
 
   for (int col = 0, active_col = 0; col < num_actual_columns; ++col) {
     if (column_flags[col] & column_parse::enabled) {
-      auto out_buffer = column_buffer(column_types[active_col], num_records, true, stream, mr);
+      auto out_buffer = column_buffer(column_types[active_col], true);
+      if (column_types[active_col].id() == type_id::STRING) {
+        out_buffer.create_with_mask(num_records, mask_state::ALL_NULL, true, stream, mr);
+      } else {
+        out_buffer.create_with_mask(num_records, mask_state::ALL_VALID, true, stream, mr);
+      }
 
       out_buffer.name = column_names[col];
       out_buffers.emplace_back(std::move(out_buffer));
