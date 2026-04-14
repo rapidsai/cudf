@@ -28,7 +28,6 @@
 #include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
-
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/distance.h>
