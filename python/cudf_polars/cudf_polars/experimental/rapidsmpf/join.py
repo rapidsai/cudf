@@ -1104,7 +1104,7 @@ async def _bloom_shuffle_join(
                 run_actor_network,
                 actors=[
                     push_to_channel(context, ch_build_in, small_key_msgs),
-                    bloom.build(ch_build_in, ch_filter, tag=bloom_tag),
+                    bloom.build(context, ch_build_in, ch_filter, bloom_tag),
                     pull_filter_actor,
                 ],
             )
@@ -1151,10 +1151,11 @@ async def _bloom_shuffle_join(
                     actors=[
                         push_to_channel(context, ch_filter_for_apply, [filter_message]),
                         bloom.apply(
+                            context,
                             ch_filter_for_apply,
                             ch_large_raw,
                             ch_large_filtered,
-                            keys=large_key_indices,
+                            large_key_indices,
                         ),
                     ],
                 ),
