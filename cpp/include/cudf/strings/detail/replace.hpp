@@ -27,17 +27,6 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
- * strings_column_view const&, int32_t, rmm::cuda_stream_view, rmm::device_async_resource_ref)
- */
-std::unique_ptr<column> replace(strings_column_view const& strings,
-                                strings_column_view const& targets,
-                                strings_column_view const& repls,
-                                cudf::size_type maxrepl,
-                                rmm::cuda_stream_view stream,
-                                rmm::device_async_resource_ref mr);
-
-/**
  * @copydoc cudf::strings::replace_multiple(strings_column_view const&, strings_column_view const&,
  * strings_column_view const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
  */

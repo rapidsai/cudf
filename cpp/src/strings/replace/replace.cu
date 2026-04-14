@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "rmm/device_buffer.hpp"
 #include "strings/positions.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -507,21 +508,25 @@ std::unique_ptr<column> replace(strings_column_view const& input,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(targets.size() == input.size(),
-               "targets column must have the same number of rows as input");
+               "targets column must have the same number of rows as input",
+               std::invalid_argument);
   CUDF_EXPECTS(repls.size() == input.size(),
-               "repls column must have the same number of rows as input");
+               "repls column must have the same number of rows as input",
+               std::invalid_argument);
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   // Compute the combined null mask up-front so the kernel produces zero-size
   // output for null rows, preventing non-empty nulls in the result.
   bool const has_any_nulls =
     input.null_count() > 0 || targets.null_count() > 0 || repls.null_count() > 0;
-  rmm::device_buffer null_mask;
-  size_type null_count = 0;
-  if (has_any_nulls) {
-    auto const views = std::vector<column_view>{input.parent(), targets.parent(), repls.parent()};
-    std::tie(null_mask, null_count) = cudf::detail::bitmask_and(table_view{views}, stream, mr);
-  }
+  auto [null_mask, null_count] = [&] {
+    if (has_any_nulls) {
+      auto const views = std::vector<column_view>{input.parent(), targets.parent(), repls.parent()};
+      return cudf::detail::bitmask_and(table_view{views}, stream, mr);
+    } else {
+      return std::pair{rmm::device_buffer{}, 0};
+    }
+  }();
   auto const d_valid_mask =
     has_any_nulls ? static_cast<bitmask_type const*>(null_mask.data()) : nullptr;
 

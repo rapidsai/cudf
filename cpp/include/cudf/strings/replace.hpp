@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -121,8 +121,8 @@ std::unique_ptr<column> replace_slice(
  * result is now ["hell0 w0rld", "foo BAR", "XXX"]
  * @endcode
  *
- * @throw cudf::logic_error if `targets.size() != input.size()`
- * @throw cudf::logic_error if `repls.size() != input.size()`
+ * @throw std::invalid_argument if `targets.size() != input.size()`
+ * @throw std::invalid_argument if `repls.size() != input.size()`
  *
  * @param input Strings column for this operation
  * @param targets Per-row strings to search for within each input string
