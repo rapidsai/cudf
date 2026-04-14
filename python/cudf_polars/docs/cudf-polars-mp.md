@@ -46,7 +46,7 @@ categories:
 | Category    | Controls                                                              |
 | ----------- | --------------------------------------------------------------------- |
 | `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level             |
-| `frontend`  | Hardware binding, thread-pool sizing (consumed by Dask/Ray/SPMD)      |
+| `frontend`  | Engine initialization (hardware binding, thread-pool sizing)          |
 | `executor`  | Partitioning, fallback behavior, dynamic planning                     |
 | `engine`    | Polars integration, IO options, RMM memory resource                   |
 
@@ -156,7 +156,7 @@ The default policy (`HardwareBindingPolicy()`) skips binding under `rrun`
 (which already binds at launch), and otherwise binds once per process using
 `CUDA_VISIBLE_DEVICES` to resolve the GPU.
 
-The GPU to bind to is resolved from `CUDA_VISIBLE_DEVICES`. Each frontend
+The GPU to bind to is resolved from `CUDA_VISIBLE_DEVICES`. Each engine
 sets this per worker (Dask via the nanny preload or `SpecCluster`, Ray via
 `num_gpus=1` scheduling, SPMD via `rrun`). If `CUDA_VISIBLE_DEVICES` is
 unset, binding falls back to GPU 0.
