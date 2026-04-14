@@ -580,12 +580,12 @@ void perform_checks(udf_source_type source_type,
                "for each non-string column)",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::none_of(cuda::counting_iterator(size_t{0}),
-                            cuda::counting_iterator(string_offsets.size()),
-                            [&](auto i) {
-                              if (outputs[i].type.id() == type_id::STRING) { return false; }
-                              return !string_offsets.empty() && string_offsets[i] == nullptr;
-                            }),
+  CUDF_EXPECTS(std::all_of(cuda::counting_iterator(size_t{0}),
+                           cuda::counting_iterator(string_offsets.size()),
+                           [&](auto i) {
+                             if (outputs[i].type.id() == type_id::STRING) { return true; }
+                             return string_offsets.empty() || string_offsets[i] == nullptr;
+                           }),
                "String offsets must only be provided for string outputs",
                std::invalid_argument);
 }
