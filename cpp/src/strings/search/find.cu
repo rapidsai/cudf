@@ -28,14 +28,16 @@
 #include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
+
 #include <thrust/binary_search.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/distance.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/transform.h>
-#include <thrust/sequence.h>
-#include <thrust/partition.h>
 #include <thrust/iterator/permutation_iterator.h>
-#include <thrust/distance.h>
+#include <thrust/partition.h>
+#include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -408,7 +410,6 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
 }
 */
 
-
 /**
  * @brief Check if `d_target` appears in a row in `d_strings`.
  *
@@ -420,12 +421,11 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
  * @param d_results Indicates which rows contain `d_target`
  */
 
-
-CUDF_KERNEL void contains_warp_parallel_fn_het2(column_device_view const d_strings,
-                                                 string_view const d_target,
-                                                 bool* d_results,
-                                                 size_type const* d_long_indices,
-                                                 size_type const long_count)
+CUDF_KERNEL void contains_warp_parallel_fn_heterogeneous(column_device_view const d_strings,
+                                                         string_view const d_target,
+                                                         bool* d_results,
+                                                         size_type const* d_long_indices,
+                                                         size_type const long_count)
 {
   auto const idx = cudf::detail::grid_1d::global_thread_id();
 
@@ -445,12 +445,6 @@ CUDF_KERNEL void contains_warp_parallel_fn_het2(column_device_view const d_strin
 
   auto const d_str = d_strings.element<string_view>(real_str_idx);
 
-  constexpr size_type length_threshold = 64;
-  if (d_str.size_bytes() <= length_threshold) {
-    if (lane_idx == 0) { d_results[real_str_idx] = false; }
-    return;
-  }
-
   auto constexpr bytes_per_warp = 4;
   auto found                    = false;
   for (auto i = lane_idx * bytes_per_warp;
@@ -468,120 +462,92 @@ CUDF_KERNEL void contains_warp_parallel_fn_het2(column_device_view const d_strin
   if (lane_idx == 0) { d_results[real_str_idx] = result; }
 }
 
-std::unique_ptr<column> contains_heterogeneous(
-    strings_column_view const& input,
-    string_scalar const& target,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref mr) {
-    
-    auto strings_count = input.size();
-    if (strings_count == 0) return make_empty_column(type_id::BOOL8);
-    
-    CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
-    
-    auto d_target = string_view(target.data(), target.size());
-    
-    // create output column
-    auto results = make_numeric_column(data_type{type_id::BOOL8},
-                                       strings_count,
-                                       cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                                       input.null_count(),
-                                       stream,
-                                       mr);
-    auto results_view = results->mutable_view();
-    auto d_results = results_view.data<bool>();
-    
-    // Handle empty target
-    if (d_target.empty()) {
-        thrust::fill(rmm::exec_policy_nosync(stream), 
-          results_view.begin<bool>(), 
-          results_view.end<bool>(), 
-          true);
-        results->set_null_count(input.null_count());
-        return results;
-    }
-    
-    auto strings_column = column_device_view::create(input.parent(), stream);
-auto d_strings = *strings_column;
+std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
+                                               string_scalar const& target,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::device_async_resource_ref mr)
+{
+  auto strings_count = input.size();
+  if (strings_count == 0) return make_empty_column(type_id::BOOL8);
 
-// partition indices based on string length threshold (64 bytes)
-constexpr size_type length_threshold = 64;
-cudaEvent_t start, stop;
-cudaEventCreate(&start);
-cudaEventCreate(&stop);
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
 
-cudaEventRecord(start);
+  auto d_target = string_view(target.data(), target.size());
 
-rmm::device_uvector<size_type> indices(strings_count, stream);
-thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end(), 0);
+  // create output column
+  auto results      = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings_count,
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+  auto results_view = results->mutable_view();
+  auto d_results    = results_view.data<bool>();
 
-auto partition_point = thrust::partition(
-    rmm::exec_policy(stream),
-    indices.begin(),
-    indices.end(),
-    [d_strings, length_threshold] __device__(size_type idx) {
-        return !d_strings.is_null(idx) && 
-               d_strings.element<string_view>(idx).size_bytes() <= length_threshold;
-    });
-
-auto short_count = thrust::distance(indices.begin(), partition_point);
-auto long_count = thrust::distance(partition_point, indices.end());
-
-cudaEventRecord(stop);
-cudaEventSynchronize(stop);
-float milliseconds = 0;
-cudaEventElapsedTime(&milliseconds, start, stop);
-//printf("Partition time: %f ms\n", milliseconds);
-
-// thread per kernel
-cudaEventRecord(start);
-if (short_count > 0) {
-  auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
-      if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { 
-        return true; 
-      }
-    }
-    return false;
-  };
-  
-    thrust::transform(
-      rmm::exec_policy(stream),
-      indices.begin(),
-      partition_point,
-      thrust::make_permutation_iterator(d_results, indices.begin()),
-      [d_strings, pfn, d_target] __device__(size_type idx) {
-        return !d_strings.is_null(idx) &&
-          bool{pfn(d_strings.element<string_view>(idx), d_target)};
-      });
+  // Handle empty target
+  if (d_target.empty()) {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
+    results->set_null_count(input.null_count());
+    return results;
   }
-  cudaEventRecord(stop);
-  cudaEventSynchronize(stop);
-  milliseconds = 0;
-  cudaEventElapsedTime(&milliseconds, start, stop);
-  //printf("Thread execution time: %f ms\n", milliseconds);
 
+  auto strings_column = column_device_view::create(input.parent(), stream);
+  auto d_strings      = *strings_column;
+
+  // Partition indices based on string length threshold (64 bytes)
+  constexpr size_type length_threshold = 64;
+  rmm::device_uvector<size_type> indices(strings_count, stream);
+  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end(), 0);
+
+  auto partition_point =
+    thrust::partition(rmm::exec_policy(stream),
+                      indices.begin(),
+                      indices.end(),
+                      [d_strings, length_threshold] __device__(size_type idx) {
+                        return !d_strings.is_null(idx) &&
+                               d_strings.element<string_view>(idx).size_bytes() <= length_threshold;
+                      });
+
+  auto short_count = thrust::distance(indices.begin(), partition_point);
+  auto long_count  = thrust::distance(partition_point, indices.end());
+
+  // Thread-per-string execution
   cudaEventRecord(start);
-  // warp per kernel
+  if (short_count > 0) {
+    auto pfn = [] __device__(string_view d_string, string_view d_target) {
+      for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
+        if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
+      }
+      return false;
+    };
+
+    thrust::transform(rmm::exec_policy(stream),
+                      indices.begin(),
+                      partition_point,
+                      thrust::make_permutation_iterator(d_results, indices.begin()),
+                      [d_strings, pfn, d_target] __device__(size_type idx) {
+                        return !d_strings.is_null(idx) &&
+                               bool{pfn(d_strings.element<string_view>(idx), d_target)};
+                      });
+  }
+
+  // Warp-per-string execution
   if (long_count > 0) {
     constexpr int block_size = 256;
-    int64_t long_count_warps = static_cast<int64_t>(long_count) * 
-                                static_cast<int64_t>(cudf::detail::warp_size);
+    int64_t long_count_warps =
+      static_cast<int64_t>(long_count) * static_cast<int64_t>(cudf::detail::warp_size);
     cudf::detail::grid_1d grid{long_count_warps, block_size};
     auto d_long_indices = indices.data() + short_count;
-    contains_warp_parallel_fn_het2<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-        d_strings, d_target, d_results, d_long_indices, long_count);
+    contains_warp_parallel_fn_heterogeneous<<<grid.num_blocks,
+                                              grid.num_threads_per_block,
+                                              0,
+                                              stream.value()>>>(
+      d_strings, d_target, d_results, d_long_indices, long_count);
   }
-    
-    results->set_null_count(input.null_count());
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    //printf("Warp execution time: %f ms\n", milliseconds);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    return results;
+
+  results->set_null_count(input.null_count());
+  return results;
 }
 
 /**
@@ -712,21 +678,6 @@ std::unique_ptr<column> contains(strings_column_view const& input,
                                  rmm::device_async_resource_ref mr)
 {
   return contains_heterogeneous(input, target, stream, mr);
-
-  // use warp parallel when the average string width is greater than the threshold
-  //if ((input.null_count() < input.size()) &&
-  //    ((input.chars_size(stream) / (input.size() - input.null_count())) >
-  //     AVG_CHAR_BYTES_THRESHOLD)) {
-  //  return contains_warp_parallel(input, target, stream, mr);
-  //}
-  //// benchmark measurements showed this to be faster for smaller strings
-  //auto pfn = [] __device__(string_view d_string, string_view d_target) {
-  //  for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
-  //    if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
-  //  }
-  //  return false;
-  //};
-  //return contains_fn(input, target, pfn, stream, mr);
 }
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
