@@ -115,7 +115,9 @@ void roaring_bitmap::contains_async(cudf::column_view const& keys,
                                     cudf::mutable_column_view const& output,
                                     rmm::cuda_stream_view stream) const
 {
-  CUDF_EXPECTS(output.type().id() == cudf::type_id::BOOL8, "Output column must be BOOL8");
+  CUDF_EXPECTS(output.type().id() == cudf::type_id::BOOL8,
+               "Output column must be BOOL8",
+               std::invalid_argument);
   CUDF_EXPECTS(output.size() >= keys.size(), "Output column size must be >= keys column size");
 
   if (_type == roaring_bitmap_type::BITS_32) {
@@ -152,7 +154,9 @@ void roaring_bitmap::not_contains_async(cudf::column_view const& keys,
                                         cudf::mutable_column_view const& output,
                                         rmm::cuda_stream_view stream) const
 {
-  CUDF_EXPECTS(output.type().id() == cudf::type_id::BOOL8, "Output column must be BOOL8");
+  CUDF_EXPECTS(output.type().id() == cudf::type_id::BOOL8,
+               "Output column must be BOOL8",
+               std::invalid_argument);
   CUDF_EXPECTS(output.size() >= keys.size(), "Output column size must be >= keys column size");
 
   auto output_iter =

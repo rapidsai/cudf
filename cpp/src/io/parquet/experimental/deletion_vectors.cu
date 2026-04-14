@@ -232,8 +232,6 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
 /**
  * @brief Computes a BOOL8 row mask column from the specified row index column and deletion vectors
  *
- * @note This function synchronizes the stream before returning the row mask column
- *
  * @param row_index_column View of the row index column
  * @param deletion_vector_refs Host span of cudf::roaring_bitmap references
  * @param rows_per_deletion_vector Host span of number of rows per deletion vector
