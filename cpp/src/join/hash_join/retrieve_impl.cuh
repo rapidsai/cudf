@@ -8,6 +8,7 @@
 #include "dispatch.cuh"
 #include "join/join_common_utils.cuh"
 #include "join/join_common_utils.hpp"
+#include "retrieve_kernels.hpp"
 #include "size_impl.cuh"
 
 #include <cudf/copying.hpp>
@@ -17,6 +18,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/prefetch.hpp>
 
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
@@ -260,6 +262,9 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(output_size, stream, mr);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(output_size, stream, mr);
+
   // Slice the probe table to the partition range
   auto const probe_partition_view =
     cudf::slice(match_ctx._left_table, {left_start_idx, left_end_idx})[0];
@@ -270,30 +275,53 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
     cudf::detail::row::equality::preprocessed_table::create(probe_partition_view, stream);
 
   // For FULL_JOIN, probe with LEFT_JOIN semantics (no complement here)
-  constexpr auto probe_join = Join == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : Join;
+  constexpr bool is_outer = (Join != join_kind::INNER_JOIN);
 
-  auto join_indices = cudf::detail::probe_join_hash_table<probe_join>(_build,
-                                                                      probe_partition_view,
-                                                                      _preprocessed_build,
-                                                                      preprocessed_probe,
-                                                                      _impl->_hash_table,
-                                                                      _has_nulls,
-                                                                      _nulls_equal,
-                                                                      output_size,
-                                                                      stream,
-                                                                      mr);
+  auto retrieve_partition = [&](auto equality, auto d_hasher) {
+    // Precompute probe keys for this partition slice.
+    auto const n = static_cast<cuda::std::int64_t>(partition_size);
+    rmm::device_uvector<probe_key_type> probe_keys(n, stream);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(partition_size),
+                      probe_keys.begin(),
+                      pair_fn{d_hasher});
+
+    auto const ref = _impl->_hash_table.ref(cuco::op::count)
+                       .rebind_key_eq(equality)
+                       .rebind_hash_function(_impl->_hash_table.hash_function());
+
+    // Pass the partition's slice of pre-computed match counts.
+    auto const* partition_counts = match_ctx._match_counts->data() + left_start_idx;
+
+    launch_retrieve<is_outer>(probe_keys.data(),
+                              n,
+                              left_indices->data(),
+                              right_indices->data(),
+                              partition_counts,
+                              ref,
+                              stream);
+  };
+
+  dispatch_join_comparator(_build,
+                           probe_partition_view,
+                           _preprocessed_build,
+                           preprocessed_probe,
+                           _has_nulls,
+                           _nulls_equal,
+                           retrieve_partition);
 
   // Offset left indices to be relative to the original complete probe table
-  if (left_start_idx > 0 && join_indices.first->size() > 0) {
+  if (left_start_idx > 0 && left_indices->size() > 0) {
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                      join_indices.first->begin(),
-                      join_indices.first->end(),
+                      left_indices->begin(),
+                      left_indices->end(),
                       cuda::make_constant_iterator(left_start_idx),
-                      join_indices.first->begin(),
+                      left_indices->begin(),
                       cuda::std::plus<size_type>{});
   }
 
-  return join_indices;
+  return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
 }  // namespace cudf::detail

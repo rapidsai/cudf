@@ -600,6 +600,10 @@ add_library(
   src/join/hash_join/left_join_retrieve.cu
   src/join/hash_join/left_join_size.cu
   src/join/hash_join/match_context.cu
+  src/join/hash_join/count_each.cu
+  src/join/hash_join/count_each_outer.cu
+  src/join/hash_join/retrieve.cu
+  src/join/hash_join/retrieve_outer.cu
   src/join/hash_join/partitioned_full_join.cu
   src/join/hash_join/partitioned_inner_join.cu
   src/join/hash_join/partitioned_left_join.cu
