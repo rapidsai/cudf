@@ -153,7 +153,7 @@ int main(int argc, char const** argv)
   auto default_stream = stream_pool.get_stream();
   auto stats_mr =
     std::visit([](auto& mr) { return rmm::mr::statistics_resource_adaptor(mr); }, resource);
-  rmm::mr::set_current_device_resource_ref(stats_mr);
+  rmm::mr::set_current_device_resource(stats_mr);
 
   // Create filter expressions (one per thread; reused circularly if needed)
   auto const column_reference = cudf::ast::column_name_reference(column_name);

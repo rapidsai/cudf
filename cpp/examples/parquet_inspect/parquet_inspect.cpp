@@ -75,7 +75,7 @@ int main(int argc, char const** argv)
   auto const stream           = cudf::get_default_stream();
   auto constexpr is_pool_used = false;
   auto mr                     = create_memory_resource(is_pool_used);
-  std::visit([](auto& mr) { cudf::set_current_device_resource_ref(mr); }, mr);
+  std::visit([](auto& mr) { cudf::set_current_device_resource(mr); }, mr);
 
   // Read parquet footer metadata
   auto [metadata, has_page_index] = read_parquet_file_metadata(input_filepath);

@@ -17,10 +17,10 @@ class memory_stats_logger {
   memory_stats_logger()
     : existing_mr(cudf::get_current_device_resource_ref()), statistics_mr(existing_mr)
   {
-    cudf::set_current_device_resource_ref(statistics_mr);
+    cudf::set_current_device_resource(statistics_mr);
   }
 
-  ~memory_stats_logger() { cudf::set_current_device_resource_ref(existing_mr); }
+  ~memory_stats_logger() { cudf::set_current_device_resource(existing_mr); }
 
   [[nodiscard]] size_t peak_memory_usage() const noexcept
   {

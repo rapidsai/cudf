@@ -58,9 +58,9 @@ int main(int argc, char const** argv)
   rmm::mr::cuda_memory_resource cuda_mr{};
   rmm::mr::pool_memory_resource pool_mr{cuda_mr, rmm::percent_of_free_device_memory(50)};
   if (mr_name == "pool") {
-    cudf::set_current_device_resource_ref(pool_mr);
+    cudf::set_current_device_resource(pool_mr);
   } else {
-    cudf::set_current_device_resource_ref(cuda_mr);
+    cudf::set_current_device_resource(cuda_mr);
   }
 
   auto const csv_file   = std::string{argv[1]};

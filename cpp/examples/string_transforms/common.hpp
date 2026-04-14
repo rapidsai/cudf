@@ -81,18 +81,18 @@ int main(int argc, char const** argv)
                            ? memory_resource_name.substr(0, memory_resource_name.size() - 6)
                            : memory_resource_name;
   if (base_name == "pool") {
-    cudf::set_current_device_resource_ref(pool_mr);
+    cudf::set_current_device_resource(pool_mr);
   } else if (base_name == "async") {
-    cudf::set_current_device_resource_ref(async_mr);
+    cudf::set_current_device_resource(async_mr);
   } else if (base_name == "cuda") {
-    cudf::set_current_device_resource_ref(cuda_mr);
+    cudf::set_current_device_resource(cuda_mr);
   } else {
     CUDF_FAIL("Unrecognized memory resource name: " + memory_resource_name, std::invalid_argument);
   }
 
   rmm::mr::statistics_resource_adaptor stats_adaptor{cudf::get_current_device_resource_ref()};
 
-  if (enable_stats) { cudf::set_current_device_resource_ref(stats_adaptor); }
+  if (enable_stats) { cudf::set_current_device_resource(stats_adaptor); }
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);

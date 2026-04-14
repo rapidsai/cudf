@@ -30,25 +30,25 @@ inline rmm::device_async_resource_ref get_current_device_resource_ref()
 }
 
 /**
- * @brief Set the current device memory resource reference.
+ * @brief Set the current device memory resource.
  *
- * @param mr The new device memory resource reference.
+ * @param mr The new device memory resource.
  * @return An owning any_resource holding the previous resource.
  */
-inline cuda::mr::any_resource<cuda::mr::device_accessible> set_current_device_resource_ref(
-  rmm::device_async_resource_ref mr)
+inline cuda::mr::any_resource<cuda::mr::device_accessible> set_current_device_resource(
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr)
 {
-  return rmm::mr::set_current_device_resource_ref(mr);
+  return rmm::mr::set_current_device_resource(std::move(mr));
 }
 
 /**
- * @brief Reset the current device memory resource reference to the initial resource.
+ * @brief Reset the current device memory resource to the initial resource.
  *
  * @return An owning any_resource holding the previous resource.
  */
-inline cuda::mr::any_resource<cuda::mr::device_accessible> reset_current_device_resource_ref()
+inline cuda::mr::any_resource<cuda::mr::device_accessible> reset_current_device_resource()
 {
-  return rmm::mr::reset_current_device_resource_ref();
+  return rmm::mr::reset_current_device_resource();
 }
 
 /** @} */  // end of group

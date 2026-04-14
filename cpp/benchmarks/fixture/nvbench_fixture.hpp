@@ -97,7 +97,7 @@ struct nvbench_base_fixture {
     }
 
     mr = create_memory_resource(rmm_mode);
-    cudf::set_current_device_resource_ref(mr);
+    cudf::set_current_device_resource(mr);
     std::cout << "RMM memory resource = " << rmm_mode << "\n";
 
     cudf::set_pinned_memory_resource(create_cuio_host_memory_resource(cuio_host_mode));

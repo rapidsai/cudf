@@ -180,7 +180,7 @@ int main(int argc, char const** argv)
 
   auto pool     = mr_name == "pool";
   auto resource = create_memory_resource(pool);
-  std::visit([](auto& mr) { cudf::set_current_device_resource_ref(mr); }, resource);
+  std::visit([](auto& mr) { cudf::set_current_device_resource(mr); }, resource);
 
   std::cout << "Reading " << input_filepath << "..." << std::endl;
   // read input file

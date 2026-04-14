@@ -398,7 +398,7 @@ void generate_parquet_data_sources(double scale_factor,
   // TODO: if old_mr is already managed pool or managed, don't create new one.
   rmm::mr::managed_memory_resource managed_mr{};
   rmm::mr::pool_memory_resource managed_pool_mr{managed_mr, rmm::percent_of_free_device_memory(50)};
-  cudf::set_current_device_resource_ref(managed_pool_mr);
+  cudf::set_current_device_resource(managed_pool_mr);
   // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free memory
 
   std::unordered_set<std::string> const requested_table_names = [&table_names]() {
@@ -462,5 +462,5 @@ void generate_parquet_data_sources(double scale_factor,
   }
 
   // Restore the original memory resource
-  cudf::set_current_device_resource_ref(old_mr);
+  cudf::set_current_device_resource(old_mr);
 }
