@@ -525,21 +525,21 @@ inline auto& prior_cudf_pinned_mr()
  */
 class pinned_fallback_host_memory_resource {
  public:
-  pinned_fallback_host_memory_resource(rmm::mr::pool_memory_resource* pool_) : pool{pool_}
+  pinned_fallback_host_memory_resource(rmm::mr::pool_memory_resource pool_) : pool{pool_}
   {
-    auto pool_size = pool->pool_size();
-    pool_begin     = pool->allocate_sync(pool_size);
+    auto pool_size = pool.pool_size();
+    pool_begin     = pool.allocate_sync(pool_size);
     pool_end       = static_cast<void*>(static_cast<uint8_t*>(pool_begin) + pool_size);
-    pool->deallocate_sync(pool_begin, pool_size);
+    pool.deallocate_sync(pool_begin, pool_size);
   }
 
   void* allocate(cuda::stream_ref stream,
                  std::size_t bytes,
                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
-    if (bytes <= pool->pool_size()) {
+    if (bytes <= pool.pool_size()) {
       try {
-        return pool->allocate(stream, bytes, alignment);
+        return pool.allocate(stream, bytes, alignment);
       } catch (...) {
         // If the pool is exhausted, fall back to the upstream memory resource
       }
@@ -552,8 +552,8 @@ class pinned_fallback_host_memory_resource {
                   std::size_t bytes,
                   std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
-    if (bytes <= pool->pool_size() && ptr >= pool_begin && ptr < pool_end) {
-      pool->deallocate(stream, ptr, bytes, alignment);
+    if (bytes <= pool.pool_size() && ptr >= pool_begin && ptr < pool_end) {
+      pool.deallocate(stream, ptr, bytes, alignment);
     } else {
       prior_cudf_pinned_mr().deallocate(stream, ptr, bytes);
     }
@@ -597,7 +597,7 @@ class pinned_fallback_host_memory_resource {
   }
 
  private:
-  rmm::mr::pool_memory_resource* pool;
+  rmm::mr::pool_memory_resource pool;
   void* pool_begin;
   void* pool_end;
 };
@@ -1072,7 +1072,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCudfPinnedPoolMemoryResource(J
     auto pool = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
     // create a pinned fallback pool that will allocate pinned memory
     // if the regular pinned pool is exhausted
-    pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
+    pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(*pool));
     prior_cudf_pinned_mr() = cudf::set_pinned_memory_resource(*pinned_fallback_mr);
   }
   JNI_CATCH(env, );
