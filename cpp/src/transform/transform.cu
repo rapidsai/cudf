@@ -247,12 +247,11 @@ auto reflect(udf_source_type source_type,
   std::vector<std::string> in_types;
 
   for (size_t i = 0; i < inputs.size(); i++) {
-    auto& in              = inputs[i];
-    auto column           = std::visit([](auto& c) { return reflect_input_column(c); }, in);
-    auto element          = std::visit([](auto& c) { return reflect_input_element(c); }, in);
-    bool as_scalar        = std::holds_alternative<scalar_column_view>(in);
-    bool may_be_nullable  = input_may_be_nullable[i];
-    auto accessor         = rtcx::reflect_template("cudf::jit::column_accessor",
+    auto& in       = inputs[i];
+    auto column    = std::visit([](auto& c) { return reflect_input_column(c); }, in);
+    auto element   = std::visit([](auto& c) { return reflect_input_element(c); }, in);
+    bool as_scalar = std::holds_alternative<scalar_column_view>(in);
+    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect_int(i),
                                            column,
                                            element,
@@ -263,11 +262,11 @@ auto reflect(udf_source_type source_type,
   std::vector<std::string> out_types;
 
   for (size_t i = 0; i < outputs.size(); i++) {
-    auto& out             = outputs[i];
-    auto column           = std::visit([](auto& c) { return reflect_output_column(c); }, out);
-    auto element          = std::visit([](auto& c) { return reflect_output_element(c); }, out);
-    bool as_scalar        = false;  // never scalar
-    auto accessor         = rtcx::reflect_template("cudf::jit::column_accessor",
+    auto& out      = outputs[i];
+    auto column    = std::visit([](auto& c) { return reflect_output_column(c); }, out);
+    auto element   = std::visit([](auto& c) { return reflect_output_element(c); }, out);
+    bool as_scalar = false;  // never scalar
+    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect_int(i),
                                            column,
                                            element,
