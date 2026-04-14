@@ -847,6 +847,39 @@ TEST_F(CsvReaderTest, DatesNamedMonthDashSeparated)
     view.column(0));
 }
 
+TEST_F(CsvReaderTest, DatesNamedMonthDashSeparatedDayLast)
+{
+  // Exercises the named-month extension for dayfirst=false (default) dash-separated path:
+  //   "Mon-DD-YYYY"  (e.g. "Dec-21-2009")
+  auto filepath = temp_env->get_temp_dir() + "DatesNamedMonthDashDayLast.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "Dec-21-2009\n";  // abbreviated month name, dayfirst=false
+    outfile << "May-15-2009\n";  // abbreviated month name
+    outfile << "Jan-01-2000\n";  // abbreviated month name, leading zero
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names({"A"})
+      .dtypes({data_type{type_id::TIMESTAMP_MILLISECONDS}})
+      .dayfirst(false)
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  expect_column_data_equal(
+    std::vector<cudf::timestamp_ms>{
+      cudf::timestamp_ms{1261353600000ms},  // 2009-12-21
+      cudf::timestamp_ms{1242345600000ms},  // 2009-05-15
+      cudf::timestamp_ms{946684800000ms},   // 2000-01-01
+    },
+    view.column(0));
+}
+
 TEST_F(CsvReaderTest, DatesFractionalSecondsMicroseconds)
 {
   // Exercises extract_time_of_day() returning hh_mm_ss<duration_us>.

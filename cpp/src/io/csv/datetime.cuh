@@ -9,6 +9,7 @@
 #include "io/utilities/time_utils.cuh"
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/strings/string_view.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -44,19 +45,60 @@ __inline__ __device__ T to_non_negative_integer(char const* begin, char const* e
 }
 
 /**
- * @brief Converts the first three characters of a month name (case-insensitive) to its
- * numeric value 1-12, or 0 if not recognized.
+ * @brief Converts a month name token to its numeric value 1–12, or 0 if not recognized.
  *
- * Supports abbreviated names (Jan, Feb, ...) and full names (January, February, ...).
+ * Supports abbreviated names (e.g. "Jan") and full names (e.g. "January"). Matching is
+ * case-insensitive for ASCII characters.
  *
- * @param begin Pointer to the first element of the string
- * @param end Pointer to the first element after the string
- * @return Month number 1-12, or 0 if not a valid month name
+ * When @p locale_names is non-null it must point to a device array of 24 `cudf::string_view`
+ * objects laid out as follows (matching the order returned by `nl_langinfo`):
+ *   - indices  0–11 : abbreviated month names (ABMON_1 .. ABMON_12)
+ *   - indices 12–23 : full month names        (MON_1   .. MON_12)
+ *
+ * This locale-aware path mirrors the behaviour of the `cudf::strings::to_timestamps` API
+ * which accepts names derived from `nl_langinfo(ABMON_*)` / `nl_langinfo(MON_*)` on the
+ * host and passes them into the GPU kernel — see `cudf/strings/convert/convert_datetime.hpp`.
+ *
+ * When @p locale_names is null the function falls back to the hard-coded English ASCII table
+ * (same behaviour as before locale support was added).
+ *
+ * @param begin        Pointer to the first character of the month-name token
+ * @param end          Pointer one past the last character of the token
+ * @param locale_names Device pointer to 24 locale `string_view`s, or nullptr
+ * @return Month number 1–12, or 0 if the token is not recognised
  */
-__inline__ __device__ int month_from_name(char const* begin, char const* end)
+__inline__ __device__ int month_from_name(char const* begin,
+                                          char const* end,
+                                          cudf::string_view const* locale_names = nullptr)
 {
-  if (end - begin < 3) { return 0; }
-  // Convert to lowercase for case-insensitive comparison
+  auto const len = static_cast<cudf::size_type>(end - begin);
+
+  if (locale_names != nullptr) {
+    // Locale-aware path: compare the token case-insensitively against every abbreviated
+    // (indices 0–11) and full (indices 12–23) locale month name.
+    for (int i = 0; i < 12; ++i) {
+      // Check abbreviated name first (shorter, so try first to avoid a prefix match
+      // of, e.g., "Mar" matching the full name "March").
+      for (int pass = 0; pass < 2; ++pass) {
+        auto const& sv = locale_names[(pass == 0) ? i : (12 + i)];
+        if (sv.size_bytes() == 0 || sv.size_bytes() != len) { continue; }
+        bool match = true;
+        for (cudf::size_type j = 0; j < len && match; ++j) {
+          // Case-insensitive ASCII comparison via | 0x20 (works for ASCII A-Z only;
+          // locale names that require multi-byte case-folding are compared as-is).
+          match = ((begin[j] | 0x20) == (sv.data()[j] | 0x20));
+        }
+        if (match) { return i + 1; }
+      }
+    }
+    return 0;
+  }
+
+  // English ASCII fallback: match on the first 3 characters only, so both abbreviated
+  // ("Jan") and full ("January") names are recognised with a single switch.
+  // The | 0x20 trick folds ASCII upper-case to lower-case; it is acceptable here
+  // because English month names are always ASCII.
+  if (len < 3) { return 0; }
   char const c0 = (*begin | 0x20);
   char const c1 = (*(begin + 1) | 0x20);
   char const c2 = (*(begin + 2) | 0x20);
@@ -110,9 +152,11 @@ __inline__ __device__ int month_from_name(char const* begin, char const* end)
  * @param dayfirst Flag indicating that first field is the day
  * @return Extracted year, month and day in `cuda::std::chrono::year_month_day` format
  */
-__inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const* begin,
-                                                                     char const* end,
-                                                                     bool dayfirst)
+__inline__ __device__ cuda::std::chrono::year_month_day extract_date(
+  char const* begin,
+  char const* end,
+  bool dayfirst,
+  cudf::string_view const* locale_names = nullptr)
 {
   using namespace cuda::std::chrono;
 
@@ -138,24 +182,30 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const*
       return year_month_day{year{1}, month{1}, day{1}};
     }
 
-    int const first_month = month_from_name(begin, space_pos);
+    int const first_month = month_from_name(begin, space_pos, locale_names);
     if (first_month > 0) {
       // "MonthName YYYY" — no day, default to 1
       m = month{static_cast<uint32_t>(first_month)};
       d = day{1};
-      y = year{to_non_negative_integer<int32_t>(space_pos + 1, end)};
+      // Bound the year to the next space so that trailing content (e.g. a time
+      // component like "10:30:00") is not absorbed by to_non_negative_integer.
+      auto const year_end = thrust::find(thrust::seq, space_pos + 1, end, ' ');
+      y                   = year{to_non_negative_integer<int32_t>(space_pos + 1, year_end)};
     } else {
       // "D MonthName [YYYY]"
       d                     = day{to_non_negative_integer<uint32_t>(begin, space_pos)};
       auto const s2         = space_pos + 1;
       auto const space_pos2 = thrust::find(thrust::seq, s2, end, ' ');
-      int const named_m     = month_from_name(s2, space_pos2);
+      int const named_m     = month_from_name(s2, space_pos2, locale_names);
       m                     = month{(named_m > 0) ? static_cast<uint32_t>(named_m) : 0u};
       if (space_pos2 == end) {
         // "D Mon" with no year — default to year 1 (matches pandas behaviour)
         y = year{1};
       } else {
-        y = year{to_non_negative_integer<int32_t>(space_pos2 + 1, end)};
+        // Bound the year token to the next space so that trailing content (e.g. a time
+        // component like "10:30:00") is not absorbed by to_non_negative_integer.
+        auto const space_pos3 = thrust::find(thrust::seq, space_pos2 + 1, end, ' ');
+        y                     = year{to_non_negative_integer<int32_t>(space_pos2 + 1, space_pos3)};
       }
     }
     return year_month_day{y, m, d};
@@ -189,7 +239,7 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const*
       auto month_end = (sep_pos == end) ? end : sep_pos;
 
       // Support named months: "DD-Mon-YYYY" (e.g. "15-May-2009")
-      int const named_m = month_from_name(s2, month_end);
+      int const named_m = month_from_name(s2, month_end, locale_names);
       if (named_m > 0) {
         m = month{static_cast<uint32_t>(named_m)};
       } else {
@@ -199,7 +249,7 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const*
 
     } else {
       // Support named months at the front: "Mon-DD-YYYY"
-      int const named_m = month_from_name(begin, sep_pos);
+      int const named_m = month_from_name(begin, sep_pos, locale_names);
       if (named_m > 0) {
         m = month{static_cast<uint32_t>(named_m)};
       } else {
@@ -321,7 +371,10 @@ __device__ constexpr bool is_digit(char c) { return c >= '0' and c <= '9'; }
  * @return Timestamp converted to `timestamp_type`
  */
 template <typename timestamp_type>
-__inline__ __device__ timestamp_type to_timestamp(char const* begin, char const* end, bool dayfirst)
+__inline__ __device__ timestamp_type to_timestamp(char const* begin,
+                                                  char const* end,
+                                                  bool dayfirst,
+                                                  cudf::string_view const* locale_names = nullptr)
 {
   using duration_type = typename timestamp_type::duration;
 
@@ -349,7 +402,7 @@ __inline__ __device__ timestamp_type to_timestamp(char const* begin, char const*
       duration_type{to_non_negative_integer<typename timestamp_type::rep>(begin, end)}};
   }
 
-  auto ymd = extract_date(begin, sep_pos, dayfirst);
+  auto ymd = extract_date(begin, sep_pos, dayfirst, locale_names);
   timestamp_type answer{cuda::std::chrono::sys_days{ymd}};
 
   // Extract time only if separator is present

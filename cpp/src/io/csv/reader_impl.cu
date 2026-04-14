@@ -47,6 +47,8 @@
 #include <thrust/count.h>
 #include <thrust/host_vector.h>
 
+#include <langinfo.h>
+
 #include <algorithm>
 #include <future>
 #include <memory>
@@ -1189,6 +1191,64 @@ parse_options make_parse_options(csv_reader_options const& reader_opts,
 
   // Handle user-defined N/A values, whereby field data is treated as null
   parse_opts.trie_na = create_na_trie(parse_opts.quotechar, reader_opts, stream);
+
+  // Build locale-aware month name table (mirrors the approach used by
+  // cudf::strings::to_timestamps, which accepts names derived from nl_langinfo).
+  // Query abbreviated (ABMON_1..12) and full (MON_1..12) month names from the
+  // current LC_TIME locale and copy them to device memory so the GPU kernel can
+  // match them case-insensitively.  The 24-entry layout matches parse_options_view::month_names.
+  {
+    static constexpr nl_item k_abmon_ids[12] = {ABMON_1,
+                                                ABMON_2,
+                                                ABMON_3,
+                                                ABMON_4,
+                                                ABMON_5,
+                                                ABMON_6,
+                                                ABMON_7,
+                                                ABMON_8,
+                                                ABMON_9,
+                                                ABMON_10,
+                                                ABMON_11,
+                                                ABMON_12};
+    static constexpr nl_item k_mon_ids[12]   = {
+      MON_1, MON_2, MON_3, MON_4, MON_5, MON_6, MON_7, MON_8, MON_9, MON_10, MON_11, MON_12};
+
+    // Collect all 24 names on the host
+    std::vector<std::string> host_names;
+    host_names.reserve(24);
+    for (auto id : k_abmon_ids) {
+      host_names.emplace_back(nl_langinfo(id));
+    }
+    for (auto id : k_mon_ids) {
+      host_names.emplace_back(nl_langinfo(id));
+    }
+
+    // Pack names into a single flat host buffer and record offsets/lengths
+    std::string flat;
+    for (auto const& s : host_names) {
+      flat += s;
+    }
+
+    // Copy flat char buffer to device
+    parse_opts.month_names_data = rmm::device_uvector<char>(flat.size(), stream);
+    cudf::detail::cuda_memcpy_async<char>(
+      cudf::device_span<char>{parse_opts.month_names_data->data(), flat.size()},
+      cudf::host_span<char const>{flat.data(), flat.size()},
+      stream);
+
+    // Build host-side string_views pointing into the device char buffer, then
+    // copy the view array to device.
+    std::vector<cudf::string_view> host_svs;
+    host_svs.reserve(24);
+    cudf::size_type offset = 0;
+    for (auto const& s : host_names) {
+      host_svs.emplace_back(parse_opts.month_names_data->data() + offset,
+                            static_cast<cudf::size_type>(s.size()));
+      offset += static_cast<cudf::size_type>(s.size());
+    }
+    parse_opts.month_names_sv = cudf::detail::make_device_uvector_async(
+      host_svs, stream, cudf::get_current_device_resource_ref());
+  }
 
   return parse_opts;
 }

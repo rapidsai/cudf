@@ -101,9 +101,14 @@ __device__ __inline__ bool is_datetime(
       (dash_count == 0 && slash_count > 0 && slash_count < 3)) {
     return true;
   }
-  // Space-separated dates with named months: "1 Jan", "Feb 2002", "2 January 1994"
-  // len counts alphabetic chars and spaces; no dashes or slashes means space is the separator
-  if (dash_count == 0 && slash_count == 0 && len >= 3) { return true; }
+  // Space-separated dates with named months: "1 Jan", "Feb 2002", "2 January 1994".
+  // len counts alphabetic chars and spaces; no dashes, slashes, or colons means space
+  // is the separator. Adding colon_count == 0 prevents matching time-only strings
+  // such as "10:30". Note: this heuristic can still produce false positives for short
+  // all-alpha strings (e.g. "abc") when the column has the as_datetime flag set — that
+  // is an acceptable trade-off since the flag is only set when the user requests date
+  // parsing for the column.
+  if (dash_count == 0 && slash_count == 0 && colon_count == 0 && len >= 3) { return true; }
 
   return false;
 }

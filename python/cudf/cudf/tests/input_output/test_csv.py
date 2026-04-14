@@ -362,6 +362,29 @@ def test_csv_reader_date_format_bad_type():
         )
 
 
+def test_csv_reader_date_format_dict_nonexistent_column():
+    """date_format dict with a non-existent column name is silently ignored."""
+    df = pd.DataFrame({"date1": ["2023-01-15", "2022-12-31", "2021-06-01"]})
+    buffer = df.to_csv(index=False, header=False)
+
+    # "nonexistent" is not a real column; the `continue` guard in the cudf
+    # date_format dict handler should skip it without raising.
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["date1"],
+        parse_dates=["date1"],
+        date_format={"date1": "ISO8601", "nonexistent": "%Y-%m-%d"},
+    )
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["date1"],
+        parse_dates=["date1"],
+        date_format="mixed",
+    )
+
+    assert_eq(gdf, pdf)
+
+
 @pytest.mark.parametrize("p_arg", ["delimiter", "sep"])
 @pytest.mark.parametrize("c_arg", ["sep", "delimiter"])
 def test_csv_reader_mixed_data_delimiter_sep(

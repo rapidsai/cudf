@@ -549,7 +549,8 @@ struct ConvertFunctor {
   {
     // TODO decide what's invalid input and update parsing functions
     if constexpr (cudf::is_timestamp<T>()) {
-      static_cast<T*>(out_buffer)[row] = to_timestamp<T>(begin, end, opts.dayfirst);
+      static_cast<T*>(out_buffer)[row] =
+        to_timestamp<T>(begin, end, opts.dayfirst, opts.month_names);
     } else if constexpr (cudf::is_duration<T>()) {
       static_cast<T*>(out_buffer)[row] = to_duration<T>(begin, end);
     } else {
