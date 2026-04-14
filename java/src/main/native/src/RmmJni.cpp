@@ -33,59 +33,10 @@
 #include <mutex>
 #include <unordered_map>
 
-using rmm::mr::logging_resource_adaptor;
-
-/**
- * @brief A pinned pool that owns both the upstream pinned resource and the pool.
- *
- * With the CCCL migration, pool_memory_resource takes a non-owning resource_ref,
- * so we need a wrapper to keep the upstream alive.
- */
-struct pinned_pool_wrapper {
-  rmm::mr::pinned_host_memory_resource pinned_mr;
-  rmm::mr::pool_memory_resource pool;
-
-  pinned_pool_wrapper(std::size_t initial_size, std::optional<std::size_t> max_size)
-    : pinned_mr{}, pool{rmm::device_async_resource_ref{pinned_mr}, initial_size, max_size}
-  {
-  }
-
-  [[nodiscard]] std::size_t pool_size() const noexcept { return pool.pool_size(); }
-
-  void* allocate(cuda::stream_ref stream,
-                 std::size_t bytes,
-                 std::size_t alignment = alignof(std::max_align_t))
-  {
-    return pool.allocate(stream, bytes, alignment);
-  }
-
-  void deallocate(cuda::stream_ref stream,
-                  void* ptr,
-                  std::size_t bytes,
-                  std::size_t alignment = alignof(std::max_align_t))
-  {
-    pool.deallocate(stream, ptr, bytes, alignment);
-  }
-
-  void* allocate_sync(std::size_t bytes, std::size_t alignment = alignof(std::max_align_t))
-  {
-    return pool.allocate_sync(bytes, alignment);
-  }
-
-  void deallocate_sync(void* ptr,
-                       std::size_t bytes,
-                       std::size_t alignment = alignof(std::max_align_t))
-  {
-    pool.deallocate_sync(ptr, bytes, alignment);
-  }
-};
-using rmm_pinned_pool_t = pinned_pool_wrapper;
-
 namespace {
 
 using cudf::jni::delete_jni_resource;
 using cudf::jni::get_resource_ref;
-using cudf::jni::jni_resource_wrapper;
 using cudf::jni::make_jni_resource;
 
 constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
@@ -561,7 +512,7 @@ inline auto& prior_cudf_pinned_mr()
  */
 class pinned_fallback_host_memory_resource {
  public:
-  pinned_fallback_host_memory_resource(rmm_pinned_pool_t* pool_) : pool{pool_}
+  pinned_fallback_host_memory_resource(rmm::mr::pool_memory_resource* pool_) : pool{pool_}
   {
     auto pool_size = pool->pool_size();
     pool_begin     = pool->allocate_sync(pool_size);
@@ -575,7 +526,7 @@ class pinned_fallback_host_memory_resource {
   {
     if (bytes <= pool->pool_size()) {
       try {
-        return pool->allocate(stream, bytes);
+        return pool->allocate(stream, bytes, alignment);
       } catch (...) {
         // If the pool is exhausted, fall back to the upstream memory resource
       }
@@ -589,7 +540,7 @@ class pinned_fallback_host_memory_resource {
                   std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
     if (bytes <= pool->pool_size() && ptr >= pool_begin && ptr < pool_end) {
-      pool->deallocate(stream, ptr, bytes);
+      pool->deallocate(stream, ptr, bytes, alignment);
     } else {
       prior_cudf_pinned_mr().deallocate(stream, ptr, bytes);
     }
@@ -633,7 +584,7 @@ class pinned_fallback_host_memory_resource {
   }
 
  private:
-  rmm_pinned_pool_t* pool;
+  rmm::mr::pool_memory_resource* pool;
   void* pool_begin;
   void* pool_end;
 };
@@ -901,14 +852,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
       {
         cudf::jni::native_jstring path(env, jpath);
         return make_jni_resource(
-          logging_resource_adaptor{upstream, path.get(), static_cast<bool>(auto_flush)});
+          rmm::mr::logging_resource_adaptor{upstream, path.get(), static_cast<bool>(auto_flush)});
       }
       case 2:  // stdout
         return make_jni_resource(
-          logging_resource_adaptor{upstream, std::cout, static_cast<bool>(auto_flush)});
+          rmm::mr::logging_resource_adaptor{upstream, std::cout, static_cast<bool>(auto_flush)});
       case 3:  // stderr
         return make_jni_resource(
-          logging_resource_adaptor{upstream, std::cerr, static_cast<bool>(auto_flush)});
+          rmm::mr::logging_resource_adaptor{upstream, std::cerr, static_cast<bool>(auto_flush)});
       default: throw std::logic_error("unsupported logging location type");
     }
   }
@@ -1092,7 +1043,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = new rmm_pinned_pool_t(init, max);
+    auto pool =
+      new rmm::mr::pool_memory_resource(rmm::mr::pinned_host_memory_resource{}, init, max);
     return reinterpret_cast<jlong>(pool);
   }
   JNI_CATCH(env, 0);
@@ -1105,7 +1057,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCudfPinnedPoolMemoryResource(J
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    auto pool = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
     // create a pinned fallback pool that will allocate pinned memory
     // if the regular pinned pool is exhausted
     pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
@@ -1125,7 +1077,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(J
     // if we didn't overwrite it with setCudfPinnedPoolMemoryResource
     cudf::set_pinned_memory_resource(prior_cudf_pinned_mr());
     pinned_fallback_mr.reset();
-    delete reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    delete reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
   }
   JNI_CATCH(env, );
 }
@@ -1138,8 +1090,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
-    void* ret = pool->allocate(cudf::get_default_stream(), size);
+    auto pool = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
+    void* ret = pool->allocate(cudf::get_default_stream(), size, rmm::CUDA_ALLOCATION_ALIGNMENT);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH_BEGIN(env, 0)
@@ -1155,9 +1107,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromPinnedPool(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool  = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    auto pool  = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
     void* cptr = reinterpret_cast<void*>(ptr);
-    pool->deallocate(cudf::get_default_stream(), cptr, size);
+    pool->deallocate(cudf::get_default_stream(), cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
   JNI_CATCH(env, );
 }
