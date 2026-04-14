@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
 import distributed
+import pynvml
 import ucxx._lib.libucxx as ucx_api
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
@@ -64,45 +65,25 @@ def _get_visible_gpu_ids() -> list[str]:
     cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
     if cvd is not None:
         return [d.strip() for d in cvd.split(",") if d.strip()]
-    import pynvml
-
     pynvml.nvmlInit()
     return [str(i) for i in range(pynvml.nvmlDeviceGetCount())]
-
-
-def _rotate_devices(i: int, devices: list[str]) -> str:
-    """
-    Return a ``CUDA_VISIBLE_DEVICES`` string with device *i* first.
-
-    Following the dask-cuda convention, the device list is rotated so
-    that worker *i*'s primary GPU appears first, and all other GPUs
-    remain visible in round-robin order.
-
-    Examples
-    --------
-    >>> _rotate_devices(0, ["0", "1", "2", "3"])
-    '0,1,2,3'
-    >>> _rotate_devices(2, ["0", "1", "2", "3"])
-    '2,3,0,1'
-    """
-    rotated = devices[i:] + devices[:i]
-    return ",".join(rotated)
 
 
 _nanny_preload_counter = 0
 
 
 def dask_setup(nanny: distributed.Nanny) -> None:
-    r"""
+    """
     Nanny preload: assign one GPU per worker via ``CUDA_VISIBLE_DEVICES``.
 
-    The name ``dask_setup`` is required by Dask's preload protocol — it is
+    The name ``dask_setup`` is required by Dask's preload protocol, it is
     discovered by name via ``--preload-nanny``. The function runs inside the
     Nanny process *before* the worker subprocess is spawned, so the
     environment variable is inherited by the worker.
 
-    Each call increments a module-level counter to assign GPUs in round-robin
-    order across workers on the same node.
+    GPUs are assigned in a round-robin fashion across workers on the same
+    node. Each worker is bound to a single GPU, but GPUs may be shared across
+    multiple workers if there are more workers than available GPUs.
 
     Usage::
 
@@ -121,9 +102,8 @@ def dask_setup(nanny: distributed.Nanny) -> None:
         )
     global _nanny_preload_counter  # noqa: PLW0603
     gpu_ids = _get_visible_gpu_ids()
-    worker_index = _nanny_preload_counter % len(gpu_ids)
+    nanny.env["CUDA_VISIBLE_DEVICES"] = gpu_ids[_nanny_preload_counter % len(gpu_ids)]
     _nanny_preload_counter += 1
-    nanny.env["CUDA_VISIBLE_DEVICES"] = _rotate_devices(worker_index, gpu_ids)
 
 
 @dataclasses.dataclass
@@ -461,7 +441,7 @@ def evaluate_pipeline_dask_mode(
 
 
 class DaskEngine(StreamingEngine):
-    r"""
+    """
     Multi-GPU Polars engine for Dask distributed execution backed by RapidsMPF.
 
     Bootstraps a RapidsMPF UCXX cluster on top of a Dask distributed cluster
@@ -540,7 +520,7 @@ class DaskEngine(StreamingEngine):
     For manually launched Dask clusters, use the nanny preload to assign
     one GPU per worker before the worker process spawns::
 
-        dask worker SCHEDULER:8786 --nworkers N --nthreads 1 \\
+        dask worker SCHEDULER:8786 --nworkers N --nthreads 1 \
             --preload-nanny cudf_polars.experimental.rapidsmpf.frontend.dask
 
     Then connect from the client::
@@ -604,7 +584,7 @@ class DaskEngine(StreamingEngine):
                     "options": {
                         "nthreads": 1,
                         "env": {
-                            "CUDA_VISIBLE_DEVICES": _rotate_devices(i, gpu_ids),
+                            "CUDA_VISIBLE_DEVICES": gpu_ids[i],
                         },
                     },
                 }

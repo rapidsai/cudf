@@ -224,16 +224,8 @@ def test_bind_enable_once_false() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _rotate_devices / dask_setup (nanny preload)
+# dask_setup (nanny preload)
 # ---------------------------------------------------------------------------
-
-
-def test_rotate_devices() -> None:
-    from cudf_polars.experimental.rapidsmpf.frontend.dask import _rotate_devices
-
-    assert _rotate_devices(0, ["0", "1", "2", "3"]) == "0,1,2,3"
-    assert _rotate_devices(2, ["0", "1", "2", "3"]) == "2,3,0,1"
-    assert _rotate_devices(0, ["0"]) == "0"
 
 
 def test_get_visible_gpu_ids_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -253,12 +245,12 @@ def test_dask_setup_assigns_gpus(monkeypatch: pytest.MonkeyPatch) -> None:
     nanny0 = MagicMock(spec=distributed.Nanny)
     nanny0.env = {}
     dask_mod.dask_setup(nanny0)
-    assert nanny0.env["CUDA_VISIBLE_DEVICES"] == "0,1"
+    assert nanny0.env["CUDA_VISIBLE_DEVICES"] == "0"
 
     nanny1 = MagicMock(spec=distributed.Nanny)
     nanny1.env = {}
     dask_mod.dask_setup(nanny1)
-    assert nanny1.env["CUDA_VISIBLE_DEVICES"] == "1,0"
+    assert nanny1.env["CUDA_VISIBLE_DEVICES"] == "1"
 
 
 def test_dask_setup_wraps_around(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -275,10 +267,10 @@ def test_dask_setup_wraps_around(monkeypatch: pytest.MonkeyPatch) -> None:
         dask_mod.dask_setup(n)
         nannies.append(n)
 
-    assert nannies[0].env["CUDA_VISIBLE_DEVICES"] == "0,1"
-    assert nannies[1].env["CUDA_VISIBLE_DEVICES"] == "1,0"
-    assert nannies[2].env["CUDA_VISIBLE_DEVICES"] == "0,1"  # wraps
-    assert nannies[3].env["CUDA_VISIBLE_DEVICES"] == "1,0"  # wraps
+    assert nannies[0].env["CUDA_VISIBLE_DEVICES"] == "0"
+    assert nannies[1].env["CUDA_VISIBLE_DEVICES"] == "1"
+    assert nannies[2].env["CUDA_VISIBLE_DEVICES"] == "0"  # wraps
+    assert nannies[3].env["CUDA_VISIBLE_DEVICES"] == "1"  # wraps
 
 
 def test_dask_setup_rejects_worker() -> None:
