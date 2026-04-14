@@ -1061,7 +1061,10 @@ async def _bloom_shuffle_join(
         return Message(
             seq,
             TableChunk.from_pylibcudf_table(
-                key_table, chunk.stream, exclusive_view=True
+                key_table,
+                chunk.stream,
+                exclusive_view=True,
+                br=context.br(),
             ),
         )
 
