@@ -242,9 +242,7 @@ std::string reflect_output_column(mutable_strings_column const&)
 
 auto reflect(udf_source_type source_type,
              std::span<input_column_view const> inputs,
-             std::span<output_column const> outputs,
-             std::span<char const> input_may_be_nullable,
-             std::span<char const> output_may_be_nullable)
+             std::span<output_column const> outputs)
 {
   std::vector<std::string> in_types;
 
@@ -252,16 +250,13 @@ auto reflect(udf_source_type source_type,
     auto& in              = inputs[i];
     auto column           = std::visit([](auto& c) { return reflect_input_column(c); }, in);
     auto element          = std::visit([](auto& c) { return reflect_input_element(c); }, in);
-    auto optional_element = std::format("cuda::std::optional<{}>", element);
     bool as_scalar        = std::holds_alternative<scalar_column_view>(in);
     bool may_be_nullable  = input_may_be_nullable[i];
     auto accessor         = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect_int(i),
                                            column,
                                            element,
-                                           optional_element,
-                                           rtcx::reflect_bool(as_scalar),
-                                           rtcx::reflect_bool(may_be_nullable));
+                                           rtcx::reflect_bool(as_scalar));
     in_types.push_back(accessor);
   }
 
@@ -271,16 +266,12 @@ auto reflect(udf_source_type source_type,
     auto& out             = outputs[i];
     auto column           = std::visit([](auto& c) { return reflect_output_column(c); }, out);
     auto element          = std::visit([](auto& c) { return reflect_output_element(c); }, out);
-    auto optional_element = std::format("cuda::std::optional<{}>", element);
     bool as_scalar        = false;  // never scalar
-    bool may_be_nullable  = output_may_be_nullable[i];
     auto accessor         = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect_int(i),
                                            column,
                                            element,
-                                           optional_element,
-                                           rtcx::reflect_bool(as_scalar),
-                                           rtcx::reflect_bool(may_be_nullable));
+                                           rtcx::reflect_bool(as_scalar));
 
     out_types.push_back(accessor);
   }
@@ -350,16 +341,13 @@ void run(null_aware is_null_aware,
          void* user_data,
          std::span<input_column_view const> inputs,
          std::span<output_column const> outputs,
-         std::span<char const> input_may_be_nullable,
-         std::span<char const> output_may_be_nullable,
          std::string const& udf,
          udf_source_type source_type,
          rmm::cuda_stream_view stream,
          rmm::device_async_resource_ref mr)
 {
-  auto [in_types, out_types, ptx_in_types, ptx_out_types] =
-    reflect(source_type, inputs, outputs, input_may_be_nullable, output_may_be_nullable);
-  auto kernel          = instantiate(is_null_aware,
+  auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
+  auto kernel                                             = instantiate(is_null_aware,
                             has_user_data,
                             in_types,
                             out_types,
@@ -367,8 +355,8 @@ void run(null_aware is_null_aware,
                             ptx_out_types,
                             udf,
                             source_type);
-  auto [cols, handles] = to_args(inputs, outputs, stream, mr);
-  auto* input_cols     = reinterpret_cast<column_device_view_core const*>(cols.data());
+  auto [cols, handles]                                    = to_args(inputs, outputs, stream, mr);
+  auto* input_cols = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* output_cols =
     reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
   return launch(
@@ -496,8 +484,6 @@ auto get_null_transformation(null_aware is_null_aware,
                              std::span<transform_input const> inputs,
                              std::span<transform_output const> outputs)
 {
-  std::vector<char> input_may_be_nullable(inputs.size(), true);
-
   auto any_input_nullable = std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
     return std::visit([](auto& c) { return c.nullable(); }, in);
   });
@@ -517,7 +503,7 @@ auto get_null_transformation(null_aware is_null_aware,
     output_may_be_nullable.push_back(may_eval_nulls);
   }
 
-  return std::make_tuple(std::move(input_may_be_nullable), std::move(output_may_be_nullable));
+  return output_may_be_nullable;
 }
 
 void perform_checks(udf_source_type source_type,
@@ -594,12 +580,12 @@ void perform_checks(udf_source_type source_type,
                "for each non-string column)",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::none_of(cuda::counting_iterator(size_t{0}),
-                            cuda::counting_iterator(string_offsets.size()),
-                            [&](auto i) {
-                              if (outputs[i].type.id() == type_id::STRING) { return false; }
-                              return !string_offsets.empty() && string_offsets[i] == nullptr;
-                            }),
+  CUDF_EXPECTS(std::all_of(cuda::counting_iterator(size_t{0}),
+                           cuda::counting_iterator(string_offsets.size()),
+                           [&](auto i) {
+                             if (outputs[i].type.id() == type_id::STRING) { return true; }
+                             return string_offsets.empty() || string_offsets[i] == nullptr;
+                           }),
                "String offsets must only be provided for string outputs",
                std::invalid_argument);
 }
@@ -837,8 +823,7 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
                                          rmm::device_async_resource_ref mr)
 {
   auto row_size = in_row_size.has_value() ? *in_row_size : jit::get_projection_size(inputs);
-  auto [input_may_be_nullable, output_may_be_nullable] =
-    get_null_transformation(is_null_aware, inputs, outputs);
+  auto output_may_be_nullable    = get_null_transformation(is_null_aware, inputs, outputs);
   auto [output_columns, stencil] = make_outputs(is_null_aware,
                                                 row_size,
                                                 inputs,
@@ -858,8 +843,6 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
                      user_data.value_or(nullptr),
                      inputs,
                      output_columns,
-                     input_may_be_nullable,
-                     output_may_be_nullable,
                      udf,
                      source_type,
                      stream,

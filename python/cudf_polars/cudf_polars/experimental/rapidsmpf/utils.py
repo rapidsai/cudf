@@ -35,7 +35,7 @@ import rmm.mr
 import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.dsl.ir import Cache, Filter, HStack, Join, Projection, Select
+from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -259,6 +260,13 @@ def maybe_remap_partitioning(
             inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
             local=_remap_scheme_select(ir, partitioning.local),
         )
+    if isinstance(ir, GroupBy):
+        return Partitioning(
+            inter_rank=_remap_scheme_simple(
+                ir, partitioning.inter_rank, ir.children[0]
+            ),
+            local=_remap_scheme_simple(ir, partitioning.local, ir.children[0]),
+        )
     if isinstance(ir, (Cache, Join, Projection, Filter)):
         child = child_ir if child_ir is not None else ir.children[0]
         return Partitioning(
@@ -327,6 +335,7 @@ def _evaluate_chunk_sync(
     chunk: TableChunk,
     ir: IR,
     ir_context: IRExecutionContext,
+    br: BufferResource,
 ) -> TableChunk:
     """
     Apply an IR node's do_evaluate to a table chunk (synchronous).
@@ -342,6 +351,8 @@ def _evaluate_chunk_sync(
         The IR node to evaluate.
     ir_context
         The IR execution context.
+    br
+        The buffer resource for lifetime tracking.
 
     Returns
     -------
@@ -355,7 +366,9 @@ def _evaluate_chunk_sync(
         DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
         context=ir_context,
     )
-    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=br
+    )
 
 
 async def evaluate_chunk(
@@ -393,7 +406,7 @@ async def evaluate_chunk(
     with opaque_memory_usage(extra):
         for single_ir in irs:
             chunk = await asyncio.to_thread(
-                _evaluate_chunk_sync, chunk, single_ir, ir_context
+                _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
             )
         return chunk
 

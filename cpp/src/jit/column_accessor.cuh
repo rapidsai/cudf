@@ -9,28 +9,23 @@
 #include <cudf/types.hpp>
 
 #include <cuda/std/cstddef>
+#include <cuda/std/optional>
 #include <cuda/std/span>
 #include <cuda/std/type_traits>
 
 namespace cudf {
 namespace jit {
 
-template <int32_t Index,
-          typename Column,
-          typename Element,
-          typename OptionalElement,
-          bool AsScalar,
-          bool MayBeNullable>
+template <int32_t Index, typename Column, typename Element, bool AsScalar>
 struct column_accessor {
   static constexpr int32_t index = Index;
   using column_type              = Column;
   using element_type             = Element;
-  using optional_element_type    = OptionalElement;
+  using optional_element_type    = cuda::std::optional<element_type>;
 
-  static constexpr bool as_scalar       = AsScalar;
-  static constexpr bool may_be_nullable = MayBeNullable;
+  static constexpr bool as_scalar = AsScalar;
 
-  static constexpr bool is_strings_output =
+  static constexpr bool is_mutable_string =
     cuda::std::is_same_v<element_type, cuda::std::span<char>>;
 
   static __device__ constexpr size_type map_index(size_type row)
@@ -56,32 +51,18 @@ struct column_accessor {
 
   static __device__ bool is_null(auto const* __restrict__ cols, size_type row)
   {
-    if constexpr (!may_be_nullable) {
-      return false;
-    } else {
-      return column(cols).is_null(map_index(row));
-    }
+    return column(cols).is_null(map_index(row));
   }
 
   static __device__ bool is_valid(auto const* __restrict__ cols, size_type row)
   {
-    if constexpr (!may_be_nullable) {
-      return true;
-    } else {
-      return column(cols).is_valid(map_index(row));
-    }
+    return column(cols).is_valid(map_index(row));
   }
 
   static __device__ optional_element_type nullable_element(auto const* __restrict__ cols,
                                                            size_type row)
   {
-    auto& c = column(cols);
-
-    if constexpr (!may_be_nullable) {
-      return c.template element<element_type>(map_index(row));
-    } else {
-      return c.template nullable_element<element_type>(map_index(row));
-    }
+    return column(cols).template nullable_element<element_type>(map_index(row));
   }
 
   static __device__ void set_null_mask_word(auto const* __restrict__ cols,
@@ -89,15 +70,11 @@ struct column_accessor {
                                             bitmask_type word)
     requires(!as_scalar)
   {
-    if constexpr (!may_be_nullable) {
-      return;
-    } else {
-      auto* mask = column(cols).null_mask();
+    auto* mask = column(cols).null_mask();
 
-      if (mask == nullptr) { return; }
+    if (mask == nullptr) { return; }
 
-      mask[word_index] = word;
-    }
+    mask[word_index] = word;
   }
 
   static __device__ void assign(auto const* __restrict__ cols, size_type row, element_type value)
@@ -109,7 +86,7 @@ struct column_accessor {
   static __device__ element_type output_arg(auto const* __restrict__ cols, size_type row)
     requires(!as_scalar)
   {
-    if constexpr (is_strings_output) {
+    if constexpr (is_mutable_string) {
       return element(cols, row);
     } else {
       return {};
@@ -120,7 +97,7 @@ struct column_accessor {
                                                           size_type row)
     requires(!as_scalar)
   {
-    if constexpr (is_strings_output) {
+    if constexpr (is_mutable_string) {
       return element(cols, row);
     } else {
       return {};
