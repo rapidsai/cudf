@@ -15,6 +15,7 @@
 
 #include <cuda/iterator>
 
+#include <stdexcept>
 #include <vector>
 
 struct StringsReplaceTest : public cudf::test::BaseFixture {
@@ -654,7 +655,7 @@ TEST_F(StringsReplaceTest, ReplaceColumnMismatchedSizes)
   auto const tv      = cudf::strings_column_view(targets);
   auto const rv      = cudf::strings_column_view(repls);
 
-  EXPECT_THROW(cudf::strings::replace(iv, tv, rv), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace(iv, tv, rv), std::invalid_argument);
 
   // repls.size() != input.size() → throws
   auto const targets2 = cudf::test::strings_column_wrapper({"l", "o"});
@@ -662,7 +663,7 @@ TEST_F(StringsReplaceTest, ReplaceColumnMismatchedSizes)
   auto const tv2      = cudf::strings_column_view(targets2);
   auto const rv2      = cudf::strings_column_view(repls2);
 
-  EXPECT_THROW(cudf::strings::replace(iv, tv2, rv2), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace(iv, tv2, rv2), std::invalid_argument);
 }
 
 TEST_F(StringsReplaceTest, ReplaceColumnAllNullInput)
@@ -702,8 +703,8 @@ TEST_F(StringsReplaceTest, ReplaceColumnEmptyInputMismatchedSizes)
   auto const ev      = cudf::strings_column_view(empty);
   auto const nv      = cudf::strings_column_view(nonzero);
 
-  EXPECT_THROW(cudf::strings::replace(ev, nv, ev), cudf::logic_error);
-  EXPECT_THROW(cudf::strings::replace(ev, ev, nv), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace(ev, nv, ev), std::invalid_argument);
+  EXPECT_THROW(cudf::strings::replace(ev, ev, nv), std::invalid_argument);
 }
 
 TEST_F(StringsReplaceTest, ReplaceColumnCombinedNulls)
