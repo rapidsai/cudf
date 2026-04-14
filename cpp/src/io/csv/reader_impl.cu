@@ -251,13 +251,10 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   rmm::cuda_stream_view stream)
 {
   cudf::scoped_range rng{"csv::load_data_and_gather_row_offsets"};
-  constexpr size_t default_chunk_bytes = 64 * 1024 * 1024;  // 64MB
+  constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
 
-  auto const data_size = data.has_value() ? data->size() : source->size();
-  // When loading the whole file, process all data in one chunk to eliminate
-  // inter-chunk kernel launch and synchronization overhead.
-  auto const max_chunk_bytes = load_whole_file ? data_size : default_chunk_bytes;
-  auto const buffer_size     = std::min(max_chunk_bytes, data_size);
+  auto const data_size      = data.has_value() ? data->size() : source->size();
+  auto const buffer_size    = std::min(max_chunk_bytes, data_size);
   auto const max_input_size = [&] {
     if (range_end == data_size) {
       return data_size - byte_range_offset;
