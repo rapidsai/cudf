@@ -93,7 +93,6 @@ cache:
       - flatbuffers =${{ flatbuffers_version }}
       - rapids-logger =0.2
       - zlib ${{ zlib_version }}
-      - zstandard >=0.25.0
 
 outputs:
   - package:

@@ -507,9 +507,6 @@ dependencies:
         packages:
           - flatbuffers==24.3.25
           - librdkafka>=2.11.1,<2.12.0
-      - output_types: [conda, pyproject, requirements]
-        packages:
-          - zstandard
   depends_on_libnvcomp:
     common:
       - output_types: conda
