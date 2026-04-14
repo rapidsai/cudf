@@ -140,6 +140,6 @@ void roaring_bitmap::contains_async(cudf::column_view const& keys,
   }
 }
 
-roaring_bitmap_type roaring_bitmap::type() const { return type_; }
+roaring_bitmap_type roaring_bitmap::type() const { return _type; }
 
 }  // namespace cudf
