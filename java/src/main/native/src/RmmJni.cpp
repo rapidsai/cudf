@@ -123,9 +123,15 @@ class tracking_resource_adaptor_impl {
  private:
   cuda::mr::any_resource<cuda::mr::device_accessible> upstream_;
   std::size_t const size_align;
+  // sum of what is currently allocated
   std::atomic_size_t total_allocated{0};
+  // the maximum total allocated for the lifetime of this class
   std::size_t max_total_allocated{0};
+  // the sum of what is currently outstanding from the last
+  // `reset_scoped_max_total_allocated` call. This can be negative.
   std::atomic_long scoped_allocated{0};
+  // the maximum total allocated relative to the last
+  // `reset_scoped_max_total_allocated` call.
   long scoped_max_total_allocated{0};
   std::mutex max_total_allocated_mutex;
 };
@@ -199,13 +205,14 @@ static_assert(cuda::mr::resource_with<tracking_resource_adaptor, cuda::mr::devic
  */
 class java_event_handler_memory_resource_impl {
  public:
-  java_event_handler_memory_resource_impl(JNIEnv* env,
-                                          jobject jhandler,
-                                          jlongArray jalloc_thresholds,
-                                          jlongArray jdealloc_thresholds,
-                                          rmm::device_async_resource_ref upstream,
-                                          tracking_resource_adaptor* tracker)
-    : upstream_{upstream}, tracker_(tracker)
+  java_event_handler_memory_resource_impl(
+    JNIEnv* env,
+    jobject jhandler,
+    jlongArray jalloc_thresholds,
+    jlongArray jdealloc_thresholds,
+    cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+    tracking_resource_adaptor tracker)
+    : upstream_{std::move(upstream)}, tracker_(std::move(tracker))
   {
     if (env->GetJavaVM(&jvm) < 0) { throw std::runtime_error("GetJavaVM failed"); }
 
@@ -238,6 +245,9 @@ class java_event_handler_memory_resource_impl {
 
   virtual ~java_event_handler_memory_resource_impl()
   {
+    // This should normally be called by a JVM thread. If the JVM environment is missing then this
+    // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
+    // already be destroyed and this thread should not try to attach to get an environment.
     JNIEnv* env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void**>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
       handler_obj = cudf::jni::del_global_ref(env, handler_obj);
@@ -251,17 +261,20 @@ class java_event_handler_memory_resource_impl {
   {
     std::size_t total_before;
     void* result;
+    // a non-zero retry_count signifies that the `on_alloc_fail`
+    // callback is being invoked while re-attempting an allocation
+    // that had previously failed.
     int retry_count = 0;
     while (true) {
       try {
-        total_before = tracker_->get_total_allocated();
-        result       = upstream_.allocate(stream, num_bytes);
+        total_before = tracker_.get_total_allocated();
+        result       = upstream_.allocate(stream, num_bytes, alignment);
         break;
       } catch (rmm::out_of_memory const& e) {
         if (!on_alloc_fail(num_bytes, retry_count++)) { throw; }
       }
     }
-    auto total_after = tracker_->get_total_allocated();
+    auto total_after = tracker_.get_total_allocated();
 
     try {
       check_for_threshold_callback(total_before,
@@ -271,7 +284,8 @@ class java_event_handler_memory_resource_impl {
                                    "onAllocThreshold",
                                    total_after);
     } catch (std::exception const& e) {
-      upstream_.deallocate(stream, result, num_bytes);
+      // Free the allocation as app will think the exception means the memory was not allocated.
+      upstream_.deallocate(stream, result, num_bytes, alignment);
       throw;
     }
 
@@ -283,9 +297,9 @@ class java_event_handler_memory_resource_impl {
                           std::size_t size,
                           std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
-    auto total_before = tracker_->get_total_allocated();
-    upstream_.deallocate(stream, p, size);
-    auto total_after = tracker_->get_total_allocated();
+    auto total_before = tracker_.get_total_allocated();
+    upstream_.deallocate(stream, p, size, alignment);
+    auto total_after = tracker_.get_total_allocated();
     check_for_threshold_callback(total_after,
                                  total_before,
                                  dealloc_thresholds,
@@ -295,12 +309,13 @@ class java_event_handler_memory_resource_impl {
   }
 
  protected:
-  rmm::device_async_resource_ref upstream_;
-  tracking_resource_adaptor* const tracker_;
+  cuda::mr::any_resource<cuda::mr::device_accessible> upstream_;
+  tracking_resource_adaptor tracker_;
   jmethodID on_alloc_fail_method;
   bool use_old_alloc_fail_interface;
   jmethodID on_alloc_threshold_method;
   jmethodID on_dealloc_threshold_method;
+  // sorted memory thresholds to trigger callbacks
   std::vector<std::size_t> alloc_thresholds{};
   std::vector<std::size_t> dealloc_thresholds{};
   JavaVM* jvm;
@@ -315,6 +330,7 @@ class java_event_handler_memory_resource_impl {
       cudf::jni::native_jlongArray jvalues(env, from_java);
       thresholds.insert(thresholds.end(), jvalues.data(), jvalues.data() + jvalues.size());
     } else {
+      // use a single, maximum-threshold value so we don't have to always check for the corner case.
       thresholds.push_back(std::numeric_limits<std::size_t>::max());
     }
   }
@@ -346,6 +362,7 @@ class java_event_handler_memory_resource_impl {
                                     std::size_t current_total)
   {
     if (high >= thresholds.front() && low < thresholds.back()) {
+      // could use binary search, but assumption is threshold count is very small
       auto it = std::find_if(thresholds.begin(), thresholds.end(), [=](std::size_t t) -> bool {
         return low < t && high >= t;
       });
@@ -363,14 +380,15 @@ class java_event_handler_memory_resource_impl {
 class java_debug_event_handler_memory_resource_impl final
   : public java_event_handler_memory_resource_impl {
  public:
-  java_debug_event_handler_memory_resource_impl(JNIEnv* env,
-                                                jobject jhandler,
-                                                jlongArray jalloc_thresholds,
-                                                jlongArray jdealloc_thresholds,
-                                                rmm::device_async_resource_ref upstream,
-                                                tracking_resource_adaptor* tracker)
+  java_debug_event_handler_memory_resource_impl(
+    JNIEnv* env,
+    jobject jhandler,
+    jlongArray jalloc_thresholds,
+    jlongArray jdealloc_thresholds,
+    cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+    tracking_resource_adaptor tracker)
     : java_event_handler_memory_resource_impl(
-        env, jhandler, jalloc_thresholds, jdealloc_thresholds, upstream, tracker)
+        env, jhandler, jalloc_thresholds, jdealloc_thresholds, std::move(upstream), std::move(tracker))
   {
     jclass cls = env->GetObjectClass(jhandler);
     if (cls == nullptr) { throw cudf::jni::jni_exception("class not found"); }
@@ -428,18 +446,19 @@ class java_debug_event_handler_memory_resource_impl final
  */
 class java_event_handler_memory_resource {
  public:
-  java_event_handler_memory_resource(JNIEnv* env,
-                                     jobject jhandler,
-                                     jlongArray jalloc_thresholds,
-                                     jlongArray jdealloc_thresholds,
-                                     rmm::device_async_resource_ref upstream,
-                                     tracking_resource_adaptor* tracker,
-                                     bool enable_debug)
+  java_event_handler_memory_resource(
+    JNIEnv* env,
+    jobject jhandler,
+    jlongArray jalloc_thresholds,
+    jlongArray jdealloc_thresholds,
+    cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+    tracking_resource_adaptor tracker,
+    bool enable_debug)
     : impl_(enable_debug
               ? std::make_shared<java_debug_event_handler_memory_resource_impl>(
                   env, jhandler, jalloc_thresholds, jdealloc_thresholds, upstream, tracker)
               : std::make_shared<java_event_handler_memory_resource_impl>(
-                  env, jhandler, jalloc_thresholds, jdealloc_thresholds, upstream, tracker))
+                  env, jhandler, jalloc_thresholds, jdealloc_thresholds, std::move(upstream), std::move(tracker)))
   {
   }
 
@@ -997,9 +1016,9 @@ Java_ai_rapids_cudf_Rmm_newEventHandlerResourceAdaptor(JNIEnv* env,
   JNI_TRY
   {
     auto upstream = get_resource(child);
-    auto& t       = get_tracking_adaptor(tracker);
+    auto t        = get_tracking_adaptor(tracker);
     return make_jni_resource(java_event_handler_memory_resource(
-      env, handler_obj, jalloc_thresholds, jdealloc_thresholds, upstream, &t, enable_debug));
+      env, handler_obj, jalloc_thresholds, jdealloc_thresholds, upstream, t, enable_debug));
   }
   JNI_CATCH(env, 0);
 }
