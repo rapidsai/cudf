@@ -130,7 +130,7 @@ def _parse_hardware_binding(value: str) -> HardwareBindingPolicy:
     """
     Parse a JSON string into a :class:`HardwareBindingPolicy`.
 
-    Examples: ``'{"enabled": false}'``, ``'{"gpu_id": 2, "raise_on_fail": true}'``.
+    Examples: ``'{"enabled": false}'``, ``'{"raise_on_fail": true}'``.
     """
     return HardwareBindingPolicy(**json.loads(value))
 
@@ -644,7 +644,7 @@ class StreamingOptions:
             type=_parse_hardware_binding,
             help=textwrap.dedent("""\
                 Hardware binding policy as a JSON object
-                (e.g. '{"gpu_id": 2}', '{"enabled": false}').
+                (e.g. '{"enabled": false}', '{"raise_on_fail": true}').
                 Env: CUDF_POLARS__FRONTEND__HARDWARE_BINDING.
                 Built-in default: enabled with auto GPU detection."""),
         )
