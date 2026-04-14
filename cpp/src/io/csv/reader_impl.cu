@@ -699,9 +699,13 @@ decode_result decode_data(parse_options const& parse_opts,
     stream);
 
   for (int i = 0; i < num_active_columns; ++i) {
-    auto const valid_count =
-      cudf::detail::count_set_bits(out_buffers[i].null_mask(), 0, num_records, stream);
-    out_buffers[i].null_count() = num_records - valid_count;
+    if (column_types[i].id() == type_id::STRING) {
+      out_buffers[i].null_count() = num_records;
+    } else {
+      auto const valid_count =
+        cudf::detail::count_set_bits(out_buffers[i].null_mask(), 0, num_records, stream);
+      out_buffers[i].null_count() = num_records - valid_count;
+    }
   }
 
   return {std::move(out_buffers), std::move(is_quoted_flags_storage)};
