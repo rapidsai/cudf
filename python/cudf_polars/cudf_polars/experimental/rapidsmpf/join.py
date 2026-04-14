@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -1000,6 +1001,35 @@ async def _forward_with_metadata(
         await ch_out.drain(context)
 
 
+async def _run_bloom_apply_network(
+    context: Context,
+    executor: StreamingExecutor,
+    ch_filter_for_apply: Channel[TableChunk],
+    ch_large_raw: Channel[TableChunk],
+    ch_large_filtered: Channel[TableChunk],
+    filter_message: Message,
+    bloom: BloomFilter,
+    large_key_indices: tuple[int, ...],
+) -> None:
+    def _run() -> None:
+        with ThreadPoolExecutor(max_workers=executor.num_py_executors) as py_executor:
+            run_actor_network(
+                actors=[
+                    push_to_channel(context, ch_filter_for_apply, [filter_message]),
+                    bloom.apply(
+                        context,
+                        ch_filter_for_apply,
+                        ch_large_raw,
+                        ch_large_filtered,
+                        large_key_indices,
+                    ),
+                ],
+                py_executor=py_executor,
+            )
+
+    await asyncio.to_thread(_run)
+
+
 async def _bloom_shuffle_join(
     context: Context,
     comm: Communicator,
@@ -1014,6 +1044,7 @@ async def _bloom_shuffle_join(
     right_metadata: ChannelMetadata,
     strategy: JoinStrategy,
     collective_ids: list[int],
+    executor: StreamingExecutor,
     *,
     tracer: ActorTracer | None,
 ) -> None:
@@ -1100,14 +1131,21 @@ async def _bloom_shuffle_join(
         async with shutdown_on_error(
             context, ch_build_in, ch_filter, trace_ir=ir, ir_context=ir_context
         ):
-            await asyncio.to_thread(
-                run_actor_network,
-                actors=[
-                    push_to_channel(context, ch_build_in, small_key_msgs),
-                    bloom.build(context, ch_build_in, ch_filter, bloom_tag),
-                    pull_filter_actor,
-                ],
-            )
+
+            def _run_bloom_build() -> None:
+                with ThreadPoolExecutor(
+                    max_workers=executor.num_py_executors
+                ) as py_executor:
+                    run_actor_network(
+                        actors=[
+                            push_to_channel(context, ch_build_in, small_key_msgs),
+                            bloom.build(context, ch_build_in, ch_filter, bloom_tag),
+                            pull_filter_actor,
+                        ],
+                        py_executor=py_executor,
+                    )
+
+            await asyncio.to_thread(_run_bloom_build)
             (filter_message,) = deferred_filter.release()
 
         # Stream the large side through bloom.apply without buffering it.
@@ -1146,18 +1184,15 @@ async def _bloom_shuffle_join(
                 _relay_chunks_raw(
                     context, ch_large_raw, large_chunks_init, ch_large, trace_ir=ir
                 ),
-                asyncio.to_thread(
-                    run_actor_network,
-                    actors=[
-                        push_to_channel(context, ch_filter_for_apply, [filter_message]),
-                        bloom.apply(
-                            context,
-                            ch_filter_for_apply,
-                            ch_large_raw,
-                            ch_large_filtered,
-                            large_key_indices,
-                        ),
-                    ],
+                _run_bloom_apply_network(
+                    context,
+                    executor,
+                    ch_filter_for_apply,
+                    ch_large_raw,
+                    ch_large_filtered,
+                    filter_message,
+                    bloom,
+                    large_key_indices,
                 ),
                 _forward_with_metadata(
                     context,
@@ -1273,6 +1308,7 @@ async def join_actor(
                 right_metadata,
                 strategy,
                 collective_ids,
+                executor,
                 tracer=tracer,
             )
             return
