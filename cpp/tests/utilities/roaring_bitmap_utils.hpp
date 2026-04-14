@@ -34,7 +34,6 @@ inline auto serialize_roaring_bitmap(cudf::host_span<Key const> keys)
     roaring::api::roaring_bitmap_portable_serialize(bitmap,
                                                     reinterpret_cast<char*>(serialized.data()));
     roaring::api::roaring_bitmap_free(bitmap);
-    return serialized;
   } else {
     auto* bitmap = roaring::api::roaring64_bitmap_create();
     auto ctx =
@@ -48,6 +47,7 @@ inline auto serialize_roaring_bitmap(cudf::host_span<Key const> keys)
     roaring::api::roaring64_bitmap_portable_serialize(bitmap,
                                                       reinterpret_cast<char*>(serialized.data()));
     roaring::api::roaring64_bitmap_free(bitmap);
-    return serialized;
   }
+
+  return serialized;
 }
