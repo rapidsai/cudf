@@ -469,10 +469,7 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
-        hw_binding = cast(
-            HardwareBindingPolicy,
-            engine_options.get("hardware_binding", HardwareBindingPolicy()),
-        )
+        hw_binding = engine_options.get("hardware_binding", HardwareBindingPolicy())
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
