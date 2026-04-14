@@ -904,6 +904,9 @@ def _(
         return replace([named_post_agg.value], replacements)[0]
     elif isinstance(node.options, plrs._expr_nodes.WindowMapping):
         # pl.col("a").over(...)
+        # Note: pl.col("a").rolling(...).over("g") also lands here. But
+        # is not supported in polars < 1.39 since the AExpr::Rolling was
+        # not exposed until polars 1.39.
         with set_expr_context(translator, ExecutionContext.WINDOW):
             agg = translator.translate_expr(n=node.function, schema=schema)
         name_gen = unique_names(schema)
@@ -948,7 +951,7 @@ def _(
             )
         ]
         children = (*by_exprs, *((order_by_expr,) if has_order_by else ()), *child_deps)
-        return expr.GroupedRollingWindow(
+        return expr.WindowExpr(
             dtype,
             (mapping, has_order_by, descending, nulls_last),
             named_aggs,
