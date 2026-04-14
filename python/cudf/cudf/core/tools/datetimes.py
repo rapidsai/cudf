@@ -559,7 +559,7 @@ class DateOffset:
     def __eq__(self, other):
         if isinstance(other, str):
             return self._maybe_as_fast_pandas_offset() == other
-        if isinstance(other, pd.tseries.offsets.BaseOffset):
+        if isinstance(other, (pd.DateOffset, pd.offsets.Tick)):
             return self._maybe_as_fast_pandas_offset() == other
         if not isinstance(other, DateOffset):
             return NotImplemented
