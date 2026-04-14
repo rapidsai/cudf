@@ -47,6 +47,8 @@ if TYPE_CHECKING:
 
     from cudf_polars.typing import NodeTraverser
 
+_HAS_ROLLING_FUNCTION = hasattr(plrs._expr_nodes, "RollingFunction")
+
 __all__ = ["Translator", "translate_named_expr"]
 
 
@@ -804,6 +806,32 @@ def _(
             expr.StructFunction.Name.from_polars(name),
             options,
             *(translator.translate_expr(n=n, schema=schema) for n in node.input),
+        )
+    elif _HAS_ROLLING_FUNCTION and isinstance(
+        name, plrs._expr_nodes.RollingFunction
+    ):
+        window_size, min_periods, weights, center, fn_params = options
+        if weights is not None:
+            raise NotImplementedError("Weighted rolling windows")
+        RF = plrs._expr_nodes.RollingFunction
+        agg_names = {
+            RF.Sum: "sum",
+            RF.Min: "min",
+            RF.Max: "max",
+            RF.Mean: "mean",
+            RF.Var: "var",
+            RF.Std: "std",
+        }
+        agg_name = agg_names.get(name)
+        if agg_name is None:
+            raise NotImplementedError(
+                f"Unsupported rolling function: {name}"
+            )
+        (child,) = (
+            translator.translate_expr(n=n, schema=schema) for n in node.input
+        )
+        return expr.FixedSizeRollingWindow(
+            dtype, agg_name, window_size, min_periods, center, fn_params, child
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
