@@ -296,7 +296,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
  * @param[out] valids The bitmaps indicating whether column fields are valid
  * @param[out] is_quoted_flags Per-column boolean arrays tracking which rows were quoted fields
  */
-CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
+CUDF_KERNEL void __launch_bounds__(csvparse_block_dim, 8)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
                       device_span<char const> data,
                       device_span<column_parse::flags const> column_flags,
