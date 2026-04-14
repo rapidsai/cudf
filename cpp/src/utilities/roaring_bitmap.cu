@@ -108,9 +108,7 @@ std::unique_ptr<cudf::column> roaring_bitmap::contains_async(
 {
   auto result = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::BOOL8}, keys.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-
   contains_async(keys, result->mutable_view(), stream);
-
   return result;
 }
 
@@ -137,6 +135,42 @@ void roaring_bitmap::contains_async(cudf::column_view const& keys,
                                                         keys.end<cuda::std::uint64_t>(),
                                                         output.begin<bool>(),
                                                         stream);
+  }
+}
+
+std::unique_ptr<cudf::column> roaring_bitmap::not_contains_async(
+  cudf::column_view const& keys,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr) const
+{
+  auto result = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::BOOL8}, keys.size(), cudf::mask_state::UNALLOCATED, stream, mr);
+  not_contains_async(keys, result->mutable_view(), stream);
+  return result;
+}
+
+void roaring_bitmap::not_contains_async(cudf::column_view const& keys,
+                                        cudf::mutable_column_view const& output,
+                                        rmm::cuda_stream_view stream) const
+{
+  CUDF_EXPECTS(output.type().id() == cudf::type_id::BOOL8, "Output column must be BOOL8");
+  CUDF_EXPECTS(output.size() >= keys.size(), "Output column size must be >= keys column size");
+
+  auto output_iter =
+    cuda::make_transform_output_iterator(output.begin<bool>(), cuda::std::logical_not<bool>{});
+
+  if (_type == roaring_bitmap_type::BITS_32) {
+    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT32,
+                 "Key column must be UINT32 for a 32-bit roaring bitmap",
+                 std::invalid_argument);
+    _impl->contains_async<roaring_bitmap_type::BITS_32>(
+      keys.begin<cuda::std::uint32_t>(), keys.end<cuda::std::uint32_t>(), output_iter, stream);
+  } else {
+    CUDF_EXPECTS(keys.type().id() == cudf::type_id::UINT64,
+                 "Key column must be UINT64 for a 64-bit roaring bitmap",
+                 std::invalid_argument);
+    _impl->contains_async<roaring_bitmap_type::BITS_64>(
+      keys.begin<cuda::std::uint64_t>(), keys.end<cuda::std::uint64_t>(), output_iter, stream);
   }
 }
 

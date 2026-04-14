@@ -145,6 +145,38 @@ class roaring_bitmap {
                       cudf::mutable_column_view const& output,
                       rmm::cuda_stream_view stream) const;
 
+  /**
+   * @brief Asynchronously queries the bitmap for non-membership of each key in the input column.
+   *
+   * The input column must have dtype UINT32 (for `BITS_32`) or UINT64 (for `BITS_64`).
+   *
+   * @param keys Key column to query
+   * @param output Output column to store the result
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @throws std::invalid_argument if the key or output column dtypes are invalid
+   */
+  void not_contains_async(cudf::column_view const& keys,
+                          cudf::mutable_column_view const& output,
+                          rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Asynchronously queries the bitmap for non-membership of each key in the input column.
+   *
+   * The input column must have dtype UINT32 (for `BITS_32`) or UINT64 (for `BITS_64`).
+   *
+   * @param keys Key column to query
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource for the output column allocation
+   * @return A BOOL8 column indicating positions of the absent keys
+   *
+   * @throws std::invalid_argument if the key column dtype is invalid
+   */
+  [[nodiscard]] std::unique_ptr<cudf::column> not_contains_async(
+    cudf::column_view const& keys,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
  private:
   roaring_bitmap_type _type;
   std::unique_ptr<roaring_bitmap_impl> _impl;

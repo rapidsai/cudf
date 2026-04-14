@@ -249,12 +249,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
   auto const row_mask_view = row_mask_column->mutable_view();
 
   if (num_deletion_vectors == 1) {
-    deletion_vector_refs.front().get().contains_async(row_index_column, row_mask_view, stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      row_mask_view.begin<bool>(),
-                      row_mask_view.end<bool>(),
-                      row_mask_view.begin<bool>(),
-                      cuda::std::logical_not<bool>{});
+    deletion_vector_refs.front().get().not_contains_async(row_index_column, row_mask_view, stream);
     return row_mask_column;
   }
 
@@ -277,7 +272,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
                   [&](auto const dv_idx) {
                     auto const begin = deletion_vector_row_offsets[dv_idx];
                     auto const end   = deletion_vector_row_offsets[dv_idx + 1];
-                    deletion_vector_refs[dv_idx].get().contains_async(
+                    deletion_vector_refs[dv_idx].get().not_contains_async(
                       cudf::detail::slice(row_index_column, begin, end, streams[dv_idx]),
                       cudf::detail::slice(row_mask_view, begin, end, streams[dv_idx]),
                       streams[dv_idx]);
@@ -290,18 +285,13 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
                   [&](auto const dv_idx) {
                     auto const begin = deletion_vector_row_offsets[dv_idx];
                     auto const end   = deletion_vector_row_offsets[dv_idx + 1];
-                    deletion_vector_refs[dv_idx].get().contains_async(
+                    deletion_vector_refs[dv_idx].get().not_contains_async(
                       cudf::detail::slice(row_index_column, begin, end, stream),
                       cudf::detail::slice(row_mask_view, begin, end, stream),
                       stream);
                   });
   }
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    row_mask_view.begin<bool>(),
-                    row_mask_view.end<bool>(),
-                    row_mask_view.begin<bool>(),
-                    cuda::std::logical_not<bool>{});
   return row_mask_column;
 }
 
