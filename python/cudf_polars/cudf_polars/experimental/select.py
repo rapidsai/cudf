@@ -24,6 +24,7 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
     _dynamic_planning_on,
+    _extract_over_shuffle_indices,
     _lower_ir_fallback,
 )
 
@@ -462,6 +463,14 @@ def _(
                 config_options,
             )
         except NotImplementedError:
+            if _dynamic_planning_on(config_options):
+                indices = _extract_over_shuffle_indices(
+                    [e.value for e in ir.exprs], child.schema
+                )
+                if indices is not None and len(indices) > 0:
+                    new_node = ir.reconstruct([child])
+                    partition_info[new_node] = pi
+                    return new_node, partition_info
             return _lower_ir_fallback(
                 ir, rec, msg="This selection is not supported for multiple partitions."
             )

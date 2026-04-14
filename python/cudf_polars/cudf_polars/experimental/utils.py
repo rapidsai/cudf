@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -143,6 +144,44 @@ def _get_unique_fractions(
 def _contains_over(exprs: Sequence[Expr]) -> bool:
     """Return True if any expression contains a window expression."""
     return any(isinstance(e, GroupedWindow) for e in traversal(exprs))
+
+
+def _extract_over_shuffle_indices(
+    exprs: Sequence[Expr], child_schema: Schema
+) -> tuple[int, ...] | None:
+    """
+    Return column indices for hash-shuffling a window over() operation.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Empty: no GroupedWindow found; plain chunkwise is correct.
+        Non-empty: all GroupedWindow share the same partition-by keys;
+        values are indices of those keys in ``child_schema``.
+    None
+        Multiple distinct partition-by key sets; not supported for
+        multi-partition streaming (caller should fall back to
+        single-partition).
+    """
+    seen_key_sets: set[frozenset[str]] = set()
+    for node in traversal(exprs):
+        if isinstance(node, GroupedWindow):
+            seen_key_sets.add(
+                frozenset(
+                    child.name
+                    for child in node.children[: node.by_count]
+                    if isinstance(child, Col)
+                )
+            )
+    if not seen_key_sets:
+        return ()
+    if len(seen_key_sets) > 1:
+        return None
+    schema_keys = list(child_schema.keys())
+    try:
+        return tuple(schema_keys.index(n) for n in next(iter(seen_key_sets)))
+    except ValueError:
+        return None
 
 
 def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:

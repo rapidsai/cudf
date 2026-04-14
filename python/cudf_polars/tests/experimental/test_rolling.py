@@ -62,6 +62,84 @@ def test_rolling_datetime(request, engine):
 
 
 @pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.len().over("g"),
+        pl.col("x").sum().over("g", "g2"),
+        pl.col("x").sum().over("g_null"),
+        pl.col("x").sum().over("g", order_by="s"),
+        pl.col("x").rank(method="dense", descending=True).over("g"),
+        pl.col("x").rank(method="min").over("g", "g2"),
+        pl.col("x").cum_sum().over("g", order_by="s"),
+        pl.when((pl.col("x") % 2) == 0)
+        .then(None)
+        .otherwise(pl.col("x"))
+        .fill_null(strategy="forward")
+        .over("g", order_by="s"),
+    ],
+    ids=[
+        "single_key_sum",
+        "len_over",
+        "multi_key",
+        "null_keys",
+        "order_by",
+        "rank_dense",
+        "rank_min_multi_key",
+        "cum_sum_order_by",
+        "fill_null_forward",
+    ],
+)
+def test_over_select(engine, expr):
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+            "g2": ["a", "b", "a", "b", "a", "b"],
+            "g_null": [1, None, 1, None, 2, 1],
+            "s": [6, 5, 4, 3, 2, 1],
+        }
+    )
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=False)
+
+
+def test_over_with_columns(engine):
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    assert_gpu_result_equal(
+        df.with_columns(pl.col("x").sum().over("g")),
+        engine=engine,
+        check_row_order=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 2}}],
+    indirect=True,
+)
+def test_over_mixed_keys_fallback(engine) -> None:
+    # Multiple over expressions with different partition by keys
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "g2": ["a", "b", "a", "b", "a", "b"],
+            "x": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    q = df.select(
+        pl.col("x").sum().over("g").alias("s_g"),
+        pl.col("x").sum().over("g2").alias("s_g2"),
+    )
+    with pytest.warns(UserWarning, match=r"not supported for multiple partitions"):
+        assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
     "engine",
     [{"executor_options": {"max_rows_per_partition": 1}}],
     indirect=True,
