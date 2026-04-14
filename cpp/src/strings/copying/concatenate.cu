@@ -87,12 +87,13 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
   d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
-  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
-                                   device_views_ptr,
-                                   device_views_ptr + views.size(),
-                                   std::next(d_partition_offsets.begin()),
-                                   chars_size_transform{},
-                                   cuda::std::plus{});
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    device_views_ptr,
+    device_views_ptr + views.size(),
+    std::next(d_partition_offsets.begin()),
+    chars_size_transform{},
+    cuda::std::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);
   stream.synchronize();  // ensure copy of output_chars_size is complete before returning
 
