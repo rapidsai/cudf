@@ -559,6 +559,8 @@ class DateOffset:
     def __eq__(self, other):
         if isinstance(other, str):
             return self._maybe_as_fast_pandas_offset() == other
+        if isinstance(other, (pd.DateOffset, pd.offsets.Tick)):
+            return self._maybe_as_fast_pandas_offset() == other
         if not isinstance(other, DateOffset):
             return NotImplemented
         return self.kwds == other.kwds
@@ -780,7 +782,15 @@ class DateOffset:
             # Pandas computation between `n*offsets.Minute()` is faster than
             # `n*DateOffset`. If only single offset unit is in use, we return
             # the base offset for faster binary ops.
-            return pd.tseries.frequencies.to_offset(pd.Timedelta(**self.kwds))
+            # Use the pandas offset class directly to avoid type mismatches
+            # (e.g. pd.Timedelta(days=1) -> <24 * Hours> instead of <Day>).
+            unit, n = next(iter(self.kwds.items()))
+            units_to_offset = {
+                v: k for k, v in self._TICK_OR_WEEK_TO_UNITS.items()
+            }
+            offset_cls = units_to_offset.get(unit)
+            if offset_cls is not None:
+                return offset_cls(n)
         return pd.DateOffset(**self.kwds, n=1)
 
 
