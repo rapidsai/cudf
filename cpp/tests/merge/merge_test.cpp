@@ -13,7 +13,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/merge.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -194,7 +193,7 @@ TYPED_TEST(MergeTest_, SingleTableInput)
 {
   cudf::size_type inputRows = 40;
 
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type>
     colWrap1(sequence, sequence + inputRows);
 
@@ -241,7 +240,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
 
   cudf::size_type inputRows = 40;
 
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type>
     leftColWrap1(sequence, sequence + inputRows);
   columnFactoryT rightColWrap1{};  // wrapper of empty column <- this might require a (sequence,
