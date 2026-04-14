@@ -28,7 +28,6 @@ from nbconvert.preprocessors import ExecutePreprocessor
 from numba import (
     vectorize,
 )
-from pytz import utc
 
 from rmm import RMMError
 
@@ -1449,10 +1448,10 @@ def test_holidays_within_dates(holiday, start, expected):
     # Verify that timezone info is preserved.
     assert list(
         holiday.dates(
-            utc.localize(xpd.Timestamp(start)),
-            utc.localize(xpd.Timestamp(start)),
+            xpd.Timestamp(start, tz="UTC"),
+            xpd.Timestamp(start, tz="UTC"),
         )
-    ) == [utc.localize(dt) for dt in expected]
+    ) == [dt.tz_localize("UTC") for dt in expected]
 
 
 @pytest.mark.serial
