@@ -1874,7 +1874,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceMulti(
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplacePerRow(
-  JNIEnv* env, jclass, jlong inputs_cv, jlong targets_cv, jlong repls_cv, jint max_repl)
+  JNIEnv* env, jclass, jlong inputs_cv, jlong targets_cv, jlong repls_cv)
 {
   JNI_NULL_CHECK(env, inputs_cv, "column is null", 0);
   JNI_NULL_CHECK(env, targets_cv, "targets string column view is null", 0);
@@ -1888,8 +1888,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplacePerRow(
     cudf::strings_column_view scv(*cv);
     cudf::strings_column_view scvtargets(*cvtargets);
     cudf::strings_column_view scvrepls(*cvrepls);
-    return release_as_jlong(
-      cudf::strings::replace(scv, scvtargets, scvrepls, static_cast<cudf::size_type>(max_repl)));
+    return release_as_jlong(cudf::strings::replace(scv, scvtargets, scvrepls));
   }
   JNI_CATCH(env, 0);
 }

@@ -503,7 +503,6 @@ std::unique_ptr<column> replace(strings_column_view const& input,
 std::unique_ptr<column> replace(strings_column_view const& input,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
-                                cudf::size_type maxrepl,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
@@ -540,7 +539,7 @@ std::unique_ptr<column> replace(strings_column_view const& input,
     return d_rps.is_valid(idx) ? d_rps.element<string_view>(idx) : string_view{};
   };
 
-  auto result = replace_string_parallel(input, tgt_fn, repl_fn, maxrepl, d_valid_mask, stream, mr);
+  auto result = replace_string_parallel(input, tgt_fn, repl_fn, -1, d_valid_mask, stream, mr);
 
   if (has_any_nulls) { result->set_null_mask(std::move(null_mask), null_count); }
   return result;
@@ -564,12 +563,11 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
-                                cudf::size_type maxrepl,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, targets, repls, maxrepl, stream, mr);
+  return detail::replace(strings, targets, repls, stream, mr);
 }
 
 }  // namespace strings

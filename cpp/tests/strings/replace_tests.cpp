@@ -616,35 +616,6 @@ TEST_F(StringsReplaceTest, ReplaceColumnEmptyTarget)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
-TEST_F(StringsReplaceTest, ReplaceColumnMaxReplZero)
-{
-  // maxrepl == 0 → copy of input returned
-  auto const input   = cudf::test::strings_column_wrapper({"hello", "world"});
-  auto const targets = cudf::test::strings_column_wrapper({"l", "o"});
-  auto const repls   = cudf::test::strings_column_wrapper({"L", "0"});
-  auto const iv      = cudf::strings_column_view(input);
-  auto const tv      = cudf::strings_column_view(targets);
-  auto const rv      = cudf::strings_column_view(repls);
-
-  auto const result = cudf::strings::replace(iv, tv, rv, 0);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, input);
-}
-
-TEST_F(StringsReplaceTest, ReplaceColumnMaxReplOne)
-{
-  // maxrepl == 1 → only first occurrence per row replaced
-  auto const input   = cudf::test::strings_column_wrapper({"hello", "aaa"});
-  auto const targets = cudf::test::strings_column_wrapper({"l", "a"});
-  auto const repls   = cudf::test::strings_column_wrapper({"L", "X"});
-  auto const iv      = cudf::strings_column_view(input);
-  auto const tv      = cudf::strings_column_view(targets);
-  auto const rv      = cudf::strings_column_view(repls);
-
-  auto const result   = cudf::strings::replace(iv, tv, rv, 1);
-  auto const expected = cudf::test::strings_column_wrapper({"heLlo", "Xaa"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
-}
-
 TEST_F(StringsReplaceTest, ReplaceColumnMismatchedSizes)
 {
   // targets.size() != input.size() → throws
@@ -724,22 +695,6 @@ TEST_F(StringsReplaceTest, ReplaceColumnCombinedNulls)
 
   auto const result   = cudf::strings::replace(iv, tv, rv);
   auto const expected = cudf::test::strings_column_wrapper({"heLLo", "", "", ""}, {1, 0, 0, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
-}
-
-TEST_F(StringsReplaceTest, ReplaceColumnMaxReplZeroNulls)
-{
-  // maxrepl == 0 with nulls in targets: output rows where targets[i] is null
-  // must themselves be null, not inherit input's valid status.
-  auto const input   = cudf::test::strings_column_wrapper({"hello", "world", "foo"});
-  auto const targets = cudf::test::strings_column_wrapper({"l", "", "o"}, {1, 0, 1});
-  auto const repls   = cudf::test::strings_column_wrapper({"L", "0", "0"});
-  auto const iv      = cudf::strings_column_view(input);
-  auto const tv      = cudf::strings_column_view(targets);
-  auto const rv      = cudf::strings_column_view(repls);
-
-  auto const result   = cudf::strings::replace(iv, tv, rv, 0);
-  auto const expected = cudf::test::strings_column_wrapper({"hello", "", "foo"}, {1, 0, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 

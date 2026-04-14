@@ -5105,17 +5105,6 @@ void testExtractReWithMultiLineDelimiters() {
   }
 
   @Test
-  void testStringReplacePerRowMaxRepl() {
-    try (ColumnVector input = ColumnVector.fromStrings("hello", "aaa");
-         ColumnVector targets = ColumnVector.fromStrings("l", "a");
-         ColumnVector repls = ColumnVector.fromStrings("L", "X");
-         ColumnVector expected = ColumnVector.fromStrings("heLlo", "Xaa");
-         ColumnVector result = input.stringReplacePerRow(targets, repls, 1)) {
-      assertColumnsAreEqual(expected, result);
-    }
-  }
-
-  @Test
   void testStringReplacePerRowEmptyTarget() {
     try (ColumnVector input = ColumnVector.fromStrings("hello", "world", "foo");
          ColumnVector targets = ColumnVector.fromStrings("l", "", "o");

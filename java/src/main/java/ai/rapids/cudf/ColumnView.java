@@ -3436,21 +3436,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new column vector containing the replaced strings.
    */
   public final ColumnVector stringReplacePerRow(ColumnView targets, ColumnView repls) {
-    return stringReplacePerRow(targets, repls, -1);
-  }
-
-  /**
-   * Returns a new strings column where, for each row {@code i}, up to {@code maxRepl}
-   * occurrences of {@code targets[i]} within {@code input[i]} are replaced with
-   * {@code repls[i]}.
-   *
-   * @param targets Per-row strings to search for within each input string.
-   * @param repls Per-row replacement strings used when the corresponding target is found.
-   * @param maxRepl Maximum number of replacements per row. Use {@code -1} to replace all.
-   * @return A new column vector containing the replaced strings.
-   * @see #stringReplacePerRow(ColumnView, ColumnView)
-   */
-  public final ColumnVector stringReplacePerRow(ColumnView targets, ColumnView repls, int maxRepl) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert targets != null : "targets column may not be null";
     assert targets.getType().equals(DType.STRING) : "targets column must be a string column";
@@ -3458,7 +3443,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert repls.getType().equals(DType.STRING) : "repls column must be a string column";
 
     return new ColumnVector(stringReplacePerRow(getNativeView(), targets.getNativeView(),
-        repls.getNativeView(), maxRepl));
+        repls.getNativeView()));
   }
 
   /**
@@ -4772,9 +4757,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param inputCV native handle of the cudf::column_view being operated on.
    * @param targetsCV handle of column containing the per-row target strings.
    * @param replsCV handle of column containing the per-row replacement strings.
-   * @param maxRepl maximum number of replacements per row (-1 for all).
    */
-  private static native long stringReplacePerRow(long inputCV, long targetsCV, long replsCV, int maxRepl) throws CudfException;
+  private static native long stringReplacePerRow(long inputCV, long targetsCV, long replsCV) throws CudfException;
 
   /**
    * Native method for replacing each regular expression pattern match with the specified

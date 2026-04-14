@@ -77,7 +77,6 @@ static void bench_replace_column(nvbench::state& state)
 {
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
-  auto const maxrepl   = static_cast<cudf::size_type>(state.get_int64("maxrepl"));
 
   data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_width);
@@ -98,13 +97,11 @@ static void bench_replace_column(nvbench::state& state)
   state.add_global_memory_reads<nvbench::int8_t>(data_size);
   state.add_global_memory_writes<nvbench::int8_t>(data_size);
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    cudf::strings::replace(input, targets, repls, maxrepl);
-  });
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { cudf::strings::replace(input, targets, repls); });
 }
 
 NVBENCH_BENCH(bench_replace_column)
   .set_name("replace_column")
   .add_int64_axis("max_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152})
-  .add_int64_axis("maxrepl", {-1, 1});
+  .add_int64_axis("num_rows", {32768, 262144, 2097152});

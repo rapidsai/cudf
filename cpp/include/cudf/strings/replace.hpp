@@ -102,12 +102,11 @@ std::unique_ptr<column> replace_slice(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Replaces, per row, the first `maxrepl` occurrences of `targets[i]` within
- * `input[i]` with `repls[i]`.
+ * @brief Replaces, per row, all occurrences of `targets[i]` within `input[i]` with `repls[i]`.
  *
  * For each row `i`, this function searches `input[i]` for the substring `targets[i]`
- * and replaces up to `maxrepl` occurrences with `repls[i]`. If `targets[i]` is an
- * empty string, `input[i]` is copied unchanged. If `targets[i]` is not found,
+ * and replaces every occurrence with `repls[i]`. If `targets[i]` is an empty string,
+ * `input[i]` is copied unchanged. If `targets[i]` is not found,
  * the output entry is a copy of `input[i]`.
  *
  * Output row `i` is null if any of `input[i]`, `targets[i]`, or `repls[i]` is null.
@@ -127,7 +126,6 @@ std::unique_ptr<column> replace_slice(
  * @param input Strings column for this operation
  * @param targets Per-row strings to search for within each input string
  * @param repls Per-row replacement strings used when the corresponding target is found
- * @param maxrepl Maximum number of replacements per row. Default of -1 replaces all occurrences.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column
@@ -136,7 +134,6 @@ std::unique_ptr<column> replace(
   strings_column_view const& input,
   strings_column_view const& targets,
   strings_column_view const& repls,
-  cudf::size_type maxrepl           = -1,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
