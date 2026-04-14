@@ -26,7 +26,7 @@
 namespace cudf::detail {
 
 template <bool IsOuter, typename Ref>
-CUDF_KERNEL void __launch_bounds__(PROBE_BLOCK_SIZE)
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   retrieve_kernel(probe_key_type const* __restrict__ input_probe,
                   size_type const* __restrict__ offsets,
                   cuda::std::int64_t n,
@@ -148,7 +148,8 @@ launch_retrieve(probe_key_type const* keys,
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(total_output, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(total_output, stream, mr);
 
-  auto const config = grid_1d{static_cast<thread_index_type>(n * PROBE_CG_SIZE), PROBE_BLOCK_SIZE};
+  auto const config =
+    grid_1d{static_cast<thread_index_type>(n * DEFAULT_JOIN_CG_SIZE), DEFAULT_JOIN_BLOCK_SIZE};
 
   retrieve_kernel<IsOuter><<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     keys, offsets.data(), n, left_indices->data(), right_indices->data(), ref);

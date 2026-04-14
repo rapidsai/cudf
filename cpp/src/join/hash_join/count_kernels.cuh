@@ -19,13 +19,13 @@
 namespace cudf::detail {
 
 template <bool IsOuter, typename Ref>
-CUDF_KERNEL void __launch_bounds__(PROBE_BLOCK_SIZE)
+CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   count_each_kernel(probe_key_type const* __restrict__ keys,
                     cuda::std::int64_t n,
                     size_type* __restrict__ output,
                     Ref ref)
 {
-  auto constexpr cg_size = PROBE_CG_SIZE;
+  auto constexpr cg_size = DEFAULT_JOIN_CG_SIZE;
 
   auto idx          = grid_1d::global_thread_id() / cg_size;
   auto const stride = grid_1d::grid_stride() / cg_size;
@@ -68,7 +68,8 @@ void launch_count_each(probe_key_type const* keys,
 {
   if (n == 0) { return; }
 
-  auto const config = grid_1d{static_cast<thread_index_type>(n * PROBE_CG_SIZE), PROBE_BLOCK_SIZE};
+  auto const config =
+    grid_1d{static_cast<thread_index_type>(n * DEFAULT_JOIN_CG_SIZE), DEFAULT_JOIN_BLOCK_SIZE};
 
   count_each_kernel<IsOuter>
     <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(keys, n, output, ref);

@@ -19,10 +19,6 @@
 
 namespace cudf::detail {
 
-// Constants matching the cuco static_multiset configuration used by hash_join.
-inline constexpr int PROBE_BLOCK_SIZE = 128;                   // cuco::detail::default_block_size()
-inline constexpr int PROBE_CG_SIZE    = DEFAULT_JOIN_CG_SIZE;  // 2
-
 /// The probe key type stored in the hash table: {hash_value, row_index}.
 using probe_key_type = cuco::pair<hash_value_type, size_type>;
 
