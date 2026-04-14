@@ -36,7 +36,7 @@ if TYPE_CHECKING:
             expr.Col(DataType(pl.Int64()), "foo"),
             expr.Literal(DataType(pl.Int64()), 1),
         ),
-        expr.GroupedRollingWindow(
+        expr.GroupedWindow(
             DataType(pl.Float64),
             ("groups_to_rows", True, False, False),
             [

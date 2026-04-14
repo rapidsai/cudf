@@ -1174,17 +1174,17 @@ TEST_F(ComputeColumnTest, PowIntegerNegativeExponent)
 }
 
 template <typename T>
-struct DecimalArithmeticTest : public cudf::test::BaseFixture {};
+struct DecimalTests : public cudf::test::BaseFixture {};
 
 // decimal128 intermediates exceed the 8-byte IntermediateDataType limit, so
 // only test decimal32 and decimal64 here.
 using DecimalArithmeticTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
-TYPED_TEST_SUITE(DecimalArithmeticTest, DecimalArithmeticTypes);
+TYPED_TEST_SUITE(DecimalTests, DecimalArithmeticTypes);
 
 // Regression test for https://github.com/rapidsai/cudf/issues/21980
 // Nested decimal expressions lose scale in intermediate return types,
 // causing "non-matching operand types" at parse time.
-TYPED_TEST(DecimalArithmeticTest, NestedDecimalArithmetic)
+TYPED_TEST(DecimalTests, NestedDecimalArithmetic)
 {
   using decimalXX = TypeParam;
   using RepType   = cudf::device_storage_type_t<decimalXX>;
@@ -1226,6 +1226,112 @@ TYPED_TEST(DecimalArithmeticTest, NestedDecimalArithmetic)
 
   result = cudf::compute_column_jit(table, mul_expr);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(DecimalTests, DecimalDivide)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+
+  // col0 = {10.00, 20.00, 30.00, 40.00}  (rep values: 1000, 2000, 3000, 4000)
+  // col1 = {0.05,  0.10,  0.15,  0.20}   (rep values: 5, 10, 15, 20)
+  auto c_0   = cudf::test::fixed_point_column_wrapper<RepType>({1000, 2000, 3000, 4000}, scale);
+  auto c_1   = cudf::test::fixed_point_column_wrapper<RepType>({5, 10, 15, 20}, scale);
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  // AST: col0 / (literal + col1)
+  // literal = 10.00 (rep=1000, scale=-2)
+  // ADD result scale = min(-2, -2) = -2
+  // DIV result scale = -2 - -2 = 0
+  auto literal_value = cudf::fixed_point_scalar<decimalXX>(RepType{1000}, scale, true);  // 10
+  auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto col_ref_1     = cudf::ast::column_reference(1);
+
+  cudf::ast::tree tree{};
+  auto const& add_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::ADD, literal, col_ref_1));
+  auto const& div_expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::DIV, col_ref_0, add_expr));
+
+  auto result = cudf::compute_column(table, div_expr);
+
+  // Expected: col0 * (10.00 + col1)
+  // Row 0: 10.00 / (10.00 + 0.05) = 10.00 / 10.05 = 0 at scale 0
+  // Row 1: 20.00 / (10.00 + 0.10) = 20.00 / 10.10 = 1 at scale 0
+  // Row 2: 30.00 / (10.00 + 0.15) = 30.00 / 10.15 = 2 at scale 0
+  // Row 3: 40.00 / (10.00 + 0.20) = 40.00 / 10.20 = 3 at scale 0
+  auto const expected_scale = numeric::scale_type{0};
+  auto expected             = cudf::test::fixed_point_column_wrapper<RepType>(
+    {RepType{0}, RepType{1}, RepType{2}, RepType{3}}, expected_scale);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  result = cudf::compute_column_jit(table, div_expr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(DecimalTests, DecimalComparator)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+
+  // col0 = {10.00, 20.00, 30.00, 40.00}  (rep values: 1000, 2000, 3000, 4000)
+  // col1 = {0.05,  0.10,  0.15,  0.20}   (rep values: 5, 10, 15, 20)
+  auto c_0   = cudf::test::fixed_point_column_wrapper<RepType>({1000, 2000, 3000, 4000}, scale);
+  auto c_1   = cudf::test::fixed_point_column_wrapper<RepType>({5, 10, 15, 20}, scale);
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto value0    = cudf::fixed_point_scalar<decimalXX>(RepType{1000}, scale, true);  // 10
+  auto literal0  = cudf::ast::literal(value0);
+  auto col_ref_0 = cudf::ast::column_reference(0);
+  auto value1    = cudf::fixed_point_scalar<decimalXX>(RepType{20}, scale, true);  // 0.2
+  auto literal1  = cudf::ast::literal(value1);
+  auto col_ref_1 = cudf::ast::column_reference(1);
+
+  {
+    cudf::ast::tree tree{};
+    auto const& expr =
+      tree.push(cudf::ast::operation(cudf::ast::ast_operator::LESS, literal0, col_ref_0));
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({0, 1, 1, 1});
+    auto result   = cudf::compute_column(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::compute_column_jit(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+  {
+    cudf::ast::tree tree{};
+    auto const& expr =
+      tree.push(cudf::ast::operation(cudf::ast::ast_operator::GREATER, literal1, col_ref_1));
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0});
+    auto result   = cudf::compute_column(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::compute_column_jit(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TYPED_TEST(DecimalTests, DecimalScaleMismatch)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto scale1 = numeric::scale_type{-1};
+  auto scale2 = numeric::scale_type{-2};
+
+  auto value0   = cudf::fixed_point_scalar<decimalXX>(RepType{100}, scale1, true);
+  auto literal0 = cudf::ast::literal(value0);
+  auto c_0      = cudf::test::fixed_point_column_wrapper<RepType>({1000, 2000, 3000, 4000}, scale2);
+  auto table    = cudf::table_view({c_0});
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  cudf::ast::tree tree{};
+  auto const& expr =
+    tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, literal0, col_ref_0));
+  EXPECT_THROW(cudf::compute_column(table, expr), cudf::logic_error);
 }
 
 TYPED_TEST(TransformTest, NonDefaultStream)
