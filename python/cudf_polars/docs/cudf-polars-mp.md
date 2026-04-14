@@ -46,9 +46,8 @@ categories:
 | Category    | Controls                                                              |
 | ----------- | --------------------------------------------------------------------- |
 | `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level             |
-| `frontend`  | Engine initialization (hardware binding, thread-pool sizing)          |
 | `executor`  | Partitioning, fallback behavior, dynamic planning                     |
-| `engine`    | Polars integration, IO options, RMM memory resource                   |
+| `engine`    | Polars integration, IO, RMM, hardware binding, thread-pool sizing     |
 
 All fields default to `UNSPECIFIED`, which means: use the corresponding
 environment variable if set, otherwise let the underlying library apply its
@@ -185,7 +184,7 @@ Via the environment variable (JSON):
 
 ```bash
 # Disable binding:
-export CUDF_POLARS__FRONTEND__HARDWARE_BINDING='{"enabled": false}'
+export CUDF_POLARS__HARDWARE_BINDING='{"enabled": false}'
 ```
 
 Via the CLI:
@@ -331,16 +330,13 @@ from rapidsmpf.config import Options
 
 with RayEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    frontend_options={"num_py_executors": 2},
+    engine_options={"num_py_executors": 2},
     executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
 ) as engine:
     ...
 ```
-
-`frontend_options` are consumed by the engine during initialization (e.g.
-hardware binding, thread-pool sizing) and are not forwarded to Polars.
 
 `ray_init_options` is forwarded to `ray.init()` when Ray is not already
 initialized. It is kept separate from streaming behavior options and has no
@@ -457,7 +453,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
 
 with DaskEngine(
     dask_client=dc,
-    frontend_options={
+    engine_options={
         "hardware_binding": HardwareBindingPolicy(enabled=False),
     },
 ) as engine:
@@ -518,15 +514,12 @@ from rapidsmpf.config import Options
 
 with DaskEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    frontend_options={"num_py_executors": 2},
+    engine_options={"num_py_executors": 2},
     executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
 ) as engine:
     ...
 ```
-
-`frontend_options` are consumed by the engine during initialization (e.g.
-hardware binding, thread-pool sizing) and are not forwarded to Polars.
 
 `executor_options` is forwarded directly to `pl.GPUEngine` as its `executor_options`
 argument; user-supplied keys are merged with reserved entries set by `DaskEngine`.
@@ -756,15 +749,12 @@ from rapidsmpf.config import Options
 
 with SPMDEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    frontend_options={"num_py_executors": 2},
+    engine_options={"num_py_executors": 2},
     executor_options={"max_rows_per_partition": 500_000},
     engine_options={"parquet_options": {"use_rapidsmpf_native": True}},
 ) as engine:
     ...
 ```
-
-`frontend_options` are consumed by the engine during initialization (e.g.
-hardware binding, thread-pool sizing) and are not forwarded to Polars.
 
 **Memory resource:** All engines accept a `memory_resource_config` option (via
 `StreamingOptions` or `engine_options`) that controls the RMM memory resource.

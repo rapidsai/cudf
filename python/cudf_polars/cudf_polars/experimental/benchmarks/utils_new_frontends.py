@@ -1162,7 +1162,6 @@ def run_polars_ray(
 
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
-        frontend_options=run_config.streaming_options.to_frontend_options(),
         executor_options=executor_options,
         engine_options=engine_options,
         ray_init_options=ray_init_options,
@@ -1217,7 +1216,6 @@ def run_polars_dask(
 
     with DaskEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
-        frontend_options=run_config.streaming_options.to_frontend_options(),
         executor_options=executor_options,
         engine_options=engine_options,
         dask_client=dask_client,

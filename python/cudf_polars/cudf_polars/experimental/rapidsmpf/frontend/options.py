@@ -140,11 +140,10 @@ class StreamingOptions:
     """
     High-level configuration for the cudf-polars streaming executor and RapidsMPF.
 
-    Options are grouped into four categories:
+    Options are grouped into three categories:
       - **RapidsMPF**: runtime and memory behavior (e.g. spilling, threading).
-      - **Frontend**: options consumed by the frontends (e.g. hardware binding).
       - **Executor**: query execution and partitioning behavior.
-      - **Engine**: Polars integration and IO configuration.
+      - **Engine**: Polars integration, IO configuration, hardware binding.
 
     All fields default to :data:`UNSPECIFIED` and follow this precedence:
       1. Explicit value.
@@ -204,19 +203,6 @@ class StreamingOptions:
         Env: ``RAPIDSMPF_PERIODIC_SPILL_CHECK``.
         Default: ``"1ms"``.
         Category: rapidsmpf.
-    hardware_binding
-        Hardware binding policy. Pass a
-        :class:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.HardwareBindingPolicy`
-        instance for fine-grained control.
-        Env: ``CUDF_POLARS__FRONTEND__HARDWARE_BINDING`` (JSON object,
-        e.g. ``'{"enabled": false}'``).
-        Default: ``HardwareBindingPolicy()``.
-        Category: frontend.
-    num_py_executors
-        Workers for the internal Python ``ThreadPoolExecutor``.
-        Env: ``CUDF_POLARS__FRONTEND__NUM_PY_EXECUTORS``.
-        Default: ``1``.
-        Category: frontend.
     fallback_mode
         Fallback behavior (``"warn"``, ``"raise"``, ``"silent"``).
         Env: ``CUDF_POLARS__EXECUTOR__FALLBACK_MODE``.
@@ -266,6 +252,19 @@ class StreamingOptions:
         CUDA stream policy (``"default"``, ``"pool"`` or config dict).
         Env: ``CUDF_POLARS__CUDA_STREAM_POLICY``.
         Category: engine.
+    hardware_binding
+        Hardware binding policy. Pass a
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.HardwareBindingPolicy`
+        instance for fine-grained control.
+        Env: ``CUDF_POLARS__HARDWARE_BINDING`` (JSON object,
+        e.g. ``'{"enabled": false}'``).
+        Default: ``HardwareBindingPolicy()``.
+        Category: engine.
+    num_py_executors
+        Workers for the internal Python ``ThreadPoolExecutor``.
+        Env: ``CUDF_POLARS__NUM_PY_EXECUTORS``.
+        Default: ``1``.
+        Category: engine.
 
     Examples
     --------
@@ -302,16 +301,6 @@ class StreamingOptions:
     periodic_spill_check: str | Unspecified = _opt(
         "rapidsmpf", "RAPIDSMPF_PERIODIC_SPILL_CHECK"
     )
-    # ---- Frontend (consumed by Dask/Ray/SPMD engines, not by Polars) ----
-    hardware_binding: HardwareBindingPolicy = dataclasses.field(
-        default_factory=lambda: _parse_hardware_binding(
-            os.environ.get("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", "{}")
-        ),
-        metadata={"category": "frontend"},
-    )
-    num_py_executors: int | Unspecified = _opt(
-        "frontend", "CUDF_POLARS__FRONTEND__NUM_PY_EXECUTORS", int
-    )
     # ---- Executor ----
     fallback_mode: str | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__FALLBACK_MODE"
@@ -338,6 +327,15 @@ class StreamingOptions:
     cuda_stream_policy: Literal["default", "pool"] | dict[str, Any] | Unspecified = (
         _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
     )
+    hardware_binding: HardwareBindingPolicy = dataclasses.field(
+        default_factory=lambda: _parse_hardware_binding(
+            os.environ.get("CUDF_POLARS__HARDWARE_BINDING", "{}")
+        ),
+        metadata={"category": "engine"},
+    )
+    num_py_executors: int | Unspecified = _opt(
+        "engine", "CUDF_POLARS__NUM_PY_EXECUTORS", int
+    )
 
     # ------------------------------------------------------------------
     # Conversion helpers used by the engines
@@ -355,16 +353,6 @@ class StreamingOptions:
         return Options(
             {k: str(v) for k, v in _category_opts(self, "rapidsmpf").items()}
         )
-
-    def to_frontend_options(self) -> dict[str, Any]:
-        """
-        Build a dict of options consumed by the frontends.
-
-        These options (e.g. ``hardware_binding``, ``num_py_executors``) are
-        consumed by the Dask, Ray, and SPMD engines during initialization
-        and are **not** forwarded to ``StreamingExecutor`` or Polars.
-        """
-        return _category_opts(self, "frontend")
 
     def to_executor_options(self) -> dict[str, Any]:
         """
@@ -645,7 +633,7 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Hardware binding policy as a JSON object
                 (e.g. '{"enabled": false}', '{"raise_on_fail": true}').
-                Env: CUDF_POLARS__FRONTEND__HARDWARE_BINDING.
+                Env: CUDF_POLARS__HARDWARE_BINDING.
                 Built-in default: enabled with auto GPU detection."""),
         )
         g.add_argument(
@@ -655,7 +643,7 @@ class StreamingOptions:
             type=int,
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
-                Env: CUDF_POLARS__FRONTEND__NUM_PY_EXECUTORS.
+                Env: CUDF_POLARS__NUM_PY_EXECUTORS.
                 Built-in default: 1."""),
         )
         g.add_argument(

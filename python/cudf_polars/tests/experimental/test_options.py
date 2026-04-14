@@ -71,8 +71,8 @@ def test_executor_options_unique_fraction() -> None:
     assert result["unique_fraction"] == {"col_a": 0.5}
 
 
-def test_frontend_options_num_py_executors() -> None:
-    result = StreamingOptions(num_py_executors=4).to_frontend_options()
+def test_engine_options_num_py_executors() -> None:
+    result = StreamingOptions(num_py_executors=4).to_engine_options()
     assert result["num_py_executors"] == 4
 
 
@@ -81,8 +81,14 @@ def test_frontend_options_num_py_executors() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_engine_options_empty_when_all_unspecified() -> None:
-    assert StreamingOptions().to_engine_options() == {}
+def test_engine_options_default_has_hardware_binding() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    assert StreamingOptions().to_engine_options() == {
+        "hardware_binding": HardwareBindingPolicy()
+    }
 
 
 def test_engine_options_includes_set_fields() -> None:
@@ -343,14 +349,14 @@ def test_to_dict_roundtrip_empty() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_hardware_binding_in_frontend_options() -> None:
+def test_hardware_binding_in_engine_options() -> None:
     from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
         HardwareBindingPolicy,
     )
 
     result = StreamingOptions(
         hardware_binding=HardwareBindingPolicy(enabled=False)
-    ).to_frontend_options()
+    ).to_engine_options()
     assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
 
 
@@ -359,8 +365,8 @@ def test_hardware_binding_env_var_disabled(monkeypatch: pytest.MonkeyPatch) -> N
         HardwareBindingPolicy,
     )
 
-    monkeypatch.setenv("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", '{"enabled": false}')
-    result = StreamingOptions().to_frontend_options()
+    monkeypatch.setenv("CUDF_POLARS__HARDWARE_BINDING", '{"enabled": false}')
+    result = StreamingOptions().to_engine_options()
     assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
 
 
@@ -377,7 +383,7 @@ def test_hardware_binding_cli_json() -> None:
 
 
 def test_hardware_binding_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CUDF_POLARS__FRONTEND__HARDWARE_BINDING", "not json")
+    monkeypatch.setenv("CUDF_POLARS__HARDWARE_BINDING", "not json")
     with pytest.raises(json.JSONDecodeError):
         StreamingOptions()
 

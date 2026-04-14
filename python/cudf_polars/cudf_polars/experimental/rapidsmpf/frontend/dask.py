@@ -185,7 +185,7 @@ def _setup_worker(
     root_ucxx_address_as_bytes: bytes,
     nranks: int,
     rapidsmpf_options_as_bytes: bytes,
-    frontend_options: dict[str, object],
+    engine_options: dict[str, object],
     *,
     uid: str,
     hardware_binding: HardwareBindingPolicy,
@@ -206,7 +206,7 @@ def _setup_worker(
         Total number of workers.
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options.
-    frontend_options
+    engine_options
         Frontend options (e.g. ``num_py_executors``).
     uid
         Unique identifier for this cluster instance, used to namespace the
@@ -258,7 +258,7 @@ def _setup_worker(
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int | None,
-            frontend_options.get("num_py_executors"),
+            engine_options.get("num_py_executors"),
         ),
         thread_name_prefix="dask-executor",
     )
@@ -511,7 +511,7 @@ class DaskEngine(StreamingEngine):
     ... )
     >>> with DaskEngine(  # doctest: +SKIP
     ...     dask_client=dc,
-    ...     frontend_options={
+    ...     engine_options={
     ...         "hardware_binding": HardwareBindingPolicy(enabled=False),
     ...     },
     ... ) as engine:
@@ -536,11 +536,9 @@ class DaskEngine(StreamingEngine):
         *,
         dask_client: distributed.Client | None = None,
         rapidsmpf_options: Options | None = None,
-        frontend_options: dict[str, Any] | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
     ) -> None:
-        frontend_options = frontend_options or {}
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
@@ -554,7 +552,7 @@ class DaskEngine(StreamingEngine):
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
             HardwareBindingPolicy,
-            frontend_options.get("hardware_binding", HardwareBindingPolicy()),
+            engine_options.get("hardware_binding", HardwareBindingPolicy()),
         )
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
@@ -624,7 +622,7 @@ class DaskEngine(StreamingEngine):
             root_ucxx_address_as_bytes,
             nranks,
             rapidsmpf_options_as_bytes,
-            frontend_options,
+            engine_options,
         )
 
         dask_ctx = DaskContext(
@@ -746,7 +744,6 @@ class DaskEngine(StreamingEngine):
         return cls(
             dask_client=dask_client,
             rapidsmpf_options=options.to_rapidsmpf_options(),
-            frontend_options=options.to_frontend_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
         )

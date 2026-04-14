@@ -453,12 +453,10 @@ class RayEngine(StreamingEngine):
         self,
         *,
         rapidsmpf_options: Options | None = None,
-        frontend_options: dict[str, Any] | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
         ray_init_options: dict[str, Any] | None = None,
     ) -> None:
-        frontend_options = frontend_options or {}
         executor_options = executor_options or {}
         engine_options = engine_options or {}
         ray_init_options = ray_init_options or {}
@@ -473,7 +471,7 @@ class RayEngine(StreamingEngine):
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
             HardwareBindingPolicy,
-            frontend_options.get("hardware_binding", HardwareBindingPolicy()),
+            engine_options.get("hardware_binding", HardwareBindingPolicy()),
         )
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
@@ -508,7 +506,7 @@ class RayEngine(StreamingEngine):
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
                         int,
-                        frontend_options.get("num_py_executors", 1),
+                        engine_options.get("num_py_executors", 1),
                     ),
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
@@ -582,7 +580,6 @@ class RayEngine(StreamingEngine):
         """
         return cls(
             rapidsmpf_options=options.to_rapidsmpf_options(),
-            frontend_options=options.to_frontend_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
             ray_init_options=ray_init_options,

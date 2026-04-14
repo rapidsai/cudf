@@ -329,18 +329,16 @@ class SPMDEngine(StreamingEngine):
         *,
         comm: Communicator | None = None,
         rapidsmpf_options: Options | None = None,
-        frontend_options: dict[str, Any] | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
     ) -> None:
-        frontend_options = frontend_options or {}
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
             HardwareBindingPolicy,
-            frontend_options.get("hardware_binding", HardwareBindingPolicy()),
+            engine_options.get("hardware_binding", HardwareBindingPolicy()),
         )
         bind_to_gpu(hw_binding)
 
@@ -373,7 +371,7 @@ class SPMDEngine(StreamingEngine):
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(int, frontend_options.get("num_py_executors", 1)),
+            max_workers=cast(int, engine_options.get("num_py_executors", 1)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
@@ -435,7 +433,6 @@ class SPMDEngine(StreamingEngine):
         """
         return cls(
             rapidsmpf_options=options.to_rapidsmpf_options(),
-            frontend_options=options.to_frontend_options(),
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
         )
