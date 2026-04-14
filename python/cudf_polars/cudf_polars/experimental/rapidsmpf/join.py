@@ -42,8 +42,8 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
-    make_spill_function,
     gather_in_task_group,
+    make_spill_function,
     maybe_remap_partitioning,
     names_to_indices,
     process_children,
@@ -1132,7 +1132,7 @@ async def _bloom_shuffle_join(
             trace_ir=ir,
             ir_context=ir_context,
         ) as tracer:
-            await asyncio.gather(
+            await gather_in_task_group(
                 _replay_with_metadata(
                     context,
                     ch_small_replay,
