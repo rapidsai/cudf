@@ -302,6 +302,9 @@ class StreamingOptions:
         "rapidsmpf", "RAPIDSMPF_PERIODIC_SPILL_CHECK"
     )
     # ---- Executor ----
+    num_py_executors: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS", int
+    )
     fallback_mode: str | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__FALLBACK_MODE"
     )
@@ -319,9 +322,6 @@ class StreamingOptions:
     )
     unique_fraction: dict[str, float] | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
-    )
-    num_py_executors: int | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS", int
     )
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
@@ -467,13 +467,6 @@ class StreamingOptions:
         dyn = getattr(args, "dynamic_planning", None)
         dynamic_planning: Any = None if dyn is False else UNSPECIFIED
 
-        # Special: hardware_binding is already a HardwareBindingPolicy
-        # (parsed by _parse_hardware_binding) or None (absent).
-        hw_raw = getattr(args, "hardware_binding", None)
-        hardware_binding: HardwareBindingPolicy | Unspecified = (
-            hw_raw if hw_raw is not None else UNSPECIFIED
-        )
-
         # Special: stream_policy "auto" or absent → UNSPECIFIED
         sp = getattr(args, "stream_policy", None)
         cuda_stream_policy: Any = UNSPECIFIED if (sp is None or sp == "auto") else sp
@@ -497,7 +490,7 @@ class StreamingOptions:
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
-            hardware_binding=hardware_binding,
+            hardware_binding=_get("hardware_binding"),
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
