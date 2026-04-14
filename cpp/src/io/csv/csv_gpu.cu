@@ -306,85 +306,92 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<cudf::bitmask_type* const> valids,
                       device_span<bool* const> is_quoted_flags)
 {
-  auto const raw_csv    = data.data();
-  auto const num_rows   = static_cast<long>(row_offsets.size()) - 1;
-  auto const stride     = static_cast<long>(gridDim.x) * blockDim.x;
-  auto const num_cols   = column_flags.size();
-  auto const has_quoted = !is_quoted_flags.empty();
+  auto const raw_csv = data.data();
+  // thread IDs range per block, so also need the block id.
+  // this is entry into the field array - tid is an elements within the num_entries array
+  auto const rec_id      = grid_1d::global_thread_id();
+  auto const rec_id_next = rec_id + 1;
 
-  for (long rec_id = grid_1d::global_thread_id(); rec_id < num_rows; rec_id += stride) {
-    auto field_start   = raw_csv + row_offsets[rec_id];
-    auto const row_end = raw_csv + row_offsets[rec_id + 1];
+  // we can have more threads than data, make sure we are not past the end of the data
+  if (rec_id_next >= row_offsets.size()) return;
 
-    auto next_field = field_start;
-    int col         = 0;
-    int actual_col  = 0;
+  auto field_start   = raw_csv + row_offsets[rec_id];
+  auto const row_end = raw_csv + row_offsets[rec_id_next];
 
-    while (col < num_cols && field_start < row_end) {
-      auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
+  auto next_field = field_start;
+  int col         = 0;
+  int actual_col  = 0;
 
-      if (column_flags[col] & column_parse::enabled) {
-        auto const is_valid = !serialized_trie_contains(
-          options.trie_na, {field_start, static_cast<size_t>(next_delimiter - field_start)});
+  while (col < column_flags.size() && field_start < row_end) {
+    auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
 
-        auto field_end = next_delimiter;
-        if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
-          auto const trimmed_field =
-            trim_whitespaces_quotes(field_start, field_end, options.quotechar);
-          field_start = trimmed_field.first;
-          field_end   = trimmed_field.second;
-        }
-        bool* const is_quoted_output = has_quoted ? is_quoted_flags[actual_col] : nullptr;
-        if (is_valid) {
-          if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-            auto end        = next_delimiter;
-            bool was_quoted = false;
-            if (not options.keepquotes) {
-              if (not options.detect_whitespace_around_quotes) {
-                if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
-                  ++field_start;
-                  --end;
-                  was_quoted = true;
-                }
-              } else {
-                auto const trimmed_field = trim_whitespaces(field_start, end);
-                if ((*trimmed_field.first == options.quotechar) &&
-                    (*(trimmed_field.second - 1) == options.quotechar)) {
-                  field_start = trimmed_field.first + 1;
-                  end         = trimmed_field.second - 1;
-                  was_quoted  = true;
-                }
+    if (column_flags[col] & column_parse::enabled) {
+      // check if the entire field is a NaN string - consistent with pandas
+      auto const is_valid = !serialized_trie_contains(
+        options.trie_na, {field_start, static_cast<size_t>(next_delimiter - field_start)});
+
+      // Modify field_start & end to ignore whitespace and quotechars
+      auto field_end = next_delimiter;
+      if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
+        auto const trimmed_field =
+          trim_whitespaces_quotes(field_start, field_end, options.quotechar);
+        field_start = trimmed_field.first;
+        field_end   = trimmed_field.second;
+      }
+      bool* const is_quoted_output =
+        is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
+      if (is_valid) {
+        // Type dispatcher does not handle STRING
+        if (dtypes[actual_col].id() == cudf::type_id::STRING) {
+          auto end        = next_delimiter;
+          bool was_quoted = false;
+          if (not options.keepquotes) {
+            if (not options.detect_whitespace_around_quotes) {
+              if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
+                ++field_start;
+                --end;
+                was_quoted = true;
+              }
+            } else {
+              // If the string is quoted, whitespace around the quotes get removed as well
+              auto const trimmed_field = trim_whitespaces(field_start, end);
+              if ((*trimmed_field.first == options.quotechar) &&
+                  (*(trimmed_field.second - 1) == options.quotechar)) {
+                field_start = trimmed_field.first + 1;
+                end         = trimmed_field.second - 1;
+                was_quoted  = true;
               }
             }
-            if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
-            auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
-            str_list[rec_id].first  = field_start;
-            str_list[rec_id].second = end - field_start;
-          } else {
-            if (cudf::type_dispatcher(dtypes[actual_col],
-                                      ConvertFunctor{},
-                                      field_start,
-                                      field_end,
-                                      columns[actual_col],
-                                      rec_id,
-                                      dtypes[actual_col],
-                                      options,
-                                      column_flags[col] & column_parse::as_hexadecimal)) {
-              set_bit(valids[actual_col], rec_id);
-            }
           }
-        } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-          auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
-          str_list[rec_id].first  = nullptr;
-          str_list[rec_id].second = 0;
-          if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
+          // Track whether this field was quoted (for doublequote unescaping)
+          if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
+          auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
+          str_list[rec_id].first  = field_start;
+          str_list[rec_id].second = end - field_start;
+        } else {
+          if (cudf::type_dispatcher(dtypes[actual_col],
+                                    ConvertFunctor{},
+                                    field_start,
+                                    field_end,
+                                    columns[actual_col],
+                                    rec_id,
+                                    dtypes[actual_col],
+                                    options,
+                                    column_flags[col] & column_parse::as_hexadecimal)) {
+            set_bit(valids[actual_col], rec_id);
+          }
         }
-        ++actual_col;
+      } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
+        auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
+        str_list[rec_id].first  = nullptr;
+        str_list[rec_id].second = 0;
+        if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
       }
-      next_field  = next_delimiter + 1;
-      field_start = next_field;
-      ++col;
+      ++actual_col;
     }
+    next_field  = next_delimiter + 1;
+    field_start = next_field;
+    ++col;
   }
 }
 
@@ -832,15 +839,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
 {
   auto const block_size = csvparse_block_dim;
   auto const num_rows   = row_offsets.size() - 1;
-  if (num_rows == 0) return;
-
-  int dev_id = 0;
-  CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
-  int num_sms = 0;
-  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
-  auto const max_grid = static_cast<size_t>(num_sms) * 8;
-  auto const grid_size =
-    std::min(cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size), max_grid);
+  auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
                                                                     data,
