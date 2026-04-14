@@ -206,7 +206,7 @@ class StreamingOptions:
     num_py_executors
         Workers for the internal Python ``ThreadPoolExecutor``.
         Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
-        Default: ``None``.
+        Default: ``1``.
         Category: executor.
     fallback_mode
         Fallback behavior (``"warn"``, ``"raise"``, ``"silent"``).
