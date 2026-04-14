@@ -529,7 +529,7 @@ class pinned_fallback_host_memory_resource {
   {
     if (bytes <= pool->pool_size()) {
       try {
-        return pool->allocate(stream, bytes);
+        return pool->allocate(stream, bytes, alignment);
       } catch (...) {
         // If the pool is exhausted, fall back to the upstream memory resource
       }
@@ -543,7 +543,7 @@ class pinned_fallback_host_memory_resource {
                   std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
     if (bytes <= pool->pool_size() && ptr >= pool_begin && ptr < pool_end) {
-      pool->deallocate(stream, ptr, bytes);
+      pool->deallocate(stream, ptr, bytes, alignment);
     } else {
       prior_cudf_pinned_mr().deallocate(stream, ptr, bytes);
     }
@@ -1047,8 +1047,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = new rmm::mr::pool_memory_resource(
-        rmm::device_async_resource_ref{rmm::mr::pinned_host_memory_resource{}}, init, max);
+    auto pool = new rmm::mr::pool_memory_resource(rmm::mr::pinned_host_memory_resource{}, init, max);
     return reinterpret_cast<jlong>(pool);
   }
   JNI_CATCH(env, 0);
@@ -1095,7 +1094,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
   {
     cudf::jni::auto_set_device(env);
     auto pool = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
-    void* ret = pool->allocate(cudf::get_default_stream(), size);
+    void* ret = pool->allocate(cudf::get_default_stream(), size, rmm::CUDA_ALLOCATION_ALIGNMENT);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH_BEGIN(env, 0)
@@ -1113,7 +1112,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromPinnedPool(
     cudf::jni::auto_set_device(env);
     auto pool  = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
     void* cptr = reinterpret_cast<void*>(ptr);
-    pool->deallocate(cudf::get_default_stream(), cptr, size);
+    pool->deallocate(cudf::get_default_stream(), cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
   JNI_CATCH(env, );
 }
