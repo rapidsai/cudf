@@ -334,7 +334,7 @@ def evaluate_pipeline(
         try:
             # Run the network
             with ThreadPoolExecutor(
-                max_workers=None,
+                max_workers=config_options.executor.num_py_executors,
                 thread_name_prefix="cpse",
             ) as executor:
                 run_actor_network(actors=nodes, py_executor=executor)

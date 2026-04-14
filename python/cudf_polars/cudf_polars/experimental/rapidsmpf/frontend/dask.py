@@ -185,7 +185,7 @@ def _setup_worker(
     root_ucxx_address_as_bytes: bytes,
     nranks: int,
     rapidsmpf_options_as_bytes: bytes,
-    engine_options: dict[str, object],
+    executor_options: dict[str, object],
     *,
     uid: str,
     hardware_binding: HardwareBindingPolicy,
@@ -206,8 +206,8 @@ def _setup_worker(
         Total number of workers.
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options.
-    engine_options
-        Frontend options (e.g. ``num_py_executors``).
+    executor_options
+        Executor options (e.g. ``num_py_executors``).
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
@@ -258,7 +258,7 @@ def _setup_worker(
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int | None,
-            engine_options.get("num_py_executors"),
+            executor_options.get("num_py_executors"),
         ),
         thread_name_prefix="dask-executor",
     )
@@ -622,7 +622,7 @@ class DaskEngine(StreamingEngine):
             root_ucxx_address_as_bytes,
             nranks,
             rapidsmpf_options_as_bytes,
-            engine_options,
+            executor_options,
         )
 
         dask_ctx = DaskContext(

@@ -47,20 +47,6 @@ class HardwareBindingPolicy:
         ``rrun.bind()`` only prints warnings to stderr on per-subsystem
         failures; setting this flag enables ``verbose=True`` so those
         warnings are visible.
-
-    Examples
-    --------
-    Default (skip under rrun, bind once):
-
-    >>> HardwareBindingPolicy()  # doctest: +NORMALIZE_WHITESPACE
-    HardwareBindingPolicy(skip_under_rrun=True, enabled=True,
-                          enable_once=True, raise_on_fail=False)
-
-    Disabled:
-
-    >>> HardwareBindingPolicy(enabled=False)  # doctest: +NORMALIZE_WHITESPACE
-    HardwareBindingPolicy(skip_under_rrun=True, enabled=False,
-                          enable_once=True, raise_on_fail=False)
     """
 
     skip_under_rrun: bool = True

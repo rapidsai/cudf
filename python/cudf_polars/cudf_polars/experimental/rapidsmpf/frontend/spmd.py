@@ -371,7 +371,7 @@ class SPMDEngine(StreamingEngine):
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(int, engine_options.get("num_py_executors", 1)),
+            max_workers=cast(int, executor_options.get("num_py_executors", 1)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()

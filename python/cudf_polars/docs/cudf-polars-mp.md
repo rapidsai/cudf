@@ -330,7 +330,7 @@ from rapidsmpf.config import Options
 
 with RayEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    engine_options={"num_py_executors": 2},
+    executor_options={"num_py_executors": 2},
     executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
@@ -514,7 +514,7 @@ from rapidsmpf.config import Options
 
 with DaskEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    engine_options={"num_py_executors": 2},
+    executor_options={"num_py_executors": 2},
     executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
 ) as engine:
@@ -749,7 +749,7 @@ from rapidsmpf.config import Options
 
 with SPMDEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    engine_options={"num_py_executors": 2},
+    executor_options={"num_py_executors": 2},
     executor_options={"max_rows_per_partition": 500_000},
     engine_options={"parquet_options": {"use_rapidsmpf_native": True}},
 ) as engine:

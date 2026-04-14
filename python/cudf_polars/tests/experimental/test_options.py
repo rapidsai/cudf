@@ -71,8 +71,8 @@ def test_executor_options_unique_fraction() -> None:
     assert result["unique_fraction"] == {"col_a": 0.5}
 
 
-def test_engine_options_num_py_executors() -> None:
-    result = StreamingOptions(num_py_executors=4).to_engine_options()
+def test_executor_options_num_py_executors() -> None:
+    result = StreamingOptions(num_py_executors=4).to_executor_options()
     assert result["num_py_executors"] == 4
 
 
@@ -81,14 +81,8 @@ def test_engine_options_num_py_executors() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_engine_options_default_has_hardware_binding() -> None:
-    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
-        HardwareBindingPolicy,
-    )
-
-    assert StreamingOptions().to_engine_options() == {
-        "hardware_binding": HardwareBindingPolicy()
-    }
+def test_engine_options_empty_when_all_unspecified() -> None:
+    assert StreamingOptions().to_engine_options() == {}
 
 
 def test_engine_options_includes_set_fields() -> None:
@@ -307,26 +301,14 @@ def test_add_cli_args_then_from_argparse_roundtrip() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_to_dict_default_has_hardware_binding_only() -> None:
-    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
-        HardwareBindingPolicy,
-    )
-
-    assert StreamingOptions().to_dict() == {"hardware_binding": HardwareBindingPolicy()}
+def test_to_dict_empty_when_all_unspecified() -> None:
+    assert StreamingOptions().to_dict() == {}
 
 
 def test_to_dict_contains_only_set_fields() -> None:
-    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
-        HardwareBindingPolicy,
-    )
-
     opts = StreamingOptions(fallback_mode="silent", num_streaming_threads=4)
     d = opts.to_dict()
-    assert d == {
-        "fallback_mode": "silent",
-        "num_streaming_threads": 4,
-        "hardware_binding": HardwareBindingPolicy(),
-    }
+    assert d == {"fallback_mode": "silent", "num_streaming_threads": 4}
 
 
 def test_to_dict_roundtrip() -> None:

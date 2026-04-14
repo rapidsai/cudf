@@ -203,6 +203,11 @@ class StreamingOptions:
         Env: ``RAPIDSMPF_PERIODIC_SPILL_CHECK``.
         Default: ``"1ms"``.
         Category: rapidsmpf.
+    num_py_executors
+        Workers for the internal Python ``ThreadPoolExecutor``.
+        Env: ``CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS``.
+        Default: ``None``.
+        Category: executor.
     fallback_mode
         Fallback behavior (``"warn"``, ``"raise"``, ``"silent"``).
         Env: ``CUDF_POLARS__EXECUTOR__FALLBACK_MODE``.
@@ -260,11 +265,6 @@ class StreamingOptions:
         e.g. ``'{"enabled": false}'``).
         Default: ``HardwareBindingPolicy()``.
         Category: engine.
-    num_py_executors
-        Workers for the internal Python ``ThreadPoolExecutor``.
-        Env: ``CUDF_POLARS__NUM_PY_EXECUTORS``.
-        Default: ``1``.
-        Category: engine.
 
     Examples
     --------
@@ -320,6 +320,9 @@ class StreamingOptions:
     unique_fraction: dict[str, float] | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
     )
+    num_py_executors: int | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS", int
+    )
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
@@ -327,14 +330,8 @@ class StreamingOptions:
     cuda_stream_policy: Literal["default", "pool"] | dict[str, Any] | Unspecified = (
         _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
     )
-    hardware_binding: HardwareBindingPolicy = dataclasses.field(
-        default_factory=lambda: _parse_hardware_binding(
-            os.environ.get("CUDF_POLARS__HARDWARE_BINDING", "{}")
-        ),
-        metadata={"category": "engine"},
-    )
-    num_py_executors: int | Unspecified = _opt(
-        "engine", "CUDF_POLARS__NUM_PY_EXECUTORS", int
+    hardware_binding: HardwareBindingPolicy | Unspecified = _opt(
+        "engine", "CUDF_POLARS__HARDWARE_BINDING", _parse_hardware_binding
     )
 
     # ------------------------------------------------------------------
@@ -431,7 +428,7 @@ class StreamingOptions:
         >>> StreamingOptions.from_dict({})  # all fields UNSPECIFIED
         StreamingOptions(...)
         """
-        return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in data.items()})  # type: ignore[arg-type]
+        return cls(**{k: (UNSPECIFIED if v is None else v) for k, v in data.items()})
 
     @classmethod
     def _from_argparse(cls, args: argparse.Namespace) -> StreamingOptions:
@@ -473,8 +470,8 @@ class StreamingOptions:
         # Special: hardware_binding is already a HardwareBindingPolicy
         # (parsed by _parse_hardware_binding) or None (absent).
         hw_raw = getattr(args, "hardware_binding", None)
-        hardware_binding: Any = (
-            hw_raw if hw_raw is not None else HardwareBindingPolicy()
+        hardware_binding: HardwareBindingPolicy | Unspecified = (
+            hw_raw if hw_raw is not None else UNSPECIFIED
         )
 
         # Special: stream_policy "auto" or absent → UNSPECIFIED

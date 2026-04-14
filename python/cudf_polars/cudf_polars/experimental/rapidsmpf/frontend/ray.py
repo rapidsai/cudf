@@ -506,7 +506,7 @@ class RayEngine(StreamingEngine):
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
                         int,
-                        engine_options.get("num_py_executors", 1),
+                        executor_options.get("num_py_executors", 1),
                     ),
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
