@@ -4,7 +4,7 @@
  */
 
 #include "cudf_jni_apis.hpp"
-#include "jni_rmm_resource.hpp"
+#include "jni_cccl_any_resource.hpp"
 
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
@@ -36,7 +36,7 @@
 namespace {
 
 using cudf::jni::delete_jni_resource;
-using cudf::jni::get_resource_ref;
+using cudf::jni::get_resource;
 using cudf::jni::make_jni_resource;
 
 constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
@@ -44,18 +44,15 @@ constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 /**
  * @brief Implementation class for tracking resource adaptor.
  * This class is not copyable due to atomic/mutex members.
- * Stores upstream as device_async_resource_ref (non-owning).
- * The JNI layer ensures the upstream resource outlives this adaptor.
+ * Owns the upstream resource via any_resource.
  */
 class tracking_resource_adaptor_impl {
  public:
-  tracking_resource_adaptor_impl(rmm::device_async_resource_ref upstream,
+  tracking_resource_adaptor_impl(cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
                                  std::size_t size_alignment)
-    : upstream_{upstream}, size_align{size_alignment}
+    : upstream_{std::move(upstream)}, size_align{size_alignment}
   {
   }
-
-  rmm::device_async_resource_ref get_wrapped_resource() { return upstream_; }
 
   std::size_t get_total_allocated() { return total_allocated.load(); }
 
@@ -124,7 +121,7 @@ class tracking_resource_adaptor_impl {
   }
 
  private:
-  rmm::device_async_resource_ref upstream_;
+  cuda::mr::any_resource<cuda::mr::device_accessible> upstream_;
   std::size_t const size_align;
   std::atomic_size_t total_allocated{0};
   std::size_t max_total_allocated{0};
@@ -137,12 +134,13 @@ static_assert(cuda::mr::resource_with<tracking_resource_adaptor_impl, cuda::mr::
 /**
  * @brief Tracking resource adaptor with reference-counted shared ownership.
  * This wrapper holds a shared_ptr to the impl and forwards resource operations.
- * It satisfies the CCCL resource concept and is copyable for use with device_async_resource_ref.
+ * It satisfies the CCCL resource concept and is copyable for use with any_resource.
  */
 class tracking_resource_adaptor {
  public:
-  tracking_resource_adaptor(rmm::device_async_resource_ref upstream, std::size_t size_alignment)
-    : impl_{std::make_shared<tracking_resource_adaptor_impl>(upstream, size_alignment)}
+  tracking_resource_adaptor(cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+                            std::size_t size_alignment)
+    : impl_{std::make_shared<tracking_resource_adaptor_impl>(std::move(upstream), size_alignment)}
   {
   }
 
@@ -182,7 +180,6 @@ class tracking_resource_adaptor {
   {
   }
 
-  rmm::device_async_resource_ref get_wrapped_resource() { return impl_->get_wrapped_resource(); }
   std::size_t get_total_allocated() { return impl_->get_total_allocated(); }
   std::size_t get_max_total_allocated() { return impl_->get_max_total_allocated(); }
   void reset_scoped_max_total_allocated(std::size_t initial_value)
@@ -247,8 +244,6 @@ class java_event_handler_memory_resource_impl {
     }
     handler_obj = nullptr;
   }
-
-  rmm::device_async_resource_ref get_wrapped_resource() { return upstream_; }
 
   virtual void* allocate(cuda::stream_ref stream,
                          std::size_t num_bytes,
@@ -484,8 +479,6 @@ class java_event_handler_memory_resource {
                            cuda::mr::device_accessible) noexcept
   {
   }
-
-  rmm::device_async_resource_ref get_wrapped_resource() { return impl_->get_wrapped_resource(); }
 
  private:
   std::shared_ptr<java_event_handler_memory_resource_impl> impl_;
@@ -740,7 +733,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPoolMemoryResource(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto upstream = get_resource_ref(child);
+    auto upstream = get_resource(child);
     return make_jni_resource(rmm::mr::pool_memory_resource{
       upstream, static_cast<std::size_t>(init), static_cast<std::size_t>(max)});
   }
@@ -766,7 +759,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newArenaMemoryResource(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto upstream = get_resource_ref(child);
+    auto upstream = get_resource(child);
     return make_jni_resource(rmm::mr::arena_memory_resource{
       upstream, static_cast<std::size_t>(init), static_cast<bool>(dump_on_oom)});
   }
@@ -820,7 +813,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLimitingResourceAdaptor(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto upstream = get_resource_ref(child);
+    auto upstream = get_resource(child);
     return make_jni_resource(rmm::mr::limiting_resource_adaptor{
       upstream, static_cast<std::size_t>(limit), static_cast<std::size_t>(align)});
   }
@@ -846,7 +839,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto upstream = get_resource_ref(child);
+    auto upstream = get_resource(child);
     switch (type) {
       case 1:  // File
       {
@@ -892,7 +885,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newTrackingResourceAdaptor(JNIEn
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto upstream = get_resource_ref(child);
+    auto upstream = get_resource(child);
     auto adaptor  = tracking_resource_adaptor(upstream, static_cast<std::size_t>(align));
     auto handle   = make_jni_resource(adaptor);
     // Store a copy in map for metrics access (copies share impl via shared_ptr)
@@ -1003,7 +996,7 @@ Java_ai_rapids_cudf_Rmm_newEventHandlerResourceAdaptor(JNIEnv* env,
   JNI_NULL_CHECK(env, tracker, "tracker is null", 0);
   JNI_TRY
   {
-    auto upstream = get_resource_ref(child);
+    auto upstream = get_resource(child);
     auto& t       = get_tracking_adaptor(tracker);
     return make_jni_resource(java_event_handler_memory_resource(
       env, handler_obj, jalloc_thresholds, jdealloc_thresholds, upstream, &t, enable_debug));
@@ -1029,8 +1022,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto ref = get_resource_ref(new_handle);
-    cudf::set_current_device_resource_ref(ref);
+    cudf::set_current_device_resource(get_resource(new_handle));
   }
   JNI_CATCH(env, );
 }

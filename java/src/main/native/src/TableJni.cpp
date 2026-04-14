@@ -7,7 +7,7 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni_compiled_expr.hpp"
-#include "jni_rmm_resource.hpp"
+#include "jni_cccl_any_resource.hpp"
 #include "jni_utils.hpp"
 #include "jni_writer_data_sink.hpp"
 #include "multi_host_buffer_source.hpp"
@@ -4313,8 +4313,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     cudf::table_view* n_table = reinterpret_cast<cudf::table_view*>(input_table);
     // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
     // and scratch memory only.
-    auto temp_mr = memoryResourceHandle != 0 ? cudf::jni::get_resource_ref(memoryResourceHandle)
-                                             : cudf::get_current_device_resource_ref();
+    rmm::device_async_resource_ref temp_mr =
+      memoryResourceHandle != 0
+        ? rmm::device_async_resource_ref{cudf::jni::get_resource(memoryResourceHandle)}
+        : cudf::get_current_device_resource_ref();
     auto chunked_pack =
       cudf::chunked_pack::create(*n_table, bounce_buffer_size, cudf::get_default_stream(), temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());
