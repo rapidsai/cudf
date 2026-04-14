@@ -19,6 +19,7 @@
 #include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -686,9 +687,6 @@ decode_result decode_data(parse_options const& parse_opts,
     }
   }
 
-  auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_active_columns, stream, cudf::get_current_device_resource_ref());
-
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
@@ -697,13 +695,13 @@ decode_result decode_data(parse_options const& parse_opts,
     make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref()),
     make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
     make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
-    d_valid_counts,
     make_device_uvector_async(h_is_quoted_flags, stream, cudf::get_current_device_resource_ref()),
     stream);
 
-  auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
   for (int i = 0; i < num_active_columns; ++i) {
-    out_buffers[i].null_count() = num_records - h_valid_counts[i];
+    auto const valid_count =
+      cudf::detail::count_set_bits(out_buffers[i].null_mask(), 0, num_records, stream);
+    out_buffers[i].null_count() = num_records - valid_count;
   }
 
   return {std::move(out_buffers), std::move(is_quoted_flags_storage)};
