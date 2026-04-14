@@ -45,20 +45,23 @@ def _run_in_subprocess(target: Callable[[], None]) -> None:
 
     proc = ctx.Process(target=_wrapper)
     proc.start()
-    proc.join(timeout=30)
+    try:
+        proc.join(timeout=30)
 
-    if proc.is_alive():
-        proc.kill()
-        proc.join()
-        raise RuntimeError("Subprocess timed out after 30 seconds")
+        if proc.is_alive():
+            proc.kill()
+            proc.join()
+            raise RuntimeError("Subprocess timed out after 30 seconds")
 
-    if parent_conn.poll():
-        exc = parent_conn.recv()
-        if exc is not None:
-            raise exc
+        if parent_conn.poll():
+            exc = parent_conn.recv()
+            if exc is not None:
+                raise exc
 
-    if proc.exitcode != 0:
-        raise RuntimeError(f"Subprocess exited with code {proc.exitcode}")
+        if proc.exitcode != 0:
+            raise RuntimeError(f"Subprocess exited with code {proc.exitcode}")
+    finally:
+        proc.close()
 
 
 def _reset_bind_state() -> None:
