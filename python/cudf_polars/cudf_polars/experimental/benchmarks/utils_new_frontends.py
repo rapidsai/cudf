@@ -1214,25 +1214,27 @@ def run_polars_dask(
         else:
             dask_client = distributed.Client(address=run_config.connect)
 
-    with DaskEngine(
-        rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
-        executor_options=executor_options,
-        engine_options=engine_options,
-        dask_client=dask_client,
-    ) as engine:
-        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
-        records, plans, validation_failures, query_failures = _run_query_loop(
-            benchmark,
-            args,
-            run_config,
-            engine,
-            None,
-            numeric_type,
-            date_type,
-            validation_files,
-        )
-    if dask_client is not None:
-        dask_client.close()
+    try:
+        with DaskEngine(
+            rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
+            executor_options=executor_options,
+            engine_options=engine_options,
+            dask_client=dask_client,
+        ) as engine:
+            run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
+            records, plans, validation_failures, query_failures = _run_query_loop(
+                benchmark,
+                args,
+                run_config,
+                engine,
+                None,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
+    finally:
+        if dask_client is not None:
+            dask_client.close()
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
