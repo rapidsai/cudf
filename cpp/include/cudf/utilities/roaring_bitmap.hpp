@@ -146,8 +146,8 @@ class roaring_bitmap {
                       rmm::cuda_stream_view stream) const;
 
  private:
-  roaring_bitmap_type type_;
-  std::unique_ptr<roaring_bitmap_impl> impl_;
+  roaring_bitmap_type _type;
+  std::unique_ptr<roaring_bitmap_impl> _impl;
 };
 
 /** @} */  // end of group
