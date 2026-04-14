@@ -22,8 +22,7 @@ namespace cudf::jni {
 class jni_resource_wrapper {
  public:
   template <typename Resource>
-  explicit jni_resource_wrapper(Resource&& resource)
-    : resource_(std::forward<Resource>(resource))
+  explicit jni_resource_wrapper(Resource&& resource) : resource_(std::forward<Resource>(resource))
   {
   }
 
