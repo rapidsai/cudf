@@ -440,14 +440,8 @@ struct ConvertFunctor {
                                              bool as_hex = false)
   {
     auto const value = [as_hex, &opts, begin, end]() -> cuda::std::optional<T> {
+      // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (field_len > 0) {
-        auto const first = static_cast<unsigned char>(*begin);
-        if (first >= '0' && first <= '9') {
-          return as_hex ? cudf::io::parse_numeric<T, 16>(begin, end, opts)
-                        : cudf::io::parse_numeric<T>(begin, end, opts);
-        }
-      }
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) { return 1; }
       if (serialized_trie_contains(opts.trie_false, {begin, field_len})) { return 0; }
       return as_hex ? cudf::io::parse_numeric<T, 16>(begin, end, opts)
@@ -495,6 +489,7 @@ struct ConvertFunctor {
                                              bool as_hex)
   {
     auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
+      // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
         return static_cast<T>(true);
@@ -523,13 +518,8 @@ struct ConvertFunctor {
                                              bool as_hex)
   {
     auto const value = [&opts, begin, end]() -> cuda::std::optional<T> {
+      // Check for user-specified true/false values
       auto const field_len = static_cast<size_t>(end - begin);
-      if (field_len > 0) {
-        auto const first = static_cast<unsigned char>(*begin);
-        if (first >= '0' && first <= '9') {
-          return cudf::io::parse_numeric<T>(begin, end, opts);
-        }
-      }
       if (serialized_trie_contains(opts.trie_true, {begin, field_len})) {
         return static_cast<T>(true);
       }
