@@ -12,7 +12,7 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/roaring_bitmap.cuh>
-#include <cuda/iterator>
+#include <thrust/transform.h>
 
 namespace cudf {
 
