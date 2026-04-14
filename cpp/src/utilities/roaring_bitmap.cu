@@ -25,12 +25,12 @@ using roaring_bitmap_64_type =
 }  // namespace
 
 struct roaring_bitmap::roaring_bitmap_impl {
-  cudf::host_span<cuda::std::byte const> _serialized_bitmap_data;
-  std::unique_ptr<roaring_bitmap_32_type> _bitmap32;
-  std::unique_ptr<roaring_bitmap_64_type> _bitmap64;
+  cudf::host_span<cuda::std::byte const> serialized_bitmap_data;
+  std::unique_ptr<roaring_bitmap_32_type> bitmap32;
+  std::unique_ptr<roaring_bitmap_64_type> bitmap64;
 
   roaring_bitmap_impl(cudf::host_span<cuda::std::byte const> serialized_bitmap_data)
-    : _serialized_bitmap_data{serialized_bitmap_data}
+    : serialized_bitmap_data{serialized_bitmap_data}
   {
   }
 
@@ -41,19 +41,19 @@ struct roaring_bitmap::roaring_bitmap_impl {
   void materialize(rmm::cuda_stream_view stream)
     requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
   {
-    auto const bytes = _serialized_bitmap_data.data();
+    auto const bytes = serialized_bitmap_data.data();
 
     if constexpr (Type == roaring_bitmap_type::BITS_32) {
-      if (_bitmap32) { return; }
-      _bitmap32 = std::make_unique<roaring_bitmap_32_type>(
+      if (bitmap32) { return; }
+      bitmap32 = std::make_unique<roaring_bitmap_32_type>(
         bytes, rmm::mr::polymorphic_allocator<char>{}, stream);
     } else {
-      if (_bitmap64) { return; }
-      _bitmap64 = std::make_unique<roaring_bitmap_64_type>(
+      if (bitmap64) { return; }
+      bitmap64 = std::make_unique<roaring_bitmap_64_type>(
         bytes, rmm::mr::polymorphic_allocator<char>{}, stream);
     }
 
-    _serialized_bitmap_data = {};
+    serialized_bitmap_data = {};
   }
 
   template <roaring_bitmap_type Type, typename InputIt, typename OutputIt>
@@ -66,13 +66,11 @@ struct roaring_bitmap::roaring_bitmap_impl {
     materialize<Type>(stream);
 
     if constexpr (Type == roaring_bitmap_type::BITS_32) {
-      CUDF_EXPECTS(_bitmap32,
-                   "Roaring bitmap has not been materialized. Call materialize() first.");
-      _bitmap32->contains_async(first, last, output, stream);
+      CUDF_EXPECTS(bitmap32, "Roaring bitmap has not been materialized. Call materialize() first.");
+      bitmap32->contains_async(first, last, output, stream);
     } else {
-      CUDF_EXPECTS(_bitmap64,
-                   "Roaring bitmap has not been materialized. Call materialize() first.");
-      _bitmap64->contains_async(first, last, output, stream);
+      CUDF_EXPECTS(bitmap64, "Roaring bitmap has not been materialized. Call materialize() first.");
+      bitmap64->contains_async(first, last, output, stream);
     }
   }
 };
