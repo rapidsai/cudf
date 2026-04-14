@@ -562,9 +562,9 @@ async def passthrough_split(
     buffer = context.spillable_messages()
     mids = []
     while (msg := await ch_in.recv(context)) is not None:
-        chunk = await TableChunk.from_message(msg).make_available_or_wait(
-            context, net_memory_delta=0
-        )
+        chunk = await TableChunk.from_message(
+            msg, br=context.br()
+        ).make_available_or_wait(context, net_memory_delta=0)
         columns = chunk.table_view().columns()
         key_table = TableChunk.from_pylibcudf_table(
             plc.Table(
@@ -575,6 +575,7 @@ async def passthrough_split(
             ),
             chunk.stream,
             exclusive_view=True,
+            br=context.br(),
         )
         mids.append(buffer.insert(Message(msg.sequence_number, chunk)))
         await ch_split.send(context, Message(msg.sequence_number, key_table))
@@ -745,11 +746,15 @@ async def _shuffle_join(
             strategy=strategy,
             left_rows=left_rows,
             right_rows=right_rows,
-            tag=collective_ids.pop(0),
+            tag=collective_ids.pop(),
         )
     else:
+        collective_ids.pop()
         filter_tasks = []
         chs_to_shutdown = []
+    if len(collective_ids) == 3:
+        # Chunkwise path skips _aggregate_estimates; drop the reserved allgather id.
+        collective_ids.pop(0)
     # Construct a shuffle-shuffle-join pipeline.
     # The shuffle operations will pass chunks through unchanged
     # if the data is already partitioned correctly.
@@ -851,7 +856,7 @@ async def _aggregate_estimates(
     ) = await allgather_reduce(
         context,
         comm,
-        collective_ids.pop(),
+        collective_ids.pop(0),
         left_sample.total_size,
         right_sample.total_size,
         left_sample.total_rows,
