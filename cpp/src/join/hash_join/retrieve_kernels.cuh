@@ -109,15 +109,19 @@ CUDF_KERNEL void __launch_bounds__(PROBE_BLOCK_SIZE)
 }
 
 template <bool IsOuter, typename Ref>
-std::size_t launch_retrieve(probe_key_type const* keys,
-                            cuda::std::int64_t n,
-                            size_type* left_output,
-                            size_type* right_output,
-                            size_type const* match_counts,
-                            Ref ref,
-                            rmm::cuda_stream_view stream)
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+launch_retrieve(probe_key_type const* keys,
+                cuda::std::int64_t n,
+                size_type const* match_counts,
+                Ref ref,
+                rmm::cuda_stream_view stream,
+                rmm::device_async_resource_ref mr)
 {
-  if (n == 0) { return 0; }
+  if (n == 0) {
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
 
   // Exclusive scan of match counts to get per-row output offsets.
   rmm::device_uvector<size_type> offsets(n, stream);
@@ -136,14 +140,20 @@ std::size_t launch_retrieve(probe_key_type const* keys,
   stream.synchronize();
   auto const total_output = static_cast<std::size_t>(last_offset) + last_count;
 
-  if (total_output == 0) { return 0; }
+  if (total_output == 0) {
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
+
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(total_output, stream, mr);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(total_output, stream, mr);
 
   auto const config = grid_1d{static_cast<thread_index_type>(n * PROBE_CG_SIZE), PROBE_BLOCK_SIZE};
 
   retrieve_kernel<IsOuter><<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    keys, offsets.data(), n, left_output, right_output, ref);
+    keys, offsets.data(), n, left_indices->data(), right_indices->data(), ref);
 
-  return total_output;
+  return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
 }  // namespace cudf::detail

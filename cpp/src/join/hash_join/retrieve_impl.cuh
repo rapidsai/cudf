@@ -26,7 +26,6 @@
 #include <cuda/std/iterator>
 #include <thrust/fill.h>
 #include <thrust/iterator/transform_output_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
@@ -250,21 +249,6 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
     }
   }
 
-  // Compute output size from pre-computed match counts
-  auto const output_size =
-    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   match_ctx._match_counts->begin() + left_start_idx,
-                   match_ctx._match_counts->begin() + left_end_idx,
-                   std::size_t{0});
-
-  if (output_size == 0) {
-    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
-  }
-
-  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(output_size, stream, mr);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(output_size, stream, mr);
-
   // Slice the probe table to the partition range
   auto const probe_partition_view =
     cudf::slice(match_ctx._left_table, {left_start_idx, left_end_idx})[0];
@@ -277,9 +261,17 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
   // For FULL_JOIN, probe with LEFT_JOIN semantics (no complement here)
   constexpr bool is_outer = (Join != join_kind::INNER_JOIN);
 
+  // launch_retrieve computes output size from match counts via exclusive scan
+  // (total = last_offset + last_count), allocates output buffers, and launches the kernel.
+  auto const* partition_counts = match_ctx._match_counts->data() + left_start_idx;
+  auto const n                 = static_cast<cuda::std::int64_t>(partition_size);
+
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+    join_indices;
+
   auto retrieve_partition = [&](auto equality, auto d_hasher) {
     // Precompute probe keys for this partition slice.
-    auto const n = static_cast<cuda::std::int64_t>(partition_size);
     rmm::device_uvector<probe_key_type> probe_keys(n, stream);
     thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>(0),
@@ -291,16 +283,8 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
                        .rebind_key_eq(equality)
                        .rebind_hash_function(_impl->_hash_table.hash_function());
 
-    // Pass the partition's slice of pre-computed match counts.
-    auto const* partition_counts = match_ctx._match_counts->data() + left_start_idx;
-
-    launch_retrieve<is_outer>(probe_keys.data(),
-                              n,
-                              left_indices->data(),
-                              right_indices->data(),
-                              partition_counts,
-                              ref,
-                              stream);
+    join_indices =
+      launch_retrieve<is_outer>(probe_keys.data(), n, partition_counts, ref, stream, mr);
   };
 
   dispatch_join_comparator(_build,
@@ -310,6 +294,8 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
                            _has_nulls,
                            _nulls_equal,
                            retrieve_partition);
+
+  auto& [left_indices, right_indices] = join_indices;
 
   // Offset left indices to be relative to the original complete probe table
   if (left_start_idx > 0 && left_indices->size() > 0) {
@@ -321,7 +307,7 @@ hash_join<Hasher>::partitioned_join_retrieve(cudf::join_partition_context const&
                       cuda::std::plus<size_type>{});
   }
 
-  return std::pair(std::move(left_indices), std::move(right_indices));
+  return join_indices;
 }
 
 }  // namespace cudf::detail
