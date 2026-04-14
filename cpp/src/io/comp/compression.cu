@@ -5,6 +5,8 @@
 
 #include "compression.hpp"
 
+#include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
