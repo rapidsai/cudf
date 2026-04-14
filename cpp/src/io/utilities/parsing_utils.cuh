@@ -199,10 +199,10 @@ namespace gpu {
  * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
  */
-template <bool escape_char = false>
 __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  char const* end,
-                                                 parse_options_view const& opts)
+                                                 parse_options_view const& opts,
+                                                 bool escape_char = false)
 {
   bool quotation   = false;
   auto current     = begin;
@@ -210,6 +210,12 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
 
   auto const field_starts_with_quote = (begin < end && *begin == opts.quotechar);
   while (current < end) {
+    // Use simple logic to ignore control chars between any quote seq
+    // Handles nominal cases including doublequotes within quotes, but
+    // may not output exact failures as PANDAS for malformed fields.
+    // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
+
+    // Only process quotes if field started with a quote
     if (field_starts_with_quote && *current == opts.quotechar && !escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
@@ -226,7 +232,8 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       }
     }
 
-    if constexpr (escape_char) {
+    if (escape_char) {
+      // If a escape character is encountered, escape next character in next loop.
       if (not escape_next and *current == '\\') {
         escape_next = true;
       } else {
@@ -234,7 +241,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       }
     }
 
-    ++current;
+    if (current < end) { current++; }
   }
   return current;
 }
