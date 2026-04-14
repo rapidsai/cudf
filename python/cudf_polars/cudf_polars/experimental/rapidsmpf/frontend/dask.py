@@ -594,6 +594,8 @@ class DaskEngine(StreamingEngine):
 
         workers_info = dask_client.scheduler_info(n_workers=-1)["workers"]
         nranks = len(workers_info)
+        if nranks == 0:
+            raise RuntimeError("No workers found in the Dask cluster.")
         root_worker = next(iter(workers_info))
 
         # Phase 1: initialize root communicator on one worker.
