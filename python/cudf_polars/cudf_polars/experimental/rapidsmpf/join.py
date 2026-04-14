@@ -592,8 +592,12 @@ def use_bloom_filter(
     threshold: float,
 ) -> bool:
     """Return True if bloom filter pre-filtering should be applied."""
-    # TODO: We can do left, and right if we also control which side we apply the filter to.
-    if threshold == 0.0 or join_type not in ("Inner", "Semi"):
+    if (
+        threshold == 0.0
+        or join_type not in ("Inner", "Semi")
+        or (join_type == "Left" and right_rows <= left_rows)
+        or (join_type == "Right" and left_rows <= right_rows)
+    ):
         return False
     small_rows, large_rows = sorted([left_rows, right_rows])
     return large_rows > 0 and small_rows / large_rows < threshold
@@ -739,6 +743,8 @@ async def _shuffle_join(
     left_rows, right_rows = row_counts
     bloom_tag = collective_ids.pop(0)
     if use_bloom_filter(ir.options[0], left_rows, right_rows, bloom_threshold):
+        if tracer is not None:
+            tracer.decision = f"{tracer.decision or 'shuffle'}_filtered"
         ch_left, ch_right, filter_tasks, chs_to_shutdown = make_filter_tasks(
             context,
             comm,
