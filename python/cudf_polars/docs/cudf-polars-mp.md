@@ -151,14 +151,10 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
 )
 ```
 
-The default policy (`HardwareBindingPolicy()`) skips binding under `rrun`
-(which already binds at launch), and otherwise binds once per process using
-`CUDA_VISIBLE_DEVICES` to resolve the GPU.
+The default policy (`HardwareBindingPolicy()`) skips binding when running under `rrun`,
+which already handles binding at launch. Otherwise, it binds once per process based on
+`CUDA_VISIBLE_DEVICES`. If `CUDA_VISIBLE_DEVICES` is unset, binding falls back to GPU 0.
 
-The GPU to bind to is resolved from `CUDA_VISIBLE_DEVICES`. Each engine
-sets this per worker (Dask via the nanny preload or `SpecCluster`, Ray via
-`num_gpus=1` scheduling, SPMD via `rrun`). If `CUDA_VISIBLE_DEVICES` is
-unset, binding falls back to GPU 0.
 
 | Field             | Default | Description                                                                                                        |
 | ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
