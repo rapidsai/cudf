@@ -951,7 +951,7 @@ def _(
             )
         ]
         children = (*by_exprs, *((order_by_expr,) if has_order_by else ()), *child_deps)
-        return expr.WindowExpr(
+        return expr.GroupedWindow(
             dtype,
             (mapping, has_order_by, descending, nulls_last),
             named_aggs,

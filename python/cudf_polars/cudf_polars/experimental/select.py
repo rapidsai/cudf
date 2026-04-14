@@ -42,7 +42,7 @@ def _hstack_chain_to_select(ir: Select) -> Select | None:
 
     Only fires when the chain has HStack(should_broadcast=False). Pure HStack(True)
     chains are left for rec(child) — their col refs may live in non-traversable expr
-    internals (e.g. WindowExpr.named_aggs) that _sub_expr cannot reach.
+    internals (e.g. GroupedWindow.named_aggs) that _sub_expr cannot reach.
     """
     hstack_chain: list[HStack] = []
     current: IR = ir.children[0]
