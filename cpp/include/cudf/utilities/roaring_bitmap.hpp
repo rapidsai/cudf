@@ -95,7 +95,7 @@ class roaring_bitmap {
   roaring_bitmap& operator=(roaring_bitmap const&) = delete;
 
   /**
-   * @brief Materalize the underlying cuco roaring bitmap.
+   * @brief Materialize the underlying cuco roaring bitmap.
    *
    * The serialized bitmap data may be released after this.
    *
