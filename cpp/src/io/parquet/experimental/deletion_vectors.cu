@@ -18,6 +18,7 @@
 
 #include <cuco/roaring_bitmap.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -162,7 +163,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   auto d_row_group_span_offsets = cudf::detail::make_device_uvector_async(
     row_group_span_offsets, stream, cudf::get_current_device_resource_ref());
   auto in_iter =
-    thrust::make_zip_iterator(d_row_group_offsets.begin(), thrust::counting_iterator<size_type>(0));
+    thrust::make_zip_iterator(d_row_group_offsets.begin(), cuda::counting_iterator<size_type>{0});
   auto out_iter = thrust::make_zip_iterator(row_indices_iter, row_group_keys.begin());
   thrust::scatter(rmm::exec_policy_nosync(stream),
                   in_iter,
@@ -301,8 +302,8 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
   constexpr auto stream_fork_threshold = 8;
   if (num_deletion_vectors >= stream_fork_threshold) {
     auto streams = cudf::detail::fork_streams(stream, num_deletion_vectors);
-    std::for_each(thrust::counting_iterator(0),
-                  thrust::counting_iterator(num_deletion_vectors),
+    std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                  cuda::counting_iterator{num_deletion_vectors},
                   [&](auto const dv_idx) {
                     deletion_vector_refs[dv_idx].get().contains_async(
                       row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
@@ -313,8 +314,8 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
     cudf::detail::join_streams(streams, stream);
   } else {
     // Otherwise, launch the queries on the same stream
-    std::for_each(thrust::counting_iterator(0),
-                  thrust::counting_iterator(num_deletion_vectors),
+    std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                  cuda::counting_iterator{num_deletion_vectors},
                   [&](auto const dv_idx) {
                     deletion_vector_refs[dv_idx].get().contains_async(
                       row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],

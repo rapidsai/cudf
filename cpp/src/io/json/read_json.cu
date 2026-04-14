@@ -695,6 +695,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     range_offset = 0;
     delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
   }
+  cudf::detail::join_streams(stream_pool, stream);
   if (!batch_dsts.empty()) {
     CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
       batch_dsts.data(), batch_srcs.data(), batch_sizes.data(), batch_dsts.size(), stream));

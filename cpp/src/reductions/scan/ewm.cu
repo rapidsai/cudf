@@ -16,6 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/transform_scan.h>
@@ -195,7 +196,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       pairs.end(),
                       output.begin(),
                       [] __device__(pair_type<T> pair) -> T { return pair.second; });
-    auto itr = thrust::make_counting_iterator<size_type>(0);
+    auto itr = cuda::counting_iterator<size_type>{0};
 
     thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      itr,
@@ -237,7 +238,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
 
   if (!input.has_nulls()) {
     auto data = thrust::make_zip_iterator(
-      cuda::std::make_tuple(input.begin<T>(), thrust::make_counting_iterator<size_type>(0)));
+      cuda::std::make_tuple(input.begin<T>(), cuda::counting_iterator<size_type>{0}));
     thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      data,
                                      data + input.size(),
@@ -250,7 +251,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     auto valid_it    = detail::make_validity_iterator(*device_view);
 
     auto data = thrust::make_zip_iterator(cuda::std::make_tuple(
-      input.begin<T>(), thrust::make_counting_iterator<size_type>(0), valid_it, nullcnt.begin()));
+      input.begin<T>(), cuda::counting_iterator<size_type>{0}, valid_it, nullcnt.begin()));
 
     thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
                                      data,

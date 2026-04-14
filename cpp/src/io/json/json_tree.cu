@@ -33,7 +33,6 @@
 #include <thrust/count.h>
 #include <thrust/fill.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -294,8 +293,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
   rmm::device_uvector<NodeIndexT> node_token_ids(num_nodes, stream);  // needed for SE, LE later
   // This block of code is generalized logical stack algorithm. TODO: make this a separate function.
   {
-    cudf::detail::copy_if_async(thrust::make_counting_iterator<NodeIndexT>(0),
-                                thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
+    cudf::detail::copy_if_async(cuda::counting_iterator<NodeIndexT>{0},
+                                cuda::counting_iterator<NodeIndexT>{0} + num_tokens,
                                 tokens.begin(),
                                 node_token_ids.begin(),
                                 is_node,
@@ -366,8 +365,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     node_range_tuple_it, node_ranges{tokens, token_indices, include_quote_char});
 
   auto const node_range_out_end = cudf::detail::copy_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(0) + num_tokens,
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{0} + num_tokens,
     node_range_out_it,
     [is_node, tokens_gpu = tokens.begin()] __device__(size_type i) -> bool {
       return is_node(tokens_gpu[i]);
@@ -411,7 +410,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         }));
     // copy_if only struct/list's token levels, token ids, tokens.
     auto zipped_in_it =
-      thrust::make_zip_iterator(push_pop_it, thrust::make_counting_iterator<NodeIndexT>(0));
+      thrust::make_zip_iterator(push_pop_it, cuda::counting_iterator<NodeIndexT>{0});
     auto zipped_out_it = thrust::make_zip_iterator(token_levels.begin(), token_id.begin());
     cudf::detail::copy_if_async(
       zipped_in_it, zipped_in_it + num_tokens, tokens.begin(), zipped_out_it, is_nested, stream);
@@ -438,8 +437,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     // translate token ids to node id using similar binary search.
     thrust::transform(
       rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator<NodeIndexT>(0),
-      thrust::make_counting_iterator<NodeIndexT>(0) + num_nested,
+      cuda::counting_iterator<NodeIndexT>{0},
+      cuda::counting_iterator<NodeIndexT>{0} + num_nested,
       parent_node_ids.begin(),
       [node_ids_gpu = node_token_ids.begin(),
        num_nodes,
@@ -552,7 +551,7 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
                                                                    {},
                                   rmm::mr::polymorphic_allocator<char>{},
                                   stream.value()};
-  auto const counting_iter                      = thrust::make_counting_iterator<size_type>(0);
+  auto const counting_iter                      = cuda::counting_iterator<size_type>{0};
   rmm::device_uvector<size_type> found_keys(num_keys, stream);
   key_set.insert_and_find_async(counting_iter,
                                 counting_iter + num_keys,
@@ -610,7 +609,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   };
   // key-value pairs: uses node_id itself as node_type. (unique node_id for a field name due to
   // hashing)
-  auto const counting_iter = thrust::make_counting_iterator<size_type>(0);
+  auto const counting_iter = cuda::counting_iterator<size_type>{0};
 
   auto const is_field_name_node = [node_categories =
                                      d_tree.node_categories.data()] __device__(auto node_id) {
@@ -630,7 +629,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                                   stream.value()};
   key_set.insert_if_async(counting_iter,
                           counting_iter + num_nodes,
-                          thrust::counting_iterator<size_type>(0),  // stencil
+                          cuda::counting_iterator<size_type>{0},  // stencil
                           is_field_name_node,
                           stream.value());
 
@@ -721,8 +720,8 @@ get_array_children_indices(TreeDepthT row_array_children_level,
   rmm::device_uvector<NodeIndexT> level2_nodes(num_level2_nodes, stream);
   rmm::device_uvector<NodeIndexT> level2_indices(num_level2_nodes, stream);
   cudf::detail::copy_if_async(
-    thrust::counting_iterator<NodeIndexT>(0),
-    thrust::counting_iterator<NodeIndexT>(num_nodes),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{num_nodes},
     node_levels.begin(),
     level2_nodes.begin(),
     [row_array_children_level] __device__(auto level) { return level == row_array_children_level; },
@@ -866,7 +865,7 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
                                   stream.value()};
 
   // insert and convert node ids to unique set ids
-  auto nodes_itr         = thrust::make_counting_iterator<size_type>(0);
+  auto nodes_itr         = cuda::counting_iterator<size_type>{0};
   auto const num_columns = key_set.insert(nodes_itr, nodes_itr + num_nodes, stream.value());
 
   rmm::device_uvector<size_type> unique_keys(num_columns, stream);
@@ -1031,8 +1030,8 @@ rmm::device_uvector<size_type> compute_row_offsets(rmm::device_uvector<NodeIndex
   // Propagate row offsets to non-list leaves from list's immediate children node by recursion
   thrust::transform_if(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_nodes),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{num_nodes},
     row_offsets.begin(),
     [node_categories = d_tree.node_categories.data(),
      parent_node_ids = d_tree.parent_node_ids.begin(),

@@ -20,10 +20,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/algorithm>
 #include <cuda/std/functional>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_reduce.h>
 
 namespace cudf {
@@ -96,7 +96,7 @@ std::unique_ptr<column> cast_to_integer(strings_column_view const& input,
 
   auto const type_size = static_cast<size_type>(cudf::size_of(output_type));
   thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+                     cuda::counting_iterator<size_type>{0},
                      input.size(),
                      cast_to_integer_fn{*d_strings, *d_results, swap, type_size});
 
@@ -215,8 +215,8 @@ std::optional<cudf::data_type> integer_cast_type(strings_column_view const& inpu
 
   auto bits_size =
     thrust::transform_reduce(rmm::exec_policy_nosync(stream),
-                             thrust::make_counting_iterator<size_type>(0),
-                             thrust::make_counting_iterator<size_type>(input.size()),
+                             cuda::counting_iterator<size_type>{0},
+                             cuda::counting_iterator<size_type>{input.size()},
                              cuda::proclaim_return_type<size_type>(
                                [d_strings = *d_strings] __device__(size_type idx) -> size_type {
                                  if (d_strings.is_null(idx)) { return 0; }

@@ -16,7 +16,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf::strings::detail {
@@ -109,8 +109,8 @@ std::unique_ptr<column> shift(strings_column_view const& input,
 
   // run kernel to shift all the characters
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<int64_t>(0),
-                    thrust::counting_iterator<int64_t>(total_bytes),
+                    cuda::counting_iterator<int64_t>{0},
+                    cuda::counting_iterator<int64_t>{total_bytes},
                     d_chars,
                     shift_chars_fn{*d_input, d_fill_str, shift_offset});
 

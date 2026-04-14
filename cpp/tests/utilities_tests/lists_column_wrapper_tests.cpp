@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,8 +16,7 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <cuda/iterator>
 
 struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
 template <typename T>
@@ -158,7 +157,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIterator)
   // Children :
   //    0, 1, 2, 3, 4
   //
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{sequence,
                                                                                     sequence + 5};
@@ -192,7 +191,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListFromIteratorWithValidity)
   // Children :
   //    0, NULL, 2, NULL, 4
   //
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
 
   cudf::test::lists_column_wrapper<T, typename decltype(sequence)::value_type> list{
     sequence, sequence + 5, valids};
@@ -1506,8 +1505,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
 
   // Creating Struct<Numeric, Bool>.
   auto numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_struct_rows),
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator{num_struct_rows},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 
   auto bool_iterator =
@@ -1540,8 +1539,8 @@ TYPED_TEST(ListColumnWrapperTestTyped, LargeListsOfStructsWithValidity)
   // Verify that the child is unchanged.
 
   auto expected_numeric_column = cudf::test::fixed_width_column_wrapper<T, int32_t>{
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_struct_rows),
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator{num_struct_rows},
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 1; })};
 
   auto expected_bool_column =

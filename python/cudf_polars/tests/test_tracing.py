@@ -112,12 +112,12 @@ def test_log_query_plan() -> None:
         [sys.executable, "-c", code], env=env, stderr=subprocess.STDOUT
     )
 
-    # Check for Query Plan event
+    # Check for Query Plan event generated from SerializablePlan
     assert b"Query Plan" in result
     assert b"scope=plan" in result or b"'scope': 'plan'" in result
-    assert b"ir_id" in result
-    assert b"ir_type" in result
-    assert b"children_ir_ids" in result
+    assert b"actor_ir_id" in result
+    assert b"actor_ir_type" in result
+    assert b"children" in result
 
 
 @pytest.mark.skipif(

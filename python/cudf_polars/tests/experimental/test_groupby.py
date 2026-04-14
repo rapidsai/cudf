@@ -291,3 +291,13 @@ def test_groupby_agg_config_options(df, op, keys, engine):
         agg = agg.round(2)  # Unary test coverage
     q = df.group_by(*keys).agg(agg)
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"target_partition_size": 1}}],
+    indirect=True,
+)
+def test_groupby_count_type_mismatch(df, engine):
+    q = df.group_by("key", maintain_order=True).agg(pl.col("value").count())
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

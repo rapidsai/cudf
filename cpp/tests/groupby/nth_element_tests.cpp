@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 
 using namespace cudf::test::iterators;
@@ -25,7 +25,7 @@ TYPED_TEST(groupby_nth_element_test, basic)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
@@ -52,7 +52,7 @@ TYPED_TEST(groupby_nth_element_test, empty_cols)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{};
   cudf::test::fixed_width_column_wrapper<V> vals{};
@@ -68,7 +68,7 @@ TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 3, 2, 2, 9});
@@ -84,7 +84,7 @@ TYPED_TEST(groupby_nth_element_test, negative)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
@@ -111,7 +111,7 @@ TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 3, 2, 2, 9});
@@ -127,7 +127,7 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_keys)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   cudf::test::fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5});
@@ -143,7 +143,7 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_values)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
   cudf::test::fixed_width_column_wrapper<V, int32_t> vals({3, 4, 5}, all_nulls());
@@ -159,7 +159,7 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                      {true, true, true, true, true, true, true, false, true, true, true});
@@ -179,7 +179,7 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                      {true, true, true, true, true, true, true, false, true, true, true});
@@ -199,7 +199,7 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
                                      {true, true, true, true, true, true, true, true, false, true, true, true, true, true});
@@ -241,7 +241,7 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
 {
   using K = int32_t;
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::NTH_ELEMENT>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
                                      {true, true, true, true, true, true, true, true, false, true, true, true, true, true});

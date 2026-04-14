@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/gather.h>
 
 #include <algorithm>
@@ -40,8 +41,8 @@ bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
 {
   // For all parquet data sources
   return std::all_of(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
     [&](auto const src_index) {
       // For all row groups in this parquet data source
       auto const& rg_indices = row_group_indices[src_index];
@@ -67,7 +68,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
   auto const total_row_groups =
     std::accumulate(row_group_indices.begin(),
                     row_group_indices.end(),
-                    size_t{0},
+                    std::size_t{0},
                     [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
   // Vector to store how many rows are present in each page - set initial capacity to two data pages
@@ -87,8 +88,8 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 
   // For all data sources
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
     [&](auto src_idx) {
       // For all column chunks in this data source
       auto const& rg_indices = row_group_indices[src_idx];
@@ -111,8 +112,8 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 
           // For all pages in this column chunk, update page row counts and offsets.
           std::for_each(
-            thrust::counting_iterator<size_t>(0),
-            thrust::counting_iterator(row_group_num_pages),
+            cuda::counting_iterator<std::size_t>{0},
+            cuda::counting_iterator{row_group_num_pages},
             [&](auto const page_idx) {
               int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
               // For the last page, this is simply the total number of rows in the column chunk
@@ -142,15 +143,15 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   auto const total_row_groups =
     std::accumulate(row_group_indices.begin(),
                     row_group_indices.end(),
-                    size_t{0},
+                    std::size_t{0},
                     [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
   std::vector<size_type> page_row_offsets;
   page_row_offsets.push_back(0);
   size_type max_page_size = 0;
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_idx) {
                   // For all row groups in this source
                   auto const& rg_indices = row_group_indices[src_idx];
@@ -166,8 +167,8 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
                       row_group.columns.begin() + colchunk_iter_offset.value();
                     auto const& offset_index       = colchunk_iter->offset_index.value();
                     auto const row_group_num_pages = offset_index.page_locations.size();
-                    std::for_each(thrust::counting_iterator<size_t>(0),
-                                  thrust::counting_iterator(row_group_num_pages),
+                    std::for_each(cuda::counting_iterator<std::size_t>{0},
+                                  cuda::counting_iterator{row_group_num_pages},
                                   [&](auto const page_idx) {
                                     int64_t const first_row_idx =
                                       offset_index.page_locations[page_idx].first_row_index;
@@ -204,8 +205,8 @@ rmm::device_uvector<size_type> compute_page_indices_async(
 
   // Scatter page indices across the their first row's index
   thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<size_type>(0),
-                     thrust::counting_iterator<size_type>(row_counts.size()),
+                     cuda::counting_iterator<size_type>{0},
+                     cuda::counting_iterator{static_cast<size_type>(row_counts.size())},
                      row_offsets.begin(),
                      row_counts.begin(),
                      page_indices.begin());

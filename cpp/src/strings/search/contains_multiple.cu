@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
@@ -24,11 +24,11 @@
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/equal.h>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
@@ -199,7 +199,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       cuda::proclaim_return_type<u_char>([] __device__(auto const& d_tgt) -> u_char {
         return d_tgt.empty() ? u_char{0} : static_cast<u_char>(d_tgt.data()[0]);
       }));
-    auto count_itr = thrust::make_counting_iterator<size_type>(0);
+    auto count_itr = cuda::counting_iterator<size_type>{0};
     auto keys_out  = first_bytes.begin();
     auto vals_out  = indices.begin();
     auto num_items = targets.size();

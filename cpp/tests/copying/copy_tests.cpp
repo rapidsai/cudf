@@ -16,7 +16,6 @@
 #include <cudf/scalar/scalar.hpp>
 
 #include <cuda/iterator>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
 
@@ -585,7 +584,7 @@ TYPED_TEST(FixedPointTypes, FixedPointLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto a = thrust::make_counting_iterator(-1000);
+  auto a = cuda::counting_iterator{-1000};
   auto b = cuda::make_constant_iterator(0);
   auto m = cudf::detail::make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
   auto e =

@@ -22,11 +22,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
@@ -244,8 +244,8 @@ struct dispatch_to_integers_fn {
     requires(cudf::is_integral_not_bool<IntegerType>())
   {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_column.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{strings_column.size()},
                       output_column.data<IntegerType>(),
                       string_to_integer_fn<IntegerType>{strings_column});
   }
@@ -268,7 +268,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_numeric_column(output_type, 0, mask_state::UNALLOCATED, stream);
+    return make_numeric_column(output_type, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   // Create integer output column copying the strings null-mask

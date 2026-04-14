@@ -21,10 +21,11 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/iterator>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/remove.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
@@ -151,7 +152,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> build_suffix_array_fn(
   auto indices    = rmm::device_uvector<cudf::size_type>(size, stream);
 
   auto const cmp_op = sort_comparator_fn{chars_span};
-  auto const seq    = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto const seq    = cuda::counting_iterator<cudf::size_type>{0};
   auto tmp_bytes    = std::size_t{0};
   cub::DeviceMergeSort::SortKeysCopy(
     nullptr, tmp_bytes, seq, indices.begin(), indices.size(), cmp_op, stream.value());
@@ -173,8 +174,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
 
   // locate candidate duplicates within the suffix array
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::counting_iterator<cudf::size_type>(indices.size()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(indices.size())},
                     sizes.begin(),
                     find_adjacent_duplicates_fn{chars_span, min_width, indices.data()});
 
@@ -187,7 +188,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
     rmm::exec_policy_nosync(stream),
     indices.begin(),
     indices.end(),
-    thrust::counting_iterator<cudf::size_type>(0),
+    cuda::counting_iterator<cudf::size_type>{0},
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(cudf::size_type idx) -> bool { return d_sizes[idx] == 0; });
   auto end = thrust::remove(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
@@ -201,8 +202,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_fn(
   auto duplicates =
     rmm::device_uvector<cudf::strings::detail::string_index_pair>(dup_count, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::counting_iterator<cudf::size_type>(dup_indices.size()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(dup_indices.size())},
                     duplicates.begin(),
                     collapse_overlaps_fn{chars_span.data(), dup_indices.data(), sizes.data()});
 
@@ -439,8 +440,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
     find_duplicates_fn{chars_span1, chars_span2, min_width, indices1, indices2, lb_ids, ub_ids};
   auto sizes = rmm::device_uvector<int16_t>(indices1.size(), stream);  // 2x input1
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::counting_iterator<cudf::size_type>(sizes.size()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(sizes.size())},
                     sizes.begin(),
                     fd_fn);
 
@@ -456,7 +457,7 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
     rmm::exec_policy_nosync(stream),
     indices1.begin(),
     indices1.end(),
-    thrust::counting_iterator<cudf::size_type>(0),
+    cuda::counting_iterator<cudf::size_type>{0},
     dup_indices.begin(),
     [d_sizes = sizes.data()] __device__(cudf::size_type idx) -> bool { return d_sizes[idx] == 0; });
   auto end = thrust::remove(rmm::exec_policy_nosync(stream), sizes.begin(), sizes.end(), 0);
@@ -470,8 +471,8 @@ std::unique_ptr<cudf::column> resolve_duplicates_pair_impl(
   auto duplicates =
     rmm::device_uvector<cudf::strings::detail::string_index_pair>(dup_count, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::counting_iterator<cudf::size_type>(dup_indices.size()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{static_cast<cudf::size_type>(dup_indices.size())},
                     duplicates.begin(),
                     collapse_overlaps_fn{chars_span1.data(), dup_indices.data(), sizes.data()});
 

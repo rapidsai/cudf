@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 
@@ -929,8 +931,8 @@ void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chu
                                     rmm::cuda_stream_view stream)
 {
   thrust::for_each(rmm::exec_policy_nosync(stream),
-                   thrust::counting_iterator(0),
-                   thrust::counting_iterator<cudf::size_type>(pages.size()),
+                   cuda::counting_iterator<cudf::size_type>{0},
+                   cuda::counting_iterator{static_cast<cudf::size_type>(pages.size())},
                    decode_page_headers_with_pgidx_fn{.colchunks          = chunks,
                                                      .pages              = pages,
                                                      .page_locations     = page_locations,

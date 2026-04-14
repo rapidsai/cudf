@@ -343,7 +343,7 @@ std::
    */
   auto inbuf_lengths = cudf::detail::make_device_uvector_async(
     col_lengths, stream, cudf::get_current_device_resource_ref());
-  size_t inbuf_lengths_size = inbuf_lengths.size();
+  std::size_t inbuf_lengths_size = inbuf_lengths.size();
   size_type inbuf_size =
     thrust::reduce(rmm::exec_policy_nosync(stream), inbuf_lengths.begin(), inbuf_lengths.end());
   rmm::device_uvector<char> inbuf(inbuf_size, stream);
@@ -355,19 +355,19 @@ std::
                          0);
 
   auto input_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<char const*>(
       [d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(
-        size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
+        std::size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
   auto output_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<char*>(
       [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.cbegin()] __device__(
-        size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));
+        std::size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));
 
   {
     // cub device batched copy
-    size_t temp_storage_bytes = 0;
+    std::size_t temp_storage_bytes = 0;
     cub::DeviceCopy::Batched(nullptr,
                              temp_storage_bytes,
                              input_it,

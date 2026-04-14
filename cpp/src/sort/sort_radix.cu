@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -86,8 +87,8 @@ struct sort_radix_fn {
     auto d_out    = pair_out.begin();
 
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(input.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       d_in,
                       float_to_pair_fn<T>{input.begin<T>()});
 

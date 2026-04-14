@@ -19,8 +19,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -148,8 +148,8 @@ struct normalize_nans_and_zeros_kernel_forwarder {
     requires(std::is_floating_point_v<T>)
   {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(in.size()),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{in.size()},
                       out.head<T>(),
                       normalize_nans_and_zeros_lambda<T>{in});
   }

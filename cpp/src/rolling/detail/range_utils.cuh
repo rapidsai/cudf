@@ -15,6 +15,7 @@
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -623,7 +624,10 @@ struct range_window_clamper {
       auto const value =
         static_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
       auto const new_scalar = cudf::fixed_point_scalar<OrderbyT>{
-        value.rescaled(numeric::scale_type{orderby.type().scale()}), true, stream};
+        value.rescaled(numeric::scale_type{orderby.type().scale()}),
+        true,
+        stream,
+        cudf::get_current_device_resource_ref()};
       return window_bounds<OrderbyT>(
         orderby, direction, order, grouping, nulls_at_start, &new_scalar, stream, mr);
     }

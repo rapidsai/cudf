@@ -26,7 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
@@ -156,7 +156,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  rmm::device_async_resource_ref mr)
 {
   if (indices.is_empty()) {
-    auto begin = thrust::make_counting_iterator<size_type>(0);
+    auto begin = cuda::counting_iterator<size_type>{0};
     if (exact) {
       return quantile<true>(input, begin, input.size(), q, interp, exact, stream, mr);
     } else {

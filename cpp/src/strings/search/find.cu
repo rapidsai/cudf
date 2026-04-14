@@ -31,7 +31,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -180,8 +179,8 @@ void find_utility(strings_column_view const& input,
   } else {
     // string-per-thread function
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(input.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       d_results,
                       finder_fn<TargetIterator, forward>{*d_strings, target_itr, start, stop});
   }
@@ -216,8 +215,8 @@ std::unique_ptr<column> find_fn(strings_column_view const& input,
     auto d_strings = column_device_view::create(input.parent(), stream);
     auto d_results = results->mutable_view().data<size_type>();
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(input.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       d_results,
                       empty_target_fn<forward>{*d_strings, start, stop});
     return results;
@@ -428,8 +427,9 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
   {
-    auto const true_scalar = make_fixed_width_scalar<bool>(true, stream);
-    auto results           = make_column_from_scalar(*true_scalar, strings.size(), stream, mr);
+    auto const true_scalar =
+      make_fixed_width_scalar<bool>(true, stream, cudf::get_current_device_resource_ref());
+    auto results = make_column_from_scalar(*true_scalar, strings.size(), stream, mr);
     results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                            strings.null_count());
     return results;
@@ -449,8 +449,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto d_results    = results_view.data<bool>();
   // set the bool values by evaluating the passed function
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings_count},
                     d_results,
                     [d_strings, pfn, d_target] __device__(size_type idx) {
                       return !d_strings.is_null(idx) &&
@@ -503,8 +503,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   // set the bool values by evaluating the passed function
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings.size()},
     d_results,
     [d_strings, pfn, d_targets] __device__(size_type idx) {
       // empty target string returns true

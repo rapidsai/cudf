@@ -23,8 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -59,8 +59,11 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto const max_size     = dictionary_column.size();
 
   // create/init indices map array
-  auto map_indices =
-    make_fixed_width_column(indices_type, keys_view.size(), mask_state::UNALLOCATED, stream);
+  auto map_indices = make_fixed_width_column(indices_type,
+                                             keys_view.size(),
+                                             mask_state::UNALLOCATED,
+                                             stream,
+                                             cudf::get_current_device_resource_ref());
   auto map_itr =
     cudf::detail::indexalator_factory::make_output_iterator(map_indices->mutable_view());
   // init to max to identify new nulls
@@ -73,8 +76,11 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   std::unique_ptr<column> keys_column = [&] {
     // create keys positions column to identify original key positions after removing they keys
     auto keys_positions = [&] {
-      auto positions = make_fixed_width_column(
-        indices_type, keys_view.size(), cudf::mask_state::UNALLOCATED, stream);
+      auto positions = make_fixed_width_column(indices_type,
+                                               keys_view.size(),
+                                               cudf::mask_state::UNALLOCATED,
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
       auto itr = cudf::detail::indexalator_factory::make_output_iterator(positions->mutable_view());
       thrust::sequence(rmm::exec_policy_nosync(stream), itr, itr + keys_view.size());
       return positions;
@@ -122,8 +128,8 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto d_null_mask  = dictionary_column.null_mask();
   auto indices_itr = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());
   auto new_nulls   = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(dictionary_column.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{dictionary_column.size()},
     [offset, d_null_mask, indices_itr, max_size] __device__(size_type idx) {
       if (d_null_mask && !bit_is_set(d_null_mask, idx + offset)) return false;
       return (indices_itr[idx] < max_size);  // new nulls have max values

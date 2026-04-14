@@ -16,10 +16,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/algorithm>
 #include <cuda/std/cmath>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
@@ -652,8 +652,8 @@ struct dispatch_to_durations_fn {
     auto d_results = results_view.data<T>();
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(results_view.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{results_view.size()},
                       d_results,
                       pfn);
   }
@@ -690,7 +690,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream);
+    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");

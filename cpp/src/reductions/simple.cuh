@@ -22,7 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
@@ -314,8 +314,8 @@ struct same_element_type_dispatcher {
       cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
     auto const binary_op  = cudf::detail::cast_functor<size_type>(binop_generator.binop());
     auto const minmax_idx = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                           thrust::make_counting_iterator(0),
-                                           thrust::make_counting_iterator(input.size()),
+                                           cuda::counting_iterator<cudf::size_type>{0},
+                                           cuda::counting_iterator{input.size()},
                                            size_type{0},
                                            binary_op);
 

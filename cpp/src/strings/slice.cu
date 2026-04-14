@@ -30,7 +30,6 @@
 #include <cuda/std/algorithm>
 #include <cuda/std/limits>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -250,8 +249,8 @@ std::unique_ptr<column> compute_substrings_from_fn(strings_column_view const& in
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(input.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       results.begin(),
                       substring_from_fn{*d_column, starts, stops});
   } else {

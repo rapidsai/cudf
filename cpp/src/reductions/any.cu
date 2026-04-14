@@ -11,8 +11,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
@@ -59,7 +59,7 @@ struct any_fn {
     auto d_result =
       cudf::detail::device_scalar<int32_t>(0, stream, cudf::get_current_device_resource_ref());
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator<size_type>(0),
+                       cuda::counting_iterator<size_type>{0},
                        input.size(),
                        any_true_fn<decltype(iter)>{iter, d_result.data()});
     return std::make_unique<numeric_scalar<bool>>(d_result.value(stream), true, stream, mr);

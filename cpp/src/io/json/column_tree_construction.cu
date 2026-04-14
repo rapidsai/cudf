@@ -21,7 +21,6 @@
 #include <cuda/iterator>
 #include <cuda/std/tuple>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -211,8 +210,9 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
     if (num_columns > 1) {
       thrust::transform_inclusive_scan(
         rmm::exec_policy_nosync(stream),
-        thrust::make_zip_iterator(thrust::make_counting_iterator(1), row_idx.begin() + 1),
-        thrust::make_zip_iterator(thrust::make_counting_iterator(1) + num_columns, row_idx.end()),
+        thrust::make_zip_iterator(cuda::counting_iterator<NodeIndexT>{1}, row_idx.begin() + 1),
+        thrust::make_zip_iterator(cuda::counting_iterator<NodeIndexT>{1} + num_columns,
+                                  row_idx.end()),
         row_idx.begin() + 1,
         cuda::proclaim_return_type<NodeIndexT>([] __device__(auto a) {
           auto n   = cuda::std::get<0>(a);
@@ -244,7 +244,7 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                                   cuda::make_constant_iterator(1),
                                   map.begin());
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::make_counting_iterator(1),
+                       cuda::counting_iterator<NodeIndexT>{1},
                        num_columns - 1,
                        [row_idx        = row_idx.begin(),
                         map            = map.begin(),
@@ -256,8 +256,8 @@ std::tuple<compressed_sparse_row, column_tree_properties> reduce_to_column_tree(
                            map[i - 1] += row_idx[parent_col_id];
                        });
     thrust::scatter(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator(1),
-                    thrust::make_counting_iterator(1) + num_columns - 1,
+                    cuda::counting_iterator<NodeIndexT>{1},
+                    cuda::counting_iterator<NodeIndexT>{1} + num_columns - 1,
                     map.begin(),
                     col_idx.begin());
 

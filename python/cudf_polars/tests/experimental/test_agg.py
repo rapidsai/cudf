@@ -33,3 +33,9 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame, engine) -> None:
         median=pl.col("a").median(),
     )
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_mean_all_null(engine):
+    lf = pl.LazyFrame({"a": [None, None]}, schema={"a": pl.Float64})
+    q = lf.select(pl.col("a").mean())
+    assert_gpu_result_equal(q, engine=engine)

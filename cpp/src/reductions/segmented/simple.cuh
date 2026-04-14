@@ -25,7 +25,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
@@ -152,7 +152,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   // Pass to simple_segmented_reduction, get indices to gather, perform gather here.
   auto device_col = cudf::column_device_view::create(col, stream);
 
-  auto it                 = thrust::make_counting_iterator(0);
+  auto it                 = cuda::counting_iterator<cudf::size_type>{0};
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
   bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::detail::op::min>;

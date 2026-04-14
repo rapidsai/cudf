@@ -32,6 +32,7 @@
 #include <cooperative_groups.h>
 #include <cuda/atomic>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/tuple>
@@ -401,7 +402,7 @@ std::pair<cudf::size_type, rmm::device_uvector<cudf::size_type>> partition_input
   // compute partitions based on the size of each string
   if ((threshold_count > 0) && (threshold_count < size)) {
     auto sizes = rmm::device_uvector<cudf::size_type>(size, stream);
-    auto begin = thrust::counting_iterator<cudf::size_type>(0);
+    auto begin = cuda::counting_iterator<cudf::size_type>{0};
     auto end   = begin + size;
     thrust::transform(rmm::exec_policy_nosync(stream), begin, end, sizes.data(), tfn);
     // these 2 are slightly faster than using partition()
@@ -453,7 +454,8 @@ std::unique_ptr<cudf::column> minhash_fn(cudf::strings_column_view const& input,
                              block_size};
   auto const hashes_size = input.chars_size(stream);
   auto d_hashes          = rmm::device_uvector<hash_value_type>(hashes_size, stream);
-  auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(0, stream);
+  auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(
+    0, stream, cudf::get_current_device_resource_ref());
 
   minhash_seed_kernel<HashFunction>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(*d_strings,
@@ -539,7 +541,8 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
                              block_size};
   auto const hashes_size = input.child().size();
   auto d_hashes          = rmm::device_uvector<hash_value_type>(hashes_size, stream);
-  auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(0, stream);
+  auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(
+    0, stream, cudf::get_current_device_resource_ref());
 
   auto d_list = cudf::detail::lists_column_device_view(*d_input);
   minhash_ngrams_kernel<HashFunction>
@@ -592,9 +595,11 @@ std::unique_ptr<cudf::column> build_list_result(cudf::column_view const& input,
                                                 rmm::device_async_resource_ref mr)
 {
   // build the offsets for the output lists column
-  auto const zero = cudf::numeric_scalar<cudf::size_type>(0, true, stream);
-  auto const size = cudf::numeric_scalar<cudf::size_type>(seeds_size, true, stream);
-  auto offsets    = cudf::detail::sequence(input.size() + 1, zero, size, stream, mr);
+  auto const zero =
+    cudf::numeric_scalar<cudf::size_type>(0, true, stream, cudf::get_current_device_resource_ref());
+  auto const size = cudf::numeric_scalar<cudf::size_type>(
+    seeds_size, true, stream, cudf::get_current_device_resource_ref());
+  auto offsets = cudf::detail::sequence(input.size() + 1, zero, size, stream, mr);
   hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
 
   // build the lists column from the offsets and the hashes

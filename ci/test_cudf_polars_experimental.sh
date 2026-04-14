@@ -35,10 +35,11 @@ rapids-pip-retry install \
 rapids-logger "Run cudf_polars tests with rapidsmpf"
 
 # Get the latest polars version for testing
-POLARS_VERSION=$(python ci/utils/fetch_polars_versions.py --latest-patch-only dependencies.yaml | awk '{print $NF}')
+available_polars_versions=$(python -m pip index versions polars --json | jq '.versions')
+POLARS_VERSION=$(python ci/utils/filter_package_versions.py dependencies.yaml run_cudf_polars polars "$available_polars_versions" | awk '{print $NF}')
 
 rapids-logger "Installing polars==${POLARS_VERSION}"
-pip install -U "polars==${POLARS_VERSION}"
+rapids-pip-retry install -U "polars==${POLARS_VERSION}"
 
 # shellcheck disable=SC2317
 function set_exitcode()

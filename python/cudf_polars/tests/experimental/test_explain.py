@@ -515,11 +515,14 @@ def test_serialize_query():
 
 @pytest.mark.parametrize("predicate", [None, pl.col("a") > 1])
 def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
-    pl.DataFrame({"a": [1, 2, 3]}).write_parquet(tmp_path / "test.parquet")
+    root = tmp_path.joinpath("test.parquet")
+    root.mkdir(parents=True, exist_ok=True)
+    for path in ["a", "b", "c"]:
+        pl.DataFrame({"a": [1, 2, 3]}).write_parquet(root / path)
 
     q = pl.scan_parquet(tmp_path / "test.parquet")
     expected_properties: dict[str, Any] = {
-        "paths": [str(tmp_path / "test.parquet")],
+        "prefix": f"{root}/",
         "typ": "parquet",
         "predicate": None,
     }
@@ -677,6 +680,9 @@ def test_dynamic_planning_adds_repartition(df, op):
     )
     plan = explain_query(q, engine, physical=True)
 
-    # With dynamic planning enabled, these operations should include
-    # a REPARTITION to collapse partitions.
-    assert "REPARTITION" in plan
+    # With dynamic planning enabled, sum needs a REPARTITION to collapse
+    # partitions for global aggregation. Sort uses SHUFFLESORTED and does not.
+    if op == "sort":
+        assert "SHUFFLESORTED" in plan
+    else:
+        assert "REPARTITION" in plan

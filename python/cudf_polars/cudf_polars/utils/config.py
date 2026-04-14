@@ -27,7 +27,6 @@ import functools
 import importlib.util
 import json
 import os
-import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
+    import distributed
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
     from ray.actor import ActorHandle
@@ -50,13 +50,13 @@ if TYPE_CHECKING:
 __all__ = [
     "Cluster",
     "ConfigOptions",
+    "DaskContext",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
     "RayContext",
     "Runtime",
     "SPMDContext",
-    "Scheduler",  # Deprecated, kept for backward compatibility
     "ShuffleMethod",
     "StreamingExecutor",
     "StreamingFallbackMode",
@@ -176,20 +176,7 @@ class Cluster(enum.StrEnum):
     DISTRIBUTED = "distributed"
     SPMD = "spmd"
     RAY = "ray"
-
-
-class Scheduler(enum.StrEnum):
-    """
-    **Deprecated**: Use :class:`Cluster` instead.
-
-    The scheduler to use for the task-based streaming executor.
-
-    * ``Scheduler.SYNCHRONOUS`` : Single-GPU execution (use ``Cluster.SINGLE`` instead)
-    * ``Scheduler.DISTRIBUTED`` : Multi-GPU execution (use ``Cluster.DISTRIBUTED`` instead)
-    """
-
-    SYNCHRONOUS = "synchronous"
-    DISTRIBUTED = "distributed"
+    DASK = "dask"
 
 
 class ShuffleMethod(enum.StrEnum):
@@ -276,7 +263,7 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used when the rapidsmpf runtime is enabled.
-        Default is True.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -315,7 +302,7 @@ class ParquetOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
             _bool_converter,
-            default=True,
+            default=False,
         )
     )
 
@@ -581,6 +568,37 @@ class RayContext:
     rank_actors: list[ActorHandle[RankActor]]
 
 
+@dataclasses.dataclass(frozen=True)
+class DaskContext:
+    """
+    Configuration for Dask cluster execution.
+
+    .. note::
+        This dataclass holds a :class:`~distributed.Client` handle, which is
+        only valid within the Dask session that created it. It is stripped from
+        ``config_options`` before pickling for remote worker calls in
+        :func:`~cudf_polars.experimental.rapidsmpf.frontend.dask.evaluate_pipeline_dask_mode`.
+        Do not persist or transfer this object across Dask sessions.
+
+    Parameters
+    ----------
+    client
+        Active :class:`~distributed.Client` connected to the cluster.
+    rapidsmpf_id
+        Unique identifier for this RapidsMPF bootstrap session.
+    owned_client
+        Client to close on shutdown, if created internally by
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`.
+    owned_cluster
+        Cluster to close on shutdown, if created internally.
+    """
+
+    client: distributed.Client
+    rapidsmpf_id: str
+    owned_client: distributed.Client | None = None
+    owned_cluster: Any | None = None
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class StreamingExecutor:
     """
@@ -604,12 +622,6 @@ class StreamingExecutor:
         * ``Cluster.DISTRIBUTED``: Multi-GPU distributed execution (requires
           an active Dask cluster)
 
-    scheduler
-        **Deprecated**: Use ``cluster`` instead.
-
-        For backward compatibility:
-        * ``Scheduler.SYNCHRONOUS`` maps to ``Cluster.SINGLE``
-        * ``Scheduler.DISTRIBUTED`` maps to ``Cluster.DISTRIBUTED``
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
@@ -690,7 +702,7 @@ class StreamingExecutor:
         or use regular pageable host memory. Pinned host memory offers higher
         bandwidth and lower latency for device to host transfers compared to
         regular pageable host memory.
-    rapidsmpf_py_executor_max_workers
+    num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor used by
         the rapidsmpf runtime. Default is None, which uses ThreadPoolExecutor's
         default behavior. This option is only used by the "rapidsmpf" runtime.
@@ -717,13 +729,6 @@ class StreamingExecutor:
         default_factory=_make_default_factory(
             f"{_env_prefix}__CLUSTER",
             Cluster.__call__,
-            default=None,
-        )
-    )
-    scheduler: Scheduler | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SCHEDULER",
-            Scheduler.__call__,
             default=None,
         )
     )
@@ -794,49 +799,23 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    rapidsmpf_py_executor_max_workers: int | None = dataclasses.field(
+    num_py_executors: int | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_PY_EXECUTOR_MAX_WORKERS", int, default=None
+            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=None
         )
     )
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
+    dask_context: DaskContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime
         if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
             if not rapidsmpf_single_available():
                 raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
-            if self.shuffle_method == "tasks":
-                raise ValueError(
-                    "The rapidsmpf streaming engine does not support task-based shuffling."
-                )
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
 
-        # Handle backward compatibility for deprecated scheduler parameter
-        if self.scheduler is not None:
-            if self.cluster is not None:
-                raise ValueError(
-                    "Cannot specify both 'scheduler' and 'cluster'. "
-                    "The 'scheduler' parameter is deprecated. "
-                    "Please use only 'cluster' instead."
-                )
-            else:
-                warnings.warn(
-                    """The 'scheduler' parameter is deprecated. Please use 'cluster' instead.
-                    Use 'cluster="single"' instead of 'scheduler="synchronous"' and "
-                    'cluster="distributed"' instead of 'scheduler="distributed"'.""",
-                    FutureWarning,
-                    stacklevel=2,
-                )
-            # Map old scheduler values to new cluster values
-            if self.scheduler == "synchronous":
-                object.__setattr__(self, "cluster", Cluster.SINGLE)
-            elif self.scheduler == "distributed":
-                object.__setattr__(self, "cluster", Cluster.DISTRIBUTED)
-            # Clear scheduler to avoid confusion
-            object.__setattr__(self, "scheduler", None)
-        elif self.cluster is None:
+        if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
@@ -924,8 +903,8 @@ class StreamingExecutor:
             raise TypeError("max_io_threads must be an int")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
-        if not isinstance(self.rapidsmpf_py_executor_max_workers, (int, type(None))):
-            raise TypeError("rapidsmpf_py_executor_max_workers must be int or None")
+        if not isinstance(self.num_py_executors, (int, type(None))):
+            raise TypeError("num_py_executors must be int or None")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -981,24 +960,12 @@ class CUDAStreamPoolConfig:
         )
 
 
-class CUDAStreamPolicy(enum.StrEnum):
-    """
-    The policy to use for acquiring new CUDA streams.
-
-    * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
-    * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
-    """
-
-    DEFAULT = "default"
-    NEW = "new"
-
-
 def _convert_cuda_stream_policy(
     user_cuda_stream_policy: dict | str,
-) -> CUDAStreamPolicy | CUDAStreamPoolConfig:
+) -> CUDAStreamPoolConfig | None:
     match user_cuda_stream_policy:
-        case "default" | "new":
-            return CUDAStreamPolicy(user_cuda_stream_policy)
+        case "default":
+            return None
         case "pool":
             return CUDAStreamPoolConfig()
         case dict():
@@ -1031,6 +998,13 @@ def _convert_cuda_stream_policy(
                         ) from None
 
 
+def _default_cuda_stream_policy() -> CUDAStreamPoolConfig | None:
+    v = os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY")
+    if v is None:
+        return None
+    return _convert_cuda_stream_policy(v)
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class ConfigOptions(Generic[ExecutorType]):
     """
@@ -1051,7 +1025,9 @@ class ConfigOptions(Generic[ExecutorType]):
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
     cuda_stream_policy
-        The policy to use for acquiring new CUDA streams. See :class:`~cudf_polars.utils.config.CUDAStreamPolicy` for more.
+        The policy to use for CUDA streams. ``None`` (the default) uses the
+        default CUDA stream. A :class:`~cudf_polars.utils.config.CUDAStreamPoolConfig`
+        can be used to configure a stream pool.
     """
 
     raise_on_fail: bool = False
@@ -1063,12 +1039,8 @@ class ConfigOptions(Generic[ExecutorType]):
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
-    cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig = dataclasses.field(
-        default_factory=_make_default_factory(
-            "CUDF_POLARS__CUDA_STREAM_POLICY",
-            CUDAStreamPolicy.__call__,
-            default=CUDAStreamPolicy.DEFAULT,
-        )
+    cuda_stream_policy: CUDAStreamPoolConfig | None = dataclasses.field(
+        default_factory=_default_cuda_stream_policy
     )
 
     @classmethod
@@ -1111,19 +1083,6 @@ class ConfigOptions(Generic[ExecutorType]):
             user_memory_resource_config = MemoryResourceConfig(
                 **user_memory_resource_config
             )
-
-        # Backward compatibility for "cardinality_factor"
-        # TODO: Remove this in 25.10
-        if "cardinality_factor" in user_executor_options:
-            warnings.warn(
-                "The 'cardinality_factor' configuration is deprecated. "
-                "Please use 'unique_fraction' instead.",
-                FutureWarning,
-                stacklevel=2,
-            )
-            cardinality_factor = user_executor_options.pop("cardinality_factor")
-            if "unique_fraction" not in user_executor_options:
-                user_executor_options["unique_fraction"] = cardinality_factor
 
         # These are user-provided options, so we need to actually validate
         # them.
@@ -1184,7 +1143,7 @@ class ConfigOptions(Generic[ExecutorType]):
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
 
-        cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig
+        cuda_stream_policy: CUDAStreamPoolConfig | None
 
         if user_cuda_stream_policy is None:
             if (
@@ -1194,7 +1153,7 @@ class ConfigOptions(Generic[ExecutorType]):
                 cuda_stream_policy = CUDAStreamPoolConfig()
             else:
                 # everything else defaults to the default stream
-                cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+                cuda_stream_policy = None
         else:
             cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
 
@@ -1204,7 +1163,7 @@ class ConfigOptions(Generic[ExecutorType]):
             or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
         ):
             raise ValueError(
-                "CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime."
+                "A stream pool is only supported by the rapidsmpf runtime."
             )
 
         kwargs["cuda_stream_policy"] = cuda_stream_policy

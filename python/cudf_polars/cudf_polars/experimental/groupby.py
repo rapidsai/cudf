@@ -13,7 +13,7 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.expr import Agg, BinOp, Col, Len, NamedExpr
+from cudf_polars.dsl.expr import Agg, BinOp, Cast, Col, Len, NamedExpr
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import GroupBy, Select, Slice
 from cudf_polars.dsl.traversal import traversal
@@ -109,17 +109,34 @@ def decompose(
         return selection, aggregation, reduction, False
     if isinstance(expr, Agg):
         if expr.name in ("sum", "count", "min", "max", "n_unique"):
-            if expr.name in ("sum", "count", "n_unique"):
-                aggfunc = "sum"
+            aggfunc = expr.name if expr.name in {"min", "max"} else "sum"
+            if expr.name == "count":
+                intermediate_dtype = DataType(pl.Int64())
+                agg_expr = Agg(
+                    intermediate_dtype,
+                    expr.name,
+                    expr.options,
+                    expr.context,
+                    *expr.children,
+                )
+                selection = NamedExpr(
+                    name,
+                    Cast(dtype, False, Col(intermediate_dtype, name)),  # noqa: FBT003
+                )
             else:
-                aggfunc = expr.name
-            selection = NamedExpr(name, Col(dtype, name))
-            aggregation = [NamedExpr(name, expr)]
+                intermediate_dtype = dtype
+                agg_expr = expr
+                selection = NamedExpr(name, Col(dtype, name))
+            aggregation = [NamedExpr(name, agg_expr)]
             reduction = [
                 NamedExpr(
                     name,
                     Agg(
-                        dtype, aggfunc, None, ExecutionContext.GROUPBY, Col(dtype, name)
+                        intermediate_dtype,
+                        aggfunc,
+                        None,
+                        ExecutionContext.GROUPBY,
+                        Col(intermediate_dtype, name),
                     ),
                 )
             ]

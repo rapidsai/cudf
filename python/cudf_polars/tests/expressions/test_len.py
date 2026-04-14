@@ -30,7 +30,13 @@ def test_len(dtype, empty):
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [1, 2, None]])
-def test_col_len(data):
+def test_col_len(data, using_rapidsmpf, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=using_rapidsmpf,
+            reason="https://github.com/rapidsai/cudf/issues/21645",
+        )
+    )
     data = {"a": list("xyz"), "b": data}
     q = pl.LazyFrame(data).select(
         pl.col("a").len().alias("l"),

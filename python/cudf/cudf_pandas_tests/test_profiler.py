@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import os
@@ -80,7 +80,7 @@ def test_profiler_hasattr_exception():
 def test_profiler_fast_slow_name_mismatch():
     with Profiler():
         df = pd.DataFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
-        df.iloc[0, 1] = "foo"
+        df.iloc[0, 1] = 100
 
 
 def test_profiler_commandline():

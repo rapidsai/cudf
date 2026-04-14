@@ -29,7 +29,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -215,8 +214,8 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   auto [null_mask, null_count] = [&]() {
     return percentiles.null_count() != 0
              ? cudf::detail::valid_if(
-                 thrust::make_counting_iterator<size_type>(0),
-                 thrust::make_counting_iterator<size_type>(0) + num_output_values,
+                 cuda::counting_iterator<size_type>{0},
+                 cuda::counting_iterator<size_type>{0} + num_output_values,
                  [percentiles = *percentiles_cdv] __device__(size_type i) {
                    return percentiles.is_valid(i % percentiles.size());
                  },

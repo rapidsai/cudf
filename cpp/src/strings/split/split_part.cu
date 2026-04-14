@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,7 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -81,8 +81,8 @@ std::unique_ptr<column> split_part_fn(strings_column_view const& input,
   // get just the indexed value of each element
   auto d_indices = rmm::device_uvector<string_index_pair>(input.size(), stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     d_indices.begin(),
                     [d_offsets, d_tokens, index] __device__(size_type idx) {
                       auto const offset      = d_offsets[idx];

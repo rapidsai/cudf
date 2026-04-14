@@ -25,7 +25,6 @@
 #include <cuda/functional>
 #include <cuda/std/functional>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
 #include <type_traits>

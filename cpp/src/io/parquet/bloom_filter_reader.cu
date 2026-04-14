@@ -24,7 +24,7 @@
 
 #include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter_ref.cuh>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/tabulate.h>
 
 #include <future>
@@ -41,8 +41,8 @@ namespace {
 struct bloom_filter_caster {
   cudf::device_span<cudf::device_span<cuda::std::byte const> const> bloom_filter_spans;
   host_span<Type const> parquet_types;
-  size_t total_row_groups;
-  size_t num_equality_columns;
+  std::size_t total_row_groups;
+  std::size_t num_equality_columns;
 
   enum class is_int96_timestamp : bool { YES, NO };
 
@@ -281,7 +281,7 @@ class bloom_filter_expression_converter : public equality_literals_collector {
  * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
  */
 void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources,
-                            size_t num_chunks,
+                            std::size_t num_chunks,
                             cudf::host_span<rmm::device_buffer> bloom_filter_data,
                             cudf::host_span<std::optional<int64_t>> bloom_filter_offsets,
                             cudf::host_span<std::optional<int32_t>> bloom_filter_sizes,
@@ -300,12 +300,12 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
   auto constexpr words_per_block = policy_type::words_per_block;
 
   // Read tasks for bloom filter data
-  std::vector<std::future<size_t>> read_tasks;
+  std::vector<std::future<std::size_t>> read_tasks;
 
   // Read bloom filters for all column chunks
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(num_chunks),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{num_chunks},
     [&](auto const chunk) {
       // If bloom filter offset absent, fill in an empty buffer and skip ahead
       if (not bloom_filter_offsets[chunk].has_value()) {
@@ -320,7 +320,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       // entire bitset as well.
       auto constexpr bloom_filter_size_guess = 256;
       auto const initial_read_size =
-        static_cast<size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_size_guess));
+        static_cast<std::size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_size_guess));
 
       // Read an initial buffer from source
       auto& source = sources[chunk_source_map[chunk]];
@@ -347,7 +347,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
       // Bloom filter header size
       auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
-      auto const bitset_size              = static_cast<size_t>(header.num_bytes);
+      auto const bitset_size              = static_cast<std::size_t>(header.num_bytes);
 
       // Check if we already read in the filter bitset in the initial read.
       if (initial_read_size >= bloom_filter_header_size + bitset_size) {
@@ -398,7 +398,7 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 
 }  // namespace
 
-size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
+std::size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
 {
   // Required alignment:
   // https://github.com/NVIDIA/cuCollections/blob/deab5799f3e4226cb8a49acf2199c03b14941ee4/include/cuco/detail/bloom_filter/bloom_filter_impl.cuh#L55-L67
@@ -408,7 +408,7 @@ size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
                                                             cuco::thread_scope_thread,
                                                             policy_type>::filter_block_type);
   static_assert((alignment & (alignment - 1)) == 0, "Alignment must be a power of 2");
-  return std::max<size_t>(alignment, rmm::CUDA_ALLOCATION_ALIGNMENT);
+  return std::max<std::size_t>(alignment, rmm::CUDA_ALLOCATION_ALIGNMENT);
 }
 
 std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
@@ -437,8 +437,8 @@ std::vector<rmm::device_buffer> aggregate_reader_metadata::read_bloom_filters(
   auto have_bloom_filters = false;
 
   // For all data sources
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_index) {
                   // Get all row group indices in the data source
                   auto const& rg_indices = row_group_indices[src_index];
@@ -506,17 +506,17 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Create a bloom filter query table caster
   bloom_filter_caster const bloom_filter_col{device_bloom_filter_data,
                                              parquet_types,
-                                             static_cast<size_t>(total_row_groups),
+                                             static_cast<std::size_t>(total_row_groups),
                                              bloom_filter_col_schemas.size()};
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.
   // The table contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<cudf::column>> bloom_filter_membership_columns;
-  size_t equality_col_idx = 0;
+  std::size_t equality_col_idx = 0;
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(output_dtypes.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{output_dtypes.size()},
     [&](auto input_col_idx) {
       auto const& dtype = output_dtypes[input_col_idx];
 

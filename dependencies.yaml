@@ -506,13 +506,13 @@ dependencies:
       - output_types: conda
         packages:
           - flatbuffers==24.3.25
-          - librdkafka>=2.8.0,<2.9.0
+          - librdkafka>=2.11.1,<2.12.0
   depends_on_libnvcomp:
     common:
       - output_types: conda
         packages:
           # Align nvcomp version with rapids-cmake
-          - libnvcomp-dev==5.1.0.21
+          - libnvcomp-dev==5.2.0.10
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -522,14 +522,14 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - nvidia-libnvcomp-cu12==5.1.0.21
+              - nvidia-libnvcomp-cu12==5.2.0.13
           - matrix:
               cuda: "13.*"
             packages:
-              - nvidia-libnvcomp-cu13==5.1.0.21
+              - nvidia-libnvcomp-cu13==5.2.0.13
           - matrix:
             packages:
-              - nvidia-libnvcomp==5.1.0.21
+              - nvidia-libnvcomp==5.2.0.13
   rapids_build_skbuild:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -694,8 +694,8 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - clang==20.1.4
-          - clang-tools==20.1.4
+          - clang==20.1.8
+          - clang-tools==20.1.8
   iwyu:
     common:
       - output_types: conda
@@ -1278,7 +1278,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - certifi
+          - ipykernel
           - ipython
           - jupyter_client
           - nbconvert

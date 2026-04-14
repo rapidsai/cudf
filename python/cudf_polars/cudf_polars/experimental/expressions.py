@@ -35,12 +35,16 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING, TypeAlias, TypedDict
 
+import polars as pl
+
 import pylibcudf as plc
 
+from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import Col, ExecutionContext, Expr, NamedExpr
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 from cudf_polars.dsl.ir import IR, Distinct, Empty, HConcat, Select
 from cudf_polars.dsl.traversal import (
@@ -291,14 +295,24 @@ def _decompose_agg_node(
         )
 
         # Combined stage
+        sum_col, count_col = columns
+        total_count = Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, count_col)
         exprs = [
-            BinOp(
+            Ternary(
                 agg.dtype,
-                plc.binaryop.BinaryOperator.DIV,
-                *(
-                    Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, column)
-                    for column in columns
+                BinOp(
+                    DataType(pl.Boolean()),
+                    plc.binaryop.BinaryOperator.GREATER,
+                    total_count,
+                    Literal(agg.dtype, 0),
                 ),
+                BinOp(
+                    agg.dtype,
+                    plc.binaryop.BinaryOperator.DIV,
+                    Agg(agg.dtype, "sum", None, ExecutionContext.FRAME, sum_col),
+                    total_count,
+                ),
+                Literal(agg.dtype, None),
             )
         ]
         columns, input_ir, partition_info = select(

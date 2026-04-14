@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -401,7 +401,9 @@ public class CompiledExpressionTest extends CudfTestBase {
         Arguments.of(BinaryOperator.PYMOD, in1, in2, mapArray(in1, in2,
             (a, b) -> ((a % b) + b) % b)),
         Arguments.of(BinaryOperator.POW, in1, in2, mapArray(in1, in2,
-            (a, b) -> (float) Math.pow(a, b))));
+            (a, b) -> (float) Math.pow(a, b))),
+        Arguments.of(BinaryOperator.FLOOR_DIV, in1, in2, mapArray(in1, in2,
+            (a, b) -> (float) Math.floor(a / b))));
   }
 
   @ParameterizedTest
@@ -425,9 +427,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     Float[] in2 = new Float[] { 123f, -456f, null, 0f };
     return Stream.of(
         Arguments.of(BinaryOperator.TRUE_DIV, in1, in2, mapArray(in1, in2,
-            (a, b) -> (double) a / b)),
-        Arguments.of(BinaryOperator.FLOOR_DIV, in1, in2, mapArray(in1, in2,
-            (a, b) -> Math.floor(a / b))));
+            (a, b) -> (double) a / b)));
   }
 
   @ParameterizedTest

@@ -20,7 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 #include <algorithm>
@@ -74,8 +74,8 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
 
   auto const comparator_helper = [&](auto const d_equal) {
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(total_size),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{total_size},
                       all_encodings->mutable_view().begin<bool>(),
                       ohe_equality_functor<decltype(d_equal)>(input.size(), d_equal));
   };

@@ -18,9 +18,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -359,8 +360,8 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
                                      mr);
   auto d_column = column_device_view::create(input.parent(), stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     results->mutable_view().data<bool>(),
                     is_title_fn{get_character_flags_table(stream), *d_column});
   results->set_null_count(input.null_count());

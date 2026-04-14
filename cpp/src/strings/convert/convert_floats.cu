@@ -21,7 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 #include <cmath>
@@ -64,8 +64,8 @@ struct dispatch_to_floats_fn {
   {
     auto d_results = output_column.data<FloatType>();
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_column.size()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{strings_column.size()},
                       d_results,
                       string_to_float_fn<FloatType>{strings_column});
   }
@@ -88,7 +88,8 @@ std::unique_ptr<column> to_floats(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_numeric_column(output_type, 0, mask_state::UNALLOCATED, stream);
+    return make_numeric_column(
+      output_type, 0, mask_state::UNALLOCATED, stream, cudf::get_current_device_resource_ref());
   }
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
@@ -457,8 +458,8 @@ std::unique_ptr<column> is_float(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;

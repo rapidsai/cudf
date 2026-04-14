@@ -112,7 +112,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = cudf::detail::device_scalar<OutputType>{initial_value, stream};
+  auto dev_result          = cudf::detail::device_scalar<OutputType>{
+    initial_value, stream, cudf::get_current_device_resource_ref()};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -125,7 +126,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             initial_value,
                             stream.value());
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  d_temp_storage =
+    rmm::device_buffer{temp_storage_bytes, stream, cudf::get_current_device_resource_ref()};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -175,7 +177,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
 
-  cudf::detail::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
+  cudf::detail::device_scalar<IntermediateType> intermediate_result{
+    initial_value, stream, cudf::get_current_device_resource_ref()};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -188,7 +191,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             initial_value,
                             stream.value());
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  d_temp_storage =
+    rmm::device_buffer{temp_storage_bytes, stream, cudf::get_current_device_resource_ref()};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),

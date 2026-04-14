@@ -14,6 +14,7 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
@@ -251,7 +252,10 @@ void reader_impl::preprocess_file(read_mode mode)
 
     return (has_timestamp_column && !_options.ignore_timezone_in_stripe_footer)
              ? cudf::detail::make_timezone_transition_table(
-                 {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
+                 {},
+                 selected_stripes[0].stripe_footer->writerTimezone,
+                 _stream,
+                 cudf::get_current_device_resource_ref())
              : std::make_unique<cudf::table>();
   }();
 

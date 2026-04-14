@@ -31,6 +31,7 @@
 #include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/std/iterator>
 #include <thrust/copy.h>
@@ -359,7 +360,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto map_ref           = vocabulary._impl->get_map_ref();
 
   if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
-    auto const zero_itr = thrust::make_counting_iterator<cudf::size_type>(0);
+    auto const zero_itr = cuda::counting_iterator<cudf::size_type>{0};
     auto d_sizes        = rmm::device_uvector<cudf::size_type>(input.size(), stream);
     thrust::transform(rmm::exec_policy_nosync(stream),
                       zero_itr,
@@ -417,8 +418,8 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto d_tmp_offsets = rmm::device_uvector<int64_t>(total_count + 1, stream);
   d_tmp_offsets.set_element(total_count, chars_size, stream);
   cudf::detail::copy_if_async(
-    thrust::counting_iterator<int64_t>(0),
-    thrust::counting_iterator<int64_t>(chars_size),
+    cuda::counting_iterator<int64_t>{0},
+    cuda::counting_iterator<int64_t>{chars_size},
     d_tmp_offsets.begin(),
     [d_marks = d_marks.data()] __device__(auto idx) {
       if (idx == 0) return true;

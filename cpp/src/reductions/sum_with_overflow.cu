@@ -16,8 +16,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform_reduce.h>
 
@@ -132,7 +132,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
   }
 
   // Perform the reduction using thrust::transform_reduce
-  auto counting_iter = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto counting_iter = cuda::counting_iterator<cudf::size_type>{0};
   auto dcol_ptr      = dcol.get();
   sum_overflow_result result;
 

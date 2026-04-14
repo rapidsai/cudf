@@ -33,10 +33,10 @@
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/copy.h>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <cstdint>
@@ -371,8 +371,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     reader->skip_bytes(chunk_offset);
     // amortize output chunk allocations over 8 worst-case outputs. This limits the overallocation
     constexpr auto max_growth = 8;
-    output_builder<byte_offset> row_offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
-    output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
+    output_builder<byte_offset> row_offset_storage(
+      ITEMS_PER_CHUNK, max_growth, stream, cudf::get_current_device_resource_ref());
+    output_builder<char> char_storage(
+      ITEMS_PER_CHUNK, max_growth, stream, cudf::get_current_device_resource_ref());
 
     auto streams = cudf::detail::fork_streams(stream, concurrency);
 
@@ -451,7 +453,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           return new_offsets_unclamped;
         }
         // if we are in the last chunk, we need to find the first out-of-bounds offset
-        auto const it = thrust::make_counting_iterator(output_offset{});
+        auto const it = cuda::counting_iterator<output_offset>{};
         auto const end_loc =
           *thrust::find_if(rmm::exec_policy_nosync(scan_stream),
                            it,

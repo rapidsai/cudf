@@ -87,7 +87,13 @@ def test_select_with_cse_no_agg():
     assert_gpu_result_equal(query)
 
 
-def test_select_with_cse_with_agg():
+def test_select_with_cse_with_agg(using_rapidsmpf, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=using_rapidsmpf,
+            reason="https://github.com/rapidsai/cudf/issues/21645",
+        )
+    )
     df = pl.LazyFrame({"a": [1, 2, 3]})
     expr = pl.col("a") + pl.col("a")
     asum = pl.col("a").sum() + pl.col("a").sum()

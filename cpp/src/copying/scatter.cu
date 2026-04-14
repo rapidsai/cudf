@@ -31,7 +31,6 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
@@ -181,11 +180,12 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    auto dict_target =
-      dictionary::detail::add_keys(dictionary_column_view(target),
-                                   make_column_from_scalar(source.get(), 1, stream)->view(),
-                                   stream,
-                                   mr);
+    auto dict_target = dictionary::detail::add_keys(
+      dictionary_column_view(target),
+      make_column_from_scalar(source.get(), 1, stream, cudf::get_current_device_resource_ref())
+        ->view(),
+      stream,
+      mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(
       dict_view, source.get(), stream, cudf::get_current_device_resource_ref());
@@ -383,8 +383,11 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  auto indices = cudf::make_numeric_column(
-    data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
+  auto indices         = cudf::make_numeric_column(data_type{type_id::INT32},
+                                           target.size(),
+                                           mask_state::UNALLOCATED,
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
   auto mutable_indices = indices->mutable_view();
 
   thrust::sequence(rmm::exec_policy_nosync(stream),
@@ -466,8 +469,8 @@ std::unique_ptr<table> boolean_mask_scatter(
                cudf::data_type_error);
 
   // Count valid pair of input and columns as per type at each column/scalar index i
-  CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(target.num_columns()),
+  CUDF_EXPECTS(std::all_of(cuda::counting_iterator<size_type>{0},
+                           cuda::counting_iterator<size_type>{target.num_columns()},
                            [&input, &target](auto index) {
                              return cudf::have_same_types(target.column(index), input[index].get());
                            }),

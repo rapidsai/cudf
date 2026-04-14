@@ -84,8 +84,7 @@ def test_sort_rapidsmpf(engine) -> None:
         }
     )
     q = df.sort(by=["y", "z"])
-    with pytest.warns(UserWarning, match="Sort does not support multiple partitions"):
-        assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=True)
 
 
 def test_is_already_partitioned():

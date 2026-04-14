@@ -33,7 +33,6 @@
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/merge.h>
@@ -615,7 +614,7 @@ void generate_cluster_limits(int delta,
       delta,
       num_gpu_groups,
       nearest_weight,
-      thrust::make_counting_iterator(num_cpu_groups),
+      cuda::counting_iterator{num_cpu_groups},
       group_info,
       cumulative_weight,
       group_cluster_wl,
@@ -651,7 +650,7 @@ size_t compute_simple_cluster_count(int delta,
   auto const num_groups = group_num_clusters.size();
 
   // worst-case sizes
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<cudf::size_type>{0};
   thrust::transform(
     rmm::exec_policy_nosync(stream),
     iter,
@@ -883,7 +882,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
     thrust::remove_copy_if(rmm::exec_policy_nosync(stream),
                            col.begin<double>(),
                            col.end<double>(),
-                           thrust::make_counting_iterator(0),
+                           cuda::counting_iterator<cudf::size_type>{0},
                            result->mutable_view().begin<double>(),
                            is_stub_weight);
     return result;
@@ -896,8 +895,8 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   rmm::device_uvector<size_type> sizes(num_rows, stream);
   thrust::transform(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + num_rows,
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator<cudf::size_type>{0} + num_rows,
     sizes.begin(),
     cuda::proclaim_return_type<size_type>([offsets = offsets->view().begin<size_type>()] __device__(
                                             size_type i) { return offsets[i + 1] - offsets[i]; }));
@@ -1022,7 +1021,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   // into the range 0-99).  But since we have multiple tdigests, we need to keep the keys unique
   // between the groups, so we add our group start offset.
   auto keys = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<cudf::size_type>{0},
     compute_tdigests_keys_fn<CumulativeWeight>{delta,
                                                cinfo.cluster_wl.begin(),
                                                cinfo.cluster_start.begin(),
@@ -1165,8 +1164,8 @@ struct typed_group_tdigest {
       data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
     thrust::transform(
       rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + num_groups,
+      cuda::counting_iterator<cudf::size_type>{0},
+      cuda::counting_iterator<cudf::size_type>{0} + num_groups,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
                                                       max_col->mutable_view().begin<double>())),
       get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.data()});
@@ -1244,8 +1243,8 @@ struct typed_reduce_tdigest {
       data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED, stream, mr);
     thrust::transform(
       rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + 1,
+      cuda::counting_iterator<cudf::size_type>{0},
+      cuda::counting_iterator<cudf::size_type>{0} + 1,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
                                                       max_col->mutable_view().begin<double>())),
       get_scalar_minmax<T>{*d_col, valid_count});
@@ -1499,7 +1498,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
 
   // generate group keys for all centroids in the entire column
   rmm::device_uvector<size_type> group_keys(num_centroids, stream, temp_mr);
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<cudf::size_type>{0};
   thrust::transform(rmm::exec_policy_nosync(stream),
                     iter,
                     iter + num_centroids,
