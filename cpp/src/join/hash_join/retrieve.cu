@@ -8,28 +8,31 @@
 
 namespace cudf::detail {
 
-template std::size_t launch_retrieve<false, primitive_count_ref_t>(probe_key_type const*,
-                                                                   cuda::std::int64_t,
-                                                                   size_type*,
-                                                                   size_type*,
-                                                                   size_type const*,
-                                                                   primitive_count_ref_t,
-                                                                   rmm::cuda_stream_view);
+template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                   std::unique_ptr<rmm::device_uvector<size_type>>>
+launch_retrieve<false, primitive_count_ref_t>(probe_key_type const*,
+                                              cuda::std::int64_t,
+                                              size_type const*,
+                                              primitive_count_ref_t,
+                                              rmm::cuda_stream_view,
+                                              rmm::device_async_resource_ref);
 
-template std::size_t launch_retrieve<false, nested_count_ref_t>(probe_key_type const*,
-                                                                cuda::std::int64_t,
-                                                                size_type*,
-                                                                size_type*,
-                                                                size_type const*,
-                                                                nested_count_ref_t,
-                                                                rmm::cuda_stream_view);
+template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                   std::unique_ptr<rmm::device_uvector<size_type>>>
+launch_retrieve<false, nested_count_ref_t>(probe_key_type const*,
+                                           cuda::std::int64_t,
+                                           size_type const*,
+                                           nested_count_ref_t,
+                                           rmm::cuda_stream_view,
+                                           rmm::device_async_resource_ref);
 
-template std::size_t launch_retrieve<false, flat_count_ref_t>(probe_key_type const*,
-                                                              cuda::std::int64_t,
-                                                              size_type*,
-                                                              size_type*,
-                                                              size_type const*,
-                                                              flat_count_ref_t,
-                                                              rmm::cuda_stream_view);
+template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                   std::unique_ptr<rmm::device_uvector<size_type>>>
+launch_retrieve<false, flat_count_ref_t>(probe_key_type const*,
+                                         cuda::std::int64_t,
+                                         size_type const*,
+                                         flat_count_ref_t,
+                                         rmm::cuda_stream_view,
+                                         rmm::device_async_resource_ref);
 
 }  // namespace cudf::detail
