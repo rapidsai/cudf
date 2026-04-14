@@ -242,7 +242,7 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__MEMORY_RESOURCE_CONFIG__*``.
         Category: engine.
     cuda_stream_policy
-        CUDA stream policy (``"default"``, ``"new"``, ``"pool"`` or config dict).
+        CUDA stream policy (``"default"``, ``"pool"`` or config dict).
         Env: ``CUDF_POLARS__CUDA_STREAM_POLICY``.
         Category: engine.
 
@@ -307,9 +307,9 @@ class StreamingOptions:
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
     memory_resource_config: MemoryResourceConfig | Unspecified = _opt("engine")
-    cuda_stream_policy: (
-        Literal["default", "new", "pool"] | dict[str, Any] | Unspecified
-    ) = _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
+    cuda_stream_policy: Literal["default", "pool"] | dict[str, Any] | Unspecified = (
+        _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
+    )
 
     # ------------------------------------------------------------------
     # Conversion helpers used by the engines

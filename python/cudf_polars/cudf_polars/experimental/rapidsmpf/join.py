@@ -193,7 +193,7 @@ async def _collect_small_side_for_broadcast(
     size = 0
     chunks: list[TableChunk] = []
     while (msg := await ch.recv(context)) is not None:
-        chunks.append(TableChunk.from_message(msg))
+        chunks.append(TableChunk.from_message(msg, br=context.br()))
         size += chunks[-1].data_alloc_size()
     row_count = sum(c.shape[0] for c in chunks)
 
@@ -287,7 +287,9 @@ async def _broadcast_join_large_chunk(
         context,
         Message(
             seq_num,
-            TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True),
+            TableChunk.from_pylibcudf_table(
+                df.table, df.stream, exclusive_view=True, br=context.br()
+            ),
         ),
     )
     del df, large_df
@@ -383,7 +385,7 @@ async def _broadcast_join(
             ch_out,
             small_dfs,
             small_child,
-            TableChunk.from_message(msg).make_available_and_spill(
+            TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
                 context.br(), allow_overbooking=True
             ),
             large_child,
@@ -454,12 +456,12 @@ async def _join_chunks(
             f"Left: {left_msg.sequence_number}, Right: {right_msg.sequence_number}"
         )
 
-        left_chunk = TableChunk.from_message(left_msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        right_chunk = TableChunk.from_message(right_msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
+        left_chunk = TableChunk.from_message(
+            left_msg, br=context.br()
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
+        right_chunk = TableChunk.from_message(
+            right_msg, br=context.br()
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
 
         input_bytes = sum(
             col.device_buffer_size()
@@ -487,7 +489,7 @@ async def _join_chunks(
             Message(
                 left_msg.sequence_number,
                 TableChunk.from_pylibcudf_table(
-                    df.table, df.stream, exclusive_view=True
+                    df.table, df.stream, exclusive_view=True, br=context.br()
                 ),
             ),
         )
@@ -1052,7 +1054,7 @@ async def _sample_chunks(
         msg = await ch.recv(context)
         if msg is None:
             break
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
         sampled_chunks[msg.sequence_number] = chunk

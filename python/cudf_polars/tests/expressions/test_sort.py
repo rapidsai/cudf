@@ -84,7 +84,7 @@ def test_setsorted(request, descending, nulls_last, with_nulls):
         df = translator.translate_ir().evaluate(
             cache={},
             timer=None,
-            context=IRExecutionContext.from_config_options(translator.config_options),
+            context=IRExecutionContext(),
         )
 
         a = df.column_map["a"]

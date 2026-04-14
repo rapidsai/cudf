@@ -43,11 +43,9 @@ from cudf_polars.dsl.utils.windows import (
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
-    get_new_cuda_stream,
     join_cuda_streams,
 )
 from cudf_polars.utils.versions import (
@@ -68,7 +66,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 __all__ = [
@@ -114,24 +112,8 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     """
 
-    get_cuda_stream: Callable[[], Stream]
+    get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-
-    @classmethod
-    def from_config_options(
-        cls, config_options: ConfigOptions, query_id: uuid.UUID | None = None
-    ) -> IRExecutionContext:
-        """Create an IRExecutionContext from ConfigOptions."""
-        query_id = query_id or uuid.uuid4()
-        match config_options.cuda_stream_policy:
-            case CUDAStreamPolicy.DEFAULT:
-                return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
-            case CUDAStreamPolicy.NEW:
-                return cls(get_cuda_stream=get_new_cuda_stream, query_id=query_id)
-            case _:  # pragma: no cover
-                raise ValueError(
-                    f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
-                )
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:

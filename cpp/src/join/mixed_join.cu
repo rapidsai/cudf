@@ -152,7 +152,7 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
 
   // Single transform to fill both arrays using zip iterator
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<size_type>{0},
     cuda::counting_iterator<size_type>{probe_table_num_rows},
     thrust::make_zip_iterator(cuda::std::make_tuple(input_pairs.begin(), hash_indices.begin())),
@@ -345,10 +345,11 @@ compute_mixed_join_matches_per_row(
                                    stream);
   }
 
-  std::size_t const size = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                          matches_per_row_span.begin(),
-                                          matches_per_row_span.end(),
-                                          std::size_t{0});
+  std::size_t const size =
+    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   matches_per_row_span.begin(),
+                   matches_per_row_span.end(),
+                   std::size_t{0});
 
   return {size, std::move(matches_per_row)};
 }
@@ -453,7 +454,7 @@ mixed_join(
   // Given the number of matches per row, we need to compute the offsets for insertion.
   auto join_result_offsets =
     rmm::device_uvector<size_type>{static_cast<std::size_t>(setup.outer_num_rows), stream, mr};
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          matches_per_row_span.begin(),
                          matches_per_row_span.end(),
                          join_result_offsets.begin());
@@ -560,13 +561,13 @@ compute_mixed_join_output_size(table_view const& left_equality,
       matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
 
     if (right_num_rows == 0 && join_type == join_kind::LEFT_JOIN) {
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    matches_per_row_span.begin(),
                    matches_per_row_span.end(),
                    1);
       return {left_num_rows, std::move(matches_per_row)};
     } else {
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    matches_per_row_span.begin(),
                    matches_per_row_span.end(),
                    0);
