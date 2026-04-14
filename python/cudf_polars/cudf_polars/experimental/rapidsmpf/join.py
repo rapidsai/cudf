@@ -594,7 +594,7 @@ def use_bloom_filter(
     """Return True if bloom filter pre-filtering should be applied."""
     if (
         threshold == 0.0
-        or join_type not in ("Inner", "Semi")
+        or join_type not in ("Inner", "Semi", "Left", "Right")
         or (join_type == "Left" and right_rows <= left_rows)
         or (join_type == "Right" and left_rows <= right_rows)
     ):
