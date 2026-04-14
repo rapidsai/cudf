@@ -1,0 +1,21 @@
+exp	commit	metric	improvement_pct	status	benchmark	description
+0	bce9dec	6.87 GiB/s (TAXI:6.87 LOGS:14.6 ANA:7.12)	0.0	keep	realistic	baseline (3-run avg, noise: TAXI 0.2-0.5%, LOGS 0.4-0.8%, ANA 0.5-0.6%)
+0	bce9dec	3.65 GiB/s (MIXED/256/64, noise 0.4%)	0.0	keep	type_inference	baseline (3-run avg, most configs <1% noise, ALL_STRING/64col up to 6.4%)
+0	bce9dec	4.03 GiB/s (0%Q), 6.23 (25%Q), 3.26 (100%Q)	0.0	keep	quoting	baseline (3-run avg, QUOTE_100_PCT/256 has 14.6% spread - high variance)
+1	e54af8f	12.58 GiB/s (TAXI:12.58 LOGS:19.4 ANA:13.4)	+83.0	keep	realistic	remove atomicAdd valid_counts from decode kernel, compute from bitmask post-kernel (verified 3x)
+1	e54af8f	4.19 GiB/s MIXED/256/64 (+15%), ALL_INT +59%, ALL_STR -5%	+15.0	keep	type_inference	same change; ALL_STRING 64col regresses -5% (high noise config)
+1	e54af8f	9.78 (0%Q +143%), 7.99 (25%Q +28%), 3.18 (100%Q -2.5%)	+142.9	keep	quoting	same change; QUOTE_100_PCT slight regression within noise
+2	e06d305	0.0	0.0	crash	realistic	ALL_VALID bitmask init — 4 test failures: short rows leave excess bits set
+2	e06d305	0.0	0.0	crash	type_inference	same (reverted)
+2	e06d305	0.0	0.0	crash	quoting	same (reverted)
+3	c2d8a75	11.55 GiB/s (TAXI -8%, ANALYTICS -10%, LOGS +2.4%)	-8.2	discard	realistic	grid-stride loop — hurt spatial locality, threads jump to distant rows
+3	c2d8a75	4.25 GiB/s MIXED/256/64 (+1.4%), mixed results	+1.4	discard	type_inference	same (reverted)
+3	c2d8a75	9.34 (0%Q -4.5%), 8.42 (25%Q +5.4%), 3.42 (100%Q +7.6%)	-4.5	discard	quoting	same (reverted)
+4	b50b1c7	TAXI/256 17.01 GiB/s (+35.6% on Ada), ANALYTICS +38.8%, LOGS +4.1%	+35.6	discard	realistic	block size 128→256 — compiler register tradeoff (56→60 regs), architecture-specific (reverted)
+5	5d21ea7	TAXI/256 12.65 (+0.9%), LOGS 19.49 (+0.7%), ANALYTICS 13.43 (+1.1%)	+0.9	discard	realistic	single-chunk row offset gathering — noise-level gain, +25-40% peak memory (reverted)
+6	7bdc856	TAXI/256 14.91 (+19.0%), LOGS 19.68 (+1.7%), ANALYTICS 16.53 (+24.4%)	+19.0	keep	realistic	__launch_bounds__(128,8) relaxes register pressure from 42→64 regs/thread target — universal
+7	e0fc267	TAXI +1.9%, LOGS +1.0%, ANALYTICS -14.1%	-14.1	discard	realistic	digit fast-path for trie skip — 2 extra regs (60→62) regressed ANALYTICS (reverted)
+8	9ba7e9c	TAXI +0.7%, LOGS +0.7%, ANALYTICS +0.8%	+0.8	discard	realistic	__restrict__ pointers — compiler spilled 60→40 regs +84B shared, noise-level gain (reverted)
+9	4fedb9f	TAXI +0.9%, LOGS +0.6%, ANALYTICS +0.8%	+0.9	discard	realistic	template escape_char — same 40-reg spill pattern, noise-level (reverted)
+10	8d84a7e	TAXI +0.3%, LOGS +0.4%, ANALYTICS -0.5%	+0.3	discard	realistic	csv_type_dispatch (24 vs 28 types) — flipped to 40-reg/84-shared, noise (not committed)
+10	8d84a7e	TAXI +0.8%, LOGS -0.3%, ANALYTICS +0.4%	+0.4	discard	realistic	skip column data zero-init (cudaMemsetAsync) — noise-level, 3-run avg (reverted)
