@@ -1076,7 +1076,7 @@ async def _bloom_shuffle_join(
         small_mids.append((seq, small_buffer.insert(Message(seq, chunk))))
 
     while (msg := await ch_small.recv(context)) is not None:
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
         seq = msg.sequence_number
