@@ -899,7 +899,7 @@ TEST_P(ParquetV2Test, CheckColumnOffsetIndexNullColumn)
   auto col2_data = random_values<int32_t>(num_rows);
 
   // col1 is all nulls
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto valids = cudf::test::iterators::all_nulls();
   auto col1 =
     cudf::test::fixed_width_column_wrapper<int32_t>(col1_data.begin(), col1_data.end(), valids);
   auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(col2_data.begin(), col2_data.end());
@@ -1401,7 +1401,7 @@ TEST_P(ParquetV2Test, CheckEncodings)
   // data should be PLAIN for v1, DELTA_BINARY_PACKED for v2
   auto col1_data = random_values<int32_t>(num_rows);
   // data should be PLAIN_DICTIONARY for v1, PLAIN and RLE_DICTIONARY for v2
-  auto col2_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+  auto col2_data = cuda::constant_iterator{1};
 
   cudf::test::fixed_width_column_wrapper<bool> col0{col0_data, col0_data + num_rows, validity};
   column_wrapper<int32_t> col1{col1_data.begin(), col1_data.end(), validity};

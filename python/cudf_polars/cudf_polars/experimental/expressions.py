@@ -530,49 +530,14 @@ def _decompose(
     )
 
 
-def decompose_expr_graph(
-    named_expr: NamedExpr,
+def make_expr_decomposer(
     input_ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     unique_names: Generator[str, None, None],
-) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
-    """
-    Decompose a NamedExpr into stages.
-
-    Parameters
-    ----------
-    named_expr
-        The original NamedExpr to decompose.
-    input_ir
-        The input-IR node that ``named_expr`` will be
-        evaluated on.
-    partition_info
-        A mapping from all unique IR nodes to the
-        associated partitioning information.
-    config_options
-        GPUEngine configuration options.
-    unique_names
-        Generator of unique names for temporaries.
-
-    Returns
-    -------
-    named_expr
-        Decomposed NamedExpr object.
-    input_ir
-        The rewritten ``input_ir`` to be evaluated by ``named_expr``.
-    partition_info
-        A mapping from unique nodes in the new graph to associated
-        partitioning information.
-
-    Notes
-    -----
-    This function recursively decomposes ``named_expr.value`` and
-    ``input_ir`` into multiple partition-wise stages.
-
-    The state dictionary is an instance of :class:`State`.
-    """
-    mapper: ExprDecomposer = CachingVisitor(
+) -> ExprDecomposer:
+    """Create a caching expression decomposer for the given input IR."""
+    return CachingVisitor(
         _decompose,
         state={
             "input_ir": input_ir,
@@ -581,5 +546,32 @@ def decompose_expr_graph(
             "unique_names": unique_names,
         },
     )
+
+
+def decompose_expr_graph(
+    named_expr: NamedExpr,
+    *,
+    mapper: ExprDecomposer,
+) -> tuple[NamedExpr, IR, MutableMapping[IR, PartitionInfo]]:
+    """
+    Decompose a NamedExpr into stages using a shared expression decomposer.
+
+    Parameters
+    ----------
+    named_expr
+        The original NamedExpr to decompose.
+    mapper
+        Expression decomposer (from :func:`make_expr_decomposer`).
+
+    Returns
+    -------
+    named_expr
+        Decomposed NamedExpr object.
+    input_ir
+        The rewritten input IR to be evaluated by ``named_expr``.
+    partition_info
+        A mapping from unique nodes in the new graph to associated
+        partitioning information.
+    """
     expr, input_ir, partition_info = mapper(named_expr.value)
     return named_expr.reconstruct(expr), input_ir, partition_info
