@@ -46,7 +46,8 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 @dataclasses.dataclass
@@ -65,6 +66,7 @@ def _setup_root(
     rapidsmpf_options_as_bytes: bytes,
     *,
     uid: str,
+    memory_resource_config: MemoryResourceConfig | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> bytes:
     """
@@ -83,6 +85,9 @@ def _setup_root(
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
+    memory_resource_config
+        Optional RMM memory resource configuration. If ``None``, defaults to
+        :class:`rmm.mr.CudaAsyncMemoryResource`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
@@ -92,7 +97,12 @@ def _setup_root(
     """
     assert dask_worker is not None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
+    base_mr = (
+        memory_resource_config.create_memory_resource()
+        if memory_resource_config is not None
+        else rmm.mr.CudaAsyncMemoryResource()
+    )
+    mr = RmmResourceAdaptor(base_mr)
     statistics = Statistics.from_options(mr, options)
     comm = new_communicator(
         nranks=nranks,
@@ -118,6 +128,7 @@ def _setup_worker(
     executor_options: dict[str, object],
     *,
     uid: str,
+    memory_resource_config: MemoryResourceConfig | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -139,6 +150,9 @@ def _setup_worker(
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
+    memory_resource_config
+        Optional RMM memory resource configuration. If ``None``, defaults to
+        :class:`rmm.mr.CudaAsyncMemoryResource`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
     """
@@ -149,7 +163,12 @@ def _setup_worker(
 
     if mp_ctx is None:
         # Non-root worker: create communicator now.
-        mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
+        base_mr = (
+            memory_resource_config.create_memory_resource()
+            if memory_resource_config is not None
+            else rmm.mr.CudaAsyncMemoryResource()
+        )
+        mr = RmmResourceAdaptor(base_mr)
         statistics = Statistics.from_options(mr, options)
         root_addr = ucx_api.UCXAddress.create_from_buffer(root_ucxx_address_as_bytes)
         comm = new_communicator(
@@ -174,7 +193,7 @@ def _setup_worker(
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
             int | None,
-            executor_options.get("rapidsmpf_py_executor_max_workers"),
+            executor_options.get("num_py_executors"),
         ),
         thread_name_prefix="dask-executor",
     )
@@ -436,6 +455,10 @@ class DaskEngine(StreamingEngine):
 
         check_reserved_keys(executor_options, engine_options)
 
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
+
         rapidsmpf_options = (
             rapidsmpf_options
             if rapidsmpf_options is not None
@@ -463,7 +486,7 @@ class DaskEngine(StreamingEngine):
 
         # Phase 1: initialize root communicator on one worker.
         root_result = dask_client.run(
-            functools.partial(_setup_root, uid=uid),
+            functools.partial(_setup_root, uid=uid, memory_resource_config=mr_config),
             nranks,
             rapidsmpf_options_as_bytes,
             workers=[root_worker],
@@ -473,7 +496,7 @@ class DaskEngine(StreamingEngine):
         # Phase 2: complete bootstrap on all workers concurrently.
         # All workers call barrier() so they must all run simultaneously.
         dask_client.run(
-            functools.partial(_setup_worker, uid=uid),
+            functools.partial(_setup_worker, uid=uid, memory_resource_config=mr_config),
             root_ucxx_address_as_bytes,
             nranks,
             rapidsmpf_options_as_bytes,
@@ -559,3 +582,46 @@ class DaskEngine(StreamingEngine):
             super().shutdown()
         if exceptions:
             raise ExceptionGroup("Worker teardown failed", exceptions)
+
+    @classmethod
+    def from_options(
+        cls,
+        options: StreamingOptions,
+        *,
+        dask_client: distributed.Client | None = None,
+    ) -> DaskEngine:
+        """
+        Create a :class:`DaskEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct a ``DaskEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+        dask_client
+            An existing :class:`distributed.Client` to use. If ``None``, a
+            :class:`dask_cuda.LocalCUDACluster` is created automatically.
+
+        Returns
+        -------
+        A new :class:`DaskEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=4, fallback_mode="silent")
+        >>> with DaskEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+        """
+        return cls(
+            dask_client=dask_client,
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+        )

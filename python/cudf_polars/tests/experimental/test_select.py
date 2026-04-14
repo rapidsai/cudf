@@ -11,7 +11,14 @@ import pytest
 
 import polars as pl
 
+import pylibcudf as plc
+
+from cudf_polars import Translator
+from cudf_polars.containers import DataType
+from cudf_polars.dsl import expr
+from cudf_polars.dsl.ir import HStack, Projection, Select
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.experimental.select import _inline_hstack_false, _sub_expr
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -206,6 +213,68 @@ def test_select_with_len(engine):
         UserWarning, match="Cross join not support for multiple partitions"
     ):
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_sub_expr_replaces_col():
+    dt = DataType(pl.Int64())
+    b = expr.Col(dt, "b")
+    assert _sub_expr(expr.Col(dt, "a"), {"a": b}) is b
+
+
+def test_sub_expr_reconstructs_when_nested_col_substituted():
+    dt = DataType(pl.Int8())
+    a = expr.Col(dt, "a")
+    b = expr.Col(dt, "b")
+    c = expr.Col(dt, "c")
+    add = expr.BinOp(dt, plc.binaryop.BinaryOperator.ADD, a, c)
+    out = _sub_expr(add, {"a": b})
+    assert out.children[0] is b
+    assert out.children[1] is c
+
+
+def test_inline_hstack_false_noop_scan():
+    ir = Translator(
+        pl.LazyFrame({"a": [1]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    assert _inline_hstack_false(ir) is ir
+
+
+def test_inline_hstack_false_inlines_hstack_false_chain():
+    base = Translator(
+        pl.LazyFrame({"a": [1, 2, 3]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    dt = base.schema["a"]
+    inner = HStack(
+        {**base.schema, "s": dt},
+        (expr.NamedExpr("s", expr.Col(dt, "a")),),
+        should_broadcast=False,
+        df=base,
+    )
+    ir = Select(
+        {"t": dt},
+        (expr.NamedExpr("t", expr.Col(dt, "s")),),
+        should_broadcast=True,
+        df=inner,
+    )
+    out = _inline_hstack_false(ir)
+    assert out.children[0] is base
+    assert isinstance(out.exprs[0].value, expr.Col)
+    assert out.exprs[0].value.name == "a"
+
+
+def test_inline_hstack_false_non_select_hstack_parent_unchanged():
+    base = Translator(
+        pl.LazyFrame({"a": [1, 2, 3]})._ldf.visit(), pl.GPUEngine()
+    ).translate_ir()
+    dt = base.schema["a"]
+    inner = HStack(
+        {**base.schema, "s": dt},
+        (expr.NamedExpr("s", expr.Col(dt, "a")),),
+        should_broadcast=False,
+        df=base,
+    )
+    proj = Projection(inner.schema, inner)
+    assert _inline_hstack_false(proj) is proj
 
 
 def test_select_with_mixed_fusable_non_fusable_exprs(df, engine):

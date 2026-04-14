@@ -651,7 +651,7 @@ using GroupedRollingTestStrings = GroupedRollingTest<cudf::string_view>;
 
 TEST_F(GroupedRollingTestStrings, StringsUnsupportedOperators)
 {
-  cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
+  cudf::test::strings_column_wrapper input{{"This", "is", "not", "", "string", ""},
                                            {true, true, true, false, true, false}};
 
   const cudf::size_type DATA_SIZE{static_cast<cudf::column_view>(input).size()};

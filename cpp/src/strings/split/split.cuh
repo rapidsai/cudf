@@ -517,7 +517,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   delimiter_fn.chars_bytes         = chars_bytes;
 
   // count the number of delimiters in the entire column
-  cudf::detail::device_scalar<int64_t> d_count(0, stream);
+  cudf::detail::device_scalar<int64_t> d_count(0, stream, cudf::get_current_device_resource_ref());
   if (chars_bytes > 0) {
     constexpr int64_t block_size         = 512;
     constexpr size_type bytes_per_thread = 4;

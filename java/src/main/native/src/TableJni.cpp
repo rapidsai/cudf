@@ -3521,7 +3521,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
     compare_nulls_equal,
     [load_factor](
       cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      cudf::filtered_join obj(right, nulleq, load_factor, cudf::get_default_stream());
       return obj.semi_join(left);
     });
 }
@@ -3621,7 +3621,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
     compare_nulls_equal,
     [load_factor](
       cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      cudf::filtered_join obj(right, nulleq, load_factor, cudf::get_default_stream());
       return obj.anti_join(left);
     });
 }

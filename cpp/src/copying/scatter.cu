@@ -180,11 +180,12 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
   {
-    auto dict_target =
-      dictionary::detail::add_keys(dictionary_column_view(target),
-                                   make_column_from_scalar(source.get(), 1, stream)->view(),
-                                   stream,
-                                   mr);
+    auto dict_target = dictionary::detail::add_keys(
+      dictionary_column_view(target),
+      make_column_from_scalar(source.get(), 1, stream, cudf::get_current_device_resource_ref())
+        ->view(),
+      stream,
+      mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(
       dict_view, source.get(), stream, cudf::get_current_device_resource_ref());
@@ -382,8 +383,11 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  auto indices = cudf::make_numeric_column(
-    data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
+  auto indices         = cudf::make_numeric_column(data_type{type_id::INT32},
+                                           target.size(),
+                                           mask_state::UNALLOCATED,
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
   auto mutable_indices = indices->mutable_view();
 
   thrust::sequence(rmm::exec_policy_nosync(stream),

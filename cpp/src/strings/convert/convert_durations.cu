@@ -690,7 +690,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream);
+    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");

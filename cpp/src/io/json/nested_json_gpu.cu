@@ -1434,7 +1434,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr StackSymbolT read_symbol = 'x';
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
-  cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
+  cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(
+    stream, cudf::get_current_device_resource_ref());
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   constexpr auto max_translation_table_size =
@@ -1636,7 +1637,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
   std::size_t constexpr max_tokens_per_struct = 6;
   auto const max_token_out_count =
     cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
-  cudf::detail::device_scalar<std::size_t> num_written_tokens{stream};
+  cudf::detail::device_scalar<std::size_t> num_written_tokens{
+    stream, cudf::get_current_device_resource_ref()};
   // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
   // see a JSON-line delimiter as the very first item
   SymbolOffsetT const delimiter_offset =
