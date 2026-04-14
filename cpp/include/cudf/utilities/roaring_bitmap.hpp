@@ -86,17 +86,12 @@ class roaring_bitmap {
    * @brief Move assignment operator for the roaring bitmap class
    *
    * @param other Roaring bitmap to move from
+   * @return Reference to the moved-from roaring bitmap
    */
   roaring_bitmap& operator=(roaring_bitmap&& other) noexcept;
 
-  /**
-   * @brief Deleted copy constructor for the roaring bitmap class
-   */
   roaring_bitmap(roaring_bitmap const&) = delete;
 
-  /**
-   * @brief Deleted copy assignment operator for the roaring bitmap class
-   */
   roaring_bitmap& operator=(roaring_bitmap const&) = delete;
 
   /**
