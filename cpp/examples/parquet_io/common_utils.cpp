@@ -23,7 +23,7 @@
  *
  */
 
-memory_resource_type create_memory_resource(bool is_pool_used)
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used)
 {
   rmm::mr::cuda_memory_resource cuda_mr{};
   if (is_pool_used) {

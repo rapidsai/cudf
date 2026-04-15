@@ -67,11 +67,11 @@ int main(int argc, char** argv)
 {
   // Construct a CUDA memory resource using RAPIDS Memory Manager (RMM)
   // This is the default memory resource for libcudf for allocating device memory.
-  rmm::mr::cuda_memory_resource cuda_mr{};
   // Construct a memory pool using the CUDA memory resource
   // Using a memory pool for device memory allocations is important for good performance in libcudf.
   // The pool defaults to allocating half of the available GPU memory.
-  rmm::mr::pool_memory_resource mr{cuda_mr, rmm::percent_of_free_device_memory(50)};
+  rmm::mr::pool_memory_resource mr{rmm::mr::cuda_memory_resource{},
+                                   rmm::percent_of_free_device_memory(50)};
 
   // Set the pool resource to be used by default for all device memory allocations
   // Note: It is the user's responsibility to ensure the `mr` object stays alive for the duration of

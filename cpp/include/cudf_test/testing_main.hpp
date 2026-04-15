@@ -50,15 +50,10 @@ inline auto make_pool()
   auto const [free, total] = rmm::available_device_memory();
   auto const min_alloc =
     rmm::align_down(std::min(free, total / 10), rmm::CUDA_ALLOCATION_ALIGNMENT);
-  static rmm::mr::cuda_memory_resource cuda_mr{};
-  return rmm::mr::pool_memory_resource{cuda_mr, min_alloc};
+  return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{}, min_alloc};
 }
 
-inline auto make_arena()
-{
-  static rmm::mr::cuda_memory_resource cuda_mr{};
-  return rmm::mr::arena_memory_resource{cuda_mr};
-}
+inline auto make_arena() { return rmm::mr::arena_memory_resource{rmm::mr::cuda_memory_resource{}}; }
 
 inline auto make_binning()
 {

@@ -16,9 +16,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/memory_resource>
 
 #include <string>
-#include <variant>
 #include <vector>
 
 /**
@@ -40,9 +42,7 @@
  * @param pool Whether to use a pool memory resource.
  * @return Memory resource instance
  */
-using memory_resource_type =
-  std::variant<rmm::mr::cuda_async_memory_resource, rmm::mr::pool_memory_resource>;
-memory_resource_type create_memory_resource(bool is_pool_used);
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used);
 
 /**
  * @brief Create a filter expression of the form `column_name == literal` for string type point

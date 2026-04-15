@@ -129,7 +129,7 @@ int main(int argc, char const** argv)
   // Create and use a memory pool
   bool constexpr is_pool_used = true;
   auto resource               = create_memory_resource(is_pool_used);
-  std::visit([](auto& mr) { cudf::set_current_device_resource(mr); }, resource);
+  cudf::set_current_device_resource(resource);
 
   // Read input parquet file
   // We do not want to time the initial read time as it may include

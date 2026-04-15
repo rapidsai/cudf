@@ -151,8 +151,7 @@ int main(int argc, char const** argv)
   auto resource               = create_memory_resource(is_pool_used);
   auto stream_pool = rmm::cuda_stream_pool(1 + num_threads, rmm::cuda_stream::flags::non_blocking);
   auto default_stream = stream_pool.get_stream();
-  auto stats_mr =
-    std::visit([](auto& mr) { return rmm::mr::statistics_resource_adaptor(mr); }, resource);
+  auto stats_mr       = rmm::mr::statistics_resource_adaptor{resource};
   rmm::mr::set_current_device_resource(stats_mr);
 
   // Create filter expressions (one per thread; reused circularly if needed)

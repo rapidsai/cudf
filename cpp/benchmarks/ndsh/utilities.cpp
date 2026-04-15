@@ -396,8 +396,8 @@ void generate_parquet_data_sources(double scale_factor,
   // Set the memory resource to the managed pool
   auto old_mr = cudf::get_current_device_resource_ref();
   // TODO: if old_mr is already managed pool or managed, don't create new one.
-  rmm::mr::managed_memory_resource managed_mr{};
-  rmm::mr::pool_memory_resource managed_pool_mr{managed_mr, rmm::percent_of_free_device_memory(50)};
+  rmm::mr::pool_memory_resource managed_pool_mr{rmm::mr::managed_memory_resource{},
+                                                rmm::percent_of_free_device_memory(50)};
   cudf::set_current_device_resource(managed_pool_mr);
   // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free memory
 
