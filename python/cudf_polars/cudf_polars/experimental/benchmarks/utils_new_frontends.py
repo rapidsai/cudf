@@ -28,8 +28,6 @@ import nvtx
 
 import polars as pl
 
-import rmm.mr
-
 __all__: list[str] = [
     "COUNT_DTYPE",
     "QueryResult",
@@ -387,6 +385,7 @@ class RunConfig:
     # Execution mode
     executor: ExecutorType  # "in-memory" | "streaming" | "cpu"
     frontend: str  # "spmd" | "ray" | "duckdb"
+    connect: str | None = None
 
     # Run parameters
     iterations: int
@@ -514,6 +513,7 @@ class RunConfig:
             native_parquet=args.native_parquet,
             max_io_threads=args.max_io_threads,
             streaming_options=streaming_options,
+            connect=args.connect,
             validation_method=validation_method,
             extra_info=args.extra_info,
         )
@@ -715,9 +715,7 @@ def execute_query(
             if args.debug:
                 translator = Translator(q._ldf.visit(), engine)
                 ir = translator.translate_ir()
-                context = IRExecutionContext.from_config_options(
-                    translator.config_options
-                )
+                context = IRExecutionContext()
                 if run_config.executor == "in-memory":
                     t0 = time.monotonic()
                     result = ir.evaluate(
@@ -818,12 +816,20 @@ def run_polars_query_iteration(
     query_result: Any,
     client: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+    result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
     result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
 
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
+
+    if expected is not None and result_casts:
+        # Applying the casts to the polars result is
+        # a workaround we need because of a polars bug
+        # See https://github.com/pola-rs/polars/issues/27269
+        # Once we support polars 1.40, we should remove this
+        result = result.with_columns(*result_casts)
 
     # TODO: shuffle stats collection is not yet wired up for the new
     # frontends. The Dask-specific gather_shuffle_statistics API does
@@ -942,6 +948,7 @@ def run_polars_query(
                 query_result=query_result,
                 client=client,
                 prepare_validation_result=prepare_validation_result,
+                result_casts=casts if casts else None,
             )
         except Exception:
             print(f"❌ query={q_id} iteration={i} failed!")
@@ -1085,7 +1092,6 @@ def run_polars_spmd(
     # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
     executor_options.pop("cluster", None)
-    rmm.mr.set_current_device_resource(rmm.mr.CudaAsyncMemoryResource())
     engine_options = {
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
@@ -1150,10 +1156,15 @@ def run_polars_ray(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    ray_init_options: dict[str, Any] = {}
+    if run_config.connect is not None:
+        ray_init_options["address"] = run_config.connect
+
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
         engine_options=engine_options,
+        ray_init_options=ray_init_options,
     ) as engine:
         run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
         records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1180,6 +1191,8 @@ def run_polars_dask(
     validation_files: dict[int, Path] | None,
 ) -> None:
     """Run benchmark queries using Dask distributed execution."""
+    import distributed
+
     from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 
     if run_config.collect_traces:
@@ -1194,22 +1207,34 @@ def run_polars_dask(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
-    with DaskEngine(
-        rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
-        executor_options=executor_options,
-        engine_options=engine_options,
-    ) as engine:
-        run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
-        records, plans, validation_failures, query_failures = _run_query_loop(
-            benchmark,
-            args,
-            run_config,
-            engine,
-            None,
-            numeric_type,
-            date_type,
-            validation_files,
-        )
+    dask_client = None
+    if run_config.connect is not None:
+        if Path(run_config.connect).is_file():
+            dask_client = distributed.Client(scheduler_file=run_config.connect)
+        else:
+            dask_client = distributed.Client(address=run_config.connect)
+
+    try:
+        with DaskEngine(
+            rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
+            executor_options=executor_options,
+            engine_options=engine_options,
+            dask_client=dask_client,
+        ) as engine:
+            run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
+            records, plans, validation_failures, query_failures = _run_query_loop(
+                benchmark,
+                args,
+                run_config,
+                engine,
+                None,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
+    finally:
+        if dask_client is not None:
+            dask_client.close()
     run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
@@ -1601,6 +1626,18 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
                 - duckdb : DuckDB CPU execution"""),
     )
     parser.add_argument(
+        "--connect",
+        dest="connect",
+        default=None,
+        type=str,
+        help=textwrap.dedent("""\
+            Connect to an existing cluster instead of creating a local one.
+            For --frontend dask: a TCP address (e.g. tcp://host:8786) or a
+            scheduler file path. For --frontend ray: a Ray address
+            (e.g. ray://host:10001 or "auto").
+            Not supported with --frontend spmd."""),
+    )
+    parser.add_argument(
         "--iterations",
         default=1,
         type=int,
@@ -1784,6 +1821,10 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     """Run the queries using the given benchmark and frontend."""
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
+
+    if run_config.connect is not None and run_config.frontend == "spmd":
+        raise ValueError("--connect is not supported with --frontend spmd.")
+
     parquet_options = {"use_rapidsmpf_native": run_config.native_parquet}
     validation_files = (
         list_validation_files(args.validate_directory)

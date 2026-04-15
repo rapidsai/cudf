@@ -361,7 +361,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join::left_join(
   } else {
     // If build table is empty, return probe table
     if (this->_build.num_rows() == 0) {
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    build_indices->begin(),
                    build_indices->end(),
                    cudf::JoinNoMatch);

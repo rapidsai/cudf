@@ -43,8 +43,7 @@ void nvbench_left_anti_join(nvbench::state& state,
       }
       return obj.anti_join(right);
     } else {
-      cudf::filtered_join obj(
-        right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+      cudf::filtered_join obj(right, compare_nulls, cudf::get_default_stream());
       for (auto i = 0; i < num_probes - 1; i++) {
         [[maybe_unused]] auto result = obj.anti_join(left);
       }
@@ -89,8 +88,7 @@ void nvbench_left_semi_join(nvbench::state& state,
       }
       return obj.semi_join(right);
     } else {
-      cudf::filtered_join obj(
-        right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+      cudf::filtered_join obj(right, compare_nulls, cudf::get_default_stream());
       for (auto i = 0; i < num_probes - 1; i++) {
         [[maybe_unused]] auto result = obj.semi_join(left);
       }
@@ -114,8 +112,7 @@ void nvbench_filtered_left_anti_join_selectivity(
   auto join = [num_probes](cudf::table_view const& left,
                            cudf::table_view const& right,
                            cudf::null_equality compare_nulls) {
-    cudf::filtered_join obj(
-      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    cudf::filtered_join obj(right, compare_nulls, cudf::get_default_stream());
     for (auto i = 0; i < num_probes - 1; i++) {
       [[maybe_unused]] auto result = obj.anti_join(left);
     }
@@ -137,8 +134,7 @@ void nvbench_filtered_left_semi_join_selectivity(
   auto join = [num_probes](cudf::table_view const& left,
                            cudf::table_view const& right,
                            cudf::null_equality compare_nulls) {
-    cudf::filtered_join obj(
-      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    cudf::filtered_join obj(right, compare_nulls, cudf::get_default_stream());
     for (auto i = 0; i < num_probes - 1; i++) {
       [[maybe_unused]] auto result = obj.semi_join(left);
     }

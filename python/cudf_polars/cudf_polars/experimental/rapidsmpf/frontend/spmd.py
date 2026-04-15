@@ -31,6 +31,10 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     check_reserved_keys,
     execute_ir_on_rank,
 )
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
+)
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
 from cudf_polars.utils.config import SPMDContext
 
@@ -45,7 +49,7 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
@@ -293,6 +297,16 @@ class SPMDEngine(StreamingEngine):
     TypeError
         If ``executor_options`` or ``engine_options`` contains a reserved key.
 
+    Notes
+    -----
+    Calls
+    :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.  By default, binding is skipped under ``rrun`` (which already
+    performs its own binding) — see
+    :attr:`HardwareBindingPolicy.skip_under_rrun`.
+
     Examples
     --------
     Context-manager style (recommended for scripts):
@@ -322,13 +336,26 @@ class SPMDEngine(StreamingEngine):
         engine_options = engine_options or {}
 
         check_reserved_keys(executor_options, engine_options)
+        hw_binding = cast(
+            HardwareBindingPolicy,
+            engine_options.get("hardware_binding", HardwareBindingPolicy()),
+        )
+        bind_to_gpu(hw_binding)
 
         rapidsmpf_options = (
             rapidsmpf_options
             if rapidsmpf_options is not None
             else Options(get_environment_variables())
         )
-        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
+        base_mr = (
+            mr_config.create_memory_resource()
+            if mr_config is not None
+            else rmm.mr.get_current_device_resource()
+        )
+        mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
@@ -337,7 +364,10 @@ class SPMDEngine(StreamingEngine):
                     options=rapidsmpf_options,
                 )
             else:
-                comm = single_communicator(rapidsmpf_options, ProgressThread())
+                comm = single_communicator(
+                    progress_thread=ProgressThread(),
+                    options=rapidsmpf_options,
+                )
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(

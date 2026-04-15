@@ -15,12 +15,16 @@ from typing import TYPE_CHECKING, Any, Literal
 from rapidsmpf.config import Options
 from rapidsmpf.utils.string import parse_boolean
 
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
+from cudf_polars.utils.config import MemoryResourceConfig
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
-        MemoryResourceConfig,
         ParquetOptions,
     )
 
@@ -117,6 +121,20 @@ def _category_opts(
     return result
 
 
+def _parse_memory_resource_config(value: str) -> MemoryResourceConfig:
+    """Argparse ``type`` callback: parse a JSON string into a :class:`MemoryResourceConfig`."""
+    return MemoryResourceConfig(**json.loads(value))
+
+
+def _parse_hardware_binding(value: str) -> HardwareBindingPolicy:
+    """
+    Parse a JSON string into a :class:`HardwareBindingPolicy`.
+
+    Examples: ``'{"enabled": false}'``, ``'{"raise_on_fail": true}'``.
+    """
+    return HardwareBindingPolicy(**json.loads(value))
+
+
 @dataclasses.dataclass
 class StreamingOptions:
     """
@@ -125,7 +143,7 @@ class StreamingOptions:
     Options are grouped into three categories:
       - **RapidsMPF**: runtime and memory behavior (e.g. spilling, threading).
       - **Executor**: query execution and partitioning behavior.
-      - **Engine**: Polars integration and IO configuration.
+      - **Engine**: Polars integration, IO configuration, hardware binding.
 
     All fields default to :data:`UNSPECIFIED` and follow this precedence:
       1. Explicit value.
@@ -236,8 +254,16 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__MEMORY_RESOURCE_CONFIG__*``.
         Category: engine.
     cuda_stream_policy
-        CUDA stream policy (``"default"``, ``"new"``, ``"pool"`` or config dict).
+        CUDA stream policy (``"default"``, ``"pool"`` or config dict).
         Env: ``CUDF_POLARS__CUDA_STREAM_POLICY``.
+        Category: engine.
+    hardware_binding
+        Hardware binding policy. Pass a
+        :class:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.HardwareBindingPolicy`
+        instance for fine-grained control.
+        Env: ``CUDF_POLARS__HARDWARE_BINDING`` (JSON object,
+        e.g. ``'{"enabled": false}'``).
+        Default: ``HardwareBindingPolicy()``.
         Category: engine.
 
     Examples
@@ -300,12 +326,13 @@ class StreamingOptions:
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
-    memory_resource_config: dict[str, Any] | MemoryResourceConfig | Unspecified = _opt(
-        "engine"
+    memory_resource_config: MemoryResourceConfig | Unspecified = _opt("engine")
+    cuda_stream_policy: Literal["default", "pool"] | dict[str, Any] | Unspecified = (
+        _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
     )
-    cuda_stream_policy: (
-        Literal["default", "new", "pool"] | dict[str, Any] | Unspecified
-    ) = _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
+    hardware_binding: HardwareBindingPolicy | Unspecified = _opt(
+        "engine", "CUDF_POLARS__HARDWARE_BINDING", _parse_hardware_binding
+    )
 
     # ------------------------------------------------------------------
     # Conversion helpers used by the engines
@@ -463,6 +490,7 @@ class StreamingOptions:
             pinned_initial_pool_size=_get("pinned_initial_pool_size"),
             spill_device_limit=_get("spill_device_limit"),
             periodic_spill_check=_get("periodic_spill_check"),
+            hardware_binding=_get("hardware_binding"),
             num_py_executors=_get("num_py_executors"),
             fallback_mode=_get("fallback_mode"),
             max_rows_per_partition=_get("max_rows_per_partition"),
@@ -588,13 +616,24 @@ class StreamingOptions:
                 Env: RAPIDSMPF_PERIODIC_SPILL_CHECK. Built-in default: 1ms."""),
         )
         g.add_argument(
+            "--hardware-binding",
+            dest="hardware_binding",
+            default=None,
+            type=_parse_hardware_binding,
+            help=textwrap.dedent("""\
+                Hardware binding policy as a JSON object
+                (e.g. '{"enabled": false}', '{"raise_on_fail": true}').
+                Env: CUDF_POLARS__HARDWARE_BINDING.
+                Built-in default: enabled with auto GPU detection."""),
+        )
+        g.add_argument(
             "--num-py-executors",
             dest="num_py_executors",
             default=None,
             type=int,
             help=textwrap.dedent("""\
                 Max workers for the Python ThreadPoolExecutor inside RapidsMPF.
-                Env: CUDF_POLARS__EXECUTOR__NUM_PY_EXECUTORS.
+                Env: CUDF_POLARS__NUM_PY_EXECUTORS.
                 Built-in default: 1."""),
         )
         g.add_argument(
@@ -686,7 +725,7 @@ class StreamingOptions:
             "--memory-resource-config",
             dest="memory_resource_config",
             default=None,
-            type=json.loads,
+            type=_parse_memory_resource_config,
             help=textwrap.dedent("""\
                 RMM memory resource configuration as a JSON object.
                 Env: CUDF_POLARS__MEMORY_RESOURCE_CONFIG__*."""),

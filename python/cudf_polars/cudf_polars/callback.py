@@ -301,7 +301,7 @@ def _callback(
         ),
     ):
         if config_options.executor.name == "in-memory":
-            context = IRExecutionContext.from_config_options(config_options)
+            context = IRExecutionContext()
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
             if timer is None:
                 return df
