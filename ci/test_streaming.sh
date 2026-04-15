@@ -37,7 +37,7 @@ set +e
 
 rapids-logger "Run C++ tests"
 
-ctest --test-dir "$STREAM_TESTS/bin/gtests/libcudf"
+ctest --test-dir "$STREAM_TESTS/bin/gtests/libcudf" --output-on-failure
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
