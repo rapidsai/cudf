@@ -18,6 +18,8 @@
 #include <cuda/std/cstddef>
 
 #include <memory>
+#include <string>
+#include <string_view>
 
 namespace CUDF_EXPORT cudf {
 
@@ -181,6 +183,44 @@ class roaring_bitmap {
   roaring_bitmap_type _type;
   std::unique_ptr<roaring_bitmap_impl> _impl;
 };
+
+namespace iceberg {
+
+/**
+ * @brief Checks whether a portable serialized deletion vector payload is already in a
+ * normalized format accepted by `cudf::roaring_bitmap`
+ *
+ * A deletion vector payload is considered normalized when every embedded 32-bit bucket uses the
+ * no-run cookie and includes the offset table. Run-encoded bitmaps or no-run bitmaps with fewer
+ * than 4 containers (which omit the offset table per the portable spec) are not considered
+ * normalized.
+ *
+ * @param type The bitmap key type (BITS_32 or BITS_64)
+ * @param payload A string view over the serialized Puffin blob bytes
+ * @return Whether the payload is already normalized
+ *
+ * @throws cudf::logic_error if the payload is too small or contains an invalid cookie
+ */
+[[nodiscard]] bool is_roaring_bitmap_normalized(roaring_bitmap_type type, std::string_view payload);
+
+/**
+ * @brief Normalizes a portable serialized deletion vector payload into the normalized format
+ * accepted by `cudf::roaring_bitmap`
+ *
+ * This converts all embedded 32-bit run-encoded containers to array/bitset format and injects
+ * the offset table when it is missing (fewer than 4 containers). If the payload is already
+ * normalized this function returns a copy of the input.
+ *
+ * @param type The bitmap key type (BITS_32 or BITS_64)
+ * @param payload A string view over the serialized Puffin blob bytes
+ * @return A normalized copy of the payload
+ *
+ * @throws cudf::logic_error if the payload is too small or contains an invalid cookie
+ */
+[[nodiscard]] std::string normalize_roaring_bitmap(roaring_bitmap_type type,
+                                                   std::string_view payload);
+
+}  // namespace iceberg
 
 /** @} */  // end of group
 
