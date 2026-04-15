@@ -33,6 +33,10 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     check_reserved_keys,
     execute_ir_on_rank,
 )
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
+)
 from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
@@ -168,6 +172,15 @@ class RankActor:
     num_py_executors
         Maximum number of threads for the actor's Python thread-pool executor.
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
+    hardware_binding
+        Policy controlling topology-aware hardware binding.
+
+    Notes
+    -----
+    Calls :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.
     """
 
     def __init__(
@@ -176,8 +189,10 @@ class RankActor:
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
         num_py_executors: int,
-        memory_resource_config: MemoryResourceConfig | None = None,
+        hardware_binding: HardwareBindingPolicy,
+        memory_resource_config: MemoryResourceConfig | None,
     ) -> None:
+        bind_to_gpu(hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
             if memory_resource_config is not None
@@ -454,6 +469,7 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
+        hw_binding = engine_options.get("hardware_binding", HardwareBindingPolicy())
 
         mr_config: MemoryResourceConfig | None = engine_options.get(
             "memory_resource_config", None
@@ -489,6 +505,7 @@ class RayEngine(StreamingEngine):
                         int,
                         executor_options.get("num_py_executors", 1),
                     ),
+                    hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
                 )
                 for _ in range(num_gpus)
