@@ -106,6 +106,50 @@ template <typename Iter>
 [[maybe_unused]] static auto no_nulls() { return cuda::make_constant_iterator(true); }
 
 /**
+ * @brief Bool iterator for marking null elements at every multiple of n.
+ *
+ * The returned iterator yields `false` (to mark `null`) at indices 0, n, 2n, ...,
+ * and yields `true` (to mark valid rows) for all other indices. E.g.
+ *
+ * @code
+ * auto iter = nulls_at_multiples_of(3);
+ * iter[0] == false; // i.e. Invalid (null) row at index 0.
+ * iter[1] == true;  // i.e. Valid row at index 1.
+ * iter[2] == true;  // i.e. Valid row at index 2.
+ * iter[3] == false; // i.e. Invalid (null) row at index 3.
+ * @endcode
+ *
+ * @param n The period at which nulls occur (nulls at indices 0, n, 2n, ...)
+ * @return auto Validity iterator
+ */
+[[maybe_unused]] static auto nulls_at_multiples_of(cudf::size_type n)
+{
+  return cudf::detail::make_counting_transform_iterator(0, [n](auto i) { return (i % n) != 0; });
+}
+
+/**
+ * @brief Bool iterator for marking valid elements only at multiples of n, null elsewhere.
+ *
+ * The returned iterator yields `true` (to mark valid rows) at indices 0, n, 2n, ...,
+ * and yields `false` (to mark `null`) for all other indices. E.g.
+ *
+ * @code
+ * auto iter = valids_at_multiples_of(3);
+ * iter[0] == true;  // i.e. Valid row at index 0.
+ * iter[1] == false; // i.e. Invalid (null) row at index 1.
+ * iter[2] == false; // i.e. Invalid (null) row at index 2.
+ * iter[3] == true;  // i.e. Valid row at index 3.
+ * @endcode
+ *
+ * @param n The period at which valid elements occur (valid at indices 0, n, 2n, ...)
+ * @return auto Validity iterator
+ */
+[[maybe_unused]] static auto valids_at_multiples_of(cudf::size_type n)
+{
+  return cudf::detail::make_counting_transform_iterator(0, [n](auto i) { return (i % n) == 0; });
+}
+
+/**
  * @brief Bool iterator for marking null elements from pointers of data
  *
  * The returned iterator yields `false` (to mark `null`) at the indices corresponding to the
