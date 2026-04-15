@@ -911,7 +911,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                    "Predicate filter should return a boolean");
       // Exclude columns present in filter only in output
-      auto output_table = cudf::detail::apply_boolean_mask(
+      auto output_table = cudf::detail::apply_mask(
         cudf::detail::mask_type::RETENTION, only_output, *predicate, _stream, _mr);
       return {std::move(output_table), std::move(out_metadata)};
     } else {

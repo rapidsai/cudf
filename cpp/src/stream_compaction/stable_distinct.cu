@@ -60,7 +60,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
     return markers;
   }();
 
-  return cudf::detail::apply_boolean_mask(
+  return cudf::detail::apply_mask(
     mask_type::RETENTION, input, cudf::device_span<bool const>(output_markers), stream, mr);
 }
 

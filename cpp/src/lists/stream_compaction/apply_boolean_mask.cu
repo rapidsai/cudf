@@ -60,13 +60,12 @@ std::unique_ptr<column> apply_boolean_mask(cudf::detail::mask_type mask_kind,
   auto const boolean_mask_sliced_child = boolean_mask.get_sliced_child(stream);
 
   auto const make_filtered_child = [&] {
-    auto filtered =
-      cudf::detail::apply_boolean_mask(mask_kind,
-                                       cudf::table_view{{input.get_sliced_child(stream)}},
-                                       boolean_mask_sliced_child,
-                                       stream,
-                                       mr)
-        ->release();
+    auto filtered = cudf::detail::apply_mask(mask_kind,
+                                             cudf::table_view{{input.get_sliced_child(stream)}},
+                                             boolean_mask_sliced_child,
+                                             stream,
+                                             mr)
+                      ->release();
     return std::move(filtered.front());
   };
 
@@ -85,17 +84,17 @@ std::unique_ptr<column> apply_boolean_mask(cudf::detail::mask_type mask_kind,
                                              cudf::get_current_device_resource_ref());
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, size_type{0});
-
-    auto output_offsets = cudf::make_numeric_column(
+    auto output_offsets    = cudf::make_numeric_column(
       offset_data_type, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
     auto output_offsets_view = output_offsets->mutable_view();
 
     if (mask_kind == cudf::detail::mask_type::RETENTION) {
-      auto const sizes_end = sizes_begin + sizes->size();
+      // Could have attempted an exclusive_scan(), but it would not compute the last entry.
+      // Instead, inclusive_scan(), followed by writing `0` to the head of the offsets column.
       thrust::inclusive_scan(
         rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         sizes_begin,
-        sizes_end,
+        sizes_begin + sizes->size(),
         output_offsets_view.begin<size_type>() + 1);
     } else {
       auto input_sliced_offsets =
@@ -121,7 +120,6 @@ std::unique_ptr<column> apply_boolean_mask(cudf::detail::mask_type mask_kind,
                                  input.null_count(),
                                  cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
-
 }  // namespace detail
 
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
@@ -130,8 +128,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(
-    cudf::detail::mask_type::RETENTION, input, boolean_mask, stream, mr);
+  return detail::apply_mask(cudf::detail::mask_type::RETENTION, input, boolean_mask, stream, mr);
 }
 
 std::unique_ptr<column> apply_deletion_mask(lists_column_view const& input,
@@ -140,8 +137,7 @@ std::unique_ptr<column> apply_deletion_mask(lists_column_view const& input,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(
-    cudf::detail::mask_type::DELETION, input, deletion_mask, stream, mr);
+  return detail::apply_mask(cudf::detail::mask_type::DELETION, input, deletion_mask, stream, mr);
 }
 
 }  // namespace cudf::lists
