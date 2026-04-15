@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include "join/join_common_utils.hpp"
+
 #include <cudf/detail/join/join.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/types.hpp>

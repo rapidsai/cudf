@@ -191,10 +191,10 @@ class hash_join {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
-  template <join_kind Join>
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                           std::unique_ptr<rmm::device_uvector<size_type>>>
-  partitioned_join_retrieve(cudf::join_partition_context const& context,
+  partitioned_join_retrieve(join_kind join,
+                            cudf::join_partition_context const& context,
                             rmm::cuda_stream_view stream,
                             rmm::device_async_resource_ref mr) const;
 

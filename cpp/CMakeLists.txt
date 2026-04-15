@@ -606,6 +606,7 @@ add_library(
   src/join/hash_join/retrieve_outer.cu
   src/join/hash_join/partitioned_full_join.cu
   src/join/hash_join/partitioned_inner_join.cu
+  src/join/hash_join/partitioned_join_retrieve.cu
   src/join/hash_join/partitioned_left_join.cu
   src/join/hash_join/full_join_complement.cu
   src/join/mark_join.cu
