@@ -14,6 +14,8 @@
 
 #include <rmm/resource_ref.hpp>
 
+#include <cuda/memory_resource>
+
 namespace CUDF_EXPORT cudf {
 namespace test {
 
@@ -26,7 +28,7 @@ namespace test {
  * ```
  */
 class BaseFixture : public ::testing::Test {
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
+  cuda::mr::any_resource<cuda::mr::device_accessible> _mr{cudf::get_current_device_resource_ref()};
 
  public:
   /**
@@ -47,7 +49,7 @@ class BaseFixture : public ::testing::Test {
  */
 template <typename T>
 class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
-  rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
+  cuda::mr::any_resource<cuda::mr::device_accessible> _mr{cudf::get_current_device_resource_ref()};
 
  public:
   /**
