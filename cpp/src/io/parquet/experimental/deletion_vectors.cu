@@ -253,8 +253,18 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
     cudf::data_type{cudf::type_id::BOOL8}, num_rows, mask_state::UNALLOCATED, stream, mr);
   auto const row_mask_view = row_mask_column->mutable_view();
 
+  auto const invert_row_mask =
+    [](cudf::mutable_column_view const& row_mask_view, auto stream, auto mr) {
+      thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                        row_mask_view.begin<bool>(),
+                        row_mask_view.end<bool>(),
+                        row_mask_view.begin<bool>(),
+                        cuda::std::logical_not<bool>{});
+    };
+
   if (num_deletion_vectors == 1) {
-    deletion_vector_refs.front().get().not_contains_async(row_index_column, row_mask_view, stream);
+    deletion_vector_refs.front().get().contains_async(row_index_column, row_mask_view, stream);
+    invert_row_mask(row_mask_view, stream, mr);
     return row_mask_column;
   }
 
@@ -277,7 +287,7 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
                   [&](auto const dv_idx) {
                     auto const begin = deletion_vector_row_offsets[dv_idx];
                     auto const end   = deletion_vector_row_offsets[dv_idx + 1];
-                    deletion_vector_refs[dv_idx].get().not_contains_async(
+                    deletion_vector_refs[dv_idx].get().contains_async(
                       cudf::detail::slice(row_index_column, begin, end, streams[dv_idx]),
                       cudf::detail::slice(row_mask_view, begin, end, streams[dv_idx]),
                       streams[dv_idx]);
@@ -290,13 +300,14 @@ std::unique_ptr<cudf::column> compute_row_mask_column(
                   [&](auto const dv_idx) {
                     auto const begin = deletion_vector_row_offsets[dv_idx];
                     auto const end   = deletion_vector_row_offsets[dv_idx + 1];
-                    deletion_vector_refs[dv_idx].get().not_contains_async(
+                    deletion_vector_refs[dv_idx].get().contains_async(
                       cudf::detail::slice(row_index_column, begin, end, stream),
                       cudf::detail::slice(row_mask_view, begin, end, stream),
                       stream);
                   });
   }
 
+  invert_row_mask(row_mask_view, stream, mr);
   return row_mask_column;
 }
 

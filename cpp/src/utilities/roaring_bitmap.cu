@@ -140,29 +140,6 @@ void roaring_bitmap::contains_async(cudf::column_view const& keys,
   }
 }
 
-std::unique_ptr<cudf::column> roaring_bitmap::not_contains_async(
-  cudf::column_view const& keys,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr) const
-{
-  auto result = cudf::make_fixed_width_column(
-    cudf::data_type{cudf::type_id::BOOL8}, keys.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-  not_contains_async(keys, result->mutable_view(), stream);
-  return result;
-}
-
-void roaring_bitmap::not_contains_async(cudf::column_view const& keys,
-                                        cudf::mutable_column_view const& output,
-                                        rmm::cuda_stream_view stream) const
-{
-  contains_async(keys, output, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                    output.begin<bool>(),
-                    output.end<bool>(),
-                    output.begin<bool>(),
-                    cuda::std::logical_not<bool>{});
-}
-
 roaring_bitmap_type roaring_bitmap::type() const { return _type; }
 
 }  // namespace cudf
