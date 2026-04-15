@@ -207,7 +207,7 @@ def test_rolling_with_slice(engine_rolling) -> None:
 
 
 def test_rolling_no_cross_partition_halo(engine_rolling) -> None:
-    """Window narrow enough that HaloExchange is a no-op (gap between partitions > window)."""
+    """Narrow window so no cross partition rows enter the range (gap larger than window)."""
     df = pl.LazyFrame(
         {
             "idx": [1, 2, 3, 10, 11, 12],

@@ -7,37 +7,28 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from rapidsmpf.integrations.cudf.partition import unpack_and_concat
-from rapidsmpf.memory.packed_data import PackedData
-from rapidsmpf.streaming.coll.halo_exchange import HaloExchange
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
-from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import Rolling
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
-    allgather_reduce,
     process_children,
     recv_metadata,
     send_metadata,
     shutdown_on_error,
 )
-from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 
     from rmm.pylibrmm.stream import Stream
 
@@ -46,17 +37,7 @@ if TYPE_CHECKING:
 
 
 def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
-    """
-    Convert a raw polars ordinal to native column units.
-
-    Mirrors the unit conversion in ``duration_to_scalar``
-    (``dsl/utils/windows.py``): polars stores durations as nanosecond
-    ordinals; libcudf range-window bounds are in native column units
-    (microseconds for TIMESTAMP_MICROSECONDS, etc.).  Halo thresholds
-    are computed by casting the index column to INT64 via
-    ``_get_idx_col_i64``, which also yields epoch values in the same
-    native units, so the comparison is consistent.
-    """
+    """Map Polars duration ordinals (ns) to native index units. See ``duration_to_scalar``."""
     if type_id in (plc.TypeId.INT64, plc.TypeId.TIMESTAMP_NANOSECONDS):
         return ordinal
     elif type_id == plc.TypeId.TIMESTAMP_MICROSECONDS:
@@ -69,64 +50,6 @@ def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
         raise NotImplementedError(
             f"Unsupported index type {type_id!r} for rolling window halo exchange"
         )
-
-
-def _filter_relay_pd(
-    pd: PackedData,
-    index_col_idx: int,
-    type_id: plc.TypeId,
-    threshold: int,
-    stream: Stream,
-    br: Any,
-    *,
-    ge: bool,
-) -> PackedData | None:
-    """
-    Unpack, filter, and repack a halo payload for multi-hop relay.
-
-    Parameters
-    ----------
-    pd
-        Packed halo payload to filter.
-    index_col_idx
-        Column position of the rolling index within the table.
-    type_id
-        TypeId of the index column (used to cast to INT64 for comparisons).
-    threshold
-        Index threshold.  Rows with index >= threshold are kept when
-        ``ge=True``; rows with index <= threshold are kept when ``ge=False``.
-    stream
-        CUDA stream for all GPU operations.
-    br
-        Buffer resource used for memory allocation.
-    ge
-        If True keep rows >= threshold (relay rightward); else keep rows
-        <= threshold (relay leftward).
-
-    Returns
-    -------
-    Filtered and repacked payload, or None if no rows survive the filter.
-    """
-    i64 = plc.DataType(plc.TypeId.INT64)
-    bool8 = plc.DataType(plc.TypeId.BOOL8)
-    table = unpack_and_concat(partitions=[pd], stream=stream, br=br)
-    idx_col = _get_idx_col_i64(table, index_col_idx, type_id, i64, stream)
-    if ge:
-        filtered = _filter_ge(table, idx_col, threshold, i64, bool8, stream)
-    else:
-        filtered = _filter_le(table, idx_col, threshold, i64, bool8, stream)
-    return _pack_table(filtered, stream, br)
-
-
-def _pack_table(table: plc.Table, stream: Stream, br: Any) -> PackedData | None:
-    """Pack a plc.Table into PackedData; return None if the table is empty."""
-    if table.num_rows() == 0:
-        return None
-    return PackedData.from_cudf_packed_columns(
-        pack(table, stream=stream, mr=br.device_mr),
-        stream,
-        br,
-    )
 
 
 def _get_idx_col_i64(
@@ -189,172 +112,27 @@ def _filter_le(
     return plc.stream_compaction.apply_boolean_mask(table, mask, stream=stream)
 
 
-def _compute_send_halos(
-    mids: list[int],
-    sm: SpillableMessages,
-    index_col_idx: int,
-    type_id: plc.TypeId,
-    lookback: int,
-    lookahead: int,
-    get_stream: Callable[[], Stream],
-    br: Any,
-) -> tuple[PackedData | None, PackedData | None, int | None, int | None]:
-    """
-    Walk boundary chunks to build the inter-rank halo payloads.
-
-    send_right: walk backward from the last chunk.  The threshold is anchored
-    to the last chunk's max index: rows with index >= (last_max - lookback) are
-    needed by the right neighbor.  Walking stops once a chunk's max index falls
-    below the threshold (no earlier chunks can contribute qualifying rows).
-
-    send_left: symmetric walk forward from the first chunk with the threshold
-    anchored to the first chunk's min index.
-
-    Also returns ``(local_min, local_max)``: the min/max index values across all
-    local chunks, used by the caller to decide whether multi-hop relay is needed.
-
-    ``mids`` is updated in-place as chunks are extracted and re-inserted.
-    All GPU operations on a chunk's table view complete *before* re-insertion
-    so the spill manager cannot invalidate the view mid-operation.
-    Each chunk's own stream is used for its GPU operations; ``get_stream`` is
-    used only to join streams when combining filtered tables from multiple chunks.
-    """
-    n = len(mids)
-    i64 = plc.DataType(plc.TypeId.INT64)
-    bool8 = plc.DataType(plc.TypeId.BOOL8)
-
-    local_max: int | None = None  # max index of last non-empty chunk
-    local_min: int | None = None  # min index of first non-empty chunk
-
-    send_right: PackedData | None = None
-    if lookback > 0:
-        threshold_r: int | None = None
-        right_pairs: list[tuple[plc.Table, Stream]] = []
-        for i in range(n - 1, -1, -1):
-            chunk = TableChunk.from_message(sm.extract(mid=mids[i]))
-            chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-            table = chunk.table_view()
-            chunk_stream = chunk.stream
-            if table.num_rows() == 0:
-                mids[i] = sm.insert(Message(0, chunk))
-                continue
-            idx_col = _get_idx_col_i64(table, index_col_idx, type_id, i64, chunk_stream)
-            mn, mx = _minmax_py(idx_col, i64, chunk_stream)
-            if threshold_r is None:
-                threshold_r = mx - lookback
-                local_max = mx  # first iteration = last non-empty chunk
-            should_stop = mx < threshold_r
-            if not should_stop:
-                right_pairs.insert(
-                    0,
-                    (
-                        _filter_ge(
-                            table, idx_col, threshold_r, i64, bool8, chunk_stream
-                        ),
-                        chunk_stream,
-                    ),
-                )
-            mids[i] = sm.insert(Message(0, chunk))
-            if should_stop:
-                break
-        if right_pairs:
-            if len(right_pairs) == 1:
-                combined, combined_stream = right_pairs[0]
-            else:
-                combined_stream = get_joined_cuda_stream(
-                    get_stream, upstreams=[s for _, s in right_pairs]
-                )
-                combined = plc.concatenate.concatenate(
-                    [t for t, _ in right_pairs], stream=combined_stream
-                )
-            send_right = _pack_table(combined, combined_stream, br)
-
-    send_left: PackedData | None = None
-    if lookahead > 0:
-        threshold_l: int | None = None
-        left_pairs: list[tuple[plc.Table, Stream]] = []
-        for i in range(n):
-            chunk = TableChunk.from_message(sm.extract(mid=mids[i]))
-            chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-            table = chunk.table_view()
-            chunk_stream = chunk.stream
-            if table.num_rows() == 0:
-                mids[i] = sm.insert(Message(0, chunk))
-                continue
-            idx_col = _get_idx_col_i64(table, index_col_idx, type_id, i64, chunk_stream)
-            mn, mx = _minmax_py(idx_col, i64, chunk_stream)
-            if threshold_l is None:
-                threshold_l = mn + lookahead
-                local_min = mn  # first iteration = first non-empty chunk
-            should_stop = mn > threshold_l
-            if not should_stop:
-                left_pairs.append(
-                    (
-                        _filter_le(
-                            table, idx_col, threshold_l, i64, bool8, chunk_stream
-                        ),
-                        chunk_stream,
-                    )
-                )
-            mids[i] = sm.insert(Message(0, chunk))
-            if should_stop:
-                break
-        if left_pairs:
-            if len(left_pairs) == 1:
-                combined, combined_stream = left_pairs[0]
-            else:
-                combined_stream = get_joined_cuda_stream(
-                    get_stream, upstreams=[s for _, s in left_pairs]
-                )
-                combined = plc.concatenate.concatenate(
-                    [t for t, _ in left_pairs], stream=combined_stream
-                )
-            send_left = _pack_table(combined, combined_stream, br)
-
-    # If only one walk ran, scan the complementary boundary chunk for the missing bound
-    if local_max is not None and local_min is None:
-        # backward walk ran but not forward; peek at first non-empty chunk for local_min
-        for j in range(n):
-            chunk = TableChunk.from_message(sm.extract(mid=mids[j]))
-            chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-            table = chunk.table_view()
-            chunk_stream = chunk.stream
-            if table.num_rows() > 0:
-                idx_col = _get_idx_col_i64(
-                    table, index_col_idx, type_id, i64, chunk_stream
-                )
-                local_min, _ = _minmax_py(idx_col, i64, chunk_stream)
-                mids[j] = sm.insert(Message(0, chunk))
-                break
-            mids[j] = sm.insert(Message(0, chunk))
-    elif local_min is not None and local_max is None:
-        # forward walk ran but not backward; peek at last non-empty chunk for local_max
-        for j in range(n - 1, -1, -1):
-            chunk = TableChunk.from_message(sm.extract(mid=mids[j]))
-            chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-            table = chunk.table_view()
-            chunk_stream = chunk.stream
-            if table.num_rows() > 0:
-                idx_col = _get_idx_col_i64(
-                    table, index_col_idx, type_id, i64, chunk_stream
-                )
-                _, local_max = _minmax_py(idx_col, i64, chunk_stream)
-                mids[j] = sm.insert(Message(0, chunk))
-                break
-            mids[j] = sm.insert(Message(0, chunk))
-
-    return send_left, send_right, local_min, local_max
-
-
-async def _unpack_pds_to_table(
-    pds: list[PackedData], stream: Stream, br: Any
-) -> plc.Table | None:
-    """Unpack a list of PackedData into a single plc.Table, or None if empty."""
-    if not pds:
-        return None
-    return await asyncio.to_thread(
-        unpack_and_concat, partitions=pds, stream=stream, br=br
-    )
+@define_actor()
+async def prepare_rank_boundaries_actor(
+    context: Context,
+    comm: Communicator,
+    ir: Rolling,
+    ir_context: IRExecutionContext,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    collective_ids: list[int],
+) -> None:
+    """Forward sorted rolling input for single rank. Multi rank TBD (SparseAlltoall)."""
+    assert comm.nranks == 1
+    assert len(collective_ids) == 2
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ):
+        metadata_in = await recv_metadata(ch_in, context)
+        await send_metadata(ch_out, context, metadata_in)
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
 
 
 @define_actor()
@@ -365,21 +143,9 @@ async def rolling_actor(
     ir_context: IRExecutionContext,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
-    collective_ids: list[int],
 ) -> None:
-    """
-    Streaming distributed rolling window actor.
-
-    Algorithm
-    ---------
-    1. Buffer all incoming chunks as spillable messages.
-    2. Walk boundary chunks to compute inter-rank halo payloads.
-    3. HaloExchange loop (skipped for nranks==1).
-    4. Output loop: for each local chunk, build left/right context from the
-       sliding left-context accumulator and a lookahead peek at the next chunk,
-       evaluate Rolling, strip context rows, apply zlice, and send one result
-       chunk per input chunk.
-    """
+    """Buffer chunks, run range rolling, strip context rows, apply zlice."""
+    assert comm.nranks == 1
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
@@ -405,14 +171,6 @@ async def rolling_actor(
             await ch_out.drain(context)
             return
 
-        # Window parameters.
-        # IR field naming (see offsets_to_windows in dsl/utils/windows.py):
-        #   preceding_ordinal = Polars `offset`  (negative = look left)
-        #   following_ordinal = Polars `period`  (always positive)
-        # libcudf preceding = -offset, libcudf following = offset + period.
-        # Therefore:
-        #   lookback  (how far left  the halo must reach) = max(0, -offset)
-        #   lookahead (how far right the halo must reach) = max(0, offset + period)
         type_id = ir.index_dtype.id()
         preceding_native = _ordinal_to_native(type_id, ir.preceding_ordinal)
         following_native = _ordinal_to_native(type_id, ir.following_ordinal)
@@ -422,102 +180,13 @@ async def rolling_actor(
         i64 = plc.DataType(plc.TypeId.INT64)
         bool8 = plc.DataType(plc.TypeId.BOOL8)
 
-        # Inter-rank halo exchange (skipped for nranks == 1)
-        halo_left_pds: list[PackedData] = []
-        halo_right_pds: list[PackedData] = []
+        left_ctx_df: DataFrame | None = None
+        right_halo_df: DataFrame | None = None
 
-        if comm.nranks > 1:
-            send_left, send_right, local_min, local_max = _compute_send_halos(
-                mids,
-                sm,
-                index_col_idx,
-                type_id,
-                lookback,
-                lookahead,
-                ir_context.get_cuda_stream,  # factory; only used to join streams
-                br,
-            )
-
-            # Allocator (collectives/common.py) reserves [halo_exchange_id,
-            # allreduce_id] in that order; pop() from the back gives the
-            # allreduce ID first.
-            allreduce_id = collective_ids.pop()
-            halo_exchange_id = collective_ids.pop()
-            he = HaloExchange(context, comm, halo_exchange_id)
-
-            while True:
-                from_left, from_right = await he.exchange(send_left, send_right)
-                if from_left is not None:
-                    halo_left_pds.insert(0, from_left)
-                if from_right is not None:
-                    halo_right_pds.append(from_right)
-
-                # Relay with threshold filtering: only forward rows the next
-                # rank actually needs.  The threshold mirrors the one used when
-                # computing the initial send_right/send_left (anchored to this
-                # rank's local_max/local_min).  If nothing survives the filter
-                # the relay becomes None, terminating in O(lookback/range)
-                # rounds rather than O(N) ranks.
-                relay_stream = ir_context.get_cuda_stream()
-                relay_right: PackedData | None = None
-                if from_left is not None and local_max is not None:
-                    relay_right = await asyncio.to_thread(
-                        _filter_relay_pd,
-                        from_left,
-                        index_col_idx,
-                        type_id,
-                        local_max - lookback,
-                        relay_stream,
-                        br,
-                        ge=True,
-                    )
-                relay_left: PackedData | None = None
-                if from_right is not None and local_min is not None:
-                    relay_left = await asyncio.to_thread(
-                        _filter_relay_pd,
-                        from_right,
-                        index_col_idx,
-                        type_id,
-                        local_min + lookahead,
-                        relay_stream,
-                        br,
-                        ge=False,
-                    )
-
-                my_done = (relay_right is None) and (relay_left is None)
-                (total_done,) = await allgather_reduce(
-                    context, comm, allreduce_id, int(my_done)
-                )
-                if total_done == comm.nranks:
-                    break
-                send_right = relay_right
-                send_left = relay_left
-
-        # Unpack inter-rank halos into DataFrames (carry their streams)
-        halo_stream = ir_context.get_cuda_stream()
-        left_halo_table = await _unpack_pds_to_table(halo_left_pds, halo_stream, br)
-        right_halo_table = await _unpack_pds_to_table(halo_right_pds, halo_stream, br)
-
-        left_ctx_df: DataFrame | None = (
-            DataFrame.from_table(
-                left_halo_table, col_names, col_dtypes, stream=halo_stream
-            )
-            if left_halo_table is not None and left_halo_table.num_rows() > 0
-            else None
-        )
-        right_halo_df: DataFrame | None = (
-            DataFrame.from_table(
-                right_halo_table, col_names, col_dtypes, stream=halo_stream
-            )
-            if right_halo_table is not None and right_halo_table.num_rows() > 0
-            else None
-        )
-
-        # Chunkwise evaluation loop
         non_child_args_no_zlice = ir._non_child_args[:-1] + (None,)
         n_processed = 0  # running tally of input rows processed (for zlice)
         for i, mid in enumerate(mids):
-            chunk = TableChunk.from_message(sm.extract(mid=mid))
+            chunk = TableChunk.from_message(sm.extract(mid=mid), br)
             chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
             chunk_table = chunk.table_view()
             n_chunk_rows = chunk_table.num_rows()
@@ -563,7 +232,7 @@ async def rolling_actor(
             if i == n_chunks - 1:
                 right_ctx_df = right_halo_df
             elif lookahead > 0:
-                next_chunk = TableChunk.from_message(sm.extract(mid=mids[i + 1]))
+                next_chunk = TableChunk.from_message(sm.extract(mid=mids[i + 1]), br)
                 next_chunk = next_chunk.make_available_and_spill(
                     br, allow_overbooking=True
                 )
@@ -648,7 +317,10 @@ async def rolling_actor(
 
             if local_result_df is not None and local_result_df.num_rows > 0:
                 result_chunk = TableChunk.from_pylibcudf_table(
-                    local_result_df.table, local_result_df.stream, exclusive_view=True
+                    local_result_df.table,
+                    local_result_df.stream,
+                    exclusive_view=True,
+                    br=br,
                 )
                 if tracer is not None:
                     tracer.add_chunk(table=result_chunk.table_view())
@@ -661,22 +333,37 @@ async def rolling_actor(
 def _(
     ir: Rolling, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    """Generate streaming sub-network for a Rolling IR node."""
+    comm = rec.state["comm"]
     nodes, channels = process_children(ir, rec)
+    if comm.nranks > 1:
+        raise NotImplementedError(
+            "LazyFrame.rolling for multiple ranks needs SparseAlltoall "
+            "(https://github.com/rapidsai/rapidsmpf/pull/959)."
+        )
     channels[ir] = ChannelManager(rec.state["context"])
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
     assert len(collective_ids) == 2, (
         f"Rolling requires 2 collective IDs, got {len(collective_ids)}"
     )
+    ctx = rec.state["context"]
+    ch_rolling_in = ctx.create_channel()
     nodes[ir] = [
-        rolling_actor(
-            rec.state["context"],
-            rec.state["comm"],
+        prepare_rank_boundaries_actor(
+            ctx,
+            comm,
             ir,
             rec.state["ir_context"],
             ch_in=channels[ir.children[0]].reserve_output_slot(),
+            ch_out=ch_rolling_in,
+            collective_ids=list(collective_ids),
+        ),
+        rolling_actor(
+            ctx,
+            comm,
+            ir,
+            rec.state["ir_context"],
+            ch_in=ch_rolling_in,
             ch_out=channels[ir].reserve_input_slot(),
-            collective_ids=collective_ids,
-        )
+        ),
     ]
     return nodes, channels
