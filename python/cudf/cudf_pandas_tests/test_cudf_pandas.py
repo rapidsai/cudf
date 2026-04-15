@@ -28,7 +28,6 @@ from nbconvert.preprocessors import ExecutePreprocessor
 from numba import (
     vectorize,
 )
-from pytz import utc
 
 from rmm import RMMError
 
@@ -110,7 +109,7 @@ def array(series):
 
 @pytest.fixture(
     params=[
-        lambda group: group["a"].sum(),
+        lambda group: group["b"].sum(),
         lambda group: group.sum().apply(lambda val: [val]),
     ]
 )
@@ -300,14 +299,13 @@ def test_df_from_series(series):
     tm.assert_frame_equal(pd.DataFrame(psr), xpd.DataFrame(sr))
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Setting an item of incompatible dtype is deprecated"
-)
 def test_iloc_change_type(series):
+    # In pandas 3.0+, setting an item of incompatible dtype raises TypeError.
     psr, sr = series
-    psr.iloc[0] = "a"
-    sr.iloc[0] = "a"
-    tm.assert_series_equal(psr, sr)
+    with pytest.raises(TypeError):
+        psr.iloc[0] = "a"
+    with pytest.raises(TypeError):
+        sr.iloc[0] = "a"
 
 
 def test_rename_categories():
@@ -580,8 +578,9 @@ def test_groupby_apply_func_returns_series(dataframe):
 @pytest.mark.parametrize("data", [[1, 2, 3], ["a", None, "b"]])
 def test_pyarrow_array_construction(data):
     cudf_pandas_series = xpd.Series(data)
+    pandas_series = pd.Series(data)
     actual_pa_array = pa.array(cudf_pandas_series)
-    expected_pa_array = pa.array(data)
+    expected_pa_array = pa.array(pandas_series)
     assert actual_pa_array.equals(expected_pa_array)
 
 
@@ -1449,10 +1448,10 @@ def test_holidays_within_dates(holiday, start, expected):
     # Verify that timezone info is preserved.
     assert list(
         holiday.dates(
-            utc.localize(xpd.Timestamp(start)),
-            utc.localize(xpd.Timestamp(start)),
+            xpd.Timestamp(start, tz="UTC"),
+            xpd.Timestamp(start, tz="UTC"),
         )
-    ) == [utc.localize(dt) for dt in expected]
+    ) == [dt.tz_localize("UTC") for dt in expected]
 
 
 @pytest.mark.serial
@@ -1822,7 +1821,6 @@ def test_fallback_raises_specific_error(
         "_exceptions",
         "version",
         "_print_versions",
-        "capitalize_first_letter",
         "_validators",
         "_decorators",
     ],
