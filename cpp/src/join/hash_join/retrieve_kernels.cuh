@@ -20,8 +20,20 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
-#include <cuco/detail/utils.cuh>
+#include <cuda/std/bit>
 #include <thrust/scan.h>
+
+namespace {
+
+/**
+ * @brief Count the number of set bits below a given position in a bitmask.
+ */
+__device__ __forceinline__ int count_lower_set_bits(unsigned int mask, int pos)
+{
+  return cuda::std::popcount(mask & ((1u << pos) - 1));
+}
+
+}  // namespace
 
 namespace cudf::detail {
 
@@ -78,11 +90,10 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 
         for (int i = 0; i < bucket_size; ++i) {
           auto const match_mask  = tile.ballot(equals[i]);
-          auto const num_matches = __popc(match_mask);
+          auto const num_matches = cuda::std::popcount(match_mask);
 
           if (equals[i]) {
-            auto const lane_offset =
-              cuco::detail::count_least_significant_bits(match_mask, tile.thread_rank());
+            auto const lane_offset = count_lower_set_bits(match_mask, tile.thread_rank());
             left_output[write_pos + lane_offset]  = left_index;
             right_output[write_pos + lane_offset] = bucket_slots[i].second;
             if constexpr (IsOuter) { found_match = true; }
