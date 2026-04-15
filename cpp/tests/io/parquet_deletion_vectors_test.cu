@@ -443,7 +443,8 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
 
   // Validate
   stream.synchronize();
-  EXPECT_TRUE(std::equal(results.begin(), results.end(), is_even));
+  EXPECT_TRUE(std::equal(
+    results.begin(), results.end(), cudf::detail::make_counting_transform_iterator(0, is_even)));
 }
 
 // Base test fixture for API tests
