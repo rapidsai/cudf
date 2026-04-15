@@ -908,8 +908,18 @@ def date_range(
     if freq is None:
         # `start`, `end`, `periods` is specified, we treat the timestamps as
         # integers and divide the number range evenly with `periods` elements.
-        start = dtype.type(start, _unit).astype(np.dtype(np.int64))
-        end = dtype.type(end, _unit).astype(np.dtype(np.int64))
+        start = (
+            pd.Timestamp(start)
+            .as_unit(_unit)
+            .to_numpy()
+            .astype(np.dtype(np.int64))
+        )
+        end = (
+            pd.Timestamp(end)
+            .as_unit(_unit)
+            .to_numpy()
+            .astype(np.dtype(np.int64))
+        )
         arr = np.linspace(start=start, stop=end, num=periods).astype(dtype)
         result = as_column(arr)
         return DatetimeIndex._from_column(result, name=name).tz_localize(tz)
@@ -945,13 +955,13 @@ def date_range(
     _periods_not_specified = False
 
     if start is None:
-        end = dtype.type(end, _unit)
+        end = pd.Timestamp(end).as_unit(_unit).to_numpy()
         start = (
             pd.Timestamp(end)
             - (periods - 1) * offset._maybe_as_fast_pandas_offset()
         ).to_numpy()
     elif end is None:
-        start = dtype.type(start, _unit)
+        start = pd.Timestamp(start).as_unit(_unit).to_numpy()
     elif periods is None:
         # When `periods` is unspecified, its upper bound estimated by
         # dividing the number of timestamps between two timestamps with
