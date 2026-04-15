@@ -367,9 +367,9 @@ class option_context(ContextDecorator):
             )
 
         self.ops = tuple(zip(args[::2], args[1::2], strict=True))
+        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
 
     def __enter__(self) -> None:
-        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
         for pat, val in self.ops:
             set_option(pat, val)
 

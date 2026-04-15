@@ -400,6 +400,23 @@ Series = make_final_proxy_type(
 )
 
 
+def _Index_values(self):
+    from cudf.utils.dtypes import is_pandas_nullable_extension_dtype
+
+    # For nullable integer dtypes (Int8/Int16/Int32/Int64/UInt8/.../UInt64),
+    # cudf's .values returns a plain ndarray, but pandas returns an
+    # IntegerArray (ExtensionArray) that supports NA values.  Using the cudf
+    # fast path here produces the wrong result type, so we always use the
+    # slow (pandas) path for these dtypes.
+    # Access dtype directly from the wrapped object to stay out of the proxy
+    # dispatch path and to avoid mutating the proxy state.
+    dtype = self._fsproxy_wrapped.dtype
+    if is_pandas_nullable_extension_dtype(dtype):
+        slow = self._fsproxy_fast_to_slow()
+        return _maybe_wrap_result(slow.values, None)
+    return _fast_slow_function_call(getattr, None, self, "values")[0]
+
+
 def Index__new__(cls, *args, **kwargs):
     # Call fast/slow constructor
     # This takes care of running __init__ as well, but must be paired
@@ -461,6 +478,7 @@ Index = make_final_proxy_type(
         # TODO: Handle special cases like mergesort being unsupported
         # and raising for certain types like Categorical and RangeIndex
         "argsort": _argsort,
+        "values": property(_Index_values),
     },
 )
 

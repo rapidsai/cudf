@@ -41,6 +41,12 @@ if [ ! -d "pandas-tests" ]; then
     # imports fail if we don't do this:
     mkdir -p pandas-tests
     cp -r pandas/pandas/tests pandas-tests/
+    # Some tests navigate up from tests/ and reference data files in sibling
+    # directories (e.g. tests/io/formats/style/test_html.py looks for
+    # io/formats/templates/ five levels above the test file).  Copy those
+    # non-test data directories so that the expected relative paths resolve.
+    mkdir -p pandas-tests/io/formats
+    cp -r pandas/pandas/io/formats/templates pandas-tests/io/formats/templates
     # directory layout requirement
     # conftest.py
     # pyproject.toml
@@ -68,14 +74,20 @@ EOF
     for hit in $(find pandas-tests -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
         test_module=$(echo "$hit" | cut -d "/" -f 2-)
-        # Get the number of directories to go up
+        # Count directory separators to find how many levels to go up.
+        # The sed pattern replaces "pandas.tests." (including the trailing dot)
+        # with N dots, where N equals the number of path components in test_module.
+        # E.g. tests/test_col.py (1 slash) -> 1 dot, tests/frame/f.py (2 slashes) -> 2 dots.
         num_dirs="${test_module//[^\/]/}"
         num_dirs="${#num_dirs}"
-        num_dots=$((num_dirs - 1))
-        # Construct the relative import
-        relative_import=$(printf "%0.s." $(seq 1 $num_dots))
-        # Replace the import
-        sed -i "s/pandas.tests/${relative_import}/g" "$hit"
+        # Build exactly num_dirs dots (0 dots is valid for num_dirs=0).
+        relative_import=""
+        for _i in $(seq 1 $num_dirs); do
+            relative_import="${relative_import}."
+        done
+        # Replace "pandas.tests." (including trailing dot) so the replacement
+        # dots are not combined with an extra dot left by the old pattern.
+        sed -i "s/pandas\.tests\./${relative_import}/g" "$hit"
     done
 fi
 
@@ -187,6 +199,5 @@ PANDAS_CI="1" python -m pytest -p cudf.pandas \
 
 mv ./*.json ..
 cd ..
-rm -rf pandas-tests/
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
