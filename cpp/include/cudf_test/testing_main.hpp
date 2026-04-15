@@ -189,10 +189,7 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
 /**
  * @brief Sets up the memory resource for the test run.
  *
- * The caller must keep the return object alive for the life of the test runs.
- *
  * @param config Command line options returned by parse_cudf_test_opts
- * @return The owning any_resource for the test memory resource
  */
 inline auto make_memory_resource_adaptor(cudf::test::config const& config)
 {
@@ -207,10 +204,7 @@ inline auto make_memory_resource_adaptor(cudf::test::config const& config)
  * The resource adaptor is only set as the current device resource if the
  * stream mode is enabled.
  *
- * The caller must keep the return object alive for the life of the test runs.
- *
  * @param config Command line options returned by parse_cudf_test_opts
- * @return Memory resource adaptor
  */
 inline auto make_stream_mode_adaptor(cudf::test::config const& config)
 {
@@ -226,14 +220,13 @@ inline auto make_stream_mode_adaptor(cudf::test::config const& config)
 }
 
 /**
- * @brief Should be called in every test program that uses rmm allocators since it maintains the
- * lifespan of the rmm default memory resource. this function parses the command line to customize
- * test behavior, like the allocation mode used for creating the default memory resource.
+ * @brief Should be called in every test program that uses rmm allocators.
+ * Parses the command line to customize test behavior, like the allocation mode
+ * used for creating the default memory resource.
  *
  */
 inline void init_cudf_test(int argc, char** argv, cudf::test::config const& config_override = {})
 {
-  // static lifetime to keep rmm resource alive till tests end
   auto const cmd_opts       = parse_cudf_test_opts(argc, argv);
   cudf::test::config config = config_override;
   if (config.rmm_mode.empty()) { config.rmm_mode = cmd_opts["rmm_mode"].as<std::string>(); }
@@ -246,8 +239,8 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
     config.stream_error_mode = cmd_opts["stream_error_mode"].as<std::string>();
   }
 
-  [[maybe_unused]] static auto mr      = make_memory_resource_adaptor(config);
-  [[maybe_unused]] static auto adaptor = make_stream_mode_adaptor(config);
+  make_memory_resource_adaptor(config);
+  make_stream_mode_adaptor(config);
 }
 
 /**
