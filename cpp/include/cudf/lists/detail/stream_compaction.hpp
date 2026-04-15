@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -16,8 +17,11 @@ namespace lists::detail {
 
 /**
  * @copydoc cudf::lists::apply_boolean_mask
+ *
+ * @param mask_kind Specifies how the boolean mask is treated (deletions or retentions)
  */
-std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
+std::unique_ptr<column> apply_boolean_mask(cudf::detail::mask_type mask_kind,
+                                           lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr);

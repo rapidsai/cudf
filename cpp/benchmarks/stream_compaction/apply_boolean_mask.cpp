@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -73,6 +73,42 @@ void apply_boolean_mask_benchmark(nvbench::state& state, nvbench::type_list<Data
 using data_type = nvbench::type_list<int32_t, int64_t, double, cudf::string_view>;
 NVBENCH_BENCH_TYPES(apply_boolean_mask_benchmark, NVBENCH_TYPE_AXES(data_type))
   .set_name("apply_boolean_mask")
+  .set_type_axes_names({"type"})
+  .add_int64_axis("columns", {1, 4, 9})
+  .add_int64_axis("rows", {100'000, 1'000'000, 10'000'000})
+  .add_int64_axis("hits_%", {10, 20, 50, 80, 90, 100});
+
+template <typename DataType>
+void apply_deletion_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
+{
+  auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("rows"));
+  auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
+  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits_%"));
+
+  auto const input_type = cudf::type_to_id<DataType>();
+  data_profile profile  = data_profile_builder().cardinality(0).no_validity().distribution(
+    input_type, distribution_id::UNIFORM, 0, 20);
+
+  auto source_table = create_random_table(
+    cycle_dtypes({input_type, cudf::type_id::STRING}, n_cols), row_count{n_rows}, profile);
+
+  profile.set_bool_probability_true(percent_true / 100.0);
+  profile.set_null_probability(std::nullopt);  // no null mask
+  auto mask = create_random_column(cudf::type_id::BOOL8, row_count{n_rows}, profile);
+
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  calculate_bandwidth<DataType>(state);
+
+  state.exec(nvbench::exec_tag::sync, [&source_table, &mask](nvbench::launch& launch) {
+    cudf::apply_deletion_mask(*source_table, mask->view());
+  });
+
+  set_throughputs(state);
+}
+
+NVBENCH_BENCH_TYPES(apply_deletion_mask_benchmark, NVBENCH_TYPE_AXES(data_type))
+  .set_name("apply_deletion_mask")
   .set_type_axes_names({"type"})
   .add_int64_axis("columns", {1, 4, 9})
   .add_int64_axis("rows", {100'000, 1'000'000, 10'000'000})

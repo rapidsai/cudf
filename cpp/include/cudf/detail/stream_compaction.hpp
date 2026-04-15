@@ -15,6 +15,7 @@
 #include <rmm/device_uvector.hpp>
 
 namespace cudf {
+
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,
@@ -37,9 +38,21 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::apply_boolean_mask
+ * @brief Specifies how the boolean mask should be interpreted by the apply_boolean_mask and
+ * apply_deletion_mask detail APIs.
  */
-std::unique_ptr<table> apply_boolean_mask(table_view const& input,
+enum class mask_type : bool {
+  DELETIONS  = false,  ///< `true` elements in the boolean mask are deletions.
+  RETENTIONS = true,   ///< `true` elements in the boolean mask are retentions.
+};
+
+/**
+ * @copydoc cudf::apply_boolean_mask
+ *
+ * @param mask_kind Specifies how the boolean mask is treated (deletions or retentions)
+ */
+std::unique_ptr<table> apply_boolean_mask(mask_type mask_kind,
+                                          table_view const& input,
                                           column_view const& boolean_mask,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr);

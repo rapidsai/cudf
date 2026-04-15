@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -216,4 +216,72 @@ TEST_F(ApplyBooleanMaskTest, Failure)
                  cudf::logic_error);
   }
 }
+struct ApplyDeletionMaskTest : public BaseFixture {};
+
+template <typename T>
+struct ApplyDeletionMaskTypedTest : ApplyDeletionMaskTest {};
+
+TYPED_TEST_SUITE(ApplyDeletionMaskTypedTest, cudf::test::NumericTypes);
+
+using cudf::lists::apply_deletion_mask;
+
+TYPED_TEST(ApplyDeletionMaskTypedTest, StraightLine)
+{
+  using T    = TypeParam;
+  auto input = lists<T>{{0, 1, 2, 3}, {4, 5}, {6, 7, 8, 9}, {0, 1}, {2, 3, 4, 5}, {6, 7}}.release();
+  auto filter = filter_t{{1, 0, 1, 0}, {1, 0}, {1, 0, 1, 0}, {1, 0}, {1, 0, 1, 0}, {1, 0}};
+
+  {
+    auto filtered = apply_deletion_mask(lists_column_view{*input}, lists_column_view{filter});
+    auto expected = lists<T>{{1, 3}, {5}, {7, 9}, {1}, {3, 5}, {7}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*filtered, expected);
+  }
+}
+
+TYPED_TEST(ApplyDeletionMaskTypedTest, AllTrue)
+{
+  using T    = TypeParam;
+  auto input = lists<T>{{0, 1, 2}, {3, 4}};
+  auto mask  = filter_t{{1, 1, 1}, {1, 1}};
+
+  auto filtered = apply_deletion_mask(lists_column_view{input}, lists_column_view{mask});
+  auto expected = lists<T>{lists<T>{}, lists<T>{}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*filtered, expected);
+}
+
+TYPED_TEST(ApplyDeletionMaskTypedTest, AllFalse)
+{
+  using T     = TypeParam;
+  auto input  = lists<T>{{0, 1, 2}, {3, 4}};
+  auto filter = filter_t{{0, 0, 0}, {0, 0}};
+
+  auto filtered = apply_deletion_mask(lists_column_view{input}, lists_column_view{filter});
+  auto expected = lists<T>{{0, 1, 2}, {3, 4}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*filtered, expected);
+}
+
+TEST_F(ApplyDeletionMaskTest, Trivial)
+{
+  auto const input  = lists<int32_t>{};
+  auto const filter = filter_t{};
+  auto const result = apply_deletion_mask(lists_column_view{input}, lists_column_view{filter});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, lists<int32_t>{});
+}
+
+TEST_F(ApplyDeletionMaskTest, Failure)
+{
+  {
+    auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
+    auto const filter = lists<int32_t>{{0, 0, 0}};
+    EXPECT_THROW(apply_deletion_mask(lists_column_view{input}, lists_column_view{filter}),
+                 cudf::logic_error);
+  }
+  {
+    auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
+    auto const filter = filter_t{{0, 0, 0}};
+    EXPECT_THROW(apply_deletion_mask(lists_column_view{input}, lists_column_view{filter}),
+                 cudf::logic_error);
+  }
+}
+
 }  // namespace cudf::test
