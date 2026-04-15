@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -26,8 +28,11 @@ import pylibcudf as plc
 import rmm.mr
 from pylibcudf.contiguous_split import pack
 
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
+    all_gather_host_data,
     check_reserved_keys,
     execute_ir_on_rank,
 )
@@ -488,6 +493,19 @@ class SPMDEngine(StreamingEngine):
         if self._ctx is None:
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
+
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        return [ClusterInfo(**json.loads(r)) for r in results]
 
     def shutdown(self) -> None:
         """

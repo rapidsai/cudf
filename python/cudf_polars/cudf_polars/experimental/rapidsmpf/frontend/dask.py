@@ -8,7 +8,6 @@ import contextlib
 import dataclasses
 import functools
 import os
-import socket
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
@@ -32,6 +31,7 @@ import polars as pl
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
     execute_ir_on_rank,
@@ -646,30 +646,15 @@ class DaskEngine(StreamingEngine):
             raise RuntimeError("dask_context is not available after shutdown")
         return self._dask_context
 
-    def gather_cluster_info(self) -> list[dict]:
+    def gather_cluster_info(self) -> list[ClusterInfo]:
         """
-        Collect diagnostic information from every Dask worker.
+        Collect diagnostic information from every rank.
 
         Returns
         -------
-        List of info dicts, one per worker. Each dict contains
-        ``pid``, ``hostname``, and ``cuda_visible_devices``.
-
-        Examples
-        --------
-        >>> with DaskEngine() as engine:  # doctest: +SKIP
-        ...     for info in engine.gather_cluster_info():
-        ...         print(info)
+        List of :class:`ClusterInfo`, one per rank.
         """
-
-        def _get_info() -> dict:
-            return {
-                "pid": os.getpid(),
-                "hostname": socket.gethostname(),
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-            }
-
-        return list(self._dask_ctx.client.run(_get_info).values())
+        return list(self._dask_ctx.client.run(ClusterInfo.local).values())
 
     def shutdown(self) -> None:
         """

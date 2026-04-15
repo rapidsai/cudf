@@ -7,7 +7,6 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import os
-import socket
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -29,6 +28,7 @@ import polars as pl
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
     execute_ir_on_rank,
@@ -281,7 +281,7 @@ class RankActor:
         self._mr = None
         ray.actor.exit_actor()
 
-    def get_info(self) -> dict[str, Any]:
+    def get_info(self) -> ClusterInfo:
         """
         Return diagnostic information about actor placement.
 
@@ -289,12 +289,7 @@ class RankActor:
         -------
         Diagnostic information about this actor's placement and state.
         """
-        return {
-            "pid": os.getpid(),
-            "hostname": socket.gethostname(),
-            "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-            "node_id": ray.get_runtime_context().get_node_id(),
-        }
+        return ClusterInfo.local()
 
     def evaluate_polars_ir(
         self,
@@ -596,20 +591,13 @@ class RayEngine(StreamingEngine):
             raise RuntimeError("rank_actors is not available after shutdown")
         return self._rank_actors
 
-    def gather_cluster_info(self) -> list[dict]:
+    def gather_cluster_info(self) -> list[ClusterInfo]:
         """
-        Collect diagnostic information from every rank actor.
+        Collect diagnostic information from every rank.
 
         Returns
         -------
-        List of info dicts (see :meth:`RankActor.get_info`), one per rank
-        in rank order.
-
-        Examples
-        --------
-        >>> with RayEngine() as engine:  # doctest: +SKIP
-        ...     for i, info in enumerate(engine.gather_cluster_info()):
-        ...         print(f"rank {i}: {info}")
+        List of :class:`ClusterInfo`, one per rank.
         """
         return ray.get([rank.get_info.remote() for rank in self.rank_actors])
 

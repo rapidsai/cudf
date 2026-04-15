@@ -265,6 +265,11 @@ class StreamingOptions:
         e.g. ``'{"enabled": false}'``).
         Default: ``HardwareBindingPolicy()``.
         Category: engine.
+    allow_gpu_sharing
+        When ``False`` (default), the engine raises if multiple ranks share the same physical GPU.
+        Env: ``CUDF_POLARS__ALLOW_GPU_SHARING``.
+        Default: ``False``.
+        Category: engine.
 
     Examples
     --------
@@ -332,6 +337,9 @@ class StreamingOptions:
     )
     hardware_binding: HardwareBindingPolicy | Unspecified = _opt(
         "engine", "CUDF_POLARS__HARDWARE_BINDING", _parse_hardware_binding
+    )
+    allow_gpu_sharing: bool | Unspecified = _opt(
+        "engine", "CUDF_POLARS__ALLOW_GPU_SHARING", parse_boolean
     )
 
     # ------------------------------------------------------------------
