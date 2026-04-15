@@ -47,6 +47,54 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
 
 
+class ShuffleInserter:
+    """
+    Context manager for the insert phase of a shuffle operation.
+
+    Obtained via :meth:`ShuffleManager.inserting`. On exit, signals
+    the end of insertion to all ranks by calling ``insert_finished()``.
+
+    Parameters
+    ----------
+    manager: ShuffleManager
+        The shuffle manager to insert into.
+    """
+
+    def __init__(self, manager: ShuffleManager):
+        self._manager = manager
+
+    def insert_hash(self, chunk: TableChunk, columns_to_hash: tuple[int, ...]) -> None:
+        """Partition chunk by hash and insert into the shuffler."""
+        self._manager.shuffler.insert(
+            py_partition_and_pack(
+                table=chunk.table_view(),
+                columns_to_hash=columns_to_hash,
+                num_partitions=self._manager.num_partitions,
+                stream=chunk.stream,
+                br=self._manager.context.br(),
+            )
+        )
+
+    def insert_split(self, chunk: TableChunk, splits: list[int]) -> None:
+        """Split chunk at the given indices and insert into the shuffler."""
+        self._manager.shuffler.insert(
+            py_split_and_pack(
+                table=chunk.table_view(),
+                splits=splits,
+                stream=chunk.stream,
+                br=self._manager.context.br(),
+            )
+        )
+
+    async def __aenter__(self) -> ShuffleInserter:
+        """Enter the context manager."""
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        """Exit the context manager, calling ``insert_finished()``."""
+        await self._manager.shuffler.insert_finished(self._manager.context)
+
+
 class ShuffleManager:
     """
     ShufflerAsync manager.
@@ -86,44 +134,13 @@ class ShuffleManager:
             partition_assignment=partition_assignment,
         )
 
+    def inserting(self) -> ShuffleInserter:
+        """Return a context manager for the insert phase."""
+        return ShuffleInserter(self)
+
     def local_partitions(self) -> list[int]:
         """Get the local partition IDs for this rank."""
         return self.shuffler.local_partitions()
-
-    def insert_hash(self, chunk: TableChunk, columns_to_hash: tuple[int, ...]) -> None:
-        """Partition chunk by hash and insert into the shuffler."""
-        self.shuffler.insert(
-            py_partition_and_pack(
-                table=chunk.table_view(),
-                columns_to_hash=columns_to_hash,
-                num_partitions=self.num_partitions,
-                stream=chunk.stream,
-                br=self.context.br(),
-            )
-        )
-
-    def insert_split(self, chunk: TableChunk, splits: list[int]) -> None:
-        """Split chunk at the given indices and insert into the shuffler."""
-        self.shuffler.insert(
-            py_split_and_pack(
-                table=chunk.table_view(),
-                splits=splits,
-                stream=chunk.stream,
-                br=self.context.br(),
-            )
-        )
-
-    async def insert_finished(self) -> None:
-        """Insert finished into the ShuffleManager."""
-        await self.shuffler.insert_finished(self.context)
-
-    async def __aenter__(self) -> ShuffleManager:
-        """Enter the context manager."""
-        return self
-
-    async def __aexit__(self, *args: object) -> None:
-        """Exit the context manager, calling ``insert_finished()``."""
-        await self.insert_finished()
 
     def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
         """
@@ -234,10 +251,11 @@ async def _global_shuffle(
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    async with ShuffleManager(context, comm, num_partitions, collective_id) as shuffle:
+    shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
+    async with shuffle.inserting() as inserter:
         while (msg := await ch_in.recv(context)) is not None:
             if not skip_insert:
-                shuffle.insert_hash(
+                inserter.insert_hash(
                     TableChunk.from_message(
                         msg, br=context.br()
                     ).make_available_and_spill(context.br(), allow_overbooking=True),

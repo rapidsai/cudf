@@ -22,6 +22,62 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
 
+class AllGatherInserter:
+    """
+    Context manager for the insert phase of an AllGather operation.
+
+    Obtained via :meth:`AllGatherManager.inserting`. On exit, signals
+    the end of insertion to all ranks by calling ``insert_finished()``.
+
+    Parameters
+    ----------
+    manager: AllGatherManager
+        The AllGather manager to insert into.
+    """
+
+    def __init__(self, manager: AllGatherManager):
+        self._manager = manager
+
+    def insert(self, sequence_number: int, chunk: TableChunk) -> None:
+        """
+        Insert a chunk into the AllGather.
+
+        Parameters
+        ----------
+        sequence_number: int
+            The sequence number of the chunk to insert.
+        chunk: TableChunk
+            The table chunk to insert. Need not be GPU-resident; if spilled,
+            it will be made available internally.
+        """
+        chunk = chunk.make_available_and_spill(
+            self._manager.context.br(), allow_overbooking=True
+        )
+        self._manager.allgather.insert(
+            sequence_number,
+            # TODO: Avoid unnecessary copies.
+            # See https://github.com/rapidsai/rapidsmpf/issues/933
+            PackedData.from_cudf_packed_columns(
+                pack(
+                    chunk.table_view(),
+                    chunk.stream,
+                    mr=self._manager.context.br().device_mr,
+                ),
+                chunk.stream,
+                self._manager.context.br(),
+            ),
+        )
+        del chunk
+
+    def __enter__(self) -> AllGatherInserter:
+        """Enter the context manager."""
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        """Exit the context manager, calling ``insert_finished()``."""
+        self._manager.allgather.insert_finished()
+
+
 class AllGatherManager:
     """
     AllGather manager.
@@ -40,48 +96,9 @@ class AllGatherManager:
         self.context = context
         self.allgather = AllGather(self.context, comm, op_id)
 
-    def insert(self, sequence_number: int, chunk: TableChunk) -> None:
-        """
-        Insert a chunk into the AllGatherContext.
-
-        Parameters
-        ----------
-        sequence_number: int
-            The sequence number of the chunk to insert.
-        chunk: TableChunk
-            The table chunk to insert. Need not be GPU-resident; if spilled,
-            it will be made available internally.
-        """
-        chunk = chunk.make_available_and_spill(
-            self.context.br(), allow_overbooking=True
-        )
-        self.allgather.insert(
-            sequence_number,
-            # TODO: Avoid unnecessary copies.
-            # See https://github.com/rapidsai/rapidsmpf/issues/933
-            PackedData.from_cudf_packed_columns(
-                pack(
-                    chunk.table_view(),
-                    chunk.stream,
-                    mr=self.context.br().device_mr,
-                ),
-                chunk.stream,
-                self.context.br(),
-            ),
-        )
-        del chunk
-
-    def insert_finished(self) -> None:
-        """Insert finished into the AllGatherManager."""
-        self.allgather.insert_finished()
-
-    def __enter__(self) -> AllGatherManager:
-        """Enter the context manager."""
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        """Exit the context manager, calling ``insert_finished()``."""
-        self.insert_finished()
+    def inserting(self) -> AllGatherInserter:
+        """Return a context manager for the insert phase."""
+        return AllGatherInserter(self)
 
     async def extract_concatenated(
         self, stream: Stream, *, ordered: bool = True

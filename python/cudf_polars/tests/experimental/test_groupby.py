@@ -11,7 +11,7 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleInserter
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -319,7 +319,7 @@ def test_shuffle_reduce_insert_finished_called_on_oom(engine):
 
     df = pl.LazyFrame({"a": range(10), "b": range(10)})
     with (
-        patch.object(ShuffleManager, "insert_hash", foo),
+        patch.object(ShuffleInserter, "insert_hash", foo),
         pytest.raises(ExceptionGroup) as exc_info,
     ):
         df.group_by("a").agg(pl.col("b").sum()).collect(engine=engine)

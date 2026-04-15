@@ -133,8 +133,9 @@ async def _compute_sort_boundaries(
             exclusive_view=True,
             br=context.br(),
         )
-        with AllGatherManager(context, comm, allgather_id) as allgather:
-            allgather.insert(comm.rank, chunk)
+        allgather = AllGatherManager(context, comm, allgather_id)
+        with allgather.inserting() as inserter:
+            inserter.insert(comm.rank, chunk)
         concat_table = await allgather.extract_concatenated(stream, ordered=True)
         return _get_final_sort_boundaries(
             DataFrame.from_table(
@@ -288,13 +289,14 @@ async def _insert_chunks_into_shuffle(
     local_sort_ir = ir.children[0]
     assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
 
-    async with ShuffleManager(
+    shuffle = ShuffleManager(
         context,
         comm,
         num_partitions,
         collective_ids.pop(),
         partition_assignment=PartitionAssignment.CONTIGUOUS,
-    ) as shuffle:
+    )
+    async with shuffle.inserting() as inserter:
         for msg in chunk_store:
             if skip_insert:
                 continue
@@ -319,7 +321,7 @@ async def _insert_chunks_into_shuffle(
                 stream=stream,
                 chunk_relative=True,
             )
-            shuffle.insert_split(available_chunk, splits)
+            inserter.insert_split(available_chunk, splits)
 
     post_sort_ir = local_sort_ir
     if local_sort_ir.stable:
