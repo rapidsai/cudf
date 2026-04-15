@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for rolling window aggregations."""
@@ -98,17 +98,22 @@ def rewrite_rolling(
     preceding_ordinal = duration_to_int(plc_index_dtype, *options.rolling.offset)
     following_ordinal = duration_to_int(plc_index_dtype, *options.rolling.period)
 
-    if (n := len(keys)) > 0:
-        # Grouped rolling in polars sorts the output by the groups.
-        inp = ir.Sort(
-            inp.schema,
-            keys,
-            [plc.types.Order.ASCENDING] * n,
-            [plc.types.NullOrder.BEFORE] * n,
-            True,  # noqa: FBT003
-            None,
-            inp,
-        )
+    n = len(keys)
+    # Range rolling needs rows ordered by the rolling index (and group keys when present).
+    # Keep a single Sort here so rapidsmpf lowering can delegate to Sort without re-wrapping.
+    sort_by = (*keys, index) if n > 0 else (index,)
+    sort_order = (plc.types.Order.ASCENDING,) * len(sort_by)
+    sort_null_order = (plc.types.NullOrder.BEFORE,) * len(sort_by)
+    stable = n > 0
+    inp = ir.Sort(
+        inp.schema,
+        sort_by,
+        sort_order,
+        sort_null_order,
+        stable,
+        None,
+        inp,
+    )
     return apply_post_evaluation(
         ir.Rolling(
             rolling_schema,

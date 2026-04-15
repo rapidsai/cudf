@@ -6,9 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pylibcudf as plc
-
-from cudf_polars.dsl.ir import Rolling, Sort
+from cudf_polars.dsl.ir import Rolling
 from cudf_polars.experimental.dispatch import lower_ir_node
 from cudf_polars.experimental.utils import _lower_ir_fallback
 
@@ -33,23 +31,7 @@ def _(
             msg="Rolling with multiple partitions requires the rapidsmpf streaming backend.",
         )
 
-    # Delegate to Sort lowering, which handles local_sort → ShuffleSorted → final_sort
-    # (including the count==1 / dynamic-planning fast path and shuffle method selection).
-    sort_by = (*ir.keys, ir.index)
-    sort_order = tuple(plc.types.Order.ASCENDING for _ in sort_by)
-    sort_null_order = tuple(plc.types.NullOrder.BEFORE for _ in sort_by)
-
-    sort_node = Sort(
-        ir.children[0].schema,
-        sort_by,
-        sort_order,
-        sort_null_order,
-        stable=False,
-        zlice=None,
-        df=ir.children[0],
-    )
-    sorted_child, partition_info = rec(sort_node)
-
+    sorted_child, partition_info = rec(ir.children[0])
     new_rolling = ir.reconstruct([sorted_child])
     partition_info[new_rolling] = partition_info[sorted_child]
     return new_rolling, partition_info
