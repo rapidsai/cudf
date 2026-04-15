@@ -23,7 +23,11 @@
 // ---- constants (must match glushkov_regcomp.h) ----------------------------
 static constexpr int32_t GLUSHKOV_MAX_STATES_DEV = 64;
 static constexpr int32_t GLUSHKOV_MAX_SHIFTS_DEV = 8;
-using g_state_t                                  = uint64_t;
+#ifndef GLUSHKOV_ASCII_TABLE_SIZE_DEFINED
+#define GLUSHKOV_ASCII_TABLE_SIZE_DEFINED
+static constexpr int32_t GLUSHKOV_ASCII_TABLE_SIZE = 128;
+#endif
+using g_state_t = uint64_t;
 
 // ---------------------------------------------------------------------------
 // Per-position character-matching descriptor (device-side)
@@ -60,7 +64,7 @@ struct glushkov_program_device {
   g_state_t first_set{};       ///< Initial active positions (before first character)
   g_state_t accept_mask{};     ///< Positions whose match completes the pattern
   g_state_t exception_mask{};  ///< Positions with non-shift follow transitions
-  bool nullable{};             ///< Pattern matches empty string
+  bool nullable{};  ///< Always false when reached (nullable patterns fall back to Thompson)
   /// When true every first_set position is CHAR(startchar): enables a tight
   /// first-character byte-scan skip (mirrors Thompson NFA's find_char).
   bool has_startchar{};
@@ -72,8 +76,9 @@ struct glushkov_program_device {
   glushkov_position const* _positions{};  ///< [num_states] per-position descriptors
   g_state_t const* _shift_masks{};        ///< [shift_count] shift-and source masks
   uint8_t const* _shift_amounts{};        ///< [shift_count] shift amounts
-  g_state_t const* _reach_ascii{};        ///< [128] precomputed reach bitmasks for ASCII chars
-  g_state_t const* _exception_succs{};    ///< [num_states] exception successor masks
+  g_state_t const*
+    _reach_ascii{};  ///< [GLUSHKOV_ASCII_TABLE_SIZE] precomputed reach bitmasks for ASCII chars
+  g_state_t const* _exception_succs{};  ///< [num_states] exception successor masks
 
   std::size_t _prog_size{};  ///< Total buffer size (for potential shmem loading)
 };
@@ -92,7 +97,7 @@ struct glushkov_program_device {
  * Total size: ~1608 bytes — negligible impact on occupancy.
  */
 struct glushkov_shmem_cache {
-  g_state_t reach_ascii[128];                          ///< [128] precomputed ASCII reach masks
+  g_state_t reach_ascii[GLUSHKOV_ASCII_TABLE_SIZE];    ///< precomputed ASCII reach masks
   g_state_t shift_masks[GLUSHKOV_MAX_SHIFTS_DEV];      ///< [shift_count] shift-and source masks
   uint8_t shift_amounts[GLUSHKOV_MAX_SHIFTS_DEV];      ///< [shift_count] shift amounts
   g_state_t exception_succs[GLUSHKOV_MAX_STATES_DEV];  ///< [num_states] exception successor masks

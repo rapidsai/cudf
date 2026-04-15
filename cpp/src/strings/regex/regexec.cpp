@@ -52,7 +52,7 @@ reprog_device::reprog_device(reprog const& prog)
  *   [_positions    : num_states × glushkov_position]
  *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × g_state_t]
  *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS_DEV × uint8_t + padding]
- *   [_reach_ascii  : 128 × g_state_t]
+ *   [_reach_ascii  : GLUSHKOV_ASCII_TABLE_SIZE × g_state_t]
  *   [_exception_succs : num_states × g_state_t]
  *   [_classes : classes_count × reclass_device + variable-length literals]
  *
@@ -91,10 +91,10 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   std::size_t const samts_off = off;
   off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t);
 
-  // _reach_ascii: 8-byte aligned (128 × g_state_t = 1 KB)
+  // _reach_ascii: 8-byte aligned (GLUSHKOV_ASCII_TABLE_SIZE × g_state_t = 1 KB)
   off                               = cudf::util::round_up_unsafe(off, alignof(g_state_t));
   std::size_t const reach_ascii_off = off;
-  off += 128 * sizeof(g_state_t);
+  off += GLUSHKOV_ASCII_TABLE_SIZE * sizeof(g_state_t);
 
   // _exception_succs: 8-byte aligned
   off                       = cudf::util::round_up_unsafe(off, alignof(g_state_t));
@@ -153,7 +153,9 @@ create_glushkov_device(glushkov_host_program const& h_gp,
 
   // ---- _reach_ascii -------------------------------------------------------
   h_gp_dev->_reach_ascii = reinterpret_cast<g_state_t const*>(d_base + reach_ascii_off);
-  std::memcpy(h_base + reach_ascii_off, h_gp.reach_ascii.data(), 128 * sizeof(g_state_t));
+  std::memcpy(h_base + reach_ascii_off,
+              h_gp.reach_ascii.data(),
+              GLUSHKOV_ASCII_TABLE_SIZE * sizeof(g_state_t));
 
   // ---- _exception_succs ---------------------------------------------------
   h_gp_dev->_exception_succs = reinterpret_cast<g_state_t const*>(d_base + exc_off);
@@ -167,8 +169,8 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   for (int32_t ci = 0; ci < classes_cnt; ++ci) {
     auto const& src             = h_gp.classes[ci];
     *h_cls++                    = reclass_device{src.builtins,
-                              static_cast<int32_t>(src.literals.size()),
-                              reinterpret_cast<reclass_range const*>(d_lit)};
+                                                 static_cast<int32_t>(src.literals.size()),
+                                                 reinterpret_cast<reclass_range const*>(d_lit)};
     std::size_t const lit_bytes = src.literals.size() * sizeof(reclass_range);
     std::memcpy(h_lit, src.literals.data(), lit_bytes);
     h_lit += lit_bytes;
@@ -327,9 +329,7 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 }
 
 int32_t reprog_device::compute_shared_memory_size_thompson() const
-{
-  return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
-}
+{ return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0; }
 
 int32_t reprog_device::compute_shared_memory_size() const
 {
@@ -342,9 +342,7 @@ int32_t reprog_device::compute_shared_memory_size() const
 }
 
 std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count)
-{
-  return relist::alloc_size(insts_count, num_threads) * 2;
-}
+{ return relist::alloc_size(insts_count, num_threads) * 2; }
 
 }  // namespace detail
 }  // namespace strings

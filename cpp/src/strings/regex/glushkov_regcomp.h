@@ -41,6 +41,12 @@ constexpr int32_t GLUSHKOV_MAX_STATES = 64;
 /// Maximum shift amounts for the Hyperscan-style shift-and optimisation.
 constexpr int32_t GLUSHKOV_MAX_SHIFTS = 8;
 
+/// Size of the precomputed ASCII reach table (characters 0–127).
+#ifndef GLUSHKOV_ASCII_TABLE_SIZE_DEFINED
+#define GLUSHKOV_ASCII_TABLE_SIZE_DEFINED
+constexpr int32_t GLUSHKOV_ASCII_TABLE_SIZE = 128;
+#endif
+
 /// Bitmask type: bit i is set when Glushkov position i is active.
 using g_state_t = uint64_t;
 
@@ -104,7 +110,7 @@ struct glushkov_host_program {
   /// reach_ascii[c] = bitmask of positions that match ASCII character c.
   /// Built by build_glushkov_program after the follow table is complete.
   /// Non-ASCII characters are handled on-the-fly at match time.
-  std::array<g_state_t, 128> reach_ascii{};
+  std::array<g_state_t, GLUSHKOV_ASCII_TABLE_SIZE> reach_ascii{};
 };
 
 /**
@@ -113,6 +119,8 @@ struct glushkov_host_program {
  * Returns nullptr when the pattern cannot be handled by the Glushkov path:
  *   - Pattern contains zero-width assertions (BOL, EOL, BOW, NBOW).
  *   - Pattern has more than GLUSHKOV_MAX_STATES character-consuming positions.
+ *   - Pattern is nullable (matches the empty string): priority semantics cannot
+ *     be faithfully represented without an ε-position for the empty match.
  *
  * @param prog  Compiled Thompson NFA (after reprog::finalize()).
  * @return      Host-side Glushkov program, or nullptr on failure.

@@ -49,9 +49,7 @@ namespace {
 
 /// True for instructions that consume a character (Glushkov positions).
 bool is_char_consuming(int32_t const type)
-{
-  return type == CHAR || type == ANY || type == ANYNL || type == CCLASS || type == NCCLASS;
-}
+{ return type == CHAR || type == ANY || type == ANYNL || type == CCLASS || type == NCCLASS; }
 
 /**
  * @brief Returns true if ASCII character @p c matches the host-side character class @p cls.
@@ -84,9 +82,7 @@ bool host_reclass_match_ascii(reclass const& cls, uint8_t const c)
 
 /// True for zero-width assertion instructions (not handled by Glushkov path).
 bool is_assertion(int32_t const type)
-{
-  return type == BOL || type == EOL || type == BOW || type == NBOW;
-}
+{ return type == BOL || type == EOL || type == BOW || type == NBOW; }
 
 // ---------------------------------------------------------------------------
 // ε-closure traversal
@@ -232,7 +228,7 @@ bool position_matches_char(glushkov_host_program const& gp, uint32_t const p, ui
  */
 bool positions_chars_overlap(glushkov_host_program const& gp, uint32_t const p, uint32_t const q)
 {
-  for (int c = 0; c < 128; ++c) {
+  for (int c = 0; c < GLUSHKOV_ASCII_TABLE_SIZE; ++c) {
     if (position_matches_char(gp, p, static_cast<uint8_t>(c)) &&
         position_matches_char(gp, q, static_cast<uint8_t>(c))) {
       return true;
@@ -495,7 +491,7 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
   // For each ASCII character c (0-127), compute the bitmask of positions that
   // match c.  This converts the O(num_states) on-the-fly loop in
   // glushkov_compute_reach into a single array lookup for ASCII input.
-  for (uint8_t c = 0; c < 128; ++c) {
+  for (int32_t c = 0; c < GLUSHKOV_ASCII_TABLE_SIZE; ++c) {
     for (uint32_t p = 0; p < gp->num_states; ++p) {
       bool matches = false;
       switch (gp->pos_inst_type[p]) {
@@ -509,8 +505,9 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
         case ANYNL: matches = true; break;
         case CCLASS:
         case NCCLASS: {
-          bool const m = host_reclass_match_ascii(gp->classes[gp->pos_cls_idx[p]], c);
-          matches      = (gp->pos_inst_type[p] == CCLASS) ? m : !m;
+          bool const m =
+            host_reclass_match_ascii(gp->classes[gp->pos_cls_idx[p]], static_cast<uint8_t>(c));
+          matches = (gp->pos_inst_type[p] == CCLASS) ? m : !m;
           break;
         }
         default: break;
@@ -523,7 +520,7 @@ std::unique_ptr<glushkov_host_program> build_glushkov_program(reprog const& prog
   // When every position in first_set is a CHAR instruction for the same
   // literal, record that character so glushkov_find can use a tight byte-scan
   // (like Thompson NFA's find_char) instead of a reach-table lookup per byte.
-  if (!gp->nullable && gp->first_set != 0) {
+  if (gp->first_set != 0) {
     g_state_t fs    = gp->first_set;
     char32_t common = 0;
     bool all_char   = true;
