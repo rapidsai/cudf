@@ -367,15 +367,9 @@ class option_context(ContextDecorator):
             )
 
         self.ops = tuple(zip(args[::2], args[1::2], strict=True))
-        # Validate all option names eagerly so that when used through the
-        # cudf.pandas proxy, unknown options (e.g. pandas-only options) raise
-        # immediately in __init__ rather than in __enter__.  This lets
-        # _fast_slow_function_call fall back to the pandas implementation.
-        for pat, _ in self.ops:
-            get_option(pat)
+        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
 
     def __enter__(self) -> None:
-        self.undo = tuple((pat, get_option(pat)) for pat, _ in self.ops)
         for pat, val in self.ops:
             set_option(pat, val)
 

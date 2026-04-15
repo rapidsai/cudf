@@ -401,7 +401,7 @@ Series = make_final_proxy_type(
 
 
 def _Index_values(self):
-    from cudf.api.types import is_extension_array_dtype
+    from cudf.utils.dtypes import is_pandas_nullable_extension_dtype
 
     # For nullable integer dtypes (Int8/Int16/Int32/Int64/UInt8/.../UInt64),
     # cudf's .values returns a plain ndarray, but pandas returns an
@@ -411,7 +411,7 @@ def _Index_values(self):
     # Access dtype directly from the wrapped object to stay out of the proxy
     # dispatch path and to avoid mutating the proxy state.
     dtype = self._fsproxy_wrapped.dtype
-    if is_extension_array_dtype(dtype) and dtype.kind in ("i", "u"):
+    if is_pandas_nullable_extension_dtype(dtype):
         slow = self._fsproxy_fast_to_slow()
         return _maybe_wrap_result(slow.values, None)
     return _fast_slow_function_call(getattr, None, self, "values")[0]
