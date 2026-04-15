@@ -331,7 +331,7 @@ namespace {
  * @see AVG_CHAR_BYTES_THRESHOLD
  *
  * @param d_strings Column of input strings
- * @param d_target String to search for in seach row of `d_strings`
+ * @param d_target String to search for in each row of `d_strings`
  * @param d_results Indicates which rows contain `d_target`
  */
 
@@ -412,10 +412,10 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
   // Partition indices based on string length threshold (64 bytes)
   size_type const length_threshold = 64;
   rmm::device_uvector<size_type> indices(strings_count, stream);
-  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end(), 0);
+  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
 
   auto partition_point =
-    thrust::partition(rmm::exec_policy(stream),
+    thrust::partition(rmm::exec_policy_nosync(stream),
                       indices.begin(),
                       indices.end(),
                       [d_strings, length_threshold] __device__(size_type idx) {
@@ -435,7 +435,7 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
       return false;
     };
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       indices.begin(),
                       partition_point,
                       thrust::make_permutation_iterator(d_results, indices.begin()),
