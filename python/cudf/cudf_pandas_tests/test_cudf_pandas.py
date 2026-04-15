@@ -496,7 +496,7 @@ def test_groupby_grouper_fallback(dataframe, groupby_udf):
 
 
 def test_options_mode():
-    assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
+    assert xpd.options.mode.string_storage == pd.options.mode.string_storage
 
 
 # Codecov and Profiler interfere with each-other,
