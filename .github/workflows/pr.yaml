@@ -607,7 +607,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: cpu16
+      node_type: cpu8
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/build_streaming.sh
       artifact-name: streaming_tests
@@ -621,7 +621,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: cpu16
+      node_type: gpu-l4-latest-1
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/test_streaming.sh
 
