@@ -6,6 +6,7 @@
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/copying.hpp>

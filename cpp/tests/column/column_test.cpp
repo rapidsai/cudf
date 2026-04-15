@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -610,11 +611,9 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
 
 TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
-  auto expect_valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
+  auto expect_valids = cudf::test::iterators::nulls_at_multiples_of(2);
 
   using LCW = cudf::test::lists_column_wrapper<TypeParam>;
 

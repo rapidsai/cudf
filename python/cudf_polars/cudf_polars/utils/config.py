@@ -1044,6 +1044,7 @@ class ConfigOptions(Generic[ExecutorType]):
             "raise_on_fail",
             "memory_resource_config",
             "cuda_stream_policy",
+            "hardware_binding",
         }
 
         extra_options = set(engine.config.keys()) - valid_options
