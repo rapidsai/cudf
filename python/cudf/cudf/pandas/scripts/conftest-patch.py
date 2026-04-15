@@ -4794,7 +4794,6 @@ NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS = {
     "tests/io/formats/style/test_format.py::test_format_clear[format_index-_display_funcs_columns-kwargs2]",
     "tests/io/formats/style/test_html.py::test_from_custom_template_style",
     "tests/io/formats/style/test_html.py::test_from_custom_template_table",
-    "tests/io/formats/style/test_html.py::test_html_template_extends_options",
     "tests/io/formats/style/test_html.py::test_replaced_css_class_names",
     "tests/io/formats/style/test_style.py::TestStyler::test_caption",
     "tests/io/formats/style/test_style.py::TestStyler::test_non_reducing_multi_slice_on_multiindex[slice_7]",
