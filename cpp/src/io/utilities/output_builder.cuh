@@ -328,8 +328,11 @@ class output_builder {
     rmm::device_uvector<T> output{size(), stream, mr};
     auto output_it = output.begin();
     for (auto const& chunk : _chunks) {
-      output_it = thrust::copy(
-        rmm::exec_policy_nosync(stream), chunk.begin(), chunk.begin() + chunk.size(), output_it);
+      output_it =
+        thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     chunk.begin(),
+                     chunk.begin() + chunk.size(),
+                     output_it);
     }
     return output;
   }

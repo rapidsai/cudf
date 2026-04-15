@@ -16,7 +16,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import HStack, Projection, Select
+from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 from cudf_polars.experimental.rapidsmpf.utils import (
     NormalizedPartitioning,
@@ -269,6 +269,34 @@ def test_remap_partitioning_select_preserves_keys(engine) -> None:
     assert result is not None
     assert result.inter_rank is not None
     assert result.inter_rank.column_indices == (0, 1)
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_groupby(engine) -> None:
+    """Hash indices refer to the groupby input child; remap to groupby output columns."""
+    q = (
+        pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+        .group_by("a", "b")
+        .agg(pl.col("c").sum())
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    while isinstance(ir, (Select, Projection)):
+        ir = ir.children[0]
+    assert isinstance(ir, GroupBy)
+
+    gb = ir
+    key_names = tuple(ne.name for ne in gb.keys)
+    child_cols = list(gb.children[0].schema.keys())
+    input_indices = tuple(child_cols.index(n) for n in key_names)
+    out_cols = list(gb.schema.keys())
+    expected = tuple(out_cols.index(n) for n in key_names)
+
+    part = Partitioning(inter_rank=HashScheme(input_indices, 8), local="inherit")
+    result = maybe_remap_partitioning(gb, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == expected
     assert result.inter_rank.modulus == 8
     assert result.local == "inherit"
 

@@ -110,6 +110,17 @@ TYPED_TEST(SegmentedGatherTest, GatherNothing)
   }
 }
 
+using SegmentedGatherTestSingle = SegmentedGatherTest<int32_t>;
+TEST_F(SegmentedGatherTestSingle, GatherEmpty)
+{
+  auto const list       = LCW<int32_t>{};
+  auto const gather_map = LCW<cudf::size_type>{};
+  auto const expected   = LCW<int32_t>{};
+  auto const results    = cudf::lists::segmented_gather(cudf::lists_column_view{list},
+                                                     cudf::lists_column_view{gather_map});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TYPED_TEST(SegmentedGatherTest, GatherNulls)
 {
   using T = TypeParam;

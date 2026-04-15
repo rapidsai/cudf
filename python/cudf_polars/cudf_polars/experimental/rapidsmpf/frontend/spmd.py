@@ -31,6 +31,10 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     check_reserved_keys,
     execute_ir_on_rank,
 )
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
+)
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
 from cudf_polars.utils.config import SPMDContext
 
@@ -293,6 +297,16 @@ class SPMDEngine(StreamingEngine):
     TypeError
         If ``executor_options`` or ``engine_options`` contains a reserved key.
 
+    Notes
+    -----
+    Calls
+    :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.  By default, binding is skipped under ``rrun`` (which already
+    performs its own binding) — see
+    :attr:`HardwareBindingPolicy.skip_under_rrun`.
+
     Examples
     --------
     Context-manager style (recommended for scripts):
@@ -322,6 +336,11 @@ class SPMDEngine(StreamingEngine):
         engine_options = engine_options or {}
 
         check_reserved_keys(executor_options, engine_options)
+        hw_binding = cast(
+            HardwareBindingPolicy,
+            engine_options.get("hardware_binding", HardwareBindingPolicy()),
+        )
+        bind_to_gpu(hw_binding)
 
         rapidsmpf_options = (
             rapidsmpf_options
