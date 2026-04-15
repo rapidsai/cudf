@@ -10,6 +10,9 @@ rapids-logger "Create test conda environment"
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
 
+rapids-logger "Download stream test artifacts"
+STREAM_TESTS="$(rapids-download-from-github streaming_tests)"
+
 rapids-logger "Generate C++ testing dependencies"
 
 ENV_YAML_DIR="$(mktemp -d)"
@@ -26,8 +29,6 @@ set +u
 conda activate test_streaming
 set -u
 
-source rapids-configure-sccache
-
 rapids-print-env
 
 EXITCODE=0
@@ -36,7 +37,7 @@ set +e
 
 rapids-logger "Run C++ tests"
 
-ctest --test-dir cpp/build
+ctest --test-dir "$STREAM_TESTS/bin/gtests/libcudf"
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
