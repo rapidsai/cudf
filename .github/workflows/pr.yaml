@@ -42,6 +42,7 @@ jobs:
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
+      - streaming-build-and-test
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
