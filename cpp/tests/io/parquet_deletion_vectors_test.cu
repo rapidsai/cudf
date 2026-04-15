@@ -6,6 +6,7 @@
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -369,8 +370,7 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
   auto constexpr num_keys = 100'000;
   using Key               = TypeParam;
 
-  auto is_even =
-    cudf::detail::make_counting_transform_iterator(0, [](auto const i) { return i % 2 == 0; });
+  auto is_even = [](Key k) { return k % 2 == 0; };
 
   auto serialized_bitmap = std::vector<cuda::std::byte>{};
 
@@ -382,8 +382,8 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
       roaring::api::roaring64_bulk_context_t{.high_bytes = {0, 0, 0, 0, 0, 0}, .leaf = nullptr};
 
     std::for_each(
-      cuda::counting_iterator<Key>(0), cuda::counting_iterator<Key>(num_keys), [&](auto key) {
-        if (is_even[key]) {
+      cuda::counting_iterator<Key>{0}, cuda::counting_iterator<Key>{num_keys}, [&](auto key) {
+        if (is_even(key)) {
           roaring::api::roaring64_bitmap_add_bulk(roaring64_bitmap, &roaring64_context, key);
         }
       });
@@ -405,8 +405,8 @@ TYPED_TEST(RoaringBitmapBasicsTest, BitmapSerialization)
     auto roaring_context = roaring::api::roaring_bulk_context_t{};
 
     std::for_each(
-      cuda::counting_iterator<Key>(0), cuda::counting_iterator<Key>(num_keys), [&](auto key) {
-        if (is_even[key]) {
+      cuda::counting_iterator<Key>{0}, cuda::counting_iterator<Key>{num_keys}, [&](auto key) {
+        if (is_even(key)) {
           roaring::api::roaring_bitmap_add_bulk(roaring_bitmap, &roaring_context, key);
         }
       });
