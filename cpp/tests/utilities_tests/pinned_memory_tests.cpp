@@ -8,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
@@ -15,44 +16,7 @@
 #include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/mr/pool_memory_resource.hpp>
-
 #include <cuda/iterator>
-#include <cuda/memory_resource>
-
-namespace {
-struct pinned_pool_wrapper {
-  rmm::mr::pool_memory_resource* pool;
-  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
-  {
-    return pool->allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
-  }
-  void deallocate_sync(void* p,
-                       std::size_t bytes,
-                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
-  {
-    pool->deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, p, bytes, alignment);
-  }
-  void* allocate(cuda::stream_ref s,
-                 std::size_t bytes,
-                 std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT)
-  {
-    return pool->allocate(s, bytes, a);
-  }
-  void deallocate(cuda::stream_ref s,
-                  void* p,
-                  std::size_t bytes,
-                  std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
-  {
-    pool->deallocate(s, p, bytes, a);
-  }
-  bool operator==(pinned_pool_wrapper const& o) const noexcept { return pool == o.pool; }
-  bool operator!=(pinned_pool_wrapper const& o) const noexcept { return pool != o.pool; }
-  friend void get_property(pinned_pool_wrapper const&, cuda::mr::device_accessible) noexcept {}
-  friend void get_property(pinned_pool_wrapper const&, cuda::mr::host_accessible) noexcept {}
-};
-}  // namespace
 
 using cudf::host_span;
 using cudf::detail::host_2dspan;
@@ -84,9 +48,7 @@ TEST_F(PinnedMemoryTest, MemoryResourceGetAndSet)
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
   // pinned/pooled host memory resource
-  rmm::mr::pinned_host_memory_resource pinned_mr;
-  rmm::mr::pool_memory_resource pool_mr{rmm::device_async_resource_ref{pinned_mr}, 4 * 1024 * 1024};
-  pinned_pool_wrapper mr{&pool_mr};
+  cudf::test::pinned_pool mr{4 * 1024 * 1024};
 
   // set new resource
   auto last_mr = cudf::get_pinned_memory_resource();

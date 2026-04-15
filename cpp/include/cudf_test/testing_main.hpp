@@ -21,6 +21,7 @@
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/managed_memory_resource.hpp>
+#include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 #include <rmm/resource_ref.hpp>
@@ -36,6 +37,48 @@ struct config {
   std::string rmm_mode;
   std::string stream_mode;
   std::string stream_error_mode;
+};
+
+// Wrapper that adds host_accessible + device_accessible properties to a pool_memory_resource.
+// pool_memory_resource doesn't propagate the host_accessible property from its pinned upstream
+// through its type, so this shim is needed to satisfy the host_device_async_resource_ref
+// required by set_pinned_memory_resource.
+struct pinned_pool {
+  rmm::mr::pinned_host_memory_resource pinned_mr;
+  rmm::mr::pool_memory_resource pool_mr;
+
+  explicit pinned_pool(std::size_t pool_size)
+    : pool_mr{rmm::device_async_resource_ref{pinned_mr}, pool_size}
+  {
+  }
+
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return pool_mr.allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
+  }
+  void deallocate_sync(void* p,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    pool_mr.deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, p, bytes, alignment);
+  }
+  void* allocate(cuda::stream_ref s,
+                 std::size_t bytes,
+                 std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return pool_mr.allocate(s, bytes, a);
+  }
+  void deallocate(cuda::stream_ref s,
+                  void* p,
+                  std::size_t bytes,
+                  std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    pool_mr.deallocate(s, p, bytes, a);
+  }
+  bool operator==(pinned_pool const& o) const noexcept { return &pool_mr == &o.pool_mr; }
+  bool operator!=(pinned_pool const& o) const noexcept { return &pool_mr != &o.pool_mr; }
+  friend void get_property(pinned_pool const&, cuda::mr::device_accessible) noexcept {}
+  friend void get_property(pinned_pool const&, cuda::mr::host_accessible) noexcept {}
 };
 
 /// MR factory functions

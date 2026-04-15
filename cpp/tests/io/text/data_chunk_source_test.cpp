@@ -11,46 +11,8 @@
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
 
-#include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/mr/pool_memory_resource.hpp>
-
-#include <cuda/memory_resource>
-
 #include <fstream>
 #include <random>
-
-namespace {
-struct pinned_pool_wrapper {
-  rmm::mr::pool_memory_resource* pool;
-  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
-  {
-    return pool->allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
-  }
-  void deallocate_sync(void* p,
-                       std::size_t bytes,
-                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
-  {
-    pool->deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, p, bytes, alignment);
-  }
-  void* allocate(cuda::stream_ref s,
-                 std::size_t bytes,
-                 std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT)
-  {
-    return pool->allocate(s, bytes, a);
-  }
-  void deallocate(cuda::stream_ref s,
-                  void* p,
-                  std::size_t bytes,
-                  std::size_t a = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
-  {
-    pool->deallocate(s, p, bytes, a);
-  }
-  bool operator==(pinned_pool_wrapper const& o) const noexcept { return pool == o.pool; }
-  bool operator!=(pinned_pool_wrapper const& o) const noexcept { return pool != o.pool; }
-  friend void get_property(pinned_pool_wrapper const&, cuda::mr::device_accessible) noexcept {}
-  friend void get_property(pinned_pool_wrapper const&, cuda::mr::host_accessible) noexcept {}
-};
-}  // namespace
 
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
@@ -66,10 +28,7 @@ std::string chunk_to_host(cudf::io::text::device_data_chunk const& chunk)
 
 void test_source(std::string const& content, cudf::io::text::data_chunk_source const& source)
 {
-  static rmm::mr::pinned_host_memory_resource pinned_mr;
-  static rmm::mr::pool_memory_resource pool_mr{rmm::device_async_resource_ref{pinned_mr},
-                                               size_t{128} * 1024 * 1024};
-  pinned_pool_wrapper mr{&pool_mr};
+  static cudf::test::pinned_pool mr{size_t{128} * 1024 * 1024};
   auto last_mr = cudf::set_pinned_memory_resource(mr);
 
   auto stream = cudf::get_default_stream();
