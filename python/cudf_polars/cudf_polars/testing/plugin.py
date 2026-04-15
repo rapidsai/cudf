@@ -272,6 +272,7 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --blocksize-mode small",
     "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --blocksize-mode small",
     "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --blocksize-mode small",
+    "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072 but failure leads to segfaults https://github.com/rapidsai/cudf/issues/22138",
     "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --blocksize-mode small",
     "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --blocksize-mode small",
@@ -288,7 +289,11 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --blocksize-mode small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --blocksize-mode small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --blocksize-mode small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --blocksize-mode small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --blocksize-mode small",
     "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
+    "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072 but failure leads to segfaults https://github.com/rapidsai/cudf/issues/22138",
     "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --blocksize-mode small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --blocksize-mode small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --blocksize-mode small",
@@ -310,7 +315,6 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
 }
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
-    "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
     "tests/unit/lazyframe/test_cse.py::test_cse_10441": "https://github.com/rapidsai/cudf/issues/21645",
     "tests/unit/lazyframe/test_cse.py::test_cse_10452": "https://github.com/rapidsai/cudf/issues/21645",
@@ -328,7 +332,6 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
     "tests/unit/operations/test_shift.py::test_shift_expr": "https://github.com/rapidsai/cudf/issues/21645",
     "tests/unit/operations/test_shift.py::test_shift_fill_value": "https://github.com/rapidsai/cudf/issues/21645",
-    "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "https://github.com/rapidsai/cudf/issues/22074",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
     "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df10-df20-df1.category = df2.category AND (df1.code * 2) = df2.code_doubled-df1.name, df1.code, df2.type-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
