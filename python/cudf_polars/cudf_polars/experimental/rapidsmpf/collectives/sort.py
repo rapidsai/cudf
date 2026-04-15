@@ -127,14 +127,13 @@ async def _compute_sort_boundaries(
     stream = local_boundaries_df.stream
 
     if allgather_id is not None:
-        allgather = AllGatherManager(context, comm, allgather_id)
         chunk = TableChunk.from_pylibcudf_table(
             local_boundaries_df.table,
             stream,
             exclusive_view=True,
             br=context.br(),
         )
-        with allgather.inserting():
+        with AllGatherManager(context, comm, allgather_id) as allgather:
             allgather.insert(comm.rank, chunk)
         concat_table = await allgather.extract_concatenated(stream, ordered=True)
         return _get_final_sort_boundaries(
@@ -285,18 +284,17 @@ async def _insert_chunks_into_shuffle(
     null_order = list(ir.null_order)
     by_indices = names_to_indices(tuple(by), ir.schema)
 
-    shuffle = ShuffleManager(
+    skip_insert = metadata_in.duplicated and comm.rank != 0
+    local_sort_ir = ir.children[0]
+    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
+
+    async with ShuffleManager(
         context,
         comm,
         num_partitions,
         collective_ids.pop(),
         partition_assignment=PartitionAssignment.CONTIGUOUS,
-    )
-    skip_insert = metadata_in.duplicated and comm.rank != 0
-    local_sort_ir = ir.children[0]
-    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
-
-    async with shuffle.inserting():
+    ) as shuffle:
         for msg in chunk_store:
             if skip_insert:
                 continue

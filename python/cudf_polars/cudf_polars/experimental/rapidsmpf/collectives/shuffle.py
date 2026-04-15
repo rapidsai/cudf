@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.integrations.cudf.partition import (
@@ -37,8 +36,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -120,13 +117,13 @@ class ShuffleManager:
         """Insert finished into the ShuffleManager."""
         await self.shuffler.insert_finished(self.context)
 
-    @asynccontextmanager
-    async def inserting(self) -> AsyncIterator[None]:
-        """Context manager that guarantees ``insert_finished()`` is called."""
-        try:
-            yield
-        finally:
-            await self.insert_finished()
+    async def __aenter__(self) -> ShuffleManager:
+        """Enter the context manager."""
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        """Exit the context manager, calling ``insert_finished()``."""
+        await self.insert_finished()
 
     def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
         """
@@ -233,13 +230,11 @@ async def _global_shuffle(
     )
     await send_metadata(ch_out, context, output_metadata)
 
-    # Create ShuffleManager instance
-    shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
     # When input is duplicated, only rank 0 should contribute data.
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    async with shuffle.inserting():
+    async with ShuffleManager(context, comm, num_partitions, collective_id) as shuffle:
         while (msg := await ch_in.recv(context)) is not None:
             if not skip_insert:
                 shuffle.insert_hash(

@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from rapidsmpf.integrations.cudf.partition import unpack_and_concat
@@ -15,8 +14,6 @@ from rapidsmpf.streaming.coll.allgather import AllGather
 from pylibcudf.contiguous_split import pack
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -78,13 +75,13 @@ class AllGatherManager:
         """Insert finished into the AllGatherManager."""
         self.allgather.insert_finished()
 
-    @contextmanager
-    def inserting(self) -> Iterator[None]:
-        """Context manager that guarantees ``insert_finished()`` is called."""
-        try:
-            yield
-        finally:
-            self.insert_finished()
+    def __enter__(self) -> AllGatherManager:
+        """Enter the context manager."""
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        """Exit the context manager, calling ``insert_finished()``."""
+        self.insert_finished()
 
     async def extract_concatenated(
         self, stream: Stream, *, ordered: bool = True

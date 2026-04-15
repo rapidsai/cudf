@@ -143,10 +143,9 @@ async def concatenate_node(
             if tracer is not None and output_duplicated:
                 tracer.set_duplicated()
 
-            allgather = AllGatherManager(context, comm, collective_id)
             stream = context.get_stream_from_pool()
             seq_num = 0
-            with allgather.inserting():
+            with AllGatherManager(context, comm, collective_id) as allgather:
                 while (msg := await ch_in.recv(context)) is not None:
                     allgather.insert(
                         seq_num, TableChunk.from_message(msg, br=context.br())

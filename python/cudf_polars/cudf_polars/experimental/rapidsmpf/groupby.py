@@ -307,9 +307,7 @@ async def _tree_reduce(
     await send_metadata(ch_out, context, metadata_out)
 
     if need_allgather:
-        allgather = AllGatherManager(context, comm, collective_id)
-
-        with allgather.inserting():
+        with AllGatherManager(context, comm, collective_id) as allgather:
             allgather.insert(
                 0,
                 _enforce_schema(
@@ -429,14 +427,12 @@ async def _shuffle_reduce(
     )
     await send_metadata(ch_out, context, metadata_out)
 
-    shuffle = ShuffleManager(
+    async with ShuffleManager(
         shuffle_context,
         shuffle_comm,
         modulus,
         collective_id,
-    )
-
-    async with shuffle.inserting():
+    ) as shuffle:
         shuffle.insert_hash(
             _enforce_schema(
                 aggregated,
