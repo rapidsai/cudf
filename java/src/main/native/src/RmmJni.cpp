@@ -387,8 +387,12 @@ class java_debug_event_handler_memory_resource_impl final
     jlongArray jdealloc_thresholds,
     cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
     tracking_resource_adaptor tracker)
-    : java_event_handler_memory_resource_impl(
-        env, jhandler, jalloc_thresholds, jdealloc_thresholds, std::move(upstream), std::move(tracker))
+    : java_event_handler_memory_resource_impl(env,
+                                              jhandler,
+                                              jalloc_thresholds,
+                                              jdealloc_thresholds,
+                                              std::move(upstream),
+                                              std::move(tracker))
   {
     jclass cls = env->GetObjectClass(jhandler);
     if (cls == nullptr) { throw cudf::jni::jni_exception("class not found"); }
@@ -446,19 +450,22 @@ class java_debug_event_handler_memory_resource_impl final
  */
 class java_event_handler_memory_resource {
  public:
-  java_event_handler_memory_resource(
-    JNIEnv* env,
-    jobject jhandler,
-    jlongArray jalloc_thresholds,
-    jlongArray jdealloc_thresholds,
-    cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
-    tracking_resource_adaptor tracker,
-    bool enable_debug)
+  java_event_handler_memory_resource(JNIEnv* env,
+                                     jobject jhandler,
+                                     jlongArray jalloc_thresholds,
+                                     jlongArray jdealloc_thresholds,
+                                     cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+                                     tracking_resource_adaptor tracker,
+                                     bool enable_debug)
     : impl_(enable_debug
               ? std::make_shared<java_debug_event_handler_memory_resource_impl>(
                   env, jhandler, jalloc_thresholds, jdealloc_thresholds, upstream, tracker)
-              : std::make_shared<java_event_handler_memory_resource_impl>(
-                  env, jhandler, jalloc_thresholds, jdealloc_thresholds, std::move(upstream), std::move(tracker)))
+              : std::make_shared<java_event_handler_memory_resource_impl>(env,
+                                                                          jhandler,
+                                                                          jalloc_thresholds,
+                                                                          jdealloc_thresholds,
+                                                                          std::move(upstream),
+                                                                          std::move(tracker)))
   {
   }
 
@@ -508,8 +515,7 @@ static_assert(
 inline auto& prior_cudf_pinned_mr()
 {
   static cuda::mr::resource_ref<cuda::mr::host_accessible, cuda::mr::device_accessible>
-    _prior_cudf_pinned_mr =
-    cudf::get_pinned_memory_resource();
+    _prior_cudf_pinned_mr = cudf::get_pinned_memory_resource();
   return _prior_cudf_pinned_mr;
 }
 
