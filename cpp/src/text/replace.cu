@@ -294,18 +294,21 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
   {
     rmm::device_uvector<int64_t> sub_offsets(sub_count, stream);
     auto const count_itr = cuda::counting_iterator<int64_t>{0};
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       count_itr,
                       count_itr + sub_count,
                       sub_offsets.data(),
                       sub_offset_fn{input_chars, first_offset, last_offset});
     // remove 0s -- where sub-offset could not be computed
     auto const remove_end =
-      thrust::remove(rmm::exec_policy_nosync(stream), sub_offsets.begin(), sub_offsets.end(), 0L);
+      thrust::remove(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     sub_offsets.begin(),
+                     sub_offsets.end(),
+                     0L);
     sub_count = cuda::std::distance(sub_offsets.begin(), remove_end);
 
     // merge them with input offsets
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   input_offsets,
                   input_offsets + input.size() + 1,
                   sub_offsets.begin(),
@@ -325,7 +328,7 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
 
   // compute indices to the actual output rows
   auto indices = rmm::device_uvector<cudf::size_type>(tmp_offsets.size(), stream);
-  thrust::upper_bound(rmm::exec_policy_nosync(stream),
+  thrust::upper_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input_offsets,
                       input_offsets + input.size() + 1,
                       tmp_offsets.begin(),
@@ -334,7 +337,10 @@ std::unique_ptr<cudf::column> replace_helper(ReplacerFn replacer,
 
   // initialize the output row sizes
   auto d_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), d_sizes.begin(), d_sizes.end(), 0);
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               d_sizes.begin(),
+               d_sizes.end(),
+               0);
 
   replacer.d_strings      = *d_tmp_strings;
   replacer.d_indices      = indices.data();
