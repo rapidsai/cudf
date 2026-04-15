@@ -396,7 +396,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map  = detail::apply_boolean_mask(mask_type::RETENTIONS,
+  auto scatter_map  = detail::apply_boolean_mask(mask_type::RETENTION,
                                                 table_view{{indices->view()}},
                                                 boolean_mask,
                                                 stream,

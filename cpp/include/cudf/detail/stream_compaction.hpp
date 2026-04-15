@@ -38,12 +38,11 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  rmm::device_async_resource_ref mr);
 
 /**
- * @brief Specifies how the boolean mask should be interpreted by the apply_boolean_mask and
- * apply_deletion_mask detail APIs.
+ * @brief Specifies how the boolean mask should be interpreted by the apply_boolean_mask detail API.
  */
 enum class mask_type : bool {
-  DELETIONS  = false,  ///< `true` elements in the boolean mask are deletions.
-  RETENTIONS = true,   ///< `true` elements in the boolean mask are retentions.
+  DELETION  = false,  ///< `true` elements in the boolean mask are deletions.
+  RETENTION = true,   ///< `true` elements in the boolean mask are retentions.
 };
 
 /**

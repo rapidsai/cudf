@@ -75,7 +75,7 @@ std::unique_ptr<table> apply_boolean_mask(mask_type mask_kind,
 
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
 
-  auto const is_retention = (mask_kind == mask_type::RETENTIONS);
+  auto const is_retention = (mask_kind == mask_type::RETENTION);
   if (boolean_mask.has_nulls()) {
     if (is_retention) {
       return detail::copy_if(input, retention_mask_filter<true>{*device_boolean_mask}, stream, mr);
@@ -102,7 +102,7 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(detail::mask_type::RETENTIONS, input, boolean_mask, stream, mr);
+  return detail::apply_boolean_mask(detail::mask_type::RETENTION, input, boolean_mask, stream, mr);
 }
 
 std::unique_ptr<table> apply_deletion_mask(table_view const& input,
@@ -111,7 +111,7 @@ std::unique_ptr<table> apply_deletion_mask(table_view const& input,
                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(detail::mask_type::DELETIONS, input, deletion_mask, stream, mr);
+  return detail::apply_boolean_mask(detail::mask_type::DELETION, input, deletion_mask, stream, mr);
 }
 
 }  // namespace cudf

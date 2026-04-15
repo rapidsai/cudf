@@ -55,7 +55,7 @@ std::vector<std::unique_ptr<column>> filter(
                                             mr);
 
   return apply_boolean_mask(
-           mask_type::RETENTIONS, cudf::table_view{filter_columns}, predicate->view(), stream, mr)
+           mask_type::RETENTION, cudf::table_view{filter_columns}, predicate->view(), stream, mr)
     ->release();
 }
 

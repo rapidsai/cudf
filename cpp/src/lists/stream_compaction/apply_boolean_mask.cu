@@ -90,7 +90,7 @@ std::unique_ptr<column> apply_boolean_mask(cudf::detail::mask_type mask_kind,
       offset_data_type, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
     auto output_offsets_view = output_offsets->mutable_view();
 
-    if (mask_kind == cudf::detail::mask_type::RETENTIONS) {
+    if (mask_kind == cudf::detail::mask_type::RETENTION) {
       auto const sizes_end = sizes_begin + sizes->size();
       thrust::inclusive_scan(
         rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
@@ -131,7 +131,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::apply_boolean_mask(
-    cudf::detail::mask_type::RETENTIONS, input, boolean_mask, stream, mr);
+    cudf::detail::mask_type::RETENTION, input, boolean_mask, stream, mr);
 }
 
 std::unique_ptr<column> apply_deletion_mask(lists_column_view const& input,
@@ -141,7 +141,7 @@ std::unique_ptr<column> apply_deletion_mask(lists_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::apply_boolean_mask(
-    cudf::detail::mask_type::DELETIONS, input, deletion_mask, stream, mr);
+    cudf::detail::mask_type::DELETION, input, deletion_mask, stream, mr);
 }
 
 }  // namespace cudf::lists
