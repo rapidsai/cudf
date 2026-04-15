@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.integrations.cudf.partition import (
@@ -36,6 +37,8 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 from cudf_polars.experimental.shuffle import Shuffle
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -116,6 +119,14 @@ class ShuffleManager:
     async def insert_finished(self) -> None:
         """Insert finished into the ShuffleManager."""
         await self.shuffler.insert_finished(self.context)
+
+    @asynccontextmanager
+    async def inserting(self) -> AsyncIterator[None]:
+        """Context manager that guarantees ``insert_finished()`` is called."""
+        try:
+            yield
+        finally:
+            await self.insert_finished()
 
     def extract_chunk(self, sequence_number: int, stream: Stream) -> plc.Table:
         """
@@ -228,16 +239,15 @@ async def _global_shuffle(
     # Other ranks still participate in the shuffle protocol.
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
-    while (msg := await ch_in.recv(context)) is not None:
-        if not skip_insert:
-            shuffle.insert_hash(
-                TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                ),
-                columns_to_hash,
-            )
-
-    await shuffle.insert_finished()
+    async with shuffle.inserting():
+        while (msg := await ch_in.recv(context)) is not None:
+            if not skip_insert:
+                shuffle.insert_hash(
+                    TableChunk.from_message(
+                        msg, br=context.br()
+                    ).make_available_and_spill(context.br(), allow_overbooking=True),
+                    columns_to_hash,
+                )
 
     for partition_id in shuffle.shuffler.local_partitions():
         stream = ir_context.get_cuda_stream()

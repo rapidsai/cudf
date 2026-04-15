@@ -134,8 +134,8 @@ async def _compute_sort_boundaries(
             exclusive_view=True,
             br=context.br(),
         )
-        allgather.insert(comm.rank, chunk)
-        allgather.insert_finished()
+        with allgather.inserting():
+            allgather.insert(comm.rank, chunk)
         concat_table = await allgather.extract_concatenated(stream, ordered=True)
         return _get_final_sort_boundaries(
             DataFrame.from_table(
@@ -296,33 +296,32 @@ async def _insert_chunks_into_shuffle(
     local_sort_ir = ir.children[0]
     assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
 
-    for msg in chunk_store:
-        if skip_insert:
-            continue
-        seq_num = msg.sequence_number
-        available_chunk = TableChunk.from_message(
-            msg, br=context.br()
-        ).make_available_and_spill(context.br(), allow_overbooking=True)
-        tbl = available_chunk.table_view()
-        sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
+    async with shuffle.inserting():
+        for msg in chunk_store:
+            if skip_insert:
+                continue
+            seq_num = msg.sequence_number
+            available_chunk = TableChunk.from_message(
+                msg, br=context.br()
+            ).make_available_and_spill(context.br(), allow_overbooking=True)
+            tbl = available_chunk.table_view()
+            sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
 
-        stream = get_joined_cuda_stream(
-            ir_context.get_cuda_stream,
-            upstreams=(available_chunk.stream, sort_boundaries_df.stream),
-        )
+            stream = get_joined_cuda_stream(
+                ir_context.get_cuda_stream,
+                upstreams=(available_chunk.stream, sort_boundaries_df.stream),
+            )
 
-        splits = find_sort_splits(
-            sort_cols_tbl,
-            sort_boundaries_df.table,
-            seq_num,
-            column_order,
-            null_order,
-            stream=stream,
-            chunk_relative=True,
-        )
-        shuffle.insert_split(available_chunk, splits)
-
-    await shuffle.insert_finished()
+            splits = find_sort_splits(
+                sort_cols_tbl,
+                sort_boundaries_df.table,
+                seq_num,
+                column_order,
+                null_order,
+                stream=stream,
+                chunk_relative=True,
+            )
+            shuffle.insert_split(available_chunk, splits)
 
     post_sort_ir = local_sort_ir
     if local_sort_ir.stable:

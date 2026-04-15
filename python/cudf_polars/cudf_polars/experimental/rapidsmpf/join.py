@@ -190,9 +190,9 @@ async def _collect_small_side_for_broadcast(
     dfs: list[DataFrame] = []
     if need_allgather:
         allgather = AllGatherManager(context, comm, collective_id)
-        for s_id in range(len(chunks)):
-            allgather.insert(s_id, chunks.pop(0))
-        allgather.insert_finished()
+        with allgather.inserting():
+            for s_id in range(len(chunks)):
+                allgather.insert(s_id, chunks.pop(0))
         stream = ir_context.get_cuda_stream()
         dfs = [
             DataFrame.from_table(

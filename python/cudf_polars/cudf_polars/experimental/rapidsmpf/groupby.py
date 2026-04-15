@@ -309,12 +309,13 @@ async def _tree_reduce(
     if need_allgather:
         allgather = AllGatherManager(context, comm, collective_id)
 
-        allgather.insert(
-            0,
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
-        )
-
-        allgather.insert_finished()
+        with allgather.inserting():
+            allgather.insert(
+                0,
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+            )
 
         stream = ir_context.get_cuda_stream()
         aggregated = await evaluate_chunk(
@@ -435,31 +436,32 @@ async def _shuffle_reduce(
         collective_id,
     )
 
-    shuffle.insert_hash(
-        _enforce_schema(
-            aggregated,
-            decomposed.reduction_ir.schema,
-            context.br(),
-        ),
-        decomposed.shuffle_indices,
-    )
-    del aggregated
-
-    while not input_drained:
-        aggregated, input_drained, _ = await _local_aggregation(
-            context,
-            decomposed,
-            ir_context,
-            ch_in,
-            target_partition_size,
-        )
+    async with shuffle.inserting():
         shuffle.insert_hash(
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
+            _enforce_schema(
+                aggregated,
+                decomposed.reduction_ir.schema,
+                context.br(),
+            ),
             decomposed.shuffle_indices,
         )
         del aggregated
 
-    await shuffle.insert_finished()
+        while not input_drained:
+            aggregated, input_drained, _ = await _local_aggregation(
+                context,
+                decomposed,
+                ir_context,
+                ch_in,
+                target_partition_size,
+            )
+            shuffle.insert_hash(
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+                decomposed.shuffle_indices,
+            )
+            del aggregated
     extract_irs = [decomposed.reduction_ir] + (
         [decomposed.select_ir] if decomposed.select_ir else []
     )
