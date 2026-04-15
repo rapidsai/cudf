@@ -81,7 +81,7 @@ using data_type = nvbench::type_list<int32_t, int64_t, double, cudf::string_view
 NVBENCH_BENCH_TYPES(apply_mask_benchmark, NVBENCH_TYPE_AXES(data_type))
   .set_name("apply_mask")
   .set_type_axes_names({"type"})
-  .add_string_axis("mask_kind", {"boolean", "deletion"})
+  .add_string_axis("mask_kind", {"retention", "deletion"})
   .add_int64_axis("columns", {1, 4, 9})
   .add_int64_axis("rows", {100'000, 1'000'000, 10'000'000})
   .add_int64_axis("hits_%", {10, 20, 50, 80, 90, 100});
