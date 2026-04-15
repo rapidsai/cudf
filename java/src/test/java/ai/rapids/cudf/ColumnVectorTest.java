@@ -2763,7 +2763,7 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, result);
     }
 
-    // Regression: flatten([[]]]) and flatten([[],[],[]]) do NOT crash in isolation
+    // Regression: flatten([[]])  and flatten([[],[],[]]) do NOT crash in isolation
     // (child.size()>0; guard does not apply). They appeared to crash only when run after
     // flatten([]) because the deferred CUDA error from that call poisoned the next allocation.
     try (ColumnVector input = ColumnVector.fromLists(listOfListsType,

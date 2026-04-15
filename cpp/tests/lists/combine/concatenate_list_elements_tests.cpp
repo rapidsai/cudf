@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -795,4 +795,66 @@ TEST_F(ConcatenateListElementsTest, ListsOfListsOfStructsHavingListsWithNulls)
       sliced_input, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results, verbosity);
   }
+}
+
+// Tests for the child.size()==0 early-exit guard added to fix rapidsai/cudf#22146.
+// When the inner list column has 0 rows, the offsets buffer may be unallocated;
+// the guard must build the result without dereferencing that buffer.
+
+// Subcase A: child.size()==1 (guard does NOT fire) — baseline check.
+TEST_F(ConcatenateListElementsTest, EmptyInnerListColumnChildSizeOne)
+{
+  // list<list<int32>> with 1 outer row containing 1 empty inner list: [[]]
+  // child.size() == 1; the new guard does not apply here.
+  // Use build_lists_col to create a proper list<list<int32>> (2-level nesting).
+  auto inner          = IntListsCol{IntListsCol{}};  // list<int32> with 1 empty row
+  auto const col      = build_lists_col(inner);      // list<list<int32>> with 1 outer row: [[]]
+  auto const results  = cudf::lists::concatenate_list_elements(col);
+  auto const expected = IntListsCol{IntListsCol{}};  // list<int32> with 1 empty row: [[]] → []
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
+}
+
+// Subcase B: child.size()==0, single valid-but-empty outer row — guard fires.
+TEST_F(ConcatenateListElementsTest, EmptyInnerListColumnChildSizeZero)
+{
+  // list<list<int32>> with 1 outer row that is an empty list-of-lists (0 inner lists).
+  // Outer offsets: {0, 0}, inner column: list<int32> with 0 rows.
+  auto offsets        = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0};
+  auto inner_offsets  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+  auto inner_elements = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  auto inner_col =
+    cudf::make_lists_column(0, inner_offsets.release(), inner_elements.release(), 0, {});
+  auto const col = cudf::make_lists_column(1, offsets.release(), std::move(inner_col), 0, {});
+
+  auto const results  = cudf::lists::concatenate_list_elements(*col);
+  auto const expected = IntListsCol{IntListsCol{}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
+}
+
+// Subcase C: child.size()==0 with a null outer row — verifies null mask is preserved.
+TEST_F(ConcatenateListElementsTest, EmptyInnerListColumnWithNullRow)
+{
+  // list<list<int32>> with 2 outer rows: row 0 is null, row 1 is a valid empty list.
+  // child.size() == 0; the null mask must be copied to the output.
+  auto offsets        = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0};
+  auto inner_offsets  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+  auto inner_elements = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  auto inner_col =
+    cudf::make_lists_column(0, inner_offsets.release(), inner_elements.release(), 0, {});
+  auto const null_it           = cudf::test::iterators::null_at(0);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 2);
+  auto const col =
+    cudf::make_lists_column(2, offsets.release(), std::move(inner_col), null_count, std::move(null_mask));
+
+  auto const results = cudf::lists::concatenate_list_elements(*col);
+
+  // Expected: list<int32> with 2 rows — null row 0, empty row 1.
+  // concatenate_list_elements reduces list<list<int32>> → list<int32>.
+  auto exp_offsets  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0};
+  auto exp_elements = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  auto [exp_null_mask, exp_null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 2);
+  auto const expected                  = cudf::make_lists_column(
+    2, exp_offsets.release(), exp_elements.release(), exp_null_count, std::move(exp_null_mask));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results, verbosity);
 }
