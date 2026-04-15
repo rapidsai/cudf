@@ -169,8 +169,8 @@ create_glushkov_device(glushkov_host_program const& h_gp,
   for (int32_t ci = 0; ci < classes_cnt; ++ci) {
     auto const& src             = h_gp.classes[ci];
     *h_cls++                    = reclass_device{src.builtins,
-                                                 static_cast<int32_t>(src.literals.size()),
-                                                 reinterpret_cast<reclass_range const*>(d_lit)};
+                              static_cast<int32_t>(src.literals.size()),
+                              reinterpret_cast<reclass_range const*>(d_lit)};
     std::size_t const lit_bytes = src.literals.size() * sizeof(reclass_range);
     std::memcpy(h_lit, src.literals.data(), lit_bytes);
     h_lit += lit_bytes;
@@ -329,7 +329,9 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 }
 
 int32_t reprog_device::compute_shared_memory_size_thompson() const
-{ return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0; }
+{
+  return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
+}
 
 int32_t reprog_device::compute_shared_memory_size() const
 {
@@ -342,7 +344,9 @@ int32_t reprog_device::compute_shared_memory_size() const
 }
 
 std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count)
-{ return relist::alloc_size(insts_count, num_threads) * 2; }
+{
+  return relist::alloc_size(insts_count, num_threads) * 2;
+}
 
 }  // namespace detail
 }  // namespace strings

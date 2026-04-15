@@ -116,12 +116,18 @@ __device__ __forceinline__ bool glushkov_position_matches(glushkov_position cons
 struct glushkov_global_source {
   glushkov_program_device const& prog;
   __device__ __forceinline__ g_state_t reach_ascii(uint32_t c) const
-  { return prog._reach_ascii[c]; }
+  {
+    return prog._reach_ascii[c];
+  }
   __device__ __forceinline__ g_state_t shift_mask(uint32_t k) const { return prog._shift_masks[k]; }
   __device__ __forceinline__ uint8_t shift_amount(uint32_t k) const
-  { return prog._shift_amounts[k]; }
+  {
+    return prog._shift_amounts[k];
+  }
   __device__ __forceinline__ g_state_t exception_succ(uint32_t p) const
-  { return prog._exception_succs[p]; }
+  {
+    return prog._exception_succs[p];
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -162,7 +168,9 @@ __device__ __forceinline__ g_state_t glushkov_compute_follow_impl(
 /// Public overload: reads from global device memory.
 __device__ __forceinline__ g_state_t glushkov_compute_follow(g_state_t const state,
                                                              glushkov_program_device const& prog)
-{ return glushkov_compute_follow_impl(state, prog, glushkov_global_source{prog}); }
+{
+  return glushkov_compute_follow_impl(state, prog, glushkov_global_source{prog});
+}
 
 // ---------------------------------------------------------------------------
 // Reach computation: bitmask of positions that match character c — templated impl
@@ -198,7 +206,9 @@ __device__ __forceinline__ g_state_t glushkov_compute_reach_impl(
 /// Public overload: reads from global device memory.
 __device__ __forceinline__ g_state_t glushkov_compute_reach(char32_t const c,
                                                             glushkov_program_device const& prog)
-{ return glushkov_compute_reach_impl(c, prog, glushkov_global_source{prog}); }
+{
+  return glushkov_compute_reach_impl(c, prog, glushkov_global_source{prog});
+}
 
 // ---------------------------------------------------------------------------
 // Main find function — templated impl
@@ -414,7 +424,9 @@ __device__ __forceinline__ match_result glushkov_find(glushkov_program_device co
                                                       string_view const d_str,
                                                       string_view::const_iterator begin,
                                                       cudf::size_type end)
-{ return glushkov_find_impl<P>(prog, d_str, begin, end, glushkov_global_source{prog}); }
+{
+  return glushkov_find_impl<P>(prog, d_str, begin, end, glushkov_global_source{prog});
+}
 
 // ===========================================================================
 // Shared-memory-cached variants (CUDA device code only)
@@ -427,13 +439,21 @@ struct glushkov_shmem_source {
   glushkov_program_device const& prog;
   glushkov_shmem_cache const* cache;
   __device__ __forceinline__ g_state_t reach_ascii(uint32_t c) const
-  { return cache->reach_ascii[c]; }
+  {
+    return cache->reach_ascii[c];
+  }
   __device__ __forceinline__ g_state_t shift_mask(uint32_t k) const
-  { return cache->shift_masks[k]; }
+  {
+    return cache->shift_masks[k];
+  }
   __device__ __forceinline__ uint8_t shift_amount(uint32_t k) const
-  { return cache->shift_amounts[k]; }
+  {
+    return cache->shift_amounts[k];
+  }
   __device__ __forceinline__ g_state_t exception_succ(uint32_t p) const
-  { return cache->exception_succs[p]; }
+  {
+    return cache->exception_succs[p];
+  }
 };
 
 /**
@@ -464,13 +484,17 @@ __device__ __forceinline__ void glushkov_load_shmem(glushkov_program_device cons
 __device__ __forceinline__ g_state_t glushkov_compute_follow(g_state_t const state,
                                                              glushkov_program_device const& prog,
                                                              glushkov_shmem_cache const* cache)
-{ return glushkov_compute_follow_impl(state, prog, glushkov_shmem_source{prog, cache}); }
+{
+  return glushkov_compute_follow_impl(state, prog, glushkov_shmem_source{prog, cache});
+}
 
 /// Overload of glushkov_compute_reach that reads from the shared-memory cache.
 __device__ __forceinline__ g_state_t glushkov_compute_reach(char32_t const c,
                                                             glushkov_program_device const& prog,
                                                             glushkov_shmem_cache const* cache)
-{ return glushkov_compute_reach_impl(c, prog, glushkov_shmem_source{prog, cache}); }
+{
+  return glushkov_compute_reach_impl(c, prog, glushkov_shmem_source{prog, cache});
+}
 
 /**
  * @brief Glushkov NFA find with shared-memory-cached program data.
@@ -485,7 +509,9 @@ __device__ __forceinline__ match_result glushkov_find(glushkov_program_device co
                                                       string_view::const_iterator begin,
                                                       cudf::size_type end,
                                                       glushkov_shmem_cache const* cache)
-{ return glushkov_find_impl<P>(prog, d_str, begin, end, glushkov_shmem_source{prog, cache}); }
+{
+  return glushkov_find_impl<P>(prog, d_str, begin, end, glushkov_shmem_source{prog, cache});
+}
 
 #endif  // __CUDACC__
 
