@@ -39,6 +39,10 @@
 #include <type_traits>
 
 namespace {
+// Wrapper that adds host_accessible + device_accessible properties to a pool_memory_resource.
+// pool_memory_resource doesn't propagate the host_accessible property from its pinned upstream
+// through its type, so this shim is needed to satisfy the host_device_async_resource_ref
+// required by set_pinned_memory_resource.
 struct pinned_pool_wrapper {
   rmm::mr::pool_memory_resource* pool;
   void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
