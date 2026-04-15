@@ -18,7 +18,7 @@ namespace lists::detail {
 /**
  * @copydoc cudf::lists::apply_boolean_mask
  *
- * @param mask_kind Specifies how the boolean mask is treated (deletions or retentions)
+ * @param mask_kind Specifies how the boolean mask is treated (retentions or deletions)
  */
 std::unique_ptr<column> apply_mask(cudf::detail::mask_type mask_kind,
                                    lists_column_view const& input,
