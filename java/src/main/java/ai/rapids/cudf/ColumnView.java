@@ -3731,12 +3731,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * For each row {@code i}, returns whether {@code input[i]} contains the literal substring
    * {@code targets[i]} (UTF-8 byte sequence, not regex).
    *
-   * This column and {@code targets} must have the same row count. Null {@code targets[i]} yields
+   * <p>This column and {@code targets} must have the same row count. Null {@code targets[i]} yields
    * {@code false} for that row; null {@code input[i]} yields null in the output.
    *
-   * Contrast with {@link #stringContains(Scalar)} (one needle for all rows) and
+   * <p>Contrast with {@link #stringContains(Scalar)} (one needle for all rows) and
    * {@link #stringContains(ColumnView)} ({@code contains_multiple}: each needle checked against
    * every row, returning multiple boolean columns).
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // input   = ["apple", "banana", null, "date"], DType = STRING
+   * // targets = ["pl",    "xyz",    "a",  null],   DType = STRING
+   * ColumnVector result = input.stringContainsPerRow(targets);
+   * // result  = [true,    false,    null, false],   DType = BOOL8
+   * }</pre>
    *
    * @param targets string column aligned row-for-row with this column
    * @return a new BOOL8 column
