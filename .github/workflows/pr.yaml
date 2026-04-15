@@ -42,7 +42,7 @@ jobs:
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
-      - streaming-build-and-test
+      - streaming-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
@@ -598,7 +598,7 @@ jobs:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
-  streaming-build-and-test:
+  streaming-build:
     needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     # if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
@@ -607,9 +607,11 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-l4-latest-1"
+      node_type: cpu16
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/build_and_test_streaming.sh
+      artifact-name: streaming_tests
+      file_to_upload: cpp/install
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.

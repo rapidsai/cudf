@@ -44,11 +44,10 @@ cmake -S cpp -B cpp/build -GNinja \
   -DCUDF_BUILD_STREAMS_TEST_UTIL=ON \
   -DBUILD_SHARED_LIBS=ON
 cmake --build cpp/build "-j${PARALLEL_LEVEL}"
+cmake --install cpp/build --prefix cpp/install --component testing
 
 sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
-
-ctest --test-dir cpp/build
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
