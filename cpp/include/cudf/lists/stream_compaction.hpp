@@ -73,8 +73,8 @@ std::unique_ptr<column> apply_boolean_mask(
  *
  * `input` and `deletion_mask` must have the same number of rows.
  * The output column has the same number of rows as the input column.
- * An element is deleted from an output row if the corresponding deletion_mask element is
- * non-null and `true`.
+ * An element is copied to an output row if the corresponding deletion_mask element is
+ * non-null and `false`.
  * An output row is invalid only if the input row is invalid.
  *
  * @throws cudf::logic_error if `deletion_mask` is not a "lists of bools" column
@@ -84,7 +84,8 @@ std::unique_ptr<column> apply_boolean_mask(
  * @param deletion_mask A nullable list of bools column used to filter `input` elements
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
- * @return List column of the same type as `input`, containing filtered list rows
+ * @return List column of the same type as `input`, containing list rows with deleted elements
+ * removed
  */
 std::unique_ptr<column> apply_deletion_mask(
   lists_column_view const& input,

@@ -218,8 +218,8 @@ std::unique_ptr<table> apply_boolean_mask(
  * @brief Filters `input` using `deletion_mask` of boolean values as a mask.
  *
  * Given an input `table_view` and a mask `column_view`, an element `i` from
- * each column_view of the `input` is deleted from the corresponding output column
- * if the corresponding element `i` in the mask is non-null and `true`.
+ * each column_view of the `input` is copied from the corresponding output column
+ * if the corresponding element `i` in the mask is non-null and `false`.
  * This operation is stable: the input order is preserved.
  *
  * @note if @p input.num_rows() is zero, there is no error, and an empty table
@@ -233,8 +233,8 @@ std::unique_ptr<table> apply_boolean_mask(
  * as a mask to filter the `input`.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
- * @return Table containing copy of all rows of @p input passing
- * the filter defined by @p deletion_mask.
+ * @return Table containing copy of all rows of @p input that are not marked
+ * for deletion by @p deletion_mask.
  */
 std::unique_ptr<table> apply_deletion_mask(
   table_view const& input,

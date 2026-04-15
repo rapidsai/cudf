@@ -463,7 +463,7 @@ TEST_F(ApplyDeletionMask, AllFalse)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
 }
 
-TEST_F(ApplyDeletionMask, AllNull)
+TEST_F(ApplyDeletionMask, AllDeletedMixedNullAndTrue)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{1, 2, 3, 4, 5};
   cudf::table_view input{{col}};
