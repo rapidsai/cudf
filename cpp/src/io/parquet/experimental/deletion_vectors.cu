@@ -125,7 +125,7 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   if (row_group_offsets.empty()) {
     auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, mr);
     auto row_indices_iter = static_cast<size_t*>(row_indices.data());
-    thrust::sequence(rmm::exec_policy_nosync(stream),
+    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      row_indices_iter,
                      row_indices_iter + num_rows,
                      start_row.value_or(size_t{0}));
@@ -150,10 +150,16 @@ std::unique_ptr<cudf::column> compute_row_index_column(
 
   auto row_indices      = rmm::device_buffer(num_rows * sizeof(size_t), stream, mr);
   auto row_indices_iter = static_cast<size_t*>(row_indices.data());
-  thrust::fill(rmm::exec_policy_nosync(stream), row_indices_iter, row_indices_iter + num_rows, 1);
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               row_indices_iter,
+               row_indices_iter + num_rows,
+               1);
 
   auto row_group_keys = rmm::device_uvector<size_type>(num_rows, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), row_group_keys.begin(), row_group_keys.end(), 0);
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               row_group_keys.begin(),
+               row_group_keys.end(),
+               0);
 
   // Scatter row group offsets and row group indices (or span indices) to their corresponding
   // row group span offsets
@@ -164,25 +170,26 @@ std::unique_ptr<cudf::column> compute_row_index_column(
   auto in_iter =
     thrust::make_zip_iterator(d_row_group_offsets.begin(), cuda::counting_iterator<size_type>{0});
   auto out_iter = thrust::make_zip_iterator(row_indices_iter, row_group_keys.begin());
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   in_iter,
                   in_iter + num_row_groups,
                   d_row_group_span_offsets.begin(),
                   out_iter);
 
   // Fill in the the rest of the row group span indices
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          row_group_keys.begin(),
                          row_group_keys.end(),
                          row_group_keys.begin(),
                          cuda::maximum<cudf::size_type>());
 
   // Segmented inclusive scan to compute the rest of the row indices
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                row_group_keys.begin(),
-                                row_group_keys.end(),
-                                row_indices_iter,
-                                row_indices_iter);
+  thrust::inclusive_scan_by_key(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    row_group_keys.begin(),
+    row_group_keys.end(),
+    row_indices_iter,
+    row_indices_iter);
 
   return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::UINT64},
                                         num_rows,
