@@ -1849,15 +1849,16 @@ TEST_F(ParquetWriterTest, ListElementFieldIds)
   //   nested_list.list.element.list.element -> id=5
   auto const simple_values  = cudf::test::fixed_width_column_wrapper<int64_t>{1, 2, 3};
   auto const simple_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
-  auto simple_list = cudf::make_lists_column(
-    2, simple_offsets.release(), simple_values.release(), 0, {});
+  auto simple_list =
+    cudf::make_lists_column(2, simple_offsets.release(), simple_values.release(), 0, {});
 
   auto const nested_values  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 11, 12, 13};
   auto const nested_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3, 4};
-  auto inner_list = cudf::make_lists_column(
-    3, nested_offsets.release(), nested_values.release(), 0, {});
+  auto inner_list =
+    cudf::make_lists_column(3, nested_offsets.release(), nested_values.release(), 0, {});
   auto const outer_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
-  auto nested_list = cudf::make_lists_column(2, outer_offsets.release(), std::move(inner_list), 0, {});
+  auto nested_list =
+    cudf::make_lists_column(2, outer_offsets.release(), std::move(inner_list), 0, {});
 
   auto const expected = cudf::table_view{{*simple_list, *nested_list}};
 
