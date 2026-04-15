@@ -4,7 +4,8 @@
 
 set -euo pipefail
 
-source rapids-configure-sccache
+rapids-logger "Create test conda environment"
+. /opt/conda/etc/profile.d/conda.sh
 
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
@@ -24,6 +25,8 @@ rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test_stream
 set +u
 conda activate test_streaming
 set -u
+
+source rapids-configure-sccache
 
 rapids-print-env
 
