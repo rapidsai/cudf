@@ -1471,7 +1471,7 @@ def test_string_replace_with_backrefs(find, replace):
     "pat",
     ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be", "cat$"],
 )
-@pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL])
+@pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL, re.IGNORECASE])
 def test_string_count(data, pat, flags):
     gs = cudf.Series(data)
     ps = pd.Series(data)
@@ -1497,6 +1497,7 @@ def test_string_count(data, pat, flags):
         ("on$", 0),
         ("on$", re.MULTILINE),
         ("o.*k", re.DOTALL),
+        ("o.*k", re.IGNORECASE),
     ],
 )
 def test_string_findall(pat, flags):
@@ -1518,6 +1519,7 @@ def test_string_findall(pat, flags):
         ("on$", 0, [2, -1, -1, -1]),
         ("on$", re.MULTILINE, [2, -1, -1, 1]),
         ("o.*k", re.DOTALL, [-1, 1, -1, 1]),
+        ("on", re.IGNORECASE, [2, 1, -1, 1]),
     ],
 )
 def test_string_find_re(pat, flags, pos):
@@ -2379,7 +2381,7 @@ def test_string_replace_n(n):
 )
 @pytest.mark.parametrize(
     "flags,flags_raise",
-    [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
+    [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 0), (re.I | re.DOTALL, 0)],
 )
 @pytest.mark.parametrize(
     "na",
@@ -2402,6 +2404,24 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na):
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
         got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_string_named_capture_groups():
+    s = ["hello-123", "world-456", "goodbye-789"]
+    gs = cudf.Series(s)
+    ps = pd.Series(s)
+
+    pat = r"(?P<word>\w+)-(?P<number>\d+)"
+    expect = ps.str.contains(pat, regex=True)
+    got = gs.str.contains(pat, regex=True)
+    assert_eq(expect, got, check_dtype=False)
+    expect = ps.str.count(pat)
+    got = gs.str.count(pat)
+    assert_eq(expect, got, check_dtype=False)
+    expect = ps.str.match(pat)
+    got = gs.str.match(pat)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_string_contains_case(ps_gs):
@@ -2494,7 +2514,7 @@ def test_string_join(ps_gs, sep):
 @pytest.mark.parametrize("pat", [r"(a)", r"(f)", r"([a-z])", r"([A-Z])"])
 @pytest.mark.parametrize("expand", [True, False])
 @pytest.mark.parametrize(
-    "flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 1)]
+    "flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 0)]
 )
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs

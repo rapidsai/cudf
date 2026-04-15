@@ -72,7 +72,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 
     // Could have attempted an exclusive_scan(), but it would not compute the last entry.
     // Instead, inclusive_scan(), followed by writing `0` to the head of the offsets column.
-    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            sizes_begin,
                            sizes_end,
                            output_offsets_view.begin<size_type>() + 1);

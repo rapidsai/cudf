@@ -21,8 +21,10 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -90,7 +92,7 @@ struct page_stats_caster : public stats_caster_base {
     auto output_data = rmm::device_buffer(cudf::size_of(dtype) * total_rows, stream, mr);
 
     // For each row index, copy over the min/max page stat value from the corresponding page.
-    thrust::gather(rmm::exec_policy_nosync(stream),
+    thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    page_indices.begin(),
                    page_indices.end(),
                    input_column.template begin<T>(),
@@ -195,7 +197,7 @@ struct page_stats_caster : public stats_caster_base {
     // Buffer for row-level string sizes (output).
     auto row_str_sizes = rmm::device_uvector<std::size_t>(total_rows, stream, mr);
     // Gather string sizes from page to row level
-    thrust::gather(rmm::exec_policy_nosync(stream),
+    thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    page_indices.begin(),
                    page_indices.end(),
                    page_str_sizes.begin(),
@@ -237,7 +239,7 @@ struct page_stats_caster : public stats_caster_base {
     // Buffer for row-level string offsets (output).
     auto row_str_offsets =
       cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows + 1, stream, mr);
-    thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            row_str_sizes.begin(),
                            row_str_sizes.end(),
                            row_str_offsets.begin() + 1);
@@ -881,7 +883,8 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 
   // Return early if no columns will participate in stats based page filtering
   if (stats_columns_mask.empty()) {
-    auto const scalar_true = cudf::numeric_scalar<bool>(true, true, stream);
+    auto const scalar_true =
+      cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
     return cudf::make_column_from_scalar(scalar_true, total_rows, stream, mr);
   }
 
@@ -1075,7 +1078,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Make sure all row_mask elements contain valid values even if they are nulls
   if constexpr (cuda::std::is_same_v<ColumnView, cudf::mutable_column_view>) {
     if (row_mask.nullable() and row_mask.null_count() > 0) {
-      thrust::for_each(rmm::exec_policy_nosync(stream),
+      thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        cuda::counting_iterator{row_mask_offset},
                        cuda::counting_iterator{row_mask_offset + total_rows},
                        [row_mask  = row_mask.template begin<bool>(),
@@ -1118,7 +1121,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     [&](auto const prev_level) {
       auto const current_level_size = cudf::util::div_rounding_up_safe(prev_level_size, 2);
       thrust::for_each(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         cuda::counting_iterator<cudf::size_type>{0},
         cuda::counting_iterator{current_level_size},
         build_fenwick_tree_level_functor{
@@ -1134,7 +1137,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
     cudf::host_span<cudf::size_type const>{page_row_offsets}, stream);
   auto page_offsets = cudf::detail::make_device_uvector_async(pinned_page_offsets, stream, mr);
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{num_ranges},
     device_data_page_mask.begin(),
