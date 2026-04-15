@@ -47,7 +47,7 @@ void apply_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
 {
   auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("rows"));
   auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
-  auto const percent_true = static_cast<double>(state.get_int64("hits_%"));
+  auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits_%"));
   auto const is_deletion  = state.get_string("mask_kind") == "deletion";
 
   auto const input_type = cudf::type_to_id<DataType>();
@@ -57,8 +57,7 @@ void apply_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
   auto source_table = create_random_table(
     cycle_dtypes({input_type, cudf::type_id::STRING}, n_cols), row_count{n_rows}, profile);
 
-  profile.set_bool_probability_true(is_deletion ? (100.0 - percent_true) / 100.0
-                                                : percent_true / 100.0);
+  profile.set_bool_probability_true(static_cast<double>(percent_true) / 100.0);
   profile.set_null_probability(std::nullopt);  // no null mask
   auto mask = create_random_column(cudf::type_id::BOOL8, row_count{n_rows}, profile);
 
