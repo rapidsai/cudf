@@ -107,13 +107,14 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
 
     // Perform segmented scan.
     auto const do_scan = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                    group_labels.begin(),
-                                    group_labels.end(),
-                                    inp_iter,
-                                    out_iter,
-                                    cuda::std::equal_to{},
-                                    binop);
+      thrust::inclusive_scan_by_key(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        group_labels.begin(),
+        group_labels.end(),
+        inp_iter,
+        out_iter,
+        cuda::std::equal_to{},
+        binop);
     };
 
     if (values.has_nulls()) {
@@ -152,13 +153,14 @@ struct group_scan_functor<K,
 
     // Perform segmented scan.
     auto const do_scan = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                    group_labels.begin(),
-                                    group_labels.end(),
-                                    inp_iter,
-                                    out_iter,
-                                    cuda::std::equal_to{},
-                                    binop);
+      thrust::inclusive_scan_by_key(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        group_labels.begin(),
+        group_labels.end(),
+        inp_iter,
+        out_iter,
+        cuda::std::equal_to{},
+        binop);
     };
 
     if (values.has_nulls()) {
@@ -194,13 +196,14 @@ struct group_scan_functor<K,
 
     auto const binop_generator =
       cudf::reduction::detail::arg_minmax_binop_generator::create<K>(values, stream);
-    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                  group_labels.begin(),
-                                  group_labels.end(),
-                                  cuda::counting_iterator<size_type>{0},
-                                  gather_map.begin(),
-                                  cuda::std::equal_to{},
-                                  binop_generator.binop());
+    thrust::inclusive_scan_by_key(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      group_labels.begin(),
+      group_labels.end(),
+      cuda::counting_iterator<size_type>{0},
+      gather_map.begin(),
+      cuda::std::equal_to{},
+      binop_generator.binop());
 
     //
     // Gather the children elements of the prefix min/max struct elements first.

@@ -147,7 +147,7 @@ async def concatenate_node(
             stream = context.get_stream_from_pool()
             seq_num = 0
             while (msg := await ch_in.recv(context)) is not None:
-                allgather.insert(seq_num, TableChunk.from_message(msg))
+                allgather.insert(seq_num, TableChunk.from_message(msg, br=context.br()))
                 seq_num += 1
                 del msg
             allgather.insert_finished()
@@ -163,7 +163,7 @@ async def concatenate_node(
                 output_chunk = empty_table_chunk(ir, context, stream)
             else:
                 output_chunk = TableChunk.from_pylibcudf_table(
-                    result_table, stream, exclusive_view=True
+                    result_table, stream, exclusive_view=True, br=context.br()
                 )
 
             await ch_out.send(context, Message(0, output_chunk))
@@ -191,7 +191,7 @@ async def concatenate_node(
                     if msg is None:
                         done_receiving = True
                         break
-                    chunks.append(TableChunk.from_message(msg))
+                    chunks.append(TableChunk.from_message(msg, br=context.br()))
 
                 if chunks:
                     chunks, extra = await make_table_chunks_available_or_wait(
@@ -213,7 +213,9 @@ async def concatenate_node(
                             ),
                             context=ir_context,
                         )
-                        del chunks
+                        if len(chunks) > 1:
+                            # _concat reuses chunks[0] if len(chunks) == 1
+                            del chunks
                     if tracer is not None:
                         tracer.add_chunk(table=df.table)
                     await ch_out.send(
@@ -221,7 +223,10 @@ async def concatenate_node(
                         Message(
                             seq_num,
                             TableChunk.from_pylibcudf_table(
-                                df.table, df.stream, exclusive_view=True
+                                df.table,
+                                df.stream,
+                                exclusive_view=True,
+                                br=context.br(),
                             ),
                         ),
                     )

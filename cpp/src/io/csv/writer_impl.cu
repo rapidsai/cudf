@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -135,8 +135,10 @@ struct column_to_strings_fn {
   std::unique_ptr<column> operator()(column_view const& column) const
     requires(std::is_same_v<column_type, bool>)
   {
-    string_scalar true_string{options_.get_true_value(), true, stream_};
-    string_scalar false_string{options_.get_false_value(), true, stream_};
+    string_scalar true_string{
+      options_.get_true_value(), true, stream_, cudf::get_current_device_resource_ref()};
+    string_scalar false_string{
+      options_.get_false_value(), true, stream_, cudf::get_current_device_resource_ref()};
     return cudf::strings::detail::from_booleans(column, true_string, false_string, stream_, mr_);
   }
 
@@ -151,7 +153,10 @@ struct column_to_strings_fn {
     }
 
     // handle special characters: {delimiter, '\n', "} in row:
-    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
+    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()},
+                            true,
+                            stream_,
+                            cudf::get_current_device_resource_ref()};
 
     auto d_column = column_device_view::create(column_v, stream_);
     escape_strings_fn fn{*d_column, delimiter.value(stream_)};
@@ -343,19 +348,21 @@ void write_chunked(data_sink* out_sink,
 
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar newline{options.get_line_terminator(), true, stream};
+  cudf::string_scalar newline{
+    options.get_line_terminator(), true, stream, cudf::get_current_device_resource_ref()};
 
   // use strings concatenate to build the final CSV output in device memory
   auto contents_w_nl = [&] {
     auto const total_size =
       str_column_view.chars_size(stream) + (newline.size() * str_column_view.size());
-    auto const empty_str = string_scalar("", true, stream);
+    auto const empty_str = string_scalar("", true, stream, cudf::get_current_device_resource_ref());
     // use join_strings when the output will be less than 2GB
     if (total_size < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
       return cudf::strings::detail::join_strings(str_column_view, newline, empty_str, stream, mr)
         ->release();
     }
-    auto nl_col = cudf::make_column_from_scalar(newline, str_column_view.size(), stream);
+    auto nl_col = cudf::make_column_from_scalar(
+      newline, str_column_view.size(), stream, cudf::get_current_device_resource_ref());
     // convert the last element into an empty string by resetting the last offset value
     auto& offsets     = nl_col->child(strings_column_view::offsets_column_index);
     auto offsets_view = offsets.mutable_view();
@@ -464,9 +471,12 @@ void write_csv(data_sink* out_sink,
       // (using null representation and delimiter):
       //
       auto str_concat_col = [&] {
-        cudf::string_scalar delimiter_str{
-          std::string{options.get_inter_column_delimiter()}, true, stream};
-        cudf::string_scalar options_narep{options.get_na_rep(), true, stream};
+        cudf::string_scalar delimiter_str{std::string{options.get_inter_column_delimiter()},
+                                          true,
+                                          stream,
+                                          cudf::get_current_device_resource_ref()};
+        cudf::string_scalar options_narep{
+          options.get_na_rep(), true, stream, cudf::get_current_device_resource_ref()};
         if (str_table_view.num_columns() > 1)
           return cudf::strings::detail::concatenate(str_table_view,
                                                     delimiter_str,

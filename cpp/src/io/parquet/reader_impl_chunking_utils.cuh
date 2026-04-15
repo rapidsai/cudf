@@ -21,6 +21,10 @@
 
 namespace cudf::io::parquet::detail {
 
+// Percentage of the total available input read limit that should be reserved for compressed
+// data vs uncompressed data.
+constexpr float input_limit_compression_reserve = 0.3f;
+
 using cudf::io::detail::codec_exec_result;
 using cudf::io::detail::codec_status;
 using cudf::io::detail::decompression_info;
@@ -90,12 +94,6 @@ int64_t find_next_split(int64_t cur_pos,
   type_id timestamp_type_id,
   Type physical,
   cuda::std::optional<LogicalType> logical_type);
-
-/**
- * @brief return compressed and total size of the data in a row group
- *
- */
-std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg);
 
 /**
  * @brief For a set of cumulative_page_info data, adjust the size_bytes field
@@ -776,5 +774,27 @@ CUDF_HOST_DEVICE inline void compute_page_level_decode_sizes(PageInfo const& pag
   // Compute space for repetition levels
   rep_level_size = has_repetition ? num_to_decode * level_type_size : 0;
 }
+
+/**
+ * @brief Result of partitioning row groups into passes.
+ */
+struct row_group_pass_data {
+  std::vector<std::size_t> pass_row_group_offsets;
+  std::vector<std::size_t> pass_start_row_counts;
+};
+
+/**
+ * @brief Partition row groups into passes based on compressed size, leaf value count,
+ * and row count thresholds.
+ *
+ * @param row_groups_info Span of row group metadata
+ * @param comp_read_limit Maximum compressed bytes per pass
+ * @param skip_rows Number of leading rows to skip (affects the effective size of the first row
+ * group)
+ * @return A row_group_pass_data containing pass boundary offsets and cumulative row counts
+ */
+row_group_pass_data compute_row_group_passes(cudf::host_span<row_group_info const> row_groups_info,
+                                             std::size_t comp_read_limit,
+                                             int64_t skip_rows);
 
 }  // namespace cudf::io::parquet::detail

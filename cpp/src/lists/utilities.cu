@@ -55,7 +55,7 @@ std::unique_ptr<column> get_normalized_offsets(lists_column_view const& input,
                                          cudf::mask_state::UNALLOCATED,
                                          stream,
                                          mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input.offsets_begin(),
                     input.offsets_end(),
                     out_offsets->mutable_view().begin<size_type>(),

@@ -88,7 +88,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   auto fn = clamp_strings_fn<OptionalScalarIterator, ReplaceScalarIterator>{
     d_input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr};
   rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(input.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{input.size()},
                     indices.begin(),
@@ -133,7 +133,11 @@ std::unique_ptr<cudf::column> clamp_dictionary_column(dictionary_column_view con
     auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
       if (key.is_valid(stream)) {
         result = dictionary::detail::add_keys(
-          matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), stream, mr);
+          matched_view,
+          make_column_from_scalar(key_replace, 1, stream, cudf::get_current_device_resource_ref())
+            ->view(),
+          stream,
+          mr);
         matched_view = dictionary_column_view(result->view());
       }
     };
@@ -166,7 +170,7 @@ std::unique_ptr<cudf::column> clamp_dictionary_column(dictionary_column_view con
 
   auto fn = clamp_dictionary_fn<T, OptionalIterator, ReplaceIterator>{
     *d_input, lo_itr, lo_index_itr, hi_itr, hi_index_itr};
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{input.size()},
                     indices_itr,
@@ -222,7 +226,7 @@ std::unique_ptr<cudf::column> clamper(column_view const& input,
 
   auto input_pair_iterator =
     make_optional_iterator<T>(*input_device_view, nullate::DYNAMIC{input.has_nulls()});
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input_pair_iterator,
                     input_pair_iterator + input.size(),
                     scalar_zip_itr,

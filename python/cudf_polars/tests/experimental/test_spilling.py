@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -38,7 +39,14 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 @pytest.mark.parametrize(
     "engine,spilled_host_mem_type",
     [
-        ({"rapidsmpf_options": {"pinned_memory": "true"}}, MemoryType.PINNED_HOST),
+        pytest.param(
+            {"rapidsmpf_options": {"pinned_memory": "true"}},
+            MemoryType.PINNED_HOST,
+            marks=pytest.mark.skipif(
+                not is_pinned_memory_resources_supported(),
+                reason="Pinned memory requires CUDA 12.6+ driver and runtime",
+            ),
+        ),
         ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
     ],
     indirect=["engine"],
@@ -75,7 +83,9 @@ def test_make_spill_function(
         for msg_idx in range(count):
             # Create 1MB messages
             table = create_test_table(1024 * 1024, stream)
-            chunk = TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
+            chunk = TableChunk.from_pylibcudf_table(
+                table, stream, exclusive_view=True, br=context.br()
+            )
             msg = Message(msg_idx, chunk)
             mid = sm.insert(msg)
             message_ids[buffer_idx].append(mid)
@@ -124,7 +134,7 @@ def test_make_spill_function(
         spilled_mid = message_ids[1][4]  # Newest message from longest queue
         spilled_msg = buffers[1].extract(mid=spilled_mid)
 
-        chunk = TableChunk.from_message(spilled_msg)
+        chunk = TableChunk.from_message(spilled_msg, br=context.br())
         assert not chunk.is_available()  # Should be on host
 
         # Make it available should bring it back to device

@@ -99,6 +99,7 @@ hybrid_scan_reader::secondary_filters_byte_ranges(
   cudf::host_span<size_type const> row_group_indices, parquet_reader_options const& options) const
 {
   CUDF_FUNC_RANGE();
+
   // Temporary vector with row group indices from the first source
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
@@ -273,6 +274,8 @@ void hybrid_scan_reader::setup_chunking_for_filter_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
+  CUDF_FUNC_RANGE();
+
   // Temporary vector with row group indices from the first source
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
@@ -291,6 +294,8 @@ void hybrid_scan_reader::setup_chunking_for_filter_columns(
 table_with_metadata hybrid_scan_reader::materialize_filter_columns_chunk(
   cudf::mutable_column_view& row_mask) const
 {
+  CUDF_FUNC_RANGE();
+
   return _impl->materialize_filter_columns_chunk(row_mask);
 }
 
@@ -305,6 +310,8 @@ void hybrid_scan_reader::setup_chunking_for_payload_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
+  CUDF_FUNC_RANGE();
+
   // Temporary vector with row group indices from the first source
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
@@ -323,6 +330,8 @@ void hybrid_scan_reader::setup_chunking_for_payload_columns(
 table_with_metadata hybrid_scan_reader::materialize_payload_columns_chunk(
   cudf::column_view const& row_mask) const
 {
+  CUDF_FUNC_RANGE();
+
   return _impl->materialize_payload_columns_chunk(row_mask);
 }
 
@@ -335,6 +344,8 @@ void hybrid_scan_reader::setup_chunking_for_all_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
+  CUDF_FUNC_RANGE();
+
   // Temporary vector with row group indices from the first source
   auto const input_row_group_indices =
     std::vector<std::vector<size_type>>{{row_group_indices.begin(), row_group_indices.end()}};
@@ -350,7 +361,15 @@ void hybrid_scan_reader::setup_chunking_for_all_columns(
 
 table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk() const
 {
+  CUDF_FUNC_RANGE();
+
   return _impl->materialize_all_columns_chunk();
+}
+
+std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_group_passes(
+  cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
+{
+  return _impl->construct_row_group_passes(row_group_indices, pass_read_limit);
 }
 
 bool hybrid_scan_reader::has_next_table_chunk() const { return _impl->has_next_table_chunk(); }

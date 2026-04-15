@@ -203,6 +203,9 @@ convention = "numpy"
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"asyncio.gather".msg = "Use gather_with_task_group instead."
+
 [tool.ruff.lint.flake8-type-checking]
 strict = true
 

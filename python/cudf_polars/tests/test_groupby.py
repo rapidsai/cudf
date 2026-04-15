@@ -126,35 +126,7 @@ def maintain_order(request):
     return request.param
 
 
-def test_groupby(
-    df: pl.LazyFrame, maintain_order, keys, exprs, using_rapidsmpf, request
-):
-    if using_rapidsmpf:
-        pytest.skip(
-            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
-        )
-    failing_rapidsmpf_nodeids = {
-        'test_groupby[maintain_order-col("key1")-col("int32").mean()]',
-        'test_groupby[maintain_order-col("key1")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby[maintain_order-col("key2")-col("int32").mean()]',
-        'test_groupby[maintain_order-col("key2")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby[maintain_order-col("key1")-dyn int: 1-col("int32").mean()]',
-        'test_groupby[maintain_order-col("key1")-dyn int: 1-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby[maintain_order-[(col("key1")) * (col("key2"))]-col("int32").mean()]',
-        'test_groupby[maintain_order-[(col("key1")) * (col("key2"))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby[maintain_order-col("key1")-col("key2")-col("int32").mean()]',
-        'test_groupby[maintain_order-col("key1")-col("key2")-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby[maintain_order-[(col("key1")) == (col("key2"))]-col("int32").mean()]',
-        'test_groupby[maintain_order-[(col("key1")) == (col("key2"))]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (1)]-col("int32").mean()]',
-        'test_groupby[maintain_order-col("key2")-[(col("key1")) == (1)]-col("uint16_with_null").sum()-col("uint16_with_null").mean().alias("mean")]',
-    }
-    request.applymarker(
-        pytest.mark.xfail(
-            using_rapidsmpf and request.node.name in failing_rapidsmpf_nodeids,
-            reason="https://github.com/rapidsai/cudf/issues/21642 and probably mean calculation referenced in https://github.com/rapidsai/cudf/issues/21721",
-        )
-    )
+def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     q = df.group_by(*keys, maintain_order=maintain_order).agg(*exprs)
 
     if not maintain_order:
@@ -352,6 +324,13 @@ def test_groupby_len_with_nulls():
 @pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
 def test_groupby_nunique(df: pl.LazyFrame, column):
     q = df.group_by("key1").agg(pl.col(column).n_unique())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
+def test_groupby_nunique_drop_nulls(df: pl.LazyFrame, column):
+    q = df.group_by("key1").agg(pl.col(column).drop_nulls().n_unique())
 
     assert_gpu_result_equal(q, check_row_order=False)
 

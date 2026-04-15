@@ -77,7 +77,7 @@ struct bloom_filter_caster {
 
     // Query literal in bloom filters from each column chunk (row group).
     thrust::tabulate(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       results_span.begin(),
       results_span.end(),
       [filter_span          = bloom_filter_spans.data(),

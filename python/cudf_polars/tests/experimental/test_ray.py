@@ -8,15 +8,13 @@ from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
+from rapidsmpf.bootstrap import is_running_with_rrun
 
 import polars as pl
 
 from cudf_polars.utils.config import RayContext
 
 ray = pytest.importorskip("ray")
-
-from rapidsmpf.bootstrap import is_running_with_rrun  # noqa: E402
-
 from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine  # noqa: E402
 
 if TYPE_CHECKING:
@@ -26,16 +24,13 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="module")
 def engine() -> Iterator[RayEngine]:
     """Create one Ray cluster + GPU actors shared across the test session."""
-    try:
-        with RayEngine(
-            # Use a small partition size so tests exercise the multi-partition
-            # code path deterministically, regardless of input size.
-            executor_options={"max_rows_per_partition": 10},
-            ray_init_options={"include_dashboard": False},
-        ) as engine:
-            yield engine
-    except RuntimeError as e:
-        pytest.skip(f"Ray GPU cluster unavailable: {e}")
+    with RayEngine(
+        # Use a small partition size so tests exercise the multi-partition
+        # code path deterministically, regardless of input size.
+        executor_options={"max_rows_per_partition": 10},
+        ray_init_options={"include_dashboard": False},
+    ) as engine:
+        yield engine
 
 
 pytestmark = [
@@ -56,7 +51,7 @@ pytestmark = [
 
 def test_reserved_executor_keys() -> None:
     """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd", "ray_context"):
+    for key in ("runtime", "cluster", "spmd_context", "ray_context"):
         with pytest.raises(TypeError, match="reserved"):
             RayEngine(executor_options={key: "anything"})
 

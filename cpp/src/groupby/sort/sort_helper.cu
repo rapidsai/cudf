@@ -86,11 +86,12 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
   if (_key_sorted_order) { return sliced_key_sorted_order(); }
 
   if (_keys_pre_sorted == sorted::YES) {
-    _key_sorted_order = cudf::detail::sequence(_keys.num_rows(),
-                                               numeric_scalar<size_type>(0, true, stream),
-                                               numeric_scalar<size_type>(1, true, stream),
-                                               stream,
-                                               cudf::get_current_device_resource_ref());
+    _key_sorted_order = cudf::detail::sequence(
+      _keys.num_rows(),
+      numeric_scalar<size_type>(0, true, stream, cudf::get_current_device_resource_ref()),
+      numeric_scalar<size_type>(1, true, stream, cudf::get_current_device_resource_ref()),
+      stream,
+      cudf::get_current_device_resource_ref());
     return sliced_key_sorted_order();
   }
 
@@ -149,17 +150,22 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
     auto const row_eq = permuted_row_equality_comparator(d_key_equal, sorted_order);
     auto const ufn    = cudf::detail::unique_copy_fn<decltype(itr), decltype(row_eq)>{
       itr, duplicate_keep_option::KEEP_FIRST, row_eq, size - 1};
-    thrust::transform(rmm::exec_policy_nosync(stream), itr, itr + size, result.begin(), ufn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      itr,
+                      itr + size,
+                      result.begin(),
+                      ufn);
     result_end = cudf::detail::copy_if(
       itr, itr + size, result.begin(), group_offsets->begin(), cuda::std::identity{}, stream);
   } else {
     auto const d_key_equal = comparator.equal_to<false>(
       cudf::nullate::DYNAMIC{cudf::has_nested_nulls(_keys)}, null_equality::EQUAL);
-    result_end = thrust::unique_copy(rmm::exec_policy_nosync(stream),
-                                     cuda::counting_iterator<size_type>{0},
-                                     cuda::counting_iterator<size_type>{size},
-                                     group_offsets->begin(),
-                                     permuted_row_equality_comparator(d_key_equal, sorted_order));
+    result_end =
+      thrust::unique_copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          cuda::counting_iterator<size_type>{0},
+                          cuda::counting_iterator<size_type>{size},
+                          group_offsets->begin(),
+                          permuted_row_equality_comparator(d_key_equal, sorted_order));
   }
 
   auto const num_groups = cuda::std::distance(group_offsets->begin(), result_end);
@@ -193,8 +199,11 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
 {
   if (_unsorted_keys_labels) return _unsorted_keys_labels->view();
 
-  column_ptr temp_labels = make_numeric_column(
-    data_type(type_to_id<size_type>()), _keys.num_rows(), mask_state::ALL_NULL, stream);
+  column_ptr temp_labels = make_numeric_column(data_type(type_to_id<size_type>()),
+                                               _keys.num_rows(),
+                                               mask_state::ALL_NULL,
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
 
   auto group_labels_view = cudf::column_view(data_type(type_to_id<size_type>()),
                                              group_labels(stream).size(),
@@ -223,7 +232,8 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   auto [row_bitmask, null_count] =
     cudf::detail::bitmask_and(_keys, stream, cudf::get_current_device_resource_ref());
 
-  auto const zero = numeric_scalar<int8_t>(0, true, stream);
+  auto const zero =
+    numeric_scalar<int8_t>(0, true, stream, cudf::get_current_device_resource_ref());
   // Create a temporary variable and only set _keys_bitmask_column right before the return.
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto keys_bitmask_column = cudf::detail::sequence(

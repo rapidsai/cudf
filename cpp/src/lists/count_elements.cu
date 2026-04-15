@@ -48,7 +48,7 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
                                         mr);
 
   // fill in the sizes
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<cudf::size_type>{0},
                     cuda::counting_iterator<cudf::size_type>{input.size()},
                     output->mutable_view().begin<size_type>(),

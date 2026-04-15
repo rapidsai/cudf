@@ -16,12 +16,15 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+    from rapidsmpf.communicator.communicator import Communicator
+
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
 @pytest.fixture
 def engine(
     request: pytest.FixtureRequest,
+    spmd_comm: Communicator,
 ) -> Generator[StreamingEngine, None, None]:
     params: dict[str, Any] = getattr(request, "param", {})
     executor_options = {
@@ -30,7 +33,7 @@ def engine(
         "dynamic_planning": {},
         **params.get("executor_options", {}),
     }
-    with SPMDEngine(executor_options=executor_options) as engine:
+    with SPMDEngine(comm=spmd_comm, executor_options=executor_options) as engine:
         yield engine
 
 

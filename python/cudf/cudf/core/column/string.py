@@ -67,7 +67,7 @@ if TYPE_CHECKING:
 # this construction will need to be updated with more explicit mapping.
 _FLAG_MAP = {
     getattr(re, flag): getattr(plc.strings.regex_flags.RegexFlags, flag)
-    for flag in ("MULTILINE", "DOTALL")
+    for flag in ("MULTILINE", "DOTALL", "IGNORECASE")
 }
 
 

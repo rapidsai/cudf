@@ -101,7 +101,7 @@ struct has_nans {
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    return thrust::any_of(rmm::exec_policy_nosync(stream),
+    return thrust::any_of(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                           cuda::counting_iterator<cudf::size_type>{0},
                           cuda::counting_iterator<cudf::size_type>{input.size()},
                           check_for_nan<T>(device_view));

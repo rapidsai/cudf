@@ -120,7 +120,7 @@ std::unique_ptr<column> group_merge_histogram(column_view const& values,
   // That is equivalent to creating a new lists column (view) from the input lists column
   // with new offsets gathered as below.
   auto new_offsets = rmm::device_uvector<size_type>(num_groups + 1, stream);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  group_offsets.begin(),
                  group_offsets.end(),
                  lists_cv.offsets_begin(),

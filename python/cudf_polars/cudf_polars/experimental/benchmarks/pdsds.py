@@ -13,14 +13,13 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 import os
 from typing import TYPE_CHECKING, ClassVar
 
 import polars as pl
 
-with contextlib.suppress(ImportError):
+try:
     from cudf_polars.experimental.benchmarks.utils import (
         COUNT_DTYPE,
         build_parser,
@@ -28,6 +27,9 @@ with contextlib.suppress(ImportError):
         run_duckdb,
         run_polars,
     )
+except ImportError as e:
+    if e.name is not None and not e.name.startswith("cudf_polars"):
+        raise
 
 if TYPE_CHECKING:
     from types import ModuleType

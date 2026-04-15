@@ -398,6 +398,7 @@ async def read_chunk(
                 df.table,
                 df.stream,
                 exclusive_view=True,
+                br=context.br(),
             ),
         ),
     )
@@ -816,13 +817,13 @@ async def sink_node(
         count_width = math.ceil(math.log10(metadata.local_count))
         count_width = max(count_width, 6)
 
-        if ir.executor_options.sink_to_directory:
+        if ir.sink_to_directory:
             _prepare_sink_directory(ir.sink.path)
             i = 0
             while (msg := await ch_in.recv(context)) is not None:
-                chunk = TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
+                chunk = TableChunk.from_message(
+                    msg, br=context.br()
+                ).make_available_and_spill(context.br(), allow_overbooking=True)
                 df = chunk_to_frame(chunk, child_ir)
                 part_path = f"{path_root}.{str(i).zfill(count_width)}.{suffix}"
                 await asyncio.to_thread(
@@ -840,9 +841,9 @@ async def sink_node(
             # Write chunks to a single file
             writer_state = None
             while (msg := await ch_in.recv(context)) is not None:
-                chunk = TableChunk.from_message(msg).make_available_and_spill(
-                    context.br(), allow_overbooking=True
-                )
+                chunk = TableChunk.from_message(
+                    msg, br=context.br()
+                ).make_available_and_spill(context.br(), allow_overbooking=True)
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
                 writer_state = await asyncio.to_thread(

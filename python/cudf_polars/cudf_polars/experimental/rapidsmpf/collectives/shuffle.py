@@ -231,7 +231,7 @@ async def _global_shuffle(
     while (msg := await ch_in.recv(context)) is not None:
         if not skip_insert:
             shuffle.insert_hash(
-                TableChunk.from_message(msg).make_available_and_spill(
+                TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
                     context.br(), allow_overbooking=True
                 ),
                 columns_to_hash,
@@ -249,6 +249,7 @@ async def _global_shuffle(
                     table=shuffle.extract_chunk(partition_id, stream),
                     stream=stream,
                     exclusive_view=True,
+                    br=context.br(),
                 ),
             ),
         )

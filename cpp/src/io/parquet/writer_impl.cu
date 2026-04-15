@@ -1517,7 +1517,7 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
   rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
   rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
   rmm::device_uvector<codec_exec_result> comp_res(max_comp_pages, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                comp_res.begin(),
                comp_res.end(),
                codec_exec_result{0, codec_status::FAILURE});
@@ -2058,9 +2058,15 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   rmm::device_uvector<uint32_t> rep_level_histogram(rep_histogram_bfr_size, stream);
 
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), def_level_histogram.begin(), def_level_histogram.end(), 0);
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    def_level_histogram.begin(),
+    def_level_histogram.end(),
+    0);
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), rep_level_histogram.begin(), rep_level_histogram.end(), 0);
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    rep_level_histogram.begin(),
+    rep_level_histogram.end(),
+    0);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
@@ -2403,39 +2409,31 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                          uncomp_bfr,   // unused, but contains data for later write to sink
                          comp_bfr,     // unused, but contains data for later write to sink
                          col_idx_bfr,  // unused, but contains data for later write to sink
-                         bounce_buffer] = [&] {
-    try {
-      return convert_table_to_parquet_data(*_table_meta,
-                                           input,
-                                           partitions,
-                                           _kv_meta,
-                                           _agg_meta,
-                                           _max_page_fragment_size,
-                                           _max_row_group_size,
-                                           _max_page_size_bytes,
-                                           _max_row_group_rows,
-                                           _max_page_size_rows,
-                                           _column_index_truncate_length,
-                                           _stats_granularity,
-                                           _compression,
-                                           _compression_statistics != nullptr,
-                                           _dict_policy,
-                                           _max_dictionary_size,
-                                           _single_write_mode,
-                                           _int96_timestamps,
-                                           _utc_timestamps,
-                                           _write_v2_headers,
-                                           _page_level_compression,
-                                           _write_arrow_schema,
-                                           _out_sink,
-                                           _stream);
-    } catch (...) {  // catch any exception type
-      CUDF_LOG_ERROR(
-        "Parquet writer encountered exception during processing. "
-        "No data has been written to the sink.");
-      throw;  // this throws the same exception
-    }
-  }();
+                         bounce_buffer] =
+    convert_table_to_parquet_data(*_table_meta,
+                                  input,
+                                  partitions,
+                                  _kv_meta,
+                                  _agg_meta,
+                                  _max_page_fragment_size,
+                                  _max_row_group_size,
+                                  _max_page_size_bytes,
+                                  _max_row_group_rows,
+                                  _max_page_size_rows,
+                                  _column_index_truncate_length,
+                                  _stats_granularity,
+                                  _compression,
+                                  _compression_statistics != nullptr,
+                                  _dict_policy,
+                                  _max_dictionary_size,
+                                  _single_write_mode,
+                                  _int96_timestamps,
+                                  _utc_timestamps,
+                                  _write_v2_headers,
+                                  _page_level_compression,
+                                  _write_arrow_schema,
+                                  _out_sink,
+                                  _stream);
 
   // Compression/encoding were all successful. Now write the intermediate results.
   write_parquet_data_to_sink(updated_agg_meta,

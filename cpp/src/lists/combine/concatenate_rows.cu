@@ -110,7 +110,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                     stream);
 
   // convert to offsets
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          offsets->view().begin<size_type>(),
                          offsets->view().begin<size_type>() + input.num_rows() + 1,
                          offsets->mutable_view().begin<size_type>(),

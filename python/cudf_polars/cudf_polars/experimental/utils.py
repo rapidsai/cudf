@@ -10,7 +10,7 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col, Expr, GroupedRollingWindow, UnaryFunction
+from cudf_polars.dsl.expr import Col, Expr, GroupedWindow, UnaryFunction
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
@@ -66,9 +66,13 @@ def _lower_ir_fallback(
     # If any children contain multiple partitions,
     # those children will be collapsed with `Repartition`.
     from cudf_polars.experimental.repartition import Repartition
+    from cudf_polars.experimental.select import _inline_hstack_false
 
     config_options = rec.state["config_options"]
     rapidsmpf_engine = config_options.executor.runtime == "rapidsmpf"
+
+    # Make sure we avoid mixed-length columns in intermediate TableChunks.
+    ir = _inline_hstack_false(ir)
 
     # Lower children
     lowered_children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
@@ -137,8 +141,8 @@ def _get_unique_fractions(
 
 
 def _contains_over(exprs: Sequence[Expr]) -> bool:
-    """Return True if any expression in 'exprs' contains an over(...) (ie. GroupedRollingWindow)."""
-    return any(isinstance(e, GroupedRollingWindow) for e in traversal(exprs))
+    """Return True if any expression contains a window expression."""
+    return any(isinstance(e, GroupedWindow) for e in traversal(exprs))
 
 
 def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:

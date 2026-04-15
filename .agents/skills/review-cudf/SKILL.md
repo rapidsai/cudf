@@ -100,12 +100,12 @@ Additional key checks not in the guide:
 - No raw owning pointers; use `std::unique_ptr`, `std::shared_ptr`, `std::reference_wrapper`.
 - Prefer pinned memory/vectors for small H2D/D2H transfers via `cudf::detail::make_pinned_vector{,_async}` instead of `cudf::detail::make_host_vector{,_async}` and `cudf::detail::make_std_vector{}`.
 - Prefer `span` versions of constructors for `cudf::detail::make_pinned_vector{,_async}` and `cudf::detail::make_host_vector{,_async}`.
-- Functions defined in headers (e.g. templates) must be `inline`.
 - Anonymous namespaces for single-TU helpers; never in headers.
 - Use `host_span`/`device_span` ; no owning vectors passed around by copy/reference unless explicitly moved (transferring ownership).
 - Use modern C++20 primitives such as `concepts`, `std::ranges`, `std::transform` over manual implementations and raw loops; Range-for loops are fine.
 - Use `static_assert` with a clear message to prevent accidental template misuse.
 - Use `[[nodiscard]]` when a function with no side effects returns a non-void result.
+- No functions defined in headers unless they are templated or `inline` device functions
 
 ### Memory Allocation & Management
 

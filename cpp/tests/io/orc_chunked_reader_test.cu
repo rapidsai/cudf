@@ -956,7 +956,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNullCount)
 {
   auto constexpr num_rows = 100'000;
 
-  auto const sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+  auto const sequence = cuda::constant_iterator(1);
   auto const validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 4 != 3; });
   std::vector<std::unique_ptr<cudf::column>> cols;

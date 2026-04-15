@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
@@ -21,7 +21,7 @@ from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
 
-from pylibcudf.libcudf.join import set_as_build_table as SetAsBuildTable  # no-cython-lint
+from pylibcudf.libcudf.join import set_as_build_table as SetAsBuildTable  # no-cython-lint  # noqa: F401, deprecated
 
 __all__ = [
     "conditional_full_join",
@@ -221,7 +221,6 @@ cpdef Column left_semi_join(
             new cpp_join.filtered_join(
                 right_keys.view(),
                 nulls_equal,
-                cpp_join.set_as_build_table.RIGHT,
                 stream.view()
             )
         )
@@ -270,7 +269,6 @@ cpdef Column left_anti_join(
             new cpp_join.filtered_join(
                 right_keys.view(),
                 nulls_equal,
-                cpp_join.set_as_build_table.RIGHT,
                 stream.view()
             )
         )
@@ -827,8 +825,13 @@ cpdef Column mixed_left_anti_join(
 
 cdef class FilteredJoin:
     """
-    Filtered hash join that builds hash table on creation and probes
-    results in subsequent join member functions.
+    Filtered hash join that builds a hash table from the right (filter) table
+    on creation and probes results in subsequent join member functions.
+
+    The build table is always treated as the right (filter) table. It will be
+    applied to multiple left (probe) tables in subsequent ``semi_join`` or
+    ``anti_join`` calls. For use cases where the left table should be reused
+    with multiple right tables, use ``MarkJoin`` instead.
 
     For details, see :cpp:class:`cudf::filtered_join`.
     """
@@ -837,7 +840,6 @@ cdef class FilteredJoin:
         self,
         Table build,
         null_equality compare_nulls,
-        cpp_join.set_as_build_table reuse_tbl,
         double load_factor=0.5,
         Stream stream=None,
     ):
@@ -847,14 +849,9 @@ cdef class FilteredJoin:
         Parameters
         ----------
         build : Table
-            The build table, from which the hash map is built.
+            The right (filter) table used to build the hash table.
         compare_nulls : NullEquality
             Controls whether null join-key values should match or not.
-        reuse_tbl : SetAsBuildTable
-            Specifies which table to use as the build table. If LEFT, the build
-            table is considered as the left table and is reused with multiple right
-            (probe) tables. If RIGHT, the build table is considered as the
-            right/filter table and will be applied to multiple left (probe) tables.
         load_factor : float, optional
             The desired ratio of filled slots to total slots in the hash table,
             must be in range (0,1]. Defaults to 0.5.
@@ -868,7 +865,6 @@ cdef class FilteredJoin:
                 new cpp_join.filtered_join(
                     build.view(),
                     compare_nulls,
-                    reuse_tbl,
                     load_factor,
                     stream.view()
                 )

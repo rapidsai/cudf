@@ -15,6 +15,7 @@
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -455,7 +456,7 @@ struct range_window_clamper {
                         mutable_column_view& result,
                         rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream),
+    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cudf::detail::make_counting_transform_iterator(
                      0, unbounded_distance_functor{grouping, direction}),
                    size,
@@ -471,7 +472,7 @@ struct range_window_clamper {
                           mutable_column_view& result,
                           rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream),
+    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cudf::detail::make_counting_transform_iterator(
                      0, current_row_distance_functor{grouping, direction, order, begin}),
                    size,
@@ -488,7 +489,7 @@ struct range_window_clamper {
                       mutable_column_view& result,
                       rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream),
+    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cudf::detail::make_counting_transform_iterator(
                      0,
                      bounded_distance_functor<Grouping, OrderbyT, DeltaT, WindowType>{
@@ -623,7 +624,10 @@ struct range_window_clamper {
       auto const value =
         static_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
       auto const new_scalar = cudf::fixed_point_scalar<OrderbyT>{
-        value.rescaled(numeric::scale_type{orderby.type().scale()}), true, stream};
+        value.rescaled(numeric::scale_type{orderby.type().scale()}),
+        true,
+        stream,
+        cudf::get_current_device_resource_ref()};
       return window_bounds<OrderbyT>(
         orderby, direction, order, grouping, nulls_at_start, &new_scalar, stream, mr);
     }

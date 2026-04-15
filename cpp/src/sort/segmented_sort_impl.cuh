@@ -67,8 +67,10 @@ struct column_fast_sort_fn {
                                                 stream,
                                                 cudf::get_current_device_resource_ref());
     mutable_column_view output_view = temp_col->mutable_view();
-    auto temp_indices               = cudf::column(
-      cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0), stream);
+    auto temp_indices =
+      cudf::column(cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0),
+                   stream,
+                   cudf::get_current_device_resource_ref());
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
     auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
@@ -155,8 +157,11 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
 {
   // Unfortunately, CUB's segmented sort functions cannot accept iterators.
   // We have to build a pre-filled sequence of indices as input.
-  auto sorted_indices =
-    cudf::detail::sequence(input.size(), numeric_scalar<size_type>{0, true, stream}, stream, mr);
+  auto sorted_indices = cudf::detail::sequence(
+    input.size(),
+    numeric_scalar<size_type>{0, true, stream, cudf::get_current_device_resource_ref()},
+    stream,
+    mr);
   auto indices_view = sorted_indices->mutable_view();
 
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),

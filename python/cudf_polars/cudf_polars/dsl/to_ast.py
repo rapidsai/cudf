@@ -76,24 +76,6 @@ UOP_TO_ASTOP = {
     plc.unary.UnaryOperator.NOT: plc_expr.ASTOperator.NOT,
 }
 
-SUPPORTED_STATISTICS_BINOPS = {
-    plc.binaryop.BinaryOperator.EQUAL,
-    plc.binaryop.BinaryOperator.NOT_EQUAL,
-    plc.binaryop.BinaryOperator.LESS,
-    plc.binaryop.BinaryOperator.LESS_EQUAL,
-    plc.binaryop.BinaryOperator.GREATER,
-    plc.binaryop.BinaryOperator.GREATER_EQUAL,
-}
-
-REVERSED_COMPARISON = {
-    plc.binaryop.BinaryOperator.EQUAL: plc.binaryop.BinaryOperator.EQUAL,
-    plc.binaryop.BinaryOperator.NOT_EQUAL: plc.binaryop.BinaryOperator.NOT_EQUAL,
-    plc.binaryop.BinaryOperator.LESS: plc.binaryop.BinaryOperator.GREATER,
-    plc.binaryop.BinaryOperator.LESS_EQUAL: plc.binaryop.BinaryOperator.GREATER_EQUAL,
-    plc.binaryop.BinaryOperator.GREATER: plc.binaryop.BinaryOperator.LESS,
-    plc.binaryop.BinaryOperator.GREATER_EQUAL: plc.binaryop.BinaryOperator.LESS_EQUAL,
-}
-
 
 class ASTState(TypedDict):
     """
@@ -194,27 +176,6 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
                 )
             ),
         )
-    if self.state["for_parquet"]:
-        op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
-        if op1_col ^ op2_col:
-            op: plc.binaryop.BinaryOperator = node.op
-            if op not in SUPPORTED_STATISTICS_BINOPS:
-                raise NotImplementedError(
-                    f"Parquet filter binop with column doesn't support {node.op!r}"
-                )
-            op1, op2 = node.children
-            if op2_col:
-                (op1, op2) = (op2, op1)
-                op = REVERSED_COMPARISON[op]
-            if not isinstance(op2, expr.Literal):
-                raise NotImplementedError(
-                    "Parquet filter binops must have form 'col binop literal'"
-                )
-            return plc_expr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
-        elif op1_col and op2_col:
-            raise NotImplementedError(
-                "Parquet filter binops must have one column reference not two"
-            )
     return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
 
 

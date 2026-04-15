@@ -130,6 +130,15 @@ class UnaryFunction(Expr):
     _supported_fns = frozenset().union(
         _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
     )
+    _pointwise_fns = frozenset(
+        {
+            "fill_null",
+            "fill_null_with_strategy",
+            "mask_nans",
+            "round",
+            "set_sorted",
+        }
+    ).union(_OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -138,19 +147,7 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        self.is_pointwise = self.name not in (
-            "as_struct",
-            "cum_max",
-            "cum_min",
-            "cum_prod",
-            "cum_sum",
-            "drop_nulls",
-            "rank",
-            "shift",
-            "shift_and_fill",
-            "top_k",
-            "unique",
-        )
+        self.is_pointwise = self.name in UnaryFunction._pointwise_fns
 
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover

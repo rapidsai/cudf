@@ -97,35 +97,20 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def _year_totals_component(
+def _year_total_sk(
     sales: pl.LazyFrame,
     date_dim: pl.LazyFrame,
-    customer: pl.LazyFrame,
     date_fk: str,
     customer_fk: str,
     amount_col: str,
-    sale_type: str,
     year: int,
 ) -> pl.LazyFrame:
-    dates = date_dim.filter(pl.col("d_year").is_in([year, year + 1])).select(
-        ["d_date_sk", "d_year"]
-    )
-    cust = customer.select(
-        ["c_customer_sk", "c_customer_id", "c_first_name", "c_last_name"]
-    )
+    dates = date_dim.filter(pl.col("d_year") == year).select(["d_date_sk"])
     return (
         sales.join(dates, left_on=date_fk, right_on="d_date_sk")
-        .join(cust, left_on=customer_fk, right_on="c_customer_sk")
-        .group_by(["c_customer_id", "c_first_name", "c_last_name", "d_year"])
+        .group_by(customer_fk)
         .agg(pl.col(amount_col).std().alias("year_total"))
-        .select(
-            pl.col("c_customer_id").alias("customer_id"),
-            pl.col("c_first_name").alias("customer_first_name"),
-            pl.col("c_last_name").alias("customer_last_name"),
-            pl.col("d_year").alias("year1"),
-            "year_total",
-        )
-        .with_columns(pl.lit(sale_type).alias("sale_type"))
+        .rename({customer_fk: "customer_sk"})
     )
 
 
@@ -144,99 +129,51 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    year_total = pl.concat(
-        [
-            _year_totals_component(
-                sales=store_sales,
-                date_dim=date_dim,
-                customer=customer,
-                date_fk="ss_sold_date_sk",
-                customer_fk="ss_customer_sk",
-                amount_col="ss_net_paid",
-                sale_type="s",
-                year=year,
-            ),
-            _year_totals_component(
-                sales=web_sales,
-                date_dim=date_dim,
-                customer=customer,
-                date_fk="ws_sold_date_sk",
-                customer_fk="ws_bill_customer_sk",
-                amount_col="ws_net_paid",
-                sale_type="w",
-                year=year,
-            ),
-        ]
+    t_s_first = (
+        _year_total_sk(
+            store_sales,
+            date_dim,
+            "ss_sold_date_sk",
+            "ss_customer_sk",
+            "ss_net_paid",
+            year,
+        )
+        .rename({"year_total": "s_first_total"})
+        .filter(pl.col("s_first_total") > 0)
     )
+    t_s_sec = _year_total_sk(
+        store_sales,
+        date_dim,
+        "ss_sold_date_sk",
+        "ss_customer_sk",
+        "ss_net_paid",
+        year + 1,
+    ).rename({"year_total": "s_sec_total"})
+    t_w_first = (
+        _year_total_sk(
+            web_sales,
+            date_dim,
+            "ws_sold_date_sk",
+            "ws_bill_customer_sk",
+            "ws_net_paid",
+            year,
+        )
+        .rename({"year_total": "w_first_total"})
+        .filter(pl.col("w_first_total") > 0)
+    )
+    t_w_sec = _year_total_sk(
+        web_sales,
+        date_dim,
+        "ws_sold_date_sk",
+        "ws_bill_customer_sk",
+        "ws_net_paid",
+        year + 1,
+    ).rename({"year_total": "w_sec_total"})
 
-    # Polars sum() returns 0 for all-null groups; SQL returns NULL.
-    # See https://github.com/rapidsai/cudf/issues/19560.
-    grouped = (
-        year_total.group_by(
-            ["customer_id", "customer_first_name", "customer_last_name"]
-        )
-        .agg(
-            [
-                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .count()
-                .alias("s_first_cnt"),
-                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .sum()
-                .alias("s_first_sum"),
-                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year + 1))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .count()
-                .alias("s_second_cnt"),
-                pl.when((pl.col("sale_type") == "s") & (pl.col("year1") == year + 1))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .sum()
-                .alias("s_second_sum"),
-                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .count()
-                .alias("w_first_cnt"),
-                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .sum()
-                .alias("w_first_sum"),
-                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year + 1))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .count()
-                .alias("w_second_cnt"),
-                pl.when((pl.col("sale_type") == "w") & (pl.col("year1") == year + 1))
-                .then(pl.col("year_total"))
-                .otherwise(None)
-                .sum()
-                .alias("w_second_sum"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("s_first_cnt") > 0)
-            .then(pl.col("s_first_sum"))
-            .otherwise(None)
-            .alias("s_first"),
-            pl.when(pl.col("s_second_cnt") > 0)
-            .then(pl.col("s_second_sum"))
-            .otherwise(None)
-            .alias("s_second"),
-            pl.when(pl.col("w_first_cnt") > 0)
-            .then(pl.col("w_first_sum"))
-            .otherwise(None)
-            .alias("w_first"),
-            pl.when(pl.col("w_second_cnt") > 0)
-            .then(pl.col("w_second_sum"))
-            .otherwise(None)
-            .alias("w_second"),
-        )
+    joined = (
+        t_s_first.join(t_s_sec, on="customer_sk")
+        .join(t_w_first, on="customer_sk")
+        .join(t_w_sec, on="customer_sk")
     )
 
     sort_by = {
@@ -247,14 +184,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            grouped.filter((pl.col("s_first") > 0) & (pl.col("w_first") > 0))
-            .with_columns(
-                (pl.col("w_second") / pl.col("w_first")).alias("w_ratio"),
-                (pl.col("s_second") / pl.col("s_first")).alias("s_ratio"),
+            joined.filter(
+                pl.col("w_sec_total") / pl.col("w_first_total")
+                > pl.col("s_sec_total") / pl.col("s_first_total")
             )
-            .filter(pl.col("w_ratio") > pl.col("s_ratio"))
-            .select(["customer_id", "customer_first_name", "customer_last_name"])
-            .sort(sort_by.keys(), nulls_last=True)
+            .join(
+                customer.select(
+                    ["c_customer_sk", "c_customer_id", "c_first_name", "c_last_name"]
+                ),
+                left_on="customer_sk",
+                right_on="c_customer_sk",
+            )
+            .select(
+                pl.col("c_customer_id").alias("customer_id"),
+                pl.col("c_first_name").alias("customer_first_name"),
+                pl.col("c_last_name").alias("customer_last_name"),
+            )
+            .sort(
+                ["customer_id", "customer_first_name", "customer_last_name"],
+                nulls_last=True,
+            )
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

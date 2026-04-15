@@ -101,8 +101,12 @@ struct result_column_creator {
       }
       return {rmm::device_buffer{}, 0};
     }();
-    return create_structs_hierarchy(
-      output_size, make_children(output_size), null_count, std::move(null_mask), stream);
+    return create_structs_hierarchy(output_size,
+                                    make_children(output_size),
+                                    null_count,
+                                    std::move(null_mask),
+                                    stream,
+                                    cudf::get_current_device_resource_ref());
   }
 };
 
@@ -166,7 +170,7 @@ rmm::device_uvector<size_type> compute_key_transform_map(
   // indices (indices of the keys in the final output table, which contains only the extracted
   // unique keys). Only these extracted unique keys are mapped.
   rmm::device_uvector<size_type> key_transform_map(num_total_keys, stream, mr);
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   cuda::counting_iterator<cudf::size_type>{0},
                   cuda::counting_iterator{static_cast<size_type>(unique_key_indices.size())},
                   unique_key_indices.begin(),
@@ -181,7 +185,7 @@ rmm::device_uvector<size_type> compute_target_indices(device_span<size_type cons
                                                       rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<size_type> target_indices(input.size(), stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input.begin(),
                     input.end(),
                     target_indices.begin(),

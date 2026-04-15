@@ -443,3 +443,34 @@ def test_assert_tpch_result_float_not_actually_sorted(epsilon: float) -> None:
         assert_tpch_result_equal(
             left, right, sort_by=[("value", False)], abs_tol=0.01, check_exact=False
         )
+
+
+def test_assert_tpch_result_equal_sort_keys_raises_not_sorted() -> None:
+    left = pl.DataFrame(
+        {
+            "lochierarchy": [0, 0, 0, 1, 1],
+            "i_category": ["music", "electronics", "books", "sports", "toys"],
+            "total_sales": [150, 200, 100, 300, 250],
+        }
+    )
+    # It does not matter what right is as long as it has the
+    # same schema because we should fail before we compare them.
+    right = left.clone()
+    sort_keys = [
+        (
+            pl.when(pl.col("lochierarchy") == 0)
+            .then(pl.col("i_category"))
+            .otherwise(pl.lit("foo")),
+            False,
+        )
+    ]
+    with pytest.raises(
+        ValidationError, match="left dataframe is not sorted by sort_keys expressions"
+    ):
+        assert_tpch_result_equal(
+            left,
+            right,
+            sort_by=[("lochierarchy", True), ("i_category", False)],
+            sort_keys=sort_keys,
+            nulls_last=True,
+        )

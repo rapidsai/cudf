@@ -24,10 +24,9 @@
 #include <cuda/iterator>
 #include <thrust/host_vector.h>
 
-#include <bitset>
 #include <iterator>
-#include <limits>
 #include <numeric>
+#include <utility>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -386,7 +385,8 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_all_true_row_mask(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
   auto const num_rows = total_rows_in_row_groups(row_group_indices);
-  auto true_scalar    = cudf::numeric_scalar<bool>(true, true, stream);
+  auto true_scalar =
+    cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
   return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
 }
 
@@ -721,6 +721,62 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns_chunk()
   _rows_processed_so_far += result.tbl->num_rows();
 
   return result;
+}
+
+std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row_group_passes(
+  cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+
+  // If pass_read_limit is 0 or there is only one row group, return all in a single pass
+  if (pass_read_limit == 0 or row_group_indices.size() == 1) {
+    return {{row_group_indices.begin(), row_group_indices.end()}};
+  }
+
+  // TODO(mh): Need to handle multiple sources in the future
+  auto constexpr source_index = 0;
+
+  // Construct row group information
+  auto row_groups_info = std::vector<row_group_info>{};
+  row_groups_info.reserve(row_group_indices.size());
+  size_t start_row = 0;
+  std::transform(row_group_indices.begin(),
+                 row_group_indices.end(),
+                 std::back_inserter(row_groups_info),
+                 [&](auto const& rg_index) {
+                   auto const& row_group =
+                     _extended_metadata->get_row_group(rg_index, source_index);
+                   auto const [compressed_size, total_size, num_rows, max_leaf_values] =
+                     _extended_metadata->get_row_group_properties(row_group);
+                   auto rg_info = row_group_info{.index               = rg_index,
+                                                 .start_row           = start_row,
+                                                 .unadjusted_num_rows = num_rows,
+                                                 .source_index        = source_index,
+                                                 .compressed_size     = compressed_size,
+                                                 .max_leaf_values     = max_leaf_values};
+                   start_row += num_rows;
+                   return rg_info;
+                 });
+
+  auto const comp_read_limit = static_cast<std::size_t>(
+    pass_read_limit * cudf::io::parquet::detail::input_limit_compression_reserve);
+
+  auto const pass_data =
+    cudf::io::parquet::detail::compute_row_group_passes(row_groups_info, comp_read_limit, 0);
+
+  // Convert offset-based pass boundaries back to vectors of row group indices
+  auto const& offsets = pass_data.pass_row_group_offsets;
+  auto passes         = std::vector<std::vector<cudf::size_type>>{};
+  passes.reserve(offsets.size() - 1);
+  std::transform(offsets.begin(),
+                 offsets.end() - 1,
+                 offsets.begin() + 1,
+                 std::back_inserter(passes),
+                 [&](auto const start, auto const end) {
+                   return std::vector<cudf::size_type>{row_group_indices.begin() + start,
+                                                       row_group_indices.begin() + end};
+                 });
+  return passes;
 }
 
 bool hybrid_scan_reader_impl::has_next_table_chunk()

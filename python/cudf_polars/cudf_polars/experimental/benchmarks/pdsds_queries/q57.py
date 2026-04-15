@@ -214,4 +214,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+        sort_keys=[
+            (pl.col("sum_sales") - pl.col("avg_monthly_sales"), False),
+            (pl.col("avg_monthly_sales"), False),
+        ],
     )

@@ -291,11 +291,9 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
 
   if (current_row_group_indices.size() > 1) {
     auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_filter_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_filter_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
+    materialize_filter_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_filter_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
   } else {
     materialize_filter_columns(current_row_group_indices);
   }
@@ -336,11 +334,9 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
 
   if (current_row_group_indices.size() > 1) {
     auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_payload_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_payload_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
+    materialize_payload_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_payload_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
   } else {
     materialize_payload_columns(current_row_group_indices);
   }
@@ -440,11 +436,9 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
 
   if (current_row_group_indices.size() > 1) {
     auto const row_group_split = current_row_group_indices.size() / 2;
-    materialize_all_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin(), row_group_split});
-    materialize_all_columns(
-      cudf::host_span<cudf::size_type const>{current_row_group_indices.begin() + row_group_split,
-                                             current_row_group_indices.size() - row_group_split});
+    materialize_all_columns(current_row_group_indices.subspan(0, row_group_split));
+    materialize_all_columns(current_row_group_indices.subspan(
+      row_group_split, current_row_group_indices.size() - row_group_split));
   } else {
     materialize_all_columns(current_row_group_indices);
   }

@@ -38,9 +38,9 @@ if TYPE_CHECKING:
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
+    all_flags = re.MULTILINE | re.DOTALL | re.IGNORECASE
     return flags == 0 or (
-        (flags & (re.MULTILINE | re.DOTALL) != 0)
-        and (flags & ~(re.MULTILINE | re.DOTALL) == 0)
+        (flags & all_flags) != 0 and (flags & ~all_flags) == 0
     )
 
 
@@ -336,15 +336,18 @@ class StringMethods(BaseAccessor):
                 )
             ):
                 other_cols = (
-                    as_column(
-                        frame.reindex(parent_index), dtype=CUDF_STRING_DTYPE
+                    (
+                        as_column(
+                            frame.reindex(parent_index),
+                            dtype=CUDF_STRING_DTYPE,
+                        )
+                        if (
+                            parent_index is not None
+                            and isinstance(frame, cudf.Series)
+                            and not frame.index.equals(parent_index)
+                        )
+                        else as_column(frame, dtype=CUDF_STRING_DTYPE)
                     )
-                    if (
-                        parent_index is not None
-                        and isinstance(frame, cudf.Series)
-                        and not frame.index.equals(parent_index)
-                    )
-                    else as_column(frame, dtype=CUDF_STRING_DTYPE)
                     for frame in others
                 )
             elif others is not None and not isinstance(others, StringMethods):
@@ -613,8 +616,8 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.extract`
 
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         if not isinstance(expand, bool):
             raise ValueError("expand parameter must be True or False")
@@ -643,6 +646,17 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             data, expand=expand, replace_name=result_name
         )
+
+    def _remove_named_capture_groups(self, pat: str) -> str:
+        r"""
+        Removes any named capture groups from the given regex pattern.
+        Named capture groups are expected in the format "(?P<name>)" only.
+        These are unnecessary (and unexpected) by the pylibcudf for non-extract regex calls.
+        """
+        to_remove = "|".join(re.compile(pat).groupindex.keys())
+        if to_remove:
+            pat = re.sub(rf"\(\?P<(?:{to_remove})>", "(", pat)
+        return pat
 
     def contains(
         self,
@@ -763,8 +777,8 @@ class StringMethods(BaseAccessor):
             The parameter `case` is not yet supported and will
             raise a NotImplementedError if anything other than the default
             value is set.
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         if (
             na is not no_default
@@ -791,7 +805,8 @@ class StringMethods(BaseAccessor):
 
         if is_scalar(pat):
             if regex:
-                result_col = self._column.contains_re(pat, flags)  # type: ignore[arg-type]
+                pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
+                result_col = self._column.contains_re(pat, flags)
             else:
                 if case is False:
                     input_column = self._column.to_lower()
@@ -3603,7 +3618,7 @@ class StringMethods(BaseAccessor):
             :meth:`pandas.Series.str.count`
 
             -   `flags` parameter currently only supports re.DOTALL
-                and re.MULTILINE.
+                and re.MULTILINE and re.IGNORECASE.
             -   Some characters need to be escaped when passing
                 in pat. e.g. ``'$'`` has a special meaning in regex
                 and must be escaped when finding this literal character.
@@ -3615,6 +3630,7 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)
         return self._return_or_inplace(self._column.count_re(pat, flags))
 
     def _findall(
@@ -3632,8 +3648,9 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
         return self._return_or_inplace(
-            self._column.findall(method, pat, flags)  # type: ignore[arg-type]
+            self._column.findall(method, pat, flags)
         )
 
     def findall(self, pat: str, flags: int = 0) -> Series | Index:
@@ -3698,8 +3715,8 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.findall`
 
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         return self._findall(plc.strings.findall.findall, pat, flags)
 
@@ -3795,9 +3812,11 @@ class StringMethods(BaseAccessor):
         return cudf.Series._from_column(
             result,
             name=self._parent.name,
-            index=self._parent.index
-            if isinstance(self._parent, cudf.Series)
-            else self._parent,
+            index=(
+                self._parent.index
+                if isinstance(self._parent, cudf.Series)
+                else self._parent
+            ),
         )
 
     def isempty(self) -> Series | Index:
@@ -4346,8 +4365,8 @@ class StringMethods(BaseAccessor):
             :meth:`pandas.Series.str.match`
 
             Parameter `case` is currently not supported.
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -4362,6 +4381,7 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)
         result = self._column.matches_re(pat, flags)
         if na is not no_default:
             result = result.fillna(na)

@@ -16,6 +16,7 @@ import cudf_polars.experimental.join
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
@@ -24,7 +25,7 @@ from cudf_polars.dsl.ir import (
     HStack,
     IRExecutionContext,
     MapFunction,
-    Projection,
+    Select,
     Slice,
     Union,
 )
@@ -141,7 +142,7 @@ def task_graph(
     --------
     generate_ir_tasks
     """
-    context = IRExecutionContext.from_config_options(config_options)
+    context = IRExecutionContext()
     graph = reduce(
         operator.or_,
         (
@@ -393,7 +394,6 @@ def _lower_ir_pwise(
 
 
 _lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Projection, _lower_ir_pwise_preserve)
 lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
 
@@ -460,13 +460,23 @@ def _(
 def _(
     ir: HStack, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
-    if not all(
-        expr.is_pointwise for expr in traversal([e.value for e in ir.columns])
-    ):  # pragma: no cover
-        # TODO: Avoid fallback if/when possible
-        return _lower_ir_fallback(
-            ir, rec, msg="This HStack not supported for multiple partitions."
-        )
+    if not all(e.is_pointwise for e in traversal([ne.value for ne in ir.columns])):
+        # Redirect non-pointwise HStack to Select so the Select handler can
+        # attempt decomposition (or fall back gracefully via decompose_select).
+        col_map = {ne.name: ne for ne in ir.columns}
+        has_passthrough = any(name not in col_map for name in ir.schema)
+        if has_passthrough or not ir.should_broadcast:
+            exprs = tuple(
+                col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+                for name, dtype in ir.schema.items()
+            )
+            return lower_ir_node(
+                Select(ir.schema, exprs, ir.should_broadcast, ir.children[0]),
+                rec,
+            )
+        # All output columns are aggregations: no N-row passthrough to anchor
+        # broadcast. Fall back so HStack.do_evaluate uses target_length=child.num_rows.
+        return _lower_ir_fallback(ir, rec)
 
     child, partition_info = rec(ir.children[0])
     new_node = ir.reconstruct([child])
