@@ -607,7 +607,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      node_type: "gpu-l1-latest-1"
+      node_type: "gpu-l4-latest-1"
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/build_and_test_streaming.sh
 
