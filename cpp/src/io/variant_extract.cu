@@ -27,6 +27,7 @@
 #include <thrust/scan.h>
 
 namespace cudf {
+namespace io::parquet {
 namespace {
 
 constexpr int variant_version_v1 = 1;
@@ -606,4 +607,5 @@ std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
   return cast_variant(intermediate->view(), desired_type, stream, mr);
 }
 
+}  // namespace io::parquet
 }  // namespace cudf
