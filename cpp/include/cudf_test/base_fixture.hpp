@@ -57,7 +57,7 @@ class BaseFixtureWithParam : public ::testing::TestWithParam<T> {
    * all tests inheriting from this fixture
    * @return reference to memory resource
    */
-  [[nodiscard]] rmm::device_async_resource_ref mr() const { return _mr; }
+  [[nodiscard]] rmm::device_async_resource_ref mr() { return _mr; }
 };
 
 /**
