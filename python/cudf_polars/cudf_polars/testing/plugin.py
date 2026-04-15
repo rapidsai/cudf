@@ -301,8 +301,11 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Too slow with --blocksize-mode small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Too slow with --blocksize-mode small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg but failure leads to segfaults https://github.com/rapidsai/cudf/issues/22138",
+    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072 but failure leads to segfaults https://github.com/rapidsai/cudf/issues/22138",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Too slow with --blocksize-mode small",
     "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072 but failure leads to segfaults https://github.com/rapidsai/cudf/issues/22138",
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Too slow for CI",
 }
 
@@ -314,9 +317,7 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/lazyframe/test_cse.py::test_cse_expr_selection_context": "https://github.com/rapidsai/cudf/issues/21645",
     "tests/unit/lazyframe/test_cse.py::test_cse_non_scalar_length_mismatch_17732": "https://github.com/rapidsai/cudf/issues/21645",
     "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
-    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/rapidsai/cudf/issues/22084",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes20]": "https://github.com/rapidsai/cudf/issues/22085",
@@ -353,6 +354,7 @@ def pytest_collection_modifyitems(
         # Don't xfail tests if running without fallback
         return
     with_rapidsmpf = config.getoption("--runtime") == "rapidsmpf"
+    with_streaming = config.getoption("--executor") == "streaming"
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
             with_rapidsmpf
@@ -366,7 +368,7 @@ def pytest_collection_modifyitems(
         ):
             item.add_marker(pytest.mark.xfail(reason=r_reason))
         elif (
-            config.getoption("--executor") == "streaming"
+            with_streaming
             and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
             is not None
         ):
