@@ -57,10 +57,9 @@ inline auto make_arena() { return rmm::mr::arena_memory_resource{rmm::mr::cuda_m
 
 inline auto make_binning()
 {
-  static auto pool = make_pool();
   // Add a binning_memory_resource with fixed-size bins of sizes 256, 512, 1024, 2048 and 4096KiB
   // Larger allocations will use the pool resource
-  return rmm::mr::binning_memory_resource{rmm::device_async_resource_ref{pool}, 18, 22};
+  return rmm::mr::binning_memory_resource{make_pool(), 18, 22};
 }
 
 /**
@@ -76,23 +75,17 @@ inline auto make_binning()
  *
  * @param allocation_mode String identifies which resource type.
  *        Accepted types are "pool", "cuda", "async", "arena", "binning", and "managed".
- * @return Memory resource stored as any_resource
+ * @return Memory resource instance
  */
 inline cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(
   std::string const& allocation_mode)
 {
-  if (allocation_mode == "binning")
-    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_binning()};
-  if (allocation_mode == "cuda")
-    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_cuda()};
-  if (allocation_mode == "async")
-    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_async()};
-  if (allocation_mode == "pool")
-    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_pool()};
-  if (allocation_mode == "arena")
-    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_arena()};
-  if (allocation_mode == "managed")
-    return cuda::mr::any_resource<cuda::mr::device_accessible>{make_managed()};
+  if (allocation_mode == "binning") return make_binning();
+  if (allocation_mode == "cuda") return make_cuda();
+  if (allocation_mode == "async") return make_async();
+  if (allocation_mode == "pool") return make_pool();
+  if (allocation_mode == "arena") return make_arena();
+  if (allocation_mode == "managed") return make_managed();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 
