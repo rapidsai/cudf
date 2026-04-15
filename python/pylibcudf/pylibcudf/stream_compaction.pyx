@@ -28,6 +28,7 @@ from .utils cimport _get_stream, _get_memory_resource
 __all__ = [
     "DuplicateKeepOption",
     "apply_boolean_mask",
+    "apply_deletion_mask",
     "distinct",
     "distinct_indices",
     "drop_nans",
@@ -143,6 +144,40 @@ cpdef Table apply_boolean_mask(
     with nogil:
         c_result = cpp_stream_compaction.apply_boolean_mask(
             source_table.view(), boolean_mask.view(), stream.view(), mr.get_mr()
+        )
+    return Table.from_libcudf(move(c_result), stream, mr)
+
+
+cpdef Table apply_deletion_mask(
+    Table source_table,
+    Column deletion_mask,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Filters out rows from the input table using a deletion mask.
+
+    For details, see :cpp:func:`apply_deletion_mask`.
+
+    Parameters
+    ----------
+    source_table : Table
+        The input table to filter.
+    deletion_mask : Column
+        A boolean column used as a deletion mask.
+
+    Returns
+    -------
+    Table
+        Table with rows removed where deletion_mask is true.
+    """
+    cdef unique_ptr[table] c_result
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_stream_compaction.apply_deletion_mask(
+            source_table.view(), deletion_mask.view(), stream.view(), mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 

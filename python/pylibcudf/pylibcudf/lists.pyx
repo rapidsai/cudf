@@ -32,6 +32,7 @@ from pylibcudf.libcudf.lists.sorting cimport (
 )
 from pylibcudf.libcudf.lists.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
+    apply_deletion_mask as cpp_apply_deletion_mask,
     distinct as cpp_distinct,
 )
 from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
@@ -60,6 +61,7 @@ __all__ = [
     "ConcatenateNullPolicy",
     "DuplicateFindOption",
     "apply_boolean_mask",
+    "apply_deletion_mask",
     "concatenate_list_elements",
     "concatenate_rows",
     "contains",
@@ -807,6 +809,45 @@ cpdef Column apply_boolean_mask(
 
     with nogil:
         c_result = cpp_apply_boolean_mask(
+            list_view.view(),
+            mask_view.view(),
+            stream.view(),
+            mr.get_mr(),
+        )
+    return Column.from_libcudf(move(c_result), stream, mr)
+
+
+cpdef Column apply_deletion_mask(
+    Column input,
+    Column deletion_mask,
+    Stream stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Filters elements in each row of the input lists column using a deletion mask.
+
+    For details, see :cpp:func:`cudf::lists::apply_deletion_mask`.
+
+    Parameters
+    ----------
+    input : Column
+        The input lists column.
+    deletion_mask : Column
+        A lists-of-bools column used as a deletion mask.
+
+    Returns
+    -------
+    Column
+        Lists column with elements removed where deletion_mask is true.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListsColumnView list_view = input.list_view()
+    cdef ListsColumnView mask_view = deletion_mask.list_view()
+
+    stream = _get_stream(stream)
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_apply_deletion_mask(
             list_view.view(),
             mask_view.view(),
             stream.view(),

@@ -37,6 +37,12 @@ def apply_boolean_mask(
     stream: Stream | None = None,
     mr: DeviceMemoryResource | None = None,
 ) -> Table: ...
+def apply_deletion_mask(
+    source_table: Table,
+    deletion_mask: Column,
+    stream: Stream | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Table: ...
 def unique(
     input: Table,
     keys: list[int],
