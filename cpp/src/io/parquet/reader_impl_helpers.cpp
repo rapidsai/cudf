@@ -6,11 +6,11 @@
 #include "reader_impl_helpers.hpp"
 
 #include "compact_protocol_reader.hpp"
-#include "parquet_common.hpp"
 #include "io/utilities/base64_utilities.hpp"
 #include "io/utilities/row_selection.hpp"
 #include "ipc/Message_generated.h"
 #include "ipc/Schema_generated.h"
+#include "parquet_common.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/host_memory.hpp>
@@ -274,10 +274,9 @@ void metadata::sanitize_schema()
   std::function<void(size_t)> process = [&](size_t schema_idx) -> void {
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
-      auto const& parent_schema = schema[schema_elem.parent_idx];
-      auto const parent_is_variant =
-        parent_schema.logical_type.has_value() &&
-        parent_schema.logical_type->type == LogicalType::VARIANT;
+      auto const& parent_schema    = schema[schema_elem.parent_idx];
+      auto const parent_is_variant = parent_schema.logical_type.has_value() &&
+                                     parent_schema.logical_type->type == LogicalType::VARIANT;
       auto const parent_type = parent_schema.converted_type;
       if (not parent_is_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
           schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&

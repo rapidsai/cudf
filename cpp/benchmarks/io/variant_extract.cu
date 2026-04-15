@@ -24,8 +24,8 @@ namespace {
 // ---------------------------------------------------------------------------
 
 // Dictionary sizes must be divisible by NUM_GROUPS.
-constexpr int NUM_GROUPS                  = 5;
-constexpr int KEY_LENGTHS[NUM_GROUPS]     = {3, 6, 10, 15, 21};
+constexpr int NUM_GROUPS              = 5;
+constexpr int KEY_LENGTHS[NUM_GROUPS] = {3, 6, 10, 15, 21};
 
 // Produce a key name for global index `idx` within a dictionary of `dict_size`
 // keys.  Keys are split into NUM_GROUPS equal blocks; each block uses a
@@ -150,12 +150,13 @@ std::vector<uint8_t> build_object_value(std::vector<int> const& field_ids, int s
   int const value_bytes_per_field = 5;
   int const total_value_bytes     = n * value_bytes_per_field;
 
-  int const field_id_size  = (max_id <= 255) ? 1 : 2;
-  int const field_off_size = (total_value_bytes <= 255) ? 1 : ((total_value_bytes <= 65535) ? 2 : 4);
-  bool const is_large      = (n > 255);
+  int const field_id_size = (max_id <= 255) ? 1 : 2;
+  int const field_off_size =
+    (total_value_bytes <= 255) ? 1 : ((total_value_bytes <= 65535) ? 2 : 4);
+  bool const is_large = (n > 255);
 
   uint8_t const header6 = static_cast<uint8_t>((field_off_size - 1) | ((field_id_size - 1) << 2) |
-                                                (is_large ? (1 << 4) : 0));
+                                               (is_large ? (1 << 4) : 0));
   uint8_t const header_byte = static_cast<uint8_t>((header6 << 2) | 2);
 
   std::vector<uint8_t> out;
@@ -230,10 +231,10 @@ std::unique_ptr<cudf::column> build_variant_column(
 
     rmm::device_buffer d_offsets_buf(h_offsets.size() * sizeof(int32_t), stream, mr);
     CUDF_CUDA_TRY(cudaMemcpyAsync(d_offsets_buf.data(),
-                                   h_offsets.data(),
-                                   h_offsets.size() * sizeof(int32_t),
-                                   cudaMemcpyHostToDevice,
-                                   stream.value()));
+                                  h_offsets.data(),
+                                  h_offsets.size() * sizeof(int32_t),
+                                  cudaMemcpyHostToDevice,
+                                  stream.value()));
 
     rmm::device_buffer d_data_buf(h_data.size(), stream, mr);
     if (!h_data.empty()) {
@@ -241,12 +242,12 @@ std::unique_ptr<cudf::column> build_variant_column(
         d_data_buf.data(), h_data.data(), h_data.size(), cudaMemcpyHostToDevice, stream.value()));
     }
 
-    auto offsets_col = std::make_unique<cudf::column>(
-      cudf::data_type{cudf::type_id::INT32},
-      static_cast<cudf::size_type>(h_offsets.size()),
-      std::move(d_offsets_buf),
-      rmm::device_buffer{},
-      0);
+    auto offsets_col =
+      std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
+                                     static_cast<cudf::size_type>(h_offsets.size()),
+                                     std::move(d_offsets_buf),
+                                     rmm::device_buffer{},
+                                     0);
     auto data_col = std::make_unique<cudf::column>(
       cudf::data_type{cudf::type_id::UINT8}, total, std::move(d_data_buf), rmm::device_buffer{}, 0);
 
@@ -368,9 +369,9 @@ static void bench_get_variant_field(nvbench::state& state)
     // SAME 20-key dict for every row — dict scan cost is identical.
     // Even: all 20 fields including target.  Odd: 19 fields, target removed.
     // Isolates found-vs-null divergence.
-    auto const keys      = full_keys(20);
-    int const target_fid = first ? 0 : static_cast<int>(keys.size()) - 1;
-    target_key           = keys[target_fid];
+    auto const keys          = full_keys(20);
+    int const target_fid     = first ? 0 : static_cast<int>(keys.size()) - 1;
+    target_key               = keys[target_fid];
     auto const meta_blob     = build_metadata(keys);
     auto const all_fids      = seq_ids(20);
     auto const val_present   = build_object_value(all_fids);
@@ -387,7 +388,7 @@ static void bench_get_variant_field(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    auto result = cudf::get_variant_field(col->view(), target_key, stream, mr);
+    auto result = cudf::io::parquet::get_variant_field(col->view(), target_key, stream, mr);
   });
 }
 
@@ -422,8 +423,8 @@ static void bench_cast_variant(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    auto result =
-      cudf::cast_variant(col->view(), cudf::data_type{cudf::type_id::INT32}, stream, mr);
+    auto result = cudf::io::parquet::cast_variant(
+      col->view(), cudf::data_type{cudf::type_id::INT32}, stream, mr);
   });
 }
 

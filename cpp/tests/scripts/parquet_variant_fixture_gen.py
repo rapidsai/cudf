@@ -33,7 +33,6 @@ import pyarrow.parquet as pq
 
 def metadata_v1(keys: list[str]) -> bytes:
     """VARIANT metadata v1: 1-byte dictionary offsets, keys in order (ids 0..n-1)."""
-    offset_size = 1
     header = (0 << 6) | 1  # offset_size code 0 -> 1 byte; version 1
     out = bytearray([header, len(keys)])
     # offsets: n+1 entries into following string blob
@@ -50,7 +49,15 @@ def metadata_v1(keys: list[str]) -> bytes:
 def enc_int32(v: int) -> bytes:
     """Primitive INT32: basic_type 0, upper 6 bits of first byte = 5 → first byte (5<<2)|0 = 0x14."""
     u = v & 0xFFFFFFFF
-    return bytes([(5 << 2) | 0, u & 0xFF, (u >> 8) & 0xFF, (u >> 16) & 0xFF, (u >> 24) & 0xFF])
+    return bytes(
+        [
+            (5 << 2) | 0,
+            u & 0xFF,
+            (u >> 8) & 0xFF,
+            (u >> 16) & 0xFF,
+            (u >> 24) & 0xFF,
+        ]
+    )
 
 
 def enc_short_str(s: str) -> bytes:
@@ -103,12 +110,16 @@ def patch_variant_logical_type(parquet_bytes: bytes) -> bytes:
     return body + bytes(new_footer) + struct.pack("<I", new_len) + b"PAR1"
 
 
-def write_fixture(path: Path, meta_list: list[bytes], val_list: list[bytes]) -> None:
+def write_fixture(
+    path: Path, meta_list: list[bytes], val_list: list[bytes]
+) -> None:
     if len(meta_list) != len(val_list):
         raise ValueError("meta/val length mismatch")
     meta_col = pa.array(meta_list, type=pa.binary())
     val_col = pa.array(val_list, type=pa.binary())
-    struct_arr = pa.StructArray.from_arrays([meta_col, val_col], names=["metadata", "value"])
+    struct_arr = pa.StructArray.from_arrays(
+        [meta_col, val_col], names=["metadata", "value"]
+    )
     table = pa.table({"v": struct_arr})
     sink = pa.BufferOutputStream()
     pq.write_table(table, sink, version="2.6", compression="NONE")
@@ -134,7 +145,9 @@ def main() -> int:
     vr2 = enc_object([(0, enc_int32(42)), (1, enc_int32(99))])
     mr3 = metadata_v1(["k"])
     vr3 = enc_object([(0, enc_short_str("zzz"))])
-    write_fixture(out_dir / "variant_multirow.parquet", [mr1, mr2, mr3], [vr1, vr2, vr3])
+    write_fixture(
+        out_dir / "variant_multirow.parquet", [mr1, mr2, mr3], [vr1, vr2, vr3]
+    )
 
     print(f"Wrote {out_dir / 'variant_minimal.parquet'}")
     print(f"Wrote {out_dir / 'variant_multirow.parquet'}")

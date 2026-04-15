@@ -179,7 +179,7 @@ fields:
 
 ## 4. Benchmarks
 
-Implementation: `cpp/benchmarks/io/variant_extract.cu`  
+Implementation: `cpp/benchmarks/io/variant_extract.cu`
 Binary: `VARIANT_EXTRACT_NVBENCH`
 
 ### 4.1 Data generation

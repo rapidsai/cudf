@@ -191,8 +191,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     switch (buffer.type.id()) {
       case type_id::STRING: {
         bool const variant_binary =
-          (buffer.user_data & cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY) !=
-          0;
+          (buffer.user_data &
+           cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY) != 0;
         if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings() and
             not variant_binary) {
           if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }

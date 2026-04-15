@@ -344,8 +344,7 @@ ConfigureTest(
 )
 
 target_compile_definitions(
-  PARQUET_TEST
-  PRIVATE "VARIANT_PARQUET_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data/parquet\""
+  PARQUET_TEST PRIVATE "VARIANT_PARQUET_FIXTURE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data/parquet\""
 )
 ConfigureTest(
   HYBRID_SCAN_TEST

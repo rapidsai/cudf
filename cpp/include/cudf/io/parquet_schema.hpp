@@ -252,7 +252,7 @@ struct LogicalType {
     TIME,
     TIMESTAMP,
     // 9 is reserved
-    INTEGER = 10,
+    INTEGER   = 10,
     UNKNOWN   = 11,
     JSON      = 12,
     BSON      = 13,
