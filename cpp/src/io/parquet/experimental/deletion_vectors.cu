@@ -5,7 +5,6 @@
 
 #include "deletion_vectors_helpers.hpp"
 
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/error.hpp>
@@ -13,7 +12,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
-#include <cuco/roaring_bitmap.cuh>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/tuple>

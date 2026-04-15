@@ -132,6 +132,7 @@ async def _compute_sort_boundaries(
             local_boundaries_df.table,
             stream,
             exclusive_view=True,
+            br=context.br(),
         )
         allgather.insert(comm.rank, chunk)
         allgather.insert_finished()
@@ -179,7 +180,7 @@ async def _sample_chunks_for_size_estimate(
         msg = await ch_in.recv(context)
         if msg is None:
             break
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
         sampled_bytes += chunk.data_alloc_size()
@@ -222,7 +223,7 @@ async def _receive_and_buffer_chunks(
     while (msg := await ch_in.recv(context)) is not None:
         seq_num = msg.sequence_number
         df = chunk_to_frame(
-            TableChunk.from_message(msg).make_available_and_spill(
+            TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
                 context.br(), allow_overbooking=True
             ),
             sort_ir,
@@ -234,6 +235,7 @@ async def _receive_and_buffer_chunks(
                 ).table,
                 df.stream,
                 exclusive_view=True,
+                br=context.br(),
             )
         )
         if sort_ir.stable:
@@ -256,7 +258,9 @@ async def _receive_and_buffer_chunks(
         chunk_store.insert(
             Message(
                 seq_num,
-                TableChunk.from_pylibcudf_table(tbl, df.stream, exclusive_view=True),
+                TableChunk.from_pylibcudf_table(
+                    tbl, df.stream, exclusive_view=True, br=context.br()
+                ),
             )
         )
         del df
@@ -296,9 +300,9 @@ async def _insert_chunks_into_shuffle(
         if skip_insert:
             continue
         seq_num = msg.sequence_number
-        available_chunk = TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
+        available_chunk = TableChunk.from_message(
+            msg, br=context.br()
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
         tbl = available_chunk.table_view()
         sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
 
@@ -374,7 +378,9 @@ async def _extract_partitions_and_send(
             context,
             Message(
                 partition_id,
-                TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True),
+                TableChunk.from_pylibcudf_table(
+                    table, stream, exclusive_view=True, br=context.br()
+                ),
             ),
         )
 

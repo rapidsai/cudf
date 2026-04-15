@@ -1249,6 +1249,31 @@ std::vector<std::string> aggregate_reader_metadata::get_pandas_index_names() con
   return names;
 }
 
+std::tuple<size_t, size_t, size_t, size_t> aggregate_reader_metadata::get_row_group_properties(
+  RowGroup const& row_group) const
+{
+  auto const compressed_size = std::transform_reduce(
+    row_group.columns.cbegin(),
+    row_group.columns.cend(),
+    size_t{0},
+    std::plus<>(),
+    [](auto const& colchunk) { return colchunk.meta_data.total_compressed_size; });
+
+  auto const total_size = compressed_size + row_group.total_byte_size;
+
+  size_t const max_leaf_values =
+    row_group.columns.empty()
+      ? 0
+      : std::max_element(row_group.columns.cbegin(),
+                         row_group.columns.cend(),
+                         [](auto const& a, auto const& b) {
+                           return a.meta_data.num_values < b.meta_data.num_values;
+                         })
+          ->meta_data.num_values;
+
+  return {compressed_size, total_size, static_cast<size_t>(row_group.num_rows), max_leaf_values};
+}
+
 std::tuple<int64_t,
            std::vector<std::vector<size_type>>,
            std::vector<std::vector<size_t>>,
@@ -1596,11 +1621,21 @@ aggregate_reader_metadata::select_row_groups(
           // Update the number of rows read from this data source
           num_rows_per_source[src_idx] += num_rows_this_row_group;
 
+          // Get row group properties
+          auto const [compressed_size, total_size, num_rows, max_leaf_values] =
+            get_row_group_properties(rg);
+
           // We need the unadjusted start index of this row group to correctly
           // initialize ColumnChunkDesc for this row group in
           // create_global_chunk_info() and calculate the row offset for the first
           // pass in compute_input_passes().
-          selection.emplace_back(rg_idx, row_group_start_row, src_idx);
+          selection.emplace_back(
+            row_group_info{.index               = rg_idx,
+                           .start_row           = row_group_start_row,
+                           .unadjusted_num_rows = num_rows,
+                           .source_index        = static_cast<cudf::size_type>(src_idx),
+                           .compressed_size     = compressed_size,
+                           .max_leaf_values     = max_leaf_values});
 
           // If page-level indexes are present, then collect extra chunk and page
           // info. The page indexes rely on absolute row numbers - not adjusted for

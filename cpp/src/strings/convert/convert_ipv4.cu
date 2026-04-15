@@ -68,7 +68,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_numeric_column(data_type{type_id::UINT32}, 0, mask_state::UNALLOCATED, stream);
+    return make_numeric_column(data_type{type_id::UINT32}, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   auto strings_column = column_device_view::create(input.parent(), stream);
@@ -81,7 +81,7 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
                                      mr);
   auto d_results = results->mutable_view().data<uint32_t>();
   // fill output column with ipv4 integers
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{strings_count},
                     d_results,
@@ -181,7 +181,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& input,
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{input.size()},
                     d_results,
