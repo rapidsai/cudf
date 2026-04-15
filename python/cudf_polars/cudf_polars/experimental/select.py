@@ -11,12 +11,15 @@ import polars as pl
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.expr import Col, Len
-from cudf_polars.dsl.ir import Empty, HConcat, Scan, Select, Union
+from cudf_polars.dsl.ir import Empty, HConcat, HStack, Projection, Scan, Select, Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.dispatch import lower_ir_node
-from cudf_polars.experimental.expressions import decompose_expr_graph
+from cudf_polars.experimental.expressions import (
+    decompose_expr_graph,
+    make_expr_decomposer,
+)
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import (
     _contains_unsupported_fill_strategy,
@@ -31,6 +34,59 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.parallel import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions
+
+
+def _hstack_chain_to_select(ir: Select) -> Select | None:
+    """
+    Inline a CSE HStack chain into a flat Select, or return None.
+
+    Only fires when the chain has HStack(should_broadcast=False). Pure HStack(True)
+    chains are left for rec(child) — their col refs may live in non-traversable expr
+    internals (e.g. GroupedWindow.named_aggs) that _sub_expr cannot reach.
+    """
+    hstack_chain: list[HStack] = []
+    current: IR = ir.children[0]
+    all_broadcasted = True
+    while isinstance(current, HStack):
+        if not current.should_broadcast:
+            all_broadcasted = False
+        hstack_chain.append(current)
+        current = current.children[0]
+    base_input = current
+
+    if all_broadcasted:
+        return None
+
+    col_defs: dict[str, expr.Expr] = {}
+    for hstack in reversed(hstack_chain):
+        for ne in hstack.columns:
+            col_defs[ne.name] = _sub_expr(ne.value, col_defs)
+
+    new_exprs = tuple(
+        expr.NamedExpr(ne.name, _sub_expr(ne.value, col_defs)) for ne in ir.exprs
+    )
+    return Select(ir.schema, new_exprs, ir.should_broadcast, base_input)
+
+
+@lower_ir_node.register(Projection)
+def _(
+    ir: Projection, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # Always convert Projection(HStack) to Select(HStack)
+    # so we can deal with HStack decomposition in one place.
+    if isinstance(ir.children[0], HStack):
+        expr_from_schema = tuple(
+            expr.NamedExpr(name, Col(dtype, name)) for name, dtype in ir.schema.items()
+        )
+        return lower_ir_node(
+            Select(ir.schema, expr_from_schema, True, ir.children[0]),  # noqa: FBT003
+            rec,
+        )
+
+    # Partition-wise default - Import here to avoid circular import
+    from cudf_polars.experimental.parallel import _lower_ir_pwise
+
+    return _lower_ir_pwise(ir, rec, preserve_partitioning=True)
 
 
 def decompose_select(
@@ -79,14 +135,19 @@ def decompose_select(
     name_generator = unique_names(
         (*(ne.name for ne in select_ir.exprs), *input_ir.schema.keys())
     )
+    # Share one decomposer across all NamedExprs so structurally identical
+    # sub-expressions (e.g. CSE'd aggregations) are computed only once.
+    shared_mapper = make_expr_decomposer(
+        input_ir,
+        partition_info,
+        config_options,
+        name_generator,
+    )
     for ne in select_ir.exprs:
         # Decompose this partial expression
         new_ne, partial_input_ir, _partition_info = decompose_expr_graph(
             ne,
-            input_ir,
-            partition_info,
-            config_options,
-            name_generator,
+            mapper=shared_mapper,
         )
         pi = _partition_info[partial_input_ir]
         partial_input_ir = Select(
@@ -197,24 +258,54 @@ def _fuse_simple_reductions(
             reduction_groups[select_c].append(select_c)
 
     new_decomposed_select_irs: list[IR] = []
+    # Schemas already projected to final output names.
+    already_projected: Schema = {}
     for root_ir, group in reduction_groups.items():
         if len(group) > 1:
-            # Fuse simple-aggregation group
+            # When all members share the same select_b (produced by a shared
+            # CachingVisitor), the reduction is already computed once. Just
+            # combine their select_c exprs into a single node referencing the
+            # shared select_b rather than building a new fused chain.
+            first_select_b = group[0].children[0]
+            if all(s.children[0] is first_select_b for s in group[1:]):
+                combined_schema: Schema = {}
+                combined_exprs: list[expr.NamedExpr] = []
+                for s in group:
+                    combined_schema |= s.schema
+                    combined_exprs.extend(s.exprs)
+                shared_select_c = Select(
+                    combined_schema,
+                    combined_exprs,
+                    True,  # noqa: FBT003
+                    first_select_b,
+                )
+                pi[shared_select_c] = pi[first_select_b]
+                new_decomposed_select_irs.append(shared_select_c)
+                already_projected |= combined_schema
+                continue
+
+            # Fuse simple-aggregation group (distinct select_b nodes)
             fused_select_b_exprs = []
             fused_select_a_exprs = []
             fused_select_b_schema: Schema = {}
             fused_select_a_schema: Schema = {}
+            seen_select_a_ids: set[int] = set()
             for select_c in group:
                 select_b = select_c.children[0]
                 assert isinstance(select_b, Select), (
                     f"Expected Select, got {type(select_b)}"
                 )
-                fused_select_b_exprs.extend(list(select_b.exprs))
-                fused_select_b_schema |= select_b.schema
                 select_a = select_b.children[0].children[0]
                 assert isinstance(select_a, Select), (
                     f"Expected Select, got {type(select_a)}"
                 )
+                if (
+                    id(select_a) in seen_select_a_ids
+                ):  # pragma: no cover; only rapidsmpf hits this
+                    continue  # shared by CachingVisitor — already contributed
+                seen_select_a_ids.add(id(select_a))
+                fused_select_b_exprs.extend(list(select_b.exprs))
+                fused_select_b_schema |= select_b.schema
                 fused_select_a_exprs.extend(list(select_a.exprs))
                 fused_select_a_schema |= select_a.schema
             fused_select_a = Select(
@@ -257,9 +348,16 @@ def _fuse_simple_reductions(
         )
         count = max(pi[c].count for c in new_decomposed_select_irs)
         pi[new_hconcat] = PartitionInfo(count=count)
+
+        final_exprs = [
+            expr.NamedExpr(ne.name, Col(already_projected[ne.name], ne.name))
+            if ne.name in already_projected
+            else ne
+            for ne in fused_select_c_exprs
+        ]
         fused_select_c = Select(
             fused_select_c_schema,
-            fused_select_c_exprs,
+            final_exprs,
             True,  # noqa: FBT003
             new_hconcat,
         )
@@ -273,6 +371,20 @@ def _fuse_simple_reductions(
 def _(
     ir: Select, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    if isinstance(ir.children[0], HStack):
+        # When the child is a CSE placeholder chain (has HStack(False)), normalize to a
+        # flat Select over base_input so decompose_select always gets a chance to run.
+        # Pure HStack(True) chains fall through to rec(child) below.
+        if (normalized := _hstack_chain_to_select(ir)) is not None:
+            return lower_ir_node(normalized, rec)
+    elif all(isinstance(e.value, Col) and e.name == e.value.name for e in ir.exprs):
+        # Fast path: Equivalent to Projection.
+        # We can only do this if the child is NOT HStack.
+        return lower_ir_node(
+            Projection(ir.schema, ir.children[0]),
+            rec,
+        )
+
     child, partition_info = rec(ir.children[0])
     pi = partition_info[child]
 
@@ -357,3 +469,43 @@ def _(
     new_node = ir.reconstruct([child])
     partition_info[new_node] = pi
     return new_node, partition_info
+
+
+def _sub_expr(e: expr.Expr, subs: dict[str, expr.Expr]) -> expr.Expr:
+    if isinstance(e, Col) and e.name in subs:
+        return subs[e.name]
+    new_children = [_sub_expr(c, subs) for c in e.children]
+    if all(new is old for new, old in zip(new_children, e.children, strict=True)):
+        return e
+    return e.reconstruct(new_children)
+
+
+def _inline_hstack_false(ir: IR) -> IR:
+    """Inline any HStack(should_broadcast=False) CSE chain in ir's first child."""
+    if not ir.children:
+        return ir
+    child = ir.children[0]
+    cse_map: dict[str, expr.Expr] = {}
+    current = child
+    while isinstance(current, HStack) and not current.should_broadcast:
+        for ne in current.columns:
+            cse_map.setdefault(ne.name, ne.value)
+        current = current.children[0]
+    base_input = current
+    if not cse_map or child is base_input:
+        return ir
+    if isinstance(ir, HStack):  # pragma: no cover
+        new_cols = tuple(
+            expr.NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.columns
+        )
+        new_schema = {
+            **base_input.schema,
+            **{ne.name: ne.value.dtype for ne in new_cols},
+        }
+        return HStack(new_schema, new_cols, ir.should_broadcast, base_input)
+    if isinstance(ir, Select):
+        new_exprs = tuple(
+            expr.NamedExpr(ne.name, _sub_expr(ne.value, cse_map)) for ne in ir.exprs
+        )
+        return Select(ir.schema, new_exprs, ir.should_broadcast, base_input)
+    return ir
