@@ -129,7 +129,7 @@ TEST_F(CudftableTest, MultiColumnCompound)
 
   cudf::test::fixed_width_column_wrapper<int32_t> struct_col1{{1, 2, 3, 4},
                                                               {true, false, true, true}};
-  cudf::test::strings_column_wrapper struct_col2{{"a", "b", "c", "d"}, {true, true, false, true}};
+  cudf::test::strings_column_wrapper struct_col2{{"a", "b", "", "d"}, {true, true, false, true}};
   cudf::test::structs_column_wrapper struct_col{{struct_col1, struct_col2},
                                                 {true, true, true, false}};
 

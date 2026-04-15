@@ -72,8 +72,10 @@ def test_rolling_datetime(request, engine):
         .lazy()
     )
     q = df.with_columns(pl.sum("a").rolling(index_column="dt", period="2d"))
+    # HStack may redirect to Select before fallback; message differs by Polars IR / version.
     with pytest.warns(
-        UserWarning, match="This HStack not supported for multiple partitions."
+        UserWarning,
+        match=r"This (HStack|selection) is not supported for multiple partitions\.",
     ):
         assert_gpu_result_equal(q, engine=engine)
 

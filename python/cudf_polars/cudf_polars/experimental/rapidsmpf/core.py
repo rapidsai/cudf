@@ -313,9 +313,7 @@ def evaluate_pipeline(
                 get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
             )
         else:
-            ir_context = IRExecutionContext.from_config_options(
-                config_options, query_id=query_id
-            )
+            ir_context = IRExecutionContext(query_id=query_id)
 
         # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
@@ -337,7 +335,7 @@ def evaluate_pipeline(
         try:
             # Run the network
             with ThreadPoolExecutor(
-                max_workers=config_options.executor.rapidsmpf_py_executor_max_workers,
+                max_workers=config_options.executor.num_py_executors,
                 thread_name_prefix="cpse",
             ) as executor:
                 run_actor_network(actors=nodes, py_executor=executor)
@@ -347,7 +345,7 @@ def evaluate_pipeline(
             # use-after-free with stream-ordered allocations
             messages = output.release()
             chunks = [
-                TableChunk.from_message(msg).make_available_and_spill(
+                TableChunk.from_message(msg, br=br).make_available_and_spill(
                     br, allow_overbooking=True
                 )
                 for msg in messages
