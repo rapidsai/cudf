@@ -19,9 +19,9 @@ void calculate_bandwidth(nvbench::state& state)
   auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("rows"));
   auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
   auto const percent_true = static_cast<double>(state.get_int64("hits_%"));
-  auto const is_deletion  = state.get_string("mask_kind") == "deletion";
+  auto const is_retention = state.get_string("mask_kind") == "retention";
 
-  auto const fraction = is_deletion ? (100.0 - percent_true) / 100.0 : percent_true / 100.0;
+  auto const fraction = is_retention ? percent_true / 100.0 : (100.0 - percent_true) / 100.0;
   cudf::size_type const output_size = fraction * n_rows;
   int64_t const mask_size = sizeof(bool) * n_rows + cudf::bitmask_allocation_size_bytes(n_rows);
   int64_t const validity_bytes_in =
@@ -48,7 +48,7 @@ void apply_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
   auto const n_rows       = static_cast<cudf::size_type>(state.get_int64("rows"));
   auto const n_cols       = static_cast<cudf::size_type>(state.get_int64("columns"));
   auto const percent_true = static_cast<cudf::size_type>(state.get_int64("hits_%"));
-  auto const is_deletion  = state.get_string("mask_kind") == "deletion";
+  auto const is_retention = state.get_string("mask_kind") == "retention";
 
   auto const input_type = cudf::type_to_id<DataType>();
   data_profile profile  = data_profile_builder().cardinality(0).no_validity().distribution(
@@ -65,13 +65,11 @@ void apply_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   calculate_bandwidth<DataType>(state);
 
-  state.exec(nvbench::exec_tag::sync, [&source_table, &mask, is_deletion](nvbench::launch& launch) {
-    if (is_deletion) {
-      cudf::apply_deletion_mask(*source_table, mask->view());
-    } else {
-      cudf::apply_boolean_mask(*source_table, mask->view());
-    }
-  });
+  state.exec(
+    nvbench::exec_tag::sync,
+    [&source_table, &mask, is_retention](nvbench::launch& launch) {
+      if (is_retention) { cudf::apply_boolean_mask(*source_table, mask->view()); }
+    } else { cudf::apply_deletion_mask(*source_table, mask->view()); });
 
   set_throughputs(state);
 }

@@ -42,11 +42,11 @@ struct kept_size_fn {
 
 namespace detail {
 
-std::unique_ptr<column> apply_boolean_mask(cudf::detail::mask_type mask_kind,
-                                           lists_column_view const& input,
-                                           lists_column_view const& boolean_mask,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+std::unique_ptr<column> apply_mask(cudf::detail::mask_type mask_kind,
+                                   lists_column_view const& input,
+                                   lists_column_view const& boolean_mask,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(boolean_mask.child().type().id() == type_id::BOOL8, "Mask must be of type BOOL8.");
   CUDF_EXPECTS(input.size() == boolean_mask.size(),
