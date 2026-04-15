@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "retrieve_impl.cuh"
+#include "common.cuh"
 
 namespace cudf::detail {
 
@@ -14,7 +14,7 @@ hash_join<Hasher>::partitioned_left_join(cudf::join_partition_context const& con
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr) const
 {
-  return this->template partitioned_join_retrieve<join_kind::LEFT_JOIN>(context, stream, mr);
+  return this->partitioned_join_retrieve(join_kind::LEFT_JOIN, context, stream, mr);
 }
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
