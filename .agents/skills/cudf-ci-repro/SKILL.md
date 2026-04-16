@@ -77,7 +77,6 @@ Also determine:
 Invoke `docker-repro.sh` with the parameters gathered in Steps 1-3. The script handles checkout, tag fetching, docker launch, and CI script execution.
 
 ```bash
-# Example invocation
 bash .agents/skills/cudf-ci-repro/scripts/docker-repro.sh \
   --image "<CONTAINER_IMAGE>" \
   --build-type "<BUILD_TYPE>" \
