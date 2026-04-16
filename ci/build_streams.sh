@@ -45,7 +45,7 @@ cmake -S cpp -B cpp/build -GNinja \
   -DCUDF_BUILD_STREAMS_TEST_UTIL=ON \
   -DBUILD_SHARED_LIBS=ON
 mkdir cpp/install
-cmake --build cpp/build "-j${PARALLEL_LEVEL}" -v
+cmake --build cpp/build "-j${PARALLEL_LEVEL}"
 cmake --install cpp/build --prefix cpp/install
 cmake --install cpp/build --prefix cpp/install --component testing
 
