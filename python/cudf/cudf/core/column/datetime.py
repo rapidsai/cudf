@@ -853,13 +853,21 @@ class DatetimeTZColumn(DatetimeColumn):
                 "There is no nullable pandas type for datetime with timezone."
             )
         else:
-            # TODO: Using self._utc_time.to_pandas().tz_localize("UTC").tz_convert(self.tz)
-            # would be the more definitive conversion, but test_localize_nonexistent
-            # and test_localize_ambiguous fail (off by ~1 hour) for some obscure timezones
-            return self._local_time.to_pandas().tz_localize(
-                self.tz,
-                ambiguous="NaT",
-                nonexistent="NaT",
+            if "_local_time" in self.__dict__:
+                # _local_time was explicitly cached (e.g., by tz_localize) and holds
+                # the original naive timestamps; re-localizing with pandas is correct.
+                return self._local_time.to_pandas().tz_localize(
+                    self.tz,
+                    ambiguous="NaT",
+                    nonexistent="NaT",
+                )
+            # When _local_time is not cached, computing it via searchsorted on the
+            # timezone transition table can return wrong results due to the table
+            # not being globally sorted.  Use UTC directly instead.
+            return (
+                self._utc_time.to_pandas()
+                .tz_localize("UTC")
+                .tz_convert(self.tz)
             )
 
     @functools.cached_property

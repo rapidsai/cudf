@@ -3219,8 +3219,8 @@ class DatetimeIndex(Index):
             else:
                 if len(unique_vals) > 2 or (
                     len(unique_vals) == 2
-                    and unique_vals[1]
-                    != self._freq._maybe_as_fast_pandas_offset()
+                    and unique_vals[1].value
+                    != self._freq._maybe_as_fast_pandas_offset().nanos
                 ):
                     raise ValueError("No unique frequency found")
 
@@ -3451,9 +3451,9 @@ class DatetimeIndex(Index):
         else:
             if slc:
                 # fastpath: dont introspect
-                new_freq = slc.step * pd.Timedelta(
-                    self._freq._maybe_as_fast_pandas_offset()
-                )
+                # Multiply the pandas offset directly (pd.Timedelta(offset)
+                # fails for calendar-based offsets like Day in pandas 3).
+                new_freq = slc.step * self._freq._maybe_as_fast_pandas_offset()
                 return cudf.DateOffset._from_freqstr(
                     pd.tseries.frequencies.to_offset(new_freq).freqstr
                 )
