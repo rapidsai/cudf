@@ -32,10 +32,10 @@ class stream_checking_resource_adaptor final {
    * @param error_on_invalid_stream Whether to error on invalid streams
    * @param check_default_stream Whether to check for the default stream
    */
-  stream_checking_resource_adaptor(rmm::device_async_resource_ref upstream,
+  stream_checking_resource_adaptor(cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
                                    bool error_on_invalid_stream,
                                    bool check_default_stream)
-    : upstream_{upstream},
+    : upstream_{std::move(upstream)},
       error_on_invalid_stream_{error_on_invalid_stream},
       check_default_stream_{check_default_stream}
   {
@@ -56,7 +56,8 @@ class stream_checking_resource_adaptor final {
    */
   [[nodiscard]] rmm::device_async_resource_ref get_upstream_resource() const noexcept
   {
-    return upstream_;
+    return rmm::device_async_resource_ref{
+      const_cast<cuda::mr::any_resource<cuda::mr::device_accessible>&>(upstream_)};
   }
 
   void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
@@ -132,7 +133,7 @@ class stream_checking_resource_adaptor final {
     }
   }
 
-  rmm::device_async_resource_ref
+  cuda::mr::any_resource<cuda::mr::device_accessible>
     upstream_;                    // the upstream resource used for satisfying allocation requests
   bool error_on_invalid_stream_;  // If true, throw an exception when the wrong stream is detected.
                                   // If false, simply print to stdout.

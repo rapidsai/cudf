@@ -206,17 +206,16 @@ inline auto make_memory_resource_adaptor(cudf::test::config const& config)
  *
  * @param config Command line options returned by parse_cudf_test_opts
  */
-inline auto make_stream_mode_adaptor(cudf::test::config const& config)
+inline void make_stream_mode_adaptor(cudf::test::config const& config)
 {
-  auto resource                      = cudf::get_current_device_resource_ref();
-  auto const error_on_invalid_stream = (config.stream_error_mode == "error");
-  auto const check_default_stream    = (config.stream_mode == "new_cudf_default");
-  auto adaptor                       = cudf::test::stream_checking_resource_adaptor(
-    resource, error_on_invalid_stream, check_default_stream);
   if ((config.stream_mode == "new_cudf_default") || (config.stream_mode == "new_testing_default")) {
+    auto const error_on_invalid_stream = (config.stream_error_mode == "error");
+    auto const check_default_stream    = (config.stream_mode == "new_cudf_default");
+    auto resource                      = cudf::reset_current_device_resource();
+    auto adaptor                       = cudf::test::stream_checking_resource_adaptor(
+      resource, error_on_invalid_stream, check_default_stream);
     cudf::set_current_device_resource(adaptor);
   }
-  return adaptor;
 }
 
 /**
