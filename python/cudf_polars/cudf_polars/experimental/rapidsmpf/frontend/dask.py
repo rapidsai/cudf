@@ -7,8 +7,8 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import functools
+import logging
 import os
-import socket
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
@@ -32,6 +32,7 @@ import polars as pl
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
     execute_ir_on_rank,
@@ -257,8 +258,8 @@ def _setup_worker(
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
-            int | None,
-            executor_options.get("num_py_executors"),
+            int,
+            executor_options.get("num_py_executors", 8),
         ),
         thread_name_prefix="dask-executor",
     )
@@ -578,12 +579,19 @@ class DaskEngine(StreamingEngine):
                     "cls": distributed.Nanny,
                     "options": {
                         "nthreads": 1,
+                        # Set worker subprocess log level to WARNING
+                        # (is INFO by default).
+                        "silence_logs": logging.WARNING,
                         "env": {
                             "CUDA_VISIBLE_DEVICES": gpu_ids[i],
                         },
                     },
                 }
-            owned_cluster = distributed.SpecCluster(workers=worker_spec)
+            # Set scheduler/client log level to WARNING in the main
+            # process (is INFO by default).
+            owned_cluster = distributed.SpecCluster(
+                workers=worker_spec, silence_logs=logging.WARNING
+            )
             owned_client = distributed.Client(owned_cluster)
             dask_client = owned_client
 
@@ -646,30 +654,15 @@ class DaskEngine(StreamingEngine):
             raise RuntimeError("dask_context is not available after shutdown")
         return self._dask_context
 
-    def gather_cluster_info(self) -> list[dict]:
+    def gather_cluster_info(self) -> list[ClusterInfo]:
         """
-        Collect diagnostic information from every Dask worker.
+        Collect diagnostic information from every rank.
 
         Returns
         -------
-        List of info dicts, one per worker. Each dict contains
-        ``pid``, ``hostname``, and ``cuda_visible_devices``.
-
-        Examples
-        --------
-        >>> with DaskEngine() as engine:  # doctest: +SKIP
-        ...     for info in engine.gather_cluster_info():
-        ...         print(info)
+        List of :class:`ClusterInfo`, one per rank.
         """
-
-        def _get_info() -> dict:
-            return {
-                "pid": os.getpid(),
-                "hostname": socket.gethostname(),
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-            }
-
-        return list(self._dask_ctx.client.run(_get_info).values())
+        return list(self._dask_ctx.client.run(ClusterInfo.local).values())
 
     def shutdown(self) -> None:
         """
