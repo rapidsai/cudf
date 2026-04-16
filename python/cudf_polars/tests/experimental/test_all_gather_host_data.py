@@ -17,48 +17,31 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
 pytestmark = pytest.mark.spmd
 
 
-def test_per_rank_data(engine) -> None:
-    """Each rank sends its rank index; results are ordered by rank."""
+def _empty(rank: int) -> bytes:
+    return b""
+
+
+def _text(rank: int) -> bytes:
+    return f"hello from rank {rank}".encode()
+
+
+def _bytearray(rank: int) -> bytearray:
+    return bytearray(f"ba-rank-{rank}".encode())
+
+
+def _struct(rank: int) -> bytes:
+    return struct.pack("qi", 12345678901234 + rank, rank)
+
+
+@pytest.mark.parametrize("make_data", [_empty, _text, _bytearray, _struct])
+def test_all_gather_host_data(engine, make_data) -> None:
+    """Each rank sends rank-specific data; results are correct and ordered."""
     comm = engine.comm
     br = engine.context.br()
-    data = struct.pack("i", comm.rank)
-    result = all_gather_host_data(comm, br, op_id=4, data=data)
+    result = all_gather_host_data(comm, br, op_id=0, data=make_data(comm.rank))
     assert len(result) == comm.nranks
     for i, item in enumerate(result):
-        assert struct.unpack("i", item)[0] == i
-
-
-def test_empty_bytes(engine) -> None:
-    """Gathering empty bytes from every rank works."""
-    comm = engine.comm
-    br = engine.context.br()
-    result = all_gather_host_data(comm, br, op_id=1, data=b"")
-    assert len(result) == comm.nranks
-    for item in result:
-        assert item == b""
-
-
-def test_structured_data(engine) -> None:
-    """Struct-packed integers survive the gather round-trip."""
-    comm = engine.comm
-    br = engine.context.br()
-    value = 12345678901234
-    data = struct.pack("q", value)
-    result = all_gather_host_data(comm, br, op_id=2, data=data)
-    assert len(result) == comm.nranks
-    for item in result:
-        assert struct.unpack("q", item)[0] == value
-
-
-def test_bytearray_input(engine) -> None:
-    """A bytearray input is accepted and gathered correctly."""
-    comm = engine.comm
-    br = engine.context.br()
-    data = bytearray(b"bytearray input")
-    result = all_gather_host_data(comm, br, op_id=3, data=data)
-    assert len(result) == comm.nranks
-    for item in result:
-        assert item == bytes(data)
+        assert item == bytes(make_data(i))
 
 
 def test_gather_cluster_info(engine) -> None:
@@ -82,15 +65,13 @@ def test_gather_cluster_info(engine) -> None:
 def test_cluster_info_cuda_visible_devices(monkeypatch) -> None:
     """ClusterInfo.local() picks up CUDA_VISIBLE_DEVICES from the environment."""
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,7")
-    info = ClusterInfo.local()
-    assert info.cuda_visible_devices == "3,7"
+    assert ClusterInfo.local().cuda_visible_devices == "3,7"
 
 
 def test_cluster_info_cuda_visible_devices_unset(monkeypatch) -> None:
     """ClusterInfo.local() returns None when CUDA_VISIBLE_DEVICES is not set."""
     monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
-    info = ClusterInfo.local()
-    assert info.cuda_visible_devices is None
+    assert ClusterInfo.local().cuda_visible_devices is None
 
 
 @pytest.mark.parametrize(
