@@ -859,7 +859,7 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   // Use L2-tiled two-phase processing (same pattern as decode):
   // Phase 1: compute field-end offsets for a tile
   // Phase 2: run type detection using precomputed offsets (CSV data still in L2)
-  constexpr size_t rows_per_tile = 256 * 1024;
+  constexpr size_t rows_per_tile = 384 * 1024;
 
   auto d_field_ends =
     rmm::device_uvector<uint32_t>(std::min(rows_per_tile, num_rows) * num_actual_cols,
@@ -909,7 +909,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   // should fit comfortably in ~half of L2 (leaving room for field_ends and outputs).
   // With 96MB L2 on Ada, target ~48MB per tile. At ~128 bytes/row average, that's ~375K rows.
   // Use a conservative fixed tile size to avoid device-to-host sync for row byte offsets.
-  constexpr size_t rows_per_tile = 256 * 1024;  // ~32MB of CSV data for typical rows
+  constexpr size_t rows_per_tile = 384 * 1024;  // ~32MB of CSV data for typical rows
 
   for (size_t tile_start = 0; tile_start < num_rows; tile_start += rows_per_tile) {
     auto const tile_rows = std::min(rows_per_tile, num_rows - tile_start);
