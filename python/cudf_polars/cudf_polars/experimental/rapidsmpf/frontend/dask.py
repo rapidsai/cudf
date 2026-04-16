@@ -257,8 +257,8 @@ def _setup_worker(
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
-            int | None,
-            executor_options.get("num_py_executors"),
+            int,
+            executor_options.get("num_py_executors", 8),
         ),
         thread_name_prefix="dask-executor",
     )
