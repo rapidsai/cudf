@@ -19,7 +19,6 @@
 #include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -27,6 +26,7 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/codec.hpp>
@@ -250,14 +250,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   rmm::cuda_stream_view stream)
 {
   cudf::scoped_range rng{"csv::load_data_and_gather_row_offsets"};
-  constexpr size_t default_chunk_bytes = 64 * 1024 * 1024;  // 64MB
+  constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
 
-  auto const data_size = data.has_value() ? data->size() : source->size();
-  // When loading the whole file, process all data in one chunk to avoid
-  // repeated kernel launches and host round-trips for row offset gathering.
-  auto const max_chunk_bytes = load_whole_file ? data_size : default_chunk_bytes;
-  auto const buffer_size     = std::min(max_chunk_bytes, data_size);
-  auto const max_input_size  = [&] {
+  auto const data_size      = data.has_value() ? data->size() : source->size();
+  auto const buffer_size    = std::min(max_chunk_bytes, data_size);
+  auto const max_input_size = [&] {
     if (range_end == data_size) {
       return data_size - byte_range_offset;
     } else {
@@ -937,18 +934,18 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   if (num_active_columns == 0) { return {std::make_unique<table>(), {}}; }
 
   // Exclude the end-of-data row from number of rows with actual data
-  auto const num_records  = std::max(row_offsets.size(), 1ul) - 1;
+  auto const num_records = std::max(row_offsets.size(), 1ul) - 1;
   auto const column_types = [&] {
     cudf::scoped_range rng{"csv::determine_column_types"};
     return determine_column_types(reader_opts,
-                                  parse_opts,
-                                  column_names,
-                                  data,
-                                  row_offsets,
-                                  num_records,
-                                  column_flags,
-                                  num_active_columns,
-                                  stream);
+                                                   parse_opts,
+                                                   column_names,
+                                                   data,
+                                                   row_offsets,
+                                                   num_records,
+                                                   column_flags,
+                                                   num_active_columns,
+                                                   stream);
   }();
 
   auto metadata    = table_metadata{};
