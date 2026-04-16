@@ -16,6 +16,8 @@
 #include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
+#include <cuda/iterator>
+
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -71,8 +73,7 @@ void check_tables_equal(cudf::table_view const& lhs_table,
   try {
     // Left anti-join the original and transcoded tables identical tables should not throw an
     // exception and return an empty indices vector
-    cudf::filtered_join join_obj(
-      lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
+    cudf::filtered_join join_obj(lhs_table, cudf::null_equality::EQUAL, stream);
     auto const indices = join_obj.anti_join(rhs_table, stream);
     // No exception thrown, check indices
     auto const tables_equal = indices->size() == 0;
@@ -144,7 +145,7 @@ std::vector<io_source> extract_input_sources(std::string const& paths,
 
   // Append the input files by input_multiplier times
   std::for_each(
-    thrust::counting_iterator(1), thrust::counting_iterator(input_multiplier), [&](auto i) {
+    cuda::counting_iterator<int32_t>{1}, cuda::counting_iterator{input_multiplier}, [&](auto i) {
       parquet_files.insert(
         parquet_files.end(), parquet_files.begin(), parquet_files.begin() + initial_size);
     });

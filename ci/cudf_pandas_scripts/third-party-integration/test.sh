@@ -26,6 +26,7 @@ main() {
         rapids-logger "Downloading artifacts from this pr jobs"
         CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
         PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --stable --cuda)")
+        PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-package-name conda_python cudf --pure --cuda "${RAPIDS_CUDA_VERSION}")")
     fi
 
     ANY_FAILURES=0
@@ -44,7 +45,8 @@ main() {
                 --file-key "test_${lib}" \
                 --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
                 --prepend-channel "${CPP_CHANNEL}" \
-                --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
+                --prepend-channel "${PYTHON_CHANNEL}" \
+                --prepend-channel "${PYTHON_NOARCH_CHANNEL}" | tee env.yaml
         else
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \

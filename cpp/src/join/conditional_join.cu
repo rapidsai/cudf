@@ -18,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -87,7 +88,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
     join_size = size.value(stream);
   }
 
-  cudf::detail::device_scalar<std::size_t> write_index(0, stream);
+  cudf::detail::device_scalar<std::size_t> write_index(
+    0, stream, cudf::get_current_device_resource_ref());
 
   auto left_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
@@ -225,7 +227,8 @@ conditional_join(table_view const& left,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  cudf::detail::device_scalar<std::size_t> write_index(0, stream);
+  cudf::detail::device_scalar<std::size_t> write_index(
+    0, stream, cudf::get_current_device_resource_ref());
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);

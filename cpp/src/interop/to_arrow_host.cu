@@ -32,9 +32,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -433,9 +434,9 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
 
   // count the number of long-ish strings -- ones that cannot be inlined
   auto const num_longer_strings = thrust::count_if(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<cudf::size_type>(0),
-    thrust::make_counting_iterator<cudf::size_type>(col.size()),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator<cudf::size_type>{col.size()},
     [d_offsets] __device__(auto idx) {
       return d_offsets[idx + 1] - d_offsets[idx] > NANOARROW_BINARY_VIEW_INLINE_SIZE;
     });
@@ -482,13 +483,13 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
       0, cuda::proclaim_return_type<int64_t>([] __device__(auto idx) {
         return (idx + 1) * max_size;
       }));
-    thrust::lower_bound(rmm::exec_policy_nosync(stream),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         d_offsets,
                         d_offsets + longer_strings.size(),
                         bound_itr,
                         bound_itr + num_buffers,
                         buffer_indices.begin());
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       buffer_indices.begin(),
                       buffer_indices.end(),
                       buffer_offsets.begin(),
@@ -512,8 +513,8 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
 
   // now build BinaryView objects from the strings in device memory
   auto d_items = rmm::device_uvector<ArrowBinaryView>(col.size(), stream);
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<cudf::size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      col.size(),
                      strings_to_binary_view{*d_strings, d_offsets, buffer_offsets, d_items.data()});
 

@@ -8,7 +8,6 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
@@ -39,6 +38,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
+    gather_in_task_group,
     maybe_remap_partitioning,
     names_to_indices,
     process_children,
@@ -47,17 +47,21 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
     shutdown_on_error,
 )
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
-from cudf_polars.utils.config import StreamingExecutor
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
+    from cudf_polars.utils.config import StreamingExecutor
 
 
 # cuDF column/concatenate row limit (int32)
@@ -176,17 +180,9 @@ async def _collect_small_side_for_broadcast(
     size = 0
     chunks: list[TableChunk] = []
     while (msg := await ch.recv(context)) is not None:
-        chunks.append(TableChunk.from_message(msg))
-        size += chunks[-1].data_alloc_size(MemoryType.DEVICE)
-    # TODO: We only need to spill the chunks here, because
-    # we don't track row-count metadata yet.
-    chunks, _ = await make_table_chunks_available_or_wait(
-        context,
-        chunks,
-        reserve_extra=0,
-        net_memory_delta=0,
-    )
-    row_count = sum(c.table_view().num_rows() for c in chunks)
+        chunks.append(TableChunk.from_message(msg, br=context.br()))
+        size += chunks[-1].data_alloc_size()
+    row_count = sum(c.shape[0] for c in chunks)
 
     if (can_concatenate := row_count < CUDF_ROW_LIMIT) and concat_size_limit:
         can_concatenate = size <= concat_size_limit
@@ -194,9 +190,9 @@ async def _collect_small_side_for_broadcast(
     dfs: list[DataFrame] = []
     if need_allgather:
         allgather = AllGatherManager(context, comm, collective_id)
-        for s_id in range(len(chunks)):
-            allgather.insert(s_id, chunks.pop(0))
-        allgather.insert_finished()
+        with allgather.inserting() as inserter:
+            for s_id in range(len(chunks)):
+                inserter.insert(s_id, chunks.pop(0))
         stream = ir_context.get_cuda_stream()
         dfs = [
             DataFrame.from_table(
@@ -222,6 +218,9 @@ async def _collect_small_side_for_broadcast(
                     )
                 ]
         else:
+            chunks, _ = await make_table_chunks_available_or_wait(
+                context, chunks, reserve_extra=0, net_memory_delta=0
+            )
             dfs = [chunk_to_frame(c, ir) for c in chunks]
 
     return dfs, size
@@ -244,7 +243,7 @@ async def _broadcast_join_large_chunk(
 ) -> None:
     """Join one large-side chunk with the small DataFrame(s) and send the result."""
     large_df = chunk_to_frame(large_chunk, large_child)
-    large_chunk_size = large_chunk.data_alloc_size(MemoryType.DEVICE)
+    large_chunk_size = large_chunk.data_alloc_size()
 
     dfs_to_join = small_dfs
     if not dfs_to_join:
@@ -275,7 +274,9 @@ async def _broadcast_join_large_chunk(
         context,
         Message(
             seq_num,
-            TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True),
+            TableChunk.from_pylibcudf_table(
+                df.table, df.stream, exclusive_view=True, br=context.br()
+            ),
         ),
     )
     del df, large_df
@@ -302,7 +303,7 @@ async def _broadcast_join(
     into a single DataFrame, then joined with each chunk from the large side.
     Pops one collective ID from collective_ids for allgather when needed.
     """
-    left_metadata, right_metadata = await asyncio.gather(
+    left_metadata, right_metadata = await gather_in_task_group(
         recv_metadata(ch_left, context),
         recv_metadata(ch_right, context),
     )
@@ -371,7 +372,7 @@ async def _broadcast_join(
             ch_out,
             small_dfs,
             small_child,
-            TableChunk.from_message(msg).make_available_and_spill(
+            TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
                 context.br(), allow_overbooking=True
             ),
             large_child,
@@ -395,7 +396,7 @@ def _get_key_indices(
     n_keys = (
         n_partitioned_keys if n_partitioned_keys is not None else len(left_key_indices)
     )
-    if ir.options == "Right":
+    if ir.options[0] == "Right":
         join_keys_for_output = ir.right_on
     else:
         join_keys_for_output = ir.left_on
@@ -417,14 +418,14 @@ async def _join_chunks(
     tracer: ActorTracer | None,
 ) -> None:
     # Consume metadata from both shuffle outputs before reading data
-    await asyncio.gather(
+    await gather_in_task_group(
         recv_metadata(ch_left, context),
         recv_metadata(ch_right, context),
     )
 
     left, right = ir.children
     while True:
-        left_msg, right_msg = await asyncio.gather(
+        left_msg, right_msg = await gather_in_task_group(
             ch_left.recv(context), ch_right.recv(context)
         )
         if left_msg is None or right_msg is None:
@@ -442,12 +443,12 @@ async def _join_chunks(
             f"Left: {left_msg.sequence_number}, Right: {right_msg.sequence_number}"
         )
 
-        left_chunk = TableChunk.from_message(left_msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        right_chunk = TableChunk.from_message(right_msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
+        left_chunk = TableChunk.from_message(
+            left_msg, br=context.br()
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
+        right_chunk = TableChunk.from_message(
+            right_msg, br=context.br()
+        ).make_available_and_spill(context.br(), allow_overbooking=True)
 
         input_bytes = sum(
             col.device_buffer_size()
@@ -475,7 +476,7 @@ async def _join_chunks(
             Message(
                 left_msg.sequence_number,
                 TableChunk.from_pylibcudf_table(
-                    df.table, df.stream, exclusive_view=True
+                    df.table, df.stream, exclusive_view=True, br=context.br()
                 ),
             ),
         )
@@ -584,7 +585,7 @@ async def _shuffle_join(
                 tracer=tracer,
             ),
         ]
-        await asyncio.gather(*actor_tasks)
+        await gather_in_task_group(*actor_tasks)
 
 
 def _make_shuffle_strategy(
@@ -831,12 +832,12 @@ async def _sample_chunks(
         msg = await ch.recv(context)
         if msg is None:
             break
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
         sampled_chunks[msg.sequence_number] = chunk
-        total_size += chunk.data_alloc_size(MemoryType.DEVICE)
-        total_rows += chunk.table_view().num_rows()
+        total_size += chunk.data_alloc_size()
+        total_rows += chunk.shape[0]
         if total_size >= max_sample_bytes:
             break
     if sampled_chunks:
@@ -887,7 +888,7 @@ async def _choose_strategy(
         assert executor.dynamic_planning is not None
         sample_chunk_count = executor.dynamic_planning.sample_chunk_count
         target_partition_size = executor.target_partition_size
-        left_sample, right_sample = await asyncio.gather(
+        left_sample, right_sample = await gather_in_task_group(
             _sample_chunks(
                 context,
                 ch_left,
@@ -976,7 +977,7 @@ async def join_actor(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
-        left_metadata, right_metadata = await asyncio.gather(
+        left_metadata, right_metadata = await gather_in_task_group(
             recv_metadata(ch_left, context),
             recv_metadata(ch_right, context),
         )
@@ -996,78 +997,86 @@ async def join_actor(
 
         ch_left_replay = context.create_channel()
         ch_right_replay = context.create_channel()
-        actor_tasks = [
-            replay_buffered_channel(
-                context,
-                ch_left_replay,
-                ch_left,
-                left_sample.chunks,
-                left_metadata,
-                trace_ir=ir,
-            ),
-            replay_buffered_channel(
-                context,
-                ch_right_replay,
-                ch_right,
-                right_sample.chunks,
-                right_metadata,
-                trace_ir=ir,
-            ),
-        ]
-        ch_left = ch_left_replay
-        ch_right = ch_right_replay
-
-        if strategy.broadcast_side is not None:
-            actor_tasks.append(
-                _broadcast_join(
+        async with shutdown_on_error(
+            context,
+            ch_left_replay,
+            ch_right_replay,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ):
+            actor_tasks = [
+                replay_buffered_channel(
                     context,
-                    comm,
-                    ir,
-                    ir_context,
-                    ch_out,
+                    ch_left_replay,
                     ch_left,
-                    ch_right,
-                    strategy,
-                    collective_ids,
-                    executor.target_partition_size,
-                    tracer=tracer,
-                )
-            )
-        else:
-            actor_tasks.append(
-                _shuffle_join(
+                    left_sample.chunks,
+                    left_metadata,
+                    trace_ir=ir,
+                ),
+                replay_buffered_channel(
                     context,
-                    comm,
-                    ir,
-                    ir_context,
-                    ch_out,
-                    ch_left,
+                    ch_right_replay,
                     ch_right,
-                    strategy,
-                    collective_ids,
-                    tracer=tracer,
+                    right_sample.chunks,
+                    right_metadata,
+                    trace_ir=ir,
+                ),
+            ]
+            ch_left = ch_left_replay
+            ch_right = ch_right_replay
+
+            if strategy.broadcast_side is not None:
+                actor_tasks.append(
+                    _broadcast_join(
+                        context,
+                        comm,
+                        ir,
+                        ir_context,
+                        ch_out,
+                        ch_left,
+                        ch_right,
+                        strategy,
+                        collective_ids,
+                        executor.target_partition_size,
+                        tracer=tracer,
+                    )
                 )
-            )
-        await asyncio.gather(*actor_tasks)
+            else:
+                actor_tasks.append(
+                    _shuffle_join(
+                        context,
+                        comm,
+                        ir,
+                        ir_context,
+                        ch_out,
+                        ch_left,
+                        ch_right,
+                        strategy,
+                        collective_ids,
+                        tracer=tracer,
+                    )
+                )
+            await gather_in_task_group(*actor_tasks)
 
 
-@generate_ir_sub_network.register(Join)
-def _(
-    ir: Join, rec: SubNetGenerator
-) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    # Join operation.
+def _use_pwise_join(
+    executor: StreamingExecutor,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    ir: Join,
+) -> bool:
+    """Whether to use a static-planning partition-wise join."""
     left, right = ir.children
-    partition_info = rec.state["partition_info"]
     output_count = partition_info[ir].count
-    executor = rec.state["config_options"].executor
+    if (
+        output_count == 1
+        and isinstance(left, Repartition)
+        and isinstance(right, Repartition)
+    ):
+        # We fell back to single-partition behavior at lowering time
+        return True
 
-    # Check for dynamic planning
-    join_type = ir.options[0]
-    use_dynamic = (
-        isinstance(executor, StreamingExecutor)
-        and executor.dynamic_planning is not None
-        and join_type in ("Inner", "Left", "Right", "Full", "Semi", "Anti")
-    )
+    if executor.name == "streaming" and executor.dynamic_planning is not None:
+        return False
 
     left_count = partition_info[left].count
     right_count = partition_info[right].count
@@ -1078,8 +1087,20 @@ def _(
         partition_info[right].partitioned_on == ir.right_on
         and right_count == output_count
     )
+    return left_partitioned and right_partitioned
 
-    pwise_join = output_count == 1 or (left_partitioned and right_partitioned)
+
+@generate_ir_sub_network.register(Join)
+def _(
+    ir: Join, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    # Join operation.
+    left, right = ir.children
+    partition_info = rec.state["partition_info"]
+    left_count = partition_info[left].count
+    right_count = partition_info[right].count
+    executor = rec.state["config_options"].executor
+    pwise_join = _use_pwise_join(executor, partition_info, ir)
 
     # Process children
     actors, channels = process_children(ir, rec)
@@ -1105,9 +1126,12 @@ def _(
         ]
         return actors, channels
 
-    elif use_dynamic:
+    elif (
+        executor.name == "streaming"
+        and executor.dynamic_planning is not None
+        and ir.options[0] in ("Inner", "Left", "Right", "Full", "Semi", "Anti")
+    ):
         # Dynamic join - decide strategy at runtime
-        assert executor.dynamic_planning is not None  # Checked in use_dynamic
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
         # Join uses up to 3 collective IDs: 1 allgather + up to 2 (left/right shuffle)
         if len(collective_ids) < 3:

@@ -76,8 +76,16 @@ def test_booleanfunction_all_any_kleene(expr, ignore_nulls):
 )
 @pytest.mark.parametrize("has_nans", [False, True], ids=["no_nans", "nans"])
 def test_boolean_function_unary(
-    expr: Callable[[pl.Expr], pl.Expr], *, has_nans: bool, has_nulls: bool
+    expr: Callable[[pl.Expr], pl.Expr],
+    *,
+    has_nans: bool,
+    has_nulls: bool,
+    using_rapidsmpf: bool,
 ) -> None:
+    if using_rapidsmpf:
+        pytest.skip(
+            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
+        )
     values: list[float | None] = [1, 2, 3, 4, 5]
     if has_nans:
         values[3] = float("nan")
@@ -160,7 +168,11 @@ def test_boolean_isbetween(closed, bounds):
     "expr", [pl.any_horizontal("*"), pl.all_horizontal("*")], ids=["any", "all"]
 )
 @pytest.mark.parametrize("wide", [False, True], ids=["narrow", "wide"])
-def test_boolean_horizontal(expr, has_nulls, wide):
+def test_boolean_horizontal(expr, has_nulls, wide, using_rapidsmpf):
+    if using_rapidsmpf:
+        pytest.skip(
+            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
+        )
     ldf = pl.LazyFrame(
         {
             "a": [False, False, False, False, False, True],

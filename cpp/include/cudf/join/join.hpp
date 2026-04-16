@@ -43,6 +43,14 @@ enum class join_kind : int32_t {
 };
 
 /**
+ * @brief Specifies whether a join implementation should apply an optional probe-side prefilter.
+ *
+ * `NO` preserves the current direct probe behavior. `YES` enables implementation-defined
+ * prefiltering, such as bloom-filter-based candidate reduction before probing a hash table.
+ */
+enum class join_prefilter : bool { NO = false, YES = true };
+
+/**
  * @brief Sentinel value used to indicate an unmatched row index in join operations.
  *
  * This value is used in join result indices to represent rows that do not have a match
@@ -74,7 +82,7 @@ struct join_match_context {
    * @param match_counts Device vector containing the count of matching rows in the right table
    *                     for each row in the left table
    */
-  join_match_context(table_view left_table,
+  join_match_context(table_view const& left_table,  // NOLINT(modernize-pass-by-value)
                      std::unique_ptr<rmm::device_uvector<size_type>> match_counts)
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
   {

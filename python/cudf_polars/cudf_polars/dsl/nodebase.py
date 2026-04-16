@@ -18,6 +18,15 @@ __all__: list[str] = ["Node"]
 T = TypeVar("T", bound="Node[Any]")
 
 
+def _expand_hashable(obj: Any) -> Any:
+    """Expand nested Node instances to their hashable form."""
+    if isinstance(obj, Node):
+        return _expand_hashable(obj.get_hashable())
+    elif isinstance(obj, tuple):
+        return tuple(_expand_hashable(x) for x in obj)
+    return obj
+
+
 class Node(Generic[T]):
     """
     An abstract node type.
@@ -103,7 +112,7 @@ class Node(Generic[T]):
         try:
             return self._stable_hash_value
         except AttributeError:
-            content = repr(self.get_hashable()).encode("utf-8")
+            content = repr(_expand_hashable(self)).encode("utf-8")
             self._stable_hash_value = int(hashlib.md5(content).hexdigest()[:8], 16)
             return self._stable_hash_value
 

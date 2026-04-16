@@ -21,6 +21,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_merge_sort.cuh>
+#include <cuda/iterator>
 #include <thrust/gather.h>
 
 namespace cudf {
@@ -77,7 +78,7 @@ struct column_sorted_order_fn {
   {
     auto keys      = column_device_view::create(input, stream);
     auto comp      = simple_comparator<T>{*keys, input.has_nulls(), ascending, null_precedence};
-    auto in_keys   = thrust::make_counting_iterator<cudf::size_type>(0);
+    auto in_keys   = cuda::counting_iterator<cudf::size_type>{0};
     auto out_keys  = indices.begin<size_type>();
     auto tmp_bytes = std::size_t{0};
     if constexpr (method == sort_method::STABLE) {
@@ -136,8 +137,11 @@ struct column_sorted_order_fn {
     auto itr = cudf::detail::indexalator_factory::make_input_iterator(
       dictionary_column_view(input).indices());
     auto mapped_indices = rmm::device_uvector<size_type>(input.size(), stream);
-    thrust::gather(
-      rmm::exec_policy_nosync(stream), itr, itr + input.size(), map, mapped_indices.begin());
+    thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   itr,
+                   itr + input.size(),
+                   map,
+                   mapped_indices.begin());
 
     // Finally, sort-order the dictionary indices using mapped values
     auto mapped_view = column_view(data_type{type_to_id<size_type>()},

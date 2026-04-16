@@ -20,6 +20,7 @@ auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
  * @param datasource Input datasource
  * @param filter_expression Filter expression
  * @param payload_column_names List of paths of select payload column names, if any
+ * @param case_sensitive_names Whether column names are case sensitive
  * @param stream CUDA stream for hybrid scan reader
  * @param mr Device memory resource
  * @param aligned_mr Device memory resource to allocate aligned memory for bloom filters
@@ -30,6 +31,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& payload_column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
   rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
@@ -40,6 +42,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
  * @param datasource Input datasource
  * @param filter_expression Filter expression
  * @param payload_column_names List of paths of select payload column names, if any
+ * @param case_sensitive_names Whether column names are case sensitive
  * @param stream CUDA stream for hybrid scan reader
  * @param mr Device memory resource
  * @param aligned_mr Device memory resource to allocate aligned memory for bloom filters
@@ -50,6 +53,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& payload_column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
   rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr);
@@ -60,6 +64,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
  * @param datasource Input datasource
  * @param filter_expression Filter expression
  * @param column_names List of column names to read, if any
+ * @param case_sensitive_names Whether column names are case sensitive
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
@@ -69,6 +74,7 @@ std::unique_ptr<cudf::table> hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
@@ -78,6 +84,7 @@ std::unique_ptr<cudf::table> hybrid_scan_single_step(
  * @param datasource Input datasource
  * @param filter_expression Filter expression
  * @param column_names List of column names to read, if any
+ * @param case_sensitive_names Whether column names are case sensitive
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
@@ -87,5 +94,6 @@ std::unique_ptr<cudf::table> chunked_hybrid_scan_single_step(
   cudf::io::datasource& datasource,
   cudf::ast::operation const& filter_expression,
   std::optional<std::vector<std::string>> const& column_names,
+  bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

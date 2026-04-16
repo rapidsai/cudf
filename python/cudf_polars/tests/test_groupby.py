@@ -136,7 +136,14 @@ def test_groupby(df: pl.LazyFrame, maintain_order, keys, exprs):
     assert_gpu_result_equal(q, check_exact=False)
 
 
-def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs):
+def test_groupby_sorted_keys(df: pl.LazyFrame, keys, exprs, using_rapidsmpf, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            using_rapidsmpf,
+            strict=False,
+            reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
+        )
+    )
     sorted_keys = [
         key.sort(descending=descending)
         for key, descending in zip(keys, itertools.cycle([False, True]))
@@ -317,6 +324,13 @@ def test_groupby_len_with_nulls():
 @pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
 def test_groupby_nunique(df: pl.LazyFrame, column):
     q = df.group_by("key1").agg(pl.col(column).n_unique())
+
+    assert_gpu_result_equal(q, check_row_order=False)
+
+
+@pytest.mark.parametrize("column", ["int", "string", "uint16_with_null"])
+def test_groupby_nunique_drop_nulls(df: pl.LazyFrame, column):
+    q = df.group_by("key1").agg(pl.col(column).drop_nulls().n_unique())
 
     assert_gpu_result_equal(q, check_row_order=False)
 

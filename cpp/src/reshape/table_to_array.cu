@@ -23,7 +23,6 @@
 #include <cuda/iterator>
 #include <cuda_runtime.h>
 #include <thrust/device_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {

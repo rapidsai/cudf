@@ -43,11 +43,9 @@ from cudf_polars.dsl.utils.windows import (
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
-    get_new_cuda_stream,
     join_cuda_streams,
 )
 from cudf_polars.utils.versions import (
@@ -68,7 +66,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 __all__ = [
@@ -114,24 +112,8 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     """
 
-    get_cuda_stream: Callable[[], Stream]
+    get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-
-    @classmethod
-    def from_config_options(
-        cls, config_options: ConfigOptions, query_id: uuid.UUID | None = None
-    ) -> IRExecutionContext:
-        """Create an IRExecutionContext from ConfigOptions."""
-        query_id = query_id or uuid.uuid4()
-        match config_options.cuda_stream_policy:
-            case CUDAStreamPolicy.DEFAULT:
-                return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
-            case CUDAStreamPolicy.NEW:
-                return cls(get_cuda_stream=get_new_cuda_stream, query_id=query_id)
-            case _:  # pragma: no cover
-                raise ValueError(
-                    f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
-                )
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
@@ -1837,11 +1819,6 @@ class GroupBy(IR):
                 raise NotImplementedError(
                     "value_counts is not supported in groupby"
                 )  # pragma: no cover; Nested list[struct] types not supported
-            if any(
-                isinstance(child, unary.UnaryFunction) and child.name == "value_counts"
-                for child in expr.children
-            ):
-                raise NotImplementedError("value_counts is not supported in groupby")
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
@@ -1874,7 +1851,7 @@ class GroupBy(IR):
             target_length=df.num_rows,
             stream=df.stream,
         )
-        sorted = (
+        keys_are_sorted = (
             plc.types.Sorted.YES
             if all(k.is_sorted for k in keys)
             else plc.types.Sorted.NO
@@ -1882,13 +1859,15 @@ class GroupBy(IR):
         grouper = plc.groupby.GroupBy(
             plc.Table([k.obj for k in keys]),
             null_handling=plc.types.NullPolicy.INCLUDE,
-            keys_are_sorted=sorted,
+            keys_are_sorted=keys_are_sorted,
             column_order=[k.order for k in keys],
             null_precedence=[k.null_order for k in keys],
         )
         requests = []
         names = []
+        cast_to_schema = []
         for request in agg_requests:
+            should_cast = False
             name = request.name
             value = request.value
             if isinstance(value, expr.Len):
@@ -1899,7 +1878,12 @@ class GroupBy(IR):
                     child = value.children[0]
                 else:
                     (child,) = value.children
+                # libcudf will return int64 when summing integers
+                # but the schema may be a lower bit width
                 col = child.evaluate(df, context=ExecutionContext.GROUPBY).obj
+                should_cast = value.name == "sum" and plc.traits.is_integral_not_bool(
+                    col.type()
+                )
             else:
                 # Anything else, we pre-evaluate
                 column = value.evaluate(df, context=ExecutionContext.GROUPBY)
@@ -1910,13 +1894,18 @@ class GroupBy(IR):
                 col = column.obj
             requests.append(plc.groupby.GroupByRequest(col, [value.agg_request]))
             names.append(name)
+            cast_to_schema.append(should_cast)
         group_keys, raw_tables = grouper.aggregate(requests, stream=df.stream)
         results = [
             Column(column, name=name, dtype=schema[name])
-            for name, column, request in zip(
+            if not should_cast
+            else Column(column, name=name, dtype=schema[name]).astype(
+                schema[name], stream=df.stream
+            )
+            for name, column, should_cast in zip(
                 names,
                 itertools.chain.from_iterable(t.columns() for t in raw_tables),
-                agg_requests,
+                cast_to_schema,
                 strict=True,
             )
         ]
@@ -1924,9 +1913,13 @@ class GroupBy(IR):
             Column(grouped_key, name=key.name, dtype=key.dtype)
             for key, grouped_key in zip(keys, group_keys.columns(), strict=True)
         ]
+        if keys_are_sorted:
+            result_keys = [
+                col.sorted_like(key) for col, key in zip(result_keys, keys, strict=True)
+            ]
         broadcasted = broadcast(*result_keys, *results, stream=df.stream)
         # Handle order preservation of groups
-        if maintain_order and not sorted:
+        if maintain_order and not keys_are_sorted:
             # The order we want
             want = plc.stream_compaction.stable_distinct(
                 plc.Table([k.obj for k in keys]),
@@ -2317,7 +2310,7 @@ class Join(IR):
                 plc.copying.OutOfBoundsPolicy.DONT_CHECK,
                 None,
             )
-        assert_never(how)  # pragma: no cover
+        assert_never(how)
 
     @staticmethod
     def _reorder_maps(
@@ -2671,9 +2664,9 @@ class HStack(IR):
                 target_length=df.num_rows if df.num_columns != 0 else None,
                 stream=df.stream,
             )
-        else:
+        else:  # pragma: no cover; streaming rewrites HStack(False)
             # Polars ensures this is true, but let's make sure nothing
-            # went wrong. In this case, the parent node is a
+            # went wrong. In this case, the parent node is
             # guaranteed to be a Select which will take care of making
             # sure that everything is the same length. The result
             # table that might have mismatching column lengths will
@@ -3250,7 +3243,7 @@ class HConcat(IR):
 
     __slots__ = ("should_broadcast",)
     _non_child = ("schema", "should_broadcast")
-    _n_non_child_args = 1
+    _n_non_child_args = 2
 
     def __init__(
         self,
@@ -3260,7 +3253,7 @@ class HConcat(IR):
     ):
         self.schema = schema
         self.should_broadcast = should_broadcast
-        self._non_child_args = (should_broadcast,)
+        self._non_child_args = (schema, should_broadcast)
         self.children = children
 
     @staticmethod
@@ -3301,6 +3294,7 @@ class HConcat(IR):
     @nvtx_annotate_cudf_polars(message="HConcat")
     def do_evaluate(
         cls,
+        schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
         *dfs: DataFrame,
         context: IRExecutionContext,
@@ -3310,13 +3304,13 @@ class HConcat(IR):
             # Special should_broadcast case.
             # Used to recombine decomposed expressions
             if should_broadcast:
-                result = DataFrame(
-                    broadcast(
-                        *itertools.chain.from_iterable(df.columns for df in dfs),
-                        stream=stream,
-                    ),
+                bcols = broadcast(
+                    *itertools.chain.from_iterable(df.columns for df in dfs),
                     stream=stream,
                 )
+                by_name = {c.name: c for c in bcols}
+                ordered = [by_name[name] for name in schema]
+                result = DataFrame(ordered, stream=stream)
             else:
                 max_rows = max(df.num_rows for df in dfs)
                 # Horizontal concatenation extends shorter tables with nulls

@@ -154,16 +154,24 @@ def q80_segment(
     ret_amt_col: str,
     ret_loss_col: str,
 ) -> pl.LazyFrame:
-    """Builds one channel sub-aggregation (sales, returns, profit) grouped by an ID column."""
+    """
+    Builds one channel sub-aggregation (sales, returns, profit) grouped by an ID column.
+
+    Join order: filter sales through selective dimension tables first
+    (date range, item price > 50, promotion channel_tv = 'N'), then
+    LEFT JOIN returns last so the expensive outer join operates on the
+    already-reduced sales set.
+    """
+    filtered_item = item.filter(pl.col("i_current_price") > 50)
+    filtered_promo = promotion.filter(pl.col("p_channel_tv") == "N")
     return (
-        sales.join(
+        sales.join(dates, left_on=sold_date_key, right_on="d_date_sk")
+        .join(filtered_item, left_on=item_left_key, right_on="i_item_sk")
+        .join(filtered_promo, left_on=promo_left_key, right_on="p_promo_sk")
+        .join(id_dim, left_on=id_left_key, right_on=id_right_key)
+        .join(
             returns, left_on=returns_join_left, right_on=returns_join_right, how="left"
         )
-        .join(dates, left_on=sold_date_key, right_on="d_date_sk")
-        .join(id_dim, left_on=id_left_key, right_on=id_right_key)
-        .join(item, left_on=item_left_key, right_on="i_item_sk")
-        .join(promotion, left_on=promo_left_key, right_on="p_promo_sk")
-        .filter((pl.col("i_current_price") > 50) & (pl.col("p_channel_tv") == "N"))
         .group_by(id_out_col)
         .agg(
             [
