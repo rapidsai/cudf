@@ -358,42 +358,22 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<size_type> valid_counts,
                       device_span<bool* const> is_quoted_flags)
 {
-  // Stage field_ends into shared memory for faster access during column iteration.
-  // Global memory field_ends are accessed with stride num_actual_cols across threads,
-  // causing uncoalesced reads. Cooperative loading into shared memory gives coalesced
-  // global reads and fast shared-memory reads during the column loop.
-  extern __shared__ uint32_t s_field_ends[];
-
-  auto const tid         = threadIdx.x;
-  auto const num_threads = blockDim.x;
-  // Total field_ends elements this block needs (up to block_size rows × num_actual_cols)
-  auto const block_start_row = static_cast<size_t>(blockIdx.x) * num_threads;
-  auto const block_rows =
-    min(static_cast<size_t>(num_threads), (row_offsets.size() - 1) - block_start_row);
-  auto const total_elems = block_rows * num_actual_cols;
-  // Cooperatively load field_ends for all rows in this block
-  auto const global_base = block_start_row * num_actual_cols;
-  for (size_t i = tid; i < total_elems; i += num_threads) {
-    s_field_ends[i] = field_ends[global_base + i];
-  }
-  __syncthreads();
-
   auto const raw_csv     = data.data();
   auto const rec_id      = grid_1d::global_thread_id();
   auto const rec_id_next = rec_id + 1;
 
   if (rec_id_next >= row_offsets.size()) return;
 
-  auto const out_row   = rec_id + output_row_offset;
-  auto const row_end   = raw_csv + row_offsets[rec_id_next];
-  auto const smem_base = static_cast<size_t>(tid) * num_actual_cols;
+  auto const out_row  = rec_id + output_row_offset;
+  auto const row_end  = raw_csv + row_offsets[rec_id_next];
+  auto const base_idx = static_cast<size_t>(rec_id) * num_actual_cols;
 
   int actual_col = 0;
   for (int col = 0; col < column_flags.size() && col < num_actual_cols; ++col) {
-    // Read field offsets from shared memory instead of global memory
+    // Derive field start and end from precomputed offsets
     auto field_start =
-      (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + s_field_ends[smem_base + col - 1] + 1;
-    auto next_delimiter = raw_csv + s_field_ends[smem_base + col];
+      (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + field_ends[base_idx + col - 1] + 1;
+    auto next_delimiter = raw_csv + field_ends[base_idx + col];
 
     if (field_start >= row_end || next_delimiter < field_start) break;
 
@@ -937,19 +917,18 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
       options, data, tile_row_offsets, tile_field_ends, num_actual_cols);
 
     // Phase 2: Decode this tile — CSV data is still hot in L2 from Phase 1
-    auto const smem_bytes = block_size * num_actual_cols * sizeof(uint32_t);
-    convert_csv_to_cudf<<<tile_grid, block_size, smem_bytes, stream.value()>>>(options,
-                                                                               data,
-                                                                               column_flags,
-                                                                               tile_row_offsets,
-                                                                               tile_field_ends,
-                                                                               num_actual_cols,
-                                                                               tile_start,
-                                                                               dtypes,
-                                                                               columns,
-                                                                               valids,
-                                                                               valid_counts,
-                                                                               is_quoted_flags);
+    convert_csv_to_cudf<<<tile_grid, block_size, 0, stream.value()>>>(options,
+                                                                      data,
+                                                                      column_flags,
+                                                                      tile_row_offsets,
+                                                                      tile_field_ends,
+                                                                      num_actual_cols,
+                                                                      tile_start,
+                                                                      dtypes,
+                                                                      columns,
+                                                                      valids,
+                                                                      valid_counts,
+                                                                      is_quoted_flags);
   }
 }
 
