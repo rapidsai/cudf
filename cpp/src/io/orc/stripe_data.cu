@@ -1976,12 +1976,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                                               kTimestampNanoScale[secondary_val & 7]};
 
               // Adjust seconds only for negative timestamps with positive nanoseconds.
-              // Alternative way to represent negative timestamps is with negative nanoseconds
-              // in which case the adjustment in not needed.
-              // Comparing with 999999 instead of zero to match the apache writer.
-              // This must happen before the timezone conversion because the ORC writer's
-              // borrowing decision was based on the stored seconds (negative for any
-              // timestamp before the ORC epoch), not the final UTC/local seconds.
+              // This compensates for the Apache writer's integer division truncating
+              // toward zero (rather than flooring) when splitting a sub-second value
+              // into `(seconds, nanos)`: for negative times with fractional seconds the
+              // stored seconds is one higher than the floor, and the stored nanos carry
+              // the remainder. The check must run in the `stored + writer_epoch` frame
+              // (i.e. before the writer-tz -> UTC conversion below), to match the
+              // Apache Java reader; the condition is `nanos > 999999` (not `!= 0`) for
+              // the same reason.
               if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
 
               // Convert to UTC
