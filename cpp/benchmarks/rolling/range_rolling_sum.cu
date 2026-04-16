@@ -20,7 +20,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
 #include <nvbench/nvbench.cuh>

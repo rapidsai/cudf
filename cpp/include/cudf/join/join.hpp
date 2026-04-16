@@ -43,6 +43,14 @@ enum class join_kind : int32_t {
 };
 
 /**
+ * @brief Specifies whether a join implementation should apply an optional probe-side prefilter.
+ *
+ * `NO` preserves the current direct probe behavior. `YES` enables implementation-defined
+ * prefiltering, such as bloom-filter-based candidate reduction before probing a hash table.
+ */
+enum class join_prefilter : bool { NO = false, YES = true };
+
+/**
  * @brief Sentinel value used to indicate an unmatched row index in join operations.
  *
  * This value is used in join result indices to represent rows that do not have a match
@@ -74,7 +82,7 @@ struct join_match_context {
    * @param match_counts Device vector containing the count of matching rows in the right table
    *                     for each row in the left table
    */
-  join_match_context(table_view left_table,
+  join_match_context(table_view const& left_table,  // NOLINT(modernize-pass-by-value)
                      std::unique_ptr<rmm::device_uvector<size_type>> match_counts)
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
   {
@@ -356,7 +364,7 @@ filter_join_indices(cudf::table_view const& left,
  *     *output = left_val > right_val;
  *   }
  * )";
- * auto [filtered_left, filtered_right] = cudf::jit_filter_join_indices(
+ * auto [filtered_left, filtered_right] = cudf::filter_join_indices_jit(
  *   left_conditional_table,   // Table with columns referenced by predicate
  *   right_conditional_table,  // Table with columns referenced by predicate
  *   *left_indices,           // Indices from hash join
@@ -394,7 +402,7 @@ filter_join_indices(cudf::table_view const& left,
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(
+filter_join_indices_jit(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,
@@ -423,7 +431,7 @@ jit_filter_join_indices(
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-jit_filter_join_indices(
+filter_join_indices_jit(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,

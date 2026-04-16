@@ -5420,7 +5420,7 @@ class IntervalIndex(Index):
 
     @property
     def closed(self) -> Literal["left", "right", "neither", "both"]:
-        return self.dtype.closed
+        return self._column.closed
 
     @property
     def closed_left(self) -> bool:

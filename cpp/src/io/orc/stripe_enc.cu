@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -340,7 +340,6 @@ static inline __device__ void StoreBitsBigEndian(
  * @param[in] inbuf base input buffer
  * @param[in] inpos position in input buffer
  * @param[in] numvals max number of values to encode
- * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
  * @param[in] temp_storage shared memory storage to perform block reduce
  *

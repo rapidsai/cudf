@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,8 +27,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/limits>
 #include <cuda/std/type_traits>
-#include <cuda/utility>
 
 namespace cudf {
 namespace detail {
@@ -150,7 +150,7 @@ struct typesAtomicCASImpl {
  * int8_t, int16_t, int32_t, int64_t, float, double
  *
  * @param address The address of old value in global or shared memory
- * @param val The value to be computed
+ * @param update_value The value to be computed
  * @param op  The binary operator used for compute
  *
  * @returns The old value at `address`
@@ -385,11 +385,8 @@ __forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t
 
   uint64_t carry = 0;
   uint64_t old_parts[2];
-
-  cuda::static_for<0, 2>([&](auto i) {
-    uint64_t const current_add = (i == 0) ? add_low : add_high;
+  auto atomic_add_word = [&](int i, uint64_t current_add) {
     uint64_t expected_part, new_part;
-
     cuda::atomic_ref<uint64_t, cuda::thread_scope_device> atomic_part{target_ptr[i]};
 
     do {
@@ -400,7 +397,10 @@ __forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t
 
     old_parts[i] = expected_part;
     carry        = calculate_carry_64(expected_part, current_add, carry);
-  });
+  };
+
+  atomic_add_word(0, add_low);
+  atomic_add_word(1, add_high);
 
   __uint128_t const old_val_unsigned =
     (static_cast<__uint128_t>(old_parts[1]) << 64) | old_parts[0];

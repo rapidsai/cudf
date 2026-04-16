@@ -42,7 +42,7 @@ std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
   auto result = cudf::transform_extended(inputs,
                                          udf,
                                          cudf::data_type{cudf::type_id::UINT16},
-                                         false,
+                                         cudf::udf_source_type::CUDA,
                                          std::nullopt,
                                          cudf::null_aware::NO,
                                          std::nullopt,

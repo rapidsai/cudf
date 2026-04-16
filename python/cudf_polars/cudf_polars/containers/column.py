@@ -266,9 +266,11 @@ class Column:
         if plc.sorting.is_sorted(
             plc.Table([self.obj]), [order], [null_order], stream=stream
         ):
-            self.sorted = plc.types.Sorted.YES
-            self.order = order
-            self.null_order = null_order
+            self.set_sorted(
+                is_sorted=plc.types.Sorted.YES,
+                order=order,
+                null_order=null_order,
+            )
             return True
         return False
 
@@ -312,6 +314,7 @@ class Column:
             return Column(
                 self._handle_string_cast(plc_dtype, stream=stream, strict=strict),
                 dtype=dtype,
+                name=self.name,
             )
         elif plc.traits.is_integral_not_bool(
             self.obj.type()
@@ -328,7 +331,7 @@ class Column:
                 upcasted.offset(),
                 upcasted.children(),
             )
-            return Column(plc_col, dtype=dtype).sorted_like(self)
+            return Column(plc_col, dtype=dtype, name=self.name).sorted_like(self)
         elif plc.traits.is_integral_not_bool(plc_dtype) and plc.traits.is_timestamp(
             self.obj.type()
         ):
@@ -346,7 +349,9 @@ class Column:
                 self.obj.children(),
             )
             return Column(
-                plc.unary.cast(plc_col, plc_dtype, stream=stream), dtype=dtype
+                plc.unary.cast(plc_col, plc_dtype, stream=stream),
+                dtype=dtype,
+                name=self.name,
             ).sorted_like(self)
         elif plc.traits.is_floating_point(
             self.obj.type()
@@ -372,10 +377,13 @@ class Column:
                     stream=stream,
                 ),
                 dtype=dtype,
+                name=self.name,
             )
         else:
             result = Column(
-                plc.unary.cast(self.obj, plc_dtype, stream=stream), dtype=dtype
+                plc.unary.cast(self.obj, plc_dtype, stream=stream),
+                dtype=dtype,
+                name=self.name,
             )
             if is_order_preserving_cast(self.obj.type(), plc_dtype):
                 return result.sorted_like(self)

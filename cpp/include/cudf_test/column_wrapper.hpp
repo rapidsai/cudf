@@ -32,7 +32,6 @@
 #include <cuda/std/functional>
 #include <thrust/copy.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
@@ -964,7 +963,8 @@ class dictionary_column_wrapper : public detail::column_wrapper {
     wrapped =
       cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end),
                                cudf::data_type{type_id::INT32},
-                               cudf::test::get_default_stream());
+                               cudf::test::get_default_stream(),
+                               cudf::get_current_device_resource_ref());
   }
 
   /**
@@ -1163,7 +1163,8 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   {
     wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end),
                                        cudf::data_type{type_id::INT32},
-                                       cudf::test::get_default_stream());
+                                       cudf::test::get_default_stream(),
+                                       cudf::get_current_device_resource_ref());
   }
 
   /**
@@ -1928,7 +1929,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                                         std::move(child_columns),
                                         null_count,
                                         std::move(null_mask),
-                                        cudf::test::get_default_stream());
+                                        cudf::test::get_default_stream(),
+                                        cudf::get_current_device_resource_ref());
   }
 
   template <typename V>

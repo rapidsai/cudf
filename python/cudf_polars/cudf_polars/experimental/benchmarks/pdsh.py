@@ -13,14 +13,13 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import contextlib
 import os
 from datetime import date
 from typing import TYPE_CHECKING
 
 import polars as pl
 
-with contextlib.suppress(ImportError):
+try:
     from cudf_polars.experimental.benchmarks.utils import (
         COUNT_DTYPE,
         QueryResult,
@@ -31,7 +30,11 @@ with contextlib.suppress(ImportError):
         run_duckdb,
         run_polars,
     )
-
+except ImportError as e:
+    if e.name is not None and not e.name.startswith("cudf_polars"):
+        raise
+    # We want to be able to import pdsh in a CPU-only environment.
+    COUNT_DTYPE = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -52,56 +55,63 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 # EXPECTED_CASTS_FLOATS should be used when the input data uses
 # Float (rather than Decimal) for account balances, etc.
 
-EXPECTED_CASTS = {
-    1: [pl.col("count_order").cast(COUNT_DTYPE)],
-    4: [pl.col("order_count").cast(COUNT_DTYPE)],
-    7: [pl.col("l_year").cast(pl.Int32())],
-    8: [pl.col("o_year").cast(pl.Int32())],
-    9: [pl.col("o_year").cast(pl.Int32())],
-    12: [
-        pl.col("high_line_count").cast(pl.Int32()),
-        pl.col("low_line_count").cast(pl.Int32()),
-    ],
-    13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
-    16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
-    21: [pl.col("numwait").cast(COUNT_DTYPE)],
-    22: [pl.col("numcust").cast(COUNT_DTYPE)],
-}
+if COUNT_DTYPE is not None:
+    EXPECTED_CASTS = {
+        1: [pl.col("count_order").cast(COUNT_DTYPE)],
+        3: [pl.col("o_orderdate").cast(pl.Date())],
+        18: [pl.col("o_orderdate").cast(pl.Date())],
+        4: [pl.col("order_count").cast(COUNT_DTYPE)],
+        7: [pl.col("l_year").cast(pl.Int32())],
+        8: [pl.col("o_year").cast(pl.Int32())],
+        9: [pl.col("o_year").cast(pl.Int32())],
+        12: [
+            pl.col("high_line_count").cast(pl.Int32()),
+            pl.col("low_line_count").cast(pl.Int32()),
+        ],
+        13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
+        16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
+        21: [pl.col("numwait").cast(COUNT_DTYPE)],
+        22: [pl.col("numcust").cast(COUNT_DTYPE)],
+    }
 
+    EXPECTED_CASTS_DECIMAL = {
+        1: [
+            pl.col("sum_qty").cast(pl.Decimal(38, 2)),
+            pl.col("sum_base_price").cast(pl.Decimal(38, 2)),
+            pl.col("sum_disc_price").cast(pl.Float64()),
+            pl.col("sum_charge").cast(pl.Float64()),
+            pl.col("avg_disc").cast(pl.Float64()),
+            pl.col("avg_price").cast(pl.Float64()),
+            pl.col("avg_qty").cast(pl.Float64()),
+        ],
+        3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+        5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+        6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+        7: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+        8: [pl.col("mkt_share").cast(pl.Decimal(38, 2))],
+        9: [
+            pl.col("sum_profit").cast(pl.Decimal(38, 2)),
+        ],
+        10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+        11: [pl.col("value").cast(pl.Decimal(38, 2))],
+        15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
+        18: [pl.col("sum(l_quantity)").cast(pl.Decimal(38, 2))],
+        19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+        22: [
+            pl.col("totacctbal").cast(pl.Decimal(38, 2)),
+        ],
+    }
 
-EXPECTED_CASTS_DECIMAL = {
-    1: [
-        pl.col("sum_qty").cast(pl.Decimal(15, 2)),
-        pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
-        pl.col("sum_disc_price").cast(pl.Float64()),
-        pl.col("sum_charge").cast(pl.Float64()),
-        pl.col("avg_disc").cast(pl.Float64()),
-        pl.col("avg_price").cast(pl.Float64()),
-        pl.col("avg_qty").cast(pl.Float64()),
-    ],
-    3: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    5: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    6: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    7: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    8: [pl.col("mkt_share").cast(pl.Decimal(38, 2))],
-    9: [
-        pl.col("sum_profit").cast(pl.Decimal(38, 2)),
-    ],
-    10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
-    18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
-    19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
-    22: [
-        pl.col("totacctbal").cast(pl.Decimal(15, 2)),
-    ],
-}
-
-# When operating on timestamp data from tpchgen-rs, duckdb uses
-# Datetime[us, tz=none] while polars uses Datetime[ms, tz=none].
-EXPECTED_CASTS_TIMESTAMP = {
-    3: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
-    18: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
-}
+    # When operating on timestamp data from tpchgen-rs, duckdb uses
+    # Datetime[us, tz=none] while polars uses Datetime[ms, tz=none].
+    EXPECTED_CASTS_TIMESTAMP = {
+        3: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
+        18: [pl.col("o_orderdate").cast(pl.Datetime("ms"))],
+    }
+else:
+    EXPECTED_CASTS = {}
+    EXPECTED_CASTS_DECIMAL = {}
+    EXPECTED_CASTS_TIMESTAMP = {}
 
 
 class PDSHQueries:
@@ -570,7 +580,7 @@ class PDSHQueries:
         supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
 
         var1 = "GERMANY"
-        var2 = 0.0001 / run_config.scale_factor
+        var2 = float(f"{0.0001 / run_config.scale_factor:.12f}")
 
         q1 = (
             partsupp.join(supplier, left_on="ps_suppkey", right_on="s_suppkey")
@@ -1796,8 +1806,8 @@ if __name__ == "__main__":
     args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSHQueries, args, num_queries=22)
+        run_polars(PDSHQueries, args)
     elif args.engine == "duckdb":
-        run_duckdb(PDSHDuckDBQueries, args, num_queries=22)
+        run_duckdb(PDSHDuckDBQueries, args)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")

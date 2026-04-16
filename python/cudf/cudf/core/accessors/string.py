@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Literal, cast, overload
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import pylibcudf as plc
 
@@ -28,7 +27,6 @@ from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
     can_convert_to_column,
 )
-from cudf.utils.scalar import pa_scalar_to_plc_scalar
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -40,9 +38,9 @@ if TYPE_CHECKING:
 
 
 def _is_supported_regex_flags(flags: int) -> bool:
+    all_flags = re.MULTILINE | re.DOTALL | re.IGNORECASE
     return flags == 0 or (
-        (flags & (re.MULTILINE | re.DOTALL) != 0)
-        and (flags & ~(re.MULTILINE | re.DOTALL) == 0)
+        (flags & all_flags) != 0 and (flags & ~all_flags) == 0
     )
 
 
@@ -50,7 +48,7 @@ def _massage_string_arg(
     value, name, allow_col: bool = False
 ) -> StringColumn | plc.Scalar:
     if isinstance(value, str):
-        return pa_scalar_to_plc_scalar(pa.scalar(value, type=pa.string()))
+        return plc.Scalar.from_py(value, dtype=plc.DataType(plc.TypeId.STRING))
 
     allowed_types = ["Scalar"]
 
@@ -338,15 +336,18 @@ class StringMethods(BaseAccessor):
                 )
             ):
                 other_cols = (
-                    as_column(
-                        frame.reindex(parent_index), dtype=CUDF_STRING_DTYPE
+                    (
+                        as_column(
+                            frame.reindex(parent_index),
+                            dtype=CUDF_STRING_DTYPE,
+                        )
+                        if (
+                            parent_index is not None
+                            and isinstance(frame, cudf.Series)
+                            and not frame.index.equals(parent_index)
+                        )
+                        else as_column(frame, dtype=CUDF_STRING_DTYPE)
                     )
-                    if (
-                        parent_index is not None
-                        and isinstance(frame, cudf.Series)
-                        and not frame.index.equals(parent_index)
-                    )
-                    else as_column(frame, dtype=CUDF_STRING_DTYPE)
                     for frame in others
                 )
             elif others is not None and not isinstance(others, StringMethods):
@@ -615,8 +616,8 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.extract`
 
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         if not isinstance(expand, bool):
             raise ValueError("expand parameter must be True or False")
@@ -645,6 +646,17 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             data, expand=expand, replace_name=result_name
         )
+
+    def _remove_named_capture_groups(self, pat: str) -> str:
+        r"""
+        Removes any named capture groups from the given regex pattern.
+        Named capture groups are expected in the format "(?P<name>)" only.
+        These are unnecessary (and unexpected) by the pylibcudf for non-extract regex calls.
+        """
+        to_remove = "|".join(re.compile(pat).groupindex.keys())
+        if to_remove:
+            pat = re.sub(rf"\(\?P<(?:{to_remove})>", "(", pat)
+        return pat
 
     def contains(
         self,
@@ -765,8 +777,8 @@ class StringMethods(BaseAccessor):
             The parameter `case` is not yet supported and will
             raise a NotImplementedError if anything other than the default
             value is set.
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         if (
             na is not no_default
@@ -793,7 +805,8 @@ class StringMethods(BaseAccessor):
 
         if is_scalar(pat):
             if regex:
-                result_col = self._column.contains_re(pat, flags)  # type: ignore[arg-type]
+                pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
+                result_col = self._column.contains_re(pat, flags)
             else:
                 if case is False:
                     input_column = self._column.to_lower()
@@ -1029,21 +1042,20 @@ class StringMethods(BaseAccessor):
         if regex and isinstance(pat, re.Pattern):
             pat = pat.pattern
 
-        pa_repl = pa.scalar(repl)
-        if not pa.types.is_string(pa_repl.type):
+        if not isinstance(repl, str):
             raise TypeError(f"repl must be a str, not {type(repl).__name__}.")
 
         # Pandas forces non-regex replace when pat is a single-character
         if regex is True and len(pat) > 0:
             result = self._column.replace_re(
                 pat,  # type: ignore[arg-type]
-                pa_repl,
+                repl,
                 n,
             )
         else:
             result = self._column.replace_str(
                 pat,  # type: ignore[arg-type]
-                pa_repl,
+                repl,
                 n,
             )
         return self._return_or_inplace(result)
@@ -2116,6 +2128,14 @@ class StringMethods(BaseAccessor):
         """
         if repl is None:
             repl = ""
+        try:
+            plc_repl = plc.Scalar.from_py(
+                repl, dtype=plc.DataType(plc.TypeId.STRING)
+            )
+        except (NotImplementedError, TypeError) as err:
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            ) from err
         if keep:
             types_to_remove = (
                 plc.strings.char_types.StringCharacterTypes.ALL_TYPES
@@ -2134,7 +2154,7 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.filter_characters_of_type(
                 types_to_remove,
-                repl,
+                plc_repl,
                 types_to_keep,
             )
         )
@@ -2265,8 +2285,16 @@ class StringMethods(BaseAccessor):
         if repl is None:
             repl = ""
 
+        try:
+            plc_repl = plc.Scalar.from_py(
+                repl, dtype=plc.DataType(plc.TypeId.STRING)
+            )
+        except (NotImplementedError, TypeError) as err:
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            ) from err
         return self._return_or_inplace(
-            self._column.replace_slice(start, stop, repl)
+            self._column.replace_slice(start, stop, plc_repl)
         )
 
     def insert(
@@ -2591,8 +2619,8 @@ class StringMethods(BaseAccessor):
                     data = self._column.split_re(pat, n)
                 else:
                     data = self._column.split(
-                        pa_scalar_to_plc_scalar(
-                            pa.scalar(pat, type=pa.string())
+                        plc.Scalar.from_py(
+                            pat, dtype=plc.DataType(plc.TypeId.STRING)
                         ),
                         n,
                     )
@@ -2605,7 +2633,9 @@ class StringMethods(BaseAccessor):
                 result_table = self._column.split_record_re(pat, n)
             else:
                 result_table = self._column.split_record(
-                    pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string())),
+                    plc.Scalar.from_py(
+                        pat, dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                     n,
                 )
 
@@ -2768,8 +2798,8 @@ class StringMethods(BaseAccessor):
                     data = self._column.rsplit_re(pat, n)
                 else:
                     data = self._column.rsplit(
-                        pa_scalar_to_plc_scalar(
-                            pa.scalar(pat, type=pa.string())
+                        plc.Scalar.from_py(
+                            pat, dtype=plc.DataType(plc.TypeId.STRING)
                         ),
                         n,
                     )
@@ -2782,7 +2812,9 @@ class StringMethods(BaseAccessor):
                 result_table = self._column.rsplit_record_re(pat, n)
             else:
                 result_table = self._column.rsplit_record(
-                    pa_scalar_to_plc_scalar(pa.scalar(pat, type=pa.string())),
+                    plc.Scalar.from_py(
+                        pat, dtype=plc.DataType(plc.TypeId.STRING)
+                    ),
                     n,
                 )
 
@@ -2901,10 +2933,13 @@ class StringMethods(BaseAccessor):
 
         if sep is None:
             sep = " "
-
+        if not isinstance(sep, str):
+            raise TypeError(
+                f"sep should be a string, but got {type(sep).__name__}"
+            )
         return self._return_or_inplace(
             self._column.partition(
-                pa_scalar_to_plc_scalar(pa.scalar(sep, type=pa.string()))
+                plc.Scalar.from_py(sep, dtype=plc.DataType(plc.TypeId.STRING)),
             ),
             expand=expand,
         )
@@ -2970,10 +3005,13 @@ class StringMethods(BaseAccessor):
 
         if sep is None:
             sep = " "
-
+        if not isinstance(sep, str):
+            raise TypeError(
+                f"sep should be a string, but got {type(sep).__name__}"
+            )
         return self._return_or_inplace(
             self._column.rpartition(
-                pa_scalar_to_plc_scalar(pa.scalar(sep, type=pa.string()))
+                plc.Scalar.from_py(sep, dtype=plc.DataType(plc.TypeId.STRING)),
             ),
             expand=expand,
         )
@@ -3320,6 +3358,10 @@ class StringMethods(BaseAccessor):
         3    None
         dtype: object
         """
+        if not (isinstance(to_strip, str) or to_strip is None):
+            raise TypeError(
+                f"to_strip should be a string or None, but got {type(to_strip).__name__}"
+            )
         return self._return_or_inplace(
             self._column.strip(plc.strings.side_type.SideType.BOTH, to_strip)
         )
@@ -3364,6 +3406,10 @@ class StringMethods(BaseAccessor):
         3       None
         dtype: object
         """
+        if not (isinstance(to_strip, str) or to_strip is None):
+            raise TypeError(
+                f"to_strip should be a string or None, but got {type(to_strip).__name__}"
+            )
         return self._return_or_inplace(
             self._column.strip(plc.strings.side_type.SideType.LEFT, to_strip)
         )
@@ -3416,6 +3462,10 @@ class StringMethods(BaseAccessor):
         3      None
         dtype: object
         """
+        if not (isinstance(to_strip, str) or to_strip is None):
+            raise TypeError(
+                f"to_strip should be a string or None, but got {type(to_strip).__name__}"
+            )
         return self._return_or_inplace(
             self._column.strip(plc.strings.side_type.SideType.RIGHT, to_strip)
         )
@@ -3568,7 +3618,7 @@ class StringMethods(BaseAccessor):
             :meth:`pandas.Series.str.count`
 
             -   `flags` parameter currently only supports re.DOTALL
-                and re.MULTILINE.
+                and re.MULTILINE and re.IGNORECASE.
             -   Some characters need to be escaped when passing
                 in pat. e.g. ``'$'`` has a special meaning in regex
                 and must be escaped when finding this literal character.
@@ -3580,6 +3630,7 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)
         return self._return_or_inplace(self._column.count_re(pat, flags))
 
     def _findall(
@@ -3597,8 +3648,9 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)  # type: ignore[arg-type]
         return self._return_or_inplace(
-            self._column.findall(method, pat, flags)  # type: ignore[arg-type]
+            self._column.findall(method, pat, flags)
         )
 
     def findall(self, pat: str, flags: int = 0) -> Series | Index:
@@ -3663,8 +3715,8 @@ class StringMethods(BaseAccessor):
         .. pandas-compat::
             :meth:`pandas.Series.str.findall`
 
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         return self._findall(plc.strings.findall.findall, pat, flags)
 
@@ -3760,9 +3812,11 @@ class StringMethods(BaseAccessor):
         return cudf.Series._from_column(
             result,
             name=self._parent.name,
-            index=self._parent.index
-            if isinstance(self._parent, cudf.Series)
-            else self._parent,
+            index=(
+                self._parent.index
+                if isinstance(self._parent, cudf.Series)
+                else self._parent
+            ),
         )
 
     def isempty(self) -> Series | Index:
@@ -4311,8 +4365,8 @@ class StringMethods(BaseAccessor):
             :meth:`pandas.Series.str.match`
 
             Parameter `case` is currently not supported.
-            The `flags` parameter currently only supports re.DOTALL and
-            re.MULTILINE.
+            The `flags` parameter currently only supports re.DOTALL,
+            re.MULTILINE and re.IGNORECASE.
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -4327,6 +4381,7 @@ class StringMethods(BaseAccessor):
             raise NotImplementedError(
                 "unsupported value for `flags` parameter"
             )
+        pat = self._remove_named_capture_groups(pat)
         result = self._column.matches_re(pat, flags)
         if na is not no_default:
             result = result.fillna(na)
@@ -4515,8 +4570,16 @@ class StringMethods(BaseAccessor):
         """
         if repl is None:
             repl = ""
+        try:
+            plc_repl = plc.Scalar.from_py(
+                repl, dtype=plc.DataType(plc.TypeId.STRING)
+            )
+        except (NotImplementedError, TypeError) as err:
+            raise TypeError(
+                f"repl should be a string, but got {type(repl).__name__}"
+            ) from err
         return self._return_or_inplace(
-            self._column.filter_characters(table, keep, repl)
+            self._column.filter_characters(table, keep, plc_repl)
         )
 
     def normalize_spaces(self) -> Series | Index:
@@ -4979,8 +5042,8 @@ class StringMethods(BaseAccessor):
             self._column.replace_tokens(
                 targets_column,  # type: ignore[arg-type]
                 replacements_column,  # type: ignore[arg-type]
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(delimiter, type=pa.string())
+                plc.Scalar.from_py(
+                    delimiter, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
             ),
         )
@@ -5050,11 +5113,11 @@ class StringMethods(BaseAccessor):
         return self._return_or_inplace(
             self._column.filter_tokens(
                 min_token_length,
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(replacement, type=pa.string())
+                plc.Scalar.from_py(
+                    replacement, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
-                pa_scalar_to_plc_scalar(
-                    pa.scalar(delimiter, type=pa.string())
+                plc.Scalar.from_py(
+                    delimiter, dtype=plc.DataType(plc.TypeId.STRING)
                 ),
             ),
         )

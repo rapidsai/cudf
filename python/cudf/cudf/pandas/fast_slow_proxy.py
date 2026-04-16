@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -127,6 +127,71 @@ class _PickleConstructor:
 _DELETE = object()
 
 
+def _make_proxy_getattr():
+    """
+    Create an optimized ``__getattr__`` for proxy types.
+
+    Uses ``_fsproxy_wrapped`` directly instead of the
+    ``_fsproxy_fast``/``_fsproxy_slow`` properties to avoid
+    triggering expensive fast-slow type conversions on every
+    attribute miss.
+
+    The fallback uses ``_fsproxy_fast_to_slow()`` /
+    ``_fsproxy_slow_to_fast()`` directly (not the ``_fsproxy_slow``
+    / ``_fsproxy_fast`` properties) so that the stored
+    ``_fsproxy_wrapped`` is **not** mutated.  This avoids the
+    fast-slow-fast ping-pong that would otherwise occur on
+    consecutive attribute misses.
+
+    A per-instance negative cache (``_fsproxy_missing_attrs``)
+    records attribute names that were not found on either the fast
+    or slow representation.  The first miss for a given name pays
+    the conversion cost, but all subsequent misses are O(1).
+    """
+
+    def __getattr__(self, name):
+        # Fast path: check per-instance negative cache.
+        inst_dict = object.__getattribute__(self, "__dict__")
+        missing = inst_dict.get("_fsproxy_missing_attrs")
+        if missing is not None and name in missing:
+            raise AttributeError(name)
+
+        wrapped = self._fsproxy_wrapped
+        try:
+            result = getattr(wrapped, name)
+        except AttributeError:
+            # The current wrapped object doesn't have this attr.
+            # Try the other representation without storing the
+            # conversion (avoids ping-pong).
+            try:
+                if isinstance(wrapped, self._fsproxy_fast_type):
+                    other = self._fsproxy_fast_to_slow()
+                else:
+                    other = self._fsproxy_slow_to_fast()
+            except Exception:
+                # Conversion failed — treat as missing.
+                raise AttributeError(name) from None
+            try:
+                result = getattr(other, name)
+            except AttributeError:
+                # Neither side has it — cache and re-raise.
+                if missing is None:
+                    missing = set()
+                    inst_dict["_fsproxy_missing_attrs"] = missing
+                missing.add(name)
+                raise
+        except Exception:
+            # Non-AttributeError (e.g., cudf internal error):
+            # fall back to the other representation.
+            if isinstance(wrapped, self._fsproxy_fast_type):
+                result = getattr(self._fsproxy_fast_to_slow(), name)
+            else:
+                result = getattr(self._fsproxy_slow_to_fast(), name)
+        return _maybe_wrap_result(result, getattr, self, name)
+
+    return __getattr__
+
+
 def make_final_proxy_type(
     name: str,
     fast_type: type,
@@ -250,6 +315,10 @@ def make_final_proxy_type(
     for method in _SPECIAL_METHODS:
         if method in slow_type_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
+
+    if hasattr(slow_type, "__getattr__"):
+        cls_dict["__getattr__"] = _make_proxy_getattr()
+
     for k, v in additional_attributes.items():
         if v is _DELETE and k in cls_dict:
             del cls_dict[k]
@@ -375,6 +444,9 @@ def make_intermediate_proxy_type(
     for method in _SPECIAL_METHODS:
         if method in slow_dir and getattr(slow_type, method, False):
             cls_dict[method] = _FastSlowAttribute(method)
+
+    if hasattr(slow_type, "__getattr__"):
+        cls_dict["__getattr__"] = _make_proxy_getattr()
 
     if additional_attributes is None:
         additional_attributes = {}
@@ -1512,7 +1584,6 @@ _SPECIAL_METHODS: set[str] = {
     "__and__",
     "__bool__",
     "__call__",
-    "__getattr__",
     "__complex__",
     "__contains__",
     "__copy__",

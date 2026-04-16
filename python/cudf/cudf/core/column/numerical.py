@@ -18,13 +18,15 @@ from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
     ColumnBase,
+    ColumnList,
     PylibcudfFunction,
     as_column,
     column_empty,
-    np_bool_dtype_policy,
+    fixed_dtype_policy,
+    pylibcudf_result_dtype_policy,
+    same_dtype_policy,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
-from cudf.core.column.utils import access_columns
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     CUDF_STRING_DTYPE,
@@ -49,6 +51,28 @@ def _needs_flip(
         return bool(cp.all(result_sign == lhs_sign))
     else:
         return bool(cp.all(result_sign != lhs_sign))
+
+
+def _is_null_or_nan_plc(plc_column: plc.Column) -> plc.Column:
+    is_null_plc = plc.unary.is_null(plc_column)
+    is_nan_plc = plc.unary.is_nan(plc_column)
+    return plc.binaryop.binary_operation(
+        is_null_plc,
+        is_nan_plc,
+        plc.binaryop.BinaryOperator.BITWISE_OR,
+        plc.types.DataType(plc.types.TypeId.BOOL8),
+    )
+
+
+def _is_valid_and_not_nan_plc(plc_column: plc.Column) -> plc.Column:
+    is_valid_plc = plc.unary.is_valid(plc_column)
+    is_not_nan_plc = plc.unary.is_not_nan(plc_column)
+    return plc.binaryop.binary_operation(
+        is_valid_plc,
+        is_not_nan_plc,
+        plc.binaryop.BinaryOperator.BITWISE_AND,
+        plc.types.DataType(plc.types.TypeId.BOOL8),
+    )
 
 
 if TYPE_CHECKING:
@@ -159,7 +183,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f":
             return as_column(False, length=len(self))
         return PylibcudfFunction(
-            plc.unary.is_nan, np_bool_dtype_policy
+            plc.unary.is_nan, pylibcudf_result_dtype_policy
         ).execute_with_args(self)
 
     def notnan(self) -> ColumnBase:
@@ -172,7 +196,7 @@ class NumericalColumn(NumericalBaseColumn):
             return as_column(True, length=len(self))
         return PylibcudfFunction(
             plc.unary.is_not_nan,
-            np_bool_dtype_policy,
+            pylibcudf_result_dtype_policy,
         ).execute_with_args(self)
 
     def isnull(self) -> ColumnBase:
@@ -182,19 +206,15 @@ class NumericalColumn(NumericalBaseColumn):
         """
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             return as_column(False, length=len(self))
-
-        with self.access(mode="read", scope="internal"):
-            is_null_plc = plc.unary.is_null(self.plc_column)
-            if self.dtype.kind == "f":
-                is_nan_plc = plc.unary.is_nan(self.plc_column)
-                result_plc = plc.binaryop.binary_operation(
-                    is_null_plc,
-                    is_nan_plc,
-                    plc.binaryop.BinaryOperator.BITWISE_OR,
-                    plc.types.DataType(plc.types.TypeId.BOOL8),
-                )
-                return ColumnBase.create(result_plc, np.dtype(np.bool_))
-            return ColumnBase.create(is_null_plc, np.dtype(np.bool_))
+        if self.dtype.kind == "f":
+            return PylibcudfFunction(
+                _is_null_or_nan_plc,
+                pylibcudf_result_dtype_policy,
+            ).execute_with_args(self)
+        return PylibcudfFunction(
+            plc.unary.is_null,
+            pylibcudf_result_dtype_policy,
+        ).execute_with_args(self)
 
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column.
@@ -204,28 +224,23 @@ class NumericalColumn(NumericalBaseColumn):
         if not self.has_nulls(include_nan=self.dtype.kind == "f"):
             result = as_column(True, length=len(self))
         else:
-            with self.access(mode="read", scope="internal"):
-                is_valid_plc = plc.unary.is_valid(self.plc_column)
-                if self.dtype.kind == "f":
-                    is_not_nan_plc = plc.unary.is_not_nan(self.plc_column)
-                    result_plc = plc.binaryop.binary_operation(
-                        is_valid_plc,
-                        is_not_nan_plc,
-                        plc.binaryop.BinaryOperator.BITWISE_AND,
-                        plc.types.DataType(plc.types.TypeId.BOOL8),
-                    )
-                    result = ColumnBase.create(result_plc, np.dtype(np.bool_))
-                else:
-                    result = ColumnBase.create(
-                        is_valid_plc, np.dtype(np.bool_)
-                    )
+            if self.dtype.kind == "f":
+                result = PylibcudfFunction(
+                    _is_valid_and_not_nan_plc,
+                    pylibcudf_result_dtype_policy,
+                ).execute_with_args(self)
+            else:
+                result = PylibcudfFunction(
+                    plc.unary.is_valid,
+                    pylibcudf_result_dtype_policy,
+                ).execute_with_args(self)
 
         return result
 
     def element_indexing(self, index: int) -> ScalarLike | None:
         result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            return self.dtype.type(result.as_py())
+        if isinstance(result, (int, float, bool)):
+            return self.dtype.type(result)
         return result
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
@@ -502,12 +517,11 @@ class NumericalColumn(NumericalBaseColumn):
     def nans_to_nulls(self: Self) -> Self:
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
-        with self.access(mode="read", scope="internal"):
-            result = type(self).create(
-                plc.transform.column_nans_to_nulls(self.plc_column),
-                dtype=self.dtype,
-            )
-            return cast(Self, result)
+        result = PylibcudfFunction(
+            plc.transform.column_nans_to_nulls,
+            same_dtype_policy,
+        ).execute_with_args(self)
+        return cast(Self, result)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
@@ -577,14 +591,13 @@ class NumericalColumn(NumericalBaseColumn):
     def int2ip(self) -> StringColumn:
         if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
-        with self.access(mode="read", scope="internal"):
-            plc_column = plc.strings.convert.convert_ipv4.integers_to_ipv4(
-                self.plc_column
-            )
-            return cast(
-                cudf.core.column.string.StringColumn,
-                ColumnBase.create(plc_column, CUDF_STRING_DTYPE),
-            )
+        return cast(
+            cudf.core.column.string.StringColumn,
+            PylibcudfFunction(
+                plc.strings.convert.convert_ipv4.integers_to_ipv4,
+                pylibcudf_result_dtype_policy,
+            ).execute_with_args(self),
+        )
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         col = self
@@ -597,6 +610,8 @@ class NumericalColumn(NumericalBaseColumn):
                 "Cannot convert numerical column to string column "
                 "when dtype is an object dtype in pandas compatibility mode."
             )
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         if len(self) == 0:
             return cast(
                 cudf.core.column.StringColumn,
@@ -607,8 +622,12 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind == "b":
             conv_func = functools.partial(
                 plc.strings.convert.convert_booleans.from_booleans,
-                true_string=pa_scalar_to_plc_scalar(pa.scalar("True")),
-                false_string=pa_scalar_to_plc_scalar(pa.scalar("False")),
+                true_string=plc.Scalar.from_py(
+                    "True", dtype=plc.DataType(plc.TypeId.STRING)
+                ),
+                false_string=plc.Scalar.from_py(
+                    "False", dtype=plc.DataType(plc.TypeId.STRING)
+                ),
             )
         elif self.dtype.kind in {"i", "u"}:
             conv_func = plc.strings.convert.convert_integers.from_integers
@@ -1030,24 +1049,23 @@ class NumericalColumn(NumericalBaseColumn):
         if bin_col.nullable:
             raise ValueError("`bins` cannot contain null entries.")
 
-        with access_columns(bin_col, self, mode="read", scope="internal") as (
-            bin_col,
-            self,
-        ):
-            return cast(
-                Self,
-                ColumnBase.create(
-                    getattr(
-                        plc.search, "lower_bound" if right else "upper_bound"
-                    )(
-                        plc.Table([bin_col.plc_column]),
-                        plc.Table([self.plc_column]),
-                        [plc.types.Order.ASCENDING],
-                        [plc.types.NullOrder.BEFORE],
-                    ),
-                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32)),
+        return cast(
+            Self,
+            PylibcudfFunction(
+                getattr(
+                    plc.search,
+                    "lower_bound" if right else "upper_bound",
                 ),
-            )
+                fixed_dtype_policy(
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int32))
+                ),
+            ).execute_with_args(
+                ColumnList(bin_col),
+                ColumnList(self),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+            ),
+        )
 
 
 def _normalize_find_and_replace_input(

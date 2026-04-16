@@ -16,7 +16,6 @@ import pytest
 import cudf
 from cudf.core._compat import (
     PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_210,
     PANDAS_GE_220,
     PANDAS_VERSION,
 )
@@ -24,7 +23,6 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
     assert_exceptions_equal,
-    expect_warning_if,
     gen_rand_series,
 )
 
@@ -1147,18 +1145,12 @@ def test_series_compare_scalar(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            numeric_and_temporal_types_as_str
-            in {"datetime64[ns]", "timedelta64[ns]"}
-            and not (
+            numeric_and_temporal_types_as_str == "timedelta64[ns]"
+            or (
                 numeric_and_temporal_types_as_str == "datetime64[ns]"
-                and comparison_op in {operator.eq, operator.ne}
-            )
-            and not (
-                not PANDAS_GE_210
-                and numeric_and_temporal_types_as_str == "timedelta64[ns]"
-                and comparison_op in {operator.eq, operator.ne}
+                and comparison_op not in {operator.eq, operator.ne}
             ),
-            reason=f"Fails with {numeric_and_temporal_types_as_str}",
+            reason=f"Fails with {numeric_and_temporal_types_as_str} with {comparison_op.__name__}",
         )
     )
 
@@ -1177,15 +1169,8 @@ def test_series_compare_scalar(
         result1 = cudf.Series(result1)
         result2 = cudf.Series(result2)
 
-    with expect_warning_if(
-        not PANDAS_GE_210
-        and numeric_and_temporal_types_as_str
-        in {"datetime64[ns]", "timedelta64[ns]"}
-        and comparison_op in {operator.eq, operator.ne},
-        DeprecationWarning,
-    ):
-        np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, rhs))
-        np.testing.assert_equal(result2.to_numpy(), comparison_op(rhs, arr1))
+    np.testing.assert_equal(result1.to_numpy(), comparison_op(arr1, rhs))
+    np.testing.assert_equal(result2.to_numpy(), comparison_op(rhs, arr1))
 
 
 @pytest.mark.parametrize("lhs_nulls", ["none", "some"])

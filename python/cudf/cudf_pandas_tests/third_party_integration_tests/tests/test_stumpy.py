@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -32,6 +32,9 @@ def test_1d_time_series():
 
 @pytest.mark.filterwarnings(
     "ignore::numba.core.errors.NumbaPerformanceWarning"
+)
+@pytest.mark.filterwarnings(
+    "ignore::numba.cuda.core.errors.NumbaPerformanceWarning"
 )
 def test_1d_gpu():
     rng = np.random.default_rng(42)

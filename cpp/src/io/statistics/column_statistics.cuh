@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -325,6 +325,7 @@ namespace detail {
  * @param[in] groups Statistics row groups [num_chunks]
  * @param[in] num_chunks Number of chunks & rowgroups
  * @param[in] stream CUDA stream to use
+ * @param[in] int96_timestamps Whether timestamps are written as INT96
  * @tparam IO File format for which statistics calculation is being done
  */
 template <detail::io_file_format IO>

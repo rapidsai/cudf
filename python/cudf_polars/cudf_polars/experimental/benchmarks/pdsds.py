@@ -13,14 +13,13 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 import os
 from typing import TYPE_CHECKING, ClassVar
 
 import polars as pl
 
-with contextlib.suppress(ImportError):
+try:
     from cudf_polars.experimental.benchmarks.utils import (
         COUNT_DTYPE,
         build_parser,
@@ -28,6 +27,9 @@ with contextlib.suppress(ImportError):
         run_duckdb,
         run_polars,
     )
+except ImportError as e:
+    if e.name is not None and not e.name.startswith("cudf_polars"):
+        raise
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -104,6 +106,113 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
             pl.col("total net profit").cast(pl.Decimal(18, 2)),
         ],
+        19: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        20: [
+            pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
+            pl.col("revenueratio").cast(pl.Decimal(38, 2)),
+        ],
+        24: [pl.col("paid").cast(pl.Decimal(18, 2))],
+        30: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
+        31: [
+            pl.col("web_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q1_q2_increase").cast(pl.Decimal(38, 2)),
+            pl.col("web_q2_q3_increase").cast(pl.Decimal(38, 2)),
+            pl.col("store_q2_q3_increase").cast(pl.Decimal(38, 2)),
+        ],
+        32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
+        33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        42: [pl.col("sum(ss_ext_sales_price)").cast(pl.Decimal(18, 2))],
+        45: [pl.col("sum(ws_sales_price)").cast(pl.Decimal(18, 2))],
+        46: [
+            pl.col("amt").cast(pl.Decimal(18, 2)),
+            pl.col("profit").cast(pl.Decimal(18, 2)),
+        ],
+        47: [
+            pl.col("sum_sales").cast(pl.Decimal(18, 2)),
+            pl.col("psum").cast(pl.Decimal(18, 2)),
+            pl.col("nsum").cast(pl.Decimal(18, 2)),
+        ],
+        51: [
+            pl.col("web_sales").cast(pl.Decimal(18, 2)),
+            pl.col("store_sales").cast(pl.Decimal(18, 2)),
+            pl.col("web_cumulative").cast(pl.Decimal(18, 2)),
+            pl.col("store_cumulative").cast(pl.Decimal(18, 2)),
+        ],
+        52: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        53: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
+        55: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        56: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        57: [
+            pl.col("sum_sales").cast(pl.Decimal(18, 2)),
+            pl.col("psum").cast(pl.Decimal(18, 2)),
+            pl.col("nsum").cast(pl.Decimal(18, 2)),
+        ],
+        58: [
+            pl.col("ss_item_rev").cast(pl.Decimal(18, 2)),
+            pl.col("cs_item_rev").cast(pl.Decimal(18, 2)),
+            pl.col("ws_item_rev").cast(pl.Decimal(18, 2)),
+            pl.col("ss_dev").cast(pl.Decimal(38, 2)),
+            pl.col("cs_dev").cast(pl.Decimal(38, 2)),
+            pl.col("ws_dev").cast(pl.Decimal(38, 2)),
+            pl.col("average").cast(pl.Decimal(38, 2)),
+        ],
+        59: [
+            pl.col("(sun_sales1 / sun_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(mon_sales1 / mon_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(tue_sales1 / tue_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(wed_sales1 / wed_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(thu_sales1 / thu_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(fri_sales1 / fri_sales2)").cast(pl.Decimal(38, 2)),
+            pl.col("(sat_sales1 / sat_sales2)").cast(pl.Decimal(38, 2)),
+        ],
+        60: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
+        61: [
+            pl.col("promotions").cast(pl.Decimal(18, 2)),
+            pl.col("total").cast(pl.Decimal(18, 2)),
+        ],
+        63: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
+        64: [
+            pl.col("s1").cast(pl.Decimal(18, 2)),
+            pl.col("s2").cast(pl.Decimal(18, 2)),
+            pl.col("s3").cast(pl.Decimal(18, 2)),
+            pl.col("s1_1").cast(pl.Decimal(18, 2)),
+            pl.col("s2_1").cast(pl.Decimal(18, 2)),
+            pl.col("s3_1").cast(pl.Decimal(18, 2)),
+        ],
+        65: [pl.col("revenue").cast(pl.Decimal(18, 2))],
+        68: [
+            pl.col("extended_price").cast(pl.Decimal(18, 2)),
+            pl.col("extended_tax").cast(pl.Decimal(18, 2)),
+            pl.col("list_price").cast(pl.Decimal(18, 2)),
+        ],
+        70: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
+        71: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
+        75: [pl.col("sales_amt_diff").cast(pl.Float64)],
+        76: [pl.col("sales_amt").cast(pl.Decimal(18, 2))],
+        77: [pl.col("sales").cast(pl.Decimal(18, 2))],
+        78: [
+            pl.col("store_wholesale_cost").cast(pl.Decimal(18, 2)),
+            pl.col("store_sales_price").cast(pl.Decimal(18, 2)),
+        ],
+        79: [
+            pl.col("amt").cast(pl.Decimal(18, 2)),
+            pl.col("profit").cast(pl.Decimal(18, 2)),
+        ],
+        80: [pl.col("sales").cast(pl.Decimal(18, 2))],
+        81: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
+        86: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
+        89: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
+        91: [pl.col("Returns_Loss").cast(pl.Decimal(18, 2))],
+        92: [pl.col("Excess Discount Amount").cast(pl.Decimal(18, 2))],
+        94: [
+            pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
+            pl.col("total net profit").cast(pl.Decimal(18, 2)),
+        ],
+        95: [
+            pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
+            pl.col("total net profit").cast(pl.Decimal(18, 2)),
+        ],
+        98: [pl.col("itemrevenue").cast(pl.Decimal(18, 2))],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
@@ -117,6 +226,92 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         14: [pl.col("sum_number_sales").cast(COUNT_DTYPE)],
         16: [pl.col("order count").cast(COUNT_DTYPE)],
+        17: [
+            pl.col("store_sales_quantitycount").cast(COUNT_DTYPE),
+            pl.col("store_returns_quantitycount").cast(COUNT_DTYPE),
+            pl.col("catalog_sales_quantitycount").cast(COUNT_DTYPE),
+        ],
+        21: [
+            pl.col("inv_before").cast(pl.Int32),
+            pl.col("inv_after").cast(pl.Int32),
+        ],
+        34: [pl.col("cnt").cast(COUNT_DTYPE)],
+        35: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
+        ],
+        44: [pl.col("rnk").cast(COUNT_DTYPE)],
+        48: [pl.col("sum(ss_quantity)").cast(pl.Int64)],
+        49: [
+            pl.col("return_rank").cast(COUNT_DTYPE),
+            pl.col("currency_rank").cast(COUNT_DTYPE),
+        ],
+        50: [
+            pl.col("30 days").cast(COUNT_DTYPE),
+            pl.col("31-60 days").cast(COUNT_DTYPE),
+            pl.col("61-90 days").cast(COUNT_DTYPE),
+            pl.col("91-120 days").cast(COUNT_DTYPE),
+            pl.col(">120 days").cast(COUNT_DTYPE),
+        ],
+        54: [
+            pl.col("segment").cast(pl.Float64),
+            pl.col("segment_base").cast(pl.Float64),
+            pl.col("num_customers").cast(COUNT_DTYPE),
+        ],
+        62: [
+            pl.col("30 days").cast(pl.Int32),
+            pl.col("31-60 days").cast(pl.Int32),
+            pl.col("61-90 days").cast(pl.Int32),
+            pl.col("91-120 days").cast(pl.Int32),
+            pl.col(">120 days").cast(pl.Int32),
+        ],
+        64: [
+            pl.col("cnt").cast(COUNT_DTYPE),
+            pl.col("cnt_1").cast(COUNT_DTYPE),
+        ],
+        67: [pl.col("rk").cast(pl.UInt32())],
+        69: [
+            pl.col("cnt1").cast(COUNT_DTYPE),
+            pl.col("cnt2").cast(COUNT_DTYPE),
+            pl.col("cnt3").cast(COUNT_DTYPE),
+        ],
+        70: [pl.col("rank_within_parent").cast(pl.UInt32())],
+        72: [
+            pl.col("total_cnt").cast(COUNT_DTYPE),
+            pl.col("no_promo").cast(COUNT_DTYPE),
+            pl.col("promo").cast(COUNT_DTYPE),
+        ],
+        73: [pl.col("cnt").cast(COUNT_DTYPE)],
+        75: [
+            pl.col("prev_yr_cnt").cast(pl.Int64),
+            pl.col("curr_yr_cnt").cast(pl.Int64),
+            pl.col("sales_cnt_diff").cast(pl.Int64),
+        ],
+        78: [
+            pl.col("store_qty").cast(pl.Int64),
+            pl.col("other_chan_qty").cast(pl.Int64),
+        ],
+        83: [
+            pl.col("sr_item_qty").cast(pl.Int64),
+            pl.col("cr_item_qty").cast(pl.Int64),
+            pl.col("wr_item_qty").cast(pl.Int64),
+        ],
+        94: [pl.col("order count").cast(COUNT_DTYPE)],
+        95: [pl.col("order count").cast(COUNT_DTYPE)],
+        96: [pl.col("count_star()").cast(COUNT_DTYPE)],
+        97: [
+            pl.col("store_only").cast(pl.Int32),
+            pl.col("catalog_only").cast(pl.Int32),
+            pl.col("store_and_catalog").cast(pl.Int32),
+        ],
+        99: [
+            pl.col("30 days").cast(pl.Int32),
+            pl.col("31-60 days").cast(pl.Int32),
+            pl.col("61-90 days").cast(pl.Int32),
+            pl.col("91-120 days").cast(pl.Int32),
+            pl.col(">120 days").cast(pl.Int32),
+        ],
     }
 
     @property
@@ -142,8 +337,8 @@ if __name__ == "__main__":
     args = parse_args(parser=parser)
 
     if args.engine == "polars":
-        run_polars(PDSDSPolarsQueries, args, num_queries=99)
+        run_polars(PDSDSPolarsQueries, args)
     elif args.engine == "duckdb":
-        run_duckdb(PDSDSDuckDBQueries, args, num_queries=99)
+        run_duckdb(PDSDSDuckDBQueries, args)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")

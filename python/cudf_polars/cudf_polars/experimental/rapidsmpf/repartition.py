@@ -30,6 +30,7 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
 @define_actor()
 async def concatenate_node(
     context: Context,
+    comm: Communicator,
     ir: Repartition,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
@@ -65,6 +67,8 @@ async def concatenate_node(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     ir
         The Repartition IR node.
     ir_context
@@ -78,10 +82,12 @@ async def concatenate_node(
     collective_id
         Pre-allocated collective ID for this operation.
     """
-    async with shutdown_on_error(context, ch_in, ch_out, trace_ir=ir) as tracer:
+    async with shutdown_on_error(
+        context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
         # Receive metadata.
         input_metadata = await recv_metadata(ch_in, context)
-        nranks = context.comm().nranks
+        nranks = comm.nranks
 
         # Interpret output_count as the GLOBAL target chunk count.
         # Calculate local target based on whether data is duplicated.
@@ -137,14 +143,16 @@ async def concatenate_node(
             if tracer is not None and output_duplicated:
                 tracer.set_duplicated()
 
-            allgather = AllGatherManager(context, collective_id)
             stream = context.get_stream_from_pool()
             seq_num = 0
-            while (msg := await ch_in.recv(context)) is not None:
-                allgather.insert(seq_num, TableChunk.from_message(msg))
-                seq_num += 1
-                del msg
-            allgather.insert_finished()
+            allgather = AllGatherManager(context, comm, collective_id)
+            with allgather.inserting() as inserter:
+                while (msg := await ch_in.recv(context)) is not None:
+                    inserter.insert(
+                        seq_num, TableChunk.from_message(msg, br=context.br())
+                    )
+                    seq_num += 1
+                    del msg
 
             # Extract concatenated result
             result_table = await allgather.extract_concatenated(stream)
@@ -157,7 +165,7 @@ async def concatenate_node(
                 output_chunk = empty_table_chunk(ir, context, stream)
             else:
                 output_chunk = TableChunk.from_pylibcudf_table(
-                    result_table, stream, exclusive_view=True
+                    result_table, stream, exclusive_view=True, br=context.br()
                 )
 
             await ch_out.send(context, Message(0, output_chunk))
@@ -185,7 +193,7 @@ async def concatenate_node(
                     if msg is None:
                         done_receiving = True
                         break
-                    chunks.append(TableChunk.from_message(msg))
+                    chunks.append(TableChunk.from_message(msg, br=context.br()))
 
                 if chunks:
                     chunks, extra = await make_table_chunks_available_or_wait(
@@ -207,7 +215,9 @@ async def concatenate_node(
                             ),
                             context=ir_context,
                         )
-                        del chunks
+                        if len(chunks) > 1:
+                            # _concat reuses chunks[0] if len(chunks) == 1
+                            del chunks
                     if tracer is not None:
                         tracer.add_chunk(table=df.table)
                     await ch_out.send(
@@ -215,7 +225,10 @@ async def concatenate_node(
                         Message(
                             seq_num,
                             TableChunk.from_pylibcudf_table(
-                                df.table, df.stream, exclusive_view=True
+                                df.table,
+                                df.stream,
+                                exclusive_view=True,
+                                br=context.br(),
                             ),
                         ),
                     )
@@ -255,6 +268,7 @@ def _(
     nodes[ir] = [
         concatenate_node(
             rec.state["context"],
+            rec.state["comm"],
             ir,
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),

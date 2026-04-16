@@ -112,8 +112,7 @@ class compressed_host_buffer_source final : public datasource {
     auto& thread_pool = pools::tpool();
     return thread_pool.submit_task([this, offset, size, dst, stream] {
       auto hbuf = host_read(offset, size);
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(dst, hbuf->data(), hbuf->size(), cudaMemcpyHostToDevice, stream.value()));
+      CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, hbuf->data(), hbuf->size(), stream));
       stream.synchronize();
       return hbuf->size();
     });
@@ -191,7 +190,10 @@ size_type find_first_delimiter(device_span<char const> d_data,
                                rmm::cuda_stream_view stream)
 {
   auto const first_delimiter_position =
-    thrust::find(rmm::exec_policy_nosync(stream), d_data.begin(), d_data.end(), delimiter);
+    thrust::find(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                 d_data.begin(),
+                 d_data.end(),
+                 delimiter);
   return first_delimiter_position != d_data.end()
            ? static_cast<size_type>(cuda::std::distance(d_data.begin(), first_delimiter_position))
            : -1;
@@ -340,7 +342,10 @@ get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     auto rev_it_begin = cuda::std::make_reverse_iterator(bufsubspan.end());
     auto rev_it_end   = cuda::std::make_reverse_iterator(bufsubspan.begin());
     auto const second_last_delimiter_it =
-      thrust::find(rmm::exec_policy_nosync(stream), rev_it_begin, rev_it_end, delimiter);
+      thrust::find(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   rev_it_begin,
+                   rev_it_end,
+                   delimiter);
     CUDF_EXPECTS(second_last_delimiter_it != rev_it_end,
                  "A single JSON line cannot be larger than the batch size limit");
     auto const last_line_size =
@@ -671,6 +676,9 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
   std::size_t const num_streams =
     std::min<std::size_t>(sources.size() - start_source + 1, pools::tpool().get_thread_count());
   auto stream_pool = cudf::detail::fork_streams(stream, num_streams);
+  std::vector<void*> batch_dsts;
+  std::vector<void const*> batch_srcs;
+  std::vector<std::size_t> batch_sizes;
   for (std::size_t i = start_source, cur_stream = 0;
        i < sources.size() && bytes_read < total_bytes_to_read;
        i++) {
@@ -685,12 +693,18 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     } else {
       h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
       auto const& h_buffer = h_buffers.back();
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        destination, h_buffer->data(), h_buffer->size(), cudaMemcpyHostToDevice, stream.value()));
+      batch_dsts.push_back(destination);
+      batch_srcs.push_back(h_buffer->data());
+      batch_sizes.push_back(h_buffer->size());
       bytes_read += h_buffer->size();
     }
     range_offset = 0;
     delimiter_map.push_back(bytes_read + (num_delimiter_chars * delimiter_map.size()));
+  }
+  cudf::detail::join_streams(stream_pool, stream);
+  if (!batch_dsts.empty()) {
+    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+      batch_dsts.data(), batch_srcs.data(), batch_sizes.data(), batch_dsts.size(), stream));
   }
   // Removing delimiter inserted after last non-empty source is read
   if (!delimiter_map.empty()) { delimiter_map.pop_back(); }
@@ -702,7 +716,7 @@ device_span<char> ingest_raw_input(device_span<char> buffer,
     auto const delimiter_source = cuda::make_constant_iterator(delimiter);
     auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
       delimiter_map, stream, cudf::get_current_device_resource_ref());
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     delimiter_source,
                     delimiter_source + d_delimiter_map.size(),
                     d_delimiter_map.data(),

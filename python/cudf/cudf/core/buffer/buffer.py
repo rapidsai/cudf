@@ -367,9 +367,20 @@ class Buffer(Serializable):
         This is used by copy-on-write to trigger a deep copy when write
         access is detected.
         """
+        # If this is not the only slice pointing to `self._owner`, we
+        # point to a new copy of our slice of `self._owner`.
         if len(self._owner._slices) > 1:
-            # If this is not the only slice pointing to `self._owner`, we
-            # point to a new copy of our slice of `self._owner`.
+            # Removing self from the owner's list of slices is principally an
+            # optimization that prevents unnecessary copies of the old owner if the old
+            # owner only has one slice (this one) after this slice is removed. However,
+            # it turns out that we also need to do this to avoid what I strongly suspect
+            # are CPython weakref bugs that lead to seg faults in the CUDA driver during
+            # memcpy calls: even though the elements of the _slices are never actually
+            # used, not removing them here leads to a seg fault in the CUDA driver
+            # during memcpy calls pointing to data owned by buffer owners whose weakref
+            # list is augmented by new buffers during deserialization. Since this change
+            # is a net improvement either way due to the optimization described above,
+            # the weakref issue is not worth further investigation at this time.
             self._owner._slices.remove(self)
             t = self.copy(deep=True)
             self._owner = t._owner

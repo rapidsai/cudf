@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -232,9 +232,6 @@ struct expression_evaluator {
    * @param left View of the left table view used for evaluation.
    * @param right View of the right table view used for evaluation.
    * @param plan The collection of device references representing the expression to evaluate.
-   * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
-   * storing intermediates.
-
    */
   __device__ inline expression_evaluator(table_device_view const& left,
                                          table_device_view const& right,
@@ -248,8 +245,6 @@ struct expression_evaluator {
    *
    * @param table View of the table view used for evaluation.
    * @param plan The collection of device references representing the expression to evaluate.
-   * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
-   * storing intermediates.
    */
   __device__ inline expression_evaluator(table_device_view const& table,
                                          expression_device_view const& plan)
@@ -266,8 +261,10 @@ struct expression_evaluator {
    *
    * @tparam Element Type of element to return.
    * @tparam has_nulls Whether or not the result data is nullable.
-   * @param device_data_reference Data reference to resolve.
-   * @param row_index Row index of data column.
+   * @param input_reference Data reference to resolve.
+   * @param thread_intermediate_storage Thread-local storage for intermediate expression results.
+   * @param left_row_index Row index into the left table.
+   * @param right_row_index Row index into the right table.
    * @return Element The type- and null-resolved data.
    */
   template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
@@ -462,6 +459,7 @@ struct expression_evaluator {
    *
    * @param output_object The container that data will be inserted into.
    * @param row_index Row index of all input and output data column(s).
+   * @param thread_intermediate_storage Thread-local storage for intermediate expression results
    */
   template <typename ResultSubclass, typename T, bool result_has_nulls>
   __device__ __forceinline__ void evaluate(
@@ -483,6 +481,7 @@ struct expression_evaluator {
    * @param left_row_index The row to pull the data from the left table.
    * @param right_row_index The row to pull the data from the right table.
    * @param output_row_index The row in the output to insert the result.
+   * @param thread_intermediate_storage Thread-local storage for intermediate expression results
    */
   template <typename ResultSubclass, typename T, bool result_has_nulls>
   __device__ __forceinline__ void evaluate(
@@ -592,13 +591,11 @@ struct expression_evaluator {
      * @param output_object The container that data will be inserted into.
      * @param device_data_reference Data reference to resolve.
      * @param row_index Row index of data column.
+     * @param thread_intermediate_storage Thread-local storage for intermediate expression results
      * @param result Value to assign to output.
      */
-    template <typename Element,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
-              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
+    template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
+      requires(is_rep_layout_compatible<Element>())
     __device__ inline void resolve_output(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       detail::device_data_reference const& device_data_reference,
@@ -618,11 +615,35 @@ struct expression_evaluator {
       }
     }
 
-    template <typename Element,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
-              CUDF_ENABLE_IF(!is_rep_layout_compatible<Element>())>
+    template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
+      requires(cuda::std::is_same_v<Element, numeric::decimal32> or
+               cuda::std::is_same_v<Element, numeric::decimal64>)  // int128 > intermediate
+    __device__ inline void resolve_output(
+      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+      detail::device_data_reference const& device_data_reference,
+      cudf::size_type const row_index,
+      IntermediateDataType<has_nulls>* thread_intermediate_storage,
+      possibly_null_value_t<Element, has_nulls> const& result) const
+    {
+      using RepType = typename Element::rep;
+      auto const v  = result.value();
+      auto const rv = [&v, &result] {
+        if constexpr (cuda::std::is_same_v<cuda::std::remove_cvref_t<decltype(v)>, RepType>) {
+          return v;  // no nulls path
+        } else {
+          // rewrap rep component value appropriately
+          using ResultType = possibly_null_value_t<RepType, has_nulls>;
+          return result.has_value() ? ResultType{v.value()} : ResultType{};
+        }
+      }();
+      resolve_output<RepType, ResultSubclass, T, result_has_nulls>(
+        output_object, device_data_reference, row_index, thread_intermediate_storage, rv);
+    }
+
+    template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
+      requires(!is_rep_layout_compatible<Element>() and
+               !(cuda::std::is_same_v<Element, numeric::decimal32> or
+                 cuda::std::is_same_v<Element, numeric::decimal64>))
     __device__ inline void resolve_output(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       detail::device_data_reference const& device_data_reference,

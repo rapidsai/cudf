@@ -10,6 +10,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -86,12 +87,13 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
   d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
-  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
-                                   device_views_ptr,
-                                   device_views_ptr + views.size(),
-                                   std::next(d_partition_offsets.begin()),
-                                   chars_size_transform{},
-                                   cuda::std::plus{});
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    device_views_ptr,
+    device_views_ptr + views.size(),
+    std::next(d_partition_offsets.begin()),
+    chars_size_transform{},
+    cuda::std::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);
   stream.synchronize();  // ensure copy of output_chars_size is complete before returning
 
@@ -233,7 +235,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   }
 
   {  // Copy offsets columns with single kernel launch
-    cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
+    cudf::detail::device_scalar<size_type> d_valid_count(
+      0, stream, cudf::get_current_device_resource_ref());
 
     constexpr size_type block_size{256};
     cudf::detail::grid_1d config(offsets_count, block_size);
@@ -280,8 +283,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         auto d_chars     = column->head<char>() + bytes_offset;
         auto const bytes = bytes_end - bytes_offset;
 
-        CUDF_CUDA_TRY(
-          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
+        CUDF_CUDA_TRY(cudf::detail::memcpy_async(d_new_chars, d_chars, bytes, stream));
 
         // get ready for the next column
         d_new_chars += bytes;

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -89,7 +89,7 @@ cache:
       - cuda-version =${{ cuda_version }}
       - libnvcomp-dev ${{ nvcomp_version }}
       - dlpack ${{ dlpack_version }}
-      - librdkafka ${{ librdkafka_version }}
+      - librdkafka
       - flatbuffers =${{ flatbuffers_version }}
       - rapids-logger =0.2
       - zlib ${{ zlib_version }}
@@ -129,7 +129,6 @@ outputs:
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - cuda-nvrtc
-        - libnvjitlink >=${{ cuda_version }}
         - if: linux and x86_64
           then:
             - libcufile
@@ -154,7 +153,6 @@ outputs:
           - libcufile
           - libcurand
           - libkvikio
-          - libnvjitlink
           - librdkafka
           - libzlib
           - librmm
@@ -180,10 +178,10 @@ outputs:
         - cmake ${{ cmake_version }}
         - ${{ stdlib("c") }}
       host:
-        - librdkafka ${{ librdkafka_version }}
+        - librdkafka
         - ${{ pin_subpackage("libcudf", exact=True) }}
       run:
-        - librdkafka ${{ librdkafka_version }}
+        - librdkafka
         - ${{ pin_subpackage("libcudf", exact=True) }}
       ignore_run_exports:
         by_name:

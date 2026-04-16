@@ -12,6 +12,7 @@ from cudf_polars.typing import GenericTransformer
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -40,6 +41,8 @@ class GenState(TypedDict):
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator the generation is collective over
     config_options
         GPUEngine configuration options.
     partition_info
@@ -58,6 +61,7 @@ class GenState(TypedDict):
     """
 
     context: Context
+    comm: Communicator
     config_options: ConfigOptions[StreamingExecutor]
     partition_info: MutableMapping[IR, PartitionInfo]
     fanout_nodes: dict[IR, FanoutInfo]

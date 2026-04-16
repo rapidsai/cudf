@@ -17,9 +17,12 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import (
     ColumnBase,
+    ColumnList,
+    PylibcudfFunction,
     as_column,
     column_empty,
     concat_columns,
+    same_dtype_policy,
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -60,14 +63,15 @@ _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 def _sort_column(col: ColumnBase) -> ColumnBase:
     """Sort a column in ascending order with nulls after."""
-    with col.access(mode="read", scope="internal"):
-        table = plc.Table([col.plc_column])
-        sorted_table = plc.sorting.sort(
-            table,
-            column_order=[plc.types.Order.ASCENDING],
-            null_precedence=[plc.types.NullOrder.AFTER],
-        )
-    return ColumnBase.create(sorted_table.columns()[0], col.dtype)
+    return PylibcudfFunction(
+        plc.sorting.sort,
+        same_dtype_policy,
+        result_index=0,
+    ).execute_with_args(
+        ColumnList(col),
+        column_order=[plc.types.Order.ASCENDING],
+        null_precedence=[plc.types.NullOrder.AFTER],
+    )
 
 
 class CategoricalColumn(ColumnBase):
@@ -277,9 +281,9 @@ class CategoricalColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = super().element_indexing(index)
-        if val is self._PANDAS_NA_VALUE:
-            return val
-        return self._decode(val.as_py())
+        if isinstance(val, int):
+            return self._decode(val)
+        return val
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -325,18 +329,17 @@ class CategoricalColumn(ColumnBase):
         return pd.Index(data)
 
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array."""
-        # pyarrow.Table doesn't support unsigned codes
+        # match pandas which uses signed codes
         signed_type = (
             min_signed_type(self.codes.max())
             if self.size > 0
             else np.dtype(np.int8)
         )
+        assert self.ordered is not None
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            # TODO: Investigate if self.ordered can actually be None here
-            ordered=self.ordered if self.ordered is not None else False,
+            ordered=self.ordered,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
@@ -648,6 +651,8 @@ class CategoricalColumn(ColumnBase):
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         return self._get_decategorized_column().as_string_column(dtype)
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:

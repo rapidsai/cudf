@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 import polars as pl
+import polars.testing
 
 from cudf_polars.experimental.benchmarks.asserts import (
     ValidationError,
@@ -143,20 +144,21 @@ def test_assert_tpch_result_equal_ties() -> None:
     )
 
 
-def test_assert_tpch_result_equal_ties_non_numeric() -> None:
+@pytest.mark.parametrize("descending", [False, True])
+def test_assert_tpch_result_equal_ties_non_numeric(*, descending: bool) -> None:
     epsilon = 1e-5
+    b = ["a", "b", "c", "c", "c"]
 
-    left = pl.DataFrame(
-        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": ["a", "b", "c", "c", "c"]}
-    )
-    right = pl.DataFrame(
-        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": ["a", "b", "c", "c", "c"]}
-    )
+    if descending:
+        b = list(reversed(b))
+
+    left = pl.DataFrame({"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": b})
+    right = pl.DataFrame({"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": b})
 
     assert_tpch_result_equal(
         left,
         right,
-        sort_by=[("b", False)],
+        sort_by=[("b", descending)],
         abs_tol=2 * epsilon,
         check_exact=False,
         limit=5,
@@ -201,6 +203,26 @@ def test_assert_tpch_result_equal_ties_multi_column_sort_by() -> None:
         check_exact=False,
         limit=5,
     )
+
+
+@pytest.mark.parametrize("limit", [None, 5])
+def test_assert_tpch_result_equal_float_sort_raises(limit: int | None) -> None:
+    # Sort on a floating point column with a limit,
+    # but the 'key' column *doesn't* match
+    epsilon = 1e-5
+    left = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0, 3.0, 3.0 + epsilon], "b": ["a", "b", "c", "c", "c"]}
+    )
+    right = pl.DataFrame(
+        {"a": [1.0, 2.0, 3.0 - epsilon, 3.0, 3.0], "b": ["x", "b", "c", "c", "c"]}
+    )
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(
+            left,
+            right,
+            sort_by=[("a", False)],
+            limit=limit,
+        )
 
 
 def test_assert_tpch_result_equal_split_at_lexicographic_not_per_column_max() -> None:
@@ -261,7 +283,7 @@ def test_assert_tpch_result_equal_raises_sort_by_columns_mismatch() -> None:
     left = pl.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     right = pl.DataFrame({"a": [1, 2, 99], "b": ["x", "y", "z"]})
 
-    with pytest.raises(ValidationError, match="sort_by columns mismatch"):
+    with pytest.raises(ValidationError, match="Result mismatch in ties part"):
         assert_tpch_result_equal(left, right, sort_by=[("a", False)], limit=3)
 
 
@@ -280,3 +302,175 @@ def test_assert_tpch_result_equal_raises_result_mismatch_non_ties() -> None:
 
     with pytest.raises(ValidationError, match="Result mismatch in non-ties part"):
         assert_tpch_result_equal(left, right, sort_by=[("a", False)], limit=4)
+
+
+def test_assert_tpch_result_equal_q11_ties():
+    # Previously, we claimed q11 was failing validation because of these values.
+    # In reality, these *are* considered equal.
+
+    left = pl.DataFrame(
+        {
+            "ps_partkey": [124439984, 69940887, 118230270, 191696233, 158970051, 0, 0],
+            "value": [
+                8005096.8,
+                8005095.75,
+                8005095.75,
+                8005093.11,
+                8005090.24,
+                1.0,
+                0.0,
+            ],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "ps_partkey": [124439984, 118230270, 69940887, 191696233, 158970051, 0, 0],
+            "value": [
+                8005096.8,
+                8005095.75,
+                8005095.749999999,
+                8005093.109999999,
+                8005090.24,
+                1.0,
+                0.0,
+            ],
+        }
+    )
+    sort_by = [("value", True)]  # descending=True
+
+    assert_tpch_result_equal(
+        left, right, sort_by=sort_by, check_exact=False, abs_tol=1e-2
+    )
+
+
+def test_assert_tpch_result_equal_float_sort_mixed_sort_columns() -> None:
+    left = pl.DataFrame(
+        {
+            "ps_partkey": [1, 2, 3],
+            "value": [8005096.8, 8005095.75, 8005095.75],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "ps_partkey": [1, 2, 3],
+            "value": [8005096.8, 8005095.75, 8005095.749999999],
+        }
+    )
+    assert_tpch_result_equal(
+        left,
+        right,
+        sort_by=[("value", True), ("ps_partkey", False)],
+        check_exact=False,
+        abs_tol=1e-2,
+    )
+
+
+def test_assert_tpch_result_equal_float_sort_raises_key_mismatch() -> None:
+    left = pl.DataFrame(
+        {
+            "ps_partkey": [124439984, 69940887, 118230270],
+            "value": [8005096.8, 8005095.75, 8005095.75],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "ps_partkey": [
+                124439984,
+                69940887,
+                999999999,
+            ],  # value matches, but not key
+            "value": [8005096.8, 8005095.75, 8005095.749999999],
+        }
+    )
+    with pytest.raises(ValidationError, match="Result mismatch"):
+        assert_tpch_result_equal(
+            left,
+            right,
+            sort_by=[("value", True)],
+            check_exact=False,
+            abs_tol=1e-2,
+        )
+
+
+@pytest.mark.parametrize(
+    "sort_by",
+    [
+        [("value", False)],
+        [("value", False), ("key", False)],
+    ],
+)
+def test_assert_tpch_result_equal_float_sort(sort_by: list[tuple[str, bool]]):
+    left = pl.DataFrame(
+        {
+            "key": ["a", "b", "c", "d", "e"],
+            "value": [1.0, 1.1, 1.2, 1.21, 1.22],
+        }
+    )
+    # Three immaterial changes:
+    # 1. swap the "d" and "e" rows
+    # 2. change the value of "c" from 1.20 -> 1.12
+    # 3. change the value of "d" from 1.21 -> 1.20
+    right = pl.DataFrame(
+        {
+            "key": ["a", "b", "d", "c", "e"],
+            "value": [1.0, 1.1, 1.20, 1.21, 1.22],
+        }
+    )
+    assert_tpch_result_equal(
+        left, right, sort_by=sort_by, abs_tol=0.011, check_exact=False
+    )
+
+
+@pytest.mark.parametrize("epsilon", [0.001, 1.0])
+def test_assert_tpch_result_float_not_actually_sorted(epsilon: float) -> None:
+    # this test verifies that we correctly raise if the
+    # result isn't sorted when `sort_by` claims it ought to be.
+    left = pl.DataFrame(
+        {
+            "key": ["a", "b", "c", "d"],
+            "value": [1.0, 1.1, 1.20 + epsilon, 1.20],
+        }
+    )
+    right = pl.DataFrame(
+        {
+            "key": ["a", "b", "c", "d"],
+            "value": [1.0, 1.1, 1.20, 1.20],
+        }
+    )
+    with pytest.raises(
+        ValidationError, match="left dataframe is not sorted by sort_by columns"
+    ):
+        assert_tpch_result_equal(
+            left, right, sort_by=[("value", False)], abs_tol=0.01, check_exact=False
+        )
+
+
+def test_assert_tpch_result_equal_sort_keys_raises_not_sorted() -> None:
+    left = pl.DataFrame(
+        {
+            "lochierarchy": [0, 0, 0, 1, 1],
+            "i_category": ["music", "electronics", "books", "sports", "toys"],
+            "total_sales": [150, 200, 100, 300, 250],
+        }
+    )
+    # It does not matter what right is as long as it has the
+    # same schema because we should fail before we compare them.
+    right = left.clone()
+    sort_keys = [
+        (
+            pl.when(pl.col("lochierarchy") == 0)
+            .then(pl.col("i_category"))
+            .otherwise(pl.lit("foo")),
+            False,
+        )
+    ]
+    with pytest.raises(
+        ValidationError, match="left dataframe is not sorted by sort_keys expressions"
+    ):
+        assert_tpch_result_equal(
+            left,
+            right,
+            sort_by=[("lochierarchy", True), ("i_category", False)],
+            sort_keys=sort_keys,
+            nulls_last=True,
+        )

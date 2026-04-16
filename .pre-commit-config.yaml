@@ -40,7 +40,7 @@ repos:
           pyarrow-stubs,
           pytest,
           types-cachetools,
-          "rmm-cu12==26.2.*,>=0.0.0a0; sys_platform=='linux'",
+          "rmm-cu12==26.6.*,>=0.0.0a0; sys_platform=='linux'",
           "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
         ]
         args: ["--config-file=pyproject.toml",
@@ -53,7 +53,7 @@ repos:
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v20.1.4
+    rev: v20.1.8
     hooks:
       - id: clang-format
         types_or: [c, c++, cuda]
@@ -104,6 +104,22 @@ repos:
         entry: 'rmm::exec_policy\('
         language: pygrep
         types_or: [c, c++, cuda]
+      - id: use-cudf-memcpy-async
+        name: use-cudf-memcpy-async
+        description: 'Enforce that cudf::detail::memcpy_async or memcpy_batch_async is used instead of cudaMemcpyAsync (see developer guide)'
+        entry: 'cudaMemcpyAsync'
+        language: pygrep
+        types_or: [c, c++, cuda]
+        files: '^cpp/(src|include)/'
+        exclude: |
+          (?x)^(
+            cpp/src/utilities/host_memory\.cpp|
+            cpp/src/utilities/cuda_memcpy\.cu|
+            cpp/src/io/utilities/data_sink\.cpp|
+            cpp/include/cudf/contiguous_split\.hpp|
+            cpp/include/cudf/utilities/pinned_memory\.hpp|
+            cpp/include/cudf/utilities/error\.hpp
+          )$
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
         description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
@@ -256,7 +272,9 @@ repos:
             (^|/)pom[.]xml$|
             ^[.]pre-commit-config[.]yaml$|
             ^conda/environments/|
+            RAPIDS_BRANCH$|
             [.](md|rst|avro|parquet|png|orc|gz|pkl|sas7bdat)$|
+            ^python/cudf/cudf/tests|
             ^python/cudf/cudf/VERSION$
       - id: verify-pyproject-license
         # ignore the top-level pyproject.toml, which doesn't

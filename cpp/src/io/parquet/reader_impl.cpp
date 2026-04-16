@@ -17,10 +17,11 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
 #include <limits>
@@ -209,7 +210,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                              skip_rows,
                              level_type_size,
                              decoder_mask,
-                             _subpass_page_mask,
+                             subpass_page_mask_span(),
                              initial_str_offsets,
                              subpass.page_string_offset_indices,
                              error_code.data(),
@@ -268,7 +269,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                             num_rows,
                             skip_rows,
                             level_type_size,
-                            _subpass_page_mask,
+                            subpass_page_mask_span(),
                             initial_str_offsets,
                             error_code.data(),
                             streams[s_idx++]);
@@ -281,7 +282,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                                    num_rows,
                                    skip_rows,
                                    level_type_size,
-                                   _subpass_page_mask,
+                                   subpass_page_mask_span(),
                                    initial_str_offsets,
                                    error_code.data(),
                                    streams[s_idx++]);
@@ -294,7 +295,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                         num_rows,
                         skip_rows,
                         level_type_size,
-                        _subpass_page_mask,
+                        subpass_page_mask_span(),
                         error_code.data(),
                         streams[s_idx++]);
   }
@@ -321,7 +322,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                            num_rows,
                            skip_rows,
                            level_type_size,
-                           _subpass_page_mask,
+                           subpass_page_mask_span(),
                            error_code.data(),
                            streams[s_idx++]);
   }
@@ -378,7 +379,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
                              num_rows,
                              skip_rows,
                              level_type_size,
-                             _subpass_page_mask,
+                             subpass_page_mask_span(),
                              error_code.data(),
                              streams[s_idx++]);
   }
@@ -394,7 +395,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   page_nesting_decode.device_to_host_async(_stream);
 
   // Invalidate output buffer nullmasks at row indices spanned by pruned pages
-  update_output_nullmasks_for_pruned_pages(_subpass_page_mask, skip_rows, num_rows);
+  update_output_nullmasks_for_pruned_pages(subpass_page_mask_span(), skip_rows, num_rows);
 
   // Copy over initial string offsets from device
   auto h_initial_str_offsets = cudf::detail::make_pinned_vector_async(initial_str_offsets, _stream);
@@ -478,11 +479,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   _stream.synchronize();
 }
 
-reader_impl::reader_impl()
-  : _options{},
-    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, cudf::get_default_stream())}
-{
-}
+reader_impl::reader_impl() : _options{} {}
 
 reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
                          std::vector<FileMetaData>&& parquet_metadatas,
@@ -509,14 +506,15 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   : _stream{std::move(stream)},
     _mr{std::move(mr)},
     _options{options.get_timestamp_type(),
+             options.get_decimal_width(),
              options.get_skip_rows(),
              options.get_num_rows(),
              options.get_skip_bytes(),
              options.get_num_bytes(),
              options.get_row_groups(),
-             options.is_enabled_use_jit_filter()},
+             options.is_enabled_use_jit_filter(),
+             options.is_enabled_case_sensitive_names()},
     _sources{std::move(sources)},
-    _subpass_page_mask{cudf::detail::hostdevice_vector<bool>(0, _stream)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
@@ -562,7 +560,9 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
                               options.is_enabled_ignore_missing_columns(),
-                              _options.timestamp_type.id());
+                              _options.timestamp_type.id(),
+                              _options.decimal_width,
+                              _options.case_sensitive_names);
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -575,7 +575,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // `preprocess_file()` and `finalize_output()`
   table_metadata metadata;
   populate_metadata(metadata);
-  _expr_conv = named_to_reference_converter(options.get_filter(), metadata);
+  _expr_conv =
+    named_to_reference_converter(options.get_filter(), metadata, _options.case_sensitive_names);
 }
 
 void reader_impl::prepare_data(read_mode mode)
@@ -641,7 +642,7 @@ void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read
     constexpr bool compute_all_string_sizes = false;
     compute_page_string_sizes_pass1(subpass.pages,
                                     pass.chunks,
-                                    _subpass_page_mask,
+                                    subpass_page_mask_span(),
                                     subpass.page_string_offset_indices,
                                     read_info.skip_rows,
                                     read_info.num_rows,
@@ -701,7 +702,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   if (uses_custom_row_bounds(mode)) {
     compute_page_sizes(subpass.pages,
                        pass.chunks,
-                       _subpass_page_mask,
+                       subpass_page_mask_span(),
                        read_info.skip_rows,
                        read_info.num_rows,
                        false,  // num_rows is already computed
@@ -845,6 +846,20 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   }
 }
 
+void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>& out_columns)
+{
+  // TODO: Instead of casting the columns after the read is done, we should
+  // be able to decode data directly into the target decimal type buffer.
+  if (_options.decimal_width == type_id::EMPTY) { return; }
+  for (auto& col : out_columns) {
+    auto const col_type = col->type();
+    if (cudf::is_fixed_point(col_type) && col_type.id() != _options.decimal_width) {
+      col =
+        cudf::cast(col->view(), data_type{_options.decimal_width, col_type.scale()}, _stream, _mr);
+    }
+  }
+}
+
 table_with_metadata reader_impl::finalize_output(read_mode mode,
                                                  table_metadata& out_metadata,
                                                  std::vector<std::unique_ptr<column>>& out_columns)
@@ -860,6 +875,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], nullptr, _stream, _mr));
     }
   }
+
+  apply_decimal_width_cast(out_columns);
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);
@@ -880,7 +897,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
   if (_expr_conv.get_converted_expr().has_value()) {
     auto read_table         = std::make_unique<table>(std::move(out_columns));
-    auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
+    auto counting_it        = cuda::counting_iterator<std::size_t>{0};
     auto const output_count = read_table->num_columns() - _num_filter_only_columns;
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
 
@@ -1073,7 +1090,7 @@ parquet_column_schema walk_schema(aggregate_reader_metadata const* mt, int idx)
     children.push_back(walk_schema(mt, child_idx));
   }
 
-  auto const type_id   = to_type_id(sch, false, type_id::EMPTY);
+  auto const type_id   = to_type_id(sch, false, type_id::EMPTY, type_id::EMPTY);
   auto const cudf_type = to_data_type(type_id, sch);
 
   return parquet_column_schema{

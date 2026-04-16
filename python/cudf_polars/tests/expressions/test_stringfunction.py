@@ -258,6 +258,12 @@ def test_split_exact_inclusive_unsupported(ldf_split):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
+def test_split_exact_null_correct_children():
+    df = pl.LazyFrame({"a": ["a_b", None]})
+    q = df.slice(1).select(pl.col("a").str.split_exact("_", 1))
+    assert_gpu_result_equal(q)
+
+
 @pytest.mark.parametrize("cache", [True, False], ids=lambda cache: f"{cache=}")
 @pytest.mark.parametrize("strict", [True, False], ids=lambda strict: f"{strict=}")
 @pytest.mark.parametrize("exact", [True, False], ids=lambda exact: f"{exact=}")
@@ -653,7 +659,11 @@ def test_string_zfill_forbidden_chars():
         ),
     ],
 )
-def test_string_pad_start(width, char):
+def test_string_pad_start(width, char, using_rapidsmpf):
+    if using_rapidsmpf:
+        pytest.skip(
+            "Avoiding possible segfault with cuda 12.9 builds https://github.com/rapidsai/cudf/issues/21828"
+        )
     df = pl.LazyFrame({"a": ["abc", "defg", "hij"]})
     q = df.select(pl.col("a").str.pad_start(width, char))
     assert_gpu_result_equal(q)

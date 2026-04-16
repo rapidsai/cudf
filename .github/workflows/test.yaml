@@ -49,7 +49,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.04-latest"
+      container_image: "rapidsai/ci-conda:26.06-latest"
       script: "ci/test_cpp_memcheck.sh"
   cpp-linters:
     secrets: inherit
@@ -70,8 +70,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_python_cudf.sh"
-      # Skip failing tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21357
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
@@ -92,7 +90,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.04-latest"
+      container_image: "rapidsai/ci-conda:26.06-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
     secrets: inherit
@@ -104,7 +102,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
       arch: "amd64"
-      container_image: "rapidsai/ci-conda:26.04-latest"
+      container_image: "rapidsai/ci-conda:26.06-latest"
       script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
     secrets: inherit
@@ -115,8 +113,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_cudf.sh
-      # Skip failing tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21357
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   wheel-tests-dask-cudf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
@@ -144,7 +140,7 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:26.04-latest"
+      container_image: "rapidsai/ci-conda:26.06-latest"
       script: |
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
       continue-on-error: true
@@ -168,7 +164,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: "ci/test_cudf_polars_with_rapidsmpf.sh"
+      script: "ci/test_cudf_polars_experimental.sh"
       continue-on-error: true
   cudf-polars-polars-tests:
     secrets: inherit
@@ -188,5 +184,5 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       node_type: "gpu-l4-latest-1"
-      container_image: "rapidsai/ci-conda:26.04-latest"
+      container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/test_narwhals.sh

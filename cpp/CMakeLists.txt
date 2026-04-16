@@ -508,6 +508,7 @@ add_library(
   src/io/json/read_json.cu
   src/io/json/parser_features.cpp
   src/io/json/process_tokens.cu
+  src/io/json/write_json.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -529,6 +530,7 @@ add_library(
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
   src/io/parquet/experimental/deletion_vectors.cu
+  src/io/parquet/experimental/deletion_vectors_helpers.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
@@ -536,6 +538,7 @@ add_library(
   src/io/parquet/experimental/hybrid_scan_preprocess.cu
   src/io/parquet/experimental/page_index_filter.cu
   src/io/parquet/experimental/page_index_filter_utils.cu
+  src/io/parquet/expression_transform_helpers.cpp
   src/io/parquet/io_utils/parquet_io_utils.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
@@ -586,8 +589,20 @@ add_library(
   src/join/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
-  src/join/hash_join.cu
-  src/join/jit_filter_join_indices.cu
+  src/join/hash_join/full_join_match_context.cpp
+  src/join/hash_join/full_join_retrieve.cu
+  src/join/hash_join/full_join_size.cu
+  src/join/hash_join/full_join_size_impl.cu
+  src/join/hash_join/hash_join.cu
+  src/join/hash_join/inner_join_match_context.cpp
+  src/join/hash_join/inner_join_retrieve.cu
+  src/join/hash_join/inner_join_size.cu
+  src/join/hash_join/left_join_match_context.cpp
+  src/join/hash_join/left_join_retrieve.cu
+  src/join/hash_join/left_join_size.cu
+  src/join/hash_join/match_context.cu
+  src/join/mark_join.cu
+  src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
   src/join/key_remapping.cu

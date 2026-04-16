@@ -689,7 +689,7 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         assert a.owner != b.owner
         assert not a.owner.is_spilled
         assert not b.owner.is_spilled
-        # And `a` and `b` is now seperated with there one spilling status
+        # And `a` and `b` is now separated with there one spilling status
         a.owner.spill(target="cpu")
         assert a.owner.is_spilled
         assert not b.owner.is_spilled

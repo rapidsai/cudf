@@ -1,16 +1,15 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/utilities/export.hpp>
 
 #include <rmm/device_uvector.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -206,4 +205,4 @@ dremel_data get_comparator_data(column_view input,
                                 bool output_as_byte_array,
                                 rmm::cuda_stream_view stream);
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

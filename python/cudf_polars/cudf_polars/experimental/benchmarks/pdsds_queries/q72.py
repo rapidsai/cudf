@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import COUNT_DTYPE, QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -80,7 +80,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 72."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -156,62 +156,71 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ]
         )
     )
-    return (
-        filtered_catalog_sales.join(
-            inventory, left_on="cs_item_sk", right_on="inv_item_sk"
-        )
-        .filter(pl.col("inv_quantity_on_hand") < pl.col("cs_quantity"))
-        .join(d2_dates, left_on="inv_date_sk", right_on="d2_date_sk")
-        .filter(pl.col("d1_week_seq") == pl.col("d2_week_seq"))
-        .join(d3_dates, left_on="cs_ship_date_sk", right_on="d3_date_sk")
-        .filter(
-            pl.col("d3_date").cast(pl.Datetime("us"))
-            > pl.col("d1_date").cast(pl.Datetime("us"))
-            + pl.duration(days=5).cast(pl.Duration("us"))
-        )
-        .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
-        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
-        .with_columns(
-            [
-                pl.when(pl.col("cs_promo_sk").is_null())
-                .then(1)
-                .otherwise(0)
-                .alias("no_promo_flag"),
-                pl.when(pl.col("cs_promo_sk").is_not_null())
-                .then(1)
-                .otherwise(0)
-                .alias("promo_flag"),
-            ]
-        )
-        .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk", how="left")
-        .join(
-            catalog_returns,
-            left_on=["cs_item_sk", "cs_order_number"],
-            right_on=["cr_item_sk", "cr_order_number"],
-            how="left",
-        )
-        .group_by(["i_item_desc", "w_warehouse_name", "d1_week_seq"])
-        .agg(
-            [
-                pl.col("no_promo_flag").sum().alias("no_promo"),
-                pl.col("promo_flag").sum().alias("promo"),
-                pl.len().alias("total_cnt"),
-            ]
-        )
-        .select(
-            [
-                "i_item_desc",
-                "w_warehouse_name",
-                pl.col("d1_week_seq").alias("d_week_seq"),
-                pl.col("no_promo"),
-                pl.col("promo"),
-                "total_cnt",
-            ]
-        )
-        .sort(
-            ["total_cnt", "i_item_desc", "w_warehouse_name", "d_week_seq"],
-            descending=[True, False, False, False],
-            nulls_last=True,
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            filtered_catalog_sales.join(
+                inventory, left_on="cs_item_sk", right_on="inv_item_sk"
+            )
+            .filter(pl.col("inv_quantity_on_hand") < pl.col("cs_quantity"))
+            .join(d2_dates, left_on="inv_date_sk", right_on="d2_date_sk")
+            .filter(pl.col("d1_week_seq") == pl.col("d2_week_seq"))
+            .join(d3_dates, left_on="cs_ship_date_sk", right_on="d3_date_sk")
+            .filter(
+                pl.col("d3_date").cast(pl.Datetime("us"))
+                > pl.col("d1_date").cast(pl.Datetime("us"))
+                + pl.duration(days=5).cast(pl.Duration("us"))
+            )
+            .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .with_columns(
+                [
+                    pl.when(pl.col("cs_promo_sk").is_null())
+                    .then(pl.lit(1, dtype=COUNT_DTYPE))
+                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
+                    .alias("no_promo_flag"),
+                    pl.when(pl.col("cs_promo_sk").is_not_null())
+                    .then(pl.lit(1, dtype=COUNT_DTYPE))
+                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
+                    .alias("promo_flag"),
+                ]
+            )
+            .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk", how="left")
+            .join(
+                catalog_returns,
+                left_on=["cs_item_sk", "cs_order_number"],
+                right_on=["cr_item_sk", "cr_order_number"],
+                how="left",
+            )
+            .group_by(["i_item_desc", "w_warehouse_name", "d1_week_seq"])
+            .agg(
+                [
+                    pl.col("no_promo_flag").sum().alias("no_promo"),
+                    pl.col("promo_flag").sum().alias("promo"),
+                    pl.len().alias("total_cnt"),
+                ]
+            )
+            .select(
+                [
+                    "i_item_desc",
+                    "w_warehouse_name",
+                    pl.col("d1_week_seq").alias("d_week_seq"),
+                    pl.col("no_promo"),
+                    pl.col("promo"),
+                    "total_cnt",
+                ]
+            )
+            .sort(
+                ["total_cnt", "i_item_desc", "w_warehouse_name", "d_week_seq"],
+                descending=[True, False, False, False],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("total_cnt", True),
+            ("i_item_desc", False),
+            ("w_warehouse_name", False),
+            ("d_week_seq", False),
+        ],
+        limit=100,
     )

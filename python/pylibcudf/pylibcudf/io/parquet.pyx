@@ -43,7 +43,7 @@ from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     table_with_metadata,
 )
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
@@ -246,6 +246,31 @@ cdef class ParquetReaderOptions:
         """Returns whether to use JIT compilation for filtering."""
         return self.c_obj.is_enabled_use_jit_filter()
 
+    cpdef void enable_case_sensitive_names(self, bool val):
+        """
+        Sets whether column names are matched case-sensitively.
+
+        Parameters
+        ----------
+        val : bool
+            Enables case-sensitive matching
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.enable_case_sensitive_names(val)
+
+    cpdef bool is_enabled_case_sensitive_names(self):
+        """
+        Returns whether column name matching is case sensitive.
+
+        Returns
+        -------
+        bool
+            Whether column names are matched case-sensitively
+        """
+        return self.c_obj.is_enabled_case_sensitive_names()
 
 cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
@@ -416,6 +441,40 @@ cdef class ParquetReaderOptionsBuilder:
         ParquetReaderOptionsBuilder
         """
         self.c_obj.use_jit_filter(use_jit_filter)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder case_sensitive_names(self, bool val):
+        """
+        Sets whether column name matching is case sensitive.
+
+        Parameters
+        ----------
+        val : bool
+            ``True`` to enable case-sensitive matching (default),
+            ``False`` for case-insensitive matching.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.case_sensitive_names(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width):
+        """
+        Sets the decimal width used to cast all decimal columns.
+
+        Parameters
+        ----------
+        width : TypeId
+            The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which
+            all decimal columns should be cast.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.decimal_width(width)
         return self
 
     cpdef build(self):

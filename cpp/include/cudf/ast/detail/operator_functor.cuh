@@ -6,6 +6,7 @@
 
 #include <cudf/ast/ast_operator.hpp>
 #include <cudf/ast/detail/possibly_null.cuh>
+#include <cudf/detail/integral_math.cuh>
 #include <cudf/fixed_point/conv.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -42,6 +43,11 @@ struct operator_functor<ast_operator::ADD, false> {
   {
     return lhs + rhs;
   }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs)
+  {
+    return cuda::std::min(lhs, rhs);
+  }
 };
 
 template <>
@@ -52,6 +58,11 @@ struct operator_functor<ast_operator::SUB, false> {
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> decltype(lhs - rhs)
   {
     return lhs - rhs;
+  }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs)
+  {
+    return cuda::std::min(lhs, rhs);
   }
 };
 
@@ -64,6 +75,8 @@ struct operator_functor<ast_operator::MUL, false> {
   {
     return lhs * rhs;
   }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs) { return lhs + rhs; }
 };
 
 template <>
@@ -75,6 +88,8 @@ struct operator_functor<ast_operator::DIV, false> {
   {
     return lhs / rhs;
   }
+
+  static constexpr int32_t fixed_point_result_scale(int32_t lhs, int32_t rhs) { return lhs - rhs; }
 };
 
 template <>
@@ -93,11 +108,21 @@ template <>
 struct operator_functor<ast_operator::FLOOR_DIV, false> {
   static constexpr auto arity{2};
 
-  template <typename LHS, typename RHS>
-  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
-    -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
+    requires(cuda::std::is_integral_v<CommonType>)
   {
-    return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
+    return cudf::detail::integral_floor_div(lhs, rhs);
+  }
+
+  template <typename LHS, typename RHS, typename CommonType = cuda::std::common_type_t<LHS, RHS>>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> CommonType
+    requires(cuda::std::is_floating_point_v<CommonType>)
+  {
+    if constexpr (cuda::std::is_same_v<CommonType, float>) {
+      return cuda::std::floorf(static_cast<CommonType>(lhs) / static_cast<CommonType>(rhs));
+    }
+    return cuda::std::floor(static_cast<CommonType>(lhs) / static_cast<CommonType>(rhs));
   }
 };
 
@@ -176,8 +201,16 @@ struct operator_functor<ast_operator::POW, false> {
   static constexpr auto arity{2};
 
   template <typename LHS, typename RHS>
+  __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept -> LHS
+    requires(cuda::std::is_integral_v<LHS> and cuda::std::is_integral_v<RHS>)
+  {
+    return cudf::detail::integral_pow(lhs, rhs);
+  }
+
+  template <typename LHS, typename RHS>
   __device__ inline auto operator()(LHS lhs, RHS rhs) const noexcept
     -> decltype(cuda::std::pow(lhs, rhs))
+    requires(not(cuda::std::is_integral_v<LHS> and cuda::std::is_integral_v<RHS>))
   {
     return cuda::std::pow(lhs, rhs);
   }

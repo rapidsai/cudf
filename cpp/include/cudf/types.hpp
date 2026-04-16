@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -258,6 +258,14 @@ enum class output_nullability : uint8_t {
   PRESERVE  = 0,  ///< A null-mask may be produced if needed
   ALL_VALID = 1   ///< A null-mask is not produced and all values are considered valid even if
                   ///< null values are produced
+};
+
+/**
+ * @brief Indicates the source language of a user defined function (UDF) to be used in JIT APIs.
+ */
+enum class udf_source_type : uint8_t {
+  CUDA = 0,  ///< The UDF is a CUDA function
+  PTX  = 1   ///< The UDF is a PTX function
 };
 
 /**

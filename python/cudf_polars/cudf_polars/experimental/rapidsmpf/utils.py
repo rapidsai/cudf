@@ -5,19 +5,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import itertools
 import operator
 import struct
+import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any
-
-from cudf_polars.dsl.tracing import LOG_TRACES, Scope
-
-try:
-    import structlog
-    import structlog.contextvars
-except ImportError:
-    pass
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.memory.packed_data import PackedData
@@ -34,13 +30,20 @@ from rapidsmpf.streaming.cudf.table_chunk import (
 )
 
 import pylibcudf as plc
+import rmm.mr
 
+import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
+from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Mapping
+    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
+    from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -50,14 +53,55 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
     from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
-    from cudf_polars.typing import DataType
+    from cudf_polars.typing import DataType, Schema
+
+
+@contextlib.contextmanager
+def set_memory_resource(mr: rmm.mr.DeviceMemoryResource) -> Iterator[None]:
+    """
+    Context manager that temporarily sets ``mr`` as the current device resource.
+
+    On entry, ``mr`` is installed via ``rmm.mr.set_current_device_resource(mr)``.
+    On exit, the previously active resource is restored unconditionally.
+
+    Parameters
+    ----------
+    mr
+        The memory resource to activate for the duration of the block.
+    """
+    old = rmm.mr.get_current_device_resource()
+    rmm.mr.set_current_device_resource(mr)
+    try:
+        yield
+    finally:
+        rmm.mr.set_current_device_resource(old)
+
+
+async def gather_in_task_group(*coroutines: Coroutine[Any, Any, Any]) -> list[Any]:
+    """
+    asyncio.gather-like API for running tasks in a asyncio.TaskGroup.
+
+    Parameters
+    ----------
+    coroutines
+        Tasks to execute.
+
+    Returns
+    -------
+    list[Any]
+        The results of the coroutines.
+    """
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(coro) for coro in coroutines]
+    return [task.result() for task in tasks]
 
 
 @asynccontextmanager
 async def shutdown_on_error(
     context: Context,
     *channels: Channel[Any],
-    trace_ir: IR | None = None,
+    trace_ir: IR,
+    ir_context: IRExecutionContext | None = None,
 ) -> AsyncIterator[ActorTracer | None]:
     """
     Shutdown on error for rapidsmpf.
@@ -76,6 +120,9 @@ async def shutdown_on_error(
         When provided and LOG_TRACES is enabled, an ActorTracer
         is yielded for collecting stats, and a structlog event is
         emitted on exit.
+    ir_context
+        The IR execution context from cudf-polars. This is used to propagate
+        the query_id to the structlog logs emitted in this context.
 
     Yields
     ------
@@ -84,86 +131,149 @@ async def shutdown_on_error(
     """
     # Create tracer only if LOG_TRACES is enabled and IR is provided
     tracer: ActorTracer | None = None
-    if LOG_TRACES and trace_ir is not None:
-        from cudf_polars.experimental.rapidsmpf.tracing import (
-            ActorTracer,
-        )
+    contextvars: dict[str, Any] = {}
+    from cudf_polars.experimental.rapidsmpf.tracing import ActorTracer
 
-        ir_id = trace_ir.get_stable_id()
-        ir_type = type(trace_ir).__name__
-        tracer = ActorTracer(ir_id, ir_type)
-        structlog.contextvars.bind_contextvars(actor_ir_id=ir_id, actor_ir_type=ir_type)
+    ir_id = trace_ir.get_stable_id()
+    ir_type = type(trace_ir).__name__
+    tracer = ActorTracer(ir_id, ir_type)
+    contextvars = {"actor_ir_id": ir_id, "actor_ir_type": ir_type}
 
-    try:
-        yield tracer
-    except BaseException:
-        await asyncio.gather(*(ch.shutdown(context) for ch in channels))
-        raise
-    finally:
-        if tracer is not None:
-            log = structlog.get_logger()
+    if ir_context is not None:
+        contextvars["cudf_polars_query_id"] = str(ir_context.query_id)
+
+    with cudf_polars.dsl.tracing.bound_contextvars(**contextvars):
+        start = time.monotonic_ns()
+        try:
+            yield tracer
+        except BaseException:
+            await gather_in_task_group(
+                *itertools.chain.from_iterable(
+                    (ch.shutdown(context), ch.shutdown_metadata(context))
+                    for ch in channels
+                )
+            )
+            raise
+        finally:
+            stop = time.monotonic_ns()
             record: dict[str, Any] = {
                 "scope": Scope.ACTOR.value,
-                "actor_ir_id": tracer.ir_id,
-                "actor_ir_type": tracer.ir_type,
-                "chunk_count": tracer.chunk_count,
-                "duplicated": tracer.duplicated,
             }
-            if tracer.row_count is not None:
-                record["rows"] = tracer.row_count
-            if tracer.decision is not None:
-                record["decision"] = tracer.decision
-            log.info("Streaming Actor", **record)
-            structlog.contextvars.unbind_contextvars("actor_ir_id", "actor_ir_type")
+            if tracer is not None:
+                record.update(
+                    {
+                        "chunk_count": tracer.chunk_count,
+                        "duplicated": tracer.duplicated,
+                    }
+                )
+                if tracer.row_count is not None:
+                    record["row_count"] = tracer.row_count
+                if tracer.decision is not None:
+                    record["decision"] = tracer.decision
+            cudf_polars.dsl.tracing.log(
+                "Streaming Actor", start=start, stop=stop, **record
+            )
 
 
-def remap_partitioning(
-    partitioning: Partitioning | None,
-    old_schema: Mapping[str, DataType],
-    new_schema: Mapping[str, DataType],
+def _remap_scheme_select(
+    select: Select, scheme: HashScheme | None | str
+) -> HashScheme | None | str:
+    # We must check if this Select node preserves partitioning
+    # before we return a remapped scheme.
+    if isinstance(scheme, HashScheme):
+        # Mapping from old to new names for "col" selection
+        old_to_new_names = {
+            ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
+        }
+        old_keys = indices_to_names(scheme.column_indices, select.children[0].schema)
+        if set(old_keys).issubset(set(old_to_new_names)):
+            new_keys = names_to_indices(
+                tuple(old_to_new_names[o] for o in old_keys), select.schema
+            )
+            return HashScheme(new_keys, scheme.modulus)
+        return None
+    elif scheme not in (None, "inherit"):  # pragma: no cover
+        return None  # Guard against new/unsupported scheme types
+    return scheme
+
+
+def _remap_scheme_simple(
+    ir: IR, scheme: HashScheme | None | str, child: IR
+) -> HashScheme | None | str:
+    # Called when we know the IR node preserves partitioning.
+    # Just remap to the new schema if possible.
+    if isinstance(scheme, HashScheme):
+        old_keys = indices_to_names(scheme.column_indices, child.schema)
+        try:
+            new_indices = names_to_indices(old_keys, ir.schema)
+        except (ValueError, IndexError):
+            return None  # Column missing in child or output schema
+        return HashScheme(new_indices, scheme.modulus)
+    return scheme  # None or "inherit" passes through unchanged
+
+
+def _hstack_to_select(hstack: HStack) -> Select:
+    """Translate HStack to the equivalent Select node."""
+    col_map = {ne.name: ne for ne in hstack.columns}
+    exprs = tuple(
+        col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+        for name, dtype in hstack.schema.items()
+    )
+    return Select(hstack.schema, exprs, hstack.should_broadcast, hstack.children[0])
+
+
+def maybe_remap_partitioning(
+    ir: IR, partitioning: Partitioning | None, *, child_ir: IR | None = None
 ) -> Partitioning | None:
     """
-    Remap partitioning column indices from old schema to new schema.
-
-    Since HashScheme uses column indices rather than names, we need to
-    remap indices when propagating partitioning through operations that
-    may change the schema (column order or presence).
+    Remap partitioning for simple IR nodes.
 
     Parameters
     ----------
+    ir
+        The IR node.
     partitioning
-        The partitioning to remap.
-    old_schema
-        The schema where the partitioning was established.
-    new_schema
-        The new schema to remap to.
+        The input partitioning.
+    child_ir
+        The child IR whose schema the partitioning refers to. When None,
+        the first child (ir.children[0]) is used.
 
     Returns
     -------
-    The remapped partitioning, or None if the inter-rank partitioning
-    columns are not present in the new schema.
+    The remapped partitioning. When partition keys are not preserved,
+    the corresponding scheme will be set to None. When the original
+    partitioning is None, the output will also be None.
+
+    Notes
+    -----
+    A Select preserves partitioning if all partition key columns are
+    output as simple Col references (unchanged values). Other columns
+    can be computed expressions - only the partition keys matter.
     """
     if partitioning is None:
-        return None
-
-    old_names = list(old_schema.keys())
-    new_name_to_idx = {name: i for i, name in enumerate(new_schema.keys())}
-
-    def remap_hash_scheme(hs: HashScheme | None | str) -> HashScheme | None | str:
-        if isinstance(hs, HashScheme):
-            try:
-                new_indices = tuple(
-                    new_name_to_idx[old_names[i]] for i in hs.column_indices
-                )
-            except (IndexError, KeyError):
-                return None  # Column missing in old or new schema
-            return HashScheme(new_indices, hs.modulus)
-        else:
-            return hs  # None or "inherit" passes through unchanged
-
-    new_inter_rank = remap_hash_scheme(partitioning.inter_rank)
-    new_local = remap_hash_scheme(partitioning.local)
-    return Partitioning(inter_rank=new_inter_rank, local=new_local)
+        return None  # Nothing to preserve
+    if isinstance(ir, (Select, HStack)):
+        if isinstance(ir, HStack):
+            # HStack is a special case of Select
+            ir = _hstack_to_select(ir)
+        return Partitioning(
+            inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
+            local=_remap_scheme_select(ir, partitioning.local),
+        )
+    if isinstance(ir, GroupBy):
+        return Partitioning(
+            inter_rank=_remap_scheme_simple(
+                ir, partitioning.inter_rank, ir.children[0]
+            ),
+            local=_remap_scheme_simple(ir, partitioning.local, ir.children[0]),
+        )
+    if isinstance(ir, (Cache, Join, Projection, Filter)):
+        child = child_ir if child_ir is not None else ir.children[0]
+        return Partitioning(
+            inter_rank=_remap_scheme_simple(ir, partitioning.inter_rank, child),
+            local=_remap_scheme_simple(ir, partitioning.local, child),
+        )
+    return None
 
 
 async def send_metadata(
@@ -225,6 +335,7 @@ def _evaluate_chunk_sync(
     chunk: TableChunk,
     ir: IR,
     ir_context: IRExecutionContext,
+    br: BufferResource,
 ) -> TableChunk:
     """
     Apply an IR node's do_evaluate to a table chunk (synchronous).
@@ -240,6 +351,8 @@ def _evaluate_chunk_sync(
         The IR node to evaluate.
     ir_context
         The IR execution context.
+    br
+        The buffer resource for lifetime tracking.
 
     Returns
     -------
@@ -253,7 +366,9 @@ def _evaluate_chunk_sync(
         DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
         context=ir_context,
     )
-    return TableChunk.from_pylibcudf_table(df.table, chunk.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=br
+    )
 
 
 async def evaluate_chunk(
@@ -291,7 +406,7 @@ async def evaluate_chunk(
     with opaque_memory_usage(extra):
         for single_ir in irs:
             chunk = await asyncio.to_thread(
-                _evaluate_chunk_sync, chunk, single_ir, ir_context
+                _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
             )
         return chunk
 
@@ -299,7 +414,7 @@ async def evaluate_chunk(
 async def concat_batch(
     batch: list[TableChunk],
     context: Context,
-    schema: Mapping[str, DataType],
+    schema: Schema,
     ir_context: IRExecutionContext,
 ) -> TableChunk:
     """
@@ -341,7 +456,9 @@ async def concat_batch(
             context=ir_context,
         )
         del batch
-    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
+    )
 
 
 async def evaluate_batch(
@@ -418,18 +535,26 @@ async def chunkwise_evaluate(
     if tracer is not None and metadata.duplicated:
         tracer.set_duplicated()
 
-    seq_num = 0
     received_any = False
     while (msg := await ch_in.recv(context)) is not None:
         received_any = True
-        result = await evaluate_chunk(
-            context, TableChunk.from_message(msg), ir, ir_context=ir_context
-        )
-        del msg
+        cd = msg.get_content_description()
+        seq_num = msg.sequence_number
+        with cudf_polars.dsl.tracing.bound_contextvars(
+            content_sizes=cd.content_sizes,
+            spillable=cd.spillable,
+            sequence_number=msg.sequence_number,
+        ):
+            result = await evaluate_chunk(
+                context,
+                TableChunk.from_message(msg, br=context.br()),
+                ir,
+                ir_context=ir_context,
+            )
+        del msg, cd
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
         await ch_out.send(context, Message(seq_num, result))
-        seq_num += 1
 
     if handle_empty_input and not received_any:
         chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
@@ -437,90 +562,241 @@ async def chunkwise_evaluate(
         del chunk
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
+        await ch_out.send(context, Message(0, result))
 
     await ch_out.drain(context)
 
 
-def get_partitioning_moduli(
-    metadata: ChannelMetadata,
-    key_indices: tuple[int, ...],
-    nranks: int,
-    *,
-    allow_subset: bool = False,
-) -> tuple[int, int | None]:
+def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...]:
     """
-    Get the moduli if data is hash partitioned on the given keys.
+    Return column names for the given column indices in schema order.
 
     Parameters
     ----------
-    metadata
-        The channel metadata.
-    key_indices
-        The column indices of the keys.
-    nranks
-        The number of ranks.
-    allow_subset
-        If True, treat partitioning as matching when the partitioning
-        key indices are a prefix of key_indices (e.g. partitioning on
-        (0,) matches key_indices (0, 1)). If False, the partitioning
-        keys must match key_indices exactly.
+    indices
+        The indices to get names for.
+    schema
+        The schema to get names from.
 
     Returns
     -------
-    inter_rank_modulus
-        Inter-rank modulus.
-        Return value of 0 means the data is not partitioned between ranks.
-    local_modulus
-        Local modulus.
-        Return value of 0 means the data is not partitioned within a rank.
-        Return value of None means that the local partitioning inherits the
-        inter-rank partitioning.
+    The column names for each index in schema order.
     """
-    # NOTE: This function will need to be updated when we support
-    # order-based partitioning. For ordered data, we can return a
-    # "boundaries" TableChunk instead of a single integer (modulus).
+    keys = list(schema.keys())
+    return tuple(keys[i] for i in indices)
 
-    trivial_inter_rank_modulus = 1 if nranks == 1 else 0
-    if metadata.partitioning is None:
-        return trivial_inter_rank_modulus, 0
 
-    def _keys_match(
-        scheme: HashScheme | None | str, key_indices: tuple[int, ...]
-    ) -> bool:
-        if isinstance(scheme, HashScheme):
-            target_key_indices = key_indices
-            current_key_indices = scheme.column_indices
-            if allow_subset:
-                target_key_indices = target_key_indices[: len(current_key_indices)]
-            return target_key_indices == current_key_indices
-        else:
-            return False
+def names_to_indices(
+    names: tuple[str | NamedExpr, ...], schema: Schema
+) -> tuple[int, ...]:
+    """
+    Return column indices for the given names in schema order.
 
-    inter_rank = metadata.partitioning.inter_rank
-    strict_inter_rank_modulus = (
-        inter_rank.modulus if _keys_match(inter_rank, key_indices) else 0
-    )
-    inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
-    if not inter_rank_modulus:
-        # Local partitioning is meaningless without inter-rank partitioning
-        return 0, 0
+    Accepts either column names (str) or NamedExpr, so it can be used with
+    e.g. ir.left_on, ir.right_on as well as plain name tuples.
 
-    local = metadata.partitioning.local
-    local_modulus = local.modulus if _keys_match(local, key_indices) else 0
-    if local_modulus != metadata.local_count:
-        local_modulus = 0  # Local count is out of sync - Better to be safe
+    Parameters
+    ----------
+    names
+        The names to get indices for.
+    schema
+        The schema to get indices from.
 
-    local_modulus = local_modulus or (None if local == "inherit" else 0)
+    Returns
+    -------
+    The column indices for each name in schema order.
+    """
+    keys = list(schema.keys())
+    str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
+    return tuple(keys.index(n) for n in str_names)
 
-    if local_modulus and not strict_inter_rank_modulus and trivial_inter_rank_modulus:
-        # Trivial inter-rank partitioning with local partitioning
-        # is the same as inter-rank partitioning with local="inherit".
-        # Use the latter representation for consistency.
-        inter_rank_modulus = local_modulus
-        local_modulus = None
 
-    return inter_rank_modulus, local_modulus
+async def replay_buffered_channel(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    buffered_chunks: dict[int, TableChunk],
+    metadata: ChannelMetadata,
+    *,
+    trace_ir: IR,
+) -> None:
+    """
+    Replay a buffered input channel into an output channel.
+
+    Parameters
+    ----------
+    context
+        The context.
+    ch_out
+        The new output channel.
+    ch_in
+        The buffered input channel.
+    buffered_chunks
+        The buffered chunks to yield first.
+    metadata
+        The metadata to send to the output channel.
+    trace_ir
+        The IR node to trace. Passed through to shutdown_on_error.
+    """
+    async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
+        await send_metadata(ch_out, context, metadata)
+        for seq_num, chunk in buffered_chunks.items():
+            await ch_out.send(context, Message(seq_num, chunk))
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
+
+
+@dataclass(frozen=True)
+class NormalizedPartitioning:
+    """Normalized view of partitioning for a set of key column indices."""
+
+    inter_rank_modulus: int
+    """The inter-rank modulus."""
+    inter_rank_indices: tuple[int, ...]
+    """The inter-rank column indices."""
+    local_modulus: int | None
+    """The local modulus."""
+    local_indices: tuple[int, ...]
+    """The local column indices."""
+
+    def __bool__(self) -> bool:
+        """True if partitioned (inter-rank and, when set, local)."""
+        return self.inter_rank_modulus > 0 and (
+            self.local_modulus is None or self.local_modulus > 0
+        )
+
+    def __eq__(self, other: object) -> bool:
+        """Equal when moduli and indices are identical."""
+        if not isinstance(other, NormalizedPartitioning):
+            return NotImplemented
+        return (
+            self.inter_rank_modulus == other.inter_rank_modulus
+            and self.local_modulus == other.local_modulus
+            and self.inter_rank_indices == other.inter_rank_indices
+            and self.local_indices == other.local_indices
+        )
+
+    def is_compatible_with(self, other: NormalizedPartitioning) -> bool:
+        """Compatible when both are partitioned and moduli and key lengths are aligned."""
+        return bool(self) and (
+            self.inter_rank_modulus == other.inter_rank_modulus
+            and self.local_modulus == other.local_modulus
+            and len(self.inter_rank_indices) == len(other.inter_rank_indices)
+            and len(self.local_indices) == len(other.local_indices)
+        )
+
+    @classmethod
+    def from_indices(
+        cls,
+        partitioning_metadata: Partitioning | None,
+        nranks: int,
+        *,
+        indices: tuple[int, ...],
+        allow_subset: bool = True,
+    ) -> NormalizedPartitioning:
+        """
+        Resolve partitioning from metadata and column indices.
+
+        Parameters
+        ----------
+        partitioning_metadata
+            The partitioning channel metadata.
+        nranks
+            The number of ranks.
+        indices
+            The column indices of the keys (e.g. from a groupby or distinct).
+        allow_subset
+            If True, treat partitioning as matching when the partitioning key
+            indices are a prefix of indices. If False, the partitioning keys
+            must match indices exactly.
+
+        Returns
+        -------
+        NormalizedPartitioning
+            The resolved inter-rank and local moduli and column indices.
+        """
+        inter_rank_modulus, local_modulus = NormalizedPartitioning._get_moduli(
+            partitioning_metadata, indices, nranks, allow_subset=allow_subset
+        )
+
+        local_indices_val: tuple[int, ...] = ()
+        inter_rank_indices: tuple[int, ...] = indices
+        if inter_rank_modulus and partitioning_metadata is not None:
+            inter_rank_hashed = isinstance(partitioning_metadata.inter_rank, HashScheme)
+            local_hashed = isinstance(partitioning_metadata.local, HashScheme)
+            if local_hashed and inter_rank_hashed:
+                inter_rank_indices = partitioning_metadata.inter_rank.column_indices
+                local_indices_val = partitioning_metadata.local.column_indices
+            elif inter_rank_hashed:
+                inter_rank_indices = partitioning_metadata.inter_rank.column_indices
+            elif local_hashed:
+                inter_rank_indices = partitioning_metadata.local.column_indices
+
+        return cls(
+            inter_rank_modulus=inter_rank_modulus,
+            inter_rank_indices=inter_rank_indices,
+            local_modulus=local_modulus,
+            local_indices=local_indices_val,
+        )
+
+    @staticmethod
+    def _get_moduli(
+        partitioning_metadata: Partitioning | None,
+        key_indices: tuple[int, ...],
+        nranks: int,
+        *,
+        allow_subset: bool = False,
+    ) -> tuple[int, int | None]:
+        # NOTE: This function will need to be updated when we support
+        # order-based partitioning. For ordered data, we can return a
+        # "boundaries" TableChunk instead of a single integer (modulus).
+
+        trivial_inter_rank_modulus = 1 if nranks == 1 else 0
+        if partitioning_metadata is None:
+            return trivial_inter_rank_modulus, 0
+
+        def _keys_match(
+            scheme: HashScheme | None | str, key_indices: tuple[int, ...]
+        ) -> bool:
+            if isinstance(scheme, HashScheme):
+                target_key_indices = key_indices
+                current_key_indices = scheme.column_indices
+                if allow_subset:
+                    target_key_indices = target_key_indices[: len(current_key_indices)]
+                return target_key_indices == current_key_indices
+            else:
+                return False
+
+        inter_rank = partitioning_metadata.inter_rank
+        strict_inter_rank_modulus = (
+            inter_rank.modulus if _keys_match(inter_rank, key_indices) else 0
+        )
+        inter_rank_modulus = strict_inter_rank_modulus or trivial_inter_rank_modulus
+        if not inter_rank_modulus:
+            # Local partitioning is meaningless without inter-rank partitioning
+            return 0, 0
+
+        local = partitioning_metadata.local
+        local_modulus = local.modulus if _keys_match(local, key_indices) else 0
+        local_modulus = local_modulus or (None if local == "inherit" else 0)
+
+        if (
+            local_modulus
+            and not strict_inter_rank_modulus
+            and trivial_inter_rank_modulus
+        ):
+            # Trivial inter-rank partitioning with local partitioning
+            # is the same as inter-rank partitioning with local="inherit".
+            # Use the latter representation for consistency.
+            inter_rank_modulus = local_modulus
+            local_modulus = None
+        elif local_modulus is None and not strict_inter_rank_modulus:
+            # Don't allow local partitioning to "inherit"
+            # when there is not proper inter-rank partitioning
+            local_modulus = 0
+
+        return inter_rank_modulus, local_modulus
 
 
 class ChannelManager:
@@ -659,6 +935,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
         empty_table,
         stream,
         exclusive_view=True,
+        br=context.br(),
     )
 
 
@@ -757,6 +1034,7 @@ def make_spill_function(
 
 async def allgather_reduce(
     context: Context,
+    comm: Communicator,
     op_id: int,
     *local_values: int,
 ) -> tuple[int, ...]:
@@ -767,6 +1045,8 @@ async def allgather_reduce(
     ----------
     context
         The rapidsmpf context.
+    comm
+        The communicator.
     op_id
         The collective operation ID for this allgather.
     *local_values
@@ -777,14 +1057,19 @@ async def allgather_reduce(
     tuple[int, ...]
         The sum of each local_value across all ranks.
     """
+    if comm.nranks == 1:
+        return tuple(local_values)
+
     n = len(local_values)
     fmt = f"<{'q' * n}"
     data = struct.pack(fmt, *local_values)
     packed = PackedData.from_host_bytes(data, context.br())
 
-    allgather = AllGather(context, op_id)
-    allgather.insert(0, packed)
-    allgather.insert_finished()
+    allgather = AllGather(context, comm, op_id)
+    try:
+        allgather.insert(0, packed)
+    finally:
+        allgather.insert_finished()
 
     results = await allgather.extract_all(context, ordered=False)
 

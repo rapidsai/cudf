@@ -5,6 +5,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "hybrid_scan_impl.hpp"
+#include "io/parquet/reader_impl_chunking_utils.cuh"
 #include "io/parquet/reader_impl_preprocess_utils.cuh"
 #include "io/utilities/time_utils.cuh"
 
@@ -18,7 +19,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/sequence.h>
 
 #include <numeric>
@@ -45,9 +46,9 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
   CUDF_FUNC_RANGE();
 
   rmm::device_uvector<chunk_page_info> chunk_page_info(chunks.size(), stream);
-  thrust::for_each(rmm::exec_policy_nosync(stream),
-                   thrust::counting_iterator<cuda::std::size_t>(0),
-                   thrust::counting_iterator(chunks.size()),
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   cuda::counting_iterator<cuda::std::size_t>{0},
+                   cuda::counting_iterator{chunks.size()},
                    [cpi = chunk_page_info.begin(), pages = pages.device_begin()] __device__(
                      auto page_idx) { cpi[page_idx].pages = &pages[page_idx]; });
 
@@ -61,7 +62,7 @@ void decode_dictionary_page_headers(cudf::detail::hostdevice_span<ColumnChunkDes
   }
 
   // Setup dictionary page for each chunk
-  thrust::for_each(rmm::exec_policy_nosync(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    pages.device_begin(),
                    pages.device_end(),
                    [chunks = chunks.device_begin()] __device__(PageInfo const& p) {
@@ -223,15 +224,14 @@ hybrid_scan_reader_impl::prepare_dictionaries(
       has_compressed_data |=
         col_meta.codec != Compression::UNCOMPRESSED and col_meta.total_compressed_size > 0;
 
-      // TODO: Use `parquet::detail::conversion_info` instead of directly computing `clock_rate`
-      // when AST support for decimals is available
-      auto const column_type_id =
+      auto const [clock_rate, logical_type] = parquet::detail::conversion_info(
         parquet::detail::to_type_id(schema,
                                     options.is_enabled_convert_strings_to_categories(),
-                                    options.get_timestamp_type().id());
-      auto const clock_rate = is_chrono(data_type{column_type_id})
-                                ? to_clockrate(options.get_timestamp_type().id())
-                                : int32_t{0};
+                                    options.get_timestamp_type().id(),
+                                    options.get_decimal_width()),
+        options.get_timestamp_type().id(),
+        schema.type,
+        schema.logical_type);
 
       // Create a column chunk descriptor - zero/null values for all fields that are not needed
       chunks[chunk_idx] = ColumnChunkDesc(static_cast<int64_t>(dict_page_data.size()),
@@ -247,7 +247,7 @@ hybrid_scan_reader_impl::prepare_dictionaries(
                                           0,  // def_level_bits
                                           0,  // rep_level_bits
                                           col_meta.codec,
-                                          schema.logical_type,
+                                          logical_type,
                                           clock_rate,
                                           0,  // src_col_index
                                           col_schema_idx,
@@ -292,9 +292,9 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_ma
 
   // Update output row mask such that out_row_mask[i] = true, iff in_row_mask[i] is valid and true.
   // This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator(total_rows),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator{total_rows},
                     out_row_mask.begin<bool>() + out_row_mask_offset,
                     [is_nullable = in_row_mask.nullable(),
                      in_row_mask = in_row_mask.begin<bool>(),

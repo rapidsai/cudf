@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,7 +59,7 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
 /**
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
  *
- * @param indata Input device buffer
+ * @param d_input Input device buffer
  * @param col_offsets Offsets to column contents in input buffer
  * @param col_lengths Length of contents of each row in column
  * @param stream CUDA stream used for device memory operations and kernel launches

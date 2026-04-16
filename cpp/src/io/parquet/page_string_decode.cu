@@ -40,7 +40,6 @@ constexpr int delta_length_block_size  = 32;
  * @param num_rows Maximum number of rows to read
  * @param is_bounds_pg True if this page is clipped
  * @param has_repetition True if the schema is nested
- * @param decoders Definition and repetition level decoders
  * @return pair containing start and end value indexes
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
@@ -1012,19 +1011,20 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
     // now do an exclusive scan over the temp_string_sizes to get offsets for each
     // page's chunk of the temp buffer
     rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
-    thrust::transform_exclusive_scan(rmm::exec_policy_nosync(stream),
-                                     pages.device_begin(),
-                                     pages.device_end(),
-                                     page_string_offsets.begin(),
-                                     page_sizes,
-                                     0L,
-                                     cuda::std::plus<int64_t>{});
+    thrust::transform_exclusive_scan(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      pages.device_begin(),
+      pages.device_end(),
+      page_string_offsets.begin(),
+      page_sizes,
+      0L,
+      cuda::std::plus<int64_t>{});
 
     // allocate the temp space
     temp_string_buf.resize(total_size, stream);
 
     // now use the offsets array to set each page's temp_string_buf pointers
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       pages.device_begin(),
                       pages.device_end(),
                       page_string_offsets.begin(),

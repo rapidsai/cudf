@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -130,7 +130,7 @@ uint16_t find_collision_proof_prime()
 void generate_special_mapping_hash_table()
 {
   uint16_t hash_prime = find_collision_proof_prime();
-  if (hash_prime == 0) { CUDF_FAIL("Could not find a usable prime number for hash table"); }
+  CUDF_EXPECTS(hash_prime != 0, "Could not find a usable prime number for hash table");
 
   // generate hash index table
   // size of the table is the prime #, since we're just doing (key % hash_prime)

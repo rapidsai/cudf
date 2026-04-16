@@ -11,6 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column.decimal import Decimal32Column, Decimal64Column
 from cudf.core.column.numerical import NumericalColumn
 from cudf.testing import assert_eq
@@ -370,6 +371,99 @@ def test_timedelta_str_roundtrip(sr_data, sr_dtype, exp_data, exp_dtype):
     assert_eq(expected_series, actual_series)
 
     assert_eq(gsr, actual_series.astype(gsr.dtype))
+
+
+def test_timedelta_astype_object_raises_pandas_compat():
+    sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(TypeError):
+            sr.astype(object)
+        with pytest.raises(TypeError):
+            sr.astype(np.dtype("object"))
+
+
+def test_timedelta_astype_unicode_dtype_pandas_compat():
+    sr = cudf.Series([1000000000], dtype="timedelta64[ns]")
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = sr.astype(np.dtype("U"))
+    expected = pd.Series(pd.to_timedelta([1000000000], unit="ns")).astype(str)
+    assert result.dtype == np.dtype("object")
+    assert_eq(result, cudf.Series(expected))
+
+
+@pytest.mark.parametrize(
+    "data, min_unit",
+    [
+        # days-only
+        (["1 days", "5 days", "0 days"], "s"),
+        # whole seconds (sub-day, no fractions)
+        (["1 days 02:03:04", "0 days 00:00:01"], "s"),
+        # millisecond fractions
+        (["0 days 00:00:01.500", "1 days 00:00:00.001"], "ms"),
+        # microsecond fractions
+        (["0 days 00:00:00.000001", "0 days 00:00:01.123456"], "us"),
+        # nanosecond fractions
+        (["0 days 00:00:00.000000001", "0 days 00:00:00.123456789"], "ns"),
+        # nanoseconds that are exact microseconds (trailing zeros stripped)
+        (["0 days 00:00:00.000001000", "0 days 00:00:00.100000000"], "us"),
+        # mixed fractional and whole seconds
+        (["0 days 00:00:01.500000", "0 days 00:00:02"], "us"),
+        # mixed days-only and sub-day rows
+        (["3 days", "0 days 01:00:00"], "s"),
+    ],
+    ids=[
+        "days_only",
+        "whole_seconds",
+        "millis",
+        "micros",
+        "nanos",
+        "nanos_exact_micros",
+        "mixed_frac_and_whole",
+        "mixed_days_and_subday",
+    ],
+)
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+    ],
+)
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Bug in older pandas versions",
+)
+def test_timedelta_astype_str_pandas_compat(data, min_unit, unit):
+    ptd = pd.to_timedelta(data).astype(unit)
+    psr = pd.Series(ptd)
+    gsr = cudf.Series(ptd)
+    expected = psr.astype("str")
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = gsr.astype("str")
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+    ],
+)
+def test_timedelta_astype_str_with_nulls_pandas_compat(unit):
+    ptd = pd.to_timedelta(
+        ["1 days 02:03:04", pd.NaT, "0 days 00:00:01"]
+    ).astype(unit)
+    psr = pd.Series(ptd)
+    gsr = cudf.Series(ptd)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = gsr.astype("str")
+    expected = psr.astype("str")
+    assert_eq(result, cudf.Series(expected))
 
 
 def test_typecast_from_datetime(numeric_types_as_str):
@@ -1327,3 +1421,13 @@ def test_series_astype_no_copy(copy):
     result = gsr.astype("int64", copy=copy)
     assert_eq(result, gsr)
     assert (result is gsr) is (not copy)
+
+
+def test_astype_aware_to_naive_raises():
+    data = [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)]
+    pd_ser = pd.Series(data)
+    cudf_ser = cudf.Series(data)
+    with pytest.raises(TypeError):
+        cudf_ser.astype("datetime64[ns]")
+    with pytest.raises(TypeError):
+        pd_ser.astype("datetime64[ns]")

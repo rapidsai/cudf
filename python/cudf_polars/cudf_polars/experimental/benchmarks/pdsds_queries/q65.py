@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -69,7 +69,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 65."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -107,25 +107,43 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         [pl.col("revenue").mean().alias("ave")]
     )
 
-    return (
-        revenue_by_store_item.join(avg_revenue_by_store, on="ss_store_sk", suffix="_sb")
-        .filter(pl.col("revenue") <= 0.1 * pl.col("ave"))
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .select(
-            [
-                "s_store_name",
-                "i_item_desc",
-                "revenue",
-                "i_current_price",
-                "i_wholesale_cost",
-                "i_brand",
-            ]
-        )
-        .sort(
-            ["s_store_name", "i_item_desc", "revenue", "i_current_price", "i_brand"],
-            nulls_last=True,
-            descending=[False, False, False, False, False],
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            revenue_by_store_item.join(
+                avg_revenue_by_store, on="ss_store_sk", suffix="_sb"
+            )
+            .filter(pl.col("revenue") <= 0.1 * pl.col("ave"))
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .select(
+                [
+                    "s_store_name",
+                    "i_item_desc",
+                    "revenue",
+                    "i_current_price",
+                    "i_wholesale_cost",
+                    "i_brand",
+                ]
+            )
+            .sort(
+                [
+                    "s_store_name",
+                    "i_item_desc",
+                    "revenue",
+                    "i_current_price",
+                    "i_brand",
+                ],
+                nulls_last=True,
+                descending=[False, False, False, False, False],
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("s_store_name", False),
+            ("i_item_desc", False),
+            ("revenue", False),
+            ("i_current_price", False),
+            ("i_brand", False),
+        ],
+        limit=100,
     )

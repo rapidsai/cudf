@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
@@ -15,8 +16,10 @@ from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
 from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.sort import ShuffleSorted
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
@@ -80,14 +83,20 @@ class ReserveOpIDs:
         )
 
         # Find all collective IR nodes.
-        collective_types: tuple[type, ...] = (Shuffle, Join, Repartition, StreamingSink)
+        collective_types: tuple[type, ...] = (
+            Shuffle,
+            Join,
+            Repartition,
+            StreamingSink,
+            ShuffleSorted,
+        )
         if self.dynamic_planning_enabled:
-            # Include GroupBy and Distinct when dynamic planning is enabled
             collective_types = (
                 Shuffle,
                 Join,
                 Repartition,
                 StreamingSink,
+                ShuffleSorted,
                 GroupBy,
                 Distinct,
             )
@@ -117,12 +126,25 @@ class ReserveOpIDs:
                     _get_new_collective_id(),
                 ]
             elif isinstance(node, Join) and self.dynamic_planning_enabled:
-                # Join needs 3 IDs: size allgather, left shuffle/bcast, right shuffle/bcast
                 self.collective_id_map[node] = [
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                 ]
+            elif isinstance(node, ShuffleSorted):
+                if self.dynamic_planning_enabled:
+                    # 3 IDs: size-estimate allgather, boundary allgather, shuffle
+                    self.collective_id_map[node] = [
+                        _get_new_collective_id(),
+                        _get_new_collective_id(),
+                        _get_new_collective_id(),
+                    ]
+                else:
+                    # 2 IDs: boundary allgather, shuffle
+                    self.collective_id_map[node] = [
+                        _get_new_collective_id(),
+                        _get_new_collective_id(),
+                    ]
             else:
                 self.collective_id_map[node] = [_get_new_collective_id()]
 
@@ -139,3 +161,25 @@ class ReserveOpIDs:
             for collective_id in collective_ids:
                 _release_collective_id(collective_id)
         return False
+
+
+@contextmanager
+def reserve_op_id() -> Iterator[int]:
+    """
+    Reserve a single collective operation ID.
+
+    This function and the ID it yields must only be used **outside** of a
+    ``run_actor_graph`` call. It is intended for SPMD mode, where operations
+    such as gathering results across ranks are performed directly rather than
+    through the actor graph. The contained block _must_ wait for completion of the collective.
+
+    Yields
+    ------
+    collective_id : int
+        A vacant collective ID reserved from the global vacancy pool.
+    """
+    collective_id = _get_new_collective_id()
+    try:
+        yield collective_id
+    finally:
+        _release_collective_id(collective_id)

@@ -23,8 +23,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -59,12 +59,15 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto const max_size     = dictionary_column.size();
 
   // create/init indices map array
-  auto map_indices =
-    make_fixed_width_column(indices_type, keys_view.size(), mask_state::UNALLOCATED, stream);
+  auto map_indices = make_fixed_width_column(indices_type,
+                                             keys_view.size(),
+                                             mask_state::UNALLOCATED,
+                                             stream,
+                                             cudf::get_current_device_resource_ref());
   auto map_itr =
     cudf::detail::indexalator_factory::make_output_iterator(map_indices->mutable_view());
   // init to max to identify new nulls
-  thrust::fill(rmm::exec_policy_nosync(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                map_itr,
                map_itr + keys_view.size(),
                max_size);  // all valid indices are less than this value
@@ -73,10 +76,15 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   std::unique_ptr<column> keys_column = [&] {
     // create keys positions column to identify original key positions after removing they keys
     auto keys_positions = [&] {
-      auto positions = make_fixed_width_column(
-        indices_type, keys_view.size(), cudf::mask_state::UNALLOCATED, stream);
+      auto positions = make_fixed_width_column(indices_type,
+                                               keys_view.size(),
+                                               cudf::mask_state::UNALLOCATED,
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
       auto itr = cudf::detail::indexalator_factory::make_output_iterator(positions->mutable_view());
-      thrust::sequence(rmm::exec_policy_nosync(stream), itr, itr + keys_view.size());
+      thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       itr,
+                       itr + keys_view.size());
       return positions;
     }();
     // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
@@ -90,7 +98,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
       cudf::detail::indexalator_factory::make_input_iterator(keys_positions->view());
     // build indices mapper
     // Example scatter([0,1,2][0,2,4][max,max,max,max,max]) => [0,max,1,max,2]
-    thrust::scatter(rmm::exec_policy_nosync(stream),
+    thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     positions_itr,
                     positions_itr + filtered_view.size(),
                     filtered_itr,
@@ -110,7 +118,7 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
                                             cudf::out_of_bounds_policy::NULLIFY,
-                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                            cudf::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr)
                          ->release();
@@ -122,8 +130,8 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
   auto d_null_mask  = dictionary_column.null_mask();
   auto indices_itr = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());
   auto new_nulls   = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(dictionary_column.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{dictionary_column.size()},
     [offset, d_null_mask, indices_itr, max_size] __device__(size_type idx) {
       if (d_null_mask && !bit_is_set(d_null_mask, idx + offset)) return false;
       return (indices_itr[idx] < max_size);  // new nulls have max values
@@ -171,7 +179,9 @@ std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& diction
   auto const matches = [&] {
     // build keys index to verify against indices values
     rmm::device_uvector<int32_t> keys_positions(keys_size, stream);
-    thrust::sequence(rmm::exec_policy_nosync(stream), keys_positions.begin(), keys_positions.end());
+    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     keys_positions.begin(),
+                     keys_positions.end());
     // wrap the indices for comparison in contains()
     column_view keys_positions_view(
       data_type{type_id::INT32}, keys_size, keys_positions.data(), nullptr, 0);

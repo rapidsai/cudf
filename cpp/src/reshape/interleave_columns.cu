@@ -24,8 +24,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
@@ -116,8 +116,8 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struc
       auto const validity_fn  = [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
         return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
       };
-      return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
-                                    thrust::make_counting_iterator<size_type>(output_size),
+      return cudf::detail::valid_if(cuda::counting_iterator<size_type>{0},
+                                    cuda::counting_iterator<size_type>{output_size},
                                     validity_fn,
                                     stream,
                                     mr);
@@ -172,8 +172,8 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
 
     rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(num_strings, stream);
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(num_strings),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{num_strings},
                       indices.begin(),
                       interleave_strings_fn{*d_table});
 
@@ -194,8 +194,8 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       detail::allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, mr);
     auto device_input  = table_device_view::create(input, stream);
     auto device_output = mutable_column_device_view::create(*output, stream);
-    auto index_begin   = thrust::make_counting_iterator<size_type>(0);
-    auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
+    auto index_begin   = cuda::counting_iterator<size_type>{0};
+    auto index_end     = cuda::counting_iterator<size_type>{output_size};
 
     auto func_value = cuda::proclaim_return_type<T>(
       [input = *device_input, divisor = input.num_columns()] __device__(size_type idx) {

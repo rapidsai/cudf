@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
@@ -87,28 +87,18 @@ def test_take(data, idx):
 
 
 @pytest.mark.parametrize(
-    ("invalid", "exception"),
+    "invalid",
     [
-        ([[0]], pytest.raises(ValueError, match="different size")),
-        ([1, 2, 3, 4], pytest.raises(ValueError, match="should be list type")),
-        (
-            [["a", "b"], ["c"]],
-            pytest.raises(
-                TypeError, match="should be column of values of index types"
-            ),
-        ),
-        (
-            [[[1], [0]], [[0]]],
-            pytest.raises(
-                TypeError, match="should be column of values of index types"
-            ),
-        ),
-        ([[0, 1], None], pytest.raises(ValueError, match="contains null")),
+        [[0]],
+        [1, 2, 3, 4],
+        [["a", "b"], ["c"]],
+        [[[1], [0]], [[0]]],
+        [[0, 1], None],
     ],
 )
-def test_take_invalid(invalid, exception):
+def test_take_invalid(invalid):
     gs = cudf.Series([[0, 1], [2, 3]])
-    with exception:
+    with pytest.raises(ValueError, match="input must be list type"):
         gs.list.take(invalid)
 
 

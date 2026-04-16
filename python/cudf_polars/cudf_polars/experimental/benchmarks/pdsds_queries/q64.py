@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -155,7 +155,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 64."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -235,9 +235,6 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
     ).select(["i_item_sk", "i_product_name"])
 
     # Prepare date dimensions
-    d1 = date_dim.select(["d_date_sk", "d_year"]).rename(
-        {"d_date_sk": "d1_date_sk", "d_year": "d1_year"}
-    )
     d2 = date_dim.select(["d_date_sk", "d_year"]).rename(
         {"d_date_sk": "d2_date_sk", "d_year": "d2_year"}
     )
@@ -293,143 +290,168 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         }
     )
 
-    # CTE 2: cross_sales - main aggregation with all joins
-    cross_sales = (
-        store_sales.join(
-            store_returns.select(["sr_item_sk", "sr_ticket_number"]),
-            left_on=["ss_item_sk", "ss_ticket_number"],
-            right_on=["sr_item_sk", "sr_ticket_number"],
-        )
-        .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
-        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
-        .join(
-            store.select(["s_store_sk", "s_store_name", "s_zip"]),
-            left_on="ss_store_sk",
-            right_on="s_store_sk",
-        )
-        .join(
-            customer.select(
-                [
-                    "c_customer_sk",
-                    "c_current_cdemo_sk",
-                    "c_current_hdemo_sk",
-                    "c_current_addr_sk",
-                    "c_first_sales_date_sk",
-                    "c_first_shipto_date_sk",
-                ]
-            ),
-            left_on="ss_customer_sk",
-            right_on="c_customer_sk",
-        )
-        .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
-        .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
-        .filter(pl.col("cd1_marital_status") != pl.col("cd2_marital_status"))
-        .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
-        .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
-        .join(ib1, left_on="hd1_income_band_sk", right_on="ib1_income_band_sk")
-        .join(ib2, left_on="hd2_income_band_sk", right_on="ib2_income_band_sk")
-        .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
-        .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
-        .join(d2, left_on="c_first_sales_date_sk", right_on="d2_date_sk")
-        .join(d3, left_on="c_first_shipto_date_sk", right_on="d3_date_sk")
-        .join(
-            promotion.select(["p_promo_sk"]),
-            left_on="ss_promo_sk",
-            right_on="p_promo_sk",
-        )
-        .join(filtered_items, left_on="ss_item_sk", right_on="i_item_sk")
-        .group_by(
-            [
-                "i_product_name",
-                "ss_item_sk",
-                "s_store_name",
-                "s_zip",
-                "b_street_number",
-                "b_streen_name",
-                "b_city",
-                "b_zip",
-                "c_street_number",
-                "c_street_name",
-                "c_city",
-                "c_zip",
-                "d1_year",
-                "d2_year",
-                "d3_year",
-            ]
-        )
-        .agg(
-            [
-                pl.len().alias("cnt"),
-                pl.col("ss_wholesale_cost").sum().alias("s1"),
-                pl.col("ss_list_price").sum().alias("s2"),
-                pl.col("ss_coupon_amt").sum().alias("s3"),
-            ]
-        )
-        .select(
-            [
-                pl.col("i_product_name").alias("product_name"),
-                pl.col("ss_item_sk").alias("item_sk"),
-                pl.col("s_store_name").alias("store_name"),
-                pl.col("s_zip").alias("store_zip"),
-                "b_street_number",
-                "b_streen_name",
-                "b_city",
-                "b_zip",
-                "c_street_number",
-                "c_street_name",
-                "c_city",
-                "c_zip",
-                pl.col("d1_year").alias("syear"),
-                pl.col("d2_year").alias("fsyear"),
-                pl.col("d3_year").alias("s2year"),
-                "cnt",
-                "s1",
-                "s2",
-                "s3",
-            ]
-        )
-    )
+    # Building the cross-sales for each year separately reduces the size of the table
+    # substantially prior to performing the expensive join.
+    def build_cross_sales_for_year(target_year: int) -> pl.LazyFrame:
+        d1 = date_dim.filter(pl.col("d_year") == target_year).select("d_date_sk")
 
-    # Final query: self-join on cross_sales
-    return (
-        cross_sales.join(
-            cross_sales,
-            left_on=["item_sk", "store_name", "store_zip"],
-            right_on=["item_sk", "store_name", "store_zip"],
-            suffix="_1",
+        return (
+            # Start with the most selective filters: item filter + cs_ui
+            store_sales.join(filtered_items, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
+            # date_dim is the next most selective filter
+            .join(d1, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(
+                store_returns.select(["sr_item_sk", "sr_ticket_number"]),
+                left_on=["ss_item_sk", "ss_ticket_number"],
+                right_on=["sr_item_sk", "sr_ticket_number"],
+            )
+            .join(
+                store.select(["s_store_sk", "s_store_name", "s_zip"]),
+                left_on="ss_store_sk",
+                right_on="s_store_sk",
+            )
+            .join(
+                customer.select(
+                    [
+                        "c_customer_sk",
+                        "c_current_cdemo_sk",
+                        "c_current_hdemo_sk",
+                        "c_current_addr_sk",
+                        "c_first_sales_date_sk",
+                        "c_first_shipto_date_sk",
+                    ]
+                ),
+                left_on="ss_customer_sk",
+                right_on="c_customer_sk",
+            )
+            .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
+            .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
+            .filter(pl.col("cd1_marital_status") != pl.col("cd2_marital_status"))
+            .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
+            .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
+            .join(ib1, left_on="hd1_income_band_sk", right_on="ib1_income_band_sk")
+            .join(ib2, left_on="hd2_income_band_sk", right_on="ib2_income_band_sk")
+            .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
+            .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
+            .join(d2, left_on="c_first_sales_date_sk", right_on="d2_date_sk")
+            .join(d3, left_on="c_first_shipto_date_sk", right_on="d3_date_sk")
+            .join(
+                promotion.select(["p_promo_sk"]),
+                left_on="ss_promo_sk",
+                right_on="p_promo_sk",
+            )
+            .group_by(
+                [
+                    "i_product_name",
+                    "ss_item_sk",
+                    "s_store_name",
+                    "s_zip",
+                    "b_street_number",
+                    "b_streen_name",
+                    "b_city",
+                    "b_zip",
+                    "c_street_number",
+                    "c_street_name",
+                    "c_city",
+                    "c_zip",
+                    "d2_year",
+                    "d3_year",
+                ]
+            )
+            .agg(
+                [
+                    pl.len().alias("cnt"),
+                    # Polars sum() returns 0 for all-null groups; SQL returns NULL.
+                    # See https://github.com/rapidsai/cudf/issues/19560.
+                    pl.when(pl.col("ss_wholesale_cost").count() > 0)
+                    .then(pl.col("ss_wholesale_cost").sum())
+                    .otherwise(None)
+                    .alias("s1"),
+                    pl.when(pl.col("ss_list_price").count() > 0)
+                    .then(pl.col("ss_list_price").sum())
+                    .otherwise(None)
+                    .alias("s2"),
+                    pl.when(pl.col("ss_coupon_amt").count() > 0)
+                    .then(pl.col("ss_coupon_amt").sum())
+                    .otherwise(None)
+                    .alias("s3"),
+                ]
+            )
+            .select(
+                [
+                    pl.col("i_product_name").alias("product_name"),
+                    pl.col("ss_item_sk").alias("item_sk"),
+                    pl.col("s_store_name").alias("store_name"),
+                    pl.col("s_zip").alias("store_zip"),
+                    "b_street_number",
+                    "b_streen_name",
+                    "b_city",
+                    "b_zip",
+                    "c_street_number",
+                    "c_street_name",
+                    "c_city",
+                    "c_zip",
+                    pl.col("d2_year").alias("fsyear"),
+                    pl.col("d3_year").alias("s2year"),
+                    "cnt",
+                    "s1",
+                    "s2",
+                    "s3",
+                ]
+            )
         )
-        .filter(
-            (pl.col("syear") == year)
-            & (pl.col("syear_1") == year + 1)
-            & (pl.col("cnt_1") <= pl.col("cnt"))
-        )
-        .select(
-            [
-                "product_name",
-                "store_name",
-                "store_zip",
-                "b_street_number",
-                "b_streen_name",
-                "b_city",
-                "b_zip",
-                "c_street_number",
-                "c_street_name",
-                "c_city",
-                "c_zip",
-                "syear",
-                "cnt",
-                "s1",
-                "s2",
-                "s3",
-                pl.col("s1_1"),
-                pl.col("s2_1"),
-                pl.col("s3_1"),
-                pl.col("syear_1"),
-                pl.col("cnt_1"),
-            ]
-        )
-        .sort(
-            ["product_name", "store_name", "cnt_1", "s1", "s1_1"],
-            nulls_last=True,
-        )
+
+    cs1 = build_cross_sales_for_year(year)
+    cs2 = build_cross_sales_for_year(year + 1)
+
+    # Final query: join year1 and year2 cross_sales
+    return QueryResult(
+        frame=(
+            cs1.join(
+                cs2,
+                left_on=["item_sk", "store_name", "store_zip"],
+                right_on=["item_sk", "store_name", "store_zip"],
+                suffix="_1",
+            )
+            .filter(pl.col("cnt_1") <= pl.col("cnt"))
+            .with_columns(pl.lit(year, dtype=pl.Int64).alias("syear"))
+            .select(
+                [
+                    "product_name",
+                    "store_name",
+                    "store_zip",
+                    "b_street_number",
+                    "b_streen_name",
+                    "b_city",
+                    "b_zip",
+                    "c_street_number",
+                    "c_street_name",
+                    "c_city",
+                    "c_zip",
+                    "syear",
+                    "cnt",
+                    "s1",
+                    "s2",
+                    "s3",
+                    pl.col("s1_1"),
+                    pl.col("s2_1"),
+                    pl.col("s3_1"),
+                    pl.lit(year + 1, dtype=pl.Int64).alias("syear_1"),
+                    pl.col("cnt_1"),
+                ]
+            )
+            .sort(
+                ["product_name", "store_name", "cnt_1", "s1", "s1_1"],
+                nulls_last=True,
+            )
+        ),
+        sort_by=[
+            ("product_name", False),
+            ("store_name", False),
+            ("cnt_1", False),
+            ("s1", False),
+            ("s1_1", False),
+        ],
+        limit=None,
     )

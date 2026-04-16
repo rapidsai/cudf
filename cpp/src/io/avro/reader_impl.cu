@@ -12,6 +12,7 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
@@ -188,7 +189,7 @@ rmm::device_buffer decompress_data(datasource& source,
       cudf::detail::hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
     auto inflate_stats =
       cudf::detail::hostdevice_vector<codec_exec_result>(meta.block_list.size(), stream);
-    thrust::fill(rmm::exec_policy_nosync(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  inflate_stats.d_begin(),
                  inflate_stats.d_end(),
                  codec_exec_result{0, codec_status::FAILURE});
@@ -292,7 +293,7 @@ rmm::device_buffer decompress_data(datasource& source,
 
     rmm::device_buffer decompressed_data(uncompressed_data_size, stream);
     rmm::device_uvector<device_span<uint8_t>> decompressed_blocks(num_blocks, stream);
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      decompressed_blocks.begin(),
                      decompressed_blocks.end(),
                      [off  = uncompressed_offsets.device_ptr(),
@@ -302,7 +303,7 @@ rmm::device_buffer decompress_data(datasource& source,
                      });
 
     rmm::device_uvector<codec_exec_result> decomp_results(num_blocks, stream);
-    thrust::fill(rmm::exec_policy_nosync(stream),
+    thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  decomp_results.begin(),
                  decomp_results.end(),
                  codec_exec_result{0, codec_status::FAILURE});
@@ -314,14 +315,14 @@ rmm::device_buffer decompress_data(datasource& source,
                max_decomp_block_size,
                uncompressed_data_size,
                stream);
-    CUDF_EXPECTS(thrust::equal(rmm::exec_policy_nosync(stream),
-                               uncompressed_sizes.d_begin(),
-                               uncompressed_sizes.d_end(),
-                               decomp_results.begin(),
-                               [] __device__(auto const& size, auto const& result) {
-                                 return size == result.bytes_written and
-                                        result.status == codec_status::SUCCESS;
-                               }),
+    CUDF_EXPECTS(thrust::equal(
+                   rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   uncompressed_sizes.d_begin(),
+                   uncompressed_sizes.d_end(),
+                   decomp_results.begin(),
+                   [] __device__(auto const& size, auto const& result) {
+                     return size == result.bytes_written and result.status == codec_status::SUCCESS;
+                   }),
                  "Error during Snappy decompression");
 
     // Update blocks offsets & sizes to refer to uncompressed data
@@ -431,15 +432,17 @@ std::vector<column_buffer> decode_data(metadata& meta,
                             stream);
 
   // Copy valid bits that are shared between columns
-  for (size_t i = 0; i < out_buffers.size(); i++) {
-    if (valid_alias[i] != nullptr) {
-      CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
-                                    valid_alias[i],
-                                    out_buffers[i].null_mask_size(),
-                                    cudaMemcpyDefault,
-                                    stream.value()));
-    }
+  auto const num_bufs = out_buffers.size();
+  std::vector<void*> dsts(num_bufs);
+  std::vector<void const*> srcs(num_bufs);
+  std::vector<std::size_t> sizes(num_bufs);
+  for (size_t i = 0; i < num_bufs; i++) {
+    dsts[i]  = valid_alias[i] ? out_buffers[i].null_mask() : nullptr;
+    srcs[i]  = valid_alias[i];
+    sizes[i] = valid_alias[i] ? out_buffers[i].null_mask_size() : 0;
   }
+  CUDF_CUDA_TRY(
+    cudf::detail::memcpy_batch_async(dsts.data(), srcs.data(), sizes.data(), num_bufs, stream));
   schema_desc.device_to_host(stream);
 
   for (size_t i = 0; i < out_buffers.size(); i++) {

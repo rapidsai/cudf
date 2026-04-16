@@ -9,7 +9,6 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 from packaging import version
 
@@ -41,6 +40,8 @@ from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+    import pandas as pd
 
     from cudf._typing import (
         ColumnBinaryOperand,
@@ -111,12 +112,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
-    def element_indexing(self, index: int) -> Decimal | None:
-        result = super().element_indexing(index)
-        if isinstance(result, pa.Scalar):
-            return result.as_py()
-        return result
-
     def as_decimal_column(
         self,
         dtype: DecimalDtype,
@@ -132,6 +127,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         if len(self) > 0:
             with self.access(mode="read", scope="internal"):
                 plc_column = (
@@ -341,17 +338,6 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return super(DecimalBaseColumn, col).to_pandas(
             nullable=nullable, arrow_type=arrow_type
         )
-
-    def to_arrow(self) -> pa.Array:
-        arrow_array = super().to_arrow()
-        # We have to preserve the precision since pylibcudf does not.
-        arrow_type = (
-            self.dtype.to_arrow()
-            if isinstance(self.dtype, DecimalDtype)
-            else cast(pd.ArrowDtype, self.dtype).pyarrow_dtype
-        )
-        # To match existing behavior we must allow unsafe casts here
-        return arrow_array.cast(arrow_type, safe=False)
 
 
 class Decimal32Column(DecimalBaseColumn):

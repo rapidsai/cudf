@@ -13,12 +13,15 @@ from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
 
+import cudf_polars.dsl.tracing
 from cudf_polars.experimental.dask_registers import DaskRegisterManager
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import MutableMapping
 
     from distributed import Client
+    from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -36,9 +39,11 @@ class EvaluatePipelineCallback(Protocol):
         config_options: ConfigOptions[StreamingExecutor],
         stats: StatsCollector,
         collective_id_map: dict[IR, list[int]],
+        comm: Communicator,
         rmpf_context: Context | None = None,
         *,
         collect_metadata: bool = False,
+        query_id: uuid.UUID,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """Evaluate a pipeline and return the result DataFrame and metadata."""
         ...
@@ -61,6 +66,7 @@ def evaluate_pipeline_dask(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a RapidsMPF streaming pipeline on a Dask cluster.
@@ -81,6 +87,8 @@ def evaluate_pipeline_dask(
         Mapping from Shuffle/Repartition/Join IR nodes to reserved collective IDs.
     collect_metadata
         Whether to collect metadata.
+    query_id
+        A unique identifier for the query.
 
     Returns
     -------
@@ -103,6 +111,7 @@ def evaluate_pipeline_dask(
         stats,
         collective_id_map,
         collect_metadata=collect_metadata,
+        query_id=query_id,
     )
     dfs: list[pl.DataFrame] = []
     metadata_collector: list[ChannelMetadata] = []
@@ -124,6 +133,7 @@ def _evaluate_pipeline_dask(
     dask_worker: Any = None,
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Build and evaluate a RapidsMPF streaming pipeline.
@@ -148,6 +158,8 @@ def _evaluate_pipeline_dask(
         when evaluate_pipeline is called with `client.run`.
     collect_metadata
         Whether to collect metadata.
+    query_id
+        A unique identifier for the query.
 
     Returns
     -------
@@ -163,7 +175,11 @@ def _evaluate_pipeline_dask(
         | get_environment_variables()
     )
     dask_context = get_worker_context(dask_worker)
-    with Context(dask_context.comm, dask_context.br, options) as rmpf_context:
+    assert dask_context.comm is not None
+    with (
+        Context(dask_context.comm.logger, dask_context.br, options) as rmpf_context,
+        cudf_polars.dsl.tracing.bound_contextvars(query_id=str(query_id)),
+    ):
         # IDs are already reserved by the caller, just pass them through
         return callback(
             ir,
@@ -171,6 +187,8 @@ def _evaluate_pipeline_dask(
             config_options,
             stats,
             collective_id_map,
+            dask_context.comm,
             rmpf_context,
             collect_metadata=collect_metadata,
+            query_id=query_id,
         )

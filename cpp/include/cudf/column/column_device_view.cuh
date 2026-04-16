@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -16,8 +16,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <functional>
@@ -89,6 +89,7 @@ class alignas(16) column_device_view : public column_device_view_core {
     return column_device_view{this->type(),
                               size,
                               this->head(),
+                              this->null_count(),
                               this->null_mask(),
                               this->offset() + offset,
                               static_cast<column_device_view*>(d_children),
@@ -220,7 +221,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   }
 
   /// Counting iterator
-  using count_it = thrust::counting_iterator<size_type>;
+  using count_it = cuda::counting_iterator<size_type>;
   /**
    * @brief Iterator for navigating this column
    */
@@ -559,6 +560,7 @@ class alignas(16) column_device_view : public column_device_view_core {
    * @param type The type of the column
    * @param size The number of elements in the column
    * @param data Pointer to the device memory containing the data
+   * @param null_count The number of nulls in the column
    * @param null_mask Pointer to the device memory containing the null bitmask
    * @param offset The index of the first element in the column
    * @param children Pointer to the device memory containing child data
@@ -567,11 +569,13 @@ class alignas(16) column_device_view : public column_device_view_core {
   CUDF_HOST_DEVICE column_device_view(data_type type,
                                       size_type size,
                                       void const* data,
+                                      size_type null_count,
                                       bitmask_type const* null_mask,
                                       size_type offset,
                                       column_device_view* children,
                                       size_type num_children)
-    : column_device_view_core{type, size, data, null_mask, offset, children, num_children}
+    : column_device_view_core{
+        type, size, data, null_count, null_mask, offset, children, num_children}
   {
   }
 
@@ -685,7 +689,7 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
   }
 
   /// Counting iterator
-  using count_it = thrust::counting_iterator<size_type>;
+  using count_it = cuda::counting_iterator<size_type>;
   /**
    * @brief Iterator for navigating this column
    */

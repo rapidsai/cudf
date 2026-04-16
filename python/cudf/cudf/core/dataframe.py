@@ -112,7 +112,7 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
-    min_signed_type,
+    min_unsigned_type,
 )
 from cudf.utils.ioutils import (
     _update_pandas_metadata_types_inplace,
@@ -8942,7 +8942,7 @@ def _find_common_dtypes_and_categories(
             ).unique()
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
-            dtypes[idx] = min_signed_type(len(categories[idx]))
+            dtypes[idx] = min_unsigned_type(len(categories[idx]))
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")

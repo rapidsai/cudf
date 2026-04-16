@@ -17,6 +17,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_actor, shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    gather_in_task_group,
     process_children,
     recv_metadata,
     send_metadata,
@@ -54,16 +55,20 @@ async def union_node(
     chs_in
         The input Channel[TableChunk]s.
     """
-    async with shutdown_on_error(context, *chs_in, ch_out):
+    async with shutdown_on_error(
+        context, *chs_in, ch_out, trace_ir=ir, ir_context=ir_context
+    ):
         # Merge and forward metadata.
         # Union loses partitioning/ordering info since sources may differ.
         # TODO: Warn users that Union does NOT preserve order?
         total_local_count = 0
         duplicated = True
-        for ch_in in chs_in:
-            metadata = await recv_metadata(ch_in, context)
-            total_local_count += metadata.local_count
-            duplicated = duplicated and metadata.duplicated
+        metadata = await gather_in_task_group(
+            *(recv_metadata(ch, context) for ch in chs_in)
+        )
+        for meta in metadata:
+            total_local_count += meta.local_count
+            duplicated = duplicated and meta.duplicated
         await send_metadata(
             ch_out,
             context,
@@ -82,7 +87,9 @@ async def union_node(
                     context,
                     Message(
                         msg.sequence_number + seq_num_offset,
-                        TableChunk.from_message(msg).make_available_and_spill(
+                        TableChunk.from_message(
+                            msg, br=context.br()
+                        ).make_available_and_spill(
                             context.br(), allow_overbooking=True
                         ),
                     ),

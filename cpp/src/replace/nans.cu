@@ -19,7 +19,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
+#include <cuda/std/limits>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
@@ -128,7 +129,7 @@ struct normalize_nans_and_zeros_lambda {
   T __device__ operator()(cudf::size_type i)
   {
     auto e = in.element<T>(i);
-    if (isnan(e)) { return std::numeric_limits<T>::quiet_NaN(); }
+    if (isnan(e)) { return cuda::std::numeric_limits<T>::quiet_NaN(); }
     if (T{0.0} == e) { return T{0.0}; }
     return e;
   }
@@ -146,9 +147,9 @@ struct normalize_nans_and_zeros_kernel_forwarder {
                   rmm::cuda_stream_view stream)
     requires(std::is_floating_point_v<T>)
   {
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(in.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{in.size()},
                       out.head<T>(),
                       normalize_nans_and_zeros_lambda<T>{in});
   }
@@ -232,6 +233,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  *
  * @throws cudf::logic_error if column does not have floating point data type.
  * @param[in, out] in_out mutable_column_view representing input data. data is processed in-place
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out, rmm::cuda_stream_view stream)
 {

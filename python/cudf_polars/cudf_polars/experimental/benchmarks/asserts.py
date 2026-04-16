@@ -46,6 +46,8 @@ def assert_tpch_result_equal(
     abs_tol: float = 1e-08,
     categorical_as_str: bool = False,
     sort_by: list[tuple[str, bool]],
+    nulls_last: bool = True,
+    sort_keys: list[tuple[pl.Expr, bool]] | None = None,
     limit: int | None = None,
 ) -> None:
     """
@@ -62,6 +64,20 @@ def assert_tpch_result_equal(
     sort_by : list[tuple[str, bool]]
         The columns to sort by, and the sort order. This *must* be the same
         as the ``sort_by`` and ``descending`` required by the query
+    nulls_last : bool, optional
+        Whether NULLs should be placed last when checking sortedness.
+        Must match the NULL placement used by the query's ``ORDER BY``.
+        DuckDB defaults to NULLS LAST for ``ASC`` and NULLS FIRST for
+        ``DESC``; some TPC-DS queries override this with explicit
+        ``NULLS FIRST`` on all columns, which requires ``nulls_last=False``.
+        Defaults to ``True`` (NULLS LAST), matching DuckDB's ``ASC`` default.
+    sort_keys : list[tuple[pl.Expr, bool]] | None, optional
+        Polars expressions for the sortedness check. Use this when the query
+        sorts by a conditional expression that cannot be represented as a plain
+        column name in ``sort_by`` (e.g. ROLLUP queries that sort by
+        ``CASE WHEN lochierarchy = 0 THEN i_category END``). When provided,
+        these expressions are evaluated and used only for the sortedness check;
+        ``sort_by`` still drives the ties/limit boundary logic.
     limit : int | None, optional
         The limit (passed to ``.head``) used in the query, if any. This is
         used to break ties in the ``sort_by`` columns. See notes below.
@@ -107,6 +123,35 @@ def assert_tpch_result_equal(
     2. For the "ties", we make sure that the lengths of the two dataframes match,
        but we *don't* compare the values since, aside from the columns in ``sort_by``,
        the values may differ, and that's OK.
+
+    Sorting by float columns introduces some additional fuzziness we need to account for.
+    Here are a few examples of ``(key, value)`` records that ought to be considered equal,
+    with an abs_tol of 0.01:
+
+    First, a ``sort(by=["value"])``, but for some reason the ``value`` associated
+    with the keys "a" and "b" are different, but within the tolerance::
+
+       result: [(a, 0.99), (b, 1.00), (c, 1.01)]
+       expected: [(b, 0.99), (a, 1.00), (c, 1.01)]
+
+    Consider the first row of ``result``: ``(a, 0.99)``. We'd consider it equal
+    to any row in ``expected`` where the ``value`` is within 0.01 of 0.99 (and
+    where the keys match, i.e. ``key=="a"``). Searching through ``expected``, we
+    see a match in the second row: ``(a, 0.99)``. Repeating that process for
+    the other rows shows that the two ought to be considered equal.
+
+    Here's an example where they are different::
+
+       result: [(a, 0.99), (b, 1.00), (c, 1.01)]
+       expected: [(c, 0.99), (b, 1.00), (a, 1.01)]
+
+    Now when we consider matches for the first row of ``result`` we see that
+    the only rows from ``expected`` that are within tolerance are the second and third rows::
+
+       candidates: [(b, 1.00), (a, 1.01)]
+
+    None of these rows could be considered equal to ``(a, 0.99)``; the first
+    has the wrong key, and the second's value is outside the tolerance.
     """
     detail: dict[str, Any]
 
@@ -168,146 +213,161 @@ def assert_tpch_result_equal(
     left = left.with_columns(*float_casts)
 
     if sort_by:
-        sort_by_cols, sort_by_descending = zip(*sort_by, strict=True)
+        by, descending = list(zip(*sort_by, strict=True))
 
-        # Before we do any sorting, we want to verify that the `sort_by` columns match exactly.
-        try:
-            polars.testing.assert_frame_equal(
-                left.select(sort_by_cols),
-                right.select(sort_by_cols),
-                **polars_kwargs,  # type: ignore[arg-type]
-            )
-        except AssertionError as e:
-            raise ValidationError(
-                message="sort_by columns mismatch", details={"error": str(e)}
-            ) from e
+        # First, validate the sortedness. We can do this independently for each dataframe.
+        # And we don't really need to worry about floating-point columns here.
+        # If sort_keys is provided, use those expressions for the sortedness check
+        # (e.g. for ROLLUP queries with conditional sort expressions like
+        # CASE WHEN lochierarchy = 0 THEN i_category END). Otherwise fall back to sort_by.
+        if sort_keys is not None:
+            exprs, check_desc = zip(*sort_keys, strict=True)
+            check_cols = [f"_sk{i}" for i in range(len(exprs))]
+            check_select = [
+                e.alias(col) for e, col in zip(exprs, check_cols, strict=True)
+            ]
+            check_msg = "sort_keys expressions"
+        else:
+            check_cols = list(by)
+            check_desc = descending
+            check_msg = "sort_by columns"
 
-    else:
-        sort_by_cols = ()
-        sort_by_descending = ()
-
-    if sort_by and limit and len(left) > 0:
-        # Handle the .sort_by(...).head(n) case; First, split the data into two parts
-        # "before" and "ties"
-        # Problem: suppose we're splitting on a float column: small, floating-point precision
-        # differences, which we'd ignore in assert_frame_equal, might cause us to
-        # split the two dataframes at different, but not meaningfully different, points.
-        # Suppose you have:
-        #
-        # result  : [a, b, c, d, d+epsilon]
-        # expected: [a, b, c, d-epsilon, d]
-        #
-        # For epsilon less than our tolerance, we'd want to consider this valid.
-        # Meaning that the split point should be `d+epsilon` and the
-        # partitions should be
-        # result:   [ [a, b, c], [d, d + epsilon] ]
-        # expected: [ [a, b, c], [d - epsilon, d] ]
-
-        sort_by_descending_list = list(sort_by_descending)
-        (split_at,) = (
-            left.select(sort_by_cols)
-            .sort(by=sort_by_cols, descending=sort_by_descending_list)
-            .tail(1)
-            .to_dicts()
-        )
-        # Note that we multiply abs_tol by 2; In our example above, our split point will
-        # be d + epsilon; but we want to consider d - epsilon tied to the "real" split point
-        # of 'd' as well.
-
-        exprs = []
-        for (col, val), desc in zip(
-            split_at.items(), sort_by_descending_list, strict=True
-        ):
-            if isinstance(val, float):
-                exprs.append(
-                    pl.col(col).lt(val - 2 * abs_tol)
-                    | pl.col(col).gt(val + 2 * abs_tol)
+        for side, df in [("left", left), ("right", right)]:
+            try:
+                tmp = df.select(check_select) if sort_keys is not None else df
+                polars.testing.assert_frame_equal(
+                    tmp,
+                    tmp.sort(
+                        by=check_cols,
+                        descending=check_desc,
+                        maintain_order=True,
+                        nulls_last=nulls_last,
+                    ),
                 )
-            else:
-                if desc:
-                    # then "before" means "greater than"
-                    op = pl.col(col).gt
-                else:
-                    op = pl.col(col).lt
-                exprs.append(op(val))
+            except AssertionError as e:
+                raise ValidationError(
+                    message=f"{side} dataframe is not sorted by {check_msg}",
+                    details={"error": str(e)},
+                ) from e
 
-        expr = pl.Expr.or_(*exprs)
-
-        result_first = left.filter(expr)
-        expected_first = right.filter(expr)
-
-        # Before we compare, we need to sort the result and expected.
-        # We need to sort by *all* the columns, starting with the
-        # columns in `sort_by`; We don't care about the sort order of the remaining
-        # columns, just that they're in the same order.
-        by = list(sort_by_cols) + [
-            col for col in left.columns if col not in sort_by_cols
+        # We know that each dataframe is sorted on `sort_by` according to itself.
+        # Now we have some freedom to reorder the rows. We'll use this freedom to avoid
+        # any kind of sorting on floating-point columns, which introduces all sorts of
+        # fuzziness we don't want to deal with.
+        non_float_columns = [
+            col
+            for col in left.columns
+            if left.schema[col] not in (pl.Float32, pl.Float64)
         ]
-        descending = list(sort_by_descending) + [False] * (
-            len(left.columns) - len(sort_by_cols)
-        )
+        left_sorted = left.sort(by=non_float_columns, nulls_last=nulls_last)
+        right_sorted = right.sort(by=non_float_columns, nulls_last=nulls_last)
 
-        result_first = result_first.sort(by=by, descending=descending)
-        expected_first = expected_first.sort(by=by, descending=descending)
+        if limit is None or left.is_empty():
+            try:
+                polars.testing.assert_frame_equal(
+                    left_sorted,
+                    right_sorted,
+                    **polars_kwargs,  # type: ignore[arg-type]
+                )
+            except AssertionError as e:
+                raise ValidationError(
+                    message="Result mismatch", details={"error": str(e)}
+                ) from e
 
-        # validate this part normally:
+        else:
+            # Handle the .sort_by(...).head(n) case; First, split the data into two parts
+            # "before" and "ties"
+            # Problem: suppose we're splitting on a float column: small, floating-point precision
+            # differences, which we'd ignore in assert_frame_equal, might cause us to
+            # split the two dataframes at different, but not meaningfully different, points.
+            # Suppose you have:
+            #
+            # result  : [a, b, c, d, d+epsilon]
+            # expected: [a, b, c, d-epsilon, d]
+            #
+            # For epsilon less than our tolerance, we'd want to consider this valid.
+            # Meaning that the split point should be `d+epsilon` and the
+            # partitions should be
+            # result:   [ [a, b, c], [d, d + epsilon] ]
+            # expected: [ [a, b, c], [d - epsilon, d] ]
+
+            (split_at,) = (
+                left.select(by)
+                .sort(by=by, descending=descending, nulls_last=nulls_last)
+                .tail(1)
+                .to_dicts()
+            )
+            # Note that we multiply abs_tol by 2; In our example above, our split point will
+            # be d + epsilon; but we want to consider d - epsilon tied to the "real" split point
+            # of 'd' as well.
+
+            filter_exprs = []
+            for (col, val), desc in zip(split_at.items(), descending, strict=True):
+                if isinstance(val, float):
+                    filter_exprs.append(
+                        pl.col(col).lt(val - 2 * abs_tol)
+                        | pl.col(col).gt(val + 2 * abs_tol)
+                    )
+                else:
+                    if desc:
+                        # then "before" means "greater than"
+                        op = pl.col(col).gt
+                    else:
+                        op = pl.col(col).lt
+                    filter_exprs.append(op(val))
+
+            expr = pl.Expr.or_(*filter_exprs)
+
+            result_first = left.filter(expr)
+            expected_first = right.filter(expr)
+            result_ties = left.filter(~expr)
+            expected_ties = right.filter(~expr)
+
+            try:
+                polars.testing.assert_frame_equal(
+                    result_first.sort(by=non_float_columns, nulls_last=nulls_last),
+                    expected_first.sort(by=non_float_columns, nulls_last=nulls_last),
+                    **polars_kwargs,  # type: ignore[arg-type]
+                )
+            except AssertionError as e:
+                raise ValidationError(
+                    message="Result mismatch in non-ties part",
+                    details={"error": str(e)},
+                ) from e
+
+            # We already know that the lengths match (we've validated that the
+            # *total* lengths match and the non-ties lengths match, so this rump
+            # must match too.). We already know that the schema matches.
+            # We *do* need to validate that that `split_at`, computed just
+            # on `left` above, actually matches. Because it's a potentially
+            # a floating point value, we'll use approximate comparison.
+
+            try:
+                polars.testing.assert_frame_equal(
+                    result_ties.sort(non_float_columns, nulls_last=nulls_last).select(
+                        by
+                    ),
+                    expected_ties.sort(non_float_columns, nulls_last=nulls_last).select(
+                        by
+                    ),
+                    **polars_kwargs,  # type: ignore[arg-type]
+                )
+            except AssertionError as e:
+                raise ValidationError(
+                    message="Result mismatch in ties part",
+                    details={"error": str(e)},
+                ) from e
+
+    else:
+        # no sort_by, just a straight comparison.
         try:
             polars.testing.assert_frame_equal(
-                result_first,
-                expected_first,
+                left,
+                right,
                 **polars_kwargs,  # type: ignore[arg-type]
             )
-        except AssertionError as e:
-            raise ValidationError(
-                message="Result mismatch in non-ties part",
-                details={
-                    "error": str(e),
-                    "split_at": str(split_at),
-                },
-            ) from e
-
-        # Now for the ties:
-        result_ties = left.filter(~expr)
-        expected_ties = right.filter(~expr)
-
-        # We already know that
-        # 1. the schema matches (checked above)
-        # 2. the values in ``sort_by`` match (else the Expr above would be False)
-        # so all that's left to check is that the lengths match.
-        if len(result_ties) != len(expected_ties):  # pragma: no cover
-            # This *should* be unreachable... We've already checked that the
-            # lengths of the two full dataframes match and that the lengths
-            # of the two "ties" portions match, so the non-ties portion
-            # must match too.
-            # But we'll check just in case.
-            raise ValidationError(
-                message="Ties length mismatch",
-                details={
-                    "expected_length": len(expected_ties),
-                    "result_length": len(result_ties),
-                    "split_at": str(split_at),
-                },
-            )
-    else:
-        # Before we compare, we need to sort the result and expected.
-        # We need to sort by *all* the columns, starting with the
-        # columns in `sort_by`; We don't care about the sort order of the remaining
-        # columns, just that they're in the same order.
-        by = list(sort_by_cols) + [
-            col for col in left.columns if col not in sort_by_cols
-        ]
-        descending = list(sort_by_descending) + [False] * (
-            len(left.columns) - len(sort_by_cols)
-        )
-
-        left = left.sort(by=by, descending=descending)
-        right = right.sort(by=by, descending=descending)
-
-        try:
-            polars.testing.assert_frame_equal(left, right, **polars_kwargs)  # type: ignore[arg-type]
         except AssertionError as e:
             raise ValidationError(
                 message="Result mismatch", details={"error": str(e)}
             ) from e
-
     return None

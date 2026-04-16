@@ -25,9 +25,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -49,9 +49,9 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                               mr);
   auto d_token_counts = token_counts->mutable_view().data<cudf::size_type>();
   // add the counts to the column
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(strings_count),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{strings_count},
                     d_token_counts,
                     tokenizer);
   return token_counts;
@@ -80,8 +80,8 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
   tokenizer.d_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
   tokenizer.d_tokens = tokens.data();
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<cudf::size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      strings_count,
                      tokenizer);
   // create the strings column using the tokens pointers
@@ -203,8 +203,8 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
   // offsets are at the beginning byte of each character
   cudf::detail::copy_if_async(
-    thrust::counting_iterator<int64_t>(0),
-    thrust::counting_iterator<int64_t>(chars_bytes + 1),
+    cuda::counting_iterator<int64_t>{0},
+    cuda::counting_iterator<int64_t>{chars_bytes + 1},
     d_new_offsets,
     [d_chars, chars_bytes] __device__(auto idx) {
       // this will also set the final value to the size chars_bytes
@@ -214,8 +214,10 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
 
   // create the output chars buffer -- just a copy of the input's chars
   rmm::device_uvector<char> output_chars(chars_bytes, stream, mr);
-  thrust::copy(
-    rmm::exec_policy_nosync(stream), d_chars, d_chars + chars_bytes, output_chars.data());
+  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               d_chars,
+               d_chars + chars_bytes,
+               output_chars.data());
 
   auto output_strings = cudf::make_strings_column(
     num_characters, std::move(offsets_column), output_chars.release(), 0, rmm::device_buffer{});

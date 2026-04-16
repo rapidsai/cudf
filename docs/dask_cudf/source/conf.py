@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # Configuration file for the Sphinx documentation builder.
@@ -76,7 +76,8 @@ intersphinx_mapping = {
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "cudf": ("https://docs.rapids.ai/api/cudf/stable/", None),
     "dask": ("https://docs.dask.org/en/stable/", None),
-    "pandas": ("https://pandas.pydata.org/docs/", None),
+    # Temporarily disable pandas intersphinx: https://github.com/pandas-dev/pandas/issues/64584
+    # "pandas": ("https://pandas.pydata.org/docs/", None),
     "dask-cuda": ("https://docs.rapids.ai/api/dask-cuda/stable/", None),
 }
 
