@@ -8,6 +8,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -19,7 +20,6 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.ir import Rolling
-from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
@@ -71,11 +71,11 @@ def _get_idx_col_i64(
 
 
 def _minmax_py(
-    col_i64: plc.Column, i64: plc.DataType, stream: Stream
+    col: plc.Column, reduce_dtype: plc.DataType, stream: Stream
 ) -> tuple[int, int]:
-    """Return (min, max) of an INT64 column as Python ints via a D→H transfer."""
-    mn = plc.reduce.reduce(col_i64, plc.aggregation.min(), i64, stream=stream)
-    mx = plc.reduce.reduce(col_i64, plc.aggregation.max(), i64, stream=stream)
+    """Return (min, max) of ``col`` as Python ints (min/max reduce at ``reduce_dtype``)."""
+    mn = plc.reduce.reduce(col, plc.aggregation.min(), reduce_dtype, stream=stream)
+    mx = plc.reduce.reduce(col, plc.aggregation.max(), reduce_dtype, stream=stream)
     mn_val = mn.to_py(stream=stream)
     mx_val = mx.to_py(stream=stream)
     assert isinstance(mn_val, int)
@@ -123,6 +123,21 @@ class _RollingActState:
     right_halo_df: DataFrame | None = None
 
 
+@dataclass(frozen=True)
+class _RollingStreamChunkMeta:
+    """Per-chunk metadata after rank-boundary tagging (internal channel 1 → 2)."""
+
+    is_local_rank_chunk: bool
+
+
+@dataclass(frozen=True)
+class _RollingExpandedChunkMeta:
+    """Per-chunk metadata for expanded frames (internal channel 2 → 3)."""
+
+    center_begin: int
+    center_end: int
+
+
 def _prepare_expanded_rolling_frame(
     state: _RollingActState,
     *,
@@ -137,9 +152,15 @@ def _prepare_expanded_rolling_frame(
     lookahead: int,
     i64: plc.DataType,
     bool8: plc.DataType,
-    ext_col_names: list[str],
-    ext_dtypes: list[Any],
-) -> tuple[DataFrame, int, int, DataFrame, int] | None:
+    base_col_names: list[str],
+    base_dtypes: list[Any],
+    is_local_rank_chunk: bool,
+) -> tuple[DataFrame, int, int] | None:
+    if not is_local_rank_chunk:
+        raise NotImplementedError(
+            "Non-local rank boundary chunks are not supported for rolling yet."
+        )
+
     left_ctx_df = state.left_ctx_df
     right_halo_df = state.right_halo_df
     br = context.br()
@@ -176,8 +197,8 @@ def _prepare_expanded_rolling_frame(
                 bool8,
                 left_ctx_df.stream,
             ),
-            ext_col_names,
-            ext_dtypes,
+            base_col_names,
+            base_dtypes,
             stream=left_ctx_df.stream,
         )
 
@@ -198,7 +219,7 @@ def _prepare_expanded_rolling_frame(
             )
             right_ctx_df = (
                 DataFrame.from_table(
-                    right_ctx_table, ext_col_names, ext_dtypes, stream=next_stream
+                    right_ctx_table, base_col_names, base_dtypes, stream=next_stream
                 )
                 if right_ctx_table.num_rows() > 0
                 else None
@@ -207,13 +228,8 @@ def _prepare_expanded_rolling_frame(
         right_ctx_df = right_halo_df if is_last_chunk else None
 
     chunk_df = DataFrame.from_table(
-        chunk_table, ext_col_names, ext_dtypes, stream=chunk_stream
+        chunk_table, base_col_names, base_dtypes, stream=chunk_stream
     )
-    chunk_id_name = ext_col_names[-1]
-    cid_col = chunk_df.column_map[chunk_id_name].obj
-    cid_mn, cid_mx = _minmax_py(cid_col, i64, chunk_stream)
-    assert cid_mn == cid_mx
-    center_chunk_id = cid_mn
     n_left = left_ctx_df.num_rows if left_ctx_df is not None else 0
     dfs = [df for df in (left_ctx_df, chunk_df, right_ctx_df) if df is not None]
     if len(dfs) == 1:
@@ -222,13 +238,13 @@ def _prepare_expanded_rolling_frame(
         with ir_context.stream_ordered_after(*dfs) as s:
             combined_df = DataFrame.from_table(
                 plc.concatenate.concatenate([df.table for df in dfs], stream=s),
-                ext_col_names,
-                ext_dtypes,
+                base_col_names,
+                base_dtypes,
                 stream=s,
             )
 
     state.left_ctx_df = left_ctx_df
-    return combined_df, n_left, n_chunk_rows, chunk_df, center_chunk_id
+    return combined_df, n_left, n_chunk_rows
 
 
 async def _rolling_do_evaluate(
@@ -298,85 +314,86 @@ def _rolling_append_left_context(
             )
 
 
-def _build_center_row_mask(
-    combined: DataFrame,
-    *,
-    chunk_id_name: str,
-    emit_id_name: str,
+def _build_center_row_mask_from_range(
+    n_rows: int,
+    center_begin: int,
+    center_end: int,
     bool8: plc.DataType,
+    stream: Stream,
 ) -> Column:
-    prov = combined.column_map[chunk_id_name]
-    emit = combined.column_map[emit_id_name]
-    mask_obj = plc.binaryop.binary_operation(
-        prov.obj,
-        emit.obj,
-        plc.binaryop.BinaryOperator.EQUAL,
+    """Boolean mask with True on ``[center_begin, center_end)`` (half-open row indices)."""
+    row_id = plc.filling.sequence(
+        n_rows,
+        plc.Scalar.from_py(0, plc.types.SIZE_TYPE, stream=stream),
+        plc.Scalar.from_py(1, plc.types.SIZE_TYPE, stream=stream),
+        stream=stream,
+    )
+    ge = plc.binaryop.binary_operation(
+        row_id,
+        plc.Scalar.from_py(center_begin, plc.types.SIZE_TYPE, stream=stream),
+        plc.binaryop.BinaryOperator.GREATER_EQUAL,
         bool8,
-        stream=combined.stream,
+        stream=stream,
+    )
+    lt = plc.binaryop.binary_operation(
+        row_id,
+        plc.Scalar.from_py(center_end, plc.types.SIZE_TYPE, stream=stream),
+        plc.binaryop.BinaryOperator.LESS,
+        bool8,
+        stream=stream,
+    )
+    mask_obj = plc.binaryop.binary_operation(
+        ge, lt, plc.binaryop.BinaryOperator.LOGICAL_AND, bool8, stream=stream
     )
     return Column(mask_obj, dtype=DataType(pl.Boolean()), name=None)
 
 
-def _emit_id_column(
-    center_chunk_id: int,
-    n_rows: int,
-    *,
-    name: str,
-    stream: Stream,
-    i64: plc.DataType,
-) -> Column:
-    return Column(
-        plc.Column.from_scalar(
-            plc.Scalar.from_py(center_chunk_id, i64, stream=stream),
-            n_rows,
-            stream=stream,
-        ),
-        dtype=DataType(pl.Int64()),
-        name=name,
-    )
+async def _drain_data_messages(
+    context: Context,
+    ch_in: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+) -> None:
+    """Ensure all data messages are drained."""
+    remaining_msg = await ch_in.recv(context)
+    if remaining_msg is not None:
+        raise RuntimeError("Expected all messages to be drained.")
+    await ch_out.drain(context)
 
 
 async def prepare_rank_boundaries(
     context: Context,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
-    base_col_names: list[str],
-    base_dtypes: list[Any],
-    chunk_id_name: str,
-    chunk_id_dtype: DataType,
     collective_ids: list[int],
 ) -> None:
-    """Single-rank passthrough with per-message chunk id; multi-rank TBD (SparseAlltoall)."""
+    """
+    Relay chunks with paired per-chunk metadata (single-rank: always local).
+
+    Multi-rank will extend this stage to inject rank-boundary frames with
+    ``is_local_rank_chunk=False`` without changing downstream contracts.
+    """
     assert len(collective_ids) == 2
     _ = collective_ids
-    i64 = plc.DataType(plc.TypeId.INT64)
-    next_chunk_id = 0
     br = context.br()
-    while True:
-        msg = await ch_in.recv(context)
-        if msg is None:
-            await ch_out.drain(context)
-            return
+    while (msg := await ch_in.recv(context)) is not None:
+        seq_num = msg.sequence_number
         chunk = TableChunk.from_message(msg, br)
         chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
         stream = chunk.stream
-        tv = chunk.table_view()
-        df = DataFrame.from_table(tv, base_col_names, base_dtypes, stream=stream)
-        id_col = Column(
-            plc.Column.from_scalar(
-                plc.Scalar.from_py(next_chunk_id, i64, stream=stream),
-                df.num_rows,
-                stream=stream,
+        await ch_out.send_metadata(
+            context,
+            Message(
+                seq_num,
+                ArbitraryChunk(_RollingStreamChunkMeta(is_local_rank_chunk=True)),
             ),
-            dtype=chunk_id_dtype,
-            name=chunk_id_name,
         )
-        next_chunk_id += 1
-        out_df = df.with_columns([id_col], stream=stream)
         out_chunk = TableChunk.from_pylibcudf_table(
-            out_df.table, stream, exclusive_view=True, br=br
+            chunk.table_view(), stream, exclusive_view=True, br=br
         )
-        await ch_out.send(context, Message(0, out_chunk))
+        await ch_out.send(context, Message(seq_num, out_chunk))
+
+    await ch_out.drain_metadata(context)
+    await ch_out.drain(context)
 
 
 async def prepare_chunks(
@@ -393,26 +410,49 @@ async def prepare_chunks(
     type_id: plc.TypeId,
     i64: plc.DataType,
     bool8: plc.DataType,
-    ext_col_names: list[str],
-    ext_dtypes: list[Any],
-    emit_id_name: str,
+    base_col_names: list[str],
+    base_dtypes: list[Any],
 ) -> None:
-    """Expand rolling context on the boundary-tagged stream and send combined frames."""
-    pending: Message | None = None
-    while True:
-        cur_msg = pending if pending is not None else await ch_in.recv(context)
-        pending = None
-        if cur_msg is None:
-            await ch_out.drain(context)
-            return
+    """
+    Expand rolling context; each output uses paired metadata + data messages.
 
+    Metadata carries the center row range in the combined table; the data
+    :class:`Message` keeps the upstream ``sequence_number`` for the center chunk.
+    """
+    pending: tuple[_RollingStreamChunkMeta, Message] | None = None
+    while (cur_meta_msg := await ch_in.recv_metadata(context)) is not None:
+        if pending is not None:
+            cur_meta, cur_msg = pending
+            pending = None
+        else:
+            cur_meta = ArbitraryChunk.from_message(cur_meta_msg).release()
+            assert isinstance(cur_meta, _RollingStreamChunkMeta)
+            cur_msg = await ch_in.recv(context)
+            assert cur_msg is not None, "Expected data message after metadata."
+
+        next_meta: _RollingStreamChunkMeta | None = None
+        peek_meta: _RollingStreamChunkMeta | None = None
         if lookahead > 0:
-            next_msg = await ch_in.recv(context)
-            is_last = next_msg is None
+            next_meta_msg = await ch_in.recv_metadata(context)
+            if next_meta_msg is None:
+                next_msg = None
+                is_last = True
+            else:
+                next_meta = ArbitraryChunk.from_message(next_meta_msg).release()
+                assert isinstance(next_meta, _RollingStreamChunkMeta)
+                next_msg = await ch_in.recv(context)
+                is_last = next_msg is None
         else:
             next_msg = None
-            peek_msg = await ch_in.recv(context)
-            is_last = peek_msg is None
+            peek_meta_msg = await ch_in.recv_metadata(context)
+            if peek_meta_msg is None:
+                peek_msg = None
+                is_last = True
+            else:
+                peek_meta = ArbitraryChunk.from_message(peek_meta_msg).release()
+                assert isinstance(peek_meta, _RollingStreamChunkMeta)
+                peek_msg = await ch_in.recv(context)
+                is_last = peek_msg is None
 
         prep = _prepare_expanded_rolling_frame(
             state,
@@ -427,46 +467,55 @@ async def prepare_chunks(
             lookahead=lookahead,
             i64=i64,
             bool8=bool8,
-            ext_col_names=ext_col_names,
-            ext_dtypes=ext_dtypes,
+            base_col_names=base_col_names,
+            base_dtypes=base_dtypes,
+            is_local_rank_chunk=cur_meta.is_local_rank_chunk,
         )
         if prep is None:
             if lookahead > 0:
-                pending = next_msg
+                if next_msg is not None:
+                    assert next_meta is not None
+                    pending = (next_meta, next_msg)
             else:
-                pending = peek_msg
+                if not is_last and peek_msg is not None:
+                    assert peek_meta is not None
+                    pending = (peek_meta, peek_msg)
             continue
 
-        combined_df, _n_left, _n_chunk_rows, _, center_chunk_id = prep
-        emit_col = _emit_id_column(
-            center_chunk_id,
-            combined_df.num_rows,
-            name=emit_id_name,
-            stream=combined_df.stream,
-            i64=i64,
+        combined_df, n_left, n_chunk_rows = prep
+        cur_seq = cur_msg.sequence_number
+        expanded_meta = _RollingExpandedChunkMeta(
+            center_begin=n_left,
+            center_end=n_left + n_chunk_rows,
         )
-        combined_tagged = combined_df.with_columns(
-            [emit_col], stream=combined_df.stream
+        await ch_out.send_metadata(
+            context,
+            Message(cur_seq, ArbitraryChunk(expanded_meta)),
         )
         out_chunk = TableChunk.from_pylibcudf_table(
-            combined_tagged.table,
-            combined_tagged.stream,
+            combined_df.table,
+            combined_df.stream,
             exclusive_view=True,
             br=context.br(),
         )
-        await ch_out.send(context, Message(0, out_chunk))
+        await ch_out.send(context, Message(cur_seq, out_chunk))
         await append_done.get()
 
         if lookahead > 0:
             if is_last:
                 break
-            pending = next_msg
+            if next_msg is not None:
+                assert next_meta is not None
+                pending = (next_meta, next_msg)
         else:
             if is_last:
                 break
-            pending = peek_msg
+            if peek_msg is not None:
+                assert peek_meta is not None
+                pending = (peek_meta, peek_msg)
 
-    await ch_out.drain(context)
+    await _drain_data_messages(context, ch_in, ch_out)
+    await ch_out.drain_metadata(context)
 
 
 async def rolling_eval_and_send(
@@ -482,39 +531,35 @@ async def rolling_eval_and_send(
     lookback: int,
     base_col_names: list[str],
     base_dtypes: list[Any],
-    ext_col_names: list[str],
-    ext_dtypes: list[Any],
-    chunk_id_name: str,
-    emit_id_name: str,
     bool8: plc.DataType,
 ) -> None:
     """Evaluate rolling, mask to owned rows, zlice, send, and advance left context."""
     non_child_args_no_zlice = ir._non_child_args[:-1] + (None,)
-    internal_meta = frozenset({chunk_id_name, emit_id_name})
     n_processed = 0
     br = context.br()
-    while True:
+    while (meta_msg := await ch_in.recv_metadata(context)) is not None:
+        expanded = ArbitraryChunk.from_message(meta_msg).release()
+        assert isinstance(expanded, _RollingExpandedChunkMeta)
         msg = await ch_in.recv(context)
-        if msg is None:
-            await ch_out.drain(context)
-            return
+        assert msg is not None, "Expected data message after metadata."
+        seq_num = msg.sequence_number
         chunk = TableChunk.from_message(msg, br)
         chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
         combined = DataFrame.from_table(
             chunk.table_view(),
-            ext_col_names,
-            ext_dtypes,
+            base_col_names,
+            base_dtypes,
             stream=chunk.stream,
         )
-        mask = _build_center_row_mask(
-            combined,
-            chunk_id_name=chunk_id_name,
-            emit_id_name=emit_id_name,
-            bool8=bool8,
+        mask = _build_center_row_mask_from_range(
+            combined.num_rows,
+            expanded.center_begin,
+            expanded.center_end,
+            bool8,
+            combined.stream,
         )
-        combined_eval = combined.discard_columns(internal_meta)
         result_df = await _rolling_do_evaluate(
-            ir, ir_context, non_child_args_no_zlice, combined_eval
+            ir, ir_context, non_child_args_no_zlice, combined
         )
         chunk_result = result_df.filter(mask)
         n_chunk_rows = chunk_result.num_rows
@@ -526,7 +571,9 @@ async def rolling_eval_and_send(
             zlice=ir.zlice,
         )
         n_processed += n_chunk_rows
-        await _rolling_send_chunk_if_nonempty(context, ch_out, local_result_df, tracer)
+        await _rolling_send_chunk_if_nonempty(
+            context, ch_out, local_result_df, tracer, sequence_number=seq_num
+        )
         center_only = combined.filter(mask).select(base_col_names)
         _rolling_append_left_context(
             state,
@@ -538,12 +585,16 @@ async def rolling_eval_and_send(
         )
         await append_done.put(None)
 
+    await _drain_data_messages(context, ch_in, ch_out)
+
 
 async def _rolling_send_chunk_if_nonempty(
     context: Context,
     ch_out: Channel[TableChunk],
     local_result_df: DataFrame | None,
     tracer: Any,
+    *,
+    sequence_number: int,
 ) -> None:
     if local_result_df is None or local_result_df.num_rows == 0:
         return
@@ -555,7 +606,7 @@ async def _rolling_send_chunk_if_nonempty(
     )
     if tracer is not None:
         tracer.add_chunk(table=result_chunk.table_view())
-    await ch_out.send(context, Message(0, result_chunk))
+    await ch_out.send(context, Message(sequence_number, result_chunk))
 
 
 @define_actor()
@@ -590,10 +641,6 @@ async def rolling_actor(
 
         base_col_names = list(ir.children[0].schema.keys())
         base_dtypes = list(ir.children[0].schema.values())
-        name_gen = unique_names(ir.children[0].schema.keys())
-        chunk_id_name = next(name_gen)
-        emit_id_name = next(name_gen)
-        chunk_id_dtype = DataType(pl.Int64())
 
         type_id = ir.index_dtype.id()
         preceding_native = _ordinal_to_native(type_id, ir.preceding_ordinal)
@@ -604,9 +651,6 @@ async def rolling_actor(
         i64 = plc.DataType(plc.TypeId.INT64)
         bool8 = plc.DataType(plc.TypeId.BOOL8)
 
-        ext_col_names = [*base_col_names, chunk_id_name]
-        ext_dtypes = [*base_dtypes, chunk_id_dtype]
-
         act_state = _RollingActState()
         append_done: asyncio.Queue[None] = asyncio.Queue()
 
@@ -615,10 +659,6 @@ async def rolling_actor(
                 context,
                 ch_in,
                 ch_after_boundaries,
-                base_col_names,
-                base_dtypes,
-                chunk_id_name,
-                chunk_id_dtype,
                 collective_ids,
             ),
             prepare_chunks(
@@ -634,9 +674,8 @@ async def rolling_actor(
                 type_id=type_id,
                 i64=i64,
                 bool8=bool8,
-                ext_col_names=ext_col_names,
-                ext_dtypes=ext_dtypes,
-                emit_id_name=emit_id_name,
+                base_col_names=base_col_names,
+                base_dtypes=base_dtypes,
             ),
             rolling_eval_and_send(
                 context,
@@ -650,10 +689,6 @@ async def rolling_actor(
                 lookback=lookback,
                 base_col_names=base_col_names,
                 base_dtypes=base_dtypes,
-                ext_col_names=[*ext_col_names, emit_id_name],
-                ext_dtypes=[*ext_dtypes, chunk_id_dtype],
-                chunk_id_name=chunk_id_name,
-                emit_id_name=emit_id_name,
                 bool8=bool8,
             ),
         )
