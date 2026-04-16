@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import functools
+import logging
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -578,12 +579,19 @@ class DaskEngine(StreamingEngine):
                     "cls": distributed.Nanny,
                     "options": {
                         "nthreads": 1,
+                        # Set worker subprocess log level to WARNING
+                        # (is INFO by default).
+                        "silence_logs": logging.WARNING,
                         "env": {
                             "CUDA_VISIBLE_DEVICES": gpu_ids[i],
                         },
                     },
                 }
-            owned_cluster = distributed.SpecCluster(workers=worker_spec)
+            # Set scheduler/client log level to WARNING in the main
+            # process (is INFO by default).
+            owned_cluster = distributed.SpecCluster(
+                workers=worker_spec, silence_logs=logging.WARNING
+            )
             owned_client = distributed.Client(owned_cluster)
             dask_client = owned_client
 
