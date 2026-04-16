@@ -28,6 +28,8 @@ set -u
 
 source rapids-configure-sccache
 
+rapidps-logger "Start sccache server"
+
 sccache --start-server
 sccache --show-adv-stats
 sccache --dist-status
