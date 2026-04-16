@@ -172,10 +172,13 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   auto const row_end   = raw_csv + row_offsets[rec_id_next];
   auto const base_idx  = static_cast<size_t>(rec_id) * num_actual_cols;
 
-  int actual_col = 0;
+  int actual_col        = 0;
+  uint32_t prev_end_ofs = 0;
   for (int col = 0; col < column_flags.size() && col < num_actual_cols; ++col) {
-    auto field_start    = (col == 0) ? row_start : raw_csv + field_ends[base_idx + col - 1] + 1;
-    auto next_delimiter = raw_csv + field_ends[base_idx + col];
+    auto const cur_end_ofs = field_ends[base_idx + col];
+    auto field_start       = (col == 0) ? row_start : raw_csv + prev_end_ofs + 1;
+    auto next_delimiter    = raw_csv + cur_end_ofs;
+    prev_end_ofs           = cur_end_ofs;
 
     if (field_start >= row_end || next_delimiter < field_start) break;
 
@@ -336,6 +339,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
+                      device_span<size_type> valid_counts,
                       device_span<bool* const> is_quoted_flags)
 {
   auto const raw_csv     = data.data();
@@ -349,12 +353,14 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   auto const row_end   = raw_csv + row_offsets[rec_id_next];
   auto const base_idx  = static_cast<size_t>(rec_id) * num_actual_cols;
 
-  int actual_col = 0;
+  int actual_col        = 0;
+  uint32_t prev_end_ofs = 0;  // cached field_end from previous iteration
   for (int col = 0; col < column_flags.size() && col < num_actual_cols; ++col) {
-    // Derive field start and end from precomputed offsets
-    auto field_start =
-      (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + field_ends[base_idx + col - 1] + 1;
-    auto next_delimiter = raw_csv + field_ends[base_idx + col];
+    // Read current field_end; derive field_start from cached previous end
+    auto const cur_end_ofs = field_ends[base_idx + col];
+    auto field_start    = (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + prev_end_ofs + 1;
+    auto next_delimiter = raw_csv + cur_end_ofs;
+    prev_end_ofs        = cur_end_ofs;
 
     if (field_start >= row_end || next_delimiter < field_start) break;
 
@@ -410,6 +416,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                     options,
                                     column_flags[col] & column_parse::as_hexadecimal)) {
             set_bit(valids[actual_col], out_row);
+            atomicAdd(&valid_counts[actual_col], 1);
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
@@ -885,6 +892,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::data_type const> dtypes,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
+                            device_span<size_type> valid_counts,
                             device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
@@ -929,6 +937,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                                                                       dtypes,
                                                                       columns,
                                                                       valids,
+                                                                      valid_counts,
                                                                       is_quoted_flags);
   }
 }
