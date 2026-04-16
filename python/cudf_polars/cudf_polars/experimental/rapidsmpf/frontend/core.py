@@ -48,7 +48,7 @@ class ClusterInfo:
     Attributes
     ----------
     pid
-        Process ID.
+        Process ID of the current rank.
     hostname
         Hostname of the machine running this rank.
     cuda_visible_devices
@@ -123,7 +123,7 @@ class StreamingEngine(pl.GPUEngine):
             executor_options=executor_options,
             **engine_options,
         )
-        if nranks > 1 and not engine_options.get("allow_gpu_sharing", False):
+        if nranks > 1 and engine_options.get("allow_gpu_sharing", False) is False:
             uuids = [info.gpu_uuid for info in self.gather_cluster_info()]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(
