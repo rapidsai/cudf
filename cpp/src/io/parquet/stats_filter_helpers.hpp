@@ -41,6 +41,9 @@ class stats_caster_base {
  public:
   /**
    * @brief Returns the clock rate for a given timestamp type_id, or 0 if not a timestamp.
+   *
+   * Host-side equivalent of cudf::io::to_clockrate (in time_utils.cuh), which cannot be
+   * included here because time_utils.cuh contains __device__ __constant__ data.
    */
   static inline int32_t timestamp_clock_rate(cudf::type_id id)
   {
@@ -55,6 +58,9 @@ class stats_caster_base {
 
   /**
    * @brief Computes timestamp scaling factor between Parquet native precision and output precision.
+   *
+   * Host-side equivalent of the __device__ calc_timestamp_scale (dictionary_page_filter.cu)
+   * and the inline snippet in page_decode.cuh lines 1189-1204.
    *
    * @param logical_type The Parquet logical type of the column
    * @param physical_type The Parquet physical type of the column
@@ -143,6 +149,8 @@ class stats_caster_base {
 
   /**
    * @brief Apply timestamp scaling to a raw decoded value.
+   *
+   * Host-side equivalent of the __device__ rounding logic in page_data.cuh lines 226-233.
    *
    * @param raw_value The raw decoded integer from Parquet stats
    * @param ts_scale Scale factor from compute_ts_scale()
