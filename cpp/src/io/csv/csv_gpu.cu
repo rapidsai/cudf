@@ -283,14 +283,61 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 }
 
 /**
+ * @brief CUDA kernel that precomputes field-end offsets for all columns in each row.
+ *
+ * This is the first phase of a two-phase decode approach. It scans through each row
+ * finding field delimiters and stores the byte offset (from data start) of each
+ * field's terminating delimiter. The second phase (convert_csv_to_cudf) uses these
+ * precomputed offsets instead of calling seek_field_end for each field.
+ *
+ * @param[in] opts Parsing options
+ * @param[in] data The entire CSV data
+ * @param[in] row_offsets Row start offsets
+ * @param[out] field_ends Output array: field_ends[row * num_cols + col] = byte offset of delimiter
+ * @param[in] num_cols Total number of columns (including disabled)
+ */
+CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
+  compute_field_ends(cudf::io::parse_options_view const opts,
+                     device_span<char const> data,
+                     device_span<uint64_t const> row_offsets,
+                     device_span<uint32_t> field_ends,
+                     int num_cols)
+{
+  auto const raw_csv     = data.data();
+  auto const rec_id      = grid_1d::global_thread_id();
+  auto const rec_id_next = rec_id + 1;
+
+  if (rec_id_next >= row_offsets.size()) return;
+
+  auto field_start   = raw_csv + row_offsets[rec_id];
+  auto const row_end = raw_csv + row_offsets[rec_id_next];
+
+  auto const base_idx  = static_cast<size_t>(rec_id) * num_cols;
+  auto const row_end_u = static_cast<uint32_t>(row_end - raw_csv);
+  for (int col = 0; col < num_cols; ++col) {
+    if (field_start < row_end) {
+      auto next_delimiter        = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
+      field_ends[base_idx + col] = static_cast<uint32_t>(next_delimiter - raw_csv);
+      field_start                = next_delimiter + 1;
+    } else {
+      // Row has fewer fields than columns: fill remaining with row-end sentinel
+      field_ends[base_idx + col] = row_end_u;
+    }
+  }
+}
+
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
- * Data is processed one record at a time
+ * Data is processed one record at a time. Uses precomputed field-end offsets
+ * to avoid redundant delimiter scanning.
  *
  * @param[in] options A set of parsing options
  * @param[in] data The entire CSV data to read
  * @param[in] column_flags Per-column parsing behavior flags
  * @param[in] row_offsets The start the CSV data of interest
+ * @param[in] field_ends Precomputed field-end offsets [num_rows * num_cols]
+ * @param[in] num_actual_cols Total number of columns
  * @param[in] dtypes The data type of the column
  * @param[out] columns The output column data
  * @param[out] valids The bitmaps indicating whether column fields are valid
@@ -302,30 +349,31 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<char const> data,
                       device_span<column_parse::flags const> column_flags,
                       device_span<uint64_t const> row_offsets,
+                      device_span<uint32_t const> field_ends,
+                      int num_actual_cols,
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
                       device_span<size_type> valid_counts,
                       device_span<bool* const> is_quoted_flags)
 {
-  auto const raw_csv = data.data();
-  // thread IDs range per block, so also need the block id.
-  // this is entry into the field array - tid is an elements within the num_entries array
+  auto const raw_csv     = data.data();
   auto const rec_id      = grid_1d::global_thread_id();
   auto const rec_id_next = rec_id + 1;
 
-  // we can have more threads than data, make sure we are not past the end of the data
   if (rec_id_next >= row_offsets.size()) return;
 
-  auto field_start   = raw_csv + row_offsets[rec_id];
-  auto const row_end = raw_csv + row_offsets[rec_id_next];
+  auto const row_end  = raw_csv + row_offsets[rec_id_next];
+  auto const base_idx = static_cast<size_t>(rec_id) * num_actual_cols;
 
-  auto next_field = field_start;
-  int col         = 0;
-  int actual_col  = 0;
+  int actual_col = 0;
+  for (int col = 0; col < column_flags.size() && col < num_actual_cols; ++col) {
+    // Derive field start and end from precomputed offsets
+    auto field_start =
+      (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + field_ends[base_idx + col - 1] + 1;
+    auto next_delimiter = raw_csv + field_ends[base_idx + col];
 
-  while (col < column_flags.size() && field_start < row_end) {
-    auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
+    if (field_start >= row_end || next_delimiter < field_start) break;
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
@@ -355,7 +403,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                 was_quoted = true;
               }
             } else {
-              // If the string is quoted, whitespace around the quotes get removed as well
               auto const trimmed_field = trim_whitespaces(field_start, end);
               if ((*trimmed_field.first == options.quotechar) &&
                   (*(trimmed_field.second - 1) == options.quotechar)) {
@@ -365,7 +412,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
               }
             }
           }
-          // Track whether this field was quoted (for doublequote unescaping)
           if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
           str_list[rec_id].first  = field_start;
@@ -380,7 +426,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                     dtypes[actual_col],
                                     options,
                                     column_flags[col] & column_parse::as_hexadecimal)) {
-            // set the valid bitmap - all bits were set to 0 to start
             set_bit(valids[actual_col], rec_id);
             atomicAdd(&valid_counts[actual_col], 1);
           }
@@ -393,9 +438,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
       }
       ++actual_col;
     }
-    next_field  = next_delimiter + 1;
-    field_start = next_field;
-    ++col;
   }
 }
 
@@ -842,15 +884,25 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
-  // Calculate actual block count to use based on records count
-  auto const block_size = csvparse_block_dim;
-  auto const num_rows   = row_offsets.size() - 1;
-  auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
+  auto const block_size      = csvparse_block_dim;
+  auto const num_rows        = row_offsets.size() - 1;
+  auto const grid_size       = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
+  auto const num_actual_cols = static_cast<int>(column_flags.size());
 
+  // Phase 1: Precompute field-end offsets for all columns
+  auto d_field_ends = rmm::device_uvector<uint32_t>(
+    num_rows * num_actual_cols, stream, cudf::get_current_device_resource_ref());
+
+  compute_field_ends<<<grid_size, block_size, 0, stream.value()>>>(
+    options, data, row_offsets, d_field_ends, num_actual_cols);
+
+  // Phase 2: Decode using precomputed offsets
   convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
                                                                     data,
                                                                     column_flags,
                                                                     row_offsets,
+                                                                    d_field_ends,
+                                                                    num_actual_cols,
                                                                     dtypes,
                                                                     columns,
                                                                     valids,
