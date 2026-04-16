@@ -6950,7 +6950,7 @@ def _rank_out_dtype(orig_dtype: DtypeObj, method: str, pct: bool) -> DtypeObj:
         # str / string[python] → float64 (no change)
         if (
             orig_dtype.na_value is pd.NA
-            and getattr(orig_dtype, "storage", None) == "pyarrow"
+            and orig_dtype.storage == "pyarrow"
         ):
             return pd.Float64Dtype()
     elif is_pandas_nullable_numpy_dtype(orig_dtype) and not isinstance(
