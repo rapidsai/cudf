@@ -5,6 +5,8 @@
 
 #include "parquet_common.hpp"
 
+#include <cudf_test/iterator_utilities.hpp>
+
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
 
@@ -24,8 +26,7 @@ std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                                                 bool include_validity,
                                                 Elements elements)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
   for (int idx = 0; idx < num_columns; idx++) {
     if (include_validity) {
@@ -94,8 +95,7 @@ template <typename T>
 std::unique_ptr<cudf::column> make_parquet_list_list_col(
   int skip_rows, int num_rows, int lists_per_row, int list_size, bool include_validity)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0 ? 1 : 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // root list
   std::vector<int> row_offsets(num_rows + 1);

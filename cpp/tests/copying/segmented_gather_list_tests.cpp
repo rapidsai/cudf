@@ -125,8 +125,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNulls)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<T>
   auto const list = LCW<T>{{{1, 2, 3, 4}, valids}, {5}, {{6, 7}, valids}, {{8, 9, 10}, valids}};
@@ -304,8 +303,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
 {
   using T = TypeParam;
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<List<T>>
   {
@@ -397,8 +395,7 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
     }
   }
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   // List<List<List<T>>>
   {
@@ -583,8 +580,7 @@ TEST_F(SegmentedGatherTestFloat, Fails)
                                              cudf::lists_column_view{nonlist_map2}),
                cudf::logic_error);
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
   LCW<int8_t> nulls_map{{{3, 2, 1, 0}, {0}, {0}, {0, 1}}, valids};
 
   // Nulls are not supported in the gather map.
