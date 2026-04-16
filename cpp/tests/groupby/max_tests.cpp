@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 
 #include <limits>
@@ -30,7 +30,7 @@ TYPED_TEST_SUITE(groupby_max_test, cudf::test::FixedWidthTypesWithoutFixedPoint)
 TYPED_TEST(groupby_max_test, basic)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -48,7 +48,7 @@ TYPED_TEST(groupby_max_test, basic)
 TYPED_TEST(groupby_max_test, empty_cols)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{};
   cudf::test::fixed_width_column_wrapper<V> vals{};
@@ -66,7 +66,7 @@ TYPED_TEST(groupby_max_test, empty_cols)
 TYPED_TEST(groupby_max_test, zero_valid_keys)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   cudf::test::fixed_width_column_wrapper<V> vals({3, 4, 5});
@@ -84,7 +84,7 @@ TYPED_TEST(groupby_max_test, zero_valid_keys)
 TYPED_TEST(groupby_max_test, zero_valid_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
@@ -102,7 +102,7 @@ TYPED_TEST(groupby_max_test, zero_valid_values)
 TYPED_TEST(groupby_max_test, null_keys_and_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys(
     {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
@@ -143,7 +143,7 @@ TEST_F(groupby_max_string_test, basic)
 TEST_F(groupby_max_string_test, zero_valid_values)
 {
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
-  cudf::test::strings_column_wrapper vals({"año", "bit", "₹1"}, all_nulls());
+  cudf::test::strings_column_wrapper vals({"", "", ""}, all_nulls());
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
   cudf::test::strings_column_wrapper expect_vals({""}, all_nulls());

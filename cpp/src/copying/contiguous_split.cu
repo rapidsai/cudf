@@ -31,7 +31,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -666,8 +665,8 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
   std::vector<column_view> sliced_children;
   sliced_children.reserve(scv.num_children());
   std::transform(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(scv.num_children()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{scv.num_children()},
     std::back_inserter(sliced_children),
     [&scv, &stream](size_type child_index) { return scv.get_sliced_child(child_index, stream); });
   return setup_source_buf_info(sliced_children.begin(),
@@ -721,7 +720,7 @@ std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
  *          column size, data offset, bitmask offset, and null count
  */
 template <typename BufInfo>
-std::tuple<size_t, int64_t, int64_t, size_type> build_output_column_metadata(
+std::tuple<std::size_t, int64_t, int64_t, size_type> build_output_column_metadata(
   column_view const& src,
   BufInfo& current_info,
   detail::metadata_builder& mb,
@@ -751,7 +750,7 @@ std::tuple<size_t, int64_t, int64_t, size_type> build_output_column_metadata(
   }();
 
   // size/data pointer for the column
-  auto const col_size = [&]() -> size_t {
+  auto const col_size = [&]() -> std::size_t {
     // if I am a string column, I need to use the number of rows from my child offset column. the
     // number of rows in my dst_buf_info struct will be equal to the number of chars, which is
     // incorrect. this is a quirk of how cudf stores strings.
@@ -765,7 +764,7 @@ std::tuple<size_t, int64_t, int64_t, size_type> build_output_column_metadata(
     }
 
     // otherwise the number of rows is the number of elements
-    return static_cast<size_t>(current_info->num_elements);
+    return static_cast<std::size_t>(current_info->num_elements);
   }();
   int64_t const data_offset =
     col_size == 0 || src.head() == nullptr ? -1 : static_cast<int64_t>(current_info->dst_offset);
@@ -1259,8 +1258,8 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
   // compute sizes of each column in each partition, including alignment.
   thrust::transform(
     rmm::exec_policy_nosync(stream, temp_mr),
-    thrust::make_counting_iterator<std::size_t>(0),
-    thrust::make_counting_iterator<std::size_t>(num_bufs),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator<std::size_t>{num_bufs},
     d_dst_buf_info,
     cuda::proclaim_return_type<dst_buf_info>([d_src_buf_info,
                                               offset_stack_partition_size,
@@ -1521,7 +1520,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
 
   auto out_to_in_index = out_to_in_index_function{d_batch_offsets.begin(), num_bufs};
 
-  auto const iter = thrust::make_counting_iterator(0);
+  auto const iter = cuda::counting_iterator<cudf::size_type>{0};
 
   // load up the batches as d_dst_buf_info
   rmm::device_uvector<dst_buf_info> d_batched_dst_buf_info(num_batches, stream, temp_mr);
@@ -1641,8 +1640,8 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
       // we want to update the offset of batches for every iteration, except the first one (because
       // offsets in the first iteration are all 0 based)
       auto num_batches_in_first_iteration = num_batches_per_iteration[0];
-      auto const iter     = thrust::make_counting_iterator(num_batches_in_first_iteration);
-      auto num_iterations = accum_size_per_iteration.size();
+      auto const iter                     = cuda::counting_iterator{num_batches_in_first_iteration};
+      auto num_iterations                 = accum_size_per_iteration.size();
       thrust::for_each(
         rmm::exec_policy_nosync(stream, temp_mr),
         iter,
@@ -2042,7 +2041,7 @@ struct contiguous_split_state {
     // build the empty results
     std::vector<packed_table> result;
     result.reserve(num_partitions);
-    auto const iter = thrust::make_counting_iterator(0);
+    auto const iter = cuda::counting_iterator<std::size_t>{0};
     std::transform(iter,
                    iter + num_partitions,
                    std::back_inserter(result),

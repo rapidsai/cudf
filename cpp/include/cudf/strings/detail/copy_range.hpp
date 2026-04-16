@@ -10,7 +10,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace strings::detail {
 
 /**
@@ -45,4 +45,4 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    rmm::device_async_resource_ref mr);
 
 }  // namespace strings::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

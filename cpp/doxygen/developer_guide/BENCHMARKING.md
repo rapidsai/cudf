@@ -42,6 +42,21 @@ For generating benchmark input data, helper functions are available at [cpp/benc
 * `create_random_column` can generate a column filled with random data. The random data parameters are configurable.
 * `create_random_table` can generate a table of columns filled with random data. The random data parameters are configurable.
 
+## NVTX Ranges
+
+In order to aid in performance measurement, add NVTX ranges to the data generation and/or
+the function being measured. Use either the `CUDF_BENCHMARK_RANGE` or `cudf::benchmark::scoped_range`
+for declaring NVTX ranges in the current scope as appropriate:
+- Use the `CUDF_BENCHMARK_RANGE()` macro if you want to use the name of the function as the name of the
+NVTX range
+- Use `cudf::benchmark::scoped_range rng{"custom_name"};` to provide a custom name for the current scope's
+NVTX range
+
+For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
+
+Do not use the libcudf nvtx range classes in benchmark source code to help separate the execution
+scope properly in the NSight Compute tools.
+
 ## What should we benchmark?
 
 In general, we should benchmark all features over a range of data sizes and types, so that we can

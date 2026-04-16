@@ -40,6 +40,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         bool is_enabled_allow_mismatched_pq_schemas() except +libcudf_exception_handler
         bool is_enabled_ignore_missing_columns() except +libcudf_exception_handler
         bool is_enabled_use_jit_filter() noexcept
+        bool is_enabled_case_sensitive_names() noexcept
         # setter
 
         void set_source(source_info src) except +libcudf_exception_handler
@@ -65,6 +66,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void enable_use_pandas_metadata(bool val) except +libcudf_exception_handler
         void set_timestamp_type(data_type type) except +libcudf_exception_handler
         void set_decimal_width(type_id width) noexcept
+        void enable_case_sensitive_names(bool val) noexcept
 
         @staticmethod
         parquet_reader_options_builder builder(
@@ -114,6 +116,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +libcudf_exception_handler
         parquet_reader_options_builder& use_jit_filter(
             bool use_jit_filter
+        ) noexcept
+        parquet_reader_options_builder& case_sensitive_names(
+            bool val
         ) noexcept
         parquet_reader_options build() except +libcudf_exception_handler
 

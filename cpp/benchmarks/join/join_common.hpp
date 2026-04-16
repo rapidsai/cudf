@@ -22,7 +22,9 @@
 #include <vector>
 
 auto const JOIN_SIZE_RANGE = std::vector<nvbench::int64_t>{1000, 100'000, 10'000'000};
-using JOIN_NULLABLE_RANGE  = nvbench::enum_type_list<false, true>;
+auto const JOIN_SELECTIVITY_RANGE =
+  std::vector<double>{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9};
+using JOIN_NULLABLE_RANGE = nvbench::enum_type_list<false, true>;
 
 using JOIN_ALGORITHM = nvbench::enum_type_list<join_t::HASH, join_t::SORT_MERGE>;
 using JOIN_DATATYPES = nvbench::enum_type_list<data_type::INT32,
@@ -36,6 +38,7 @@ using JOIN_NULL_EQUALITY =
   nvbench::enum_type_list<cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL>;
 
 using DEFAULT_JOIN_DATATYPES     = nvbench::enum_type_list<data_type::INT32>;
+using SELECTIVITY_JOIN_DATATYPES = nvbench::enum_type_list<data_type::INT32, data_type::STRING>;
 using DEFAULT_JOIN_NULL_EQUALITY = nvbench::enum_type_list<cudf::null_equality::UNEQUAL>;
 
 inline void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type ast_levels)

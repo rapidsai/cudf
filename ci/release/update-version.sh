@@ -142,6 +142,9 @@ sed_runner "s|/tree/\\bmain\\b/|/tree/${RAPIDS_BRANCH_NAME}/|g" python/cudf_pola
 sed_runner "s|CUDF_TAG release/[0-9]\+\.[0-9]\+|CUDF_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/examples/versions.cmake
 sed_runner "s|CUDF_TAG \\bmain\\b|CUDF_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/examples/versions.cmake
 
+# .pre-commit-config.yaml
+sed_runner "/rmm-cu[0-9]*==/ s/==.*\*,/==${NEXT_SHORT_TAG_PEP440}.*,/g" .pre-commit-config.yaml
+
 # CI files
 for FILE in .github/workflows/*.yaml .github/workflows/*.yml; do
   sed_runner "/shared-workflows/ s|@.*|@${WORKFLOW_BRANCH_REF}|g" "${FILE}"

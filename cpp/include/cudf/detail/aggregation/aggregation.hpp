@@ -18,7 +18,7 @@
 #include <numeric>
 #include <utility>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 /**
@@ -1375,4 +1375,4 @@ void initialize_with_identity(mutable_table_view const& table,
                               rmm::cuda_stream_view stream);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

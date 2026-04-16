@@ -490,7 +490,7 @@ jobs:
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: "ci/test_cudf_polars_with_rapidsmpf.sh"
+      script: "ci/test_cudf_polars_experimental.sh"
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit

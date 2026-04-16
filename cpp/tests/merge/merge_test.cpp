@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/merge.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
@@ -21,7 +20,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -194,7 +193,7 @@ TYPED_TEST(MergeTest_, SingleTableInput)
 {
   cudf::size_type inputRows = 40;
 
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type>
     colWrap1(sequence, sequence + inputRows);
 
@@ -241,7 +240,7 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn)
 
   cudf::size_type inputRows = 40;
 
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cuda::counting_iterator{0};
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence)::value_type>
     leftColWrap1(sequence, sequence + inputRows);
   columnFactoryT rightColWrap1{};  // wrapper of empty column <- this might require a (sequence,
@@ -687,12 +686,10 @@ class MergeTest : public cudf::test::BaseFixture {};
 TEST_F(MergeTest, KeysWithNulls)
 {
   cudf::size_type nrows = 13200;  // Ensures that thrust::merge uses more than one tile/block
-  auto data_iter        = thrust::make_counting_iterator<int32_t>(0);
-  auto valids1 =
-    cudf::detail::make_counting_transform_iterator(0, [](auto row) { return row % 10 != 0; });
+  auto data_iter        = cuda::counting_iterator<int32_t>{0};
+  auto valids1          = cudf::test::iterators::nulls_at_multiples_of(10);
   cudf::test::fixed_width_column_wrapper<int32_t> data1(data_iter, data_iter + nrows, valids1);
-  auto valids2 =
-    cudf::detail::make_counting_transform_iterator(0, [](auto row) { return row % 15 != 0; });
+  auto valids2 = cudf::test::iterators::nulls_at_multiples_of(15);
   cudf::test::fixed_width_column_wrapper<int32_t> data2(data_iter, data_iter + nrows, valids2);
   auto all_data = cudf::concatenate(std::vector<cudf::column_view>{{data1, data2}});
 
@@ -720,16 +717,14 @@ TEST_F(MergeTest, KeysWithNulls)
 
 TEST_F(MergeTest, Structs)
 {
-  // clang-format off
-
   cudf::test::fixed_width_column_wrapper<int> t0_col0{0, 2, 4, 6, 8};
-    cudf::test::strings_column_wrapper t0_scol0{"abc", "def", "ghi", "jkl", "mno"};
-    cudf::test::fixed_width_column_wrapper<float> t0_scol1{1, 2, 3, 4, 5};
+  cudf::test::strings_column_wrapper t0_scol0{"abc", "def", "ghi", "jkl", "mno"};
+  cudf::test::fixed_width_column_wrapper<float> t0_scol1{1, 2, 3, 4, 5};
   cudf::test::structs_column_wrapper t0_col1({t0_scol0, t0_scol1});
 
   cudf::test::fixed_width_column_wrapper<int> t1_col0{1, 3, 5, 7, 9};
-    cudf::test::strings_column_wrapper t1_scol0{"pqr", "stu", "vwx", "yzz", "000"};
-    cudf::test::fixed_width_column_wrapper<float> t1_scol1{-1, -2, -3, -4, -5};
+  cudf::test::strings_column_wrapper t1_scol0{"pqr", "stu", "vwx", "yzz", "000"};
+  cudf::test::fixed_width_column_wrapper<float> t1_scol1{-1, -2, -3, -4, -5};
   cudf::test::structs_column_wrapper t1_col1({t1_scol0, t1_scol1});
 
   cudf::table_view t0({t0_col0, t0_col1});
@@ -738,29 +733,26 @@ TEST_F(MergeTest, Structs)
   auto result = cudf::merge({t0, t1}, {0}, {cudf::order::ASCENDING});
 
   cudf::test::fixed_width_column_wrapper<int> e_col0{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    cudf::test::strings_column_wrapper e_scol0{"abc", "pqr", "def", "stu", "ghi", "vwx", "jkl", "yzz", "mno", "000"};
-    cudf::test::fixed_width_column_wrapper<float> e_scol1{1, -1, 2, -2, 3, -3, 4, -4, 5, -5};
+  cudf::test::strings_column_wrapper e_scol0{
+    "abc", "pqr", "def", "stu", "ghi", "vwx", "jkl", "yzz", "mno", "000"};
+  cudf::test::fixed_width_column_wrapper<float> e_scol1{1, -1, 2, -2, 3, -3, 4, -4, 5, -5};
   cudf::test::structs_column_wrapper e_col1({e_scol0, e_scol1});
 
   cudf::table_view expected({e_col0, e_col1});
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, *result);
-
-  // clang-format on
 }
 
 TEST_F(MergeTest, StructsWithNulls)
 {
-  // clang-format off
-
   cudf::test::fixed_width_column_wrapper<int> t0_col0{0, 2, 4, 6, 8};
-    cudf::test::strings_column_wrapper t0_scol0{{"abc", "def", "ghi", "jkl", "mno"}, {1, 1, 0, 0, 1}};
-    cudf::test::fixed_width_column_wrapper<float> t0_scol1{{1, 2, 3, 4, 5}, {0, 1, 0, 0, 1}};
+  cudf::test::strings_column_wrapper t0_scol0{{"abc", "def", "", "", "mno"}, {1, 1, 0, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<float> t0_scol1{{1, 2, 3, 4, 5}, {0, 1, 0, 0, 1}};
   cudf::test::structs_column_wrapper t0_col1({t0_scol0, t0_scol1}, {1, 0, 1, 0, 0});
 
   cudf::test::fixed_width_column_wrapper<int> t1_col0{1, 3, 5, 7, 9};
-    cudf::test::strings_column_wrapper t1_scol0{"pqr", "stu", "vwx", "yzz", "000"};
-    cudf::test::fixed_width_column_wrapper<float> t1_scol1{{-1, -2, -3, -4, -5}, {1, 1, 1, 0, 0}};
+  cudf::test::strings_column_wrapper t1_scol0{"pqr", "stu", "vwx", "yzz", "000"};
+  cudf::test::fixed_width_column_wrapper<float> t1_scol1{{-1, -2, -3, -4, -5}, {1, 1, 1, 0, 0}};
   cudf::test::structs_column_wrapper t1_col1({t1_scol0, t1_scol1}, {1, 1, 1, 1, 0});
 
   cudf::table_view t0({t0_col0, t0_col1});
@@ -769,99 +761,96 @@ TEST_F(MergeTest, StructsWithNulls)
   auto result = cudf::merge({t0, t1}, {0}, {cudf::order::ASCENDING});
 
   cudf::test::fixed_width_column_wrapper<int> e_col0{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    cudf::test::strings_column_wrapper e_scol0{{"abc", "pqr", "def", "stu", "ghi", "vwx", "jkl", "yzz", "mno", "000"},
-                                               {1,     1,     0,      1,    0,     1,     0,     1,     0,     1}};
-    cudf::test::fixed_width_column_wrapper<float> e_scol1{{1, -1, 2, -2, 3, -3, 4, -4, 5, -5},
-                                                          {0,  1, 0,  1, 0,  1, 0,  0, 0,  0}};
+  cudf::test::strings_column_wrapper e_scol0{
+    {"abc", "pqr", "", "stu", "", "vwx", "", "yzz", "", "000"}, {1, 1, 0, 1, 0, 1, 0, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<float> e_scol1{{1, -1, 2, -2, 3, -3, 4, -4, 5, -5},
+                                                        {0, 1, 0, 1, 0, 1, 0, 0, 0, 0}};
   cudf::test::structs_column_wrapper e_col1({e_scol0, e_scol1}, {1, 1, 0, 1, 1, 1, 0, 1, 0, 0});
 
   cudf::table_view expected({e_col0, e_col1});
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, *result);
-
-  // clang-format on
 }
 
 TEST_F(MergeTest, StructsNested)
 {
-  // clang-format off
-
   cudf::test::fixed_width_column_wrapper<int> t0_col0{8, 6, 4, 2, 0};
-    cudf::test::strings_column_wrapper t0_scol0{"mno", "jkl", "ghi", "def", "abc"};
-    cudf::test::fixed_width_column_wrapper<float> t0_scol1{5, 4, 3, 2, 1};
-      cudf::test::strings_column_wrapper t0_sscol0{"5555", "4444", "333", "22", "1"};
-      cudf::test::fixed_width_column_wrapper<float> t0_sscol1{50, 40, 30, 20, 10};
-    cudf::test::structs_column_wrapper t0_scol2({t0_sscol0, t0_sscol1});
+  cudf::test::strings_column_wrapper t0_scol0{"mno", "jkl", "ghi", "def", "abc"};
+  cudf::test::fixed_width_column_wrapper<float> t0_scol1{5, 4, 3, 2, 1};
+  cudf::test::strings_column_wrapper t0_sscol0{"5555", "4444", "333", "22", "1"};
+  cudf::test::fixed_width_column_wrapper<float> t0_sscol1{50, 40, 30, 20, 10};
+  cudf::test::structs_column_wrapper t0_scol2({t0_sscol0, t0_sscol1});
   cudf::test::structs_column_wrapper t0_col1({t0_scol0, t0_scol1, t0_scol2});
 
   cudf::test::fixed_width_column_wrapper<int> t1_col0{9, 7, 5, 3, 1};
-    cudf::test::strings_column_wrapper t1_scol0{"000", "yzz", "vwx", "stu", "pqr"};
-    cudf::test::fixed_width_column_wrapper<float> t1_scol1{-5, -4, -3, -2, -1};
-      cudf::test::strings_column_wrapper t1_sscol0{"-5555", "-4444", "-333", "-22", "-1"};
-      cudf::test::fixed_width_column_wrapper<float> t1_sscol1{-50, -40, -30, -20, -10};
-    cudf::test::structs_column_wrapper t1_scol2({t1_sscol0, t1_sscol1});
+  cudf::test::strings_column_wrapper t1_scol0{"000", "yzz", "vwx", "stu", "pqr"};
+  cudf::test::fixed_width_column_wrapper<float> t1_scol1{-5, -4, -3, -2, -1};
+  cudf::test::strings_column_wrapper t1_sscol0{"-5555", "-4444", "-333", "-22", "-1"};
+  cudf::test::fixed_width_column_wrapper<float> t1_sscol1{-50, -40, -30, -20, -10};
+  cudf::test::structs_column_wrapper t1_scol2({t1_sscol0, t1_sscol1});
   cudf::test::structs_column_wrapper t1_col1({t1_scol0, t1_scol1, t1_scol2});
 
-  cudf::table_view t0({t0_col0 , t0_col1});
-  cudf::table_view t1({t1_col0 , t1_col1});
+  cudf::table_view t0({t0_col0, t0_col1});
+  cudf::table_view t1({t1_col0, t1_col1});
 
   auto result = cudf::merge({t0, t1}, {0}, {cudf::order::DESCENDING});
 
   cudf::test::fixed_width_column_wrapper<int> e_col0{9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
-    cudf::test::strings_column_wrapper e_scol0{"000", "mno", "yzz", "jkl", "vwx", "ghi", "stu", "def", "pqr", "abc"};
-    cudf::test::fixed_width_column_wrapper<float> e_scol1{-5, 5, -4, 4, -3, 3, -2, 2, -1, 1};
-      cudf::test::strings_column_wrapper e_sscol0{"-5555", "5555", "-4444", "4444", "-333", "333", "-22", "22", "-1", "1"};
-      cudf::test::fixed_width_column_wrapper<float> e_sscol1{-50, 50, -40, 40, -30, 30, -20, 20, -10, 10};
-    cudf::test::structs_column_wrapper e_scol2({e_sscol0, e_sscol1});
+  cudf::test::strings_column_wrapper e_scol0{
+    "000", "mno", "yzz", "jkl", "vwx", "ghi", "stu", "def", "pqr", "abc"};
+  cudf::test::fixed_width_column_wrapper<float> e_scol1{-5, 5, -4, 4, -3, 3, -2, 2, -1, 1};
+  cudf::test::strings_column_wrapper e_sscol0{
+    "-5555", "5555", "-4444", "4444", "-333", "333", "-22", "22", "-1", "1"};
+  cudf::test::fixed_width_column_wrapper<float> e_sscol1{
+    -50, 50, -40, 40, -30, 30, -20, 20, -10, 10};
+  cudf::test::structs_column_wrapper e_scol2({e_sscol0, e_sscol1});
   cudf::test::structs_column_wrapper e_col1({e_scol0, e_scol1, e_scol2});
 
   cudf::table_view expected({e_col0, e_col1});
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, *result);
-
-  // clang-format on
 }
 
 TEST_F(MergeTest, StructsNestedWithNulls)
 {
-  // clang-format off
-
   cudf::test::fixed_width_column_wrapper<int> t0_col0{8, 6, 4, 2, 0};
-    cudf::test::strings_column_wrapper t0_scol0{"mno", "jkl", "ghi", "def", "abc"};
-    cudf::test::fixed_width_column_wrapper<float> t0_scol1{{5, 4, 3, 2, 1}, {1, 1, 0, 1, 1}};
-      cudf::test::strings_column_wrapper t0_sscol0{{"5555", "4444", "333", "22", "1"}, {1, 0, 1, 1, 0}};
-      cudf::test::fixed_width_column_wrapper<float> t0_sscol1{50, 40, 30, 20, 10};
-    cudf::test::structs_column_wrapper t0_scol2({t0_sscol0, t0_sscol1}, {0, 0, 1, 1, 1});
+  cudf::test::strings_column_wrapper t0_scol0{"mno", "jkl", "ghi", "def", "abc"};
+  cudf::test::fixed_width_column_wrapper<float> t0_scol1{{5, 4, 3, 2, 1}, {1, 1, 0, 1, 1}};
+  cudf::test::strings_column_wrapper t0_sscol0{{"5555", "", "333", "22", ""}, {1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<float> t0_sscol1{50, 40, 30, 20, 10};
+  cudf::test::structs_column_wrapper t0_scol2({t0_sscol0, t0_sscol1}, {0, 0, 1, 1, 1});
   cudf::test::structs_column_wrapper t0_col1({t0_scol0, t0_scol1, t0_scol2}, {0, 0, 1, 1, 1});
 
   cudf::test::fixed_width_column_wrapper<int> t1_col0{9, 7, 5, 3, 1};
-    cudf::test::strings_column_wrapper t1_scol0{"000", "yzz", "vwx", "stu", "pqr"};
-    cudf::test::fixed_width_column_wrapper<float> t1_scol1{{-5, -4, -3, -2, -1}, {1, 1, 1, 0, 1}};
-      cudf::test::strings_column_wrapper t1_sscol0{{"-5555", "-4444", "-333", "-22", "-1"}, {1, 1, 1, 1, 1}};
-      cudf::test::fixed_width_column_wrapper<float> t1_sscol1{-50, -40, -30, -20, -10};
-    cudf::test::structs_column_wrapper t1_scol2({t1_sscol0, t1_sscol1}, {1, 1, 1, 1, 0});
+  cudf::test::strings_column_wrapper t1_scol0{"000", "yzz", "vwx", "stu", "pqr"};
+  cudf::test::fixed_width_column_wrapper<float> t1_scol1{{-5, -4, -3, -2, -1}, {1, 1, 1, 0, 1}};
+  cudf::test::strings_column_wrapper t1_sscol0{{"-5555", "-4444", "-333", "-22", "-1"},
+                                               {1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<float> t1_sscol1{-50, -40, -30, -20, -10};
+  cudf::test::structs_column_wrapper t1_scol2({t1_sscol0, t1_sscol1}, {1, 1, 1, 1, 0});
   cudf::test::structs_column_wrapper t1_col1({t1_scol0, t1_scol1, t1_scol2});
 
-  cudf::table_view t0({t0_col0 , t0_col1});
-  cudf::table_view t1({t1_col0 , t1_col1});
+  cudf::table_view t0({t0_col0, t0_col1});
+  cudf::table_view t1({t1_col0, t1_col1});
 
   auto result = cudf::merge({t0, t1}, {0}, {cudf::order::DESCENDING});
 
   cudf::test::fixed_width_column_wrapper<int> e_col0{9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
-    cudf::test::strings_column_wrapper e_scol0{"000", "mno", "yzz", "jkl", "vwx", "ghi", "stu", "def", "pqr", "abc"};
-    cudf::test::fixed_width_column_wrapper<float> e_scol1{{-5, 5, -4, 4, -3, 3, -2, 2, -1, 1},
-                                                          { 1, 1,  1, 1,  1, 0,  0, 1,  1, 1}};
-      cudf::test::strings_column_wrapper e_sscol0{{"-5555", "5555", "-4444", "4444", "-333", "333", "-22", "22", "-1", "1"},
-                                                  {  1,      0,       1,      0,       1,     1,      1,    1,     0,   0}};
-      cudf::test::fixed_width_column_wrapper<float> e_sscol1{-50, 50, -40, 40, -30, 30, -20, 20, -10, 10};
-    cudf::test::structs_column_wrapper e_scol2({e_sscol0, e_sscol1}, {1, 0, 1, 0, 1, 1, 1, 1, 0, 1});
-  cudf::test::structs_column_wrapper e_col1({e_scol0, e_scol1, e_scol2}, {1, 0, 1, 0, 1, 1, 1, 1, 1, 1});
+  cudf::test::strings_column_wrapper e_scol0{
+    "000", "mno", "yzz", "jkl", "vwx", "ghi", "stu", "def", "pqr", "abc"};
+  cudf::test::fixed_width_column_wrapper<float> e_scol1{{-5, 5, -4, 4, -3, 3, -2, 2, -1, 1},
+                                                        {1, 1, 1, 1, 1, 0, 0, 1, 1, 1}};
+  cudf::test::strings_column_wrapper e_sscol0{
+    {"-5555", "", "-4444", "", "-333", "333", "-22", "22", "", ""}, {1, 0, 1, 0, 1, 1, 1, 1, 0, 0}};
+  cudf::test::fixed_width_column_wrapper<float> e_sscol1{
+    -50, 50, -40, 40, -30, 30, -20, 20, -10, 10};
+  cudf::test::structs_column_wrapper e_scol2({e_sscol0, e_sscol1}, {1, 0, 1, 0, 1, 1, 1, 1, 0, 1});
+  cudf::test::structs_column_wrapper e_col1({e_scol0, e_scol1, e_scol2},
+                                            {1, 0, 1, 0, 1, 1, 1, 1, 1, 1});
 
   cudf::table_view expected({e_col0, e_col1});
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, *result);
-
-  // clang-format on
 }
 
 using lcw = cudf::test::lists_column_wrapper<int32_t>;

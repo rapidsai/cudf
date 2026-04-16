@@ -203,6 +203,11 @@ allow_mismatched_pq_schemas : boolean, default False
     options from the input files with otherwise mismatched schemas.
 ignore_missing_columns : boolean, default True
     If True, ignores non-existent projected columns while reading.
+case_sensitive_names : boolean, default True
+    If True (default), column names in `columns` and `filter` are
+    matched case-sensitively against the column names in Parquet schema.
+    Otherwise, if there are multiple case-insensitive matches, the first
+    matched column from the Parquet schema is selected.
 prefetch_options : dict, default None
     WARNING: This is an experimental feature and may be removed at any
     time without warning or deprecation period.

@@ -95,12 +95,13 @@ TEST_F(HybridScanFiltersTest, Metadata)
   // Filtering AST - table[0] < 100
   auto literal_value     = cudf::numeric_scalar<T>(100);
   auto literal           = cudf::ast::literal(literal_value);
-  auto col_ref_0         = cudf::ast::column_name_reference("col0");
+  auto col_ref_0         = cudf::ast::column_name_reference("coL0");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
 
   // Create reader options with empty source info
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
+  cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
+                                               .filter(filter_expression)
+                                               .case_sensitive_names(false);
 
   // Input file buffer span
   auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
@@ -1504,5 +1505,76 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
     EXPECT_EQ(filter_row_groups_with_dictionaries(
                 datasource_ref, reader_ref, filter_expression, stream, mr),
               expected_row_groups);
+  }
+}
+
+TEST_F(HybridScanFiltersTest, RowGroupPasses)
+{
+  auto constexpr num_rg      = 10;
+  auto constexpr rows_per_rg = 1'000;
+
+  // Create a per-row-group table (each write() call produces one row group)
+  auto values = cuda::counting_iterator(0);
+  cudf::test::fixed_width_column_wrapper<int32_t> col0(values, values + rows_per_rg);
+  cudf::test::fixed_width_column_wrapper<double> col1(values, values + rows_per_rg);
+  auto chunk_table = cudf::table_view{{col0, col1}};
+
+  std::string parquet_filepath = temp_env->get_temp_filepath("RowGroupPassesBasic.parquet");
+  {
+    auto opts =
+      cudf::io::chunked_parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath})
+        .build();
+    auto writer = cudf::io::chunked_parquet_writer(opts);
+    for (int i = 0; i < num_rg; ++i) {
+      writer.write(chunk_table);
+    }
+    writer.close();
+  }
+
+  auto options = cudf::io::parquet_reader_options::builder().build();
+
+  auto datasource          = cudf::io::datasource::create(parquet_filepath);
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+  auto reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
+
+  auto const all_row_groups = reader->all_row_groups(options);
+  EXPECT_EQ(static_cast<int>(all_row_groups.size()), num_rg);
+
+  // No pass read limit. All row groups in a single pass
+  {
+    auto passes = reader->construct_row_group_passes(all_row_groups, 0);
+    EXPECT_EQ(passes.size(), 1);
+    EXPECT_EQ(passes.front(), all_row_groups);
+  }
+
+  // Small pass limit would result in each row group in its own pass
+  {
+    auto passes = reader->construct_row_group_passes(all_row_groups, 1);
+    EXPECT_EQ(passes.size(), all_row_groups.size());
+    auto zipped = cuda::make_zip_iterator(passes.begin(), all_row_groups.begin());
+    std::for_each(zipped, zipped + passes.size(), [&](auto const& iter) {
+      auto const& pass      = cuda::std::get<0>(iter);
+      auto const& row_group = cuda::std::get<1>(iter);
+      EXPECT_EQ(pass.size(), 1);
+      EXPECT_EQ(pass.front(), row_group);
+    });
+  }
+
+  // All passes should cover all row groups and be consecutive
+  {
+    auto passes = reader->construct_row_group_passes(all_row_groups, 1'024);
+    std::vector<cudf::size_type> flattened;
+    for (auto const& pass : passes) {
+      EXPECT_GT(pass.size(), 0);
+      flattened.insert(flattened.end(), pass.begin(), pass.end());
+    }
+    EXPECT_EQ(flattened.size(), all_row_groups.size());
+    auto zipped = cuda::make_zip_iterator(flattened.begin(), all_row_groups.begin());
+    std::for_each(zipped, zipped + flattened.size(), [&](auto const& iter) {
+      auto const& flattened_value = cuda::std::get<0>(iter);
+      auto const& row_group       = cuda::std::get<1>(iter);
+      EXPECT_EQ(flattened_value, row_group);
+    });
   }
 }

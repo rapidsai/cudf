@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -27,8 +27,8 @@ enum class ast_operator : int32_t {
   MUL,         ///< operator *
   DIV,         ///< operator / using common type of lhs and rhs
   TRUE_DIV,    ///< operator / after promoting type to floating point
-  FLOOR_DIV,   ///< operator / after promoting to 64 bit floating point and then
-               ///< flooring the result
+  FLOOR_DIV,   ///< operator / after promoting to the common type of lhs and rhs (integral or
+               ///< floating point), and then flooring the result
   MOD,         ///< operator %
   PYMOD,       ///< operator % using Python's sign rules for negatives
   POW,         ///< lhs ^ rhs

@@ -45,25 +45,29 @@ class split_device_span {
 
   split_device_span() = default;
 
-  explicit constexpr split_device_span(device_span<T> head, device_span<T> tail = {})
+  explicit CUDF_HOST_DEVICE constexpr split_device_span(device_span<T> head,
+                                                        device_span<T> tail = {})
     : _head{head}, _tail{tail}
   {
   }
 
-  [[nodiscard]] __device__ constexpr reference operator[](size_type i) const
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr reference operator[](size_type i) const
   {
     return i < _head.size() ? _head[i] : _tail[i - _head.size()];
   }
 
-  [[nodiscard]] constexpr size_type size() const { return _head.size() + _tail.size(); }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr size_type size() const
+  {
+    return _head.size() + _tail.size();
+  }
 
-  [[nodiscard]] constexpr device_span<T> head() const { return _head; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr device_span<T> head() const { return _head; }
 
-  [[nodiscard]] constexpr device_span<T> tail() const { return _tail; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr device_span<T> tail() const { return _tail; }
 
-  [[nodiscard]] constexpr iterator begin() const;
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr iterator begin() const;
 
-  [[nodiscard]] constexpr iterator end() const;
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr iterator end() const;
 
  private:
   device_span<T> _head;
@@ -89,68 +93,78 @@ class split_device_span_iterator {
 
   split_device_span_iterator() = default;
 
-  constexpr split_device_span_iterator(split_device_span<T> span, size_type offset)
+  CUDF_HOST_DEVICE constexpr split_device_span_iterator(split_device_span<T> span, size_type offset)
     : _span{span}, _offset{offset}
   {
   }
 
-  [[nodiscard]] constexpr reference operator*() const { return _span[_offset]; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr reference operator*() const { return _span[_offset]; }
 
-  [[nodiscard]] constexpr reference operator[](size_type i) const { return _span[_offset + i]; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr reference operator[](size_type i) const
+  {
+    return _span[_offset + i];
+  }
 
-  [[nodiscard]] constexpr friend bool operator==(it const& lhs, it const& rhs)
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend bool operator==(it const& lhs, it const& rhs)
   {
     return lhs._offset == rhs._offset;
   }
 
-  [[nodiscard]] constexpr friend bool operator!=(it const& lhs, it const& rhs)
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend bool operator!=(it const& lhs, it const& rhs)
   {
     return !(lhs == rhs);
   }
-  [[nodiscard]] constexpr friend bool operator<(it const& lhs, it const& rhs)
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend bool operator<(it const& lhs, it const& rhs)
   {
     return lhs._offset < rhs._offset;
   }
 
-  [[nodiscard]] constexpr friend bool operator>=(it const& lhs, it const& rhs)
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend bool operator>=(it const& lhs, it const& rhs)
   {
     return !(lhs < rhs);
   }
 
-  [[nodiscard]] constexpr friend bool operator>(it const& lhs, it const& rhs) { return rhs < lhs; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend bool operator>(it const& lhs, it const& rhs)
+  {
+    return rhs < lhs;
+  }
 
-  [[nodiscard]] constexpr friend bool operator<=(it const& lhs, it const& rhs)
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend bool operator<=(it const& lhs, it const& rhs)
   {
     return !(lhs > rhs);
   }
 
-  [[nodiscard]] constexpr friend difference_type operator-(it const& lhs, it const& rhs)
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend difference_type operator-(it const& lhs,
+                                                                            it const& rhs)
   {
     return lhs._offset - rhs._offset;
   }
 
-  [[nodiscard]] constexpr friend it operator+(it lhs, difference_type i) { return lhs += i; }
+  [[nodiscard]] CUDF_HOST_DEVICE constexpr friend it operator+(it lhs, difference_type i)
+  {
+    return lhs += i;
+  }
 
-  constexpr it& operator+=(difference_type i)
+  CUDF_HOST_DEVICE constexpr it& operator+=(difference_type i)
   {
     _offset += i;
     return *this;
   }
 
-  constexpr it& operator-=(difference_type i) { return *this += -i; }
+  CUDF_HOST_DEVICE constexpr it& operator-=(difference_type i) { return *this += -i; }
 
-  constexpr it& operator++() { return *this += 1; }
+  CUDF_HOST_DEVICE constexpr it& operator++() { return *this += 1; }
 
-  constexpr it& operator--() { return *this -= 1; }
+  CUDF_HOST_DEVICE constexpr it& operator--() { return *this -= 1; }
 
-  constexpr it operator++(int)
+  CUDF_HOST_DEVICE constexpr it operator++(int)
   {
     auto result = *this;
     ++*this;
     return result;
   }
 
-  constexpr it operator--(int)
+  CUDF_HOST_DEVICE constexpr it operator--(int)
   {
     auto result = *this;
     --*this;
@@ -163,13 +177,15 @@ class split_device_span_iterator {
 };
 
 template <typename T>
-[[nodiscard]] constexpr split_device_span_iterator<T> split_device_span<T>::begin() const
+[[nodiscard]] CUDF_HOST_DEVICE constexpr split_device_span_iterator<T> split_device_span<T>::begin()
+  const
 {
   return {*this, 0};
 }
 
 template <typename T>
-[[nodiscard]] constexpr split_device_span_iterator<T> split_device_span<T>::end() const
+[[nodiscard]] CUDF_HOST_DEVICE constexpr split_device_span_iterator<T> split_device_span<T>::end()
+  const
 {
   return {*this, size()};
 }
@@ -312,8 +328,11 @@ class output_builder {
     rmm::device_uvector<T> output{size(), stream, mr};
     auto output_it = output.begin();
     for (auto const& chunk : _chunks) {
-      output_it = thrust::copy(
-        rmm::exec_policy_nosync(stream), chunk.begin(), chunk.begin() + chunk.size(), output_it);
+      output_it =
+        thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     chunk.begin(),
+                     chunk.begin() + chunk.size(),
+                     output_it);
     }
     return output;
   }

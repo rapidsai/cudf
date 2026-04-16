@@ -80,10 +80,11 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
 
   if (num_groups == 0) { return result; }
 
-  thrust::adjacent_difference(rmm::exec_policy_nosync(stream),
-                              group_offsets.begin() + 1,
-                              group_offsets.end(),
-                              result->mutable_view().begin<size_type>());
+  thrust::adjacent_difference(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    group_offsets.begin() + 1,
+    group_offsets.end(),
+    result->mutable_view().begin<size_type>());
   return result;
 }
 
