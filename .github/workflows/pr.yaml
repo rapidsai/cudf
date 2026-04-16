@@ -618,6 +618,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: cpu8
       container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.cuda_version }}-ubuntu24.04-py3.13"
+      arch: ${{ matrix.arch }}
       script: ci/build_streaming.sh
       artifact-name: streaming_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
       file_to_upload: cpp/install
@@ -641,6 +642,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: gpu-l4-latest-1
       container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.cuda_version }}-ubuntu24.04-py3.13"
+      arch: ${{ matrix.arch }}
       script: ci/test_streaming.sh streaming_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
 
   telemetry-summarize:
