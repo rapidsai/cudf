@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <rmm/device_buffer.hpp>
 #include "strings/positions.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -26,6 +25,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
