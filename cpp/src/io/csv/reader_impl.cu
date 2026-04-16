@@ -19,6 +19,8 @@
 #include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -26,7 +28,6 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/codec.hpp>
@@ -686,9 +687,6 @@ decode_result decode_data(parse_options const& parse_opts,
     }
   }
 
-  auto d_valid_counts = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_active_columns, stream, cudf::get_current_device_resource_ref());
-
   cudf::io::csv::gpu::decode_row_column_data(
     parse_opts.view(),
     data,
@@ -697,13 +695,19 @@ decode_result decode_data(parse_options const& parse_opts,
     make_device_uvector_async(column_types, stream, cudf::get_current_device_resource_ref()),
     make_device_uvector_async(h_data, stream, cudf::get_current_device_resource_ref()),
     make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
-    d_valid_counts,
     make_device_uvector_async(h_is_quoted_flags, stream, cudf::get_current_device_resource_ref()),
     stream);
 
-  auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
+  // Compute null counts from validity bitmasks (avoids per-field atomicAdd in the kernel)
   for (int i = 0; i < num_active_columns; ++i) {
-    out_buffers[i].null_count() = num_records - h_valid_counts[i];
+    if (column_types[i].id() == type_id::STRING) {
+      // STRING columns track nulls via nullptr in the string pair, not the validity bitmask
+      out_buffers[i].null_count() = num_records;
+    } else {
+      auto const valid_count =
+        cudf::detail::count_set_bits(out_buffers[i].null_mask(), 0, num_records, stream);
+      out_buffers[i].null_count() = num_records - valid_count;
+    }
   }
 
   return {std::move(out_buffers), std::move(is_quoted_flags_storage)};
@@ -934,18 +938,18 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   if (num_active_columns == 0) { return {std::make_unique<table>(), {}}; }
 
   // Exclude the end-of-data row from number of rows with actual data
-  auto const num_records = std::max(row_offsets.size(), 1ul) - 1;
+  auto const num_records  = std::max(row_offsets.size(), 1ul) - 1;
   auto const column_types = [&] {
     cudf::scoped_range rng{"csv::determine_column_types"};
     return determine_column_types(reader_opts,
-                                                   parse_opts,
-                                                   column_names,
-                                                   data,
-                                                   row_offsets,
-                                                   num_records,
-                                                   column_flags,
-                                                   num_active_columns,
-                                                   stream);
+                                  parse_opts,
+                                  column_names,
+                                  data,
+                                  row_offsets,
+                                  num_records,
+                                  column_flags,
+                                  num_active_columns,
+                                  stream);
   }();
 
   auto metadata    = table_metadata{};

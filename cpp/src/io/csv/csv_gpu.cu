@@ -336,7 +336,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
-                      device_span<size_type> valid_counts,
                       device_span<bool* const> is_quoted_flags)
 {
   auto const raw_csv     = data.data();
@@ -411,7 +410,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                     options,
                                     column_flags[col] & column_parse::as_hexadecimal)) {
             set_bit(valids[actual_col], out_row);
-            atomicAdd(&valid_counts[actual_col], 1);
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
@@ -887,7 +885,6 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::data_type const> dtypes,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
-                            device_span<size_type> valid_counts,
                             device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
@@ -932,7 +929,6 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                                                                       dtypes,
                                                                       columns,
                                                                       valids,
-                                                                      valid_counts,
                                                                       is_quoted_flags);
   }
 }
