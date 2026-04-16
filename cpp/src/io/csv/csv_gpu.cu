@@ -342,92 +342,96 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<size_type> valid_counts,
                       device_span<bool* const> is_quoted_flags)
 {
-  auto const raw_csv     = data.data();
-  auto const rec_id      = grid_1d::global_thread_id();
-  auto const rec_id_next = rec_id + 1;
+  auto const raw_csv = data.data();
 
-  if (rec_id_next >= row_offsets.size()) return;
+  // Thread coarsening: each thread processes 2 consecutive rows.
+  // This reduces grid size and amortizes per-thread initialization overhead.
+  for (int r = 0; r < 2; ++r) {
+    auto const rec_id      = grid_1d::global_thread_id() * 2 + r;
+    auto const rec_id_next = rec_id + 1;
 
-  auto const out_row   = rec_id + output_row_offset;
-  auto const row_start = raw_csv + row_offsets[rec_id];
-  auto const row_end   = raw_csv + row_offsets[rec_id_next];
-  auto const base_idx  = static_cast<size_t>(rec_id) * num_actual_cols;
+    if (rec_id_next >= row_offsets.size()) return;
 
-  int actual_col        = 0;
-  uint32_t prev_end_ofs = 0;  // cached field_end from previous iteration
-  for (int col = 0; col < column_flags.size() && col < num_actual_cols; ++col) {
-    // Read current field_end; derive field_start from cached previous end
-    auto const cur_end_ofs = field_ends[base_idx + col];
-    auto field_start    = (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + prev_end_ofs + 1;
-    auto next_delimiter = raw_csv + cur_end_ofs;
-    prev_end_ofs        = cur_end_ofs;
+    auto const out_row   = rec_id + output_row_offset;
+    auto const row_start = raw_csv + row_offsets[rec_id];
+    auto const row_end   = raw_csv + row_offsets[rec_id_next];
+    auto const base_idx  = static_cast<size_t>(rec_id) * num_actual_cols;
 
-    if (field_start >= row_end || next_delimiter < field_start) break;
+    int actual_col        = 0;
+    uint32_t prev_end_ofs = 0;
+    for (int col = 0; col < column_flags.size() && col < num_actual_cols; ++col) {
+      auto const cur_end_ofs = field_ends[base_idx + col];
+      auto field_start    = (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + prev_end_ofs + 1;
+      auto next_delimiter = raw_csv + cur_end_ofs;
+      prev_end_ofs        = cur_end_ofs;
 
-    if (column_flags[col] & column_parse::enabled) {
-      // check if the entire field is a NaN string - consistent with pandas
-      auto const is_valid = !serialized_trie_contains(
-        options.trie_na, {field_start, static_cast<size_t>(next_delimiter - field_start)});
+      if (field_start >= row_end || next_delimiter < field_start) break;
 
-      // Modify field_start & end to ignore whitespace and quotechars
-      auto field_end = next_delimiter;
-      if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
-        auto const trimmed_field =
-          trim_whitespaces_quotes(field_start, field_end, options.quotechar);
-        field_start = trimmed_field.first;
-        field_end   = trimmed_field.second;
-      }
-      bool* const is_quoted_output =
-        is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
-      if (is_valid) {
-        // Type dispatcher does not handle STRING
-        if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-          auto end        = next_delimiter;
-          bool was_quoted = false;
-          if (not options.keepquotes) {
-            if (not options.detect_whitespace_around_quotes) {
-              if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
-                ++field_start;
-                --end;
-                was_quoted = true;
-              }
-            } else {
-              auto const trimmed_field = trim_whitespaces(field_start, end);
-              if ((*trimmed_field.first == options.quotechar) &&
-                  (*(trimmed_field.second - 1) == options.quotechar)) {
-                field_start = trimmed_field.first + 1;
-                end         = trimmed_field.second - 1;
-                was_quoted  = true;
+      if (column_flags[col] & column_parse::enabled) {
+        // check if the entire field is a NaN string - consistent with pandas
+        auto const is_valid = !serialized_trie_contains(
+          options.trie_na, {field_start, static_cast<size_t>(next_delimiter - field_start)});
+
+        // Modify field_start & end to ignore whitespace and quotechars
+        auto field_end = next_delimiter;
+        if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
+          auto const trimmed_field =
+            trim_whitespaces_quotes(field_start, field_end, options.quotechar);
+          field_start = trimmed_field.first;
+          field_end   = trimmed_field.second;
+        }
+        bool* const is_quoted_output =
+          is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
+        if (is_valid) {
+          // Type dispatcher does not handle STRING
+          if (dtypes[actual_col].id() == cudf::type_id::STRING) {
+            auto end        = next_delimiter;
+            bool was_quoted = false;
+            if (not options.keepquotes) {
+              if (not options.detect_whitespace_around_quotes) {
+                if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
+                  ++field_start;
+                  --end;
+                  was_quoted = true;
+                }
+              } else {
+                auto const trimmed_field = trim_whitespaces(field_start, end);
+                if ((*trimmed_field.first == options.quotechar) &&
+                    (*(trimmed_field.second - 1) == options.quotechar)) {
+                  field_start = trimmed_field.first + 1;
+                  end         = trimmed_field.second - 1;
+                  was_quoted  = true;
+                }
               }
             }
+            if (is_quoted_output != nullptr) { is_quoted_output[out_row] = was_quoted; }
+            auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
+            str_list[out_row].first  = field_start;
+            str_list[out_row].second = end - field_start;
+          } else {
+            if (cudf::type_dispatcher(dtypes[actual_col],
+                                      ConvertFunctor{},
+                                      field_start,
+                                      field_end,
+                                      columns[actual_col],
+                                      out_row,
+                                      dtypes[actual_col],
+                                      options,
+                                      column_flags[col] & column_parse::as_hexadecimal)) {
+              set_bit(valids[actual_col], out_row);
+              atomicAdd(&valid_counts[actual_col], 1);
+            }
           }
-          if (is_quoted_output != nullptr) { is_quoted_output[out_row] = was_quoted; }
+        } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
-          str_list[out_row].first  = field_start;
-          str_list[out_row].second = end - field_start;
-        } else {
-          if (cudf::type_dispatcher(dtypes[actual_col],
-                                    ConvertFunctor{},
-                                    field_start,
-                                    field_end,
-                                    columns[actual_col],
-                                    out_row,
-                                    dtypes[actual_col],
-                                    options,
-                                    column_flags[col] & column_parse::as_hexadecimal)) {
-            set_bit(valids[actual_col], out_row);
-            atomicAdd(&valid_counts[actual_col], 1);
-          }
+          str_list[out_row].first  = nullptr;
+          str_list[out_row].second = 0;
+          if (is_quoted_output != nullptr) { is_quoted_output[out_row] = false; }
         }
-      } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-        auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
-        str_list[out_row].first = nullptr;
-        str_list[out_row].second = 0;
-        if (is_quoted_output != nullptr) { is_quoted_output[out_row] = false; }
+        ++actual_col;
       }
-      ++actual_col;
-    }
-  }
+    }  // column loop
+  }  // row loop (thread coarsening)
 }
 
 /*
@@ -927,18 +931,20 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
       options, data, tile_row_offsets, tile_field_ends, num_actual_cols);
 
     // Phase 2: Decode this tile — CSV data is still hot in L2 from Phase 1
-    convert_csv_to_cudf<<<tile_grid, block_size, 0, stream.value()>>>(options,
-                                                                      data,
-                                                                      column_flags,
-                                                                      tile_row_offsets,
-                                                                      tile_field_ends,
-                                                                      num_actual_cols,
-                                                                      tile_start,
-                                                                      dtypes,
-                                                                      columns,
-                                                                      valids,
-                                                                      valid_counts,
-                                                                      is_quoted_flags);
+    // Grid halved because each thread processes 2 rows (thread coarsening)
+    auto const decode_grid = cudf::util::div_rounding_up_safe<size_t>(tile_rows, block_size * 2);
+    convert_csv_to_cudf<<<decode_grid, block_size, 0, stream.value()>>>(options,
+                                                                        data,
+                                                                        column_flags,
+                                                                        tile_row_offsets,
+                                                                        tile_field_ends,
+                                                                        num_actual_cols,
+                                                                        tile_start,
+                                                                        dtypes,
+                                                                        columns,
+                                                                        valids,
+                                                                        valid_counts,
+                                                                        is_quoted_flags);
   }
 }
 
