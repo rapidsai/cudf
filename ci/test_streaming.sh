@@ -11,7 +11,7 @@ rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
 
 rapids-logger "Download stream test artifacts"
-STREAM_TESTS="$(rapids-download-from-github streaming_tests)"
+STREAM_TESTS="$(rapids-download-from-github "streaming_tests_${RAPIDS_CUDA_VERSION}_$(arch)")"
 
 rapids-logger "Generate C++ testing dependencies"
 
