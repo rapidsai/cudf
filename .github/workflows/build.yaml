@@ -32,6 +32,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: read
+  pull-requests: read
+
 jobs:
   telemetry-setup:
     runs-on: ubuntu-latest
@@ -43,11 +50,10 @@ jobs:
         # This gate is here and not at the job level because we need the job to not be skipped,
         # since other jobs depend on it.
         if: ${{ vars.TELEMETRY_ENABLED == 'true' }}
-        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
+        uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@c7f296f0a71159e86f1a676b8fd1a733c54f5563  # main
   cpp-build:
     needs: [telemetry-setup]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -57,8 +63,7 @@ jobs:
       sha: ${{ inputs.sha }}
   python-build:
     needs: [telemetry-setup, cpp-build]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -69,8 +74,7 @@ jobs:
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   python-build-noarch:
     needs: [telemetry-setup, cpp-build, python-build]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -80,8 +84,10 @@ jobs:
       pure-conda: cuda_major
   upload-conda:
     needs: [cpp-build, python-build, python-build-noarch]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@main
+    secrets:
+      CONDA_RAPIDSAI_TOKEN: ${{ secrets.CONDA_RAPIDSAI_TOKEN }}
+      CONDA_RAPIDSAI_NIGHTLY_TOKEN: ${{ secrets.CONDA_RAPIDSAI_NIGHTLY_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -90,8 +96,7 @@ jobs:
   docs-build:
     if: github.ref_type == 'branch'
     needs: [python-build, python-build-noarch]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       arch: "amd64"
       branch: ${{ inputs.branch }}
@@ -103,8 +108,7 @@ jobs:
       sha: ${{ inputs.sha }}
   wheel-build-libcudf:
     needs: [telemetry-setup]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       # build for every combination of arch and CUDA version, but only for the latest Python
       matrix_filter: group_by([.ARCH, (.CUDA_VER|split(".")|map(tonumber)|.[0])]) | map(max_by(.PY_VER|split(".")|map(tonumber)))
@@ -118,8 +122,10 @@ jobs:
       package-type: cpp
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    secrets:
+      CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN: ${{ secrets.CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN }}
+      RAPIDSAI_PYPI_TOKEN: ${{ secrets.RAPIDSAI_PYPI_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -129,8 +135,7 @@ jobs:
       package-type: cpp
   wheel-build-pylibcudf:
     needs: [telemetry-setup, wheel-build-libcudf]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -144,8 +149,10 @@ jobs:
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    secrets:
+      CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN: ${{ secrets.CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN }}
+      RAPIDSAI_PYPI_TOKEN: ${{ secrets.RAPIDSAI_PYPI_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -156,8 +163,7 @@ jobs:
       publish-wheel-search-key: pylibcudf_wheel_python_abi3
   wheel-build-cudf:
     needs: [telemetry-setup, wheel-build-pylibcudf]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -171,8 +177,10 @@ jobs:
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-publish-cudf:
     needs: wheel-build-cudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    secrets:
+      CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN: ${{ secrets.CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN }}
+      RAPIDSAI_PYPI_TOKEN: ${{ secrets.RAPIDSAI_PYPI_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -183,8 +191,7 @@ jobs:
       publish-wheel-search-key: cudf_wheel_python_abi3
   wheel-build-dask-cudf:
     needs: [telemetry-setup, wheel-build-cudf]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -199,8 +206,10 @@ jobs:
       pure-wheel: true
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    secrets:
+      CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN: ${{ secrets.CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN }}
+      RAPIDSAI_PYPI_TOKEN: ${{ secrets.RAPIDSAI_PYPI_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -210,8 +219,7 @@ jobs:
       package-type: python
   wheel-build-cudf-polars:
     needs: [telemetry-setup, wheel-build-pylibcudf]
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
@@ -226,8 +234,10 @@ jobs:
       pure-wheel: true
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    secrets:
+      CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN: ${{ secrets.CONDA_RAPIDSAI_WHEELS_NIGHTLY_TOKEN }}
+      RAPIDSAI_PYPI_TOKEN: ${{ secrets.RAPIDSAI_PYPI_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
@@ -268,4 +278,4 @@ jobs:
     continue-on-error: true
     steps:
       - name: Telemetry summarize
-        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@main
+        uses: rapidsai/shared-actions/telemetry-dispatch-summarize@c7f296f0a71159e86f1a676b8fd1a733c54f5563  # main

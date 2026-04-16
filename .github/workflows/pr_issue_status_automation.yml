@@ -9,11 +9,19 @@ on:
     # Only runs if the PR is open (we don't want to update the status of a closed PR)
     types: [opened, edited, synchronize]
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: read
+  pull-requests: read
+
 jobs:
     get-project-id:
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
       if: github.event.pull_request.state == 'open'
-      secrets: inherit
+      secrets:
+        ADD_TO_PROJECT_GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_GITHUB_TOKEN }}
       permissions:
         contents: read
       with:
@@ -22,7 +30,7 @@ jobs:
 
     update-status:
       # This job sets the PR and its linked issues to "In Progress" status
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       with:
@@ -34,7 +42,8 @@ jobs:
         ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
         UPDATE_ITEM: true
         UPDATE_LINKED_ISSUES: true
-      secrets: inherit
+      secrets:
+        ADD_TO_PROJECT_GITHUB_TOKEN: ${{ secrets.ADD_TO_PROJECT_GITHUB_TOKEN }}
 
     get-release:
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
@@ -56,7 +65,7 @@ jobs:
 
     update-release:
       # This job sets the PR and its linked issues to the release they are targeting
-      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: [get-project-id, get-release]
       with:
@@ -68,4 +77,3 @@ jobs:
         ITEM_NODE_ID: "${{ github.event.pull_request.node_id }}"
         UPDATE_ITEM: true
         UPDATE_LINKED_ISSUES: true
-      secrets: inherit

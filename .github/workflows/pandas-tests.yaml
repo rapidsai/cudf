@@ -18,11 +18,17 @@ on:
         required: true
         type: string
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: read
+  pull-requests: read
+
 jobs:
   pandas-tests:
       # run the Pandas unit tests
-      secrets: inherit
-      uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+      uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
       with:
         build_type: nightly
         branch: ${{ inputs.branch }}
