@@ -606,8 +606,8 @@ jobs:
       fail-fast: false
       matrix:
         cuda_version:
-          - "12.9.1"
-          - "13.1.1"
+          - &latest_cuda12 "12.9.1"
+          - &latest_cuda13 "13.1.1"
         arch:
           - amd64
           - arm64
@@ -629,8 +629,8 @@ jobs:
       fail-fast: false
       matrix:
         cuda_version:
-          - "12.9.1"
-          - "13.1.1"
+          - *latest_cuda12
+          - *latest_cuda13
         arch:
           - amd64
           - arm64
