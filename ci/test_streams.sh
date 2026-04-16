@@ -21,14 +21,14 @@ ENV_YAML_DIR="$(mktemp -d)"
 
 rapids-dependency-file-generator \
   --output conda \
-  --file-key streaming_tests \
+  --file-key stream_tests \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test_streaming
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n stream_tests
 
 # Temporarily allow unbound variables for conda activation.
 set +u
-conda activate test_streaming
+conda activate stream_tests
 set -u
 
 rapids-print-env

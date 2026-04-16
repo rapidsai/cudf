@@ -42,8 +42,8 @@ jobs:
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
-      - streaming-build
-      - streaming-test
+      - streams-build
+      - streams-test
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
@@ -599,7 +599,7 @@ jobs:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
-  streaming-build:
+  streams-build:
     needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     strategy:
@@ -619,11 +619,11 @@ jobs:
       node_type: cpu8
       container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.cuda_version }}-ubuntu24.04-py3.13"
       arch: ${{ matrix.arch }}
-      script: ci/build_streaming.sh
-      artifact-name: streaming_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
+      script: ci/build_streams.sh
+      artifact-name: stream_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
       file_to_upload: cpp/install
-  streaming-test:
-    needs: streaming-build
+  streams-test:
+    needs: streams-build
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     # if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
     strategy:
@@ -643,7 +643,7 @@ jobs:
       node_type: gpu-l4-latest-1
       container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.cuda_version }}-ubuntu24.04-py3.13"
       arch: ${{ matrix.arch }}
-      script: ci/test_streaming.sh streaming_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
+      script: ci/test_streams.sh stream_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.

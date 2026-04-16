@@ -16,14 +16,14 @@ ENV_YAML_DIR="$(mktemp -d)"
 
 rapids-dependency-file-generator \
   --output conda \
-  --file-key streaming_tests \
+  --file-key stream_tests \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test_streaming
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n stream_tests
 
 # Temporarily allow unbound variables for conda activation.
 set +u
-conda activate test_streaming
+conda activate stream_tests
 set -u
 
 RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
@@ -31,8 +31,8 @@ export RAPIDS_CUDA_MAJOR
 
 source rapids-configure-sccache
 
-SCCACHE_S3_KEY_PREFIX="cudf-streaming/$(arch)/cuda${RAPIDS_CUDA_MAJOR}/objects-cache"
-SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX="cudf-streaming/$(arch)/cuda${RAPIDS_CUDA_MAJOR}/preprocessor-cache"
+SCCACHE_S3_KEY_PREFIX="cudf-streams/$(arch)/cuda${RAPIDS_CUDA_MAJOR}/objects-cache"
+SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX="cudf-streams/$(arch)/cuda${RAPIDS_CUDA_MAJOR}/preprocessor-cache"
 SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
 export SCCACHE_S3_KEY_PREFIX SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE
 
