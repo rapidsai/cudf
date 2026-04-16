@@ -28,7 +28,7 @@ set -u
 
 source rapids-configure-sccache
 
-sccache --stop-server 2>/dev/null || true
+sccache --start-server
 
 rapids-print-env
 
