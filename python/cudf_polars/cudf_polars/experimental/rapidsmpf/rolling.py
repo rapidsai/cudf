@@ -41,20 +41,23 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
+_ORDINAL_DIVISOR: dict[plc.TypeId, int] = {
+    plc.TypeId.INT64: 1,
+    plc.TypeId.TIMESTAMP_NANOSECONDS: 1,
+    plc.TypeId.TIMESTAMP_MICROSECONDS: 1_000,
+    plc.TypeId.TIMESTAMP_MILLISECONDS: 1_000_000,
+    plc.TypeId.TIMESTAMP_DAYS: 86_400_000_000_000,
+}
+
+
 def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
     """Map Polars duration ordinals (ns) to native index units. See ``duration_to_scalar``."""
-    if type_id in (plc.TypeId.INT64, plc.TypeId.TIMESTAMP_NANOSECONDS):
-        return ordinal
-    elif type_id == plc.TypeId.TIMESTAMP_MICROSECONDS:
-        return ordinal // 1000
-    elif type_id == plc.TypeId.TIMESTAMP_MILLISECONDS:
-        return ordinal // 1_000_000
-    elif type_id == plc.TypeId.TIMESTAMP_DAYS:
-        return ordinal // 86_400_000_000_000
-    else:  # pragma: no cover
+    try:
+        return ordinal // _ORDINAL_DIVISOR[type_id]
+    except KeyError:  # pragma: no cover
         raise NotImplementedError(
             f"Unsupported index type {type_id!r} for rolling window halo exchange"
-        )
+        ) from None
 
 
 def _get_idx_col_i64(
@@ -83,37 +86,17 @@ def _minmax_py(
     return mn_val, mx_val
 
 
-def _filter_ge(
+def _filter_threshold(
     table: plc.Table,
     idx_col_i64: plc.Column,
     threshold: int,
+    op: plc.binaryop.BinaryOperator,
     i64: plc.DataType,
     bool8: plc.DataType,
     stream: Stream,
 ) -> plc.Table:
     thr = plc.Scalar.from_py(threshold, i64, stream=stream)
-    mask = plc.binaryop.binary_operation(
-        idx_col_i64,
-        thr,
-        plc.binaryop.BinaryOperator.GREATER_EQUAL,
-        bool8,
-        stream=stream,
-    )
-    return plc.stream_compaction.apply_boolean_mask(table, mask, stream=stream)
-
-
-def _filter_le(
-    table: plc.Table,
-    idx_col_i64: plc.Column,
-    threshold: int,
-    i64: plc.DataType,
-    bool8: plc.DataType,
-    stream: Stream,
-) -> plc.Table:
-    thr = plc.Scalar.from_py(threshold, i64, stream=stream)
-    mask = plc.binaryop.binary_operation(
-        idx_col_i64, thr, plc.binaryop.BinaryOperator.LESS_EQUAL, bool8, stream=stream
-    )
+    mask = plc.binaryop.binary_operation(idx_col_i64, thr, op, bool8, stream=stream)
     return plc.stream_compaction.apply_boolean_mask(table, mask, stream=stream)
 
 
@@ -189,10 +172,11 @@ def _prepare_expanded_rolling_frame(
             left_ctx_df.table, index_col_idx, type_id, i64, left_ctx_df.stream
         )
         left_ctx_df = DataFrame.from_table(
-            _filter_ge(
+            _filter_threshold(
                 left_ctx_df.table,
                 left_idx,
                 chunk_mn - lookback,
+                plc.binaryop.BinaryOperator.GREATER_EQUAL,
                 i64,
                 bool8,
                 left_ctx_df.stream,
@@ -214,8 +198,14 @@ def _prepare_expanded_rolling_frame(
             next_idx = _get_idx_col_i64(
                 next_table, index_col_idx, type_id, i64, next_stream
             )
-            right_ctx_table = _filter_le(
-                next_table, next_idx, chunk_mx + lookahead, i64, bool8, next_stream
+            right_ctx_table = _filter_threshold(
+                next_table,
+                next_idx,
+                chunk_mx + lookahead,
+                plc.binaryop.BinaryOperator.LESS_EQUAL,
+                i64,
+                bool8,
+                next_stream,
             )
             right_ctx_df = (
                 DataFrame.from_table(
@@ -243,7 +233,9 @@ def _prepare_expanded_rolling_frame(
                 stream=s,
             )
 
-    state.left_ctx_df = left_ctx_df
+    state.left_ctx_df = (
+        left_ctx_df  # trim only; append happens in rolling_eval_and_send
+    )
     return combined_df, n_left, n_chunk_rows
 
 
@@ -265,27 +257,24 @@ async def _rolling_do_evaluate(
 def _rolling_output_with_zlice(
     result_df: DataFrame,
     *,
-    n_left: int,
     n_chunk_rows: int,
     n_processed: int,
     zlice: tuple[int, int | None] | None,
 ) -> DataFrame | None:
-    chunk_result_df = result_df.slice((n_left, n_chunk_rows))
-    local_result_df: DataFrame | None = chunk_result_df
-    if zlice is not None:
-        zlice_offset, zlice_length = zlice
-        local_start = max(0, zlice_offset - n_processed)
-        local_end = (
-            n_chunk_rows
-            if zlice_length is None
-            else min(n_chunk_rows, zlice_offset + zlice_length - n_processed)
-        )
-        local_result_df = (
-            chunk_result_df.slice((local_start, local_end - local_start))
-            if local_start < local_end
-            else None
-        )
-    return local_result_df
+    if zlice is None:
+        return result_df
+    zlice_offset, zlice_length = zlice
+    local_start = max(0, zlice_offset - n_processed)
+    local_end = (
+        n_chunk_rows
+        if zlice_length is None
+        else min(n_chunk_rows, zlice_offset + zlice_length - n_processed)
+    )
+    return (
+        result_df.slice((local_start, local_end - local_start))
+        if local_start < local_end
+        else None
+    )
 
 
 def _rolling_append_left_context(
@@ -420,45 +409,34 @@ async def prepare_chunks(
     :class:`Message` keeps the upstream ``sequence_number`` for the center chunk.
     """
     pending: tuple[_RollingStreamChunkMeta, Message] | None = None
-    while (cur_meta_msg := await ch_in.recv_metadata(context)) is not None:
+    while True:
         if pending is not None:
             cur_meta, cur_msg = pending
             pending = None
         else:
+            if (cur_meta_msg := await ch_in.recv_metadata(context)) is None:
+                break
             cur_meta = ArbitraryChunk.from_message(cur_meta_msg).release()
             assert isinstance(cur_meta, _RollingStreamChunkMeta)
             cur_msg = await ch_in.recv(context)
             assert cur_msg is not None, "Expected data message after metadata."
 
         next_meta: _RollingStreamChunkMeta | None = None
-        peek_meta: _RollingStreamChunkMeta | None = None
-        if lookahead > 0:
-            next_meta_msg = await ch_in.recv_metadata(context)
-            if next_meta_msg is None:
-                next_msg = None
-                is_last = True
-            else:
-                next_meta = ArbitraryChunk.from_message(next_meta_msg).release()
-                assert isinstance(next_meta, _RollingStreamChunkMeta)
-                next_msg = await ch_in.recv(context)
-                is_last = next_msg is None
+        next_msg: Message | None = None
+        peek_meta_msg = await ch_in.recv_metadata(context)
+        if peek_meta_msg is None:
+            is_last = True
         else:
-            next_msg = None
-            peek_meta_msg = await ch_in.recv_metadata(context)
-            if peek_meta_msg is None:
-                peek_msg = None
-                is_last = True
-            else:
-                peek_meta = ArbitraryChunk.from_message(peek_meta_msg).release()
-                assert isinstance(peek_meta, _RollingStreamChunkMeta)
-                peek_msg = await ch_in.recv(context)
-                is_last = peek_msg is None
+            next_meta = ArbitraryChunk.from_message(peek_meta_msg).release()
+            assert isinstance(next_meta, _RollingStreamChunkMeta)
+            next_msg = await ch_in.recv(context)
+            is_last = next_msg is None
 
         prep = _prepare_expanded_rolling_frame(
             state,
             context=context,
             cur_msg=cur_msg,
-            next_msg=next_msg,
+            next_msg=next_msg if lookahead > 0 else None,
             is_last_chunk=is_last,
             ir_context=ir_context,
             index_col_idx=index_col_idx,
@@ -472,14 +450,9 @@ async def prepare_chunks(
             is_local_rank_chunk=cur_meta.is_local_rank_chunk,
         )
         if prep is None:
-            if lookahead > 0:
-                if next_msg is not None:
-                    assert next_meta is not None
-                    pending = (next_meta, next_msg)
-            else:
-                if not is_last and peek_msg is not None:
-                    assert peek_meta is not None
-                    pending = (peek_meta, peek_msg)
+            if next_msg is not None:
+                assert next_meta is not None
+                pending = (next_meta, next_msg)
             continue
 
         combined_df, n_left, n_chunk_rows = prep
@@ -501,18 +474,11 @@ async def prepare_chunks(
         await ch_out.send(context, Message(cur_seq, out_chunk))
         await append_done.get()
 
-        if lookahead > 0:
-            if is_last:
-                break
-            if next_msg is not None:
-                assert next_meta is not None
-                pending = (next_meta, next_msg)
-        else:
-            if is_last:
-                break
-            if peek_msg is not None:
-                assert peek_meta is not None
-                pending = (peek_meta, peek_msg)
+        if is_last:
+            break
+        if next_msg is not None:
+            assert next_meta is not None
+            pending = (next_meta, next_msg)
 
     await _drain_data_messages(context, ch_in, ch_out)
     await ch_out.drain_metadata(context)
@@ -565,7 +531,6 @@ async def rolling_eval_and_send(
         n_chunk_rows = chunk_result.num_rows
         local_result_df = _rolling_output_with_zlice(
             chunk_result,
-            n_left=0,
             n_chunk_rows=n_chunk_rows,
             n_processed=n_processed,
             zlice=ir.zlice,
