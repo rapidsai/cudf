@@ -59,17 +59,12 @@ def _hstack_chain_to_select(ir: Select) -> Select | None:
 
     col_defs: dict[str, expr.Expr] = {}
     for hstack in reversed(hstack_chain):
-        if hstack.should_broadcast:
-            # All expressions in a with_columns see the input frame, not each
-            # other's outputs, so substitute against a snapshot of col_defs.
-            snapshot = dict(col_defs)
-            for ne in hstack.columns:
-                col_defs[ne.name] = _sub_expr(ne.value, snapshot)
-        else:
-            # CSE placeholders may reference earlier placeholders in the same
-            # HStack, so substitute against the accumulated col_defs.
-            for ne in hstack.columns:
-                col_defs[ne.name] = _sub_expr(ne.value, col_defs)
+        # with_columns semantics: snapshot so expressions see the input frame,
+        # not each other's outputs. CSE placeholders use col_defs directly since
+        # later placeholders may reference earlier ones.
+        defs = dict(col_defs) if hstack.should_broadcast else col_defs
+        for ne in hstack.columns:
+            col_defs[ne.name] = _sub_expr(ne.value, defs)
 
     new_exprs = tuple(
         expr.NamedExpr(ne.name, _sub_expr(ne.value, col_defs)) for ne in ir.exprs

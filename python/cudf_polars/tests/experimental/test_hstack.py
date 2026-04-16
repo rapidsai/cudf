@@ -138,13 +138,10 @@ def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
     assert_gpu_result_equal(q, engine=engine, collect_kwargs={"optimizations": opts})
 
 
-def test_hstack_with_cse_and_column_override():
-    # Polars CSEs col("a").cast(Float64) into a placeholder, producing a CSE
-    # HStack layer beneath the with_columns HStack. When the with_columns
-    # overrides column "a", the substitution map was built incrementally, so
-    # later expressions in the same with_columns (e, k) saw the new "a" instead
-    # of the original. The fix snapshots the substitution map before processing
-    # each with_columns HStack so all its expressions see the same input state.
+def test_hstack_with_cse_and_column_override(engine):
+    # When a with_columns overrides a column and a CSE placeholder is hoisted,
+    # other expressions in the same with_columns must still see the original
+    # column, not the overridden value.
     df = pl.LazyFrame({"a": [1, 3, 2], "b": [4, 4, 6], "z": [7.0, 8.0, 9.0]})
     q = df.with_columns(
         a=(1 + 3 * pl.col("a")) * (1 / pl.col("a")),
