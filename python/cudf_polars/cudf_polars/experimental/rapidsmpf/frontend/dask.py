@@ -589,8 +589,9 @@ class DaskEngine(StreamingEngine):
                 }
             # Set scheduler/client log level to WARNING in the main
             # process (is INFO by default).
-            logging.getLogger("distributed").setLevel(logging.WARNING)
-            owned_cluster = distributed.SpecCluster(workers=worker_spec)
+            owned_cluster = distributed.SpecCluster(
+                workers=worker_spec, silence_logs=logging.WARNING
+            )
             owned_client = distributed.Client(owned_cluster)
             dask_client = owned_client
 
