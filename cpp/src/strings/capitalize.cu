@@ -359,7 +359,7 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
                                      stream,
                                      mr);
   auto d_column = column_device_view::create(input.parent(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{input.size()},
                     results->mutable_view().data<bool>(),

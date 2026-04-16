@@ -324,7 +324,7 @@ class key_remap_table : public key_remap_table_interface {
       // No metrics - simple insert
       auto set_ref = _hash_table.ref(cuco::op::insert);
       thrust::for_each_n(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         cuda::counting_iterator<cudf::size_type>{0},
         build_num_rows,
         insert_only_fn<decltype(set_ref), decltype(key_iter)>{set_ref, key_iter, bitmask_ptr});
@@ -339,9 +339,13 @@ class key_remap_table : public key_remap_table_interface {
                               rmm::cuda_stream_view stream)
   {
     rmm::device_uvector<cudf::size_type> counts(build_num_rows, stream);
-    thrust::fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
+    thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                 counts.begin(),
+                 counts.end(),
+                 0);
 
-    cudf::detail::device_scalar<cudf::size_type> d_distinct_count{0, stream};
+    cudf::detail::device_scalar<cudf::size_type> d_distinct_count{
+      0, stream, cudf::get_current_device_resource_ref()};
 
     auto set_ref = _hash_table.ref(cuco::op::insert_and_find);
 
@@ -352,11 +356,12 @@ class key_remap_table : public key_remap_table_interface {
 
     _distinct_count = d_distinct_count.value(stream);
 
-    _max_duplicate_count = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                          counts.begin(),
-                                          counts.end(),
-                                          cudf::size_type{0},
-                                          cuda::maximum<cudf::size_type>{});
+    _max_duplicate_count =
+      thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     counts.begin(),
+                     counts.end(),
+                     cudf::size_type{0},
+                     cuda::maximum<cudf::size_type>{});
   }
 
  public:
@@ -376,8 +381,10 @@ class key_remap_table : public key_remap_table_interface {
     if (this->_build.num_rows() == 0) {
       auto result =
         std::make_unique<rmm::device_uvector<cudf::size_type>>(probe_num_rows, stream, mr);
-      thrust::fill(
-        rmm::exec_policy_nosync(stream), result->begin(), result->end(), cudf::JoinNoMatch);
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   result->begin(),
+                   result->end(),
+                   cudf::JoinNoMatch);
       return result;
     }
 
@@ -581,8 +588,10 @@ class key_remapping_impl {
     if (_table == nullptr) {
       auto result =
         std::make_unique<rmm::device_uvector<cudf::size_type>>(keys.num_rows(), stream, mr);
-      thrust::fill(
-        rmm::exec_policy_nosync(stream), result->begin(), result->end(), cudf::JoinNoMatch);
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   result->begin(),
+                   result->end(),
+                   cudf::JoinNoMatch);
       return result;
     }
     return _table->probe(keys, stream, mr);
@@ -642,7 +651,7 @@ std::unique_ptr<cudf::column> remap_keys_internal(detail::key_remapping_impl con
 
   if (indices->size() == 0) { return cudf::make_empty_column(cudf::type_id::INT32); }
 
-  thrust::replace(rmm::exec_policy_nosync(stream),
+  thrust::replace(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   indices->begin(),
                   indices->end(),
                   cudf::JoinNoMatch,

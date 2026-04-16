@@ -5,19 +5,19 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 
 import pytest
 from rapidsmpf.bootstrap import is_running_with_rrun
 
 import polars as pl
 
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import DaskContext
 
 distributed = pytest.importorskip("distributed")
 
 from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine  # noqa: E402
-from cudf_polars.testing.asserts import assert_gpu_result_equal  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -26,18 +26,17 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="module")
 def engine() -> Iterator[DaskEngine]:
     """Create one Dask/GPU cluster shared across the test module."""
-    try:
-        with DaskEngine(
-            # Small partition size so tests exercise the multi-partition code path
-            # deterministically, regardless of input size.
-            executor_options={"max_rows_per_partition": 10},
-        ) as engine:
-            yield engine
-    except Exception as e:
-        pytest.skip(f"Dask GPU cluster unavailable: {e}")
+    with DaskEngine(
+        # Small partition size so tests exercise the multi-partition code path
+        # deterministically, regardless of input size.
+        executor_options={"max_rows_per_partition": 10},
+    ) as engine:
+        yield engine
 
 
 pytestmark = [
+    # distributed's shutdown leaves unclosed sockets; suppress the noise.
+    pytest.mark.filterwarnings("ignore::ResourceWarning"),
     pytest.mark.skipif(
         is_running_with_rrun(),
         reason="DaskEngine must not be created from within an rrun cluster",
@@ -46,39 +45,15 @@ pytestmark = [
 
 
 # ---------------------------------------------------------------------------
-# No-GPU smoke tests
-# ---------------------------------------------------------------------------
-
-
-def test_reserved_executor_keys() -> None:
-    """executor_options rejects reserved keys."""
-    for key in ("runtime", "cluster", "spmd_context", "dask_context"):
-        with pytest.raises(TypeError, match="reserved"):
-            DaskEngine(executor_options={key: "anything"})
-
-
-def test_reserved_engine_options_keys() -> None:
-    """engine_options rejects reserved keys."""
-    for key in ("memory_resource", "executor"):
-        with pytest.raises(TypeError, match="reserved"):
-            DaskEngine(engine_options={key: "anything"})
-
-
-def test_raises_inside_rrun() -> None:
-    """DaskEngine must not be created from within an rrun cluster."""
-    with (
-        patch(
-            "rapidsmpf.bootstrap.is_running_with_rrun",
-            return_value=True,
-        ),
-        pytest.raises(RuntimeError, match="rrun"),
-    ):
-        DaskEngine()
-
-
-# ---------------------------------------------------------------------------
 # GPU tests — share a single Dask cluster for the whole module
 # ---------------------------------------------------------------------------
+
+
+def test_from_options() -> None:
+    """DaskEngine.from_options with default StreamingOptions creates a valid engine."""
+    opts = StreamingOptions(fallback_mode="silent")
+    with DaskEngine.from_options(opts) as engine:
+        assert engine.nranks >= 1
 
 
 def test_yields_engine(engine: DaskEngine) -> None:
@@ -96,16 +71,24 @@ def test_executor_options_forwarded(engine: DaskEngine) -> None:
 
 
 def test_gather_cluster_info(engine: DaskEngine) -> None:
-    """gather_cluster_info returns one info dict per rank with expected fields."""
+    """gather_cluster_info returns one ClusterInfo per rank with expected fields."""
     infos = engine.gather_cluster_info()
     assert len(infos) == engine.nranks
     for info in infos:
-        assert "pid" in info
-        assert "hostname" in info
-        assert "cuda_visible_devices" in info
-        assert isinstance(info["pid"], int)
+        assert isinstance(info.pid, int)
+        assert isinstance(info.hostname, str)
     # Each worker runs in its own process.
-    assert len({info["pid"] for info in infos}) == engine.nranks
+    assert len({info.pid for info in infos}) == engine.nranks
+
+
+def test_from_options_creates_engine() -> None:
+    """DaskEngine.from_options produces a working engine and runs a query."""
+    opts = StreamingOptions(max_rows_per_partition=10, fallback_mode="silent")
+    with DaskEngine.from_options(opts) as eng:
+        assert isinstance(eng, pl.GPUEngine)
+        assert eng.nranks >= 1
+        lf = pl.LazyFrame({"a": [1, 2, 3]})
+        assert_gpu_result_equal(lf, engine=eng, check_row_order=False)
 
 
 def test_scan(engine: DaskEngine) -> None:

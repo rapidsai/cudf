@@ -30,7 +30,9 @@ try:
         run_duckdb,
         run_polars,
     )
-except ImportError:
+except ImportError as e:
+    if e.name is not None and not e.name.startswith("cudf_polars"):
+        raise
     # We want to be able to import pdsh in a CPU-only environment.
     COUNT_DTYPE = None  # type: ignore[assignment]
 
@@ -56,6 +58,8 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 if COUNT_DTYPE is not None:
     EXPECTED_CASTS = {
         1: [pl.col("count_order").cast(COUNT_DTYPE)],
+        3: [pl.col("o_orderdate").cast(pl.Date())],
+        18: [pl.col("o_orderdate").cast(pl.Date())],
         4: [pl.col("order_count").cast(COUNT_DTYPE)],
         7: [pl.col("l_year").cast(pl.Int32())],
         8: [pl.col("o_year").cast(pl.Int32())],
@@ -72,8 +76,8 @@ if COUNT_DTYPE is not None:
 
     EXPECTED_CASTS_DECIMAL = {
         1: [
-            pl.col("sum_qty").cast(pl.Decimal(15, 2)),
-            pl.col("sum_base_price").cast(pl.Decimal(15, 2)),
+            pl.col("sum_qty").cast(pl.Decimal(38, 2)),
+            pl.col("sum_base_price").cast(pl.Decimal(38, 2)),
             pl.col("sum_disc_price").cast(pl.Float64()),
             pl.col("sum_charge").cast(pl.Float64()),
             pl.col("avg_disc").cast(pl.Float64()),
@@ -89,11 +93,12 @@ if COUNT_DTYPE is not None:
             pl.col("sum_profit").cast(pl.Decimal(38, 2)),
         ],
         10: [pl.col("revenue").cast(pl.Decimal(38, 2))],
+        11: [pl.col("value").cast(pl.Decimal(38, 2))],
         15: [pl.col("total_revenue").cast(pl.Decimal(38, 2))],
-        18: [pl.col("sum(l_quantity)").cast(pl.Decimal(15, 2))],
+        18: [pl.col("sum(l_quantity)").cast(pl.Decimal(38, 2))],
         19: [pl.col("revenue").cast(pl.Decimal(38, 2))],
         22: [
-            pl.col("totacctbal").cast(pl.Decimal(15, 2)),
+            pl.col("totacctbal").cast(pl.Decimal(38, 2)),
         ],
     }
 

@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -26,10 +28,17 @@ import pylibcudf as plc
 import rmm.mr
 from pylibcudf.contiguous_split import pack
 
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
+    all_gather_host_data,
     check_reserved_keys,
     execute_ir_on_rank,
+)
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
 )
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
 from cudf_polars.utils.config import SPMDContext
@@ -44,7 +53,8 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
@@ -162,8 +172,10 @@ def allgather_polars_dataframe(
 
     # Bulk AllGather: each rank contributes once (sequence_number=0)
     allgather = AllGather(comm, op_id, ctx.br())
-    allgather.insert(0, packed_data)
-    allgather.insert_finished()
+    try:
+        allgather.insert(0, packed_data)
+    finally:
+        allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
 
     # Deserialize and concatenate each rank's contribution
@@ -190,6 +202,12 @@ class SPMDEngine(StreamingEngine):
     representing its fragment of the distributed dataset. Collective operations,
     such as shuffles, all-gathers, and joins, coordinate across ranks to produce
     a globally consistent result.
+
+    Prefer :meth:`from_options` for typical use — pass a
+    :class:`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`
+    instance for a unified, typed interface. The ``__init__`` parameters
+    (``rapidsmpf_options``, ``executor_options``, ``engine_options``) are
+    intended for advanced use when fine-grained control is needed.
 
     This class is the primary entry point for SPMD execution. It:
 
@@ -266,6 +284,12 @@ class SPMDEngine(StreamingEngine):
 
     Parameters
     ----------
+    comm
+        An already-bootstrapped communicator. When provided, the bootstrap step
+        is skipped and the caller retains ownership; the communicator is **not**
+        closed on shutdown. Pass this to share a single communicator across multiple
+        engine lifetimes (e.g. a session-scoped pytest fixture).
+        When ``None`` (default) a new communicator is bootstrapped automatically.
     rapidsmpf_options
         RapidsMPF-specific options. Defaults to the reading ``RAPIDSMPF_*``
         environment variables.
@@ -279,6 +303,16 @@ class SPMDEngine(StreamingEngine):
     ------
     TypeError
         If ``executor_options`` or ``engine_options`` contains a reserved key.
+
+    Notes
+    -----
+    Calls
+    :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.  By default, binding is skipped under ``rrun`` (which already
+    performs its own binding) — see
+    :attr:`HardwareBindingPolicy.skip_under_rrun`.
 
     Examples
     --------
@@ -300,6 +334,7 @@ class SPMDEngine(StreamingEngine):
     def __init__(
         self,
         *,
+        comm: Communicator | None = None,
         rapidsmpf_options: Options | None = None,
         executor_options: dict[str, Any] | None = None,
         engine_options: dict[str, Any] | None = None,
@@ -308,29 +343,42 @@ class SPMDEngine(StreamingEngine):
         engine_options = engine_options or {}
 
         check_reserved_keys(executor_options, engine_options)
+        hw_binding = cast(
+            HardwareBindingPolicy,
+            engine_options.get("hardware_binding", HardwareBindingPolicy()),
+        )
+        bind_to_gpu(hw_binding)
 
         rapidsmpf_options = (
             rapidsmpf_options
             if rapidsmpf_options is not None
             else Options(get_environment_variables())
         )
-        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
-        if bootstrap.is_running_with_rrun():
-            comm = bootstrap.create_ucxx_comm(
-                progress_thread=ProgressThread(),
-                type=bootstrap.BackendType.AUTO,
-                options=rapidsmpf_options,
-            )
-        else:
-            comm = single_communicator(
-                progress_thread=ProgressThread(),
-                options=rapidsmpf_options,
-            )
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
+        base_mr = (
+            mr_config.create_memory_resource()
+            if mr_config is not None
+            else rmm.mr.get_current_device_resource()
+        )
+        mr = RmmResourceAdaptor(base_mr)
+        if comm is None:
+            if bootstrap.is_running_with_rrun():
+                comm = bootstrap.create_ucxx_comm(
+                    progress_thread=ProgressThread(),
+                    type=bootstrap.BackendType.AUTO,
+                    options=rapidsmpf_options,
+                )
+            else:
+                comm = single_communicator(
+                    progress_thread=ProgressThread(),
+                    options=rapidsmpf_options,
+                )
+        # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(
-                int, executor_options.get("rapidsmpf_py_executor_max_workers", 1)
-            ),
+            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
@@ -361,6 +409,40 @@ class SPMDEngine(StreamingEngine):
         except Exception:
             exit_stack.close()
             raise
+
+    @classmethod
+    def from_options(cls, options: StreamingOptions) -> SPMDEngine:
+        """
+        Create an :class:`SPMDEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct an ``SPMDEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+
+        Returns
+        -------
+        A new :class:`SPMDEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=8, fallback_mode="silent")
+        >>> with SPMDEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = df.lazy().collect(engine=engine)
+        """
+        return cls(
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+        )
 
     @property
     def rank(self) -> int:
@@ -413,6 +495,19 @@ class SPMDEngine(StreamingEngine):
         if self._ctx is None:
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
+
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        return [ClusterInfo(**json.loads(r)) for r in results]
 
     def shutdown(self) -> None:
         """

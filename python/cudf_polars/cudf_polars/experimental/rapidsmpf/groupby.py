@@ -39,6 +39,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
+    maybe_remap_partitioning,
     process_children,
     recv_metadata,
     send_metadata,
@@ -48,6 +49,7 @@ from cudf_polars.experimental.repartition import Repartition
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
 
     from cudf_polars.dsl.ir import IRExecutionContext
@@ -216,11 +218,11 @@ async def _local_aggregation(
         chunks_received += 1
         chunk = await evaluate_chunk(
             context,
-            TableChunk.from_message(msg),
+            TableChunk.from_message(msg, br=context.br()),
             decomposed.piecewise_ir,
             ir_context=ir_context,
         )
-        chunk = _enforce_schema(chunk, decomposed.piecewise_ir.schema)
+        chunk = _enforce_schema(chunk, decomposed.piecewise_ir.schema, context.br())
         total_size += chunk.data_alloc_size()
         evaluated_chunks.append(chunk)
         if total_size > target_partition_size and len(evaluated_chunks) > 1:
@@ -306,13 +308,13 @@ async def _tree_reduce(
 
     if need_allgather:
         allgather = AllGatherManager(context, comm, collective_id)
-
-        allgather.insert(
-            0,
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema),
-        )
-
-        allgather.insert_finished()
+        with allgather.inserting() as inserter:
+            inserter.insert(
+                0,
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+            )
 
         stream = ir_context.get_cuda_stream()
         aggregated = await evaluate_chunk(
@@ -321,6 +323,7 @@ async def _tree_reduce(
                 await allgather.extract_concatenated(stream),
                 stream,
                 exclusive_view=True,
+                br=context.br(),
             ),
             decomposed.reduction_ir,
             ir_context=ir_context,
@@ -431,31 +434,32 @@ async def _shuffle_reduce(
         modulus,
         collective_id,
     )
-
-    shuffle.insert_hash(
-        _enforce_schema(
-            aggregated,
-            decomposed.reduction_ir.schema,
-        ),
-        decomposed.shuffle_indices,
-    )
-    del aggregated
-
-    while not input_drained:
-        aggregated, input_drained, _ = await _local_aggregation(
-            context,
-            decomposed,
-            ir_context,
-            ch_in,
-            target_partition_size,
-        )
-        shuffle.insert_hash(
-            _enforce_schema(aggregated, decomposed.reduction_ir.schema),
+    async with shuffle.inserting() as inserter:
+        inserter.insert_hash(
+            _enforce_schema(
+                aggregated,
+                decomposed.reduction_ir.schema,
+                context.br(),
+            ),
             decomposed.shuffle_indices,
         )
         del aggregated
 
-    await shuffle.insert_finished()
+        while not input_drained:
+            aggregated, input_drained, _ = await _local_aggregation(
+                context,
+                decomposed,
+                ir_context,
+                ch_in,
+                target_partition_size,
+            )
+            inserter.insert_hash(
+                _enforce_schema(
+                    aggregated, decomposed.reduction_ir.schema, context.br()
+                ),
+                decomposed.shuffle_indices,
+            )
+            del aggregated
     extract_irs = [decomposed.reduction_ir] + (
         [decomposed.select_ir] if decomposed.select_ir else []
     )
@@ -465,6 +469,7 @@ async def _shuffle_reduce(
             shuffle.extract_chunk(partition_id, stream),
             stream,
             exclusive_view=True,
+            br=context.br(),
         )
         partition_chunk = await evaluate_chunk(
             context,
@@ -482,6 +487,7 @@ async def _shuffle_reduce(
 def _enforce_schema(
     chunk: TableChunk,
     canonical_schema: dict[str, Any],
+    br: BufferResource,
 ) -> TableChunk:
     """Enforce the canonical schema of a TableChunk."""
     tbl = chunk.table_view()
@@ -509,7 +515,7 @@ def _enforce_schema(
         for col, target_plc in zip(cols, target_plcs, strict=True)
     ]
     return TableChunk.from_pylibcudf_table(
-        plc.Table(new_columns), chunk.stream, exclusive_view=True
+        plc.Table(new_columns), chunk.stream, exclusive_view=True, br=br
     )
 
 
@@ -685,13 +691,20 @@ async def groupby_actor(
         if fully_partitioned or fallback_case:
             if tracer is not None:
                 tracer.decision = "chunkwise"
+            metadata_out = ChannelMetadata(
+                local_count=metadata_in.local_count,
+                partitioning=maybe_remap_partitioning(
+                    ir, metadata_in.partitioning, child_ir=ir.children[0]
+                ),
+                duplicated=metadata_in.duplicated,
+            )
             await chunkwise_evaluate(
                 context,
                 ir,
                 ir_context,
                 ch_out,
                 ch_in,
-                metadata_in,
+                metadata_out,
                 tracer=tracer,
             )
             return
