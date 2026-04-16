@@ -316,10 +316,6 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
-    "tests/unit/lazyframe/test_cse.py::test_cse_10441": "https://github.com/rapidsai/cudf/issues/21645",
-    "tests/unit/lazyframe/test_cse.py::test_cse_10452": "https://github.com/rapidsai/cudf/issues/21645",
-    "tests/unit/lazyframe/test_cse.py::test_cse_expr_selection_context": "https://github.com/rapidsai/cudf/issues/21645",
-    "tests/unit/lazyframe/test_cse.py::test_cse_non_scalar_length_mismatch_17732": "https://github.com/rapidsai/cudf/issues/21645",
     "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
@@ -330,8 +326,6 @@ RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_order": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
-    "tests/unit/operations/test_shift.py::test_shift_expr": "https://github.com/rapidsai/cudf/issues/21645",
-    "tests/unit/operations/test_shift.py::test_shift_fill_value": "https://github.com/rapidsai/cudf/issues/21645",
     "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "https://github.com/rapidsai/cudf/issues/22074",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
     "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df10-df20-df1.category = df2.category AND (df1.code * 2) = df2.code_doubled-df1.name, df1.code, df2.type-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
