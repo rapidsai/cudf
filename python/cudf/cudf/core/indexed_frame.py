@@ -80,7 +80,6 @@ from cudf.utils.dtypes import (
     is_column_like,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
-    is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _warn_no_dask_cudf
@@ -6368,10 +6367,6 @@ class IndexedFrame(Frame):
             else plc.types.NullPolicy.INCLUDE
         )
 
-        # Remember original column dtypes before nans_to_nulls transform so
-        # we can restore nullable semantics in the output.
-        source_col_dtypes = [col.dtype for col in source._columns]
-
         if cudf.get_option("mode.pandas_compatible"):
             source = source.nans_to_nulls()
         result_columns = [
@@ -6383,55 +6378,6 @@ class IndexedFrame(Frame):
                 pct=pct,
             )
             for col in source._columns
-        ]
-
-        def _rank_out_dtype(orig_dtype) -> DtypeObj:
-            # Determine per-column output dtype to match pandas 3 semantics.
-            #
-            # Pandas 3 rank() output dtypes by input dtype:
-            #   Float64 / Int64 / UInt64 (nullable numpy-backed):
-            #     average or pct=True → Float64,  otherwise → UInt64
-            #   float64[pyarrow] / int64[pyarrow] (Arrow numeric):
-            #     average or pct=True → double[pyarrow], otherwise → uint64[pyarrow]
-            #   string[pyarrow] (StringDtype with na_value=pd.NA):
-            #     always → Float64
-            #   str / string[python] / float64 / … (non-nullable or non-numeric ext):
-            #     → float64 (unchanged)
-
-            if isinstance(orig_dtype, pd.ArrowDtype):
-                import pyarrow as pa
-
-                if pa.types.is_floating(
-                    orig_dtype.pyarrow_dtype
-                ) or pa.types.is_integer(orig_dtype.pyarrow_dtype):
-                    if method == "average" or pct:
-                        return pd.ArrowDtype(pa.float64())
-                    else:
-                        return pd.ArrowDtype(pa.uint64())
-                # Non-numeric Arrow types (e.g. string): fall through to float64
-            elif isinstance(orig_dtype, pd.StringDtype):
-                # string[pyarrow] uses pyarrow storage + pd.NA → Float64
-                # str / string[python] → float64 (no change)
-                if (
-                    orig_dtype.na_value is pd.NA
-                    and getattr(orig_dtype, "storage", None) == "pyarrow"
-                ):
-                    return pd.Float64Dtype()
-            elif is_pandas_nullable_numpy_dtype(orig_dtype) and not isinstance(
-                orig_dtype, (pd.StringDtype, pd.BooleanDtype)
-            ):
-                # Float64, Int64, UInt64, etc.
-                if method == "average" or pct:
-                    return pd.Float64Dtype()
-                else:
-                    return pd.UInt64Dtype()
-            return np.dtype("float64")
-
-        result_columns = [
-            col.astype(_rank_out_dtype(orig))
-            for col, orig in zip(
-                result_columns, source_col_dtypes, strict=True
-            )
         ]
 
         if dropped_cols:
