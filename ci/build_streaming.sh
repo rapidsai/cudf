@@ -39,6 +39,7 @@ cmake -S cpp -B cpp/build -GNinja \
   -DCUDA_STATIC_RUNTIME=OFF \
   -DCUDF_BUILD_STREAMS_TEST_UTIL=ON \
   -DBUILD_SHARED_LIBS=ON
+mkdir cpp/install
 SCCACHE_ERROR_LOG=$(pwd)/cpp/install/sccache_log.txt \
   SCCACHE_LOG=debug \
   cmake --build cpp/build "-j${PARALLEL_LEVEL}" -v
