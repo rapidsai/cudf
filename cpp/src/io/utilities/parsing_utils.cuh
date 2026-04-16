@@ -204,19 +204,34 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  parse_options_view const& opts,
                                                  bool escape_char = false)
 {
+  auto current = begin;
+
+  // Fast path: field does not start with a quote character.
+  // No quotation tracking or escape handling needed — just scan for delimiter/terminator.
+  if (begin >= end || *begin != opts.quotechar) {
+    while (current < end) {
+      auto const c = *current;
+      if (c == opts.delimiter) {
+        while (opts.multi_delimiter && (current + 1 < end) && *(current + 1) == opts.delimiter) {
+          ++current;
+        }
+        break;
+      }
+      if (c == opts.terminator) { break; }
+      if (c == '\r' && (current + 1 < end && *(current + 1) == '\n')) {
+        --end;
+        break;
+      }
+      ++current;
+    }
+    return current;
+  }
+
+  // Slow path: field starts with a quote — need full quotation tracking
   bool quotation   = false;
-  auto current     = begin;
   bool escape_next = false;
-
-  auto const field_starts_with_quote = (begin < end && *begin == opts.quotechar);
   while (current < end) {
-    // Use simple logic to ignore control chars between any quote seq
-    // Handles nominal cases including doublequotes within quotes, but
-    // may not output exact failures as PANDAS for malformed fields.
-    // Check for instances such as "a2\"bc" and "\\" if `escape_char` is true.
-
-    // Only process quotes if field started with a quote
-    if (field_starts_with_quote && *current == opts.quotechar && !escape_next) {
+    if (*current == opts.quotechar && !escape_next) {
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
@@ -233,7 +248,6 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
     }
 
     if (escape_char) {
-      // If a escape character is encountered, escape next character in next loop.
       if (not escape_next and *current == '\\') {
         escape_next = true;
       } else {
