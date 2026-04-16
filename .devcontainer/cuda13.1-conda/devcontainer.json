@@ -49,7 +49,7 @@
   "initializeCommand": [
     "/bin/bash",
     "-c",
-    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,claude,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda13.1-envs} && touch ${localWorkspaceFolder}/../.claude.json"
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,claude,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda13.1-envs} && mkdir -m 0700 -p ${localWorkspaceFolder}/../.{ssh,gnupg} && touch ${localWorkspaceFolder}/../.claude.json"
   ],
   "postAttachCommand": [
     "/bin/bash",
@@ -65,7 +65,10 @@
     "source=${localWorkspaceFolder}/../.claude.json,target=/home/coder/.claude.json,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
-    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda13.1-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
+    "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda13.1-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.ssh,target=/home/coder/.ssh,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.gitconfig,target=/home/coder/.gitconfig,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.gnupg,target=/home/coder/.gnupg,type=bind,consistency=consistent"
   ],
   "customizations": {
     "vscode": {
