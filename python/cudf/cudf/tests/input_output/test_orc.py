@@ -567,6 +567,15 @@ def test_orc_reader_boolean_type(datadir, orc_file):
     assert_eq(pdf, df)
 
 
+def test_orc_read_decompress_overflow_orc(datadir):
+    # PostScript declares compressionBlockSize over reader maximum (1 GiB).
+    path = datadir / "decompress_overflow.orc"
+    with pytest.raises(
+        RuntimeError, match="Compression block size exceeds maximum"
+    ):
+        cudf.read_orc(path)
+
+
 def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
     # Other timedate tests only cover "future" times
