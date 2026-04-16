@@ -46,10 +46,11 @@ From the job JSON, note:
 - `name` — the job name (e.g. `conda-cpp-build / 12.9.1, 3.11, amd64, rockylinux8`)
 - `steps[].name` and `steps[].conclusion` — which steps ran and their outcome
 
-Download the full job log:
+Download the full job log (the API returns a redirect to a zip archive, so
+extract it before reading):
 
 ```bash
-gh api repos/rapidsai/cudf/actions/jobs/$JOB_ID/logs > /tmp/ci_job_log.txt
+gh run view "$RUN_ID" --repo rapidsai/cudf --job "$JOB_ID" --log > /tmp/ci_job_log.txt
 ```
 
 Read through the log to identify:

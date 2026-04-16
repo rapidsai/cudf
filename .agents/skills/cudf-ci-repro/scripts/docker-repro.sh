@@ -2,8 +2,8 @@
 set -euo pipefail
 
 usage() {
-  cat <<'EOF'
-Usage: repro.sh [OPTIONS]
+  cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
 
 Checkout the correct cudf commit and launch a CI-replica Docker container
 that runs specified CI scripts inside it.
@@ -65,6 +65,11 @@ if [[ ${#missing[@]} -gt 0 ]]; then
   usage 1
 fi
 
+case "$BUILD_TYPE" in
+  pull-request|branch|nightly) ;;
+  *) echo "Error: --build-type must be one of: pull-request, branch, nightly (got '$BUILD_TYPE')" >&2; exit 1 ;;
+esac
+
 if [[ "$BUILD_TYPE" == "nightly" && -z "$NIGHTLY_DATE" ]]; then
   echo "Error: --nightly-date is required when --build-type=nightly" >&2
   exit 1
@@ -82,7 +87,7 @@ git fetch https://github.com/rapidsai/cudf.git --tags 2>/dev/null || true
 # --- Step 2: Prepare local-build sed patch if requested ---
 if [[ "$LOCAL_BUILD" -eq 1 ]]; then
   echo ">>> Patching ci/*.sh to use local conda build output..."
-  sed -ri '/rapids-download-conda-from-github/ s/_CHANNEL=.*/_CHANNEL=${RAPIDS_CONDA_BLD_OUTPUT_DIR}/' ci/*.sh
+  sed -ri '/rapids-download-conda-from-github/ s|^([[:space:]]*[A-Z_]*CHANNEL)=.*|\1=${RAPIDS_CONDA_BLD_OUTPUT_DIR}|' ci/*.sh
 fi
 
 # --- Step 3: Build docker command ---
