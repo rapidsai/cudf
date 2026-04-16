@@ -1971,8 +1971,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               auto seconds = s->top.data.tz_epoch + duration_s{s->vals.i64[t + vals_skipped]};
-              // Convert to UTC
-              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
                                               kTimestampNanoScale[secondary_val & 7]};
@@ -1981,7 +1979,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
               // Alternative way to represent negative timestamps is with negative nanoseconds
               // in which case the adjustment in not needed.
               // Comparing with 999999 instead of zero to match the apache writer.
+              // This must happen before the timezone conversion because the ORC writer's
+              // borrowing decision was based on the stored seconds (negative for any
+              // timestamp before the ORC epoch), not the final UTC/local seconds.
               if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
+
+              // Convert to UTC
+              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               static_cast<int64_t*>(data_out)[row] = [&]() {
                 using cuda::std::chrono::duration_cast;
