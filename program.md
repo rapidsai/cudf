@@ -34,9 +34,9 @@ To set up a new experiment:
 3. **Read the in-scope files** — read every file for full context (see "File Reference" section below for the complete list). Start with the primary CSV source files in `cpp/src/io/csv/`.
 4. **Read the "Research Seeds" and "Known Dead Ends" sections** at the top of this file. Use the seeds to focus initial research. Do NOT retry anything listed as a dead end.
 5. **Deep research phase** — before touching any code, spawn **2-3 researcher agents in parallel**, each with a different focus:
-   - **Researcher 1**: CSV parsing algorithms — papers on GPU-accelerated CSV/text parsing, SIMD-style parsing, parallel field detection
-   - **Researcher 2**: GPU kernel/memory optimization — coalescing patterns for text processing, shared memory for delimiter scanning, warp-level string operations
-   - **Researcher 3**: Competing implementations — how cuIO, RAPIDS, DuckDB, Apache Arrow CSV, ParaText, or other GPU databases parse CSV
+   - **Researcher 1**: CSV parsing algorithms — papers on GPU-accelerated CSV/text parsing, parallel field detection, single-pass vs multi-pass parsing, work-reduction techniques
+   - **Researcher 2**: Data structure and memory-pass optimization — reducing total passes over data, better intermediate representations, algorithmic fusion of parsing stages, scan-based algorithms (e.g. CUB decoupled lookback)
+   - **Researcher 3**: Competing implementations — how cuIO, RAPIDS, DuckDB, Apache Arrow CSV, ParaText, or other GPU databases parse CSV, focusing on parsing strategy, pass count, and type-handling approach
 
    Pass the Known Dead Ends to each researcher so they avoid suggesting already-ruled-out approaches.
    While they run, read the source code yourself. When all return, merge ideas into a ranked backlog.
@@ -63,6 +63,14 @@ To set up a new experiment:
 All 3 primary benchmarks are run via `./eval.sh` after every experiment. **Every experiment must report results for ALL 3 benchmarks** — not just the one you expect to improve. A change that speeds up one benchmark but regresses another is not a win.
 
 **Focus: CSV reader only.** The reader (`reader_impl.cu`, `csv_gpu.cu`) is the performance-critical path. Writer benchmarks are out of scope for this run.
+
+**Algorithm-first principle**: Prefer algorithmic improvements over GPU-specific hyperparameter tuning. Changes should produce runtime improvements across all GPUs and GPU architectures — the current generation, newer architectures, and similar-class hardware. A better algorithm wins everywhere; a hand-tuned thread block size or shared memory config may only help on one GPU and silently regress on the next. Concretely:
+
+- **Always prefer**: Better parsing algorithms, reduced memory passes, smarter data structures, reduced work (skip unnecessary computation), better parallelization strategies
+- **Accept when justified**: Architecture-aware memory access patterns (coalescing, avoiding bank conflicts) — these transfer across GPU generations because they follow fundamental hardware design
+- **Avoid unless no algorithmic alternative exists**: Tuning thread block dimensions, warp-specific tile sizes, shared memory capacity knobs, occupancy-chasing launch configs, or any constant that would need re-tuning on a different GPU
+
+If you find yourself tweaking numeric parameters (block sizes, tile widths, unroll factors) rather than changing the structure of the computation, you are almost certainly in the wrong optimization layer.
 
 **Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds ugly complexity is not worth it. Removing something and getting equal or better results is a great outcome — that's a simplification win.
 
@@ -109,8 +117,8 @@ You are not just an experiment runner — you are the **research head**. You mai
 3. Assess: is the current optimization direction still productive, or is it time to pivot?
 4. Spawn **1-2 small focused researcher agents** with a specific question (not broad surveys). Examples:
    - "The decode_data stage is 70% of runtime. Find papers on GPU-parallel type conversion for mixed int/float/string columns."
-   - "Warp divergence is high in csv_gpu.cu:decode_field. Find techniques for reducing divergence when threads process different column types."
-   - "The last 2 experiments targeting shared memory tiling both regressed. Find a completely different approach to memory access optimization."
+   - "Warp divergence is high in csv_gpu.cu:decode_field. Find techniques for reorganizing work so threads process similar column types together."
+   - "The last 2 experiments targeting shared memory tiling both regressed. Find a fundamentally different approach — fewer passes, fused stages, or reduced total work."
 5. Use their findings to form your hypothesis — only then proceed to implement.
 
 **Key principle**: Each experiment should be informed by research, not just intuition. Small focused research before each experiment beats large unfocused research at the start. The research head always knows WHY the next experiment is worth trying.
@@ -218,7 +226,7 @@ LOOP FOREVER:
       2. Re-read source code from disk, AGENT_LOG.md, results.tsv, and NVTX stages.
       3. Spawn **2-3 deep researcher agents** with full experiment history — they must find a fundamentally new direction.
       4. Require a HIGH-confidence idea (backed by a paper or clear architectural insight) before the next experiment. Don't start another build cycle on a hunch.
-    - **Force diversity**: 3+ variations of the same technique (e.g. different thread block sizes, different shared memory tile configs)? You're stuck in a local optimum. Try a completely different algorithm. The biggest gains come from algorithmic changes, not parameter sweeps.
+    - **Force diversity**: 3+ variations of the same technique (e.g. different thread block sizes, different shared memory tile configs, different unroll factors)? You're stuck in a local optimum. Try a completely different algorithm (see Rule 7).
     - **Re-anchor every 5 experiments**: Re-read results.tsv end-to-end, AGENT_LOG.md, check `/memory` for past discoveries, re-state your objective, summarize what worked and what failed, only THEN propose your next hypothesis. Long sessions cause context rot — memory is your hedge against it.
     - **Idea backlog low** (fewer than 2-3 ideas)? Respawn 2-3 researcher agents with results.tsv + AGENT_LOG.md so they know what's been tried and search in new directions.
 
@@ -261,21 +269,23 @@ When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-se
 
 Every experiment gets a sequential number. **Each experiment produces 3 rows** — one per primary benchmark.
 
+The TSV format is **fixed for the entire run** — never add, remove, or reorder columns. This ensures the file is always machine-parseable and comparable across experiments.
+
 The TSV has a header row and 7 columns:
 
 ```
 exp	commit	metric	improvement_pct	status	benchmark	description
 ```
 
-1. exp: sequential experiment number (0 = baseline, 1, 2, 3, ...)
-2. commit: short git hash (7 chars)
-3. metric: benchmark throughput (e.g. `5.2 GiB/s`). For `realistic`, include per-type breakdown if useful: `5.2 GiB/s (INT:7.1 FLT:6.9 TS:6.0)`
-4. improvement_pct: vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes
-5. status: `keep`, `discard`, `crash`, or `idea`
-6. benchmark: `realistic`, `type_inference`, or `quoting`
-7. description: short text of what was tried
+1. **exp**: sequential experiment number (0 = baseline, 1, 2, 3, ...)
+2. **commit**: short git hash (7 chars)
+3. **metric**: benchmark throughput as a single value (e.g. `5.2 GiB/s`). Keep this column simple and consistent — one number with unit, no inline breakdowns or parenthetical details.
+4. **improvement_pct**: vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes
+5. **status**: `keep`, `discard`, `crash`, or `idea`
+6. **benchmark**: `realistic`, `type_inference`, or `quoting`
+7. **description**: short text of what was tried. Any extra context (per-type breakdowns, NVTX stage details, noise floor notes, re-run confirmations) goes here. This is the flexible column — use it for anything that doesn't fit the other columns.
 
-results.tsv is **untracked and append-only**. Never edit or delete existing rows. Because it is untracked, you must ensure code reverts never destroy it — see "Reverting Failed Experiments" below.
+results.tsv is **untracked and append-only**. Never edit or delete existing rows. Never change the column format mid-run. Because it is untracked, you must ensure code reverts never destroy it — see "Reverting Failed Experiments" below.
 
 ### AGENT_LOG.md
 
@@ -457,8 +467,8 @@ If 3+ experiments show no improvement across ANY primary benchmark (including wi
 4. Spawn **2-3 deep researcher agents** with the full experiment history. They must find a fundamentally new direction.
 5. Require a **high-confidence idea** (backed by a paper, clear architectural insight, or profiling data) before starting the next experiment. Don't spend another build cycle on a hunch.
 
-### Rule 7 — Force diversity after local optima
-If you've made 3+ variations of the same technique (e.g. different shared memory tile sizes, different thread block dimensions, different radix widths), you are stuck in a local optimum. STOP tuning parameters and try a completely different algorithmic approach. The biggest GPU performance gains come from algorithmic changes and memory access pattern redesigns, not parameter sweeps.
+### Rule 7 — Force diversity after local optima (algorithm-first)
+If you've made 3+ variations of the same technique (e.g. different shared memory tile sizes, different thread block dimensions, different radix widths, different unroll factors), you are stuck in a local optimum. STOP tuning parameters and try a completely different algorithmic approach. The biggest performance gains come from algorithmic changes — fewer passes, fused stages, reduced total work, better parallelization strategies — not GPU-specific parameter sweeps.
 
 ### Rule 8 — Research head: assess before every hypothesis
 Before forming each hypothesis, act as research head:
@@ -499,14 +509,12 @@ After each significant finding (successful optimization, failed approach with cl
 Every rejected experiment wastes a full build-test-benchmark cycle (10-30 min). A well-reasoned hypothesis with high confidence is worth more than five speculative shots.
 
 ### When you run out of ideas
-This is NOT the time to make random changes to GPU kernel parameters. Instead:
+This is NOT the time to start tweaking GPU-specific parameters (block sizes, shared memory configs, occupancy). Instead:
 1. Do more web searches — new papers, different search terms, adjacent GPU workloads (JSON parsing, text processing, regex matching on GPU)
-2. Re-read the source code from disk looking for bottlenecks you missed
+2. Re-read the source code from disk looking for bottlenecks you missed — redundant passes, unnecessary work, serial dependencies that could be parallelized differently
 3. Try combining two previous near-miss ideas that each showed partial improvement
-4. Try a fundamentally different approach (if you've been optimizing kernel launch params, try algorithmic changes; if you've been optimizing parsing, try data type conversion)
+4. Try a fundamentally different approach (fewer passes, fused stages, different data layout, different work decomposition strategy)
 5. Spawn researcher agents to search for new techniques in parallel — always pass results.tsv so they know what's been tried
-
-Random mutations waste build cycles. Research finds new strategies.
 
 ---
 
@@ -593,27 +601,31 @@ Keep this gap in mind when evaluating optimization ideas — a technique that wi
 
 ## CSV Parser Optimization Areas to Consider
 
-Prioritize by impact tier — architecture-level changes have the highest payoff.
+Prioritize by impact tier. **Algorithmic improvements come first** — they produce portable gains across all GPUs and architectures. GPU-specific tuning is the last resort.
 
-**Architecture-level (highest impact, explore FIRST):**
-- **Mixed-type warp divergence**: When threads in a warp process columns of different types, divergence kills throughput. Can we reorganize work to reduce this?
-- **Multi-pass vs single-pass architecture**: Is the current multi-kernel approach (row detection → field detection → type conversion) optimal, or can phases be overlapped/fused at a higher level?
-- **Memory bandwidth utilization**: The raw CSV data is read multiple times across kernels. Can we reduce total memory traffic?
-- **Host-side overhead**: Memory allocation, column construction, metadata processing — what fraction of wall time is non-GPU?
-- **Multi-stream pipelining**: For large files, overlap H2D transfer with compute
-- **Efficient Scan algorithm usage**: whenever you are looking into scan based algorithms, use efficient scan algorithms like CUB decoupled lookback algorithm (Example available in cccl repository), and similarly other algorithms also efficient one available via research. If any part of the algorithm seems useful, pick them up too and adapt for existing code and algorithm.
+**Algorithmic (highest impact, explore FIRST):**
+- **Pass reduction**: The current multi-kernel approach (row detection → field detection → type conversion) reads the raw CSV data multiple times. Can phases be fused or overlapped to reduce total memory traffic?
+- **Work reduction**: Are there computations that can be skipped entirely? (e.g. skipping type inference when types are known, eliminating redundant scans, short-circuiting for common cases)
+- **Better parallelization strategy**: When threads in a warp process columns of different types, divergence kills throughput. Can work be reorganized algorithmically so threads process similar work together?
+- **Efficient scan algorithms**: Use state-of-the-art scan algorithms like CUB decoupled lookback (example available in cccl repository). Whenever scan-based algorithms appear in the pipeline, evaluate whether a more efficient algorithm exists via research. Adapt and integrate as appropriate.
+- **Stage fusion**: Combining delimiter detection + field extraction + type conversion at the algorithm level to avoid materializing intermediate results
+- **Pipelining**: For large files, overlap H2D transfer with compute using multi-stream processing — this is an algorithmic scheduling improvement, not a hardware knob
+- **Host-side overhead**: Memory allocation, column construction, metadata processing — what fraction of wall time is non-GPU? Can algorithmic changes reduce it?
 
-**Kernel-level (moderate impact):**
-- **Delimiter/newline scanning**: Parallel character scanning, SIMD-style operations on GPU, shared memory for scan state
-- **Field parsing**: Vectorized type conversion (string→int, string→float, string→datetime)
-- **Memory access patterns**: Coalesced reads of raw CSV text, minimizing scattered writes during column extraction
-- **Kernel fusion**: Combining delimiter detection + field extraction + type conversion to reduce memory round-trips
-- **Quote handling**: Efficient parallel handling of quoted fields with escaped characters
-- **Row/column decomposition**: Better strategies for splitting work across thread blocks when rows vary in length
+**Structural (moderate impact — these follow fundamental hardware design and transfer across GPU generations):**
+- **Delimiter/newline scanning**: Parallel character scanning, SIMD-style operations on GPU for scan state propagation
+- **Field parsing**: Vectorized type conversion algorithms (string→int, string→float, string→datetime) — focus on better algorithms for conversion, not hardware-specific tricks
+- **Memory access patterns**: Coalesced reads of raw CSV text, minimizing scattered writes during column extraction — these patterns follow fundamental GPU memory architecture and transfer across generations
+- **Quote handling**: Efficient parallel algorithms for quoted fields with escaped characters (FSM-based approaches, bracket matching)
+- **Row/column decomposition**: Better algorithmic strategies for splitting work across thread blocks when rows vary in length
 
-**Type-specific (lower impact, only after architecture is optimized):**
-- **Data type conversion**: Optimizing the hot path for common types (integers, floats, strings, dates)
-- **Duration/datetime parsing**: GPU-specific optimizations in `durations.cu` and `datetime.cuh`
+**Type-specific (lower impact, only after algorithmic approaches are exhausted):**
+- **Data type conversion**: Optimizing the hot path for common types (integers, floats, strings, dates) — algorithmic improvements (e.g. branchless conversion, lookup tables) over hardware tuning
+- **Duration/datetime parsing**: Algorithmic improvements in `durations.cu` and `datetime.cuh`
+
+**Hardware-specific tuning (LAST RESORT — only when no algorithmic alternative exists):**
+- Thread block dimensions, shared memory tile sizes, occupancy-chasing launch configs, unroll factors
+- These produce fragile gains tied to one GPU model. They may silently regress on a different GPU or the next architecture generation. Only pursue if profiling shows a clear bottleneck with no algorithmic solution.
 
 ---
 
