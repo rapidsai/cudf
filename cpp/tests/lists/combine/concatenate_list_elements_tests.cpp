@@ -843,15 +843,15 @@ TEST_F(ConcatenateListElementsTest, EmptyInnerListColumnWithNullRow)
     cudf::make_lists_column(0, inner_offsets.release(), inner_elements.release(), 0, {});
   auto const null_it           = cudf::test::iterators::null_at(0);
   auto [null_mask, null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 2);
-  auto const col =
-    cudf::make_lists_column(2, offsets.release(), std::move(inner_col), null_count, std::move(null_mask));
+  auto const col               = cudf::make_lists_column(
+    2, offsets.release(), std::move(inner_col), null_count, std::move(null_mask));
 
   auto const results = cudf::lists::concatenate_list_elements(*col);
 
   // Expected: list<int32> with 2 rows — null row 0, empty row 1.
   // concatenate_list_elements reduces list<list<int32>> → list<int32>.
-  auto exp_offsets  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0};
-  auto exp_elements = cudf::test::fixed_width_column_wrapper<int32_t>{};
+  auto exp_offsets                     = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0};
+  auto exp_elements                    = cudf::test::fixed_width_column_wrapper<int32_t>{};
   auto [exp_null_mask, exp_null_count] = cudf::test::detail::make_null_mask(null_it, null_it + 2);
   auto const expected                  = cudf::make_lists_column(
     2, exp_offsets.release(), exp_elements.release(), exp_null_count, std::move(exp_null_mask));
@@ -876,8 +876,11 @@ TEST_F(ConcatenateListElementsTest, EmptyInnerListColumnChildSizeZeroWithStructG
     auto s_child2      = int32s_col{};
     auto grandchild    = structs_col{{s_child1, s_child2}};  // struct<int32,int32>, 0 rows
     auto inner_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0};
-    auto inner_col     = cudf::make_lists_column(
-      0, inner_offsets.release(), grandchild.release(), 0, {});  // list<struct<int32,int32>>, 0 rows
+    auto inner_col     = cudf::make_lists_column(0,
+                                             inner_offsets.release(),
+                                             grandchild.release(),
+                                             0,
+                                                 {});  // list<struct<int32,int32>>, 0 rows
     auto outer_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0};
     return cudf::make_lists_column(1, outer_offsets.release(), std::move(inner_col), 0, {});
   }();
