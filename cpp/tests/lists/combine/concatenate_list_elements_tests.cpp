@@ -858,3 +858,39 @@ TEST_F(ConcatenateListElementsTest, EmptyInnerListColumnWithNullRow)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results, verbosity);
 }
+
+// Subcase D: child.size()==0 with a struct grandchild — verifies the guard preserves
+// child column structure (field columns) when the grandchild is a struct type.
+// Addresses review feedback on rapidsai/cudf#22147 (pmattione-nvidia).
+TEST_F(ConcatenateListElementsTest, EmptyInnerListColumnChildSizeZeroWithStructGrandchild)
+{
+  // list<list<struct<int32,int32>>> with 1 outer row that is an empty list-of-lists.
+  // child.size() == 0; grandchild is struct<int32,int32> with 0 rows.
+  // The guard must copy the grandchild (preserving its field columns) without
+  // dereferencing the child offsets buffer.
+  using structs_col = cudf::test::structs_column_wrapper;
+  using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const col = [] {
+    auto s_child1      = int32s_col{};
+    auto s_child2      = int32s_col{};
+    auto grandchild    = structs_col{{s_child1, s_child2}};  // struct<int32,int32>, 0 rows
+    auto inner_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+    auto inner_col     = cudf::make_lists_column(
+      0, inner_offsets.release(), grandchild.release(), 0, {});  // list<struct<int32,int32>>, 0 rows
+    auto outer_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0};
+    return cudf::make_lists_column(1, outer_offsets.release(), std::move(inner_col), 0, {});
+  }();
+
+  // Expected: list<struct<int32,int32>> with 1 empty row (the outer list flattened).
+  auto const expected = [] {
+    auto s_child1   = int32s_col{};
+    auto s_child2   = int32s_col{};
+    auto grandchild = structs_col{{s_child1, s_child2}};
+    auto offsets    = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0};
+    return cudf::make_lists_column(1, offsets.release(), grandchild.release(), 0, {});
+  }();
+
+  auto const results = cudf::lists::concatenate_list_elements(*col);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results, verbosity);
+}
