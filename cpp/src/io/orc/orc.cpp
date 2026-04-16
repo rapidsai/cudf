@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -430,6 +430,8 @@ host_span<uint8_t const> orc_decompressor::decompress_blocks(host_span<uint8_t c
       // Uncompressed block
       max_dst_length += block_len;
     } else {
+      CUDF_EXPECTS(max_dst_length <= std::numeric_limits<size_t>::max() - m_blockSize,
+                   "ORC decompression: compression block size overflow");
       max_dst_length += m_blockSize;
     }
     i += block_len;
@@ -472,6 +474,8 @@ metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source
   uint8_t const* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
   protobuf_reader(ps_data, ps_length).read(ps);
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
+  CUDF_EXPECTS(ps.compressionBlockSize <= 1ULL << 30,
+               "Compression block size exceeds maximum allowed (1 GiB)");
 
   // If compression is used, the rest of the metadata is compressed
   // If no compressed is used, the decompressor is simply a pass-through
