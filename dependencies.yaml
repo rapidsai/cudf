@@ -147,6 +147,11 @@ files:
       - develop
       - iwyu
       - py_version
+  streaming_tests:
+    output: none
+    includes:
+      - build_all
+      - build_base
   docs:
     output: none
     includes:
