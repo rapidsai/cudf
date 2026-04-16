@@ -4,7 +4,7 @@ Autonomous LLM-driven optimization of the cuDF C++ CSV parser for maximum GPU th
 
 ## Run Configuration
 
-- **Base branch**: `origin/dev_autoresearch_v2`
+- **Base branch**: `origin/dev_autoresearch_v3`
 - **Run tag pattern**: `<monthday>-csv` (e.g. `apr12-csv`)
 
 ## Research Seeds
