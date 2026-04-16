@@ -351,6 +351,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<uint64_t const> row_offsets,
                       device_span<uint32_t const> field_ends,
                       int num_actual_cols,
+                      size_t output_row_offset,
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
@@ -363,6 +364,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 
   if (rec_id_next >= row_offsets.size()) return;
 
+  auto const out_row  = rec_id + output_row_offset;
   auto const row_end  = raw_csv + row_offsets[rec_id_next];
   auto const base_idx = static_cast<size_t>(rec_id) * num_actual_cols;
 
@@ -412,29 +414,29 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
               }
             }
           }
-          if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
+          if (is_quoted_output != nullptr) { is_quoted_output[out_row] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
-          str_list[rec_id].first  = field_start;
-          str_list[rec_id].second = end - field_start;
+          str_list[out_row].first  = field_start;
+          str_list[out_row].second = end - field_start;
         } else {
           if (cudf::type_dispatcher(dtypes[actual_col],
                                     ConvertFunctor{},
                                     field_start,
                                     field_end,
                                     columns[actual_col],
-                                    rec_id,
+                                    out_row,
                                     dtypes[actual_col],
                                     options,
                                     column_flags[col] & column_parse::as_hexadecimal)) {
-            set_bit(valids[actual_col], rec_id);
+            set_bit(valids[actual_col], out_row);
             atomicAdd(&valid_counts[actual_col], 1);
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
         auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
-        str_list[rec_id].first  = nullptr;
-        str_list[rec_id].second = 0;
-        if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
+        str_list[out_row].first = nullptr;
+        str_list[out_row].second = 0;
+        if (is_quoted_output != nullptr) { is_quoted_output[out_row] = false; }
       }
       ++actual_col;
     }
@@ -886,28 +888,48 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
 {
   auto const block_size      = csvparse_block_dim;
   auto const num_rows        = row_offsets.size() - 1;
-  auto const grid_size       = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
   auto const num_actual_cols = static_cast<int>(column_flags.size());
 
-  // Phase 1: Precompute field-end offsets for all columns
+  // Allocate field-end offsets for all rows
   auto d_field_ends = rmm::device_uvector<uint32_t>(
     num_rows * num_actual_cols, stream, cudf::get_current_device_resource_ref());
 
-  compute_field_ends<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, row_offsets, d_field_ends, num_actual_cols);
+  // L2-tiled two-phase processing: process field-end computation and decode in tiles
+  // so the CSV data stays hot in L2 cache between the two phases. Each tile's CSV data
+  // should fit comfortably in ~half of L2 (leaving room for field_ends and outputs).
+  // With 96MB L2 on Ada, target ~48MB per tile. At ~128 bytes/row average, that's ~375K rows.
+  // Use a conservative fixed tile size to avoid device-to-host sync for row byte offsets.
+  constexpr size_t rows_per_tile = 256 * 1024;  // ~32MB of CSV data for typical rows
 
-  // Phase 2: Decode using precomputed offsets
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
-                                                                    data,
-                                                                    column_flags,
-                                                                    row_offsets,
-                                                                    d_field_ends,
-                                                                    num_actual_cols,
-                                                                    dtypes,
-                                                                    columns,
-                                                                    valids,
-                                                                    valid_counts,
-                                                                    is_quoted_flags);
+  for (size_t tile_start = 0; tile_start < num_rows; tile_start += rows_per_tile) {
+    auto const tile_rows = std::min(rows_per_tile, num_rows - tile_start);
+    auto const tile_grid = cudf::util::div_rounding_up_safe<size_t>(tile_rows, block_size);
+
+    // Tile's row_offsets span: includes tile_rows + 1 elements (need next row for end boundary)
+    auto const tile_row_offsets = row_offsets.subspan(tile_start, tile_rows + 1);
+
+    // Tile's field_ends span
+    auto const tile_field_ends = device_span<uint32_t>{
+      d_field_ends.data() + tile_start * num_actual_cols, tile_rows * num_actual_cols};
+
+    // Phase 1: Precompute field-end offsets for this tile
+    compute_field_ends<<<tile_grid, block_size, 0, stream.value()>>>(
+      options, data, tile_row_offsets, tile_field_ends, num_actual_cols);
+
+    // Phase 2: Decode this tile — CSV data is still hot in L2 from Phase 1
+    convert_csv_to_cudf<<<tile_grid, block_size, 0, stream.value()>>>(options,
+                                                                      data,
+                                                                      column_flags,
+                                                                      tile_row_offsets,
+                                                                      tile_field_ends,
+                                                                      num_actual_cols,
+                                                                      tile_start,
+                                                                      dtypes,
+                                                                      columns,
+                                                                      valids,
+                                                                      valid_counts,
+                                                                      is_quoted_flags);
+  }
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,
