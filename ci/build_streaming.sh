@@ -26,20 +26,19 @@ set +u
 conda activate test_streaming
 set -u
 
+RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
+export RAPIDS_CUDA_MAJOR
+
 source rapids-configure-sccache
 
-rapidps-logger "Start sccache server"
-
-sccache --start-server
-sccache --show-adv-stats
-sccache --dist-status
+SCCACHE_S3_KEY_PREFIX="cudf-streaming/$(arch)/cuda${RAPIDS_CUDA_MAJOR}/objects-cache"
+SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX="cudf-streaming/$(arch)/cuda${RAPIDS_CUDA_MAJOR}/preprocessor-cache"
+SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE=true
+export SCCACHE_S3_KEY_PREFIX SCCACHE_S3_PREPROCESSOR_CACHE_KEY_PREFIX SCCACHE_S3_USE_PREPROCESSOR_CACHE_MODE
 
 rapids-print-env
 
 rapids-logger "Run C++ build"
-
-RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
-export RAPIDS_CUDA_MAJOR
 
 cmake -S cpp -B cpp/build -GNinja \
   -DCUDA_STATIC_RUNTIME=OFF \
