@@ -172,8 +172,10 @@ def allgather_polars_dataframe(
 
     # Bulk AllGather: each rank contributes once (sequence_number=0)
     allgather = AllGather(comm, op_id, ctx.br())
-    allgather.insert(0, packed_data)
-    allgather.insert_finished()
+    try:
+        allgather.insert(0, packed_data)
+    finally:
+        allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
 
     # Deserialize and concatenate each rank's contribution
