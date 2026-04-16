@@ -641,7 +641,7 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: gpu-l4-latest-1
       container_image: "rapidsai/ci-conda:26.06-latest"
-      script: ci/test_streaming.sh
+      script: ci/test_streaming.sh streaming_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
