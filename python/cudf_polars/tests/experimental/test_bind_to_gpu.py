@@ -112,28 +112,54 @@ def test_bind_falls_back_to_gpu_0() -> None:
             bind_to_gpu(HardwareBindingPolicy())
             assert mock_bind.call_count == 2
             assert mock_bind.call_args_list == [
-                call(verbose=False),
-                call(gpu_id=0, verbose=False),
+                call(),
+                call(gpu_id=0),
             ]
 
     _run_in_subprocess(body)
 
 
-def test_bind_raise_on_fail_sets_verbose() -> None:
-    """raise_on_fail=True forwards verbose=True to bind()."""
+def test_bind_raise_on_fail_propagates_exception() -> None:
+    """raise_on_fail=True lets RuntimeError from bind() propagate."""
 
     def body() -> None:
         _reset_bind_state()
+        mock_bind = MagicMock(
+            side_effect=RuntimeError("binding failed")
+        )
         with patch(
-            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind"
-        ) as mock_bind:
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind",
+            mock_bind,
+        ):
             from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
                 HardwareBindingPolicy,
                 bind_to_gpu,
             )
 
-            bind_to_gpu(HardwareBindingPolicy(raise_on_fail=True))
-            mock_bind.assert_called_once_with(verbose=True)
+            with pytest.raises(RuntimeError, match="binding failed"):
+                bind_to_gpu(HardwareBindingPolicy(raise_on_fail=True))
+
+    _run_in_subprocess(body)
+
+
+def test_bind_raise_on_fail_false_suppresses_exception() -> None:
+    """raise_on_fail=False silently ignores RuntimeError from bind()."""
+
+    def body() -> None:
+        _reset_bind_state()
+        mock_bind = MagicMock(
+            side_effect=RuntimeError("binding failed")
+        )
+        with patch(
+            "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind",
+            mock_bind,
+        ):
+            from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+                HardwareBindingPolicy,
+                bind_to_gpu,
+            )
+
+            bind_to_gpu(HardwareBindingPolicy(raise_on_fail=False))
 
     _run_in_subprocess(body)
 
