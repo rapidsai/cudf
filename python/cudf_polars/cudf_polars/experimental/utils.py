@@ -166,6 +166,8 @@ def _extract_over_shuffle_indices(
     seen_key_sets: set[frozenset[str]] = set()
     for node in traversal(exprs):
         if isinstance(node, GroupedWindow):
+            # TODO: support non-Col partition-by expressions using
+            # ShuffleManager.insert_hash_with_keys (rapidsai/cudf#21692).
             seen_key_sets.add(
                 frozenset(
                     child.name
@@ -182,6 +184,38 @@ def _extract_over_shuffle_indices(
         return tuple(schema_keys.index(n) for n in next(iter(seen_key_sets)))
     except ValueError:
         return None
+
+
+def _all_over_scalar_and_top_level(exprs: Sequence[Expr]) -> bool:
+    """
+    Return True if every GroupedWindow in exprs is top-level and purely scalar.
+
+    Top-level means the GroupedWindow is the direct value of a NamedExpr (not
+    nested inside another expression).  Scalar means all named_aggs are Agg/Len
+    reductions with Col partition-by keys.
+
+    Parameters
+    ----------
+    exprs
+        The values of the NamedExprs in a Select.exprs or HStack.columns.
+
+    Returns
+    -------
+    bool
+        True only when it is safe to use the scalar broadcast path.
+    """
+    for e in exprs:
+        if isinstance(e, GroupedWindow):
+            _, unary_ops = e._split_named_expr()
+            if any(ops for ops in unary_ops.values()):
+                return False
+            if not all(isinstance(c, Col) for c in e.children[: e.by_count]):
+                return False
+        else:
+            for node in traversal([e]):
+                if isinstance(node, GroupedWindow):
+                    return False
+    return True
 
 
 def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:

@@ -100,7 +100,7 @@ def test_over_select(engine, expr):
             "s": [6, 5, 4, 3, 2, 1],
         }
     )
-    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=False)
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
 
 
 def test_over_with_columns(engine):
@@ -113,7 +113,7 @@ def test_over_with_columns(engine):
     assert_gpu_result_equal(
         df.with_columns(pl.col("x").sum().over("g")),
         engine=engine,
-        check_row_order=False,
+        check_row_order=True,
     )
 
 
