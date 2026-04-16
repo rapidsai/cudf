@@ -65,11 +65,14 @@ void apply_mask_benchmark(nvbench::state& state, nvbench::type_list<DataType>)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   calculate_bandwidth<DataType>(state);
 
-  state.exec(
-    nvbench::exec_tag::sync,
-    [&source_table, &mask, is_retention](nvbench::launch& launch) {
-      if (is_retention) { cudf::apply_boolean_mask(*source_table, mask->view()); }
-    } else { cudf::apply_deletion_mask(*source_table, mask->view()); });
+  state.exec(nvbench::exec_tag::sync,
+             [&source_table, &mask, is_retention](nvbench::launch& launch) {
+               if (is_retention) {
+                 cudf::apply_boolean_mask(*source_table, mask->view());
+               } else {
+                 cudf::apply_deletion_mask(*source_table, mask->view());
+               }
+             });
 
   set_throughputs(state);
 }
