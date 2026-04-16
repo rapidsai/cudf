@@ -84,6 +84,8 @@ namespace detail {
   // Construct all deletion vectors and store their references
   auto deletion_vectors     = std::vector<cudf::roaring_bitmap>{};
   auto deletion_vector_refs = std::vector<std::reference_wrapper<cudf::roaring_bitmap const>>{};
+  // Must reserve enough space for the deletion vectors and references to avoid implicit
+  // re-allocations in emplace_back leading to dangling references
   deletion_vectors.reserve(serialized_roaring_bitmaps.size());
   deletion_vector_refs.reserve(serialized_roaring_bitmaps.size());
   std::transform(serialized_roaring_bitmaps.begin(),
