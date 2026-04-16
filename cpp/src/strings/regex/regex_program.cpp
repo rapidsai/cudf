@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,6 +46,24 @@ int32_t regex_program::groups_count() const { return _impl->prog.groups_count();
 std::size_t regex_program::compute_working_memory_size(int32_t num_strings) const
 {
   return detail::compute_working_memory_size(num_strings, instructions_count());
+}
+
+std::optional<std::string> regex_program::is_literal_only() const
+{
+  auto literal = _impl->prog.literal_only();
+  return literal.empty() ? std::nullopt : std::optional{literal};
+}
+
+std::optional<std::string> regex_program::is_starts_with_only() const
+{
+  auto literal = _impl->prog.starts_with_only();
+  return literal.empty() ? std::nullopt : std::optional{literal};
+}
+
+std::optional<std::string> regex_program::is_ends_with_only() const
+{
+  auto literal = _impl->prog.ends_with_only();
+  return literal.empty() ? std::nullopt : std::optional{literal};
 }
 
 }  // namespace strings

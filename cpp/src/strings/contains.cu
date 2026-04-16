@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,9 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/contains.hpp>
+#include <cudf/strings/detail/find.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -80,6 +82,30 @@ std::unique_ptr<column> contains_re(strings_column_view const& input,
                                     rmm::cuda_stream_view stream,
                                     rmm::device_async_resource_ref mr)
 {
+  // check for potential fast-paths
+  auto literal = prog.is_literal_only();
+  if (literal.has_value()) {
+    // single literal with no regex patterns or flags
+    auto const target =
+      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
+    return contains(input, target, stream, mr);
+  }
+  literal = prog.is_starts_with_only();
+  if (literal.has_value()) {
+    // single literal with begin instruction
+    auto const target =
+      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
+    return starts_with(input, target, stream, mr);
+  }
+  literal = prog.is_ends_with_only();
+  if (literal.has_value()) {
+    // single literal with end instruction
+    auto const target =
+      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
+    return ends_with(input, target, stream, mr);
+  }
+
+  // regular regex
   return contains_impl(input, prog, false, stream, mr);
 }
 
@@ -88,6 +114,29 @@ std::unique_ptr<column> matches_re(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
+  // check for potential fast-paths (all call starts_with)
+  auto literal = prog.is_literal_only();
+  if (literal.has_value()) {
+    // single literal with no regex patterns or flags
+    auto const target =
+      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
+    return starts_with(input, target, stream, mr);
+  }
+  literal = prog.is_starts_with_only();
+  if (literal.has_value()) {
+    // single literal with begin instruction
+    auto const target =
+      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
+    return starts_with(input, target, stream, mr);
+  }
+  literal = prog.is_ends_with_only();
+  if (literal.has_value()) {
+    // single literal with end instruction
+    auto const target =
+      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
+    return starts_with(input, target, stream, mr);
+  }
+
   return contains_impl(input, prog, true, stream, mr);
 }
 
@@ -96,7 +145,6 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);

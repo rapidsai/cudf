@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -8,6 +8,7 @@
 #include <cudf/types.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace CUDF_EXPORT cudf {
@@ -46,6 +47,7 @@ struct regex_program {
   regex_program()                                = delete;
   regex_program(regex_program const&)            = delete;
   regex_program& operator=(regex_program const&) = delete;
+  ~regex_program();
 
   /**
    * @brief Move constructor
@@ -105,7 +107,26 @@ struct regex_program {
    */
   [[nodiscard]] std::size_t compute_working_memory_size(int32_t num_strings) const;
 
-  ~regex_program();
+  /**
+   * @brief placeholder
+   *
+   * @return literal
+   */
+  std::optional<std::string> is_literal_only() const;
+
+  /**
+   * @brief placeholder
+   *
+   * @return literal
+   */
+  std::optional<std::string> is_starts_with_only() const;
+
+  /**
+   * @brief placeholder
+   *
+   * @return literal
+   */
+  std::optional<std::string> is_ends_with_only() const;
 
  private:
   std::string _pattern;
