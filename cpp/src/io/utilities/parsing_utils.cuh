@@ -123,7 +123,6 @@ CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
                                                       char const* end,
                                                       parse_options_view const& opts)
 {
-  T value{};
   bool all_digits_valid = true;
   constexpr bool as_hex = (base == 16);
 
@@ -139,8 +138,68 @@ CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
   // Skip over the "0x" prefix for hex notation
   if (base == 16 && begin + 2 < end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
 
-  // Handle the whole part of the number
-  // auto index = begin;
+  // Fast path for decimal floating-point: accumulate mantissa as uint64 to avoid
+  // expensive FP64 operations per digit (critical on GPUs with low FP64 throughput).
+  if constexpr (cuda::std::is_floating_point_v<T> && base == 10) {
+    uint64_t mantissa     = 0;
+    int32_t decimal_shift = 0;  // number of digits after decimal point
+    bool has_decimal      = false;
+
+    // Parse integer and fractional digits into mantissa
+    while (begin < end) {
+      char c = *begin;
+      if (c == opts.decimal) {
+        has_decimal = true;
+        ++begin;
+        continue;
+      }
+      if (c == 'e' || c == 'E') {
+        ++begin;
+        break;
+      }
+      if (c == opts.thousands || c == '+') {
+        ++begin;
+        continue;
+      }
+      auto d = decode_digit<T, false>(c, &all_digits_valid);
+      // Guard against uint64 overflow (max 18 significant digits)
+      if (mantissa < 1000000000000000000ULL) {
+        mantissa = mantissa * 10 + d;
+        if (has_decimal) { ++decimal_shift; }
+      } else {
+        // Too many digits: only adjust exponent for digits past the decimal
+        if (!has_decimal) {
+          decimal_shift--;  // extra integer digit = negative decimal shift
+        }
+      }
+      ++begin;
+    }
+
+    // Parse exponent
+    int32_t exponent = 0;
+    if (begin < end) {
+      int32_t const exponent_sign = *begin == '-' ? -1 : 1;
+      if (*begin == '-' || *begin == '+') { ++begin; }
+      while (begin < end) {
+        exponent = (exponent * 10) + decode_digit<T, false>(*(begin++), &all_digits_valid);
+      }
+      exponent *= exponent_sign;
+    }
+
+    if (!all_digits_valid) { return cuda::std::optional<T>{}; }
+
+    // Single FP64 conversion: mantissa * 10^(exponent - decimal_shift)
+    // Always compute in double to avoid precision loss for float32 targets.
+    int32_t final_exp = exponent - decimal_shift;
+    double dbl_value  = static_cast<double>(mantissa);
+    if (final_exp != 0) { dbl_value *= exp10(static_cast<double>(final_exp)); }
+
+    return static_cast<T>(dbl_value) * sign;
+  }
+
+  // Original path for integers and hex floating-point
+  T value{};
+
   while (begin < end) {
     if (*begin == opts.decimal) {
       ++begin;
@@ -153,7 +212,7 @@ CUDF_HOST_DEVICE cuda::std::optional<T> parse_numeric(char const* begin,
     ++begin;
   }
 
-  if (cuda::std::is_floating_point_v<T>) {
+  if constexpr (cuda::std::is_floating_point_v<T>) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
     while (begin < end) {
