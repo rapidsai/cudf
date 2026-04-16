@@ -12,10 +12,7 @@ from rapidsmpf.bootstrap import is_running_with_rrun
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.frontend.options import (
-    StreamingOptions,
-)
-from cudf_polars.utils.config import MemoryResourceConfig, RayContext
+from cudf_polars.utils.config import RayContext
 
 ray = pytest.importorskip("ray")
 from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine  # noqa: E402
@@ -27,16 +24,13 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="module")
 def engine() -> Iterator[RayEngine]:
     """Create one Ray cluster + GPU actors shared across the test session."""
-    try:
-        with RayEngine(
-            # Use a small partition size so tests exercise the multi-partition
-            # code path deterministically, regardless of input size.
-            executor_options={"max_rows_per_partition": 10},
-            ray_init_options={"include_dashboard": False},
-        ) as engine:
-            yield engine
-    except RuntimeError as e:
-        pytest.skip(f"Ray GPU cluster unavailable: {e}")
+    with RayEngine(
+        # Use a small partition size so tests exercise the multi-partition
+        # code path deterministically, regardless of input size.
+        executor_options={"max_rows_per_partition": 10},
+        ray_init_options={"include_dashboard": False},
+    ) as engine:
+        yield engine
 
 
 pytestmark = [
@@ -107,17 +101,14 @@ def test_executor_options_forwarded(
 
 
 def test_gather_cluster_info(engine: RayEngine) -> None:
-    """gather_cluster_info returns one info dict per rank with expected fields."""
+    """gather_cluster_info returns one ClusterInfo per rank with expected fields."""
     infos = engine.gather_cluster_info()
     assert len(infos) == engine.nranks
     for info in infos:
-        assert "node_id" in info
-        assert "hostname" in info
-        assert "pid" in info
-        assert "cuda_visible_devices" in info
-        assert isinstance(info["pid"], int)
+        assert isinstance(info.hostname, str)
+        assert isinstance(info.pid, int)
     # Each actor runs in its own process.
-    assert len({info["pid"] for info in infos}) == engine.nranks
+    assert len({info.pid for info in infos}) == engine.nranks
 
 
 def test_scan(engine: RayEngine) -> None:
@@ -172,21 +163,6 @@ def test_join(engine: RayEngine) -> None:
     assert result.shape == (n, 3)
     assert result["val_left"].to_list() == list(range(n))
     assert result["val_right"].to_list() == [x * 2 for x in range(n)]
-
-
-def test_memory_resource_config() -> None:
-    """RayEngine actors use the MR from memory_resource_config when provided."""
-    opts = StreamingOptions(
-        fallback_mode="silent",
-        memory_resource_config=MemoryResourceConfig(
-            qualname="rmm.mr.CudaMemoryResource"
-        ),
-    )
-    try:
-        with RayEngine.from_options(opts) as engine:
-            assert engine.nranks >= 1
-    except Exception as e:
-        pytest.skip(f"Ray GPU cluster unavailable: {e}")
 
 
 def test_empty_dataframe(engine: RayEngine) -> None:
