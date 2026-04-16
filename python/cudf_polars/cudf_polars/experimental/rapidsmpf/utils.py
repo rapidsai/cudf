@@ -35,7 +35,7 @@ import rmm.mr
 import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
-from cudf_polars.dsl.ir import Cache, Filter, Join, Projection, Select
+from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
@@ -211,6 +212,16 @@ def _remap_scheme_simple(
     return scheme  # None or "inherit" passes through unchanged
 
 
+def _hstack_to_select(hstack: HStack) -> Select:
+    """Translate HStack to the equivalent Select node."""
+    col_map = {ne.name: ne for ne in hstack.columns}
+    exprs = tuple(
+        col_map[name] if name in col_map else NamedExpr(name, Col(dtype, name))
+        for name, dtype in hstack.schema.items()
+    )
+    return Select(hstack.schema, exprs, hstack.should_broadcast, hstack.children[0])
+
+
 def maybe_remap_partitioning(
     ir: IR, partitioning: Partitioning | None, *, child_ir: IR | None = None
 ) -> Partitioning | None:
@@ -241,10 +252,20 @@ def maybe_remap_partitioning(
     """
     if partitioning is None:
         return None  # Nothing to preserve
-    if isinstance(ir, Select):
+    if isinstance(ir, (Select, HStack)):
+        if isinstance(ir, HStack):
+            # HStack is a special case of Select
+            ir = _hstack_to_select(ir)
         return Partitioning(
             inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
             local=_remap_scheme_select(ir, partitioning.local),
+        )
+    if isinstance(ir, GroupBy):
+        return Partitioning(
+            inter_rank=_remap_scheme_simple(
+                ir, partitioning.inter_rank, ir.children[0]
+            ),
+            local=_remap_scheme_simple(ir, partitioning.local, ir.children[0]),
         )
     if isinstance(ir, (Cache, Join, Projection, Filter)):
         child = child_ir if child_ir is not None else ir.children[0]
@@ -314,6 +335,7 @@ def _evaluate_chunk_sync(
     chunk: TableChunk,
     ir: IR,
     ir_context: IRExecutionContext,
+    br: BufferResource,
 ) -> TableChunk:
     """
     Apply an IR node's do_evaluate to a table chunk (synchronous).
@@ -329,6 +351,8 @@ def _evaluate_chunk_sync(
         The IR node to evaluate.
     ir_context
         The IR execution context.
+    br
+        The buffer resource for lifetime tracking.
 
     Returns
     -------
@@ -342,7 +366,9 @@ def _evaluate_chunk_sync(
         DataFrame.from_table(chunk.table_view(), names, dtypes, chunk.stream),
         context=ir_context,
     )
-    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=br
+    )
 
 
 async def evaluate_chunk(
@@ -380,7 +406,7 @@ async def evaluate_chunk(
     with opaque_memory_usage(extra):
         for single_ir in irs:
             chunk = await asyncio.to_thread(
-                _evaluate_chunk_sync, chunk, single_ir, ir_context
+                _evaluate_chunk_sync, chunk, single_ir, ir_context, context.br()
             )
         return chunk
 
@@ -430,7 +456,9 @@ async def concat_batch(
             context=ir_context,
         )
         del batch
-    return TableChunk.from_pylibcudf_table(df.table, df.stream, exclusive_view=True)
+    return TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
+    )
 
 
 async def evaluate_batch(
@@ -507,24 +535,26 @@ async def chunkwise_evaluate(
     if tracer is not None and metadata.duplicated:
         tracer.set_duplicated()
 
-    seq_num = 0
     received_any = False
     while (msg := await ch_in.recv(context)) is not None:
         received_any = True
         cd = msg.get_content_description()
+        seq_num = msg.sequence_number
         with cudf_polars.dsl.tracing.bound_contextvars(
             content_sizes=cd.content_sizes,
             spillable=cd.spillable,
             sequence_number=msg.sequence_number,
         ):
             result = await evaluate_chunk(
-                context, TableChunk.from_message(msg), ir, ir_context=ir_context
+                context,
+                TableChunk.from_message(msg, br=context.br()),
+                ir,
+                ir_context=ir_context,
             )
         del msg, cd
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
         await ch_out.send(context, Message(seq_num, result))
-        seq_num += 1
 
     if handle_empty_input and not received_any:
         chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
@@ -532,7 +562,7 @@ async def chunkwise_evaluate(
         del chunk
         if tracer is not None:
             tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
+        await ch_out.send(context, Message(0, result))
 
     await ch_out.drain(context)
 
@@ -905,6 +935,7 @@ def empty_table_chunk(ir: IR, context: Context, stream: Stream) -> TableChunk:
         empty_table,
         stream,
         exclusive_view=True,
+        br=context.br(),
     )
 
 
@@ -1035,8 +1066,10 @@ async def allgather_reduce(
     packed = PackedData.from_host_bytes(data, context.br())
 
     allgather = AllGather(context, comm, op_id)
-    allgather.insert(0, packed)
-    allgather.insert_finished()
+    try:
+        allgather.insert(0, packed)
+    finally:
+        allgather.insert_finished()
 
     results = await allgather.extract_all(context, ordered=False)
 

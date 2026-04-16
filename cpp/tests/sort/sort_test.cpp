@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -52,7 +52,7 @@ TYPED_TEST(Sort, WithNullMax)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
+  cudf::test::strings_column_wrapper col2({"d", "e", "", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
@@ -88,7 +88,7 @@ TYPED_TEST(Sort, WithNullMin)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {1, 1, 0, 1, 1});
+  cudf::test::strings_column_wrapper col2({"d", "e", "", "d", "k"}, {1, 1, 0, 1, 1});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 1, 0, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
@@ -120,7 +120,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {0, 0, 1, 1, 0}};
-  cudf::test::strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {0, 1, 0, 0, 1});
+  cudf::test::strings_column_wrapper col2({"", "e", "", "", "k"}, {0, 1, 0, 0, 1});
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 0, 1, 0, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
@@ -415,7 +415,7 @@ TYPED_TEST(Sort, WithSlicedStructColumn)
   // clang-format off
   using FWCW = cudf::test::fixed_width_column_wrapper<T, int32_t>;
   std::vector<bool>             string_valids{    1,     1,     1,     1,    1,    1,   1,   0};
-  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", "x"};
+  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", ""};
   auto col2 =                           FWCW{{    1,     1,     0,     0,    0,    2,   1,   3}};
   auto col3 =                           FWCW{{    7,     8,     1,     1,    9,    5,   7,   3}};
   auto col1 = cudf::test::strings_column_wrapper{names.begin(), names.end(), string_valids.begin()};
@@ -479,7 +479,7 @@ TYPED_TEST(Sort, SlicedColumns)
 
   // clang-format off
   std::vector<bool>             string_valids{    1,     1,     1,     1,    1,    1,   1,   0};
-  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", "x"};
+  std::initializer_list<std::string> names = {"bbe", "bbe", "aaa", "abc", "ab", "za", "b", ""};
   auto col2 =                           FWCW{{    7,     8,     1,     1,    9,    5,   7,   3}};
   auto col1 = cudf::test::strings_column_wrapper{names.begin(), names.end(), string_valids.begin()};
   // clang-format on

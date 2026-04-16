@@ -49,7 +49,7 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
 
   auto iter = cuda::counting_iterator<size_type>{0};
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     iter,
     iter + parent_table_device_view.num_columns(),
     [col_desc, parent_col_view = parent_table_device_view, leaf_columns] __device__(

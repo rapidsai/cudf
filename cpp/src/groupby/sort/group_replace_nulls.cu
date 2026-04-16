@@ -45,19 +45,26 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto func = cudf::detail::replace_policy_functor();
   cuda::std::equal_to<cudf::size_type> eq;
   if (replace_policy == cudf::replace_policy::PRECEDING) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                  group_labels.begin(),
-                                  group_labels.begin() + size,
-                                  in_begin,
-                                  gm_begin,
-                                  eq,
-                                  func);
+    thrust::inclusive_scan_by_key(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      group_labels.begin(),
+      group_labels.begin() + size,
+      in_begin,
+      gm_begin,
+      eq,
+      func);
   } else {
     auto gl_rbegin = cuda::std::make_reverse_iterator(group_labels.begin() + size);
     auto in_rbegin = cuda::std::make_reverse_iterator(in_begin + size);
     auto gm_rbegin = cuda::std::make_reverse_iterator(gm_begin + size);
     thrust::inclusive_scan_by_key(
-      rmm::exec_policy_nosync(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      gl_rbegin,
+      gl_rbegin + size,
+      in_rbegin,
+      gm_rbegin,
+      eq,
+      func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),

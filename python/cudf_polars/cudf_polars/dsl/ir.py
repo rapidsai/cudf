@@ -43,11 +43,9 @@ from cudf_polars.dsl.utils.windows import (
     range_window_bounds,
 )
 from cudf_polars.utils import dtypes
-from cudf_polars.utils.config import CUDAStreamPolicy
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_joined_cuda_stream,
-    get_new_cuda_stream,
     join_cuda_streams,
 )
 from cudf_polars.utils.versions import (
@@ -68,7 +66,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
-    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+    from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
 __all__ = [
@@ -114,24 +112,8 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     """
 
-    get_cuda_stream: Callable[[], Stream]
+    get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-
-    @classmethod
-    def from_config_options(
-        cls, config_options: ConfigOptions, query_id: uuid.UUID | None = None
-    ) -> IRExecutionContext:
-        """Create an IRExecutionContext from ConfigOptions."""
-        query_id = query_id or uuid.uuid4()
-        match config_options.cuda_stream_policy:
-            case CUDAStreamPolicy.DEFAULT:
-                return cls(get_cuda_stream=get_cuda_stream, query_id=query_id)
-            case CUDAStreamPolicy.NEW:
-                return cls(get_cuda_stream=get_new_cuda_stream, query_id=query_id)
-            case _:  # pragma: no cover
-                raise ValueError(
-                    f"Invalid CUDA stream policy: {config_options.cuda_stream_policy}"
-                )
 
     @contextlib.contextmanager
     def stream_ordered_after(self, *dfs: DataFrame) -> Generator[Stream, None, None]:
@@ -2818,9 +2800,9 @@ class HStack(IR):
                 target_length=df.num_rows if df.num_columns != 0 else None,
                 stream=df.stream,
             )
-        else:
+        else:  # pragma: no cover; streaming rewrites HStack(False)
             # Polars ensures this is true, but let's make sure nothing
-            # went wrong. In this case, the parent node is a
+            # went wrong. In this case, the parent node is
             # guaranteed to be a Select which will take care of making
             # sure that everything is the same length. The result
             # table that might have mismatching column lengths will
@@ -3397,7 +3379,7 @@ class HConcat(IR):
 
     __slots__ = ("should_broadcast",)
     _non_child = ("schema", "should_broadcast")
-    _n_non_child_args = 1
+    _n_non_child_args = 2
 
     def __init__(
         self,
@@ -3407,7 +3389,7 @@ class HConcat(IR):
     ):
         self.schema = schema
         self.should_broadcast = should_broadcast
-        self._non_child_args = (should_broadcast,)
+        self._non_child_args = (schema, should_broadcast)
         self.children = children
 
     @staticmethod
@@ -3448,6 +3430,7 @@ class HConcat(IR):
     @nvtx_annotate_cudf_polars(message="HConcat")
     def do_evaluate(
         cls,
+        schema: Schema,
         should_broadcast: bool,  # noqa: FBT001
         *dfs: DataFrame,
         context: IRExecutionContext,
@@ -3457,13 +3440,13 @@ class HConcat(IR):
             # Special should_broadcast case.
             # Used to recombine decomposed expressions
             if should_broadcast:
-                result = DataFrame(
-                    broadcast(
-                        *itertools.chain.from_iterable(df.columns for df in dfs),
-                        stream=stream,
-                    ),
+                bcols = broadcast(
+                    *itertools.chain.from_iterable(df.columns for df in dfs),
                     stream=stream,
                 )
+                by_name = {c.name: c for c in bcols}
+                ordered = [by_name[name] for name in schema]
+                result = DataFrame(ordered, stream=stream)
             else:
                 max_rows = max(df.num_rows for df in dfs)
                 # Horizontal concatenation extends shorter tables with nulls
