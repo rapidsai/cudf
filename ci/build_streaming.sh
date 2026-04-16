@@ -29,6 +29,8 @@ set -u
 source rapids-configure-sccache
 
 sccache --start-server
+sccache --show-adv-stats
+sccache --dist-status
 
 rapids-print-env
 
@@ -42,11 +44,11 @@ cmake -S cpp -B cpp/build -GNinja \
   -DCUDF_BUILD_STREAMS_TEST_UTIL=ON \
   -DBUILD_SHARED_LIBS=ON
 mkdir cpp/install
-SCCACHE_ERROR_LOG=$(pwd)/cpp/install/sccache_log.txt \
-  SCCACHE_LOG=debug \
-  cmake --build cpp/build "-j${PARALLEL_LEVEL}" -v
+cmake --build cpp/build "-j${PARALLEL_LEVEL}" -v
 cmake --install cpp/build --prefix cpp/install
 cmake --install cpp/build --prefix cpp/install --component testing
 
 sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
+
+cat "$SCCACHE_ERROR_LOG"
