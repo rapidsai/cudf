@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -47,7 +47,7 @@ cpdef Column contains_re(
             input.view(),
             prog.c_obj.get()[0],
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -86,7 +86,7 @@ cpdef Column count_re(
             input.view(),
             prog.c_obj.get()[0],
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -126,7 +126,7 @@ cpdef Column matches_re(
             input.view(),
             prog.c_obj.get()[0],
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -176,7 +176,7 @@ cpdef Column like(
             c_pattern,
             c_escape_character,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     stream.synchronize()
 

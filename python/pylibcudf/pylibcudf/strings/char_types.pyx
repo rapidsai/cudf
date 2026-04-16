@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -59,7 +59,7 @@ cpdef Column all_characters_of_type(
             types,
             verify_types,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -109,7 +109,7 @@ cpdef Column filter_characters_of_type(
             dereference(c_replacement),
             types_to_keep,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -49,7 +49,7 @@ cpdef Column find_multiple(
             input.view(),
             targets.view(),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -90,7 +90,7 @@ cpdef Table contains_multiple(
             input.view(),
             targets.view(),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)

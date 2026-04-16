@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -40,7 +40,7 @@ cdef class CharacterNormalizer:
                     do_lower_case,
                     c_tokens,
                     stream.view(),
-                    mr.c_ref.value()
+                    mr.get_mr()
                 )
             )
 
@@ -73,7 +73,7 @@ cpdef Column normalize_spaces(
 
     with nogil:
         c_result = cpp_normalize.normalize_spaces(
-            input.view(), stream.view(), mr.c_ref.value()
+            input.view(), stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -113,7 +113,7 @@ cpdef Column normalize_characters(
             input.view(),
             dereference(normalizer.c_obj.get()),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

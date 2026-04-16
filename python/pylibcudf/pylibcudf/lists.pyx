@@ -110,7 +110,7 @@ cpdef Table explode_outer(
 
     with nogil:
         c_result = cpp_explode.explode_outer(
-            input.view(), explode_column_idx, stream.view(), mr.c_ref.value()
+            input.view(), explode_column_idx, stream.view(), mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -147,7 +147,7 @@ cpdef Column concatenate_rows(
             input.view(),
             concatenate_null_policy.IGNORE,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -182,7 +182,7 @@ cpdef Column concatenate_list_elements(
 
     with nogil:
         c_result = cpp_concatenate_list_elements(
-            input.view(), null_policy, stream.view(), mr.c_ref.value()
+            input.view(), null_policy, stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -234,7 +234,7 @@ cpdef Column contains(
                 search_key.get()
             ),
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -270,7 +270,7 @@ cpdef Column contains_nulls(
 
     with nogil:
         c_result = cpp_contains.contains_nulls(
-            list_view.view(), stream.view(), mr.c_ref.value()
+            list_view.view(), stream.view(), mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -321,7 +321,7 @@ cpdef Column index_of(
             ),
             find_option,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -355,7 +355,7 @@ cpdef Column reverse(
 
     with nogil:
         c_result = cpp_reverse.reverse(
-            list_view.view(), stream.view(), mr.c_ref.value()
+            list_view.view(), stream.view(), mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -408,7 +408,7 @@ cpdef Column segmented_gather(
             list_view2.view(),
             bounds_policy,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -446,7 +446,7 @@ cpdef Column extract_list_element(
             list_view.view(),
             index.view() if ColumnOrSizeType is Column else index,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -481,7 +481,7 @@ cpdef Column count_elements(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_count_elements(list_view.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_count_elements(list_view.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -524,12 +524,12 @@ cpdef Column sequences(
                 steps.view(),
                 sizes.view(),
                 stream.view(),
-                mr.c_ref.value(),
+                mr.get_mr(),
             )
     else:
         with nogil:
             c_result = cpp_filling.sequences(
-                starts.view(), sizes.view(), stream.view(), mr.c_ref.value()
+                starts.view(), sizes.view(), stream.view(), mr.get_mr()
             )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -576,7 +576,7 @@ cpdef Column sort_lists(
                     sort_order,
                     na_position,
                     stream.view(),
-                    mr.c_ref.value(),
+                    mr.get_mr(),
             )
         else:
             c_result = cpp_sort_lists(
@@ -584,7 +584,7 @@ cpdef Column sort_lists(
                     sort_order,
                     na_position,
                     stream.view(),
-                    mr.c_ref.value(),
+                    mr.get_mr(),
             )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -632,7 +632,7 @@ cpdef Column difference_distinct(
             nulls_equal,
             nans_equal,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -679,7 +679,7 @@ cpdef Column have_overlap(
             nulls_equal,
             nans_equal,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -726,7 +726,7 @@ cpdef Column intersect_distinct(
             nulls_equal,
             nans_equal,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -774,7 +774,7 @@ cpdef Column union_distinct(
             nulls_equal,
             nans_equal,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -815,7 +815,7 @@ cpdef Column apply_boolean_mask(
             list_view.view(),
             mask_view.view(),
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -858,7 +858,7 @@ cpdef Column distinct(
             nans_equal,
             duplicate_keep_option.KEEP_ANY,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 

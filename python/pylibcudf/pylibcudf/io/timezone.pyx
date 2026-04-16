@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -50,7 +50,7 @@ cpdef Table make_timezone_transition_table(
             make_optional[string](c_tzdir),
             c_tzname,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)

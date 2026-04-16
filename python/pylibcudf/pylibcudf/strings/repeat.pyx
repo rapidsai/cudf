@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -53,7 +53,7 @@ cpdef Column repeat_strings(
                 input.view(),
                 repeat_times.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif ColumnorSizeType is size_type:
         with nogil:
@@ -61,7 +61,7 @@ cpdef Column repeat_strings(
                 input.view(),
                 repeat_times,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         raise ValueError("repeat_times must be size_type or integer")

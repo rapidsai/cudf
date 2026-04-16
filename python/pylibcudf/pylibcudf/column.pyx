@@ -470,7 +470,7 @@ cdef class Column:
                     move(dereference(c_schema)),
                     move(dereference(c_device_array)),
                     stream.view(),
-                    result.mr.c_ref.value(),
+                    result.mr.get_mr(),
                 )
             result.col.swap(c_result)
 
@@ -491,7 +491,7 @@ cdef class Column:
                     move(dereference(c_schema)),
                     move(dereference(c_array)),
                     stream.view(),
-                    result.mr.c_ref.value(),
+                    result.mr.get_mr(),
                 )
             result.col.swap(c_result)
 
@@ -515,7 +515,7 @@ cdef class Column:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_arrow_stream)),
                     stream.view(),
-                    result.mr.c_ref.value(),
+                    result.mr.get_mr(),
                 )
             result.col.swap(c_result)
 
@@ -846,7 +846,7 @@ cdef class Column:
                 dereference(c_scalar),
                 size,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -877,7 +877,7 @@ cdef class Column:
         mr = _get_memory_resource(mr)
 
         with nogil:
-            result = get_element(cv, 0, stream.view(), mr.c_ref.value())
+            result = get_element(cv, 0, stream.view(), mr.get_mr())
 
         return Scalar.from_libcudf(move(result))
 
@@ -913,7 +913,7 @@ cdef class Column:
                 dereference(slr.get()),
                 size,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -1370,7 +1370,7 @@ cdef class Column:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            c_result = make_unique[column](self.view(), stream.view(), mr.c_ref.value())
+            c_result = make_unique[column](self.view(), stream.view(), mr.get_mr())
         return Column.from_libcudf(move(c_result), stream, mr)
 
     cpdef uint64_t device_buffer_size(self):

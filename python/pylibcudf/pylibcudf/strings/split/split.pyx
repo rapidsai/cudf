@@ -74,7 +74,7 @@ cpdef Table split(
             dereference(c_delimiter),
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -126,7 +126,7 @@ cpdef Table rsplit(
             dereference(c_delimiter),
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -173,7 +173,7 @@ cpdef Column split_record(
             dereference(c_delimiter),
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -222,7 +222,7 @@ cpdef Column rsplit_record(
             dereference(c_delimiter),
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -268,7 +268,7 @@ cpdef Table split_re(
             prog.c_obj.get()[0],
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -314,7 +314,7 @@ cpdef Table rsplit_re(
             prog.c_obj.get()[0],
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -359,7 +359,7 @@ cpdef Column split_record_re(
             prog.c_obj.get()[0],
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -401,7 +401,7 @@ cpdef Column rsplit_record_re(
             prog.c_obj.get()[0],
             maxsplit,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -424,7 +424,7 @@ cpdef Column split_part(
             dereference(c_delimiter),
             index,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

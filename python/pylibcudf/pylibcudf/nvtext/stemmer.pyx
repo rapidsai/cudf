@@ -97,7 +97,7 @@ cpdef Column porter_stemmer_measure(
 
     with nogil:
         c_result = cpp_porter_stemmer_measure(
-            input.view(), stream.view(), mr.c_ref.value()
+            input.view(), stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

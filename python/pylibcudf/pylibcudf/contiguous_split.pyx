@@ -187,7 +187,7 @@ cdef class ChunkedPack:
         stream = _get_stream(stream)
         temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
-            input.view(), user_buffer_size, stream.view(), temp_mr.c_ref.value()
+            input.view(), user_buffer_size, stream.view(), temp_mr.get_mr()
         )
 
         cdef ChunkedPack out = ChunkedPack.__new__(ChunkedPack)
@@ -350,7 +350,7 @@ cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource m
     mr = _get_memory_resource(mr)
     with nogil:
         pack = move(make_unique[packed_columns](
-            cpp_pack(input.view(), stream.view(), mr.c_ref.value())
+            cpp_pack(input.view(), stream.view(), mr.get_mr())
         ))
     return PackedColumns.from_libcudf(move(pack), stream, mr)
 

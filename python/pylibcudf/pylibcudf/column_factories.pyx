@@ -111,7 +111,7 @@ cpdef Column make_numeric_column(
             size,
             state,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -145,7 +145,7 @@ cpdef Column make_fixed_point_column(
             size,
             state,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -180,7 +180,7 @@ cpdef Column make_timestamp_column(
             size,
             state,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -215,7 +215,7 @@ cpdef Column make_duration_column(
             size,
             state,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -250,7 +250,7 @@ cpdef Column make_fixed_width_column(
             size,
             state,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), stream, mr)

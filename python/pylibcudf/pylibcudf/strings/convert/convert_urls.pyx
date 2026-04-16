@@ -38,7 +38,7 @@ cpdef Column url_encode(Column input, Stream stream=None, DeviceMemoryResource m
 
     with nogil:
         c_result = cpp_convert_urls.url_encode(
-            input.view(), stream.view(), mr.c_ref.value()
+            input.view(), stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -69,7 +69,7 @@ cpdef Column url_decode(Column input, Stream stream=None, DeviceMemoryResource m
 
     with nogil:
         c_result = cpp_convert_urls.url_decode(
-            input.view(), stream.view(), mr.c_ref.value()
+            input.view(), stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

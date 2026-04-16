@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -62,6 +62,6 @@ cpdef Column ngrams_tokenize(
             dereference(<const string_scalar*>delimiter.get()),
             dereference(<const string_scalar*>separator.get()),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)

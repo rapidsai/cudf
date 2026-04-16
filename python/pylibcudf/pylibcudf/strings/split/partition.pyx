@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -51,7 +51,7 @@ cpdef Table partition(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
@@ -63,7 +63,7 @@ cpdef Table partition(
             input.view(),
             dereference(c_delimiter),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -100,7 +100,7 @@ cpdef Table rpartition(
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
@@ -112,7 +112,7 @@ cpdef Table rpartition(
             input.view(),
             dereference(c_delimiter),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -70,7 +70,7 @@ cpdef Column replace(
             repl_str[0],
             maxrepl,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -118,7 +118,7 @@ cpdef Column replace_multiple(
             target.view(),
             repl.view(),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -167,7 +167,7 @@ cpdef Column replace_slice(
 
     if repl is None:
         repl = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* scalar_str = <string_scalar*>(repl.c_obj.get())
@@ -179,7 +179,7 @@ cpdef Column replace_slice(
             start,
             stop,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

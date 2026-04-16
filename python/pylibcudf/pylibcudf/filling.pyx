@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -78,7 +78,7 @@ cpdef Column fill(
             end,
             dereference((<Scalar> value).c_obj),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -166,7 +166,7 @@ cpdef Column sequence(
             dereference(init.c_obj),
             dereference(step.c_obj),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -212,7 +212,7 @@ cpdef Table repeat(
                 input_table.view(),
                 count.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     if ColumnOrSize is size_type:
         with nogil:
@@ -220,7 +220,7 @@ cpdef Table repeat(
                 input_table.view(),
                 count,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     return Table.from_libcudf(move(result), stream, mr)
 
@@ -265,6 +265,6 @@ cpdef Column calendrical_month_sequence(
             dereference(init.c_obj),
             months,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)

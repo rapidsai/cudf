@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
@@ -103,7 +103,7 @@ cpdef Table gather(
             gather_map.view(),
             bounds_policy,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -165,7 +165,7 @@ cpdef Table scatter(
                 scatter_map.view(),
                 target_table.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         source_scalars = _as_vector(source)
@@ -175,7 +175,7 @@ cpdef Table scatter(
                 scatter_map.view(),
                 target_table.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -253,7 +253,7 @@ cpdef Column allocate_like(
                 c_size,
                 policy,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -368,7 +368,7 @@ cpdef Column copy_range(
             input_end,
             target_begin,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -418,7 +418,7 @@ cpdef Column shift(
                 offset,
                 dereference(fill_value.c_obj),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -566,7 +566,7 @@ cpdef Column copy_if_else(
                 rhs.view(),
                 boolean_mask.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif LeftCopyIfElseOperand is Column and RightCopyIfElseOperand is Scalar:
         with nogil:
@@ -575,7 +575,7 @@ cpdef Column copy_if_else(
                 dereference(rhs.c_obj),
                 boolean_mask.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif LeftCopyIfElseOperand is Scalar and RightCopyIfElseOperand is Column:
         with nogil:
@@ -584,7 +584,7 @@ cpdef Column copy_if_else(
                 rhs.view(),
                 boolean_mask.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         with nogil:
@@ -593,7 +593,7 @@ cpdef Column copy_if_else(
                 dereference(rhs.c_obj),
                 boolean_mask.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -651,7 +651,7 @@ cpdef Table boolean_mask_scatter(
                 target.view(),
                 boolean_mask.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         source_scalars = _as_vector(input)
@@ -661,7 +661,7 @@ cpdef Table boolean_mask_scatter(
                 target.view(),
                 boolean_mask.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
 
     return Table.from_libcudf(move(result), stream, mr)
@@ -702,7 +702,7 @@ cpdef Scalar get_element(
 
     with nogil:
         c_output = cpp_copying.get_element(
-            input_column.view(), index, stream.view(), mr.c_ref.value()
+            input_column.view(), index, stream.view(), mr.get_mr()
         )
 
     return Scalar.from_libcudf(move(c_output))

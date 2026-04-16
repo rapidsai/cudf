@@ -50,7 +50,7 @@ cpdef Column capitalize(
 
     if delimiters is None:
         delimiters = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* cpp_delimiters = <const string_scalar*>(
@@ -62,7 +62,7 @@ cpdef Column capitalize(
             input.view(),
             dereference(cpp_delimiters),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -96,7 +96,7 @@ cpdef Column title(
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_capitalize.title(
-            input.view(), sequence_type, stream.view(), mr.c_ref.value()
+            input.view(), sequence_type, stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -122,7 +122,7 @@ cpdef Column is_title(Column input, Stream stream=None, DeviceMemoryResource mr=
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_capitalize.is_title(
-            input.view(), stream.view(), mr.c_ref.value()
+            input.view(), stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

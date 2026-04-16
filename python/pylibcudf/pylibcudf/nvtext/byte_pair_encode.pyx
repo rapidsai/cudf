@@ -38,7 +38,7 @@ cdef class BPEMergePairs:
         mr = _get_memory_resource(mr)
         with nogil:
             self.c_obj = move(
-                cpp_load_merge_pairs(c_pairs, stream.view(), mr.c_ref.value())
+                cpp_load_merge_pairs(c_pairs, stream.view(), mr.get_mr())
             )
 
     __hash__ = None
@@ -77,7 +77,7 @@ cpdef Column byte_pair_encoding(
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), stream.view(), mr.c_ref.value())
+            cpp_make_string_scalar(" ".encode(), stream.view(), mr.get_mr())
         )
 
     with nogil:
@@ -87,7 +87,7 @@ cpdef Column byte_pair_encoding(
                 dereference(merge_pairs.c_obj.get()),
                 dereference(<const string_scalar*>separator.c_obj.get()),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         )
 

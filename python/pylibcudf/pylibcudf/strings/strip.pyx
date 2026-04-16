@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -52,7 +52,7 @@ cpdef Column strip(
 
     if to_strip is None:
         to_strip = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef unique_ptr[column] c_result
@@ -65,7 +65,7 @@ cpdef Column strip(
             side,
             dereference(cpp_to_strip),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

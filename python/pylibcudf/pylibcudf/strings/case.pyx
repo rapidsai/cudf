@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -35,7 +35,7 @@ cpdef Column to_lower(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.to_lower(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_case.to_lower(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -62,7 +62,7 @@ cpdef Column to_upper(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.to_upper(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_case.to_upper(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -91,6 +91,6 @@ cpdef Column swapcase(Column input, Stream stream=None, DeviceMemoryResource mr=
     stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.swapcase(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_case.swapcase(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)

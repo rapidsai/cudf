@@ -744,7 +744,7 @@ cpdef tuple chunked_read_json(
         try:
             with nogil:
                 c_result = move(cpp_read_json(
-                    options.c_obj, s.view(), mr.c_ref.value()
+                    options.c_obj, s.view(), mr.get_mr()
                 ))
         except (ValueError, OverflowError):
             break
@@ -801,7 +801,7 @@ cpdef TableWithMetadata read_json(
     cdef Stream s = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.c_ref.value()))
+        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 
@@ -865,7 +865,7 @@ cpdef TableWithMetadata read_json_from_string_column(
                 dereference(c_separator),
                 dereference(c_narep),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         )
         c_contents = c_join_string_column.get().release()
@@ -888,7 +888,7 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Read JSON from the joined string
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, stream.view(), mr.c_ref.value()))
+        c_result = move(cpp_read_json(options.c_obj, stream.view(), mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, stream, mr)
 

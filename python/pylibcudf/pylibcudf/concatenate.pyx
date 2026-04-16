@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -53,7 +53,7 @@ cpdef concatenate(list objects, Stream stream=None, DeviceMemoryResource mr=None
 
         with nogil:
             c_tbl_result = cpp_concatenate.concatenate(
-                c_tables, stream.view(), mr.c_ref.value()
+                c_tables, stream.view(), mr.get_mr()
             )
         return Table.from_libcudf(move(c_tbl_result), stream, mr)
     elif isinstance(objects[0], Column):
@@ -62,7 +62,7 @@ cpdef concatenate(list objects, Stream stream=None, DeviceMemoryResource mr=None
 
         with nogil:
             c_col_result = cpp_concatenate.concatenate(
-                c_columns, stream.view(), mr.c_ref.value()
+                c_columns, stream.view(), mr.get_mr()
             )
         return Column.from_libcudf(move(c_col_result), stream, mr)
     else:

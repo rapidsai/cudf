@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
@@ -73,7 +73,7 @@ cpdef Column murmurhash3_x86_32(
             input.view(),
             seed,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -111,7 +111,7 @@ cpdef Table murmurhash3_x64_128(
             input.view(),
             seed,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)
@@ -150,7 +150,7 @@ cpdef Column xxhash_32(
             input.view(),
             seed,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -189,7 +189,7 @@ cpdef Column xxhash_64(
             input.view(),
             seed,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -224,7 +224,7 @@ cpdef Column md5(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_md5(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_md5(input.view(), stream.view(), mr.get_mr())
     return Column.from_libcudf(move(c_result), stream, mr)
 
 cpdef Column sha1(
@@ -254,7 +254,7 @@ cpdef Column sha1(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha1(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_sha1(input.view(), stream.view(), mr.get_mr())
     return Column.from_libcudf(move(c_result), stream, mr)
 
 
@@ -285,7 +285,7 @@ cpdef Column sha224(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha224(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_sha224(input.view(), stream.view(), mr.get_mr())
     return Column.from_libcudf(move(c_result), stream, mr)
 
 
@@ -316,7 +316,7 @@ cpdef Column sha256(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha256(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_sha256(input.view(), stream.view(), mr.get_mr())
     return Column.from_libcudf(move(c_result), stream, mr)
 
 
@@ -347,7 +347,7 @@ cpdef Column sha384(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha384(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_sha384(input.view(), stream.view(), mr.get_mr())
     return Column.from_libcudf(move(c_result), stream, mr)
 
 
@@ -378,5 +378,5 @@ cpdef Column sha512(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha512(input.view(), stream.view(), mr.c_ref.value())
+        c_result = cpp_sha512(input.view(), stream.view(), mr.get_mr())
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -74,7 +74,7 @@ cpdef tuple[Table, list] hash_partition(
                 hash_function,
                 seed,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         columns_to_hash = keys
@@ -86,7 +86,7 @@ cpdef tuple[Table, list] hash_partition(
                 hash_function,
                 seed,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)
 
@@ -135,7 +135,7 @@ cpdef tuple[Table, list] partition(
             partition_map.view(),
             c_num_partitions,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)
@@ -185,7 +185,7 @@ cpdef tuple[Table, list] round_robin_partition(
             c_num_partitions,
             c_start_partition,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)

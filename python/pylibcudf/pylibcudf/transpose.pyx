@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
@@ -44,7 +44,7 @@ cpdef Table transpose(
 
     with nogil:
         c_result = cpp_transpose.transpose(
-            input_table.view(), stream.view(), mr.c_ref.value()
+            input_table.view(), stream.view(), mr.get_mr()
         )
 
     owner_table = Table(

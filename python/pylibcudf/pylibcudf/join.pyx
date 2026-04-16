@@ -98,7 +98,7 @@ cpdef tuple inner_join(
             right_keys.view(),
             nulls_equal,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -143,7 +143,7 @@ cpdef tuple left_join(
             right_keys.view(),
             nulls_equal,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -188,7 +188,7 @@ cpdef tuple full_join(
             right_keys.view(),
             nulls_equal,
             stream.view(),
-            mr.c_ref.value(),
+            mr.get_mr(),
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -239,7 +239,7 @@ cpdef Column left_semi_join(
         c_result = join_obj.get()[0].semi_join(
             left_keys.view(),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return _column_from_gather_map(move(c_result), stream, mr)
 
@@ -287,7 +287,7 @@ cpdef Column left_anti_join(
         c_result = join_obj.get()[0].anti_join(
             left_keys.view(),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return _column_from_gather_map(move(c_result), stream, mr)
 
@@ -322,7 +322,7 @@ cpdef Table cross_join(
 
     with nogil:
         result = cpp_join.cross_join(
-            left.view(), right.view(), stream.view(), mr.c_ref.value()
+            left.view(), right.view(), stream.view(), mr.get_mr()
         )
     return Table.from_libcudf(move(result), stream, mr)
 
@@ -366,7 +366,7 @@ cpdef tuple conditional_inner_join(
             dereference(binary_predicate.c_obj.get()),
             output_size,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -413,7 +413,7 @@ cpdef tuple conditional_left_join(
             dereference(binary_predicate.c_obj.get()),
             output_size,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -458,7 +458,7 @@ cpdef tuple conditional_full_join(
             right.view(),
             dereference(binary_predicate.c_obj.get()),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -504,7 +504,7 @@ cpdef Column conditional_left_semi_join(
             dereference(binary_predicate.c_obj.get()),
             output_size,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return _column_from_gather_map(move(c_result), stream, mr)
 
@@ -547,7 +547,7 @@ cpdef Column conditional_left_anti_join(
             dereference(binary_predicate.c_obj.get()),
             output_size,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return _column_from_gather_map(move(c_result), stream, mr)
 
@@ -603,7 +603,7 @@ cpdef tuple mixed_inner_join(
             nulls_equal,
             empty_optional,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -662,7 +662,7 @@ cpdef tuple mixed_left_join(
             nulls_equal,
             empty_optional,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -721,7 +721,7 @@ cpdef tuple mixed_full_join(
             nulls_equal,
             empty_optional,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -777,7 +777,7 @@ cpdef Column mixed_left_semi_join(
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return _column_from_gather_map(move(c_result), stream, mr)
 
@@ -830,7 +830,7 @@ cpdef Column mixed_left_anti_join(
             dereference(binary_predicate.c_obj.get()),
             nulls_equal,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return _column_from_gather_map(move(c_result), stream, mr)
 
@@ -917,7 +917,7 @@ cdef class FilteredJoin:
             c_result = self.c_obj.get()[0].semi_join(
                 probe.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         return _column_from_gather_map(move(c_result), stream, mr)
 
@@ -956,6 +956,6 @@ cdef class FilteredJoin:
             c_result = self.c_obj.get()[0].anti_join(
                 probe.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         return _column_from_gather_map(move(c_result), stream, mr)

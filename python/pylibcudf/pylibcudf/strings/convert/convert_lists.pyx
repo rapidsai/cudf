@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -63,7 +63,7 @@ cpdef Column format_list_column(
 
     if na_rep is None:
         na_rep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.c_ref.value())
+            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* c_na_rep = <const string_scalar*>(
@@ -79,7 +79,7 @@ cpdef Column format_list_column(
             dereference(c_na_rep),
             separators.view(),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.string cimport string
@@ -175,6 +175,6 @@ cpdef TableWithMetadata read_avro(
     cdef Stream s = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_avro(options.c_obj, s.view(), mr.c_ref.value()))
+        c_result = move(cpp_read_avro(options.c_obj, s.view(), mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)

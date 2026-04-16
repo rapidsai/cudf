@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -57,7 +57,7 @@ cpdef Column to_integers(
                 input.view(),
                 output_type.c_obj,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         )
 
@@ -95,7 +95,7 @@ cpdef Column from_integers(
             cpp_convert_integers.from_integers(
                 integers.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         )
 
@@ -142,7 +142,7 @@ cpdef Column is_integer(
                 cpp_convert_integers.is_integer(
                     input.view(),
                     stream.view(),
-                    mr.c_ref.value()
+                    mr.get_mr()
                 )
             )
     else:
@@ -152,7 +152,7 @@ cpdef Column is_integer(
                     input.view(),
                     int_type.c_obj,
                     stream.view(),
-                    mr.c_ref.value()
+                    mr.get_mr()
                 )
             )
 
@@ -194,7 +194,7 @@ cpdef Column hex_to_integers(
                 input.view(),
                 output_type.c_obj,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         )
 
@@ -230,7 +230,7 @@ cpdef Column is_hex(Column input, Stream stream=None, DeviceMemoryResource mr=No
             cpp_convert_integers.is_hex(
                 input.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         )
 
@@ -268,7 +268,7 @@ cpdef Column integers_to_hex(
             cpp_convert_integers.integers_to_hex(
                 input.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         )
 

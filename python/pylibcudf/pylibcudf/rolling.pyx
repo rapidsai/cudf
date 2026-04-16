@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -177,7 +177,7 @@ cpdef Table grouped_range_rolling_window(
             dereference(following.c_obj.get()),
             crequests,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Table.from_libcudf(move(result), stream, mr)
 
@@ -236,7 +236,7 @@ cpdef Column rolling_window(
                 min_periods,
                 dereference(c_agg),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         with nogil:
@@ -247,7 +247,7 @@ cpdef Column rolling_window(
                 min_periods,
                 dereference(c_agg),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
 
     return Column.from_libcudf(move(result), stream, mr)
@@ -320,7 +320,7 @@ cpdef tuple make_range_windows(
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return (
         Column.from_libcudf(move(result.first), stream, mr),

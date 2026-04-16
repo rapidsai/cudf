@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
@@ -60,7 +60,7 @@ cpdef Column interleave_columns(
 
     with nogil:
         c_result = cpp_interleave_columns(
-            source_table.view(), stream.view(), mr.c_ref.value()
+            source_table.view(), stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -98,7 +98,7 @@ cpdef Table tile(
 
     with nogil:
         c_result = cpp_tile(
-            source_table.view(), count, stream.view(), mr.c_ref.value()
+            source_table.view(), count, stream.view(), mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), stream, mr)

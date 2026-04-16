@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -37,7 +37,7 @@ cdef class WordPieceVocabulary:
         mr = _get_memory_resource(mr)
         with nogil:
             self.c_obj = move(cpp_load_wordpiece_vocabulary(
-                c_vocab, stream.view(), mr.c_ref.value()
+                c_vocab, stream.view(), mr.get_mr()
             ))
 
     __hash__ = None
@@ -82,7 +82,7 @@ cpdef Column wordpiece_tokenize(
             dereference(vocabulary.c_obj.get()),
             max_words_per_row,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

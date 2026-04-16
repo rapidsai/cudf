@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -67,7 +67,7 @@ cpdef Column sorted_order(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -111,7 +111,7 @@ cpdef Column stable_sorted_order(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -164,7 +164,7 @@ cpdef Column rank(
             null_precedence,
             percentage,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -252,7 +252,7 @@ cpdef Table segmented_sort_by_key(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -304,7 +304,7 @@ cpdef Table stable_segmented_sort_by_key(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -351,7 +351,7 @@ cpdef Table sort_by_key(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -398,7 +398,7 @@ cpdef Table stable_sort_by_key(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -441,7 +441,7 @@ cpdef Table sort(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -484,7 +484,7 @@ cpdef Table stable_sort(
             c_orders,
             c_null_precedence,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), stream, mr)
 
@@ -527,7 +527,7 @@ cpdef Column top_k(
             k,
             sort_order,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -573,6 +573,6 @@ cpdef Column top_k_order(
             k,
             sort_order,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), stream, mr)

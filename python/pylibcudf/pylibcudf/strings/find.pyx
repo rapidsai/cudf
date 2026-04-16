@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -67,7 +67,7 @@ cpdef Column find(
                 target.view(),
                 start,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
@@ -77,7 +77,7 @@ cpdef Column find(
                 start,
                 stop,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -128,7 +128,7 @@ cpdef Column rfind(
             start,
             stop,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
     return Column.from_libcudf(move(result), stream, mr)
 
@@ -177,7 +177,7 @@ cpdef Column contains(
                 input.view(),
                 target.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
@@ -185,7 +185,7 @@ cpdef Column contains(
                 input.view(),
                 dereference(<string_scalar*>(target.c_obj.get())),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -238,7 +238,7 @@ cpdef Column starts_with(
                 input.view(),
                 target.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
@@ -246,7 +246,7 @@ cpdef Column starts_with(
                 input.view(),
                 dereference(<string_scalar*>(target.c_obj.get())),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")
@@ -296,7 +296,7 @@ cpdef Column ends_with(
                 input.view(),
                 target.view(),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif ColumnOrScalar is Scalar:
         with nogil:
@@ -304,7 +304,7 @@ cpdef Column ends_with(
                 input.view(),
                 dereference(<string_scalar*>(target.c_obj.get())),
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid target {target}")

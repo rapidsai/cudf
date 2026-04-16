@@ -67,7 +67,7 @@ cpdef Column round(
             decimal_places,
             round_method,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -115,7 +115,7 @@ cpdef Column round_decimal(
             decimal_places,
             round_method,
             stream.view(),
-            mr.c_ref.value()
+            mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)

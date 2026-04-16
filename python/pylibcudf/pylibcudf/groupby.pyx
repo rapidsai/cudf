@@ -196,7 +196,7 @@ cdef class GroupBy:
         # ourselves.
         with nogil:
             c_res = dereference(self.c_obj).aggregate(
-                c_requests, stream.view(), mr.c_ref.value()
+                c_requests, stream.view(), mr.get_mr()
             )
         return GroupBy._parse_outputs(move(c_res), stream, mr)
 
@@ -233,7 +233,7 @@ cdef class GroupBy:
         mr = _get_memory_resource(mr)
         with nogil:
             c_res = dereference(self.c_obj).scan(
-                c_requests, stream.view(), mr.c_ref.value()
+                c_requests, stream.view(), mr.get_mr()
             )
         return GroupBy._parse_outputs(move(c_res), stream, mr)
 
@@ -279,7 +279,7 @@ cdef class GroupBy:
                 c_offset,
                 c_fill_values,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         return (
             Table.from_libcudf(move(c_res.first), stream, mr),
@@ -321,7 +321,7 @@ cdef class GroupBy:
                 value.view(),
                 c_replace_policies,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
         return (
             Table.from_libcudf(move(c_res.first), stream, mr),
@@ -358,7 +358,7 @@ cdef class GroupBy:
         mr = _get_memory_resource(mr)
         if values:
             c_groups = dereference(self.c_obj).get_groups(
-                values.view(), stream.view(), mr.c_ref.value()
+                values.view(), stream.view(), mr.get_mr()
             )
             return (
                 c_groups.offsets,
@@ -368,7 +368,7 @@ cdef class GroupBy:
         else:
             # c_groups.values is nullptr - call get_groups with empty table view
             c_groups = dereference(self.c_obj).get_groups(
-                empty_view, stream.view(), mr.c_ref.value()
+                empty_view, stream.view(), mr.get_mr()
             )
             return (
                 c_groups.offsets,

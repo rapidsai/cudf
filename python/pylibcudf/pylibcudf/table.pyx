@@ -171,7 +171,7 @@ cdef class Table:
                     move(dereference(c_schema)),
                     move(dereference(c_array)),
                     stream.view(),
-                    result.mr.c_ref.value(),
+                    result.mr.get_mr(),
                 )
             result.tbl.swap(c_result)
 
@@ -194,7 +194,7 @@ cdef class Table:
                 c_result = make_unique[arrow_table](
                     move(dereference(c_stream)),
                     stream.view(),
-                    result.mr.c_ref.value(),
+                    result.mr.get_mr(),
                 )
             result.tbl.swap(c_result)
 

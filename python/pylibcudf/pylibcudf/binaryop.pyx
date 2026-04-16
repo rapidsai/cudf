@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
@@ -72,7 +72,7 @@ cpdef Column binary_operation(
                 op,
                 output_type.c_obj,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif LeftBinaryOperand is Column and RightBinaryOperand is Scalar:
         with nogil:
@@ -82,7 +82,7 @@ cpdef Column binary_operation(
                 op,
                 output_type.c_obj,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     elif LeftBinaryOperand is Scalar and RightBinaryOperand is Column:
         with nogil:
@@ -92,7 +92,7 @@ cpdef Column binary_operation(
                 op,
                 output_type.c_obj,
                 stream.view(),
-                mr.c_ref.value()
+                mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
