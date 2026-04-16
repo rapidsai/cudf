@@ -293,6 +293,7 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --blocksize-mode small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --blocksize-mode small",
     "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
+    "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105 but failure leads to segfaults https://github.com/rapidsai/cudf/issues/22138",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072 but failure leads to segfaults https://github.com/rapidsai/cudf/issues/22138",
     "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --blocksize-mode small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --blocksize-mode small",
@@ -316,8 +317,8 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
 
 RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
-    "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
+    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/rapidsai/cudf/issues/22084",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes12]": "https://github.com/rapidsai/cudf/issues/22085",
