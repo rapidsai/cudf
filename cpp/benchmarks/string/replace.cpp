@@ -72,36 +72,3 @@ NVBENCH_BENCH(bench_replace)
   .add_int64_axis("max_width", {32, 64, 128, 256})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_string_axis("api", {"scalar", "multi", "slice", "column"});
-
-static void bench_replace_column(nvbench::state& state)
-{
-  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const max_width = static_cast<cudf::size_type>(state.get_int64("max_width"));
-
-  data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_width);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
-  cudf::strings_column_view input(column->view());
-
-  // Per-row targets and replacements (same length as input)
-  std::vector<std::string> t_vals(num_rows, "+");
-  std::vector<std::string> r_vals(num_rows, "-");
-  cudf::test::strings_column_wrapper targets_col(t_vals.begin(), t_vals.end());
-  cudf::test::strings_column_wrapper repls_col(r_vals.begin(), r_vals.end());
-  cudf::strings_column_view targets(targets_col);
-  cudf::strings_column_view repls(repls_col);
-
-  auto stream = cudf::get_default_stream();
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto const data_size = column->alloc_size();
-  state.add_global_memory_reads<nvbench::int8_t>(data_size);
-  state.add_global_memory_writes<nvbench::int8_t>(data_size);
-
-  state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { cudf::strings::replace(input, targets, repls); });
-}
-
-NVBENCH_BENCH(bench_replace_column)
-  .set_name("replace_column")
-  .add_int64_axis("max_width", {32, 64, 128, 256})
-  .add_int64_axis("num_rows", {32768, 262144, 2097152});
