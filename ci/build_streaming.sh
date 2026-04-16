@@ -51,5 +51,3 @@ cmake --install cpp/build --prefix cpp/install --component testing
 
 sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
-
-cat "$SCCACHE_ERROR_LOG"
