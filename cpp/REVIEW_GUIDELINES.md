@@ -135,7 +135,7 @@ Before commenting, ask:
 - Be concise: One-line issue summary + one-line impact
 - Provide code suggestions when you have concrete fixes
 - No preamble or sign-off
-
+- Do not output any retracted findings
 ## Examples to Follow
 
 **CRITICAL** (unchecked CUDA error):
