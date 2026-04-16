@@ -25,6 +25,13 @@ Starting directions for this run. NOT prescriptive — validate each idea agains
 
 All 3 primary benchmarks are run via `./eval.sh` after every experiment. **Every experiment must report results for ALL 3 benchmarks.** A change that speeds up one but regresses another is not a win.
 
+**Representative configurations**: Each primary benchmark has multiple configs (type profiles, sizes, quoting levels). For keep/discard decisions and results.tsv, use the **mixed-type representative config** from each benchmark:
+- `realistic` → **TAXI / 256MB** (14 mixed-type columns — ints, floats, timestamps, strings)
+- `type_inference` → **MIXED / with_inference / 256MB** (mixed types with inference enabled — the real-world default)
+- `quoting` → **QUOTE_25_PCT / 256MB** (realistic quoting density — 25% quoted string columns)
+
+Single-type configs (ALL_INTEGRAL, ALL_FLOAT, ALL_STRING, QUOTE_0_PCT, QUOTE_100_PCT) exist in the benchmark output but are **diagnostic only** — they help explain WHY a change helped or hurt, but must NOT drive optimization direction. Do not optimize for single-type throughput.
+
 **Focus: CSV reader only.** The reader (`reader_impl.cu`, `csv_gpu.cu`) is the performance-critical path. Writer benchmarks are out of scope.
 
 **Algorithm-first principle**: Prefer algorithmic improvements over GPU-specific hyperparameter tuning. Changes should produce runtime improvements across all GPUs and architectures — current, newer, and similar-class hardware. Concretely:
@@ -94,7 +101,7 @@ If you find yourself tweaking numeric parameters rather than changing the struct
    ./eval.sh results/baseline_run3
    ```
    Record average AND variance. Future improvements must exceed this noise floor.
-9. **Initialize** results.tsv (header + baseline exp 0) and AGENT_LOG.md (run header).
+9. **Initialize** results.tsv (header + baseline exp 0), benchmarks.tsv (header + baseline exp 0 with all configs), and AGENT_LOG.md (run header).
 10. **Begin the loop.**
 
 ---
@@ -159,18 +166,21 @@ If either gate fails → immediately revert, log as `crash`, move on. Do NOT ben
 
 ### 6. Benchmark
 
+**a) Primary eval** (drives keep/discard decision):
 ```bash
 ./eval.sh results/<experiment_tag>
 ```
 
-Every 3rd experiment, also run all CSV reader benchmarks for a holistic view:
+**b) Full reader benchmarks** (run EVERY experiment for comprehensive logging):
 ```bash
-RESULTS_DIR="results/<experiment_tag>_full"
-mkdir -p "$RESULTS_DIR"
+RESULTS_DIR="results/<experiment_tag>"
 for f in cpp/build/latest/benchmarks/CSV_READER_*; do
-  "$f" --timeout 5 --json "$RESULTS_DIR/$(basename $f).json"
+  name=$(basename "$f")
+  "$f" --timeout 5 --json "$RESULTS_DIR/$name.json"
 done
 ```
+
+After both complete, append all results to `benchmarks.tsv` (see Logging section). This produces a complete record of every benchmark config for every experiment — essential for tracking regressions across the full benchmark surface and for post-run analysis.
 
 ### 7. Evaluate & Record
 
@@ -179,7 +189,12 @@ done
 - Does it hold across ALL 3 primary benchmarks, or only one?
 - Check `nvtx_stages.txt` — did the expected stage speed up?
 
-Record 3 rows in results.tsv (one per benchmark). Append a section to AGENT_LOG.md. After significant discoveries, save insights to `/memory`.
+Record in all 3 log files:
+- **results.tsv**: 3 rows (one per primary benchmark, using representative mixed-type config throughput)
+- **benchmarks.tsv**: one row per config across ALL reader benchmarks (complete snapshot)
+- **AGENT_LOG.md**: append experiment section
+
+After significant discoveries, save insights to `/memory`.
 
 ### 8. Decide
 
@@ -196,11 +211,16 @@ Check discipline rules below before the next iteration. Every 5th experiment, pr
 
 ## Logging
 
-### results.tsv
+There are 3 log files. All are **untracked, append-only** — never edit existing entries, never change column format mid-run.
 
-Tab-separated (NOT comma-separated). Format is **fixed for the entire run** — never change columns.
+### results.tsv — agent decision log
 
-Every experiment produces 3 rows — one per primary benchmark. Header and 7 columns:
+Tab-separated. 3 rows per experiment (one per primary benchmark), using the **representative mixed-type config** for each benchmark's metric:
+- `realistic` → TAXI / 256MB throughput
+- `type_inference` → MIXED / with_inference / 256MB throughput
+- `quoting` → QUOTE_25_PCT / 256MB throughput
+
+Header and 7 columns:
 
 ```
 exp	commit	metric	improvement_pct	status	benchmark	description
@@ -210,15 +230,38 @@ exp	commit	metric	improvement_pct	status	benchmark	description
 |---|---|
 | exp | Sequential number (0 = baseline, 1, 2, 3...) |
 | commit | Short git hash (7 chars) |
-| metric | Single throughput value (e.g. `5.2 GiB/s`) — no inline breakdowns |
+| metric | Throughput from the representative config (e.g. `5.2 GiB/s`) |
 | improvement_pct | vs baseline (e.g. `+5.2` or `-1.3`), `0.0` for crashes |
 | status | `keep`, `discard`, `crash`, or `idea` |
 | benchmark | `realistic`, `type_inference`, or `quoting` |
-| description | What was tried. Extra context (per-type breakdowns, NVTX details, re-run notes) goes here |
+| description | What was tried. Extra context (single-type deltas, NVTX details, re-run notes) goes here |
 
-### AGENT_LOG.md
+### benchmarks.tsv — comprehensive benchmark log
 
-Append-only narrative log. After every experiment:
+Tab-separated. Logs **every config of every reader benchmark** for every experiment. This is the complete record for post-run analysis — the user will script over this to see how all numbers changed across experiments.
+
+Format is **fixed for the entire run**. Header and 6 columns:
+
+```
+exp	commit	status	binary	config	throughput_GiBs
+```
+
+| Column | Format |
+|---|---|
+| exp | Sequential experiment number (matches results.tsv) |
+| commit | Short git hash (7 chars) |
+| status | `keep`, `discard`, `crash` (matches results.tsv decision) |
+| binary | Benchmark binary name (e.g. `CSV_READER_REALISTIC_NVBENCH`) |
+| config | Config string describing the axes (e.g. `TAXI/256MB`, `MIXED/with_inference/256MB/8cols`, `QUOTE_25_PCT/256MB`) |
+| throughput_GiBs | Throughput as a number (e.g. `5.23`) |
+
+Extract throughput for each config from the NVBench JSON `bytes_per_second` field, convert to GiB/s. One row per benchmark config per experiment. For crashes, log 0 rows (no benchmark data).
+
+Initialize with the header row, then append baseline (exp 0) rows for all configs. Every subsequent experiment appends a complete set of rows for all configs.
+
+### AGENT_LOG.md — narrative log
+
+Append-only. After every experiment:
 
 ```markdown
 ## Experiment N: <short title>
@@ -237,8 +280,6 @@ Initialize with: `# Agent Log — <run tag>`
 - `csv::infer_column_types` — type inference (skipped with explicit dtypes)
 - `csv::determine_column_types` — final column type determination
 - `csv::decode_data` — main GPU parsing/decoding pass
-
-**Both results.tsv and AGENT_LOG.md are untracked and append-only.** Never edit existing entries.
 
 ---
 
@@ -310,19 +351,19 @@ Do NOT start tweaking GPU-specific parameters. Instead:
 
 ## Reference
 
-### Primary benchmarks (run via `eval.sh` every experiment)
+### Primary benchmarks (run via `eval.sh` — drive keep/discard decisions)
 
-| Benchmark | Binary Name | What It Measures |
+| Benchmark | Binary | Representative Config | What It Measures |
+|---|---|---|---|
+| Realistic mixed-type | CSV_READER_REALISTIC_NVBENCH | **TAXI / 256MB** | TAXI (14 mixed cols), LOGS (6 cols), ANALYTICS (8 cols) at 256/512/1024 MB |
+| Type inference | CSV_READER_TYPE_INFERENCE_NVBENCH | **MIXED / with_inference / 256MB** | With/without inference; single-type configs are diagnostic only |
+| Quoting density | CSV_READER_QUOTING_NVBENCH | **QUOTE_25_PCT / 256MB** | 0%, 25%, 100% quoted columns at 64/256 MB |
+
+### Additional reader benchmarks (run every experiment for comprehensive logging)
+
+| Benchmark | Binary | What It Measures |
 |---|---|---|
-| Realistic mixed-type profiles | CSV_READER_REALISTIC_NVBENCH | TAXI (14 cols), LOGS (6 cols), ANALYTICS (8 cols) at 256/512/1024 MB |
-| Type inference vs explicit | CSV_READER_TYPE_INFERENCE_NVBENCH | With/without inference across ALL_INTEGRAL, ALL_FLOAT, ALL_STRING, MIXED |
-| Quoting density | CSV_READER_QUOTING_NVBENCH | 0%, 25%, 100% quoted columns at 64/256 MB |
-
-### Holistic benchmarks (run every 3 experiments)
-
-| Benchmark | Binary Name | What It Measures |
-|---|---|---|
-| Original reader (input sizes) | CSV_READER_NVBENCH | Various input sizes and formats |
+| Original reader (input sizes) | CSV_READER_NVBENCH | Per-type and IO source variations (diagnostic — do not optimize for single-type results) |
 | Scale (large data) | CSV_READER_SCALE_NVBENCH | Mixed-type from 256 MB to 4 GB |
 
 ### File reference

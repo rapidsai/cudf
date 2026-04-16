@@ -49,7 +49,7 @@
   "initializeCommand": [
     "/bin/bash",
     "-c",
-    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda13.1-envs}"
+    "mkdir -m 0755 -p ${localWorkspaceFolder}/../.{aws,cache,claude,config,conda/pkgs,conda/${localWorkspaceFolderBasename}-cuda13.1-envs} && touch ${localWorkspaceFolder}/../.claude.json"
   ],
   "postAttachCommand": [
     "/bin/bash",
@@ -61,6 +61,8 @@
   "mounts": [
     "source=${localWorkspaceFolder}/../.aws,target=/home/coder/.aws,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.cache,target=/home/coder/.cache,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.claude,target=/home/coder/.claude,type=bind,consistency=consistent",
+    "source=${localWorkspaceFolder}/../.claude.json,target=/home/coder/.claude.json,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.config,target=/home/coder/.config,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/pkgs,target=/home/coder/.conda/pkgs,type=bind,consistency=consistent",
     "source=${localWorkspaceFolder}/../.conda/${localWorkspaceFolderBasename}-cuda13.1-envs,target=/home/coder/.conda/envs,type=bind,consistency=consistent"
