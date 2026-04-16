@@ -178,26 +178,6 @@ device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& opti
                                         rmm::cuda_stream_view stream);
 
 /**
- * @brief Precompute field-end offsets for all columns in each row.
- *
- * Returns a device array of uint32_t offsets, one per field per row,
- * representing the byte offset (from data start) of each field's delimiter.
- * Can be shared between type detection and decode to avoid redundant scanning.
- *
- * @param[in] options Parsing options
- * @param[in] data The CSV data
- * @param[in] row_offsets Row start offsets
- * @param[in] num_actual_cols Total number of columns
- * @param[in] stream CUDA stream
- * @return Device vector of field-end offsets [num_rows * num_actual_cols]
- */
-rmm::device_uvector<uint32_t> precompute_field_ends(cudf::io::parse_options_view const& options,
-                                                    device_span<char const> data,
-                                                    device_span<uint64_t const> row_offsets,
-                                                    int num_actual_cols,
-                                                    rmm::cuda_stream_view stream);
-
-/**
  * @brief Launches kernel for detecting possible dtype of each column of data
  *
  * @param[in] options Options that control individual field data conversion
@@ -205,7 +185,6 @@ rmm::device_uvector<uint32_t> precompute_field_ends(cudf::io::parse_options_view
  * @param[in] column_flags Flags that control individual column parsing
  * @param[in] row_offsets List of row data start positions (offsets)
  * @param[in] num_active_columns Number of active columns
- * @param[in] field_ends Optional precomputed field-end offsets (empty span to compute internally)
  * @param[in] stream CUDA stream to use
  *
  * @return stats Histogram of each dtypes' occurrence for each column
@@ -216,7 +195,6 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   device_span<column_parse::flags const> column_flags,
   device_span<uint64_t const> row_offsets,
   size_t const num_active_columns,
-  device_span<uint32_t const> field_ends,
   rmm::cuda_stream_view stream);
 
 /**
@@ -232,7 +210,6 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
  * @param[out] valid_counts Device memory output of the number of valid fields in each column
  * @param[out] is_quoted Per-column boolean arrays indicating which rows were quoted fields
  *                          (nullptr entries mean the column doesn't need quote tracking)
- * @param[in] field_ends Optional precomputed field-end offsets (empty span to compute internally)
  * @param[in] stream CUDA stream to use
  */
 void decode_row_column_data(cudf::io::parse_options_view const& options,
@@ -244,7 +221,6 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
                             device_span<bool* const> is_quoted,
-                            device_span<uint32_t const> field_ends,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu
