@@ -124,9 +124,7 @@ def test_bind_raise_on_fail_propagates_exception() -> None:
 
     def body() -> None:
         _reset_bind_state()
-        mock_bind = MagicMock(
-            side_effect=RuntimeError("binding failed")
-        )
+        mock_bind = MagicMock(side_effect=RuntimeError("binding failed"))
         with patch(
             "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind",
             mock_bind,
@@ -147,9 +145,7 @@ def test_bind_raise_on_fail_false_suppresses_exception() -> None:
 
     def body() -> None:
         _reset_bind_state()
-        mock_bind = MagicMock(
-            side_effect=RuntimeError("binding failed")
-        )
+        mock_bind = MagicMock(side_effect=RuntimeError("binding failed"))
         with patch(
             "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind",
             mock_bind,
