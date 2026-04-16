@@ -152,6 +152,8 @@ files:
     includes:
       - build_all
       - build_base
+      - cuda
+      - cuda_version
   docs:
     output: none
     includes:
