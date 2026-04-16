@@ -28,6 +28,8 @@ set -u
 
 source rapids-configure-sccache
 
+sccache --stop-server 2>/dev/null || true
+
 rapids-print-env
 
 rapids-logger "Run C++ build"
