@@ -1409,7 +1409,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             # When indices differ, pandas returns freq=None for the result
             # (the aligned union index may be regular but pandas doesn't infer
             # it in this case). Clear freq to match pandas behaviour.
-            if indices_differ and isinstance(lhs.index, cudf.DatetimeIndex):
+            if indices_differ and isinstance(lhs.index, DatetimeIndex):
                 lhs.index._freq = None
         else:
             lhs = self
