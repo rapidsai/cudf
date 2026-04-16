@@ -55,6 +55,14 @@ struct row_group_stats_caster : public stats_caster_base {
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types do not have statistics");
     } else {
+      // Compute timestamp scale factor for precision conversion
+      int32_t ts_scale = 0;
+      if constexpr (cudf::is_timestamp<T>()) {
+        auto const& schema = per_file_metadata[0].schema[schema_idx];
+        ts_scale           = stats_caster_base::compute_ts_scale(
+          schema.logical_type, schema.type, static_cast<int32_t>(T::period::den));
+      }
+
       host_column<T> min(total_row_groups, stream);
       host_column<T> max(total_row_groups, stream);
       std::optional<host_column<bool>> is_null;
@@ -78,8 +86,8 @@ struct row_group_stats_caster : public stats_caster_base {
                                       ? colchunk.meta_data.statistics.max_value
                                       : colchunk.meta_data.statistics.max;
             // translate binary data to Type then to <T>
-            min.set_index(stats_idx, min_value, colchunk.meta_data.type);
-            max.set_index(stats_idx, max_value, colchunk.meta_data.type);
+            min.set_index(stats_idx, min_value, colchunk.meta_data.type, ts_scale);
+            max.set_index(stats_idx, max_value, colchunk.meta_data.type, ts_scale);
             // Check the nullability of this column chunk
             if (has_is_null_operator) {
               if (colchunk.meta_data.statistics.null_count.has_value()) {
@@ -228,9 +236,23 @@ aggregate_reader_metadata::filter_row_groups(
       : input_row_group_indices;
 
   // Collect equality literals for each input table column for bloom filtering
-  auto const equality_literals =
+  auto equality_literals =
     equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
       .get_literals();
+
+  // Skip bloom filter probing for timestamp columns with precision conversion, because the
+  // bloom filter was built at the native precision, and hashing at the output precision will
+  // never match.
+  for (size_t col_idx = 0; col_idx < output_dtypes.size(); ++col_idx) {
+    if (cudf::is_timestamp(output_dtypes[col_idx]) && !equality_literals[col_idx].empty()) {
+      auto const schema_idx     = output_column_schemas[col_idx];
+      auto const& schema        = per_file_metadata[0].schema[schema_idx];
+      auto const output_clk     = stats_caster_base::timestamp_clock_rate(output_dtypes[col_idx].id());
+      if (stats_caster_base::compute_ts_scale(schema.logical_type, schema.type, output_clk) != 0) {
+        equality_literals[col_idx].clear();
+      }
+    }
+  }
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;

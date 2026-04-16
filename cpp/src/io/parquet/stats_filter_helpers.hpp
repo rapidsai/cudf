@@ -38,6 +38,53 @@ constexpr size_t initial_chars_capacity = 1024;
  *
  */
 class stats_caster_base {
+ public:
+  /**
+   * @brief Returns the clock rate for a given timestamp type_id, or 0 if not a timestamp.
+   */
+  static inline int32_t timestamp_clock_rate(cudf::type_id id)
+  {
+    switch (id) {
+      case cudf::type_id::TIMESTAMP_SECONDS: return 1;
+      case cudf::type_id::TIMESTAMP_MILLISECONDS: return cudf::timestamp_ms::period::den;
+      case cudf::type_id::TIMESTAMP_MICROSECONDS: return cudf::timestamp_us::period::den;
+      case cudf::type_id::TIMESTAMP_NANOSECONDS: return cudf::timestamp_ns::period::den;
+      default: return 0;
+    }
+  }
+
+  /**
+   * @brief Computes timestamp scaling factor between Parquet native precision and output precision.
+   *
+   * @param logical_type The Parquet logical type of the column
+   * @param physical_type The Parquet physical type of the column
+   * @param output_clock_rate The clock rate of the output timestamp type (e.g. 1000 for ms)
+   * @return Scale factor: <0 means divide by -scale, >0 means multiply by scale, 0 means no-op
+   */
+  static inline int32_t compute_ts_scale(cuda::std::optional<LogicalType> const& logical_type,
+                                          Type physical_type,
+                                          int32_t output_clock_rate)
+  {
+    if (physical_type == Type::INT96 || !logical_type.has_value() ||
+        logical_type->type != LogicalType::TIMESTAMP || output_clock_rate == 0) {
+      return 0;
+    }
+    int32_t native_units = 0;
+    auto const& lt       = *logical_type;
+    if (lt.is_timestamp_millis()) {
+      native_units = cudf::timestamp_ms::period::den;
+    } else if (lt.is_timestamp_micros()) {
+      native_units = cudf::timestamp_us::period::den;
+    } else if (lt.is_timestamp_nanos()) {
+      native_units = cudf::timestamp_ns::period::den;
+    }
+    if (native_units != 0 && native_units != output_clock_rate) {
+      return (output_clock_rate < native_units) ? -(native_units / output_clock_rate)
+                                                : (output_clock_rate / native_units);
+    }
+    return 0;
+  }
+
  protected:
   static inline numeric::decimal128::rep decode_flba_decimal128(uint8_t const* stats_val)
   {
@@ -94,19 +141,44 @@ class stats_caster_base {
     return stats_caster_base::target_type<T>(*reinterpret_cast<bool const*>(stats_val));
   }
 
+  /**
+   * @brief Apply timestamp scaling to a raw decoded value.
+   *
+   * @param raw_value The raw decoded integer from Parquet stats
+   * @param ts_scale Scale factor from compute_ts_scale()
+   * @return Scaled value
+   */
+  static inline int64_t apply_ts_scale(int64_t raw_value, int32_t ts_scale)
+  {
+    if (ts_scale < 0) {
+      int sign = (raw_value < 0);
+      return ((raw_value + sign) / -ts_scale) + sign;
+    } else if (ts_scale > 0) {
+      return raw_value * ts_scale;
+    }
+    return raw_value;
+  }
+
   // integral but not boolean, and fixed_point, and chrono.
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                           size_t stats_size,
+                           Type const type,
+                           int32_t ts_scale = 0)
     requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
              cudf::is_chrono<T>())
   {
     switch (type) {
-      case Type::INT32:
-        return stats_caster_base::target_type<T>(
-          decode_fixed_width_value<int32_t>(stats_val, stats_size));
-      case Type::INT64:
-        return stats_caster_base::target_type<T>(
-          decode_fixed_width_value<int64_t>(stats_val, stats_size));
+      case Type::INT32: {
+        auto val = static_cast<int64_t>(decode_fixed_width_value<int32_t>(stats_val, stats_size));
+        if constexpr (cudf::is_chrono<T>()) { val = apply_ts_scale(val, ts_scale); }
+        return stats_caster_base::target_type<T>(val);
+      }
+      case Type::INT64: {
+        auto val = decode_fixed_width_value<int64_t>(stats_val, stats_size);
+        if constexpr (cudf::is_chrono<T>()) { val = apply_ts_scale(val, ts_scale); }
+        return stats_caster_base::target_type<T>(val);
+      }
       case Type::INT96:  // Deprecated in parquet specification
         return stats_caster_base::target_type<T>(
           static_cast<__int128_t>(decode_fixed_width_value<int64_t>(stats_val, stats_size)) << 32 |
@@ -115,8 +187,10 @@ class stats_caster_base {
       case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           if constexpr (cudf::is_chrono<T>()) {
-            return stats_caster_base::target_type<T>(
-              decode_fixed_width_value<typename T::rep>(stats_val, stats_size));
+            auto val =
+              static_cast<int64_t>(decode_fixed_width_value<typename T::rep>(stats_val, stats_size));
+            val = apply_ts_scale(val, ts_scale);
+            return stats_caster_base::target_type<T>(val);
           } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
             // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
             // big-endian.
@@ -182,7 +256,8 @@ class stats_caster_base {
 
     void inline set_index(size_type index,
                           std::optional<std::vector<uint8_t>> const& binary_value,
-                          Type const type)
+                          Type const type,
+                          int32_t ts_scale = 0)
     {
       if (binary_value.has_value()) {
         // For strings, also insert the characters
@@ -198,6 +273,10 @@ class stats_caster_base {
             reinterpret_cast<uint8_t const*>(chars.data()) + current_chars_offset,
             binary_value.value().size(),
             type);
+        } else if constexpr ((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
+                              cudf::is_fixed_point<T>() or cudf::is_chrono<T>()) {
+          val[index] = stats_caster_base::convert<T>(
+            binary_value.value().data(), binary_value.value().size(), type, ts_scale);
         } else {
           val[index] = stats_caster_base::convert<T>(
             binary_value.value().data(), binary_value.value().size(), type);

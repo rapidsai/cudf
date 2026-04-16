@@ -312,6 +312,14 @@ struct page_stats_caster : public stats_caster_base {
     std::optional<host_column<bool>> is_null;
     if (has_is_null_operator) { is_null = host_column<bool>(total_pages, stream); }
 
+    // Compute timestamp scale factor for precision conversion
+    int32_t ts_scale = 0;
+    if constexpr (cudf::is_timestamp<T>()) {
+      auto const& schema = per_file_metadata[0].schema[schema_idx];
+      ts_scale           = stats_caster_base::compute_ts_scale(
+        schema.logical_type, schema.type, static_cast<int32_t>(T::period::den));
+    }
+
     // Populate the host columns with page-level min, max statistics from the page index
     auto page_offset_idx = 0;
     // For all row data sources
@@ -336,39 +344,40 @@ struct page_stats_caster : public stats_caster_base {
           auto const page_offset_in_colchunk = col_chunk_page_offsets[page_offset_idx++];
 
           // For all pages in this column chunk
-          std::for_each(cuda::counting_iterator<std::size_t>{0},
-                        cuda::counting_iterator{num_pages_in_colchunk},
-                        [&](auto page_idx) {
-                          auto const& min_value      = column_index.min_values[page_idx];
-                          auto const& max_value      = column_index.max_values[page_idx];
-                          auto const column_page_idx = page_offset_in_colchunk + page_idx;
-                          // Translate binary data to Type then to <T>
-                          min.set_index(column_page_idx, min_value, colchunk.meta_data.type);
-                          max.set_index(column_page_idx, max_value, colchunk.meta_data.type);
-                          if (has_is_null_operator) {
-                            // Check if the page is completely null
-                            if (column_index.null_pages[page_idx]) {
-                              is_null->val[column_page_idx] = true;
-                              return;
-                            }
-                            // Check if the page doesn't have a null count
-                            if (not column_index.null_counts.has_value()) {
-                              is_null->set_index(column_page_idx, std::nullopt, {});
-                              return;
-                            }
-                            // Use the null count to determine if the page is completely null
-                            auto const page_row_count = page_row_offsets[column_page_idx + 1] -
-                                                        page_row_offsets[column_page_idx];
-                            auto const& null_count = column_index.null_counts.value()[page_idx];
-                            if (null_count == page_row_count) {
-                              is_null->val[column_page_idx] = false;
-                            } else if (null_count > 0 and null_count < page_row_count) {
-                              is_null->set_index(column_page_idx, std::nullopt, {});
-                            } else {
-                              CUDF_FAIL("Invalid null count");
-                            }
-                          }
-                        });
+          std::for_each(
+            cuda::counting_iterator<std::size_t>{0},
+            cuda::counting_iterator{num_pages_in_colchunk},
+            [&](auto page_idx) {
+              auto const& min_value      = column_index.min_values[page_idx];
+              auto const& max_value      = column_index.max_values[page_idx];
+              auto const column_page_idx = page_offset_in_colchunk + page_idx;
+              // Translate binary data to Type then to <T>
+              min.set_index(column_page_idx, min_value, colchunk.meta_data.type, ts_scale);
+              max.set_index(column_page_idx, max_value, colchunk.meta_data.type, ts_scale);
+              if (has_is_null_operator) {
+                // Check if the page is completely null
+                if (column_index.null_pages[page_idx]) {
+                  is_null->val[column_page_idx] = true;
+                  return;
+                }
+                // Check if the page doesn't have a null count
+                if (not column_index.null_counts.has_value()) {
+                  is_null->set_index(column_page_idx, std::nullopt, {});
+                  return;
+                }
+                // Use the null count to determine if the page is completely null
+                auto const page_row_count =
+                  page_row_offsets[column_page_idx + 1] - page_row_offsets[column_page_idx];
+                auto const& null_count = column_index.null_counts.value()[page_idx];
+                if (null_count == page_row_count) {
+                  is_null->val[column_page_idx] = false;
+                } else if (null_count > 0 and null_count < page_row_count) {
+                  is_null->set_index(column_page_idx, std::nullopt, {});
+                } else {
+                  CUDF_FAIL("Invalid null count");
+                }
+              }
+            });
         });
       });
 
