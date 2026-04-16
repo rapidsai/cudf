@@ -17,15 +17,15 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
 pytestmark = pytest.mark.spmd
 
 
-def test_roundtrip_bytes(engine) -> None:
-    """Each rank contributes a bytes object and gets back all contributions."""
+def test_per_rank_data(engine) -> None:
+    """Each rank sends its rank index; results are ordered by rank."""
     comm = engine.comm
     br = engine.context.br()
-    data = b"hello from rank"
-    result = all_gather_host_data(comm, br, op_id=0, data=data)
+    data = struct.pack("i", comm.rank)
+    result = all_gather_host_data(comm, br, op_id=4, data=data)
     assert len(result) == comm.nranks
-    for item in result:
-        assert item == data
+    for i, item in enumerate(result):
+        assert struct.unpack("i", item)[0] == i
 
 
 def test_empty_bytes(engine) -> None:
@@ -69,11 +69,28 @@ def test_gather_cluster_info(engine) -> None:
         assert isinstance(info, ClusterInfo)
         assert info.pid > 0
         assert len(info.hostname) > 0
-        assert len(info.gpu_uuid) > 0
+        assert info.cuda_visible_devices is None or isinstance(
+            info.cuda_visible_devices, str
+        )
+        assert isinstance(info.gpu_uuid, str)
     # Each rank runs in its own process.
     assert len({info.pid for info in infos}) == engine.nranks
     # Without allow_gpu_sharing, all UUIDs must be unique (enforced at init).
     assert len({info.gpu_uuid for info in infos}) == engine.nranks
+
+
+def test_cluster_info_cuda_visible_devices(monkeypatch) -> None:
+    """ClusterInfo.local() picks up CUDA_VISIBLE_DEVICES from the environment."""
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,7")
+    info = ClusterInfo.local()
+    assert info.cuda_visible_devices == "3,7"
+
+
+def test_cluster_info_cuda_visible_devices_unset(monkeypatch) -> None:
+    """ClusterInfo.local() returns None when CUDA_VISIBLE_DEVICES is not set."""
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+    info = ClusterInfo.local()
+    assert info.cuda_visible_devices is None
 
 
 @pytest.mark.parametrize(

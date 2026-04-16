@@ -318,12 +318,12 @@ def all_gather_host_data(
     Gather host data from every rank using an AllGather collective.
 
     Each rank contributes a buffer of host bytes; every rank receives back
-    an ordered list containing the contributions from all ranks (index *i*
-    holds the bytes sent by rank *i*).
+    an ordered list containing the contributions from all ranks (index `i`
+    holds the bytes sent by rank `i`).
 
-    This function is **blocking**: all ranks must call it, and each rank
-    waits until the collective completes. The input buffer is **copied**
-    into device memory and cannot be stream-ordered.
+    This function is blocking: all ranks must call it, and each rank
+    waits until the collective completes. The input buffer is copied
+    and cannot be stream-ordered.
 
     Parameters
     ----------
