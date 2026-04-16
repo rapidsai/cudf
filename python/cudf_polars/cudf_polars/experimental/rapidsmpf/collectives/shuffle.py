@@ -22,7 +22,11 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 )
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
+import pylibcudf as plc
+
+from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -40,11 +44,12 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
-    import pylibcudf as plc
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.core import SubNetGenerator
+    from cudf_polars.typing import Schema
 
 
 class ShuffleManager:
@@ -92,6 +97,30 @@ class ShuffleManager:
                     table=chunk.table_view(),
                     columns_to_hash=columns_to_hash,
                     num_partitions=self._manager.num_partitions,
+                    stream=chunk.stream,
+                    br=self._manager.context.br(),
+                )
+            )
+
+        def insert_hash_with_keys(
+            self, chunk: TableChunk, key_table: plc.Table
+        ) -> None:
+            """
+            Partition chunk by hash using a separate key table and insert.
+
+            Uses ``hash_partition(input, key_table, ...)`` to support
+            non-``Col`` (e.g. expression-derived) shuffle keys.
+            """
+            partitioned_table, offsets = plc.partitioning.hash_partition(
+                chunk.table_view(),
+                key_table,
+                self._manager.num_partitions,
+                stream=chunk.stream,
+            )
+            self._manager.shuffler.insert(
+                py_split_and_pack(
+                    table=partitioned_table,
+                    splits=list(offsets[1:-1]),
                     stream=chunk.stream,
                     br=self._manager.context.br(),
                 )
@@ -202,6 +231,8 @@ async def _global_shuffle(
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
+    key_exprs: tuple[NamedExpr, ...] | None = None,
+    child_schema: Schema | None = None,
 ) -> None:
     """
     Global shuffle implementation.
@@ -219,16 +250,28 @@ async def _global_shuffle(
     ch_in
         Input Channel[TableChunk] with metadata and data channels.
     columns_to_hash
-        Tuple of column indices to use for hashing.
+        Tuple of column indices to use for hashing. Ignored when
+        ``key_exprs`` is provided.
     num_partitions
         Number of partitions to shuffle into.
     collective_id
         The collective ID.
+    key_exprs
+        Optional tuple of ``NamedExpr`` objects to evaluate at runtime
+        as the hash keys. When provided, ``columns_to_hash`` is ignored
+        and key columns are computed by evaluating these expressions on
+        each incoming chunk.
+    child_schema
+        Schema of the child IR node, required when ``key_exprs`` is
+        provided so that incoming chunks can be wrapped into DataFrames
+        for expression evaluation.
     """
     metadata_in = await recv_metadata(ch_in, context)
 
-    # Check if we can skip the shuffle (already partitioned correctly)
-    if _is_already_partitioned(
+    # Check if we can skip the shuffle (already partitioned correctly).
+    # This optimisation only applies to simple Col keys where we have
+    # a concrete set of column indices to compare against.
+    if key_exprs is None and _is_already_partitioned(
         metadata_in, columns_to_hash, num_partitions, comm.nranks
     ):
         # Forward metadata and data unchanged
@@ -239,13 +282,21 @@ async def _global_shuffle(
         return
 
     # Normal shuffle path
-    output_metadata = ChannelMetadata(
-        local_count=max(1, num_partitions // comm.nranks),
-        partitioning=Partitioning(
-            inter_rank=HashScheme(columns_to_hash, num_partitions),
-            local="inherit",
-        ),
-    )
+    if key_exprs is None:
+        # Simple Col keys: describe output partitioning by column indices
+        output_metadata = ChannelMetadata(
+            local_count=max(1, num_partitions // comm.nranks),
+            partitioning=Partitioning(
+                inter_rank=HashScheme(columns_to_hash, num_partitions),
+                local="inherit",
+            ),
+        )
+    else:
+        # Expression-based keys: we can't describe the partitioning in
+        # terms of column indices, so omit partitioning metadata.
+        output_metadata = ChannelMetadata(
+            local_count=max(1, num_partitions // comm.nranks),
+        )
     await send_metadata(ch_out, context, output_metadata)
 
     # When input is duplicated, only rank 0 should contribute data.
@@ -256,12 +307,25 @@ async def _global_shuffle(
     async with shuffle.inserting() as inserter:
         while (msg := await ch_in.recv(context)) is not None:
             if not skip_insert:
-                inserter.insert_hash(
-                    TableChunk.from_message(
-                        msg, br=context.br()
-                    ).make_available_and_spill(context.br(), allow_overbooking=True),
-                    columns_to_hash,
-                )
+                chunk = TableChunk.from_message(
+                    msg, br=context.br()
+                ).make_available_and_spill(context.br(), allow_overbooking=True)
+                if key_exprs is None:
+                    inserter.insert_hash(chunk, columns_to_hash)
+                else:
+                    # Evaluate key expressions on the incoming chunk to
+                    # obtain a key table, then hash-partition using that.
+                    df = DataFrame.from_table(
+                        chunk.table_view(),
+                        list(child_schema.keys()),  # type: ignore[union-attr]
+                        list(child_schema.values()),  # type: ignore[union-attr]
+                        chunk.stream,
+                    )
+                    key_table = DataFrame(
+                        [expr.evaluate(df) for expr in key_exprs],
+                        stream=df.stream,
+                    ).table
+                    inserter.insert_hash_with_keys(chunk, key_table)
 
     for partition_id in shuffle.shuffler.local_partitions():
         stream = ir_context.get_cuda_stream()
@@ -292,6 +356,8 @@ async def shuffle_actor(
     columns_to_hash: tuple[int, ...],
     num_partitions: int,
     collective_id: int,
+    key_exprs: tuple[NamedExpr, ...] | None = None,
+    child_schema: Schema | None = None,
 ) -> None:
     """
     Execute a global shuffle pipeline within a single node.
@@ -315,11 +381,18 @@ async def shuffle_actor(
     ch_out
         Output Channel[TableChunk] with metadata and data channels.
     columns_to_hash
-        Tuple of column indices to use for hashing.
+        Tuple of column indices to use for hashing. Ignored when
+        ``key_exprs`` is provided.
     num_partitions
         Number of partitions to shuffle into.
     collective_id
         The collective ID.
+    key_exprs
+        Optional tuple of ``NamedExpr`` objects to evaluate at runtime
+        as the hash keys. When provided, ``columns_to_hash`` is ignored.
+    child_schema
+        Schema of the child IR node, required when ``key_exprs`` is
+        provided.
     """
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
@@ -333,6 +406,8 @@ async def shuffle_actor(
             columns_to_hash,
             num_partitions,
             collective_id,
+            key_exprs=key_exprs,
+            child_schema=child_schema,
         )
 
 
@@ -346,17 +421,31 @@ def _(
     (child,) = ir.children
     nodes, channels = rec(child)
 
-    keys: list[Col] = [ne.value for ne in ir.keys if isinstance(ne.value, Col)]
-    if len(keys) != len(ir.keys):  # pragma: no cover
-        raise NotImplementedError("Shuffle requires simple keys.")
-    column_names = list(ir.schema.keys())
+    key_values = [ne.value for ne in ir.keys]
+
+    # Non-pointwise expressions (e.g. aggregations) cannot be evaluated
+    # chunk-by-chunk and are therefore unsupported as shuffle keys.
+    if not all(expr.is_pointwise for expr in traversal(key_values)):  # pragma: no cover
+        raise NotImplementedError("Shuffle requires pointwise key expressions.")
 
     context = rec.state["context"]
-    columns_to_hash = tuple(column_names.index(k.name) for k in keys)
     num_partitions = rec.state["partition_info"][ir].count
-
-    # Look up the reserved collective ID for this operation
     collective_id = rec.state["collective_id_map"][ir][0]
+
+    # Determine whether all keys are simple column references (Col).
+    # For Col keys we can use direct column-index hashing; for any
+    # non-Col (but still pointwise) expression we evaluate the keys
+    # at runtime using hash_partition(input, key_table, num_partitions).
+    col_keys = [k for k in key_values if isinstance(k, Col)]
+    if len(col_keys) == len(key_values):
+        column_names = list(ir.schema.keys())
+        columns_to_hash = tuple(column_names.index(k.name) for k in col_keys)
+        key_exprs = None
+        child_schema = None
+    else:
+        columns_to_hash = ()
+        key_exprs = ir.keys
+        child_schema = child.schema
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
@@ -373,6 +462,8 @@ def _(
             columns_to_hash=columns_to_hash,
             num_partitions=num_partitions,
             collective_id=collective_id,
+            key_exprs=key_exprs,
+            child_schema=child_schema,
         )
     ]
 
