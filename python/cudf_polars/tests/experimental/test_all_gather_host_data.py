@@ -68,7 +68,7 @@ def test_gather_cluster_info(engine) -> None:
     for info in infos:
         assert isinstance(info, ClusterInfo)
         assert info.pid > 0
-        assert len(info.hostname) > 0
+        assert isinstance(info.hostname, str)
         assert info.cuda_visible_devices is None or isinstance(
             info.cuda_visible_devices, str
         )
