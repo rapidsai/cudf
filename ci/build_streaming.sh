@@ -30,10 +30,6 @@ source rapids-configure-sccache
 
 rapids-print-env
 
-EXITCODE=0
-trap "EXITCODE=1" ERR
-set +e
-
 rapids-logger "Run C++ build"
 
 RAPIDS_CUDA_MAJOR="${RAPIDS_CUDA_VERSION%%.*}"
@@ -51,6 +47,3 @@ cmake --install cpp/build --prefix cpp/install --component testing
 
 sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
-
-rapids-logger "Test script exiting with value: $EXITCODE"
-exit ${EXITCODE}
