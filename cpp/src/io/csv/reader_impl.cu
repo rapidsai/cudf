@@ -19,6 +19,7 @@
 #include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
@@ -26,7 +27,6 @@
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/codec.hpp>
@@ -579,6 +579,7 @@ void infer_column_types(parse_options const& parse_opts,
                         int32_t num_records,
                         data_type timestamp_type,
                         host_span<data_type> column_types,
+                        device_span<uint32_t const> field_ends,
                         rmm::cuda_stream_view stream)
 {
   cudf::scoped_range rng{"csv::infer_column_types"};
@@ -603,6 +604,7 @@ void infer_column_types(parse_options const& parse_opts,
     make_device_uvector_async(column_flags, stream, cudf::get_current_device_resource_ref()),
     row_offsets,
     num_inferred_columns,
+    field_ends,
     stream);
   stream.synchronize();
 
@@ -651,6 +653,7 @@ decode_result decode_data(parse_options const& parse_opts,
                           int32_t num_records,
                           int32_t num_actual_columns,
                           int32_t num_active_columns,
+                          device_span<uint32_t const> field_ends,
                           rmm::cuda_stream_view stream,
                           rmm::device_async_resource_ref mr)
 {
@@ -699,6 +702,7 @@ decode_result decode_data(parse_options const& parse_opts,
     make_device_uvector_async(h_valid, stream, cudf::get_current_device_resource_ref()),
     d_valid_counts,
     make_device_uvector_async(h_is_quoted_flags, stream, cudf::get_current_device_resource_ref()),
+    field_ends,
     stream);
 
   auto const h_valid_counts = cudf::detail::make_host_vector(d_valid_counts, stream);
@@ -718,6 +722,7 @@ cudf::detail::host_vector<data_type> determine_column_types(
   int32_t num_records,
   host_span<column_parse::flags> column_flags,
   cudf::size_type num_active_columns,
+  device_span<uint32_t const> field_ends,
   rmm::cuda_stream_view stream)
 {
   std::vector<data_type> column_types(column_flags.size());
@@ -739,6 +744,7 @@ cudf::detail::host_vector<data_type> determine_column_types(
                      num_records,
                      reader_opts.get_timestamp_type(),
                      column_types,
+                     field_ends,
                      stream);
 
   // compact column_types to only include active columns
@@ -935,17 +941,26 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
   // Exclude the end-of-data row from number of rows with actual data
   auto const num_records = std::max(row_offsets.size(), 1ul) - 1;
+
+  // Precompute field-end offsets once — shared between type detection and decode.
+  // This avoids redundant field scanning when type inference is enabled.
+  auto const d_field_ends = (num_records > 0)
+                              ? cudf::io::csv::gpu::precompute_field_ends(
+                                  parse_opts.view(), data, row_offsets, num_actual_columns, stream)
+                              : rmm::device_uvector<uint32_t>(0, stream);
+
   auto const column_types = [&] {
     cudf::scoped_range rng{"csv::determine_column_types"};
     return determine_column_types(reader_opts,
-                                                   parse_opts,
-                                                   column_names,
-                                                   data,
-                                                   row_offsets,
-                                                   num_records,
-                                                   column_flags,
-                                                   num_active_columns,
-                                                   stream);
+                                  parse_opts,
+                                  column_names,
+                                  data,
+                                  row_offsets,
+                                  num_records,
+                                  column_flags,
+                                  num_active_columns,
+                                  d_field_ends,
+                                  stream);
   }();
 
   auto metadata    = table_metadata{};
@@ -963,6 +978,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       num_records,
       num_actual_columns,
       num_active_columns,
+      d_field_ends,
       stream,
       mr);
 

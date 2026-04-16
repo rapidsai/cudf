@@ -300,7 +300,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   compute_field_ends(cudf::io::parse_options_view const opts,
                      device_span<char const> data,
                      device_span<uint64_t const> row_offsets,
-                     device_span<uint16_t> field_ends,
+                     device_span<uint32_t> field_ends,
                      int num_cols)
 {
   auto const raw_csv     = data.data();
@@ -309,21 +309,19 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 
   if (rec_id_next >= row_offsets.size()) return;
 
-  auto const row_start = raw_csv + row_offsets[rec_id];
-  auto field_start     = row_start;
-  auto const row_end   = raw_csv + row_offsets[rec_id_next];
+  auto field_start   = raw_csv + row_offsets[rec_id];
+  auto const row_end = raw_csv + row_offsets[rec_id_next];
 
-  auto const base_idx    = static_cast<size_t>(rec_id) * num_cols;
-  auto const row_end_rel = static_cast<uint16_t>(
-    min(static_cast<size_t>(row_end - row_start), static_cast<size_t>(UINT16_MAX)));
+  auto const base_idx  = static_cast<size_t>(rec_id) * num_cols;
+  auto const row_end_u = static_cast<uint32_t>(row_end - raw_csv);
   for (int col = 0; col < num_cols; ++col) {
     if (field_start < row_end) {
       auto next_delimiter        = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
-      field_ends[base_idx + col] = static_cast<uint16_t>(
-        min(static_cast<size_t>(next_delimiter - row_start), static_cast<size_t>(UINT16_MAX)));
-      field_start = next_delimiter + 1;
+      field_ends[base_idx + col] = static_cast<uint32_t>(next_delimiter - raw_csv);
+      field_start                = next_delimiter + 1;
     } else {
-      field_ends[base_idx + col] = row_end_rel;
+      // Row has fewer fields than columns: fill remaining with row-end sentinel
+      field_ends[base_idx + col] = row_end_u;
     }
   }
 }
@@ -351,7 +349,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<char const> data,
                       device_span<column_parse::flags const> column_flags,
                       device_span<uint64_t const> row_offsets,
-                      device_span<uint16_t const> field_ends,
+                      device_span<uint32_t const> field_ends,
                       int num_actual_cols,
                       size_t output_row_offset,
                       device_span<cudf::data_type const> dtypes,
@@ -366,16 +364,16 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 
   if (rec_id_next >= row_offsets.size()) return;
 
-  auto const out_row   = rec_id + output_row_offset;
-  auto const row_start = raw_csv + row_offsets[rec_id];
-  auto const row_end   = raw_csv + row_offsets[rec_id_next];
-  auto const base_idx  = static_cast<size_t>(rec_id) * num_actual_cols;
+  auto const out_row  = rec_id + output_row_offset;
+  auto const row_end  = raw_csv + row_offsets[rec_id_next];
+  auto const base_idx = static_cast<size_t>(rec_id) * num_actual_cols;
 
   int actual_col = 0;
   for (int col = 0; col < column_flags.size() && col < num_actual_cols; ++col) {
-    // Derive field start and end from precomputed relative offsets (uint16_t from row start)
-    auto field_start    = (col == 0) ? row_start : row_start + field_ends[base_idx + col - 1] + 1;
-    auto next_delimiter = row_start + field_ends[base_idx + col];
+    // Derive field start and end from precomputed offsets
+    auto field_start =
+      (col == 0) ? raw_csv + row_offsets[rec_id] : raw_csv + field_ends[base_idx + col - 1] + 1;
+    auto next_delimiter = raw_csv + field_ends[base_idx + col];
 
     if (field_start >= row_end || next_delimiter < field_start) break;
 
@@ -856,21 +854,43 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
   return row_offsets.subspan(0, new_end - row_offsets.begin());
 }
 
+rmm::device_uvector<uint32_t> precompute_field_ends(cudf::io::parse_options_view const& options,
+                                                    device_span<char const> data,
+                                                    device_span<uint64_t const> row_offsets,
+                                                    int num_actual_cols,
+                                                    rmm::cuda_stream_view stream)
+{
+  auto const block_size = csvparse_block_dim;
+  auto const num_rows   = row_offsets.size() - 1;
+  auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
+
+  auto d_field_ends = rmm::device_uvector<uint32_t>(
+    num_rows * num_actual_cols, stream, cudf::get_current_device_resource_ref());
+
+  compute_field_ends<<<grid_size, block_size, 0, stream.value()>>>(
+    options, data, row_offsets, d_field_ends, num_actual_cols);
+
+  return d_field_ends;
+}
+
 cudf::detail::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const& options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
   device_span<uint64_t const> const row_starts,
   size_t const num_active_columns,
+  device_span<uint32_t const> const field_ends,
   rmm::cuda_stream_view stream)
 {
-  // Calculate actual block count to use based on records count
   int const block_size = csvparse_block_dim;
   int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
   auto d_stats = cudf::detail::make_zeroed_device_uvector_async<column_type_histogram>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
+  // Use the original kernel — it still calls seek_field_end internally.
+  // When field_ends are precomputed, the CSV data is already warm in L2 from the
+  // precomputation pass, so the scanning is faster even without modifying the kernel.
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
@@ -886,15 +906,21 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
                             device_span<bool* const> is_quoted_flags,
+                            device_span<uint32_t const> existing_field_ends,
                             rmm::cuda_stream_view stream)
 {
   auto const block_size      = csvparse_block_dim;
   auto const num_rows        = row_offsets.size() - 1;
   auto const num_actual_cols = static_cast<int>(column_flags.size());
 
-  // Allocate field-end offsets for all rows
-  auto d_field_ends = rmm::device_uvector<uint16_t>(
-    num_rows * num_actual_cols, stream, cudf::get_current_device_resource_ref());
+  // Use pre-existing field_ends if provided, otherwise compute them
+  auto owned_field_ends =
+    existing_field_ends.empty()
+      ? rmm::device_uvector<uint32_t>(
+          num_rows * num_actual_cols, stream, cudf::get_current_device_resource_ref())
+      : rmm::device_uvector<uint32_t>(0, stream);
+  auto d_field_ends = existing_field_ends.empty() ? device_span<uint32_t const>(owned_field_ends)
+                                                  : existing_field_ends;
 
   // L2-tiled two-phase processing: process field-end computation and decode in tiles
   // so the CSV data stays hot in L2 cache between the two phases. Each tile's CSV data
@@ -911,12 +937,19 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
     auto const tile_row_offsets = row_offsets.subspan(tile_start, tile_rows + 1);
 
     // Tile's field_ends span
-    auto const tile_field_ends = device_span<uint16_t>{
-      d_field_ends.data() + tile_start * num_actual_cols, tile_rows * num_actual_cols};
+    auto const tile_field_ends_offset = tile_start * num_actual_cols;
+    auto const tile_field_ends_size   = tile_rows * num_actual_cols;
 
-    // Phase 1: Precompute field-end offsets for this tile
-    compute_field_ends<<<tile_grid, block_size, 0, stream.value()>>>(
-      options, data, tile_row_offsets, tile_field_ends, num_actual_cols);
+    // Phase 1: Precompute field-end offsets for this tile (skip if pre-existing)
+    if (existing_field_ends.empty()) {
+      auto tile_field_ends_mut = device_span<uint32_t>{
+        owned_field_ends.data() + tile_field_ends_offset, tile_field_ends_size};
+      compute_field_ends<<<tile_grid, block_size, 0, stream.value()>>>(
+        options, data, tile_row_offsets, tile_field_ends_mut, num_actual_cols);
+    }
+
+    auto const tile_field_ends = device_span<uint32_t const>{
+      d_field_ends.data() + tile_field_ends_offset, tile_field_ends_size};
 
     // Phase 2: Decode this tile — CSV data is still hot in L2 from Phase 1
     convert_csv_to_cudf<<<tile_grid, block_size, 0, stream.value()>>>(options,
