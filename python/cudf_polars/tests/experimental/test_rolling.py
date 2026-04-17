@@ -134,6 +134,65 @@ def test_ungrouped_int_rolling_multiple_aggs(engine_rolling) -> None:
     assert_gpu_result_equal(q, engine=engine_rolling)
 
 
+def test_ungrouped_int_rolling_right_halo_spans_multiple_chunks(engine_rolling) -> None:
+    """
+    Lookahead only: ``offset`` narrower than ``period`` yields a positive streaming
+    lookahead so the right halo can require more than one downstream partition
+    (``max_rows_per_partition`` is 3 in the ``engine_rolling`` fixture).
+    """
+    df = pl.LazyFrame(
+        {
+            "idx": list(range(1, 13)),
+            "val": list(range(1, 13)),
+        }
+    )
+    q = df.rolling("idx", period="6i", offset="-1i", closed="right").agg(
+        s=pl.col("val").sum(),
+    )
+    assert_gpu_result_equal(q, engine=engine_rolling)
+
+
+def test_ungrouped_int_rolling_lookback_spans_multiple_prior_chunks(
+    engine_rolling,
+) -> None:
+    """
+    Lookback only: default ``offset=-period`` gives ``lookback == period`` and zero
+    lookahead. A wide integer window must pull many prior rows into ``left_ctx`` across
+    more than one already-processed partition chunk.
+    """
+    df = pl.LazyFrame(
+        {
+            "idx": list(range(1, 16)),
+            "val": list(range(1, 16)),
+        }
+    )
+    q = df.rolling("idx", period="8i", closed="right").agg(s=pl.col("val").sum())
+    assert_gpu_result_equal(q, engine=engine_rolling)
+
+
+def test_ungrouped_int_rolling_halo_spans_multiple_chunks_lookahead_and_lookback(
+    engine_rolling,
+) -> None:
+    """
+    Both directions: ``rolling_stream_halo_extents`` uses ``lookback = max(0, -p)`` and
+    ``lookahead = max(0, p + f)`` for ordinals ``(p, f)`` from ``offset`` / ``period``.
+    With ``offset='-5i'`` and ``period='10i'``, lookback and lookahead are both 5 in
+    index units, so a single center partition can need prior rows from more than one
+    upstream chunk and future rows from more than one downstream chunk when
+    ``max_rows_per_partition`` is 3.
+    """
+    df = pl.LazyFrame(
+        {
+            "idx": list(range(1, 16)),
+            "val": list(range(1, 16)),
+        }
+    )
+    q = df.rolling("idx", period="10i", offset="-5i", closed="right").agg(
+        s=pl.col("val").sum(),
+    )
+    assert_gpu_result_equal(q, engine=engine_rolling)
+
+
 @pytest.mark.parametrize("period", ["2d", "4d"])
 def test_ungrouped_datetime_rolling(engine_rolling, period) -> None:
     dates = [
