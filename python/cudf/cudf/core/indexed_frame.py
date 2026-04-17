@@ -6409,14 +6409,126 @@ class IndexedFrame(Frame):
         dtype_backend=None,
     ) -> Self:
         """
-        Convert columns to the best possible nullable dtypes.
+        Convert columns from numpy dtypes to the best dtypes that support ``pd.NA``.
 
-        If the dtype is numeric, and consists of all integers, convert
-        to an appropriate integer extension type. Otherwise, convert
-        to an appropriate floating type.
+        Parameters
+        ----------
+        infer_objects : bool, default True
+            Whether object dtypes should be converted to the best possible types.
+        convert_string : bool, default True
+            Whether object dtypes should be converted to ``StringDtype()``.
+        convert_integer : bool, default True
+            Whether, if possible, conversion can be done to integer extension types.
+        convert_boolean : bool, defaults True
+            Whether object dtypes should be converted to ``BooleanDtypes()``.
+        convert_floating : bool, defaults True
+            Whether, if possible, conversion can be done to floating extension types.
+            If `convert_integer` is also True, preference will be give to integer
+            dtypes if the floats can be faithfully casted to integers.
+        dtype_backend : {'numpy_nullable', 'pyarrow'}, default 'numpy_nullable'
+            Back-end data type applied to the resultant :class:`DataFrame` or
+            :class:`Series` (still experimental). Behaviour is as follows:
 
-        All other dtypes are always returned as-is as all dtypes in
-        cudf are nullable.
+            * ``"numpy_nullable"``: returns nullable-dtype-backed
+              :class:`DataFrame` or :class:`Serires`.
+            * ``"pyarrow"``: returns pyarrow-backed nullable :class:`ArrowDtype`
+              :class:`DataFrame` or :class:`Series`.
+
+        Returns
+        -------
+        Series or DataFrame
+            Copy of input object with new dtype.
+
+        See Also
+        --------
+        infer_objects : Infer dtypes of objects.
+        to_datetime : Convert argument to datetime.
+        to_timedelta : Convert argument to timedelta.
+        to_numeric : Convert argument to a numeric type.
+
+        Notes
+        -----
+        By default, ``convert_dtypes`` will attempt to convert a Series (or each
+        Series in a DataFrame) to dtypes that support ``pd.NA``. By using the options
+        ``convert_string``, ``convert_integer``, ``convert_boolean`` and
+        ``convert_floating``, it is possible to turn off individual conversions
+        to ``StringDtype``, the integer extension types, ``BooleanDtype``
+        or floating extension types, respectively.
+
+        For object-dtyped columns, if ``infer_objects`` is ``True``, use the inference
+        rules as during normal Series/DataFrame construction.  Then, if possible,
+        convert to ``StringDtype``, ``BooleanDtype`` or an appropriate integer
+        or floating extension type, otherwise leave as ``object``.
+
+        If the dtype is integer, convert to an appropriate integer extension type.
+
+        If the dtype is numeric, and consists of all integers, convert to an
+        appropriate integer extension type. Otherwise, convert to an
+        appropriate floating extension type.
+
+        In the future, as new dtypes are added that support ``pd.NA``, the results
+        of this method will change to support those new dtypes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> df = cudf.DataFrame(
+        ...     {
+        ...         "a": cudf.Series([1, 2, 3], dtype=np.dtype("int32")),
+        ...         "b": cudf.Series(["x", "y", "z"], dtype=np.dtype("O")),
+        ...         "e": cudf.Series([10, np.nan, 20], dtype=np.dtype("float")),
+        ...         "f": cudf.Series([np.nan, 100.5, 200], dtype=np.dtype("float")),
+        ...     }
+        ... )
+
+        Start with a DataFrame with default dtypes.
+
+        >>> df
+           a  b     e      f
+        0  1  x  10.0    NaN
+        1  2  y   NaN  100.5
+        2  3  z  20.0  200.0
+
+        >>> df.dtypes
+        a      int32
+        b     object
+        e    float64
+        f    float64
+        dtype: object
+
+        Convert the DataFrame to use best possible dtypes.
+
+        >>> dfn = df.convert_dtypes()
+        >>> dfn
+           a  b     e      f
+        0  1  x    10   <NA>
+        1  2  y  <NA>  100.5
+        2  3  z    20  200.0
+
+        >>> dfn.dtypes
+        a      Int32
+        b     string
+        e      Int64
+        f    Float64
+        dtype: object
+
+        Start with a Series of strings and missing data represented by ``np.nan``.
+
+        >>> s = cudf.Series(["a", "b", np.nan])
+        >>> s
+        0      a
+        1      b
+        2    NaN
+        dtype: str
+
+        Obtain a Series with dtype ``StringDtype``.
+
+        >>> s.convert_dtypes()
+        0       a
+        1       b
+        2    <NA>
+        dtype: string
         """
         if dtype_backend == "pyarrow":
             cols = []
@@ -6430,31 +6542,73 @@ class IndexedFrame(Frame):
             return self._from_data_like_self(
                 self._data._from_columns_like_self(cols, verify=False)
             )
-        if not (convert_floating and convert_integer):
-            return self.copy()
-        else:
-            if (
-                cudf.get_option("mode.pandas_compatible")
-                and dtype_backend is None
-            ):
-                raise NotImplementedError(
-                    "The `dtype_backend` argument is not supported in "
-                    "pandas_compatible mode."
+        numpy_to_nullable = {
+            "int8": pd.Int8Dtype(),
+            "int16": pd.Int16Dtype(),
+            "int32": pd.Int32Dtype(),
+            "int64": pd.Int64Dtype(),
+            "uint8": pd.UInt8Dtype(),
+            "uint16": pd.UInt16Dtype(),
+            "uint32": pd.UInt32Dtype(),
+            "uint64": pd.UInt64Dtype(),
+            "float32": pd.Float32Dtype(),
+            "float64": pd.Float64Dtype(),
+        }
+        cols = []
+        for col in self._columns:
+            dtype = col.dtype
+            new_col = None
+            if dtype == np.dtype("bool"):
+                if convert_boolean:
+                    new_col = col.astype(pd.BooleanDtype(), copy=True)
+                elif convert_integer:
+                    new_col = col.astype(pd.Int64Dtype(), copy=True)
+                elif convert_floating:
+                    new_col = col.astype(pd.Float64Dtype(), copy=True)
+            elif dtype.kind in ("i", "u") and dtype.name in numpy_to_nullable:
+                if convert_integer:
+                    new_col = col.astype(
+                        numpy_to_nullable[dtype.name], copy=True
+                    )
+            elif dtype.kind == "f" and dtype.name in numpy_to_nullable:
+                col_filled = col.fillna(0)
+                as_int = col_filled.astype(np.dtype(np.int64))
+                nan_blocks_int = (
+                    pd.options.future.distinguish_nan_and_na
+                    and col.nan_count > 0
                 )
-            cols = []
-            for col in self._columns:
-                if col.dtype.kind == "f":
-                    col_filled = col.fillna(0)
-                    as_int = col_filled.astype(np.dtype(np.int64))
-                    if cp.allclose(col_filled, as_int):
-                        cols.append(as_int)
-                        continue
-                elif isinstance(col.dtype, pd.StringDtype):
-                    col = col.astype(pd.StringDtype(na_value=pd.NA))
-                cols.append(col)
-            return self._from_data_like_self(
-                self._data._from_columns_like_self(cols, verify=False)
-            )
+                if (
+                    convert_integer
+                    and not nan_blocks_int
+                    and bool(cp.allclose(col_filled, as_int))
+                ):
+                    new_col = col.nans_to_nulls().astype(
+                        pd.Int64Dtype(), copy=True
+                    )
+                elif convert_floating:
+                    new_col = col.astype(
+                        numpy_to_nullable[dtype.name], copy=True
+                    )
+            elif isinstance(dtype, pd.StringDtype):
+                if convert_string and dtype.na_value is not pd.NA:
+                    new_col = col.astype(
+                        pd.StringDtype(na_value=pd.NA), copy=True
+                    )
+            elif dtype == np.dtype("O"):
+                if convert_string:
+                    new_col = col.astype(
+                        pd.StringDtype(na_value=pd.NA), copy=True
+                    )
+                elif infer_objects:
+                    new_col = col.astype(
+                        pd.StringDtype(na_value=np.nan), copy=True
+                    )
+            if new_col is None:
+                new_col = col.copy(deep=True)
+            cols.append(new_col)
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(cols, verify=False)
+        )
 
     @_performance_tracking
     def pct_change(
