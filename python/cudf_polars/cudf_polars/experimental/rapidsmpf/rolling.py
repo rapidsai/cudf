@@ -56,6 +56,9 @@ _TIMESTAMP_TO_DURATION: dict[plc.TypeId, plc.TypeId] = {
     plc.TypeId.TIMESTAMP_DAYS: plc.TypeId.DURATION_DAYS,
 }
 
+_INT64 = plc.DataType(plc.TypeId.INT64)
+_BOOL8 = plc.DataType(plc.TypeId.BOOL8)
+
 
 def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
     """Map Polars duration ordinals (ns) to native index units. See ``duration_to_scalar``."""
@@ -94,12 +97,11 @@ def _get_idx_col(
     table: plc.Table,
     index_col_idx: int,
     index_dtype: plc.DataType,
-    i64: plc.DataType,
     stream: Stream,
 ) -> plc.Column:
     col = table.columns()[index_col_idx]
     if index_dtype.id() == plc.TypeId.INT64 and col.type().id() != plc.TypeId.INT64:
-        col = plc.unary.cast(col, i64, stream=stream)
+        col = plc.unary.cast(col, _INT64, stream=stream)
     return col
 
 
@@ -129,16 +131,14 @@ def _filter_threshold(
     idx_col: plc.Column,
     threshold: int | plc.Scalar,
     op: plc.binaryop.BinaryOperator,
-    i64: plc.DataType,
-    bool8: plc.DataType,
     stream: Stream,
 ) -> plc.Table:
     thr = (
         threshold
         if isinstance(threshold, plc.Scalar)
-        else plc.Scalar.from_py(threshold, i64, stream=stream)
+        else plc.Scalar.from_py(threshold, _INT64, stream=stream)
     )
-    mask = plc.binaryop.binary_operation(idx_col, thr, op, bool8, stream=stream)
+    mask = plc.binaryop.binary_operation(idx_col, thr, op, _BOOL8, stream=stream)
     return plc.stream_compaction.apply_boolean_mask(table, mask, stream=stream)
 
 
@@ -146,6 +146,38 @@ def _filter_threshold(
 class _RollingActState:
     left_ctx_df: DataFrame | None = None
     right_halo_df: DataFrame | None = None
+    prev_ungrouped_int_max: int | None = (
+        None  # ungrouped INT64: max index on prior centers
+    )
+
+
+def _check_ungrouped_int_chunk_order(
+    st: _RollingActState,
+    combined: DataFrame,
+    exp: _RollingExpandedChunkMeta,
+    ir: Rolling,
+    *,
+    index_col_idx: int,
+    seq: int,
+) -> None:
+    """Ungrouped INT64 only: center min must be >= prior center max (partition order)."""
+    if ir.keys or ir.index_dtype.id() != plc.TypeId.INT64:
+        return
+    if (n := exp.center_end - exp.center_begin) == 0:
+        return
+    idx = _get_idx_col(
+        combined.slice((exp.center_begin, n)).table,
+        index_col_idx,
+        ir.index_dtype,
+        combined.stream,
+    )
+    lo, hi = _minmax_py(idx, _INT64, combined.stream)
+    if st.prev_ungrouped_int_max is not None and lo < st.prev_ungrouped_int_max:
+        raise RuntimeError(
+            f"rolling streaming: INT64 index decreased across chunks "
+            f"(min {lo} < prev max {st.prev_ungrouped_int_max}, seq={seq})"
+        )  # pragma: no cover; Should never get here
+    st.prev_ungrouped_int_max = hi
 
 
 @dataclass(frozen=True)
@@ -175,8 +207,6 @@ def _prepare_expanded_rolling_frame(
     index_dtype: plc.DataType,
     lookback: int,
     lookahead: int,
-    i64: plc.DataType,
-    bool8: plc.DataType,
     base_col_names: list[str],
     base_dtypes: list[Any],
     is_local_rank_chunk: bool,
@@ -212,11 +242,9 @@ def _prepare_expanded_rolling_frame(
     chunk_mx_s: plc.Scalar | None = None
     dur_dt: plc.DataType | None = None
     if need_chunk_minmax:
-        chunk_idx = _get_idx_col(
-            chunk_table, index_col_idx, index_dtype, i64, chunk_stream
-        )
+        chunk_idx = _get_idx_col(chunk_table, index_col_idx, index_dtype, chunk_stream)
         if is_int_index:
-            chunk_mn, chunk_mx = _minmax_py(chunk_idx, i64, chunk_stream)
+            chunk_mn, chunk_mx = _minmax_py(chunk_idx, _INT64, chunk_stream)
         else:
             dur_dt = _duration_dtype_for_timestamp(index_dtype)
             chunk_mn_s, chunk_mx_s = _minmax_scalars(
@@ -225,7 +253,7 @@ def _prepare_expanded_rolling_frame(
 
     if left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0:
         left_idx = _get_idx_col(
-            left_ctx_df.table, index_col_idx, index_dtype, i64, left_ctx_df.stream
+            left_ctx_df.table, index_col_idx, index_dtype, left_ctx_df.stream
         )
         if is_int_index:
             left_ctx_df = DataFrame.from_table(
@@ -234,8 +262,6 @@ def _prepare_expanded_rolling_frame(
                     left_idx,
                     chunk_mn - lookback,
                     plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                    i64,
-                    bool8,
                     left_ctx_df.stream,
                 ),
                 base_col_names,
@@ -260,8 +286,6 @@ def _prepare_expanded_rolling_frame(
                         left_idx,
                         lower_s,
                         plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                        i64,
-                        bool8,
                         s,
                     ),
                     base_col_names,
@@ -281,17 +305,13 @@ def _prepare_expanded_rolling_frame(
             next_df = DataFrame.from_table(
                 next_table, base_col_names, base_dtypes, stream=next_stream
             )
-            next_idx = _get_idx_col(
-                next_table, index_col_idx, index_dtype, i64, next_stream
-            )
+            next_idx = _get_idx_col(next_table, index_col_idx, index_dtype, next_stream)
             if is_int_index:
                 right_ctx_table = _filter_threshold(
                     next_table,
                     next_idx,
                     chunk_mx + lookahead,
                     plc.binaryop.BinaryOperator.LESS_EQUAL,
-                    i64,
-                    bool8,
                     next_stream,
                 )
                 right_ctx_df = (
@@ -318,8 +338,6 @@ def _prepare_expanded_rolling_frame(
                         next_idx,
                         upper_s,
                         plc.binaryop.BinaryOperator.LESS_EQUAL,
-                        i64,
-                        bool8,
                         s,
                     )
                     right_ctx_df = (
@@ -421,7 +439,6 @@ def _build_center_row_mask_from_range(
     n_rows: int,
     center_begin: int,
     center_end: int,
-    bool8: plc.DataType,
     stream: Stream,
 ) -> Column:
     """Boolean mask with True on ``[center_begin, center_end)`` (half-open row indices)."""
@@ -435,18 +452,18 @@ def _build_center_row_mask_from_range(
         row_id,
         plc.Scalar.from_py(center_begin, plc.types.SIZE_TYPE, stream=stream),
         plc.binaryop.BinaryOperator.GREATER_EQUAL,
-        bool8,
+        _BOOL8,
         stream=stream,
     )
     lt = plc.binaryop.binary_operation(
         row_id,
         plc.Scalar.from_py(center_end, plc.types.SIZE_TYPE, stream=stream),
         plc.binaryop.BinaryOperator.LESS,
-        bool8,
+        _BOOL8,
         stream=stream,
     )
     mask_obj = plc.binaryop.binary_operation(
-        ge, lt, plc.binaryop.BinaryOperator.LOGICAL_AND, bool8, stream=stream
+        ge, lt, plc.binaryop.BinaryOperator.LOGICAL_AND, _BOOL8, stream=stream
     )
     return Column(mask_obj, dtype=DataType(pl.Boolean()), name=None)
 
@@ -511,8 +528,6 @@ async def prepare_chunks(
     lookahead: int,
     index_col_idx: int,
     index_dtype: plc.DataType,
-    i64: plc.DataType,
-    bool8: plc.DataType,
     base_col_names: list[str],
     base_dtypes: list[Any],
 ) -> None:
@@ -557,8 +572,6 @@ async def prepare_chunks(
             index_dtype=index_dtype,
             lookback=lookback,
             lookahead=lookahead,
-            i64=i64,
-            bool8=bool8,
             base_col_names=base_col_names,
             base_dtypes=base_dtypes,
             is_local_rank_chunk=cur_meta.is_local_rank_chunk,
@@ -609,9 +622,9 @@ async def rolling_eval_and_send(
     tracer: Any,
     *,
     lookback: int,
+    index_col_idx: int,
     base_col_names: list[str],
     base_dtypes: list[Any],
-    bool8: plc.DataType,
 ) -> None:
     """Evaluate rolling, mask to owned rows, zlice, send, and advance left context."""
     non_child_args_no_zlice = ir._non_child_args[:-1] + (None,)
@@ -631,11 +644,13 @@ async def rolling_eval_and_send(
             base_dtypes,
             stream=chunk.stream,
         )
+        _check_ungrouped_int_chunk_order(
+            state, combined, expanded, ir, index_col_idx=index_col_idx, seq=seq_num
+        )
         mask = _build_center_row_mask_from_range(
             combined.num_rows,
             expanded.center_begin,
             expanded.center_end,
-            bool8,
             combined.stream,
         )
         result_df = await _rolling_do_evaluate(
@@ -727,8 +742,6 @@ async def rolling_actor(
         lookback = max(0, -preceding_native)
         lookahead = max(0, preceding_native + following_native)
         index_col_idx = base_col_names.index(ir.index.name)
-        i64 = plc.DataType(plc.TypeId.INT64)
-        bool8 = plc.DataType(plc.TypeId.BOOL8)
 
         act_state = _RollingActState()
         append_done: asyncio.Queue[None] = asyncio.Queue()
@@ -756,8 +769,6 @@ async def rolling_actor(
                 lookahead=lookahead,
                 index_col_idx=index_col_idx,
                 index_dtype=ir.index_dtype,
-                i64=i64,
-                bool8=bool8,
                 base_col_names=base_col_names,
                 base_dtypes=base_dtypes,
             ),
@@ -771,9 +782,9 @@ async def rolling_actor(
                 append_done,
                 tracer,
                 lookback=lookback,
+                index_col_idx=index_col_idx,
                 base_col_names=base_col_names,
                 base_dtypes=base_dtypes,
-                bool8=bool8,
             ),
         )
 
