@@ -7,8 +7,8 @@
 #include "hybrid_scan_impl.hpp"
 #include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
+#include "io/parquet/timestamp_utils.cuh"
 #include "io/utilities/block_utils.cuh"
-#include "io/utilities/time_utils.hpp"
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -84,9 +84,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<slot_type,
-                                          BUCKET_SIZE,
-                                          cuco::extent<std::size_t>,
-                                          rmm::mr::polymorphic_allocator<char>>;
+                                              BUCKET_SIZE,
+                                              cuco::extent<std::size_t>,
+                                              rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -374,7 +374,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
   // Calculate the timestamp scale if this chunk has a timestamp logical type
   auto const timestamp_scale =
     chunk.logical_type.has_value()
-      ? calc_timestamp_scale(chunk.logical_type.value(), chunk.ts_clock_rate)
+      ? parquet::detail::calc_timestamp_scale(chunk.logical_type, chunk.ts_clock_rate)
       : int32_t{0};
 
   // FLBA length (0 if not FLBA type)

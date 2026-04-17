@@ -4473,8 +4473,8 @@ TEST_F(ParquetReaderTest, TimestampTypeWithFilterPushdown_NativeMatch)
 
   // Read with native precision (TIMESTAMP_MICROSECONDS) and a filter
   // Filter: ts >= 5,000,000 (in microseconds)
-  auto literal_value = cudf::timestamp_scalar<cudf::timestamp_us>(
-    cudf::timestamp_us{cudf::duration_us{5000000}});
+  auto literal_value =
+    cudf::timestamp_scalar<cudf::timestamp_us>(cudf::timestamp_us{cudf::duration_us{5000000}});
   auto literal    = cudf::ast::literal(literal_value);
   auto col_ref    = cudf::ast::column_reference(0);
   auto filter_gte = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
@@ -4547,15 +4547,15 @@ TEST_F(ParquetReaderTest, TimestampTypeWithFilterPushdown_AllPrecisions)
       cudf::io::write_parquet(out_opts);
 
       // Compute filter threshold: value 10000 (in native ticks) converted to output ticks
-      auto const threshold_native  = int64_t{10000} * 100;  // raw_values[10000] = 1000000
-      double const scale            = static_cast<double>(output.ticks_per_second) /
-                            static_cast<double>(native.ticks_per_second);
+      auto const threshold_native = int64_t{10000} * 100;  // raw_values[10000] = 1000000
+      double const scale =
+        static_cast<double>(output.ticks_per_second) / static_cast<double>(native.ticks_per_second);
       auto const threshold_output = static_cast<int64_t>(threshold_native * scale);
 
       // Build filter: ts >= threshold_output (in output precision)
       auto build_and_run = [&](auto scalar_val) {
-        auto literal    = cudf::ast::literal(scalar_val);
-        auto col_ref    = cudf::ast::column_reference(0);
+        auto literal = cudf::ast::literal(scalar_val);
+        auto col_ref = cudf::ast::column_reference(0);
         auto filter_gte =
           cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
 

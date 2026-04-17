@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include "io/utilities/time_utils.hpp"
-
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -120,9 +118,9 @@ class stats_caster_base {
   // integral but not boolean, and fixed_point, and chrono.
   template <typename T>
   static inline T convert(uint8_t const* stats_val,
-                           size_t stats_size,
-                           Type const type,
-                           int32_t ts_scale = 0)
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or cudf::is_fixed_point<T>() or
              cudf::is_chrono<T>())
   {
@@ -145,8 +143,8 @@ class stats_caster_base {
       case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           if constexpr (cudf::is_chrono<T>()) {
-            auto val =
-              static_cast<int64_t>(decode_fixed_width_value<typename T::rep>(stats_val, stats_size));
+            auto val = static_cast<int64_t>(
+              decode_fixed_width_value<typename T::rep>(stats_val, stats_size));
             val = apply_ts_scale(val, ts_scale);
             return stats_caster_base::target_type<T>(val);
           } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
@@ -232,7 +230,7 @@ class stats_caster_base {
             binary_value.value().size(),
             type);
         } else if constexpr ((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
-                              cudf::is_fixed_point<T>() or cudf::is_chrono<T>()) {
+                             cudf::is_fixed_point<T>() or cudf::is_chrono<T>()) {
           val[index] = stats_caster_base::convert<T>(
             binary_value.value().data(), binary_value.value().size(), type, ts_scale);
         } else {

@@ -6,6 +6,7 @@
 #include "expression_transform_helpers.hpp"
 #include "reader_impl_helpers.hpp"
 #include "stats_filter_helpers.hpp"
+#include "timestamp_utils.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -56,13 +57,12 @@ struct row_group_stats_caster : public stats_caster_base {
       CUDF_FAIL("Compound types do not have statistics");
     } else {
       // Compute timestamp scale factor for precision conversion
-      int32_t ts_scale = 0;
       if constexpr (cudf::is_timestamp<T>()) {
         auto const& schema = per_file_metadata[0].schema[schema_idx];
-        if (schema.logical_type.has_value()) {
-          ts_scale =
-            calc_timestamp_scale(*schema.logical_type, static_cast<int32_t>(T::period::den));
-        }
+        auto const ts_scale =
+          (schema.logical_type.has_value())
+            ? calc_timestamp_scale(schema.logical_type, static_cast<int32_t>(T::period::den))
+            : 0;
       }
 
       host_column<T> min(total_row_groups, stream);
@@ -251,7 +251,7 @@ aggregate_reader_metadata::filter_row_groups(
       auto const& schema    = per_file_metadata[0].schema[schema_idx];
       auto const output_clk = cudf::io::to_clockrate(output_dtypes[col_idx].id());
       if (schema.logical_type.has_value() &&
-          calc_timestamp_scale(*schema.logical_type, output_clk) != 0) {
+          calc_timestamp_scale(schema.logical_type, output_clk) != 0) {
         equality_literals[col_idx].clear();
       }
     }

@@ -5,6 +5,7 @@
 
 #include "hybrid_scan_helpers.hpp"
 #include "io/parquet/stats_filter_helpers.hpp"
+#include "io/parquet/timestamp_utils.cuh"
 #include "page_index_filter_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -317,7 +318,8 @@ struct page_stats_caster : public stats_caster_base {
     if constexpr (cudf::is_timestamp<T>()) {
       auto const& schema = per_file_metadata[0].schema[schema_idx];
       if (schema.logical_type.has_value()) {
-        ts_scale = calc_timestamp_scale(*schema.logical_type, static_cast<int32_t>(T::period::den));
+        ts_scale = parquet::detail::calc_timestamp_scale(schema.logical_type,
+                                                         static_cast<int32_t>(T::period::den));
       }
     }
 

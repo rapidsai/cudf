@@ -5,10 +5,7 @@
 
 #pragma once
 
-#include "io/utilities/time_utils.hpp"
-
-namespace cudf {
-namespace io {
+namespace cudf::detail {
 
 /**
  * @brief Lookup table to compute power of ten
@@ -16,5 +13,4 @@ namespace io {
 static const __device__ __constant__ int32_t powers_of_ten[10] = {
   1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::detail
