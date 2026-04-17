@@ -43,24 +43,43 @@ VectorPair get_trivial_left_join_indices(table_view const& left,
                                          rmm::device_async_resource_ref mr);
 
 /**
- * @brief Finalize a full-join result: concatenate per-partition probe indices and append
- *        the complement (unmatched build-table rows paired with `JoinNoMatch`).
+ * @brief Finalize a full-join result from a single probe-side `(left, right)` index pair.
  *
- * Given the per-partition `(left, right)` probe index spans produced by a hash/mixed/conditional
- * full-join probe pass, this helper builds the combined `(left_indices, right_indices)` result of
- * a full outer join. The probe partials are concatenated in order into the head of the output,
- * and unmatched build rows (build indices not appearing in any of the `right_partials`) are
- * appended to the tail with their left-side index set to `cudf::JoinNoMatch`.
+ * Takes ownership of `probe_indices`, resizes both vectors to `probe_indices.first->size() +
+ * build_table_num_rows`, and appends the complement (unmatched build rows paired with
+ * `JoinNoMatch`) into the tail. The vectors are then resized down to the true output length.
  *
- * Callers that produce a single `(left, right)` vector pair (the non-partitioned case) wrap
- * it into 1-element spans.
+ * Used by the non-partitioned full-join paths (hash/mixed/conditional); consuming the caller's
+ * buffers in-place avoids a redundant concat memcpy over the probe data.
  *
- * @param left_partials Per-partition probe-side (left) index spans. Must match `right_partials`
- *                      in count and per-entry size.
- * @param right_partials Per-partition probe-side (right) index spans. `JoinNoMatch` entries
- *                       and any out-of-range values are ignored for complement computation.
- * @param probe_table_num_rows Number of rows in the original probe table. When 0, every build
- *                             row is treated as unmatched (fast path).
+ * @param probe_indices Probe-side `(left, right)` index vectors (consumed).
+ * @param probe_table_num_rows Number of rows in the probe table (0 → every build row is
+ *                             unmatched, fast path).
+ * @param build_table_num_rows Number of rows in the build table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate working storage.
+ *
+ * @return `[left_indices, right_indices]` of the complete full-join output.
+ */
+VectorPair finalize_full_join(VectorPair&& probe_indices,
+                              size_type probe_table_num_rows,
+                              size_type build_table_num_rows,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Finalize a full-join result from per-partition probe index spans.
+ *
+ * Concatenates every `(left_partials[i], right_partials[i])` pair into the head of the output
+ * and appends the complement (unmatched build rows paired with `JoinNoMatch`) into the tail.
+ * Internally delegates to the `VectorPair&&` overload, so the mark/compact path is shared.
+ *
+ * Used by `cudf::hash_join::full_join_finalize` for partitioned full joins where the partials
+ * live in separate buffers and must be gathered.
+ *
+ * @param left_partials Per-partition probe-side (left) index spans.
+ * @param right_partials Per-partition probe-side (right) index spans.
+ * @param probe_table_num_rows Number of rows in the probe table.
  * @param build_table_num_rows Number of rows in the build table.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned vectors.
