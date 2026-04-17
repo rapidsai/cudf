@@ -139,7 +139,10 @@ class ReserveOpIDs:
                     _get_new_collective_id(),
                 ]
             elif isinstance(node, Join) and self.dynamic_planning_enabled:
+                # Join needs 4 IDs: size allgather, left shuffle/bcast,
+                # right shuffle/bcast, bloom filter
                 self.collective_id_map[node] = [
+                    _get_new_collective_id(),
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                     _get_new_collective_id(),
