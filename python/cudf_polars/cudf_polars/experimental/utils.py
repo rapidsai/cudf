@@ -159,22 +159,20 @@ def _extract_over_shuffle_indices(
         Non-empty: all GroupedWindow share the same partition-by keys;
         values are indices of those keys in ``child_schema``.
     None
-        Multiple distinct partition-by key sets; not supported for
+        Multiple distinct partition-by key sets, or any partition-by
+        expression is not a plain column reference; not supported for
         multi-partition streaming (caller should fall back to
         single-partition).
     """
     seen_key_sets: set[frozenset[str]] = set()
     for node in traversal(exprs):
         if isinstance(node, GroupedWindow):
+            by_children = node.children[: node.by_count]
             # TODO: support non-Col partition-by expressions using
             # ShuffleManager.insert_hash_with_keys (rapidsai/cudf#21692).
-            seen_key_sets.add(
-                frozenset(
-                    child.name
-                    for child in node.children[: node.by_count]
-                    if isinstance(child, Col)
-                )
-            )
+            if not all(isinstance(c, Col) for c in by_children):
+                return None
+            seen_key_sets.add(frozenset(c.name for c in by_children))  # type: ignore[union-attr]
     if not seen_key_sets:
         return ()
     if len(seen_key_sets) > 1:
@@ -211,10 +209,8 @@ def _all_over_scalar_and_top_level(exprs: Sequence[Expr]) -> bool:
                 return False
             if not all(isinstance(c, Col) for c in e.children[: e.by_count]):
                 return False
-        else:
-            for node in traversal([e]):
-                if isinstance(node, GroupedWindow):
-                    return False
+        elif any(isinstance(node, GroupedWindow) for node in traversal(e.children)):
+            return False
     return True
 
 

@@ -118,6 +118,32 @@ def test_over_with_columns(engine):
 
 
 @pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over(pl.col("g") % 2),
+        pl.col("x").sum().over("g", pl.col("x") % 2),
+    ],
+    ids=["noncol_key", "mixed_col_and_expr_key"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 2}}],
+    indirect=True,
+)
+def test_over_noncol_key_fallback(engine, expr) -> None:
+    # Non-Col and mixed Col/expr partition-by keys are not yet supported for
+    # multi-partition streaming and should fall back to single-partition.
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    with pytest.warns(UserWarning, match=r"not supported for multiple partitions"):
+        assert_gpu_result_equal(df.select(expr), engine=engine)
+
+
+@pytest.mark.parametrize(
     "engine",
     [{"executor_options": {"max_rows_per_partition": 2}}],
     indirect=True,
@@ -137,6 +163,57 @@ def test_over_mixed_keys_fallback(engine) -> None:
     )
     with pytest.warns(UserWarning, match=r"not supported for multiple partitions"):
         assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.len().over("g"),
+        pl.col("x").rank(method="dense").over("g"),
+        pl.col("x").cum_sum().over("g", order_by="s"),
+    ],
+    ids=["scalar_sum", "scalar_len", "nonscalar_rank", "nonscalar_cum_sum"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 1}}],
+    indirect=True,
+)
+def test_over_many_partitions(engine, expr) -> None:
+    # max_rows_per_partition=1 forces one chunk per row, exercising the AllGather
+    # (scalar broadcast) and sort-and-split (non-scalar) paths across many partitions.
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+            "s": [6, 5, 4, 3, 2, 1],
+        }
+    )
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.col("x").rank(method="dense").over("g"),
+    ],
+    ids=["scalar_sum", "nonscalar_rank"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 2}}],
+    indirect=True,
+)
+def test_over_empty_input(engine, expr) -> None:
+    df = pl.LazyFrame(
+        {
+            "g": pl.Series([], dtype=pl.Int64),
+            "x": pl.Series([], dtype=pl.Int64),
+        }
+    )
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
 
 
 @pytest.mark.parametrize(

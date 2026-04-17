@@ -482,7 +482,7 @@ def _(
             indices = _extract_over_shuffle_indices(
                 [ne.value for ne in ir.columns], ir.children[0].schema
             )
-            if indices is not None and len(indices) > 0:
+            if indices:
                 child, partition_info = rec(ir.children[0])
                 new_node = ir.reconstruct([child])
                 partition_info[new_node] = partition_info[child]
