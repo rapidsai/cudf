@@ -104,6 +104,13 @@ repos:
         entry: 'rmm::exec_policy\('
         language: pygrep
         types_or: [c, c++, cuda]
+      - id: exec-policy-nosync-memory-resource
+        name: exec-policy-nosync-memory-resource
+        description: 'Enforce that rmm::exec_policy_nosync is always passed a memory resource as its second argument'
+        entry: 'rmm::exec_policy_nosync\([^,)]+\)'
+        language: pygrep
+        types_or: [c, c++, cuda]
+        files: '^cpp/(src|include)/'
       - id: use-cudf-memcpy-async
         name: use-cudf-memcpy-async
         description: 'Enforce that cudf::detail::memcpy_async or memcpy_batch_async is used instead of cudaMemcpyAsync (see developer guide)'
