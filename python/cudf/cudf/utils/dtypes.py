@@ -527,6 +527,19 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     If no such dtype exists, return the default dtype.
     """
     if isinstance(source_dtype, pd.ArrowDtype):
+        # Preserve the source Arrow string variant (string vs large_string)
+        # when the target is a string-like dtype.
+        if pa.types.is_string(
+            source_dtype.pyarrow_dtype
+        ) or pa.types.is_large_string(source_dtype.pyarrow_dtype):
+            if isinstance(target_dtype, pd.StringDtype) or (
+                isinstance(target_dtype, pd.ArrowDtype)
+                and (
+                    pa.types.is_string(target_dtype.pyarrow_dtype)
+                    or pa.types.is_large_string(target_dtype.pyarrow_dtype)
+                )
+            ):
+                return source_dtype
         return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
         if (

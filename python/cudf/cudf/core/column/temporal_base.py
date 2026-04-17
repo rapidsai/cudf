@@ -215,7 +215,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
     def element_indexing(self, index: int) -> ScalarLike:
         result = super().element_indexing(index)
         if isinstance(result, (datetime.datetime, datetime.timedelta)):
-            return self._PD_SCALAR(result)
+            return self._PD_SCALAR(result).as_unit(self.time_unit)
         return result
 
     def to_pandas(
