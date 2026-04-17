@@ -189,9 +189,12 @@ hash_join<Hasher>::join_retrieve(cudf::table_view const& probe,
                                                                 mr);
 
   if constexpr (Join == join_kind::FULL_JOIN) {
-    auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, probe.num_rows(), _build.num_rows(), stream, mr);
-    return detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+    std::vector<cudf::device_span<size_type const>> const left_partials{
+      cudf::device_span<size_type const>{join_indices.first->data(), join_indices.first->size()}};
+    std::vector<cudf::device_span<size_type const>> const right_partials{
+      cudf::device_span<size_type const>{join_indices.second->data(), join_indices.second->size()}};
+    return detail::finalize_full_join(
+      left_partials, right_partials, probe.num_rows(), _build.num_rows(), stream, mr);
   } else {
     return join_indices;
   }

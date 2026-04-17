@@ -609,7 +609,7 @@ add_library(
   src/join/hash_join/partitioned_inner_join.cu
   src/join/hash_join/partitioned_join_retrieve.cu
   src/join/hash_join/partitioned_left_join.cu
-  src/join/hash_join/full_join_finalize.cu
+  src/join/hash_join/full_join_finalize.cpp
   src/join/mark_join.cu
   src/join/filter_join_indices_jit.cu
   src/join/join.cu

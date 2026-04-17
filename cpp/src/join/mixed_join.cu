@@ -34,6 +34,7 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -522,9 +523,12 @@ mixed_join(
   // For full joins, get the indices in the right table that were not joined to
   // by any row in the left table.
   if (join_type == join_kind::FULL_JOIN) {
-    auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, left_num_rows, right_num_rows, stream, mr);
-    join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+    std::vector<cudf::device_span<size_type const>> const left_partials{
+      cudf::device_span<size_type const>{join_indices.first->data(), join_indices.first->size()}};
+    std::vector<cudf::device_span<size_type const>> const right_partials{
+      cudf::device_span<size_type const>{join_indices.second->data(), join_indices.second->size()}};
+    join_indices = detail::finalize_full_join(
+      left_partials, right_partials, left_num_rows, right_num_rows, stream, mr);
   }
   return join_indices;
 }
