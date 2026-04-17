@@ -350,7 +350,8 @@ def _slice_and_accumulate_sync(
     br: Any,
     accumulated: list[list[TableChunk]],
 ) -> None:
-    """Slice *sorted_df* into per-boundary sub-chunks and append to *accumulated*.
+    """
+    Slice *sorted_df* into per-boundary sub-chunks and append to *accumulated*.
 
     Uses ``lower_bound`` to find all split positions in one GPU call, then
     ``plc.copying.split`` for zero-copy views.  Each non-empty sub-view is
@@ -431,7 +432,8 @@ def _concat_sort_boundary_sync(
     ir_context: IRExecutionContext,
     br: Any,
 ) -> TableChunk:
-    """Concatenate and sort *sub_chunks* for one boundary, stripping the row_idx column.
+    """
+    Concatenate and sort *sub_chunks* for one boundary, stripping the row_idx column.
 
     Parameters
     ----------
@@ -453,7 +455,9 @@ def _concat_sort_boundary_sync(
         return TableChunk.from_pylibcudf_table(
             plc.Table(
                 [
-                    plc.column_factories.make_empty_column(col_types[i].plc_type, stream=stream)
+                    plc.column_factories.make_empty_column(
+                        col_types[i].plc_type, stream=stream
+                    )
                     for i in keep_col_indices
                 ]
             ),
@@ -466,7 +470,9 @@ def _concat_sort_boundary_sync(
         DataFrame.from_table(chunk.table_view(), col_names, col_types, chunk.stream)
         for chunk in sub_chunks
     ]
-    merged_df = _concat(*sub_dfs, context=ir_context) if len(sub_dfs) > 1 else sub_dfs[0]
+    merged_df = (
+        _concat(*sub_dfs, context=ir_context) if len(sub_dfs) > 1 else sub_dfs[0]
+    )
     merged = merged_df.table
     stream = merged_df.stream
 
@@ -482,7 +488,9 @@ def _concat_sort_boundary_sync(
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         stream=stream,
     )
-    return TableChunk.from_pylibcudf_table(sorted_tbl, stream, exclusive_view=True, br=br)
+    return TableChunk.from_pylibcudf_table(
+        sorted_tbl, stream, exclusive_view=True, br=br
+    )
 
 
 @define_actor()
@@ -597,8 +605,8 @@ async def over_actor(
             # all ranks' partial results; select_ir is applied only once after.
             if comm.nranks > 1 and not metadata_in.duplicated:
                 allgather = AllGatherManager(context, comm, collective_id)
-                allgather.insert(0, local_agg)
-                allgather.insert_finished()
+                with allgather.inserting() as inserter:
+                    inserter.insert(0, local_agg)
                 stream = ir_context.get_cuda_stream()
                 concat_chunk = TableChunk.from_pylibcudf_table(
                     await allgather.extract_concatenated(stream),
@@ -664,7 +672,9 @@ async def over_actor(
                 ).make_available_and_spill(context.br(), allow_overbooking=True)
                 stream = ir_context.get_cuda_stream()
                 n_rows = chunk.table_view().num_rows()
-                boundaries.append((msg.sequence_number, row_counter, row_counter + n_rows))
+                boundaries.append(
+                    (msg.sequence_number, row_counter, row_counter + n_rows)
+                )
                 chunk = await asyncio.to_thread(
                     _add_row_idx_sync, chunk, row_counter, stream, context.br()
                 )
@@ -714,7 +724,10 @@ async def over_actor(
                 col_names = [c.name for c in result_df.columns]
                 col_types = [c.dtype for c in result_df.columns]
                 idx_col_idx = col_names.index(row_idx_col)
-                keep_col_indices = [i for i, n in enumerate(col_names) if n != row_idx_col]
+                keep_col_indices = [
+                    i for i, n in enumerate(col_names) if n != row_idx_col
+                ]
+            assert col_types is not None
             sorted_df = await asyncio.to_thread(
                 _sort_df_by_row_idx_sync,
                 result_df,
@@ -749,7 +762,9 @@ async def over_actor(
                 # Bring sub-chunks to device if spilled (async wait).
                 available: list[TableChunk] = []
                 for chunk in accumulated[k]:
-                    avail = await chunk.make_available_or_wait(context, net_memory_delta=0)
+                    avail = await chunk.make_available_or_wait(
+                        context, net_memory_delta=0
+                    )
                     available.append(avail)
                 accumulated[k] = []  # drop refs to now-consumed originals
 

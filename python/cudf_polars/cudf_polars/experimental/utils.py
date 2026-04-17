@@ -172,7 +172,7 @@ def _extract_over_shuffle_indices(
             # ShuffleManager.insert_hash_with_keys (rapidsai/cudf#21692).
             if not all(isinstance(c, Col) for c in by_children):
                 return None
-            seen_key_sets.add(frozenset(c.name for c in by_children))  # type: ignore[union-attr]
+            seen_key_sets.add(frozenset(c.name for c in by_children))  # type: ignore[attr-defined]
     if not seen_key_sets:
         return ()
     if len(seen_key_sets) > 1:
