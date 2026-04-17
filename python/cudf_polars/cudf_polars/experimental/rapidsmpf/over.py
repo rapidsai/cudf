@@ -665,6 +665,7 @@ async def over_actor(
         row_idx_col = next(unique_names(ir.children[0].schema.keys()))
         boundaries: list[tuple[int, int, int]] = []
 
+        # Phase 1: stamp each row with its absolute position and insert into the shuffle
         async with shuffle.inserting() as inserter:
             while (msg := await ch_in.recv(context)) is not None:
                 chunk = TableChunk.from_message(
@@ -687,12 +688,14 @@ async def over_actor(
 
         # Three-phase sort-and-split.
         #
-        # Phase 1 (per partition): evaluate, sort by row_idx, then immediately
-        #   slice into per-boundary sub-chunks and materialise each as an
-        #   independent TableChunk registered with br.  The sorted partition is
-        #   freed as soon as its sub-chunks are accumulated, so the SpillManager
-        #   can evict earlier sub-chunks to host if memory is tight.
-        # Phase 2 (per boundary): bring sub-chunks back to device if spilled
+        # Phase 1 (insert): stamp each row with its absolute position and insert
+        #   into the shuffle (see the inserting() block above).
+        # Phase 2 (per partition): extract, evaluate, sort by row_idx, then
+        #   immediately slice into per-boundary sub-chunks and materialise each
+        #   as an independent TableChunk registered with br.  The sorted
+        #   partition is freed as soon as its sub-chunks are accumulated, so the
+        #   SpillManager can evict earlier sub-chunks to host if memory is tight.
+        # Phase 3 (per boundary): bring sub-chunks back to device if spilled
         #   (make_available_or_wait), concat + sort + output.
         #
         # This keeps total working memory proportional to one boundary's output
@@ -704,7 +707,7 @@ async def over_actor(
         split_values: list[int] = [start for _, start, _ in boundaries[1:]]
         accumulated: list[list[TableChunk]] = [[] for _ in boundaries]
 
-        # Phase 1
+        # Phase 2
         for partition_id in shuffle.local_partitions():
             stream = ir_context.get_cuda_stream()
             partition_chunk = TableChunk.from_pylibcudf_table(
@@ -748,11 +751,11 @@ async def over_actor(
             )
             del sorted_df  # Free; sub-views are in accumulated as spill-eligible chunks
 
-        # Sync pool streams so memory freed during Phase 1 is available
+        # Sync pool streams so memory freed during Phase 2 is available
         for _ in range(context.stream_pool_size()):
             context.get_stream_from_pool().synchronize()
 
-        # Phase 2: per-boundary output
+        # Phase 3: per-boundary output
         # TODO: if all input rows were shuffled to other ranks, accumulated is
         # all-empty while boundaries is non-empty (seq-num gap).  Revisit once
         # rapidsmpf empty-partition handling is clearer.

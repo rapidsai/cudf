@@ -217,6 +217,33 @@ def test_over_empty_input(engine, expr) -> None:
 
 
 @pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.col("x").rank(method="dense").over("g"),
+    ],
+    ids=["scalar_sum", "nonscalar_rank"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": -1}}],
+    indirect=True,
+)
+def test_over_already_partitioned(engine, expr) -> None:
+    # broadcast_join_limit=-1 makes the broadcast threshold negative, disabling
+    # broadcast joins entirely. Therefore, we should already be shuffled on "g"
+    # after then join. The over("g") actor should detect this and evaluate chunkwise
+    # without a second shuffle.
+    left = pl.LazyFrame({"g": [1, 1, 2, 2, 2, 1], "x": [1, 2, 3, 4, 5, 6]})
+    right = pl.LazyFrame({"g": [1, 2], "y": [10, 20]})
+    assert_gpu_result_equal(
+        left.join(right, on="g").with_columns(expr),
+        engine=engine,
+        check_row_order=False,
+    )
+
+
+@pytest.mark.parametrize(
     "engine",
     [{"executor_options": {"max_rows_per_partition": 1}}],
     indirect=True,
