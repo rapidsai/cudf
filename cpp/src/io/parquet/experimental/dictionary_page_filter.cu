@@ -8,6 +8,7 @@
 #include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/utilities/block_utils.cuh"
+#include "io/utilities/time_utils.hpp"
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -83,9 +84,9 @@ using hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<T>;
 
 /// cuco::static_set_ref storage type
 using storage_type     = cuco::bucket_storage<slot_type,
-                                              BUCKET_SIZE,
-                                              cuco::extent<std::size_t>,
-                                              rmm::mr::polymorphic_allocator<char>>;
+                                          BUCKET_SIZE,
+                                          cuco::extent<std::size_t>,
+                                          rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -186,36 +187,6 @@ __device__ __forceinline__ bool is_error_set(kernel_error::pointer error)
 {
   return cuda::atomic_ref<kernel_error::value_type, cuda::thread_scope_block>{*error}.load(
            cuda::std::memory_order_relaxed) != 0;
-}
-
-/**
- * @brief Helper function to calculate the timestamp scale
- *
- * @param logical_type Logical type of the column
- * @param clock_rate Clock rate of the column
- * @return Timestamp scale
- */
-__device__ __forceinline__ int32_t calc_timestamp_scale(LogicalType const& logical_type,
-                                                        int32_t clock_rate)
-{
-  // Note: This function has been extracted from the snippet at:
-  // https://github.com/rapidsai/cudf/blob/c89c83c00c729a86c56570693b627f31408bc2c9/cpp/src/io/parquet/page_decode.cuh#L1219-L1236
-
-  // Adjust for timestamps
-  auto units = 0;
-  if (logical_type.is_timestamp_millis()) {
-    units = cudf::timestamp_ms::period::den;
-  } else if (logical_type.is_timestamp_micros()) {
-    units = cudf::timestamp_us::period::den;
-  } else if (logical_type.is_timestamp_nanos()) {
-    units = cudf::timestamp_ns::period::den;
-  }
-
-  if (units and units != clock_rate) {
-    return (clock_rate < units) ? -(units / clock_rate) : (clock_rate / units);
-  }
-
-  return 0;
 }
 
 /**

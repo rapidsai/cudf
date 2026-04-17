@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "io/utilities/time_utils.hpp"
+
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -39,58 +41,6 @@ constexpr size_t initial_chars_capacity = 1024;
  */
 class stats_caster_base {
  public:
-  /**
-   * @brief Returns the clock rate for a given timestamp type_id, or 0 if not a timestamp.
-   *
-   * Host-side equivalent of cudf::io::to_clockrate (in time_utils.cuh), which cannot be
-   * included here because time_utils.cuh contains __device__ __constant__ data.
-   */
-  static inline int32_t timestamp_clock_rate(cudf::type_id id)
-  {
-    switch (id) {
-      case cudf::type_id::TIMESTAMP_SECONDS: return 1;
-      case cudf::type_id::TIMESTAMP_MILLISECONDS: return cudf::timestamp_ms::period::den;
-      case cudf::type_id::TIMESTAMP_MICROSECONDS: return cudf::timestamp_us::period::den;
-      case cudf::type_id::TIMESTAMP_NANOSECONDS: return cudf::timestamp_ns::period::den;
-      default: return 0;
-    }
-  }
-
-  /**
-   * @brief Computes timestamp scaling factor between Parquet native precision and output precision.
-   *
-   * Host-side equivalent of the __device__ calc_timestamp_scale (dictionary_page_filter.cu)
-   * and the inline snippet in page_decode.cuh lines 1189-1204.
-   *
-   * @param logical_type The Parquet logical type of the column
-   * @param physical_type The Parquet physical type of the column
-   * @param output_clock_rate The clock rate of the output timestamp type (e.g. 1000 for ms)
-   * @return Scale factor: <0 means divide by -scale, >0 means multiply by scale, 0 means no-op
-   */
-  static inline int32_t compute_ts_scale(cuda::std::optional<LogicalType> const& logical_type,
-                                          Type physical_type,
-                                          int32_t output_clock_rate)
-  {
-    if (physical_type == Type::INT96 || !logical_type.has_value() ||
-        logical_type->type != LogicalType::TIMESTAMP || output_clock_rate == 0) {
-      return 0;
-    }
-    int32_t native_units = 0;
-    auto const& lt       = *logical_type;
-    if (lt.is_timestamp_millis()) {
-      native_units = cudf::timestamp_ms::period::den;
-    } else if (lt.is_timestamp_micros()) {
-      native_units = cudf::timestamp_us::period::den;
-    } else if (lt.is_timestamp_nanos()) {
-      native_units = cudf::timestamp_ns::period::den;
-    }
-    if (native_units != 0 && native_units != output_clock_rate) {
-      return (output_clock_rate < native_units) ? -(native_units / output_clock_rate)
-                                                : (output_clock_rate / native_units);
-    }
-    return 0;
-  }
-
  protected:
   static inline numeric::decimal128::rep decode_flba_decimal128(uint8_t const* stats_val)
   {
@@ -153,7 +103,7 @@ class stats_caster_base {
    * Host-side equivalent of the __device__ rounding logic in page_data.cuh lines 226-233.
    *
    * @param raw_value The raw decoded integer from Parquet stats
-   * @param ts_scale Scale factor from compute_ts_scale()
+   * @param ts_scale Scale factor from calc_timestamp_scale()
    * @return Scaled value
    */
   static inline int64_t apply_ts_scale(int64_t raw_value, int32_t ts_scale)

@@ -316,8 +316,9 @@ struct page_stats_caster : public stats_caster_base {
     int32_t ts_scale = 0;
     if constexpr (cudf::is_timestamp<T>()) {
       auto const& schema = per_file_metadata[0].schema[schema_idx];
-      ts_scale           = stats_caster_base::compute_ts_scale(
-        schema.logical_type, schema.type, static_cast<int32_t>(T::period::den));
+      if (schema.logical_type.has_value()) {
+        ts_scale = calc_timestamp_scale(*schema.logical_type, static_cast<int32_t>(T::period::den));
+      }
     }
 
     // Populate the host columns with page-level min, max statistics from the page index

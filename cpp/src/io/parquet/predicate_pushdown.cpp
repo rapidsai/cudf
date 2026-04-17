@@ -59,8 +59,10 @@ struct row_group_stats_caster : public stats_caster_base {
       int32_t ts_scale = 0;
       if constexpr (cudf::is_timestamp<T>()) {
         auto const& schema = per_file_metadata[0].schema[schema_idx];
-        ts_scale           = stats_caster_base::compute_ts_scale(
-          schema.logical_type, schema.type, static_cast<int32_t>(T::period::den));
+        if (schema.logical_type.has_value()) {
+          ts_scale =
+            calc_timestamp_scale(*schema.logical_type, static_cast<int32_t>(T::period::den));
+        }
       }
 
       host_column<T> min(total_row_groups, stream);
@@ -245,10 +247,11 @@ aggregate_reader_metadata::filter_row_groups(
   // never match.
   for (size_t col_idx = 0; col_idx < output_dtypes.size(); ++col_idx) {
     if (cudf::is_timestamp(output_dtypes[col_idx]) && !equality_literals[col_idx].empty()) {
-      auto const schema_idx     = output_column_schemas[col_idx];
-      auto const& schema        = per_file_metadata[0].schema[schema_idx];
-      auto const output_clk     = stats_caster_base::timestamp_clock_rate(output_dtypes[col_idx].id());
-      if (stats_caster_base::compute_ts_scale(schema.logical_type, schema.type, output_clk) != 0) {
+      auto const schema_idx = output_column_schemas[col_idx];
+      auto const& schema    = per_file_metadata[0].schema[schema_idx];
+      auto const output_clk = cudf::io::to_clockrate(output_dtypes[col_idx].id());
+      if (schema.logical_type.has_value() &&
+          calc_timestamp_scale(*schema.logical_type, output_clk) != 0) {
         equality_literals[col_idx].clear();
       }
     }
