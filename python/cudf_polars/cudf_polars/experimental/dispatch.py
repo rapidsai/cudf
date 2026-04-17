@@ -71,7 +71,23 @@ def lower_ir_node(
     --------
     lower_ir_graph
     """
-    raise AssertionError(f"Unhandled type {type(ir)}")  # pragma: no cover
+    # This should never happen, but we're seeing it in CI somehow.
+    # Let's include some hacky debug information to help use debug it.
+    import json
+
+    ir_type = type(ir)
+    ir_id = id(ir)
+    ir_name = ir_type.__name__
+
+    data = {
+        "qualname": ir_type.__qualname__,
+        "ir_id": ir_id,
+        "ir_type_id": id(ir_type),
+        "ir_name": ir_name,
+        "registry": str(lower_ir_node.registry),
+    }
+
+    raise AssertionError(json.dumps(data, indent=4))  # pragma: no cover
 
 
 @singledispatch
