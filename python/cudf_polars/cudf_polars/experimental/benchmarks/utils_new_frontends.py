@@ -1325,8 +1325,6 @@ def _consolidate_logs(
         logger = logging.getLogger()
         return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
 
-    # worker logs + client logs.
-    # all_logs = "\n".join(engine._run(gather_logs))
     all_logs = "\n".join(engine._run(gather_logs))
     if gather_client_logs:
         all_logs += "\n" + gather_logs()
