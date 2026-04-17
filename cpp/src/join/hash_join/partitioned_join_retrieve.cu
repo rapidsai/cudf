@@ -19,7 +19,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
-#include <cuda/std/functional>
 #include <cuda/std/tuple>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
@@ -124,10 +123,11 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
                        .rebind_hash_function(_impl->_hash_table.hash_function());
 
     if (is_outer) {
-      join_indices = launch_retrieve<true>(probe_keys.data(), n, partition_counts, ref, stream, mr);
+      join_indices = launch_retrieve<true>(
+        probe_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
     } else {
-      join_indices =
-        launch_retrieve<false>(probe_keys.data(), n, partition_counts, ref, stream, mr);
+      join_indices = launch_retrieve<false>(
+        probe_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
     }
   };
 
@@ -138,18 +138,6 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
                            _has_nulls,
                            _nulls_equal,
                            retrieve_partition);
-
-  auto& [left_indices, right_indices] = join_indices;
-
-  // Offset left indices to be relative to the original complete probe table
-  if (left_start_idx > 0 && left_indices->size() > 0) {
-    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                      left_indices->begin(),
-                      left_indices->end(),
-                      cuda::make_constant_iterator(left_start_idx),
-                      left_indices->begin(),
-                      cuda::std::plus<size_type>{});
-  }
 
   return join_indices;
 }
