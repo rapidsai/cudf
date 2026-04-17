@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::orc::detail {
@@ -325,6 +326,7 @@ class protobuf_reader {
   void read_field(T& value, uint8_t const* end)
     requires(std::is_floating_point_v<T>)
   {
+    CUDF_EXPECTS(std::cmp_less_equal(sizeof(T), end - m_cur), "Protobuf parsing out of bounds");
     memcpy(&value, m_cur, sizeof(T));
     m_cur += sizeof(T);
   }
