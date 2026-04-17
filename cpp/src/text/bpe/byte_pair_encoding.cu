@@ -369,16 +369,23 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     auto const mp_map = get_bpe_merge_pairs_impl(merge_pairs)->get_mp_table_ref();  // lookup table
     auto const d_chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
     auto up_fn = bpe_unpairable_offsets_fn<decltype(mp_map)>{d_chars_span, first_offset, mp_map};
-    thrust::transform(rmm::exec_policy_nosync(stream), chars_begin, chars_end, d_up_offsets, up_fn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      chars_begin,
+                      chars_end,
+                      d_up_offsets,
+                      up_fn);
     auto const up_end =  // remove all but the unpairable offsets
-      thrust::remove(rmm::exec_policy_nosync(stream), d_up_offsets, d_up_offsets + chars_size, 0L);
+      thrust::remove(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     d_up_offsets,
+                     d_up_offsets + chars_size,
+                     0L);
     auto const unpairables = cuda::std::distance(d_up_offsets, up_end);  // number of unpairables
 
     // new string boundaries created by combining unpairable offsets with the existing offsets
     auto tmp_offsets = rmm::device_uvector<int64_t>(unpairables + input.size() + 1, stream);
     auto input_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   input_offsets,
                   input_offsets + input.size() + 1,
                   d_up_offsets,
@@ -386,7 +393,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                   tmp_offsets.begin());
     // remove any adjacent duplicate offsets (i.e. empty or null rows)
     auto const offsets_end =
-      thrust::unique(rmm::exec_policy_nosync(stream), tmp_offsets.begin(), tmp_offsets.end());
+      thrust::unique(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     tmp_offsets.begin(),
+                     tmp_offsets.end());
     auto const offsets_total =
       static_cast<cudf::size_type>(cuda::std::distance(tmp_offsets.begin(), offsets_end));
     tmp_offsets.resize(offsets_total, stream);
@@ -428,7 +437,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 
   // this will insert the single-byte separator into positions specified in d_inserts
   auto const sep_char = cuda::constant_iterator<char>(separator.to_string(stream)[0]);
-  thrust::merge_by_key(rmm::exec_policy_nosync(stream),
+  thrust::merge_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        d_inserts,      // where to insert separator byte
                        copy_end,       //
                        chars_begin,    // all indices

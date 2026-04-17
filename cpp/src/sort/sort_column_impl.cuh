@@ -137,8 +137,11 @@ struct column_sorted_order_fn {
     auto itr = cudf::detail::indexalator_factory::make_input_iterator(
       dictionary_column_view(input).indices());
     auto mapped_indices = rmm::device_uvector<size_type>(input.size(), stream);
-    thrust::gather(
-      rmm::exec_policy_nosync(stream), itr, itr + input.size(), map, mapped_indices.begin());
+    thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   itr,
+                   itr + input.size(),
+                   map,
+                   mapped_indices.begin());
 
     // Finally, sort-order the dictionary indices using mapped values
     auto mapped_view = column_view(data_type{type_to_id<size_type>()},

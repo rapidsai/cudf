@@ -86,7 +86,7 @@ struct sort_radix_fn {
     auto pair_out = rmm::device_uvector<float_pair<T>>(input.size(), stream);
     auto d_out    = pair_out.begin();
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{input.size()},
                       d_in,
@@ -111,7 +111,7 @@ struct sort_radix_fn {
       cub::DeviceRadixSort::SortKeysDescending(
         tmp_stg.data(), tmp_bytes, d_in, d_out, n, decomposer, 0, end_bit, sv);
     }
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       d_out,
                       d_out + input.size(),
                       output.begin<T>(),
