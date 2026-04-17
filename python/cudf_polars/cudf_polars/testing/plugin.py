@@ -264,7 +264,7 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 # Generally skip for:
-# 1) Tests that are too slow with --blocksize-mode small due to many small paritions for large data
+# 1) Tests that are too slow with --blocksize-mode small due to many small partitions for large data
 # 2) Tests that fail during cudf_polars execution and segfaults later due to https://github.com/rapidsai/cudf/issues/22138
 RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --blocksize-mode small",
