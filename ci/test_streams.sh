@@ -32,4 +32,4 @@ rapids-print-env
 
 rapids-logger "Run C++ tests"
 
-ctest --test-dir "$STREAM_TESTS/bin/gtests/libcudf" --output-on-failure
+ctest --test-dir "${STREAM_TESTS}/bin/gtests/libcudf" --output-on-failure
