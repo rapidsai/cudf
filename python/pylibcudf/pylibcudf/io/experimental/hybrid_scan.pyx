@@ -838,7 +838,7 @@ cdef class HybridScanReader:
         row_group_indices : list[int]
             Input row group indices
         pass_read_limit : int
-        Limit on the amount of memory used for reading and decompressing data
+            Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
 
         Returns
