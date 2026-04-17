@@ -581,7 +581,7 @@ def test_orc_read_footer_underflow(datadir):
         cudf.read_orc(path)
 
 
-def test_orc_read_small_file_lying_ps_length():
+def test_orc_read_incorrect_ps_length():
     # File is only 10 bytes, but the last byte claims a 255-byte PostScript.
     # Bounds check should catch this and raise an OverflowError.
     buf = BytesIO(b"\x00" * 9 + b"\xff")
