@@ -435,6 +435,63 @@ async def _ensure_successor_prefetched(
     await _recv_one_into_prefetch(context, ch_in, state)
 
 
+async def _ensure_right_halo_prefetched(
+    context: Context,
+    ch_in: Channel[TableChunk],
+    state: _RollingActState,
+    cur_msg: Message,
+    br: Any,
+    *,
+    is_int_index: bool,
+    index_col_idx: int,
+    index_dtype: plc.DataType,
+    lookahead: int,
+) -> bool:
+    """Extend prefetch until the right halo for ``cur_msg`` is covered. Returns False if empty."""
+    if is_int_index:
+        cur_bounds = _chunk_index_int_bounds_from_msg(
+            _message_peek_copy(cur_msg, br),
+            br,
+            index_col_idx=index_col_idx,
+            index_dtype=index_dtype,
+        )
+        if cur_bounds is None:
+            return False
+        await _extend_prefetch_for_int_lookahead(
+            context,
+            ch_in,
+            state,
+            chunk_mx=cur_bounds[1],
+            lookahead=lookahead,
+            index_col_idx=index_col_idx,
+            index_dtype=index_dtype,
+        )
+    else:
+        cur_peek_chunk = TableChunk.from_message(_message_peek_copy(cur_msg, br), br)
+        cur_peek_chunk = cur_peek_chunk.make_available_and_spill(
+            br, allow_overbooking=True
+        )
+        peek_table = cur_peek_chunk.table_view()
+        if peek_table.num_rows() == 0:
+            return False
+        peek_stream = cur_peek_chunk.stream
+        peek_idx = _get_idx_col(peek_table, index_col_idx, index_dtype, peek_stream)
+        _, chunk_mx_s = _minmax_scalars(
+            peek_idx, index_dtype, peek_stream, assume_sorted=True
+        )
+        await _extend_prefetch_for_ts_lookahead(
+            context,
+            ch_in,
+            state,
+            chunk_mx_s=chunk_mx_s,
+            lookahead=lookahead,
+            index_dtype=index_dtype,
+            index_col_idx=index_col_idx,
+            cur_stream=peek_stream,
+        )
+    return True
+
+
 def _prepare_expanded_rolling_frame(
     state: _RollingActState,
     *,
@@ -810,14 +867,10 @@ async def prepare_chunks(
     Metadata carries the center row range in the combined table; the data
     :class:`Message` keeps the upstream ``sequence_number`` for the center chunk.
     """
-    pending: tuple[_RollingStreamChunkMeta, Message] | None = None
     br = context.br()
     is_int_index = index_dtype.id() == plc.TypeId.INT64
     while True:
-        if pending is not None:
-            cur_meta, cur_msg = pending
-            pending = None
-        elif state.prefetch:
+        if state.prefetch:
             cur_meta, cur_msg = state.prefetch.popleft()
         else:
             if (cur_meta_msg := await ch_in.recv_metadata(context)) is None:
@@ -827,73 +880,27 @@ async def prepare_chunks(
             cur_msg = await ch_in.recv(context)
             assert cur_msg is not None, "Expected data message after metadata."
 
+        cur_seq = cur_msg.sequence_number
+
         if lookahead > 0:
-            if is_int_index:
-                cur_bounds = _chunk_index_int_bounds_from_msg(
-                    _message_peek_copy(cur_msg, br),
-                    br,
-                    index_col_idx=index_col_idx,
-                    index_dtype=index_dtype,
-                )
-                if cur_bounds is None:
-                    # Empty center: any prefetch was for the previous (skipped) center;
-                    # do not reuse it as the next center's right halo (stream order).
-                    state.prefetch.clear()
-                    pair = await _recv_stream_chunk_pair(context, ch_in)
-                    if pair is not None:
-                        pending = pair
-                    continue
-                _, chunk_mx = cur_bounds
-                await _extend_prefetch_for_int_lookahead(
-                    context,
-                    ch_in,
-                    state,
-                    chunk_mx=chunk_mx,
-                    lookahead=lookahead,
-                    index_col_idx=index_col_idx,
-                    index_dtype=index_dtype,
-                )
-            else:
-                cur_peek_msg = _message_peek_copy(cur_msg, br)
-                cur_peek_chunk = TableChunk.from_message(cur_peek_msg, br)
-                cur_peek_chunk = cur_peek_chunk.make_available_and_spill(
-                    br, allow_overbooking=True
-                )
-                peek_table = cur_peek_chunk.table_view()
-                if peek_table.num_rows() == 0:
-                    state.prefetch.clear()
-                    pair = await _recv_stream_chunk_pair(context, ch_in)
-                    if pair is not None:
-                        pending = pair
-                    continue
-                peek_stream = cur_peek_chunk.stream
-                peek_idx = _get_idx_col(
-                    peek_table, index_col_idx, index_dtype, peek_stream
-                )
-                _, chunk_mx_s = _minmax_scalars(
-                    peek_idx, index_dtype, peek_stream, assume_sorted=True
-                )
-                await _extend_prefetch_for_ts_lookahead(
-                    context,
-                    ch_in,
-                    state,
-                    chunk_mx_s=chunk_mx_s,
-                    lookahead=lookahead,
-                    index_dtype=index_dtype,
-                    index_col_idx=index_col_idx,
-                    cur_stream=peek_stream,
-                )
+            if not await _ensure_right_halo_prefetched(
+                context,
+                ch_in,
+                state,
+                cur_msg,
+                br,
+                is_int_index=is_int_index,
+                index_col_idx=index_col_idx,
+                index_dtype=index_dtype,
+                lookahead=lookahead,
+            ):
+                continue
         else:
             if _peek_n_rows_from_message(cur_msg, br) == 0:
-                pair = await _recv_stream_chunk_pair(context, ch_in)
-                if pair is not None:
-                    pending = pair
                 continue
             await _ensure_successor_prefetched(context, ch_in, state)
 
-        is_last_chunk = len(state.prefetch) == 0
-        # ``_prepare_expanded_rolling_frame`` consumes each next message via
-        # ``TableChunk.from_message``; keep originals in ``prefetch`` for later centers.
+        is_last_chunk = not state.prefetch
         next_msgs: Sequence[Message] | None = (
             tuple(_message_peek_copy(m, br) for _, m in state.prefetch)
             if lookahead > 0 and not is_last_chunk
@@ -915,11 +922,10 @@ async def prepare_chunks(
             base_dtypes=base_dtypes,
             is_local_rank_chunk=cur_meta.is_local_rank_chunk,
         )
-        if prep is None:
-            continue
-
+        assert prep is not None, (
+            "empty center must be skipped before _prepare_expanded_rolling_frame"
+        )
         combined_df, n_left, n_chunk_rows = prep
-        cur_seq = cur_msg.sequence_number
         expanded_meta = _RollingExpandedChunkMeta(
             center_begin=n_left,
             center_end=n_left + n_chunk_rows,
