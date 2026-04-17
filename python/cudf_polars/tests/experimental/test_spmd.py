@@ -291,8 +291,14 @@ def test_comm_and_context_unavailable_after_shutdown(spmd_comm: Communicator) ->
 #   _CROSS_RANK_KEYS[r] hashes to partition 1-r: data is fully shuffled away.
 # num_partitions=2 = max(nranks=2, local_count=1).  local_count=1 requires
 # max_rows_per_partition >= the number of rows per rank (3 here), so we use 4.
-_SAME_RANK_KEYS = [0, 3]   # g=0 hashes to partition 0 (rank 0); g=3 hashes to partition 1 (rank 1)
-_CROSS_RANK_KEYS = [3, 0]  # g=3 hashes to partition 1 (rank 1); g=0 hashes to partition 0 (rank 0)
+_SAME_RANK_KEYS = [
+    0,
+    3,
+]  # g=0 hashes to partition 0 (rank 0); g=3 hashes to partition 1 (rank 1)
+_CROSS_RANK_KEYS = [
+    3,
+    0,
+]  # g=3 hashes to partition 1 (rank 1); g=0 hashes to partition 0 (rank 0)
 
 
 @pytest.mark.parametrize(
@@ -312,8 +318,8 @@ def test_over_multirank(
     request: pytest.FixtureRequest,
     spmd_comm: Communicator,
     expr: pl.Expr,
-    is_scalar: bool,
-    cross_rank: bool,
+    is_scalar: bool,  # noqa: FBT001
+    cross_rank: bool,  # noqa: FBT001
 ) -> None:
     """over() correctness in multi-rank SPMD mode, same-rank and cross-rank cases.
 
@@ -332,9 +338,15 @@ def test_over_multirank(
         rank = engine.rank
         nranks = engine.nranks
         if nranks < 2:
-            request.applymarker(pytest.mark.skip(reason="multirank test requires at least 2 ranks"))
+            request.applymarker(
+                pytest.mark.skip(reason="multirank test requires at least 2 ranks")
+            )
         if nranks > 2:
-            request.applymarker(pytest.mark.skip(reason="key assignments only probed for exactly 2 ranks"))
+            request.applymarker(
+                pytest.mark.skip(
+                    reason="key assignments only probed for exactly 2 ranks"
+                )
+            )
         if cross_rank and not is_scalar:
             request.applymarker(
                 pytest.mark.xfail(
