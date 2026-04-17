@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -57,9 +57,7 @@ cpdef Column unary_operation(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.unary_operation(
-            input.view(), op, stream.view(), mr.get_mr()
-        )
+        result = cpp_unary.unary_operation(input.view(), op, stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(result), stream, mr)
 

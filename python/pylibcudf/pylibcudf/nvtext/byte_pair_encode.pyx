@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -37,9 +37,7 @@ cdef class BPEMergePairs:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(
-                cpp_load_merge_pairs(c_pairs, stream.view(), mr.get_mr())
-            )
+            self.c_obj = move(cpp_load_merge_pairs(c_pairs, stream.view(), mr.get_mr()))
 
     __hash__ = None
 

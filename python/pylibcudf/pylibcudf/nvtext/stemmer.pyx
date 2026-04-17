@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -96,9 +96,7 @@ cpdef Column porter_stemmer_measure(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_porter_stemmer_measure(
-            input.view(), stream.view(), mr.get_mr()
-        )
+        c_result = cpp_porter_stemmer_measure(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 

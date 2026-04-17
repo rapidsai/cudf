@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -743,9 +743,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(
-                    options.c_obj, s.view(), mr.get_mr()
-                ))
+                c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:

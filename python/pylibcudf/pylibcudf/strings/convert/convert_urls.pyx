@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -37,9 +37,7 @@ cpdef Column url_encode(Column input, Stream stream=None, DeviceMemoryResource m
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_urls.url_encode(
-            input.view(), stream.view(), mr.get_mr()
-        )
+        c_result = cpp_convert_urls.url_encode(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)
 
@@ -68,8 +66,6 @@ cpdef Column url_decode(Column input, Stream stream=None, DeviceMemoryResource m
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_urls.url_decode(
-            input.view(), stream.view(), mr.get_mr()
-        )
+        c_result = cpp_convert_urls.url_decode(input.view(), stream.view(), mr.get_mr())
 
     return Column.from_libcudf(move(c_result), stream, mr)

@@ -67,9 +67,7 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.nans_to_nulls(
-            input.view(), stream.view(), mr.get_mr()
-        )
+        c_result = cpp_transform.nans_to_nulls(input.view(), stream.view(), mr.get_mr())
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream, mr)),
@@ -212,9 +210,7 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.bools_to_mask(
-            input.view(), stream.view(), mr.get_mr()
-        )
+        c_result = cpp_transform.bools_to_mask(input.view(), stream.view(), mr.get_mr())
 
     return (
         gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream, mr)),

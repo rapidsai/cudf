@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -232,9 +232,7 @@ cdef class GroupBy:
         stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
         with nogil:
-            c_res = dereference(self.c_obj).scan(
-                c_requests, stream.view(), mr.get_mr()
-            )
+            c_res = dereference(self.c_obj).scan(c_requests, stream.view(), mr.get_mr())
         return GroupBy._parse_outputs(move(c_res), stream, mr)
 
     cpdef tuple shift(

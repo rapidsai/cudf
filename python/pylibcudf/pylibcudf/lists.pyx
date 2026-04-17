@@ -144,10 +144,7 @@ cpdef Column concatenate_rows(
 
     with nogil:
         c_result = cpp_concatenate_rows(
-            input.view(),
-            concatenate_null_policy.IGNORE,
-            stream.view(),
-            mr.get_mr(),
+            input.view(), concatenate_null_policy.IGNORE, stream.view(), mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), stream, mr)
@@ -354,9 +351,7 @@ cpdef Column reverse(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_reverse.reverse(
-            list_view.view(), stream.view(), mr.get_mr()
-        )
+        c_result = cpp_reverse.reverse(list_view.view(), stream.view(), mr.get_mr())
     return Column.from_libcudf(move(c_result), stream, mr)
 
 

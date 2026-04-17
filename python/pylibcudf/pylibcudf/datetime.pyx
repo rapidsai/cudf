@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -147,9 +147,7 @@ cpdef Column floor_datetimes(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_floor_datetimes(
-            input.view(), freq, stream.view(), mr.get_mr()
-        )
+        result = cpp_floor_datetimes(input.view(), freq, stream.view(), mr.get_mr())
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column round_datetimes(
@@ -183,9 +181,7 @@ cpdef Column round_datetimes(
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_round_datetimes(
-            input.view(), freq, stream.view(), mr.get_mr()
-        )
+        result = cpp_round_datetimes(input.view(), freq, stream.view(), mr.get_mr())
     return Column.from_libcudf(move(result), stream, mr)
 
 cpdef Column add_calendrical_months(

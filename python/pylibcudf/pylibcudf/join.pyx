@@ -94,11 +94,7 @@ cpdef tuple inner_join(
 
     with nogil:
         c_result = cpp_join.inner_join(
-            left_keys.view(),
-            right_keys.view(),
-            nulls_equal,
-            stream.view(),
-            mr.get_mr(),
+            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -139,11 +135,7 @@ cpdef tuple left_join(
 
     with nogil:
         c_result = cpp_join.left_join(
-            left_keys.view(),
-            right_keys.view(),
-            nulls_equal,
-            stream.view(),
-            mr.get_mr(),
+            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
@@ -184,11 +176,7 @@ cpdef tuple full_join(
 
     with nogil:
         c_result = cpp_join.full_join(
-            left_keys.view(),
-            right_keys.view(),
-            nulls_equal,
-            stream.view(),
-            mr.get_mr(),
+            left_keys.view(), right_keys.view(), nulls_equal, stream.view(), mr.get_mr()
         )
     return (
         _column_from_gather_map(move(c_result.first), stream, mr),
