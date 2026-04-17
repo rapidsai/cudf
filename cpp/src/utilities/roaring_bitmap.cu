@@ -23,6 +23,23 @@ using roaring_bitmap_32_type =
 using roaring_bitmap_64_type =
   cuco::experimental::roaring_bitmap<cuda::std::uint64_t, rmm::mr::polymorphic_allocator<char>>;
 
+/**
+ * @brief Dispatches a roaring_bitmap_impl function based on the roaring bitmap type
+ *
+ * @tparam Func Type of function to dispatch
+ * @param type Roaring bitmap type
+ * @param func Function to dispatch
+ * @return Result of the function dispatch
+ */
+template <typename Func>
+decltype(auto) dispatch_roaring_bitmap_type(roaring_bitmap_type type, Func&& func)
+{
+  if (type == roaring_bitmap_type::BITS_32) {
+    return std::forward<Func>(func).template operator()<roaring_bitmap_type::BITS_32>();
+  }
+  return std::forward<Func>(func).template operator()<roaring_bitmap_type::BITS_64>();
+}
+
 }  // namespace
 
 struct roaring_bitmap::roaring_bitmap_impl {
@@ -55,6 +72,39 @@ struct roaring_bitmap::roaring_bitmap_impl {
     }
 
     serialized_bitmap_data = {};
+  }
+
+  template <roaring_bitmap_type Type>
+  [[nodiscard]] bool empty() const
+    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
+  {
+    if constexpr (Type == roaring_bitmap_type::BITS_32) {
+      return bitmap32->empty();
+    } else {
+      return bitmap64->empty();
+    }
+  }
+
+  template <roaring_bitmap_type Type>
+  [[nodiscard]] cuda::std::size_t size() const
+    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
+  {
+    if constexpr (Type == roaring_bitmap_type::BITS_32) {
+      return bitmap32->size();
+    } else {
+      return bitmap64->size();
+    }
+  }
+
+  template <roaring_bitmap_type Type>
+  [[nodiscard]] cuda::std::size_t size_bytes() const
+    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
+  {
+    if constexpr (Type == roaring_bitmap_type::BITS_32) {
+      return bitmap32->size_bytes();
+    } else {
+      return bitmap64->size_bytes();
+    }
   }
 
   template <roaring_bitmap_type Type, typename InputIt, typename OutputIt>
@@ -94,11 +144,28 @@ roaring_bitmap& roaring_bitmap::operator=(roaring_bitmap&&) noexcept = default;
 
 void roaring_bitmap::materialize(rmm::cuda_stream_view stream) const
 {
-  if (_type == roaring_bitmap_type::BITS_32) {
-    _impl->materialize<roaring_bitmap_type::BITS_32>(stream);
-  } else {
-    _impl->materialize<roaring_bitmap_type::BITS_64>(stream);
-  }
+  dispatch_roaring_bitmap_type(
+    _type, [&]<roaring_bitmap_type Type>() { _impl->materialize<Type>(stream); });
+}
+
+roaring_bitmap_type roaring_bitmap::type() const { return _type; }
+
+bool roaring_bitmap::empty() const
+{
+  return dispatch_roaring_bitmap_type(
+    _type, [&]<roaring_bitmap_type Type>() { return _impl->empty<Type>(); });
+}
+
+cuda::std::size_t roaring_bitmap::size() const
+{
+  return dispatch_roaring_bitmap_type(
+    _type, [&]<roaring_bitmap_type Type>() { return _impl->size<Type>(); });
+}
+
+cuda::std::size_t roaring_bitmap::size_bytes() const
+{
+  return dispatch_roaring_bitmap_type(
+    _type, [&]<roaring_bitmap_type Type>() { return _impl->size_bytes<Type>(); });
 }
 
 std::unique_ptr<cudf::column> roaring_bitmap::contains_async(
@@ -139,7 +206,5 @@ void roaring_bitmap::contains_async(cudf::column_view const& keys,
                                                         stream);
   }
 }
-
-roaring_bitmap_type roaring_bitmap::type() const { return _type; }
 
 }  // namespace cudf

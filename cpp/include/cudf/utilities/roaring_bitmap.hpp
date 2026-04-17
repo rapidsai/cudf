@@ -95,9 +95,9 @@ class roaring_bitmap {
   roaring_bitmap& operator=(roaring_bitmap const&) = delete;
 
   /**
-   * @brief Materialize the underlying cuco roaring bitmap.
+   * @brief Materialize the underlying cuco roaring bitmap
    *
-   * The serialized bitmap data may be released after this.
+   * The serialized bitmap data span is cleared after this call.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
@@ -109,6 +109,27 @@ class roaring_bitmap {
    * @return Roaring bitmap type
    */
   [[nodiscard]] roaring_bitmap_type type() const;
+
+  /**
+   * @brief Checks whether the bitmap contains no keys
+   *
+   * @return Whether the roaring bitmap contains no keys
+   */
+  [[nodiscard]] bool empty() const;
+
+  /**
+   * @brief Returns the number of keys stored in the bitmap
+   *
+   * @return Number of keys stored in the bitmap
+   */
+  [[nodiscard]] cuda::std::size_t size() const;
+
+  /**
+   * @brief Returns the size of the serialized bitmap storage in bytes
+   *
+   * @return Size of the serialized bitmap storage in bytes
+   */
+  [[nodiscard]] cuda::std::size_t size_bytes() const;
 
   /**
    * @brief Asynchronously queries the bitmap for membership of each key in the input column.
