@@ -68,9 +68,10 @@ class stats_caster_base {
   }
 
   template <typename ToType, typename FromType>
-  static inline ToType target_type(FromType const value)
+  static inline ToType target_type(FromType value, int32_t ts_scale = 0)
   {
     if constexpr (cudf::is_timestamp<ToType>()) {
+      if (ts_scale != 0) { value = apply_ts_scale(value, ts_scale); }
       return static_cast<ToType>(
         typename ToType::duration{static_cast<typename ToType::rep>(value)});
     } else if constexpr (std::is_same_v<ToType, string_view>) {
@@ -85,7 +86,7 @@ class stats_caster_base {
   static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
     requires(cudf::is_dictionary<T>() or cudf::is_nested<T>())
   {
-    CUDF_FAIL("unsupported type for stats casting");
+    CUDF_FAIL("Unsupported type for stats casting");
   }
 
   template <typename T>
@@ -106,16 +107,12 @@ class stats_caster_base {
              cudf::is_chrono<T>())
   {
     switch (type) {
-      case Type::INT32: {
-        auto val = static_cast<int64_t>(decode_fixed_width_value<int32_t>(stats_val, stats_size));
-        if constexpr (cudf::is_chrono<T>()) { val = apply_ts_scale(val, ts_scale); }
-        return stats_caster_base::target_type<T>(val);
-      }
-      case Type::INT64: {
-        auto val = decode_fixed_width_value<int64_t>(stats_val, stats_size);
-        if constexpr (cudf::is_chrono<T>()) { val = apply_ts_scale(val, ts_scale); }
-        return stats_caster_base::target_type<T>(val);
-      }
+      case Type::INT32:
+        return stats_caster_base::target_type<T>(
+          decode_fixed_width_value<int32_t>(stats_val, stats_size), ts_scale);
+      case Type::INT64:
+        return stats_caster_base::target_type<T>(
+          decode_fixed_width_value<int64_t>(stats_val, stats_size), ts_scale);
       case Type::INT96:  // Deprecated in parquet specification
         return stats_caster_base::target_type<T>(
           static_cast<__int128_t>(decode_fixed_width_value<int64_t>(stats_val, stats_size)) << 32 |
@@ -124,10 +121,8 @@ class stats_caster_base {
       case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
           if constexpr (cudf::is_chrono<T>()) {
-            auto val = static_cast<int64_t>(
-              decode_fixed_width_value<typename T::rep>(stats_val, stats_size));
-            val = apply_ts_scale(val, ts_scale);
-            return stats_caster_base::target_type<T>(val);
+            return stats_caster_base::target_type<T>(
+              decode_fixed_width_value<typename T::rep>(stats_val, stats_size), ts_scale);
           } else if constexpr (std::is_same_v<T, numeric::decimal128::rep>) {
             // Decimals with physical type FLBA/BYTE_ARRAY are stored as two's complement using
             // big-endian.
