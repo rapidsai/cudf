@@ -47,7 +47,7 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
 
   auto vector = rmm::device_uvector<unbound_list_view>(n_rows, stream, mr);
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     index_begin,
                     index_end,
                     vector.begin(),
@@ -93,7 +93,7 @@ std::unique_ptr<column> scatter_impl(rmm::device_uvector<unbound_list_view> cons
   auto const child_column_type = lists_column_view(target).child().type();
 
   // Scatter.
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   source_vector.begin(),
                   source_vector.end(),
                   scatter_map_begin,
@@ -233,7 +233,7 @@ std::unique_ptr<column> scatter(scalar const& slr,
                                    : cudf::create_null_mask(1, mask_state::ALL_NULL, stream, mr);
   auto offset_column =
     make_numeric_column(data_type{type_to_id<size_type>()}, 2, mask_state::UNALLOCATED, stream, mr);
-  thrust::sequence(rmm::exec_policy_nosync(stream),
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    offset_column->mutable_view().begin<size_type>(),
                    offset_column->mutable_view().end<size_type>(),
                    0,

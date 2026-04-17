@@ -46,7 +46,13 @@ template <typename InputIterator,
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    result = thrust::copy_if(rmm::exec_policy_nosync(stream), itr, copy_end, stencil, result, pred);
+    result =
+      thrust::copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      itr,
+                      copy_end,
+                      stencil,
+                      result,
+                      pred);
     stencil += std::distance(itr, copy_end);
     itr = copy_end;
   }
@@ -152,8 +158,13 @@ template <typename InputIterator, typename OutputIterator, typename Predicate>
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    result = thrust::copy_if(rmm::exec_policy_nosync(stream), itr, copy_end, result, pred);
-    itr    = copy_end;
+    result =
+      thrust::copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      itr,
+                      copy_end,
+                      result,
+                      pred);
+    itr = copy_end;
   }
   return result;
 }
