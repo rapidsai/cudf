@@ -898,7 +898,7 @@ def test_num_py_executors_default() -> None:
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.num_py_executors is None
+    assert config.executor.num_py_executors == 8
 
 
 def test_num_py_executors_from_executor_options() -> None:

@@ -216,9 +216,14 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
 
   // remove duplicates to help speed up lower_bound
   auto offsets = rmm::device_uvector<size_type>(targets.size(), stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end());
-  auto const end = thrust::unique_by_key(
-    rmm::exec_policy_nosync(stream), first_bytes.begin(), first_bytes.end(), offsets.begin());
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   offsets.begin(),
+                   offsets.end());
+  auto const end =
+    thrust::unique_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          first_bytes.begin(),
+                          first_bytes.end(),
+                          offsets.begin());
   auto const unique_count =
     static_cast<size_type>(cuda::std::distance(first_bytes.begin(), end.first));
 

@@ -312,12 +312,13 @@ struct same_element_type_dispatcher {
     // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
     auto const binop_generator =
       cudf::reduction::detail::arg_minmax_binop_generator::create<Op>(input, stream);
-    auto const binary_op  = cudf::detail::cast_functor<size_type>(binop_generator.binop());
-    auto const minmax_idx = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                           cuda::counting_iterator<cudf::size_type>{0},
-                                           cuda::counting_iterator{input.size()},
-                                           size_type{0},
-                                           binary_op);
+    auto const binary_op = cudf::detail::cast_functor<size_type>(binop_generator.binop());
+    auto const minmax_idx =
+      thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<cudf::size_type>{0},
+                     cuda::counting_iterator{input.size()},
+                     size_type{0},
+                     binary_op);
 
     return cudf::detail::get_element(input, minmax_idx, stream, mr);
   }

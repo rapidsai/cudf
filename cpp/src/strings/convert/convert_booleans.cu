@@ -51,7 +51,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& input,
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<bool>();
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{strings_count},
                     d_results,
