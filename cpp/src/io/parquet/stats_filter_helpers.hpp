@@ -116,7 +116,8 @@ class stats_caster_base {
       case Type::INT96:  // Deprecated in parquet specification
         return stats_caster_base::target_type<T>(
           static_cast<__int128_t>(decode_fixed_width_value<int64_t>(stats_val, stats_size)) << 32 |
-          decode_fixed_width_value<int32_t>(stats_val + sizeof(int64_t), stats_size));
+            decode_fixed_width_value<int32_t>(stats_val + sizeof(int64_t), stats_size),
+          ts_scale);
       case Type::BYTE_ARRAY: [[fallthrough]];
       case Type::FIXED_LEN_BYTE_ARRAY:
         if (stats_size == sizeof(T)) {
@@ -134,8 +135,10 @@ class stats_caster_base {
               decode_fixed_width_value<T>(stats_val, stats_size));
           }
         }
+        [[fallthrough]];
+      default:
         // unsupported type
-      default: CUDF_FAIL("Invalid type and stats combination");
+        CUDF_FAIL("Invalid type and stats combination");
     }
   }
 
@@ -213,8 +216,7 @@ class stats_caster_base {
           val[index] = stats_caster_base::convert<T>(
             binary_value.value().data(), binary_value.value().size(), type);
         }
-      }
-      if (not binary_value.has_value()) {
+      } else {
         clear_bit_unsafe(null_mask.data(), index);
         null_count++;
       }
