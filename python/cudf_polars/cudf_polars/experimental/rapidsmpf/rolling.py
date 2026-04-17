@@ -89,21 +89,48 @@ def _get_idx_col(
 
 
 def _minmax_py(
-    col: plc.Column, reduce_dtype: plc.DataType, stream: Stream
+    col: plc.Column,
+    reduce_dtype: plc.DataType,
+    stream: Stream,
+    *,
+    assume_sorted: bool = False,
 ) -> tuple[int, int]:
-    """Return (min, max) of ``col`` as Python ints (min/max reduce at ``reduce_dtype``)."""
-    mn = plc.reduce.reduce(col, plc.aggregation.min(), reduce_dtype, stream=stream)
-    mx = plc.reduce.reduce(col, plc.aggregation.max(), reduce_dtype, stream=stream)
-    mn_val = mn.to_py(stream=stream)
-    mx_val = mx.to_py(stream=stream)
+    """
+    Return (min, max) of ``col`` as Python ints (``reduce_dtype`` for reduce path).
+
+    If ``assume_sorted`` is True, use first/last rows (caller must guarantee non-decreasing
+    order and no nulls, as for Polars rolling index columns).
+    """
+    if assume_sorted:
+        n = col.size()
+        lo_c = plc.copying.slice(col, [0, 1], stream=stream)[0]
+        hi_c = plc.copying.slice(col, [n - 1, n], stream=stream)[0]
+        mn_val = lo_c.to_scalar(stream=stream).to_py(stream=stream)
+        mx_val = hi_c.to_scalar(stream=stream).to_py(stream=stream)
+    else:
+        mn_val = plc.reduce.reduce(
+            col, plc.aggregation.min(), reduce_dtype, stream=stream
+        ).to_py(stream=stream)
+        mx_val = plc.reduce.reduce(
+            col, plc.aggregation.max(), reduce_dtype, stream=stream
+        ).to_py(stream=stream)
     assert isinstance(mn_val, int)
     assert isinstance(mx_val, int)
     return mn_val, mx_val
 
 
 def _minmax_scalars(
-    col: plc.Column, value_dtype: plc.DataType, stream: Stream
+    col: plc.Column,
+    value_dtype: plc.DataType,
+    stream: Stream,
+    *,
+    assume_sorted: bool = False,
 ) -> tuple[plc.Scalar, plc.Scalar]:
+    if assume_sorted:
+        n = col.size()
+        lo_c = plc.copying.slice(col, [0, 1], stream=stream)[0]
+        hi_c = plc.copying.slice(col, [n - 1, n], stream=stream)[0]
+        return lo_c.to_scalar(stream=stream), hi_c.to_scalar(stream=stream)
     mn = plc.reduce.reduce(col, plc.aggregation.min(), value_dtype, stream=stream)
     mx = plc.reduce.reduce(col, plc.aggregation.max(), value_dtype, stream=stream)
     return mn, mx
@@ -154,7 +181,7 @@ def _check_ungrouped_int_chunk_order(
         ir.index_dtype,
         combined.stream,
     )
-    lo, hi = _minmax_py(idx, _INT64, combined.stream)
+    lo, hi = _minmax_py(idx, _INT64, combined.stream, assume_sorted=True)
     if st.prev_ungrouped_int_max is not None and lo < st.prev_ungrouped_int_max:
         raise RuntimeError(
             f"rolling streaming: INT64 index decreased across chunks "
@@ -227,11 +254,13 @@ def _prepare_expanded_rolling_frame(
     if need_chunk_minmax:
         chunk_idx = _get_idx_col(chunk_table, index_col_idx, index_dtype, chunk_stream)
         if is_int_index:
-            chunk_mn, chunk_mx = _minmax_py(chunk_idx, _INT64, chunk_stream)
+            chunk_mn, chunk_mx = _minmax_py(
+                chunk_idx, _INT64, chunk_stream, assume_sorted=True
+            )
         else:
             dur_dt = _duration_dtype_for_timestamp(index_dtype)
             chunk_mn_s, chunk_mx_s = _minmax_scalars(
-                chunk_idx, index_dtype, chunk_stream
+                chunk_idx, index_dtype, chunk_stream, assume_sorted=True
             )
 
     if left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0:
