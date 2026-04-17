@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -133,7 +134,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
 
 TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
 {
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::test::iterators::no_nulls();
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
@@ -220,7 +221,7 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 {
   // list<int>, nullable vs. non-nullable
   {
-    auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto all_valid = cudf::test::iterators::no_nulls();
     cudf::test::lists_column_wrapper<int> a{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}};
     cudf::test::lists_column_wrapper<int> b{{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}}, all_valid};
 
@@ -237,7 +238,7 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 
   // list<list<int>>, nullable vs. non-nullable
   {
-    auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto all_valid = cudf::test::iterators::no_nulls();
     cudf::test::lists_column_wrapper<int> a{{{1, 2, 3}, {5, 6}}, {{8, 9}, {10}}, {{14, 15}}};
     cudf::test::lists_column_wrapper<int> b{{{{1, 2, 3}, {5, 6}}, {{8, 9}, {10}}, {{14, 15}}},
                                             all_valid};

@@ -691,8 +691,7 @@ class StreamingExecutor:
         regular pageable host memory.
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor used by
-        the rapidsmpf runtime. Default is None, which uses ThreadPoolExecutor's
-        default behavior. This option is only used by the "rapidsmpf" runtime.
+        the rapidsmpf runtime. Default is 8.
 
     Notes
     -----
@@ -786,9 +785,9 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    num_py_executors: int | None = dataclasses.field(
+    num_py_executors: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=None
+            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
     spmd_context: SPMDContext | None = None
@@ -890,8 +889,8 @@ class StreamingExecutor:
             raise TypeError("max_io_threads must be an int")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
-        if not isinstance(self.num_py_executors, (int, type(None))):
-            raise TypeError("num_py_executors must be int or None")
+        if not isinstance(self.num_py_executors, int):
+            raise TypeError("num_py_executors must be an int")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -947,24 +946,12 @@ class CUDAStreamPoolConfig:
         )
 
 
-class CUDAStreamPolicy(enum.StrEnum):
-    """
-    The policy to use for acquiring new CUDA streams.
-
-    * ``CUDAStreamPolicy.DEFAULT`` : Use the default CUDA stream.
-    * ``CUDAStreamPolicy.NEW`` : Create a new CUDA stream.
-    """
-
-    DEFAULT = "default"
-    NEW = "new"
-
-
 def _convert_cuda_stream_policy(
     user_cuda_stream_policy: dict | str,
-) -> CUDAStreamPolicy | CUDAStreamPoolConfig:
+) -> CUDAStreamPoolConfig | None:
     match user_cuda_stream_policy:
-        case "default" | "new":
-            return CUDAStreamPolicy(user_cuda_stream_policy)
+        case "default":
+            return None
         case "pool":
             return CUDAStreamPoolConfig()
         case dict():
@@ -997,6 +984,13 @@ def _convert_cuda_stream_policy(
                         ) from None
 
 
+def _default_cuda_stream_policy() -> CUDAStreamPoolConfig | None:
+    v = os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY")
+    if v is None:
+        return None
+    return _convert_cuda_stream_policy(v)
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class ConfigOptions(Generic[ExecutorType]):
     """
@@ -1017,7 +1011,9 @@ class ConfigOptions(Generic[ExecutorType]):
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
     cuda_stream_policy
-        The policy to use for acquiring new CUDA streams. See :class:`~cudf_polars.utils.config.CUDAStreamPolicy` for more.
+        The policy to use for CUDA streams. ``None`` (the default) uses the
+        default CUDA stream. A :class:`~cudf_polars.utils.config.CUDAStreamPoolConfig`
+        can be used to configure a stream pool.
     """
 
     raise_on_fail: bool = False
@@ -1029,12 +1025,8 @@ class ConfigOptions(Generic[ExecutorType]):
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
-    cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig = dataclasses.field(
-        default_factory=_make_default_factory(
-            "CUDF_POLARS__CUDA_STREAM_POLICY",
-            CUDAStreamPolicy.__call__,
-            default=CUDAStreamPolicy.DEFAULT,
-        )
+    cuda_stream_policy: CUDAStreamPoolConfig | None = dataclasses.field(
+        default_factory=_default_cuda_stream_policy
     )
 
     @classmethod
@@ -1051,6 +1043,7 @@ class ConfigOptions(Generic[ExecutorType]):
             "raise_on_fail",
             "memory_resource_config",
             "cuda_stream_policy",
+            "hardware_binding",
         }
 
         extra_options = set(engine.config.keys()) - valid_options
@@ -1137,7 +1130,7 @@ class ConfigOptions(Generic[ExecutorType]):
             "cuda_stream_policy", None
         ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
 
-        cuda_stream_policy: CUDAStreamPolicy | CUDAStreamPoolConfig
+        cuda_stream_policy: CUDAStreamPoolConfig | None
 
         if user_cuda_stream_policy is None:
             if (
@@ -1147,7 +1140,7 @@ class ConfigOptions(Generic[ExecutorType]):
                 cuda_stream_policy = CUDAStreamPoolConfig()
             else:
                 # everything else defaults to the default stream
-                cuda_stream_policy = CUDAStreamPolicy.DEFAULT
+                cuda_stream_policy = None
         else:
             cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
 
@@ -1157,7 +1150,7 @@ class ConfigOptions(Generic[ExecutorType]):
             or (executor.name == "streaming" and executor.runtime != Runtime.RAPIDSMPF)
         ):
             raise ValueError(
-                "CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime."
+                "A stream pool is only supported by the rapidsmpf runtime."
             )
 
         kwargs["cuda_stream_policy"] = cuda_stream_policy
