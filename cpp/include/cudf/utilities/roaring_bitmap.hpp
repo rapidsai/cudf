@@ -62,7 +62,7 @@ class roaring_bitmap {
    * @param serialized_bitmap_data Host span of bytes containing a roaring bitmap serialized in
    * portable format
    *
-   * @throws std::invalid_argument if the serialized bitmap data is empty
+   * @throw std::invalid_argument if the serialized bitmap data is empty
    */
   explicit roaring_bitmap(roaring_bitmap_type type,
                           cudf::host_span<cuda::std::byte const> serialized_bitmap_data);
@@ -139,7 +139,7 @@ class roaring_bitmap {
    *
    * @return A BOOL8 column indicating positions of the present keys
    *
-   * @throws std::invalid_argument if the key column dtype is invalid
+   * @throw std::invalid_argument if the key column dtype is invalid
    */
   [[nodiscard]] std::unique_ptr<cudf::column> contains_async(
     cudf::column_view const& keys,
@@ -157,7 +157,7 @@ class roaring_bitmap {
    * @param output Output column to store the result
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if the key or output column dtypes are invalid
+   * @throw std::invalid_argument if the key or output column dtypes are invalid
    */
   void contains_async(cudf::column_view const& keys,
                       cudf::mutable_column_view const& output,
