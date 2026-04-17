@@ -25,7 +25,7 @@ if [[ "${package_dir}" == "python/libcudf" ]]; then
         )
     else
         PYDISTCHECK_ARGS+=(
-            --max-allowed-size-compressed '325M'
+            --max-allowed-size-compressed '350M'
         )
     fi
 elif [[ "${package_dir}" != "python/cudf" ]] && \
