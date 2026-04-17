@@ -14,3 +14,7 @@ python -m pytest --cache-clear "$@" tests $IGNORE_EXPERIMENTAL --executor in-mem
 python -m pytest --cache-clear "$@" tests $IGNORE_EXPERIMENTAL --executor streaming
 python -m pytest --cache-clear "$@" tests $IGNORE_EXPERIMENTAL --executor streaming \
     --blocksize-mode small
+# Run all tests with --runtime rapidsmpf
+python -m pytest --cache-clear "$@" tests --executor streaming \
+    --runtime rapidsmpf \
+    --blocksize-mode small
