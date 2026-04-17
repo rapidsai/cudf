@@ -852,14 +852,12 @@ cdef class HybridScanReader:
             If ``row_group_indices`` is empty.
         """
         cdef vector[size_type] indices_vec = row_group_indices
-        cdef vector[vector[size_type]] passes = \
-            self.c_obj.get()[0].construct_row_group_passes(
-                host_span[const_size_type](
-                    indices_vec.data(), indices_vec.size()
-                ),
-                pass_read_limit
-            )
-        return [list(p) for p in passes]
+        return self.c_obj.get()[0].construct_row_group_passes(
+            host_span[const_size_type](
+                indices_vec.data(), indices_vec.size()
+            ),
+            pass_read_limit
+        )
 
     def has_next_table_chunk(self):
         """Check if there is any parquet data left to read.
