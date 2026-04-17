@@ -613,7 +613,7 @@ jobs:
       artifact-name: stream_tests_${{ matrix.cuda_version }}
       file_to_upload: cpp/install
   streams-test:
-    needs: streams-build
+    needs: [streams-build, changed-files]
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
     with:
