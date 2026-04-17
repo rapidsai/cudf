@@ -49,6 +49,13 @@ _ORDINAL_DIVISOR: dict[plc.TypeId, int] = {
     plc.TypeId.TIMESTAMP_DAYS: 86_400_000_000_000,
 }
 
+_TIMESTAMP_TO_DURATION: dict[plc.TypeId, plc.TypeId] = {
+    plc.TypeId.TIMESTAMP_NANOSECONDS: plc.TypeId.DURATION_NANOSECONDS,
+    plc.TypeId.TIMESTAMP_MICROSECONDS: plc.TypeId.DURATION_MICROSECONDS,
+    plc.TypeId.TIMESTAMP_MILLISECONDS: plc.TypeId.DURATION_MILLISECONDS,
+    plc.TypeId.TIMESTAMP_DAYS: plc.TypeId.DURATION_DAYS,
+}
+
 
 def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
     """Map Polars duration ordinals (ns) to native index units. See ``duration_to_scalar``."""
@@ -60,15 +67,38 @@ def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
         ) from None
 
 
-def _get_idx_col_i64(
+def _duration_dtype_for_timestamp(index_dtype: plc.DataType) -> plc.DataType:
+    try:
+        return plc.DataType(_TIMESTAMP_TO_DURATION[index_dtype.id()])
+    except KeyError as e:  # pragma: no cover
+        raise NotImplementedError(
+            f"Unsupported timestamp index type {index_dtype!r} for rolling halo"
+        ) from e
+
+
+def _scalar_binop_scalar(
+    lhs: plc.Scalar,
+    rhs: plc.Scalar,
+    op: plc.binaryop.BinaryOperator,
+    out_dtype: plc.DataType,
+    stream: Stream,
+) -> plc.Scalar:
+    """Apply ``op`` to two scalars (via 1-row columns); result dtype ``out_dtype``."""
+    lc = plc.Column.from_scalar(lhs, 1, stream=stream)
+    rc = plc.Column.from_scalar(rhs, 1, stream=stream)
+    out = plc.binaryop.binary_operation(lc, rc, op, out_dtype, stream=stream)
+    return out.to_scalar(stream=stream)
+
+
+def _get_idx_col(
     table: plc.Table,
     index_col_idx: int,
-    type_id: plc.TypeId,
+    index_dtype: plc.DataType,
     i64: plc.DataType,
     stream: Stream,
 ) -> plc.Column:
     col = table.columns()[index_col_idx]
-    if type_id != plc.TypeId.INT64:
+    if index_dtype.id() == plc.TypeId.INT64 and col.type().id() != plc.TypeId.INT64:
         col = plc.unary.cast(col, i64, stream=stream)
     return col
 
@@ -86,17 +116,29 @@ def _minmax_py(
     return mn_val, mx_val
 
 
+def _minmax_scalars(
+    col: plc.Column, value_dtype: plc.DataType, stream: Stream
+) -> tuple[plc.Scalar, plc.Scalar]:
+    mn = plc.reduce.reduce(col, plc.aggregation.min(), value_dtype, stream=stream)
+    mx = plc.reduce.reduce(col, plc.aggregation.max(), value_dtype, stream=stream)
+    return mn, mx
+
+
 def _filter_threshold(
     table: plc.Table,
-    idx_col_i64: plc.Column,
-    threshold: int,
+    idx_col: plc.Column,
+    threshold: int | plc.Scalar,
     op: plc.binaryop.BinaryOperator,
     i64: plc.DataType,
     bool8: plc.DataType,
     stream: Stream,
 ) -> plc.Table:
-    thr = plc.Scalar.from_py(threshold, i64, stream=stream)
-    mask = plc.binaryop.binary_operation(idx_col_i64, thr, op, bool8, stream=stream)
+    thr = (
+        threshold
+        if isinstance(threshold, plc.Scalar)
+        else plc.Scalar.from_py(threshold, i64, stream=stream)
+    )
+    mask = plc.binaryop.binary_operation(idx_col, thr, op, bool8, stream=stream)
     return plc.stream_compaction.apply_boolean_mask(table, mask, stream=stream)
 
 
@@ -130,7 +172,7 @@ def _prepare_expanded_rolling_frame(
     is_last_chunk: bool,
     ir_context: IRExecutionContext,
     index_col_idx: int,
-    type_id: plc.TypeId,
+    index_dtype: plc.DataType,
     lookback: int,
     lookahead: int,
     i64: plc.DataType,
@@ -156,35 +198,76 @@ def _prepare_expanded_rolling_frame(
         return None
 
     chunk_stream = chunk.stream
+    chunk_df = DataFrame.from_table(
+        chunk_table, base_col_names, base_dtypes, stream=chunk_stream
+    )
+    is_int_index = index_dtype.id() == plc.TypeId.INT64
+
     need_chunk_minmax = (
         left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0
     ) or (lookahead > 0 and not is_last_chunk)
     chunk_mn = 0
     chunk_mx = 0
+    chunk_mn_s: plc.Scalar | None = None
+    chunk_mx_s: plc.Scalar | None = None
+    dur_dt: plc.DataType | None = None
     if need_chunk_minmax:
-        chunk_idx = _get_idx_col_i64(
-            chunk_table, index_col_idx, type_id, i64, chunk_stream
+        chunk_idx = _get_idx_col(
+            chunk_table, index_col_idx, index_dtype, i64, chunk_stream
         )
-        chunk_mn, chunk_mx = _minmax_py(chunk_idx, i64, chunk_stream)
+        if is_int_index:
+            chunk_mn, chunk_mx = _minmax_py(chunk_idx, i64, chunk_stream)
+        else:
+            dur_dt = _duration_dtype_for_timestamp(index_dtype)
+            chunk_mn_s, chunk_mx_s = _minmax_scalars(
+                chunk_idx, index_dtype, chunk_stream
+            )
 
     if left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0:
-        left_idx = _get_idx_col_i64(
-            left_ctx_df.table, index_col_idx, type_id, i64, left_ctx_df.stream
+        left_idx = _get_idx_col(
+            left_ctx_df.table, index_col_idx, index_dtype, i64, left_ctx_df.stream
         )
-        left_ctx_df = DataFrame.from_table(
-            _filter_threshold(
-                left_ctx_df.table,
-                left_idx,
-                chunk_mn - lookback,
-                plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                i64,
-                bool8,
-                left_ctx_df.stream,
-            ),
-            base_col_names,
-            base_dtypes,
-            stream=left_ctx_df.stream,
-        )
+        if is_int_index:
+            left_ctx_df = DataFrame.from_table(
+                _filter_threshold(
+                    left_ctx_df.table,
+                    left_idx,
+                    chunk_mn - lookback,
+                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                    i64,
+                    bool8,
+                    left_ctx_df.stream,
+                ),
+                base_col_names,
+                base_dtypes,
+                stream=left_ctx_df.stream,
+            )
+        else:
+            assert chunk_mn_s is not None
+            assert dur_dt is not None
+            lookback_s = plc.Scalar.from_py(lookback, dur_dt, stream=chunk_stream)
+            lower_s = _scalar_binop_scalar(
+                chunk_mn_s,
+                lookback_s,
+                plc.binaryop.BinaryOperator.SUB,
+                index_dtype,
+                chunk_stream,
+            )
+            with ir_context.stream_ordered_after(left_ctx_df, chunk_df) as s:
+                left_ctx_df = DataFrame.from_table(
+                    _filter_threshold(
+                        left_ctx_df.table,
+                        left_idx,
+                        lower_s,
+                        plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                        i64,
+                        bool8,
+                        s,
+                    ),
+                    base_col_names,
+                    base_dtypes,
+                    stream=s,
+                )
 
     if lookahead > 0:
         if is_last_chunk:
@@ -195,31 +278,62 @@ def _prepare_expanded_rolling_frame(
             next_chunk = next_chunk.make_available_and_spill(br, allow_overbooking=True)
             next_table = next_chunk.table_view()
             next_stream = next_chunk.stream
-            next_idx = _get_idx_col_i64(
-                next_table, index_col_idx, type_id, i64, next_stream
+            next_df = DataFrame.from_table(
+                next_table, base_col_names, base_dtypes, stream=next_stream
             )
-            right_ctx_table = _filter_threshold(
-                next_table,
-                next_idx,
-                chunk_mx + lookahead,
-                plc.binaryop.BinaryOperator.LESS_EQUAL,
-                i64,
-                bool8,
-                next_stream,
+            next_idx = _get_idx_col(
+                next_table, index_col_idx, index_dtype, i64, next_stream
             )
-            right_ctx_df = (
-                DataFrame.from_table(
-                    right_ctx_table, base_col_names, base_dtypes, stream=next_stream
+            if is_int_index:
+                right_ctx_table = _filter_threshold(
+                    next_table,
+                    next_idx,
+                    chunk_mx + lookahead,
+                    plc.binaryop.BinaryOperator.LESS_EQUAL,
+                    i64,
+                    bool8,
+                    next_stream,
                 )
-                if right_ctx_table.num_rows() > 0
-                else None
-            )
+                right_ctx_df = (
+                    DataFrame.from_table(
+                        right_ctx_table, base_col_names, base_dtypes, stream=next_stream
+                    )
+                    if right_ctx_table.num_rows() > 0
+                    else None
+                )
+            else:
+                assert chunk_mx_s is not None
+                assert dur_dt is not None
+                lookahead_s = plc.Scalar.from_py(lookahead, dur_dt, stream=chunk_stream)
+                upper_s = _scalar_binop_scalar(
+                    chunk_mx_s,
+                    lookahead_s,
+                    plc.binaryop.BinaryOperator.ADD,
+                    index_dtype,
+                    chunk_stream,
+                )
+                with ir_context.stream_ordered_after(next_df, chunk_df) as s:
+                    right_ctx_table = _filter_threshold(
+                        next_table,
+                        next_idx,
+                        upper_s,
+                        plc.binaryop.BinaryOperator.LESS_EQUAL,
+                        i64,
+                        bool8,
+                        s,
+                    )
+                    right_ctx_df = (
+                        DataFrame.from_table(
+                            right_ctx_table,
+                            base_col_names,
+                            base_dtypes,
+                            stream=s,
+                        )
+                        if right_ctx_table.num_rows() > 0
+                        else None
+                    )
     else:
         right_ctx_df = right_halo_df if is_last_chunk else None
-
-    chunk_df = DataFrame.from_table(
-        chunk_table, base_col_names, base_dtypes, stream=chunk_stream
-    )
     n_left = left_ctx_df.num_rows if left_ctx_df is not None else 0
     dfs = [df for df in (left_ctx_df, chunk_df, right_ctx_df) if df is not None]
     if len(dfs) == 1:
@@ -396,7 +510,7 @@ async def prepare_chunks(
     lookback: int,
     lookahead: int,
     index_col_idx: int,
-    type_id: plc.TypeId,
+    index_dtype: plc.DataType,
     i64: plc.DataType,
     bool8: plc.DataType,
     base_col_names: list[str],
@@ -440,7 +554,7 @@ async def prepare_chunks(
             is_last_chunk=is_last,
             ir_context=ir_context,
             index_col_idx=index_col_idx,
-            type_id=type_id,
+            index_dtype=index_dtype,
             lookback=lookback,
             lookahead=lookahead,
             i64=i64,
@@ -619,6 +733,11 @@ async def rolling_actor(
         act_state = _RollingActState()
         append_done: asyncio.Queue[None] = asyncio.Queue()
 
+        # TODO: The incoming data should be ordered on grouping
+        # keys and the index column. When OrderScheme is available,
+        # we should check the incoming metadata to verify this.
+        # Otherwise, we can do a sort here to "correct" the order.
+
         await gather_in_task_group(
             prepare_rank_boundaries(
                 context,
@@ -636,7 +755,7 @@ async def rolling_actor(
                 lookback=lookback,
                 lookahead=lookahead,
                 index_col_idx=index_col_idx,
-                type_id=type_id,
+                index_dtype=ir.index_dtype,
                 i64=i64,
                 bool8=bool8,
                 base_col_names=base_col_names,
