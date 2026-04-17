@@ -829,7 +829,7 @@ cdef class HybridScanReader:
         """Partition row groups into passes such that the GPU memory required to
         materialize a pass is bounded by the specified limit.
 
-        Note that ``pass_read_limit`` is a hint, not an absolute limit. i.e., if
+        Note that ``pass_read_limit`` is a hint, not an absolute limit. i.e. if
         a row group cannot fit within the limit, it will still constitute a valid
         pass.
 
