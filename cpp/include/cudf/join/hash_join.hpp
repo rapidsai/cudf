@@ -361,9 +361,9 @@ class hash_join {
    * table (defined by the join_partition_context) and the build table. The context must have been
    * previously created by calling full_join_match_context().
    *
-   * @note This method does NOT include unmatched build rows (the complement). Since the complement
-   * is a global property across all partitions, it must be computed separately after all partitions
-   * are processed using full_join_complement().
+   * @note This method does NOT include unmatched build rows (the complement).  After all
+   * partitions have been processed, pass the collected results to `full_join_finalize()` to
+   * obtain the complete full join output.
    *
    * The returned left_indices are relative to the original complete probe table.
    *
@@ -381,29 +381,32 @@ class hash_join {
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
 
   /**
-   * @brief Computes the full join complement: unmatched build rows.
+   * @brief Finalizes a partitioned full join by concatenating all per-partition probe results
+   * and appending the unmatched build rows (the complement).
    *
-   * After performing partitioned_full_join() on all partitions, call this method with the
-   * concatenated right_indices from all partitions to obtain the unmatched build table rows.
-   * The result can be concatenated with the partitioned results to form the complete full join.
+   * Call this method after calling `partitioned_full_join()` for every partition.  It combines
+   * the per-partition probe indices with the unmatched build row indices (a global property
+   * across all partitions) and returns a single `(left_indices, right_indices)` pair equivalent
+   * to the output of `full_join()`.
    *
-   * @param right_indices Concatenated right (build) indices from all partitioned_full_join() calls
-   * @param probe_table_num_rows Total number of rows in the probe table
+   * @param left_partials Per-partition `left_indices` views produced by `partitioned_full_join()`
+   * @param right_partials Per-partition `right_indices` views produced by `partitioned_full_join()`
+   * @param probe_table_num_rows Total number of rows in the original probe table
    * @param build_table_num_rows Total number of rows in the build table
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the result device memory
    *
-   * @return A pair of device vectors [`left_indices`, `right_indices`] for unmatched build rows,
-   *         where left_indices are all JoinNoMatch and right_indices are the unmatched build row
-   *         indices
+   * @return A pair of device vectors [`left_indices`, `right_indices`] representing the full
+   *         join output.
    */
   [[nodiscard]] static std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                                  std::unique_ptr<rmm::device_uvector<size_type>>>
-  full_join_complement(cudf::device_span<size_type const> right_indices,
-                       size_type probe_table_num_rows,
-                       size_type build_table_num_rows,
-                       rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  full_join_finalize(cudf::host_span<cudf::device_span<size_type const> const> left_partials,
+                     cudf::host_span<cudf::device_span<size_type const> const> right_partials,
+                     size_type probe_table_num_rows,
+                     size_type build_table_num_rows,
+                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   std::unique_ptr<impl_type const> _impl;
