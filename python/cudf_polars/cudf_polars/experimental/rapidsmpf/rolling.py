@@ -20,6 +20,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.dsl.ir import Rolling
+from cudf_polars.dsl.utils.windows import rolling_stream_halo_extents
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
@@ -41,14 +42,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
-_ORDINAL_DIVISOR: dict[plc.TypeId, int] = {
-    plc.TypeId.INT64: 1,
-    plc.TypeId.TIMESTAMP_NANOSECONDS: 1,
-    plc.TypeId.TIMESTAMP_MICROSECONDS: 1_000,
-    plc.TypeId.TIMESTAMP_MILLISECONDS: 1_000_000,
-    plc.TypeId.TIMESTAMP_DAYS: 86_400_000_000_000,
-}
-
 _TIMESTAMP_TO_DURATION: dict[plc.TypeId, plc.TypeId] = {
     plc.TypeId.TIMESTAMP_NANOSECONDS: plc.TypeId.DURATION_NANOSECONDS,
     plc.TypeId.TIMESTAMP_MICROSECONDS: plc.TypeId.DURATION_MICROSECONDS,
@@ -58,16 +51,6 @@ _TIMESTAMP_TO_DURATION: dict[plc.TypeId, plc.TypeId] = {
 
 _INT64 = plc.DataType(plc.TypeId.INT64)
 _BOOL8 = plc.DataType(plc.TypeId.BOOL8)
-
-
-def _ordinal_to_native(type_id: plc.TypeId, ordinal: int) -> int:
-    """Map Polars duration ordinals (ns) to native index units. See ``duration_to_scalar``."""
-    try:
-        return ordinal // _ORDINAL_DIVISOR[type_id]
-    except KeyError:  # pragma: no cover
-        raise NotImplementedError(
-            f"Unsupported index type {type_id!r} for rolling window halo exchange"
-        ) from None
 
 
 def _duration_dtype_for_timestamp(index_dtype: plc.DataType) -> plc.DataType:
@@ -736,11 +719,9 @@ async def rolling_actor(
         base_col_names = list(ir.children[0].schema.keys())
         base_dtypes = list(ir.children[0].schema.values())
 
-        type_id = ir.index_dtype.id()
-        preceding_native = _ordinal_to_native(type_id, ir.preceding_ordinal)
-        following_native = _ordinal_to_native(type_id, ir.following_ordinal)
-        lookback = max(0, -preceding_native)
-        lookahead = max(0, preceding_native + following_native)
+        lookback, lookahead = rolling_stream_halo_extents(
+            ir.index_dtype, ir.preceding_ordinal, ir.following_ordinal
+        )
         index_col_idx = base_col_names.index(ir.index.name)
 
         act_state = _RollingActState()

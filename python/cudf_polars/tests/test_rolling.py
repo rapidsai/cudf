@@ -9,6 +9,9 @@ import pytest
 
 import polars as pl
 
+import pylibcudf as plc
+
+from cudf_polars.dsl.utils.windows import rolling_stream_halo_extents
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -271,3 +274,32 @@ def test_rolling_rank_unsupported(df):
         pl.col("values").rank(method="dense", descending=False)
     )
     assert_ir_translation_raises(q, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "dtype,prec,foll,lookback,lookahead",
+    [
+        (plc.DataType(plc.TypeId.INT64), -5, 10, 5, 5),
+        (plc.DataType(plc.TypeId.INT64), 2, 3, 0, 5),
+        (
+            plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS),
+            -2_000_000,
+            5_000_000,
+            2000,
+            3000,
+        ),
+    ],
+)
+def test_rolling_stream_halo_extents(
+    dtype: plc.DataType,
+    prec: int,
+    foll: int,
+    lookback: int,
+    lookahead: int,
+) -> None:
+    assert rolling_stream_halo_extents(dtype, prec, foll) == (lookback, lookahead)
+
+
+def test_rolling_stream_halo_extents_unsupported_dtype() -> None:
+    with pytest.raises(NotImplementedError, match="Unsupported rolling index type"):
+        rolling_stream_halo_extents(plc.DataType(plc.TypeId.FLOAT32), 0, 1)
