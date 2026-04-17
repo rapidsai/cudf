@@ -10,7 +10,7 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col, Expr, GroupedWindow, UnaryFunction
+from cudf_polars.dsl.expr import Agg, Col, Expr, GroupedWindow, Len, UnaryFunction
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
@@ -24,6 +24,12 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
+
+
+# Aggregation names that can be decomposed across partitions (see groupby.decompose)
+_DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
+    ("sum", "count", "mean", "min", "max", "n_unique")
+)
 
 
 def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
@@ -190,7 +196,7 @@ def _all_over_scalar_and_top_level(exprs: Sequence[Expr]) -> bool:
 
     Top-level means the GroupedWindow is the direct value of a NamedExpr (not
     nested inside another expression).  Scalar means all named_aggs are Agg/Len
-    reductions with Col partition-by keys.
+    reductions with Col partition-by keys and decomposable aggregation types.
 
     Parameters
     ----------
@@ -204,10 +210,19 @@ def _all_over_scalar_and_top_level(exprs: Sequence[Expr]) -> bool:
     """
     for e in exprs:
         if isinstance(e, GroupedWindow):
-            _, unary_ops = e._split_named_expr()
+            reductions, unary_ops = e._split_named_expr()
             if any(ops for ops in unary_ops.values()):
                 return False
             if not all(isinstance(c, Col) for c in e.children[: e.by_count]):
+                return False
+            if not all(
+                isinstance(ne.value, Len)
+                or (
+                    isinstance(ne.value, Agg)
+                    and ne.value.name in _DECOMPOSABLE_AGG_NAMES
+                )
+                for ne in reductions
+            ):
                 return False
         elif any(isinstance(node, GroupedWindow) for node in traversal(e.children)):
             return False
