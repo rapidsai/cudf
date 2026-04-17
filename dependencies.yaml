@@ -468,6 +468,19 @@ files:
       - depends_on_cudf
       - depends_on_cudf_polars
       - depends_on_narwhals
+  test_cudf_pandas_compat:
+    output: none
+    matrix:
+      cuda: ["12.9", "13.1"]
+      pandas_compat_version: ["2.0", "2.1", "2.2", "2.3"]
+    includes:
+      - test_cudf_pandas_compat
+  test_cudf_polars_compat:
+    output: none
+    matrix:
+      polars_compat_version: ["1.30", "1.31", "1.32", "1.33", "1.34", "1.35", "1.36", "1.37", "1.38"]
+    includes:
+      - test_cudf_polars_compat
 channels:
   - rapidsai-nightly
   - rapidsai
@@ -1336,3 +1349,83 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - structlog
+  test_cudf_pandas_compat:
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              pandas_compat_version: "2.0"
+            packages:
+              - numpy>=1.26,<2.0a0
+              - pandas==2.0.*
+          - matrix:
+              pandas_compat_version: "2.1"
+            packages:
+              - numpy>=1.26,<2.0a0
+              - pandas==2.1.*
+          - matrix:
+              pandas_compat_version: "2.2"
+            packages:
+              - numpy>=1.26,<2.0a0
+              - pandas==2.2.*
+          - matrix:
+              pandas_compat_version: "2.3"
+            packages:
+              - numpy>=1.26,<2.0a0
+              - pandas==2.3.*
+          - matrix:
+            packages:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - cupy-cuda12x<14
+          - matrix:
+              cuda: "13.*"
+            packages:
+              - cupy-cuda13x<14
+          - matrix:
+            packages:
+  test_cudf_polars_compat:
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              polars_compat_version: "1.30"
+            packages:
+              - polars==1.30.*
+          - matrix:
+              polars_compat_version: "1.31"
+            packages:
+              - polars==1.31.*
+          - matrix:
+              polars_compat_version: "1.32"
+            packages:
+              - polars==1.32.*
+          - matrix:
+              polars_compat_version: "1.33"
+            packages:
+              - polars==1.33.*
+          - matrix:
+              polars_compat_version: "1.34"
+            packages:
+              - polars==1.34.*
+          - matrix:
+              polars_compat_version: "1.35"
+            packages:
+              - polars==1.35.*
+          - matrix:
+              polars_compat_version: "1.36"
+            packages:
+              - polars==1.36.*
+          - matrix:
+              polars_compat_version: "1.37"
+            packages:
+              - polars==1.37.*
+          - matrix:
+              polars_compat_version: "1.38"
+            packages:
+              - polars==1.38.*
+          - matrix:
+            packages:

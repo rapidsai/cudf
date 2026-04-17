@@ -80,11 +80,7 @@ python -m pytest -p cudf.pandas \
     -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
-available_pandas_versions=$(python -m pip index versions pandas --json | jq '.versions')
-output=$(python ci/utils/filter_package_versions.py dependencies.yaml run_common pandas "$available_pandas_versions")
-
-# Convert the space-separated list into an array
-read -r -a versions <<< "${output}"
+read -r -a versions <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_pandas_compat pandas_compat_version)"
 
 version_lte() {
   [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
@@ -92,12 +88,26 @@ version_lte() {
 
 if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
     for version in "${versions[@]}"; do
-        echo "Installing pandas version: ${version}"
-        # This loop tests cudf.pandas compatibility with older pandas-numpy versions,
-        # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
-        # downgrade cupy here to avoid an import failure when cupy tries
-        # to load against the older numpy.
-        rapids-pip-retry install "numpy>=1.26,<2.0a0" "pandas==${version}" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+        rapids-logger "Testing cudf.pandas compatibility with pandas ${version}.*"
+
+        # Generate requirements for this pandas compat version.
+        # Each entry pins numpy<2 + the specific pandas minor line + the CUDA-appropriate cupy<14.
+        # cupy>=14 dropped support for numpy<2 (see https://github.com/cupy/cupy/issues/9709).
+        rapids-dependency-file-generator \
+            --config dependencies.yaml \
+            --file-key test_cudf_pandas_compat \
+            --output requirements \
+            --matrix "cuda=${RAPIDS_CUDA_VERSION};pandas_compat_version=${version}" \
+            > "pandas-compat-${version}-requirements.txt"
+
+        # Create an isolated virtual environment inheriting the already-installed cudf
+        # wheels so we only need to override pandas, numpy, and cupy.
+        python -m venv --system-site-packages "venv_pandas_${version}"
+        # shellcheck disable=SC1090
+        source "venv_pandas_${version}/bin/activate"
+
+        rapids-pip-retry install -r "pandas-compat-${version}-requirements.txt"
+
         python -m pytest -p cudf.pandas \
             --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
             --numprocesses=8 \
@@ -119,6 +129,9 @@ if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
             --numprocesses=0 \
             -k "profiler" \
             ./python/cudf/cudf_pandas_tests/
+
+        deactivate
+        rm -rf "venv_pandas_${version}" "pandas-compat-${version}-requirements.txt"
     done
 else
     rapids-logger "Python ${RAPIDS_PY_VERSION} detected (>= 3.13). Skipping cudf.pandas compatibility tests with numpy<2"
