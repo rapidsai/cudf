@@ -14,6 +14,7 @@ launch_retrieve<false, primitive_count_ref_t>(probe_key_type const*,
                                               cuda::std::int64_t,
                                               size_type const*,
                                               primitive_count_ref_t,
+                                              size_type,
                                               rmm::cuda_stream_view,
                                               rmm::device_async_resource_ref);
 
@@ -23,6 +24,7 @@ launch_retrieve<false, nested_count_ref_t>(probe_key_type const*,
                                            cuda::std::int64_t,
                                            size_type const*,
                                            nested_count_ref_t,
+                                           size_type,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref);
 
@@ -32,6 +34,7 @@ launch_retrieve<false, flat_count_ref_t>(probe_key_type const*,
                                          cuda::std::int64_t,
                                          size_type const*,
                                          flat_count_ref_t,
+                                         size_type,
                                          rmm::cuda_stream_view,
                                          rmm::device_async_resource_ref);
 

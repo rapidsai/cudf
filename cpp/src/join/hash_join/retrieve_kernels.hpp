@@ -22,7 +22,9 @@ namespace cudf::detail {
  *
  * Internally computes per-row output offsets via exclusive scan on match_counts,
  * derives the total output size, allocates output buffers, and launches the
- * retrieve kernel.
+ * retrieve kernel. `left_offset` is added to each stored probe-row index when
+ * writing to `left_indices`, so callers can produce indices in the full probe
+ * table's coordinate space directly from a slice-local `keys` array.
  *
  * @return A pair of device vectors [left_indices, right_indices].
  */
@@ -33,6 +35,7 @@ launch_retrieve(probe_key_type const* keys,
                 cuda::std::int64_t n,
                 size_type const* match_counts,
                 Ref ref,
+                size_type left_offset,
                 rmm::cuda_stream_view stream,
                 rmm::device_async_resource_ref mr);
 

@@ -3,25 +3,29 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Hash join retrieve kernel using prefix-scan offsets.  Each CG knows
-// exactly where to write — no atomics, no shared-memory buffering.
-// Uses cuco ref public APIs: storage_ref(), probing_scheme(), empty_key_sentinel(), key_eq().
+// Hash join retrieve kernel ported from cuco's open_addressing retrieve.
+// Uses a shared-memory buffer per flushing tile (warp) to coalesce global
+// output writes and amortize the global atomic counter across many matches.
 
 #pragma once
 
 #include "kernels_common.cuh"
 
-#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuco/pair.cuh>
+#include <cuda/atomic>
 #include <cuda/std/bit>
-#include <thrust/scan.h>
+#include <cuda/std/cstdint>
+#include <thrust/reduce.h>
 
 namespace {
 
@@ -40,83 +44,157 @@ namespace cudf::detail {
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   retrieve_kernel(probe_key_type const* __restrict__ input_probe,
-                  size_type const* __restrict__ offsets,
                   cuda::std::int64_t n,
+                  size_type left_offset,
                   size_type* __restrict__ left_output,
                   size_type* __restrict__ right_output,
+                  size_type* __restrict__ output_counter,
                   Ref ref)
 {
   namespace cg = cooperative_groups;
 
-  auto constexpr cg_size     = Ref::cg_size;
-  auto constexpr bucket_size = Ref::bucket_size;
-  auto const empty_sentinel  = ref.empty_key_sentinel();
-  auto const key_equal       = ref.key_eq();
+  auto constexpr cg_size            = Ref::cg_size;
+  auto constexpr bucket_size        = Ref::bucket_size;
+  auto constexpr flushing_tile_size = 32;  // full warp for coalesced flushes
+  static_assert(flushing_tile_size >= cg_size);
+  static_assert(DEFAULT_JOIN_BLOCK_SIZE % flushing_tile_size == 0);
 
-  auto const tile   = cg::tiled_partition<cg_size>(cg::this_thread_block());
-  auto idx          = grid_1d::global_thread_id() / cg_size;
-  auto const stride = grid_1d::grid_stride() / cg_size;
+  auto constexpr num_flushing_tiles   = DEFAULT_JOIN_BLOCK_SIZE / flushing_tile_size;
+  auto constexpr tiles_in_block       = DEFAULT_JOIN_BLOCK_SIZE / cg_size;
+  auto constexpr max_matches_per_step = flushing_tile_size * bucket_size;
+  // buffer_size leaves headroom so one full probing step can't overflow.
+  auto constexpr buffer_size = max_matches_per_step + flushing_tile_size;
 
-  while (idx < n) {
-    auto const probe_key  = input_probe[idx];
-    auto const left_index = probe_key.second;
-    auto write_pos        = static_cast<size_type>(offsets[idx]);
+  using index_pair = cuco::pair<size_type, size_type>;
+  __shared__ index_pair buffers[num_flushing_tiles][buffer_size];
+  __shared__ cuda::std::int32_t counters[num_flushing_tiles];
 
-    auto probing_iter = ref.probing_scheme().template make_iterator<bucket_size>(
-      tile, probe_key, ref.storage_ref().extent());
-    auto const init_probing_idx = *probing_iter;
+  auto const block            = cg::this_thread_block();
+  auto const flushing_tile    = cg::tiled_partition<flushing_tile_size>(block);
+  auto const probing_tile     = cg::tiled_partition<cg_size>(block);
+  auto const flushing_tile_id = flushing_tile.meta_group_rank();
+  auto const empty_sentinel   = ref.empty_key_sentinel();
+  auto const key_equal        = ref.key_eq();
 
-    bool running                      = true;
-    [[maybe_unused]] bool found_match = false;
+  if (flushing_tile.thread_rank() == 0) { counters[flushing_tile_id] = 0; }
+  flushing_tile.sync();
 
-    while (tile.any(running)) {
-      if (running) {
-        auto const bucket_slots = ref.storage_ref()[*probing_iter];
+  auto atomic_counter = cuda::atomic_ref<size_type, cuda::thread_scope_device>{*output_counter};
 
-        bool equals[bucket_size];
-        for (int i = 0; i < bucket_size; ++i) {
-          equals[i] = false;
-          if (running) {
-            if (bucket_slots[i] == empty_sentinel) {
-              running = false;
-            } else if (key_equal(probe_key, bucket_slots[i])) {
-              equals[i] = true;
+  auto flush_buffers = [&](auto const& tile) {
+    size_type offset = 0;
+    auto const count = counters[flushing_tile_id];
+    auto const rank  = tile.thread_rank();
+    if (rank == 0) {
+      offset = atomic_counter.fetch_add(static_cast<size_type>(count), cuda::memory_order_relaxed);
+    }
+    offset = tile.shfl(offset, 0);
+    for (int i = rank; i < count; i += tile.size()) {
+      left_output[offset + i]  = buffers[flushing_tile_id][i].first;
+      right_output[offset + i] = buffers[flushing_tile_id][i].second;
+    }
+  };
+
+  auto const grid_stride_tiles = static_cast<cuda::std::int64_t>(gridDim.x) * tiles_in_block;
+  auto idx =
+    static_cast<cuda::std::int64_t>(blockIdx.x) * tiles_in_block + probing_tile.meta_group_rank();
+
+  while (flushing_tile.any(idx < n)) {
+    bool const active = idx < n;
+    auto const active_flushing_tile =
+      cg::binary_partition<flushing_tile_size>(flushing_tile, active);
+
+    if (active) {
+      auto const probe_key  = input_probe[idx];
+      auto const left_index = probe_key.second + left_offset;
+
+      auto probing_iter = ref.probing_scheme().template make_iterator<bucket_size>(
+        probing_tile, probe_key, ref.storage_ref().extent());
+      auto const init_probing_idx = *probing_iter;
+
+      bool running                      = true;
+      [[maybe_unused]] bool found_match = false;
+
+      while (active_flushing_tile.any(running)) {
+        if (running) {
+          auto const bucket_slots = ref.storage_ref()[*probing_iter];
+
+          bool equals[bucket_size];
+          for (int i = 0; i < bucket_size; ++i) {
+            equals[i] = false;
+            if (running) {
+              if (bucket_slots[i] == empty_sentinel) {
+                running = false;
+              } else if (key_equal(probe_key, bucket_slots[i])) {
+                equals[i] = true;
+              }
             }
           }
-        }
 
-        tile.sync();
-        running = tile.all(running);
+          probing_tile.sync();
+          running = probing_tile.all(running);
 
-        for (int i = 0; i < bucket_size; ++i) {
-          auto const match_mask  = tile.ballot(equals[i]);
-          auto const num_matches = cuda::std::popcount(match_mask);
-
-          if (equals[i]) {
-            auto const lane_offset = count_lower_set_bits(match_mask, tile.thread_rank());
-            left_output[write_pos + lane_offset]  = left_index;
-            right_output[write_pos + lane_offset] = bucket_slots[i].second;
-            if constexpr (IsOuter) { found_match = true; }
+          cuda::std::int32_t exists[bucket_size];
+          cuda::std::int32_t num_matches[bucket_size];
+          cuda::std::int32_t total_matches = 0;
+          for (int i = 0; i < bucket_size; ++i) {
+            exists[i]      = probing_tile.ballot(equals[i]);
+            num_matches[i] = cuda::std::popcount(static_cast<unsigned>(exists[i]));
+            total_matches += num_matches[i];
           }
 
-          if (tile.thread_rank() == 0) { write_pos += num_matches; }
-          write_pos = tile.shfl(write_pos, 0);
+          auto const lane_id = probing_tile.thread_rank();
+
+          if (total_matches > 0) {
+            if constexpr (IsOuter) { found_match = true; }
+
+            cuda::std::int32_t output_idx = 0;
+            if (lane_id == 0) {
+              auto shared_ref = cuda::atomic_ref<cuda::std::int32_t, cuda::thread_scope_block>{
+                counters[flushing_tile_id]};
+              output_idx = shared_ref.fetch_add(total_matches, cuda::memory_order_relaxed);
+            }
+            output_idx = probing_tile.shfl(output_idx, 0);
+
+            cuda::std::int32_t matches_offset = 0;
+            for (int i = 0; i < bucket_size; ++i) {
+              if (equals[i]) {
+                auto const lane_offset = count_lower_set_bits(exists[i], lane_id);
+                buffers[flushing_tile_id][output_idx + matches_offset + lane_offset] = {
+                  left_index, bucket_slots[i].second};
+              }
+              matches_offset += num_matches[i];
+            }
+          }
+
+          if constexpr (IsOuter) {
+            if (!running && !found_match && lane_id == 0) {
+              auto shared_ref = cuda::atomic_ref<cuda::std::int32_t, cuda::thread_scope_block>{
+                counters[flushing_tile_id]};
+              auto const output_idx = shared_ref.fetch_add(1, cuda::memory_order_relaxed);
+              buffers[flushing_tile_id][output_idx] = {left_index, cudf::JoinNoMatch};
+            }
+          }
+        }  // if running
+
+        active_flushing_tile.sync();
+        if (counters[flushing_tile_id] > (buffer_size - max_matches_per_step)) {
+          flush_buffers(active_flushing_tile);
+          active_flushing_tile.sync();
+          if (active_flushing_tile.thread_rank() == 0) { counters[flushing_tile_id] = 0; }
+          active_flushing_tile.sync();
         }
-      }
 
-      ++probing_iter;
-      if (*probing_iter == init_probing_idx) { running = false; }
-    }
+        ++probing_iter;
+        if (*probing_iter == init_probing_idx) { running = false; }
+      }  // while running
+    }  // if active
 
-    if constexpr (IsOuter) {
-      if (!found_match && tile.thread_rank() == 0) {
-        left_output[write_pos]  = left_index;
-        right_output[write_pos] = JoinNoMatch;
-      }
-    }
+    idx += grid_stride_tiles;
+  }  // while idx < n
 
-    idx += stride;
-  }
+  flushing_tile.sync();
+  if (counters[flushing_tile_id] > 0) { flush_buffers(flushing_tile); }
 }
 
 template <bool IsOuter, typename Ref>
@@ -126,6 +204,7 @@ launch_retrieve(probe_key_type const* keys,
                 cuda::std::int64_t n,
                 size_type const* match_counts,
                 Ref ref,
+                size_type left_offset,
                 rmm::cuda_stream_view stream,
                 rmm::device_async_resource_ref mr)
 {
@@ -134,22 +213,13 @@ launch_retrieve(probe_key_type const* keys,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  // Exclusive scan of match counts to get per-row output offsets.
-  rmm::device_uvector<size_type> offsets(n, stream);
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                         match_counts,
-                         match_counts + n,
-                         offsets.begin());
-
-  // Total output size = last offset + last count.  Batch both D2H copies.
-  size_type last_offset     = 0;
-  size_type last_count      = 0;
-  void* const dsts[]        = {&last_offset, &last_count};
-  void const* const srcs[]  = {offsets.data() + n - 1, match_counts + n - 1};
-  std::size_t const sizes[] = {sizeof(size_type), sizeof(size_type)};
-  CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(dsts, srcs, sizes, 2, stream));
-  stream.synchronize();
-  auto const total_output = static_cast<std::size_t>(last_offset) + last_count;
+  // Shared-memory buffered retrieve only needs the total output size, not
+  // per-row offsets.  A reduce is cheaper than an exclusive_scan.
+  auto const total_output =
+    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   match_counts,
+                   match_counts + n,
+                   size_type{0});
 
   if (total_output == 0) {
     return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
@@ -159,11 +229,14 @@ launch_retrieve(probe_key_type const* keys,
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(total_output, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(total_output, stream, mr);
 
-  auto const config =
-    grid_1d{static_cast<thread_index_type>(n * DEFAULT_JOIN_CG_SIZE), DEFAULT_JOIN_BLOCK_SIZE};
+  // Global atomic counter claimed in bulk by each flushing-tile buffer flush.
+  rmm::device_scalar<size_type> output_counter(size_type{0}, stream);
 
-  retrieve_kernel<IsOuter><<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    keys, offsets.data(), n, left_indices->data(), right_indices->data(), ref);
+  auto constexpr tiles_in_block = DEFAULT_JOIN_BLOCK_SIZE / Ref::cg_size;
+  auto const num_blocks = static_cast<unsigned int>((n + tiles_in_block - 1) / tiles_in_block);
+
+  retrieve_kernel<IsOuter><<<num_blocks, DEFAULT_JOIN_BLOCK_SIZE, 0, stream.value()>>>(
+    keys, n, left_offset, left_indices->data(), right_indices->data(), output_counter.data(), ref);
 
   return std::pair(std::move(left_indices), std::move(right_indices));
 }
