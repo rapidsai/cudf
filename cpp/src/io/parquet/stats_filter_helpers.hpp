@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "timestamp_utils.cuh"
+
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -38,7 +40,6 @@ constexpr size_t initial_chars_capacity = 1024;
  *
  */
 class stats_caster_base {
- public:
  protected:
   static inline numeric::decimal128::rep decode_flba_decimal128(uint8_t const* stats_val)
   {
@@ -93,26 +94,6 @@ class stats_caster_base {
   {
     CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
     return stats_caster_base::target_type<T>(*reinterpret_cast<bool const*>(stats_val));
-  }
-
-  /**
-   * @brief Apply timestamp scaling to a raw decoded value.
-   *
-   * Host-side equivalent of the __device__ rounding logic in page_data.cuh lines 226-233.
-   *
-   * @param raw_value The raw decoded integer from Parquet stats
-   * @param ts_scale Scale factor from calc_timestamp_scale()
-   * @return Scaled value
-   */
-  static inline int64_t apply_ts_scale(int64_t raw_value, int32_t ts_scale)
-  {
-    if (ts_scale < 0) {
-      int sign = (raw_value < 0);
-      return ((raw_value + sign) / -ts_scale) + sign;
-    } else if (ts_scale > 0) {
-      return raw_value * ts_scale;
-    }
-    return raw_value;
   }
 
   // integral but not boolean, and fixed_point, and chrono.

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "page_decode.cuh"
+#include "timestamp_utils.cuh"
 
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
@@ -212,7 +213,6 @@ inline __device__ void read_int64_timestamp(page_state_s* s,
   if (dict_pos + 4 < dict_size) {
     uint2 v;
     int64_t val;
-    int32_t ts_scale;
     v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
     v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
     if (ofs) {
@@ -224,14 +224,7 @@ inline __device__ void read_int64_timestamp(page_state_s* s,
     val <<= 32;
     val |= v.x;
     // Output to desired clock rate
-    ts_scale = s->ts_scale;
-    if (ts_scale < 0) {
-      // round towards negative infinity
-      int sign = (val < 0);
-      ts       = ((val + sign) / -ts_scale) + sign;
-    } else {
-      ts = val * ts_scale;
-    }
+    ts = apply_ts_scale(val, s->ts_scale);
   } else {
     ts = 0;
   }

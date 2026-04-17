@@ -42,4 +42,23 @@ namespace cudf::io::parquet::detail {
   return 0;
 }
 
+/**
+ * @brief Apply timestamp scaling to a raw decoded value.
+ *
+ * @param value Raw decoded integer value
+ * @param ts_scale Scale factor from calc_timestamp_scale()
+ * @return Scaled value
+ */
+[[nodiscard]] CUDF_HOST_DEVICE inline int64_t apply_ts_scale(int64_t value, int32_t ts_scale)
+{
+  if (ts_scale == 0) {
+    return value;
+  } else if (ts_scale < 0) {
+    auto const sign = static_cast<int>(value < 0);
+    return ((value + sign) / -ts_scale) + sign;
+  } else {
+    return value * ts_scale;
+  }
+}
+
 }  // namespace cudf::io::parquet::detail
