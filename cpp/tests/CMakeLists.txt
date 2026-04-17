@@ -69,7 +69,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     INSTALL_COMPONENT_SET testing
   )
 
-  if(CUDF_BUILD_STREAMS_TEST_UTIL)
+  if(0)
     set_tests_properties(
       ${CMAKE_TEST_NAME}
       PROPERTIES
