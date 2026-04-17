@@ -52,9 +52,6 @@ enum class roaring_bitmap_type : uint8_t {
  */
 class roaring_bitmap {
  public:
-  //! Forward declaration of the opaque wrapper of cuco's roaring bitmap
-  struct roaring_bitmap_impl;
-
   /**
    * @brief Constructs a roaring_bitmap from serialized bitmap data (payload)
    *
@@ -167,8 +164,10 @@ class roaring_bitmap {
                       rmm::cuda_stream_view stream) const;
 
  private:
+  //! Forward declaration of the opaque wrapper of cuco's roaring bitmap
+  class impl;
   roaring_bitmap_type _type;
-  std::unique_ptr<roaring_bitmap_impl> _impl;
+  std::unique_ptr<impl> _impl;
 };
 
 /** @} */  // end of group
