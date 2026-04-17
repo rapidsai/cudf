@@ -80,11 +80,20 @@ python -m pytest -p cudf.pandas \
     -k "profiler" \
     ./python/cudf/cudf_pandas_tests/
 
-read -r -a versions <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_pandas_compat pandas_compat_version)"
-
 version_lte() {
   [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
 }
+
+# Versions with wheels for Python 3.12+ (always tested when Python <= 3.13).
+read -r -a versions <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_pandas_compat pandas_compat_version)"
+
+# pandas 2.0 and 2.1 have no pre-built wheels for Python 3.12+; pip falls
+# back to a source build that fails with modern setuptools (pkg_resources
+# was removed). Only include them on Python <= 3.11.
+if version_lte "${RAPIDS_PY_VERSION}" "3.11"; then
+    read -r -a pre_312_versions <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_pandas_compat_pre_py312 pandas_compat_version)"
+    versions=("${pre_312_versions[@]}" "${versions[@]}")
+fi
 
 if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
     for version in "${versions[@]}"; do
