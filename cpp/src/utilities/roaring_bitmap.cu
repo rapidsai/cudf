@@ -24,7 +24,7 @@ using roaring_bitmap_64_type =
   cuco::experimental::roaring_bitmap<cuda::std::uint64_t, rmm::mr::polymorphic_allocator<char>>;
 
 /**
- * @brief Dispatches a roaring_bitmap_impl function based on the roaring bitmap type
+ * @brief Dispatches a roaring_bitmap::impl function based on the roaring bitmap type
  *
  * @tparam Func Type of function to dispatch
  * @param type Roaring bitmap type
