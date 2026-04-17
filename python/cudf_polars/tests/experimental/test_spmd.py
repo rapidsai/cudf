@@ -347,7 +347,7 @@ def test_over_multirank(
                     reason="key assignments only probed for exactly 2 ranks"
                 )
             )
-        if cross_rank and not is_scalar:
+        if cross_rank and not is_scalar and nranks == 2:
             request.applymarker(
                 pytest.mark.xfail(
                     reason=(
