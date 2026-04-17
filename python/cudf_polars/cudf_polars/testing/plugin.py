@@ -245,6 +245,8 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_delta.py::test_scan_delta_extract_table_statistics_df": "schemas mismatch: dtypes different",
     "tests/unit/io/test_partition.py::test_sink_partitioned_no_columns_in_file_25535[scan_parquet-sink_parquet]": "Incorrect row count. Related to https://github.com/rapidsai/cudf/issues/21428",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[0]": "ZeroDivisionError: division by zero",
+    # Flaky deadlock test, may occur on rtxpro6000 only
+    "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_in_mem_to_streaming_dispatch_deadlock_22641": "Flaky deadlock, may occur on rtxpro6000 only",
 }
 
 
