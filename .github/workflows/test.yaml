@@ -203,7 +203,7 @@ jobs:
       node_type: cpu8
       container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.cuda_version }}-ubuntu24.04-py3.13"
       script: ci/build_streams.sh
-      artifact-name: stream_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
+      artifact-name: stream_tests_${{ matrix.cuda_version }}
       file_to_upload: cpp/install
   streams-test:
     needs: streams-build
@@ -221,4 +221,4 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: gpu-l4-latest-1
       container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.cuda_version }}-ubuntu24.04-py3.13"
-      script: ci/test_streams.sh stream_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
+      script: ci/test_streams.sh stream_tests_${{ matrix.cuda_version }}
