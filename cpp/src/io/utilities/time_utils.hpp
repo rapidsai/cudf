@@ -12,7 +12,7 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 namespace cudf {
-namespace io {
+namespace io::detail {
 
 struct get_period {
   template <typename T>
@@ -33,5 +33,5 @@ inline int32_t to_clockrate(type_id timestamp_type_id)
            : type_dispatcher(data_type{timestamp_type_id}, get_period{});
 }
 
-}  // namespace io
+}  // namespace io::detail
 }  // namespace cudf

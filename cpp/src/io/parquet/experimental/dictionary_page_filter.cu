@@ -373,9 +373,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
 
   // Calculate the timestamp scale if this chunk has a timestamp logical type
   auto const timestamp_scale =
-    chunk.logical_type.has_value()
-      ? parquet::detail::calc_timestamp_scale(chunk.logical_type, chunk.ts_clock_rate)
-      : int32_t{0};
+    parquet::detail::calc_timestamp_scale(chunk.logical_type, chunk.ts_clock_rate);
 
   // FLBA length (0 if not FLBA type)
   auto const flba_length = chunk.type_length;

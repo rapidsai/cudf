@@ -314,14 +314,14 @@ struct page_stats_caster : public stats_caster_base {
     if (has_is_null_operator) { is_null = host_column<bool>(total_pages, stream); }
 
     // Compute timestamp scale factor for precision conversion
-    int32_t ts_scale = 0;
-    if constexpr (cudf::is_timestamp<T>()) {
-      auto const& schema = per_file_metadata[0].schema[schema_idx];
-      if (schema.logical_type.has_value()) {
-        ts_scale = parquet::detail::calc_timestamp_scale(schema.logical_type,
-                                                         static_cast<int32_t>(T::period::den));
+    auto const ts_scale = [&] {
+      if constexpr (cudf::is_timestamp<T>()) {
+        auto const& schema = per_file_metadata[0].schema[schema_idx];
+        return parquet::detail::calc_timestamp_scale(schema.logical_type,
+                                                     static_cast<int32_t>(T::period::den));
       }
-    }
+      return 0;
+    }();
 
     // Populate the host columns with page-level min, max statistics from the page index
     auto page_offset_idx = 0;
