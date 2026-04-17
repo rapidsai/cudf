@@ -43,12 +43,11 @@
 
 namespace {
 template <typename T>
-using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
-using strcol_wrapper = cudf::test::strings_column_wrapper;
-using CVector        = std::vector<std::unique_ptr<cudf::column>>;
-using Table          = cudf::table;
-constexpr cudf::size_type NoneValue =
-  std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
+using column_wrapper                = cudf::test::fixed_width_column_wrapper<T>;
+using strcol_wrapper                = cudf::test::strings_column_wrapper;
+using CVector                       = std::vector<std::unique_ptr<cudf::column>>;
+using Table                         = cudf::table;
+constexpr cudf::size_type NoneValue = cudf::JoinNoMatch;
 enum class algorithm { HASH, HASH_PARTITIONED, SORT_MERGE, MERGE };
 
 void expect_match_counts_equal(rmm::device_uvector<cudf::size_type> const& actual_counts,

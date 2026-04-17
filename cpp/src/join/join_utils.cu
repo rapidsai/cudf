@@ -4,24 +4,34 @@
  */
 
 #include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cuda/atomic>
 #include <cuda/iterator>
 #include <cuda/std/functional>
-#include <thrust/copy.h>
-#include <thrust/scatter.h>
+#include <cuda/std/tuple>
+#include <thrust/for_each.h>
+#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
 
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -45,100 +55,135 @@ VectorPair get_trivial_left_join_indices(table_view const& left,
   return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
-VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS((a.first->size() == a.second->size()),
-               "Mismatch between sizes of vectors in vector pair");
-  CUDF_EXPECTS((b.first->size() == b.second->size()),
-               "Mismatch between sizes of vectors in vector pair");
-  if (a.first->is_empty()) {
-    return std::move(b);
-  } else if (b.first->is_empty()) {
-    return std::move(a);
-  }
-  auto original_size = a.first->size();
-  a.first->resize(a.first->size() + b.first->size(), stream);
-  a.second->resize(a.second->size() + b.second->size(), stream);
-  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-               b.first->begin(),
-               b.first->end(),
-               a.first->begin() + original_size);
-  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-               b.second->begin(),
-               b.second->end(),
-               a.second->begin() + original_size);
-  return std::move(a);
-}
+namespace {
 
-VectorPair get_left_join_indices_complement(
-  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
-  size_type left_table_row_count,
-  size_type right_table_row_count,
+// Predicate: build row `idx` is unmatched iff its bit in the packed uint32 mask is clear.
+struct unmatched_bit {
+  uint32_t const* marks;
+  __device__ bool operator()(size_type idx) const noexcept
+  {
+    return ((marks[idx / 32] >> (idx % 32)) & 1u) == 0u;
+  }
+};
+
+// Transform a selected (unmatched) build index into a (JoinNoMatch, idx) pair that is stored
+// through a zip iterator over (left_out_tail, right_out_tail).
+struct to_no_match_pair {
+  __device__ cuda::std::tuple<size_type, size_type> operator()(size_type idx) const noexcept
+  {
+    return cuda::std::make_tuple(cudf::JoinNoMatch, idx);
+  }
+};
+
+}  // namespace
+
+VectorPair finalize_full_join(
+  cudf::host_span<cudf::device_span<size_type const> const> left_partials,
+  cudf::host_span<cudf::device_span<size_type const> const> right_partials,
+  size_type probe_table_num_rows,
+  size_type build_table_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Get array of indices that do not appear in right_indices
+  CUDF_EXPECTS(left_partials.size() == right_partials.size(),
+               "left_partials and right_partials must have the same length",
+               std::invalid_argument);
 
-  // Vector allocated for unmatched result
-  auto right_indices_complement =
-    std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
-
-  // If left table is empty in a full join call then all rows of the right table
-  // should be represented in the joined indices. This is an optimization since
-  // if left table is empty and full join is called all the elements in
-  // right_indices will be cudf::JoinNoMatch, i.e. `cuda::std::numeric_limits<size_type>::min()`.
-  // This if path should produce exactly the same result as the else path but will be faster.
-  if (left_table_row_count == 0) {
-    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                     right_indices_complement->begin(),
-                     right_indices_complement->end(),
-                     0);
-  } else {
-    // Assume all the indices in invalid_index_map are invalid
-    auto invalid_index_map =
-      std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
-    thrust::uninitialized_fill(
-      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-      invalid_index_map->begin(),
-      invalid_index_map->end(),
-      int32_t{1});
-
-    // Functor to check for index validity since left joins can create invalid indices
-    valid_range<size_type> valid(0, right_table_row_count);
-
-    // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
-    // Thus specifying that those locations are valid
-    thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                       cuda::make_constant_iterator(0),
-                       cuda::make_constant_iterator(0) + right_indices->size(),
-                       right_indices->begin(),      // Index locations
-                       right_indices->begin(),      // Stencil - Check if index location is valid
-                       invalid_index_map->begin(),  // Output indices
-                       valid);                      // Stencil Predicate
-    size_type begin_counter = static_cast<size_type>(0);
-    size_type end_counter   = static_cast<size_type>(right_table_row_count);
-
-    // Create list of indices that have been marked as invalid
-    size_type indices_count =
-      thrust::copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                      cuda::counting_iterator{begin_counter},
-                      cuda::counting_iterator{end_counter},
-                      invalid_index_map->begin(),
-                      right_indices_complement->begin(),
-                      cuda::std::identity{}) -
-      right_indices_complement->begin();
-    right_indices_complement->resize(indices_count, stream);
+  std::size_t probe_total = 0;
+  for (std::size_t i = 0; i < left_partials.size(); ++i) {
+    CUDF_EXPECTS(left_partials[i].size() == right_partials[i].size(),
+                 "matching partials must have equal left/right sizes",
+                 std::invalid_argument);
+    probe_total += left_partials[i].size();
   }
 
-  auto left_invalid_indices =
-    std::make_unique<rmm::device_uvector<size_type>>(right_indices_complement->size(), stream);
-  thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    left_invalid_indices->begin(),
-    left_invalid_indices->end(),
-    cudf::JoinNoMatch);
+  auto const upper = probe_total + static_cast<std::size_t>(build_table_num_rows);
+  auto left_out    = std::make_unique<rmm::device_uvector<size_type>>(upper, stream, mr);
+  auto right_out   = std::make_unique<rmm::device_uvector<size_type>>(upper, stream, mr);
 
-  return std::pair(std::move(left_invalid_indices), std::move(right_indices_complement));
+  // Concatenate every probe partial into the head of the output via one batched memcpy.
+  if (probe_total > 0) {
+    auto const n = left_partials.size();
+    std::vector<void*> dsts;
+    std::vector<void const*> srcs;
+    std::vector<std::size_t> sizes;
+    dsts.reserve(2 * n);
+    srcs.reserve(2 * n);
+    sizes.reserve(2 * n);
+    std::size_t offset = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+      auto const sz = left_partials[i].size() * sizeof(size_type);
+      dsts.push_back(left_out->data() + offset);
+      srcs.push_back(left_partials[i].data());
+      sizes.push_back(sz);
+      dsts.push_back(right_out->data() + offset);
+      srcs.push_back(right_partials[i].data());
+      sizes.push_back(sz);
+      offset += left_partials[i].size();
+    }
+    CUDF_CUDA_TRY(cudf::detail::memcpy_batch_async(
+      dsts.data(), srcs.data(), sizes.data(), dsts.size(), stream));
+  }
+
+  // Empty-probe fast path: every build row is unmatched.
+  if (probe_table_num_rows == 0) {
+    auto const tail = static_cast<std::size_t>(build_table_num_rows);
+    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     right_out->begin() + probe_total,
+                     right_out->begin() + probe_total + tail,
+                     0);
+    thrust::uninitialized_fill(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      left_out->begin() + probe_total,
+      left_out->begin() + probe_total + tail,
+      cudf::JoinNoMatch);
+    left_out->resize(probe_total + tail, stream);
+    right_out->resize(probe_total + tail, stream);
+    return std::pair(std::move(left_out), std::move(right_out));
+  }
+
+  if (build_table_num_rows == 0) {
+    left_out->resize(probe_total, stream);
+    right_out->resize(probe_total, stream);
+    return std::pair(std::move(left_out), std::move(right_out));
+  }
+
+  // Mark matched build rows in a packed uint32_t bitmask.
+  auto const n_words = cudf::util::div_rounding_up_safe(build_table_num_rows, size_type{32});
+  rmm::device_uvector<uint32_t> marks(n_words, stream);
+  CUDF_CUDA_TRY(cudaMemsetAsync(marks.data(), 0, n_words * sizeof(uint32_t), stream.value()));
+
+  auto const right_head = right_out->data();
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<std::size_t>{0},
+                     probe_total,
+                     [right_head,
+                      marks      = marks.data(),
+                      build_rows = build_table_num_rows] __device__(std::size_t i) {
+                       auto const idx = right_head[i];
+                       if (idx < 0 || idx >= build_rows) return;
+                       cuda::atomic_ref<uint32_t, cuda::thread_scope_device> ref(marks[idx / 32]);
+                       ref.fetch_or(1u << (idx % 32), cuda::std::memory_order_relaxed);
+                     });
+
+  // Fused compaction: for each unmatched build row, emit (JoinNoMatch, build_idx) into
+  // (left_out_tail, right_out_tail) in a single CUB DeviceSelect pass.
+  auto zip_tail =
+    thrust::make_zip_iterator(left_out->data() + probe_total, right_out->data() + probe_total);
+  auto out_iter = thrust::make_transform_output_iterator(zip_tail, to_no_match_pair{});
+
+  auto const new_end =
+    cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
+                          cuda::counting_iterator<size_type>{build_table_num_rows},
+                          out_iter,
+                          unmatched_bit{marks.data()},
+                          stream);
+
+  auto const comp_size = static_cast<std::size_t>(new_end - out_iter);
+  left_out->resize(probe_total + comp_size, stream);
+  right_out->resize(probe_total + comp_size, stream);
+
+  return std::pair(std::move(left_out), std::move(right_out));
 }
 
 }  // namespace detail
