@@ -414,25 +414,23 @@ inline bool protobuf_reader::get<bool>()
 };
 
 template <>
-inline uint32_t protobuf_reader::get<uint32_t>()
-{
-  uint32_t v = 0;
-  for (uint32_t l = 0;; l += 7) {
-    uint32_t c = get<uint8_t>();
-    v |= (c & 0x7f) << l;
-    if (c < 0x80) return v;
-  }
-}
-
-template <>
 inline uint64_t protobuf_reader::get<uint64_t>()
 {
   uint64_t v = 0;
-  for (uint64_t l = 0;; l += 7) {
+  for (uint32_t l = 0; l < sizeof(v) * 8; l += 7) {
     uint64_t c = get<uint8_t>();
     v |= (c & 0x7f) << l;
     if (c < 0x80) return v;
   }
+  CUDF_FAIL("Invalid varint: exceeds maximum encoded length");
+}
+
+template <>
+inline uint32_t protobuf_reader::get<uint32_t>()
+{
+  // Negative int32 is sign-extended to int64 and encoded as a 10-byte varint, so we decode the
+  // full 64-bit varint and truncate to the low 32 bits.
+  return static_cast<uint32_t>(get<uint64_t>());
 }
 
 template <typename T>
