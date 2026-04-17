@@ -21,18 +21,23 @@ on:
         description: "One of: [branch, nightly, pull-request]"
         type: string
         default: nightly
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: read
+  pull-requests: read
+
 jobs:
   conda-cpp-checks:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
   conda-cpp-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -40,8 +45,7 @@ jobs:
       script: ci/test_cpp.sh
       sha: ${{ inputs.sha }}
   conda-cpp-memcheck-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -52,8 +56,7 @@ jobs:
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: "ci/test_cpp_memcheck.sh"
   cpp-linters:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -62,8 +65,9 @@ jobs:
       script: "ci/cpp_linters.sh"
       file_to_upload: iwyu_results.txt
   conda-python-cudf-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -72,8 +76,9 @@ jobs:
       script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -81,8 +86,7 @@ jobs:
       sha: ${{ inputs.sha }}
       script: "ci/test_python_other.sh"
   conda-java-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -93,8 +97,7 @@ jobs:
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: "ci/test_java.sh"
   conda-notebook-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -105,8 +108,7 @@ jobs:
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: "ci/test_notebooks.sh"
   wheel-tests-cudf:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -114,8 +116,7 @@ jobs:
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_cudf.sh
   wheel-tests-dask-cudf:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -123,8 +124,7 @@ jobs:
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_dask_cudf.sh
   unit-tests-cudf-pandas:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -132,8 +132,7 @@ jobs:
       sha: ${{ inputs.sha }}
       script: ci/cudf_pandas_scripts/run_tests.sh
   third-party-integration-tests-cudf-pandas:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -145,8 +144,7 @@ jobs:
         ci/cudf_pandas_scripts/third-party-integration/test.sh python/cudf/cudf_pandas_tests/third_party_integration_tests/dependencies.yaml
       continue-on-error: true
   wheel-tests-cudf-polars:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -154,8 +152,7 @@ jobs:
       sha: ${{ inputs.sha }}
       script: "ci/test_wheel_cudf_polars.sh"
   wheel-tests-cudf-polars-with-rapidsmpf:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
@@ -167,8 +164,7 @@ jobs:
       script: "ci/test_cudf_polars_experimental.sh"
       continue-on-error: true
   cudf-polars-polars-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
@@ -176,8 +172,7 @@ jobs:
       sha: ${{ inputs.sha }}
       script: "ci/test_cudf_polars_polars_tests.sh"
   narwhals-tests:
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}

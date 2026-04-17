@@ -8,11 +8,19 @@ on:
       - labeled
       - unlabeled
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  packages: read
+  pull-requests: read
+
 jobs:
   trigger-notifier:
     if: contains(github.event.pull_request.labels.*.name, 'breaking')
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@main
+    secrets:
+      NV_SLACK_BREAKING_CHANGE_NOTIFIER_APP: ${{ secrets.NV_SLACK_BREAKING_CHANGE_NOTIFIER_APP }}
+    uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@4866bb5437e913caf5bf775f57c91abd144ed391  # main
     with:
       sender_login: ${{ github.event.sender.login }}
       sender_avatar: ${{ github.event.sender.avatar_url }}
