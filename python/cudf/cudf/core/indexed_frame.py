@@ -6397,7 +6397,7 @@ class IndexedFrame(Frame):
                 self._data._from_columns_like_self(result_columns)
             )
         result.index = source.index
-        return result.astype(np.float64)
+        return result
 
     def convert_dtypes(
         self,
