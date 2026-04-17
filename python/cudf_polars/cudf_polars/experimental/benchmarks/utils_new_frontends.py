@@ -386,6 +386,7 @@ class RunConfig:
     executor: ExecutorType  # "in-memory" | "streaming" | "cpu"
     frontend: str  # "spmd" | "ray" | "duckdb"
     connect: str | None = None
+    num_gpus: int | None = None
 
     # Run parameters
     iterations: int
@@ -514,6 +515,7 @@ class RunConfig:
             max_io_threads=args.max_io_threads,
             streaming_options=streaming_options,
             connect=args.connect,
+            num_gpus=args.num_gpus,
             validation_method=validation_method,
             extra_info=args.extra_info,
         )
@@ -1159,6 +1161,8 @@ def run_polars_ray(
     ray_init_options: dict[str, Any] = {}
     if run_config.connect is not None:
         ray_init_options["address"] = run_config.connect
+    if run_config.num_gpus is not None:
+        ray_init_options["num_gpus"] = run_config.num_gpus
 
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
@@ -1213,6 +1217,11 @@ def run_polars_dask(
             dask_client = distributed.Client(scheduler_file=run_config.connect)
         else:
             dask_client = distributed.Client(address=run_config.connect)
+
+    if run_config.num_gpus is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+            str(i) for i in range(run_config.num_gpus)
+        )
 
     try:
         with DaskEngine(
@@ -1638,6 +1647,14 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Not supported with --frontend spmd."""),
     )
     parser.add_argument(
+        "--num-gpus",
+        dest="num_gpus",
+        default=None,
+        type=int,
+        help="Number of GPUs for local cluster creation (--frontend ray/dask only). "
+        "Cannot be used with --connect. Defaults to all visible GPUs.",
+    )
+    parser.add_argument(
         "--iterations",
         default=1,
         type=int,
@@ -1770,10 +1787,16 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
 
     StreamingOptions._add_cli_args(parser)
 
-    # Trap the legacy --spill-device flag so we can emit a clear error.
+    # Trap legacy flags so we can emit clear errors.
     parser.add_argument(
         "--spill-device",
         dest="spill_device",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--blocksize",
+        dest="blocksize",
         default=None,
         help=argparse.SUPPRESS,
     )
@@ -1794,7 +1817,13 @@ def parse_args(
     if parsed_args.spill_device is not None:
         parser.error(
             "--spill-device is not supported with --frontend; "
-            "use --spill-device-limit instead."
+            "use --spill-device-limit instead, which takes a "
+            'percentage, not a fraction (e.g. "80%").'
+        )
+    if parsed_args.blocksize is not None:
+        parser.error(
+            "--blocksize is not supported with --frontend; "
+            "use --target-partition-size instead."
         )
 
     if parsed_args.validate_directory and parsed_args.validate:
@@ -1824,6 +1853,19 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
 
     if run_config.connect is not None and run_config.frontend == "spmd":
         raise ValueError("--connect is not supported with --frontend spmd.")
+
+    if run_config.num_gpus is not None:
+        if run_config.connect is not None:
+            raise ValueError("--num-gpus cannot be used with --connect.")
+        if run_config.frontend not in ("ray", "dask"):
+            raise ValueError(
+                "--num-gpus is only supported with --frontend ray or dask."
+            )
+        if "CUDA_VISIBLE_DEVICES" in os.environ:
+            raise ValueError(
+                "--num-gpus cannot be used when CUDA_VISIBLE_DEVICES is already set. "
+                "Unset CUDA_VISIBLE_DEVICES or use it directly to control GPU visibility."
+            )
 
     parquet_options = {"use_rapidsmpf_native": run_config.native_parquet}
     validation_files = (
