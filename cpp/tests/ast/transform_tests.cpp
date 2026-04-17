@@ -14,6 +14,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
@@ -275,18 +276,19 @@ TYPED_TEST(TransformTest, BasicAdditionLarge)
 {
   using Executor = TypeParam;
 
-  auto a     = cuda::counting_iterator<int32_t>{0};
-  auto col   = column_wrapper<int32_t>(a, a + 2000);
-  auto table = cudf::table_view{{col, col}};
+  auto zero = cudf::numeric_scalar<int32_t>(0);
+  auto two  = cudf::numeric_scalar<int32_t>(2);
+
+  auto col   = cudf::sequence(2000, zero);
+  auto table = cudf::table_view{{col->view(), col->view()}};
 
   auto col_ref    = cudf::ast::column_reference(0);
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref, col_ref);
 
-  auto b        = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto expected = column_wrapper<int32_t>(b, b + 2000);
+  auto expected = cudf::sequence(2000, zero, two);
   auto result   = Executor::compute_column(table, expression);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), result->view(), verbosity);
 }
 
 TYPED_TEST(TransformTest, LessComparator)
@@ -309,12 +311,14 @@ TYPED_TEST(TransformTest, LessComparator)
 
 TYPED_TEST(TransformTest, LessComparatorLarge)
 {
-  auto a         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto b         = cuda::counting_iterator<int32_t>{500};
+  auto zero   = cudf::numeric_scalar<int32_t>(0);
+  auto two    = cudf::numeric_scalar<int32_t>(2);
+  auto five_h = cudf::numeric_scalar<int32_t>(500);
+
   using Executor = TypeParam;
-  auto c_0       = column_wrapper<int32_t>(a, a + 2000);
-  auto c_1       = column_wrapper<int32_t>(b, b + 2000);
-  auto table     = cudf::table_view{{c_0, c_1}};
+  auto c_0       = cudf::sequence(2000, zero, two);
+  auto c_1       = cudf::sequence(2000, five_h);
+  auto table     = cudf::table_view{{c_0->view(), c_1->view()}};
 
   auto col_ref_0  = cudf::ast::column_reference(0);
   auto col_ref_1  = cudf::ast::column_reference(1);
@@ -357,14 +361,15 @@ TYPED_TEST(TransformTest, MultiLevelTreeArithmetic)
 
 TYPED_TEST(TransformTest, MultiLevelTreeArithmeticLarge)
 {
-  auto a         = cuda::counting_iterator<int32_t>{0};
-  auto b         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 1; });
-  auto c         = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto zero = cudf::numeric_scalar<int32_t>(0);
+  auto one  = cudf::numeric_scalar<int32_t>(1);
+  auto two  = cudf::numeric_scalar<int32_t>(2);
+
   using Executor = TypeParam;
-  auto c_0       = column_wrapper<int32_t>(a, a + 2000);
-  auto c_1       = column_wrapper<int32_t>(b, b + 2000);
-  auto c_2       = column_wrapper<int32_t>(c, c + 2000);
-  auto table     = cudf::table_view{{c_0, c_1, c_2}};
+  auto c_0       = cudf::sequence(2000, zero);
+  auto c_1       = cudf::sequence(2000, one);
+  auto c_2       = cudf::sequence(2000, zero, two);
+  auto table     = cudf::table_view{{c_0->view(), c_1->view(), c_2->view()}};
 
   auto col_ref_0 = cudf::ast::column_reference(0);
   auto col_ref_1 = cudf::ast::column_reference(1);
