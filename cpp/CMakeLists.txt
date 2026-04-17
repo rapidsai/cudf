@@ -1161,6 +1161,8 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
+                 BUILD_RPATH "\$ORIGIN"
+                 INSTALL_RPATH "\$ORIGIN"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
