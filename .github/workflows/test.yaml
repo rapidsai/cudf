@@ -189,7 +189,6 @@ jobs:
   streams-test:
     needs: streams-build
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    # if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
     strategy:
       fail-fast: false
       matrix:
