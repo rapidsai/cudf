@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -164,7 +164,7 @@ std::unique_ptr<column> contains(
  * @brief Returns a column of boolean values for each string where true indicates
  * the corresponding target string was found within that string in the provided column.
  *
- * The 'output[i] = true` if string `targets[i]` is found inside `input[i]` otherwise
+ * `output[i] = true` if string `targets[i]` is found inside `input[i]` otherwise
  * `output[i] = false`.
  * If `target[i]` is an empty string, true is returned for `output[i]`.
  * If `target[i]` is null, false is returned for `output[i]`.

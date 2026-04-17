@@ -50,7 +50,7 @@ std::unique_ptr<string_scalar> repeat_string(string_scalar const& input,
   auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, mr);
 
   // Pull data from the input string into each byte of the output string.
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     iter,
                     iter + repeat_times * str_size,
                     static_cast<char*>(buff.data()),
