@@ -253,29 +253,6 @@ jobs:
             -f branch=${{ inputs.branch }} \
             -f sha=${{ inputs.sha }} \
             -f date=${{ inputs.date }}
-  streams-build:
-    needs: checks
-    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda_version:
-          - &latest_cuda12 "12.9.1"
-          - &latest_cuda13 "13.1.1"
-        arch:
-          - amd64
-          - arm64
-    with:
-      build_type: ${{ inputs.build_type || 'branch' }}
-      branch: ${{ inputs.branch }}
-      date: ${{ inputs.date }}
-      sha: ${{ inputs.sha }}
-      node_type: cpu8
-      container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.cuda_version }}-ubuntu24.04-py3.13"
-      arch: ${{ matrix.arch }}
-      script: ci/build_streams.sh
-      artifact-name: stream_tests_${{ matrix.cuda_version }}_${{ matrix.arch }}
-      file_to_upload: cpp/install
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
     runs-on: linux-amd64-cpu4

@@ -9,9 +9,6 @@ readonly artifact_name="$1"
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
 
-rapids-logger "Configuring conda strict channel priority"
-conda config --set channel_priority strict
-
 rapids-logger "Download stream test artifacts"
 STREAM_TESTS="$(rapids-download-from-github "$artifact_name")"
 
