@@ -25,9 +25,9 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <optional>
 
@@ -149,13 +149,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
                         rmm::mr::polymorphic_allocator<char>{},
                         {stream.value()}};
 
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<cudf::size_type>{0};
 
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
     row_set.insert_async(iter, iter + right_num_rows, stream.value());
   } else {
-    thrust::counting_iterator<cudf::size_type> stencil(0);
+    cuda::counting_iterator<cudf::size_type> stencil(0);
     auto const [row_bitmask, _] =
       cudf::detail::bitmask_and(build, stream, cudf::get_current_device_resource_ref());
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
@@ -195,8 +195,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = cudf::detail::copy_if(
-    thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(probe.num_rows()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{probe.num_rows()},
     left_table_keep_mask.begin(),
     gather_map->begin(),
     [join_type] __device__(bool keep_row) {

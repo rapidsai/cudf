@@ -20,8 +20,8 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
 #include <limits>
@@ -897,7 +897,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
   if (_expr_conv.get_converted_expr().has_value()) {
     auto read_table         = std::make_unique<table>(std::move(out_columns));
-    auto counting_it        = thrust::make_counting_iterator<std::size_t>(0);
+    auto counting_it        = cuda::counting_iterator<std::size_t>{0};
     auto const output_count = read_table->num_columns() - _num_filter_only_columns;
     auto only_output        = read_table->select(counting_it, counting_it + output_count);
 

@@ -26,6 +26,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <cuda/iterator>
+
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
 #include <nanoarrow/nanoarrow_device.h>
@@ -188,9 +190,9 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
     // build strings into gather input form
     auto d_indices =
       rmm::device_uvector<cudf::strings::detail::string_index_pair>(size, stream, mr);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<cudf::size_type>(offset),
-                      thrust::counting_iterator<cudf::size_type>(offset + size),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<cudf::size_type>{offset},
+                      cuda::counting_iterator<cudf::size_type>{offset + size},
                       d_indices.begin(),
                       binary_view_to_string_index_pair{d_items, d_ptrs, d_mask, skip_mask});
     // gather strings into output column

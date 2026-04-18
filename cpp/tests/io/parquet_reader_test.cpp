@@ -164,7 +164,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
   std::bernoulli_distribution bn(0.7f);
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = thrust::make_counting_iterator(0);
+  auto values = cuda::counting_iterator<int>{0};
 
   // int64
   cudf::test::fixed_width_column_wrapper<int64_t> c0(values, values + num_rows, valids);
@@ -251,7 +251,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
   std::bernoulli_distribution bn(0.7f);
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-  auto values = thrust::make_counting_iterator(0);
+  auto values = cuda::counting_iterator<int>{0};
 
   cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
 
@@ -752,8 +752,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
         reinterpret_cast<std::byte const*>(decimals_parquet.data()), decimals_parquet.size()}});
     auto result = cudf::io::read_parquet(read_opts);
 
-    auto validity =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 50; });
+    auto validity = cudf::test::iterators::null_at(50);
 
     EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
@@ -1214,9 +1213,8 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
   constexpr cudf::size_type rows_per_level = 2;
 
   constexpr cudf::size_type num_values = (1 << num_nesting_levels) * rows_per_level;
-  auto value_iter                      = thrust::make_counting_iterator(0);
-  auto validity =
-    cudf::detail::make_counting_transform_iterator(0, [](cudf::size_type i) { return i % 2; });
+  auto value_iter                      = cuda::counting_iterator<int>{0};
+  auto validity                        = cudf::test::iterators::nulls_at_multiples_of(2);
   cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);
 
   // ~256k values with num_nesting_levels = 16
@@ -1573,12 +1571,12 @@ TEST_F(ParquetReaderTest, ExtendedFilterExpressions)
 {
   // Create a parquet file with 3 int32 columns for col-to-col comparison testing
   auto constexpr num_rows = 20'000;
-  auto col_a = cudf::test::fixed_width_column_wrapper<int32_t>(thrust::counting_iterator(0),
-                                                               thrust::counting_iterator(num_rows));
+  auto col_a = cudf::test::fixed_width_column_wrapper<int32_t>(cuda::counting_iterator<int>{0},
+                                                               cuda::counting_iterator{num_rows});
   auto col_b = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::counting_iterator(num_rows), thrust::counting_iterator(2 * num_rows));
+    cuda::counting_iterator{num_rows}, cuda::counting_iterator{2 * num_rows});
   auto col_c = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::counting_iterator(2 * num_rows), thrust::counting_iterator(3 * num_rows));
+    cuda::counting_iterator{2 * num_rows}, cuda::counting_iterator{3 * num_rows});
 
   auto const written_table = cudf::table_view{{col_a, col_b, col_c}};
 

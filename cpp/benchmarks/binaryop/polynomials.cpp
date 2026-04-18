@@ -12,7 +12,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -43,8 +43,8 @@ static void BM_binaryop_polynomials(nvbench::state& state)
     std::mt19937 generator;
     std::uniform_real_distribution<key_type> distribution{0, 1};
 
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(order + 1),
+    std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                   cuda::counting_iterator{order + 1},
                    std::back_inserter(constants),
                    [&](int) { return cudf::numeric_scalar<key_type>(distribution(generator)); });
   }

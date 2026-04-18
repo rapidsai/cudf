@@ -14,6 +14,7 @@ import pytest
 
 def test_structlog_streaming_node_events():
     """Test that structlog emits 'Streaming Actor' events when tracing is enabled."""
+    pytest.importorskip("structlog")
     code = textwrap.dedent("""\
     import rmm
     import polars as pl

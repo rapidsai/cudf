@@ -20,9 +20,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
@@ -90,9 +90,9 @@ struct dispatch_hex_to_integers_fn {
     requires(cudf::is_integral_not_bool<IntegerType>())
   {
     auto d_results = output_column.data<IntegerType>();
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(strings_column.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{strings_column.size()},
                       d_results,
                       hex_to_integer_fn<IntegerType>{strings_column});
   }
@@ -230,9 +230,9 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings.size()},
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;

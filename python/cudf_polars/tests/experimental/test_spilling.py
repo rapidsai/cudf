@@ -8,7 +8,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pytest
 from rapidsmpf.memory.buffer import MemoryType
+from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
@@ -34,15 +36,39 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
     return plc.Table([plc.Column.from_array(data, stream=stream)])
 
 
-def test_make_spill_function(engine: SPMDEngine) -> None:
+@pytest.mark.parametrize(
+    "engine,spilled_host_mem_type",
+    [
+        pytest.param(
+            {"rapidsmpf_options": {"pinned_memory": "true"}},
+            MemoryType.PINNED_HOST,
+            marks=pytest.mark.skipif(
+                not is_pinned_memory_resources_supported(),
+                reason="Pinned memory requires CUDA 12.6+ driver and runtime",
+            ),
+        ),
+        ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
+    ],
+    indirect=["engine"],
+)
+def test_make_spill_function(
+    engine: SPMDEngine, spilled_host_mem_type: MemoryType
+) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
     context = engine.context
+
+    if spilled_host_mem_type == MemoryType.PINNED_HOST:
+        assert engine.context.br().pinned_mr is not None
+        other_host_mem_type = MemoryType.HOST
+    else:
+        assert engine.context.br().pinned_mr is None
+        other_host_mem_type = MemoryType.PINNED_HOST
 
     # Create 3 spillable message containers simulating fanout buffers
     # Buffer 0: Fast consumer (2 messages)
     # Buffer 1: Slow consumer (5 messages) <- should spill from here first
     # Buffer 2: Medium consumer (3 messages)
-    buffers = [SpillableMessages() for _ in range(3)]
+    buffers = [SpillableMessages(context.br()) for _ in range(3)]
     messages_per_buffer = [2, 5, 3]
 
     # Track message IDs for each buffer
@@ -57,7 +83,9 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
         for msg_idx in range(count):
             # Create 1MB messages
             table = create_test_table(1024 * 1024, stream)
-            chunk = TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
+            chunk = TableChunk.from_pylibcudf_table(
+                table, stream, exclusive_view=True, br=context.br()
+            )
             msg = Message(msg_idx, chunk)
             mid = sm.insert(msg)
             message_ids[buffer_idx].append(mid)
@@ -81,7 +109,8 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
             mid = message_ids[1][i]
             desc = buffer_1_descs[mid]
             # Should be in HOST memory (spilled)
-            assert desc.content_sizes[MemoryType.HOST] > 0
+            assert desc.content_sizes[spilled_host_mem_type] > 0
+            assert desc.content_sizes[other_host_mem_type] == 0
             assert desc.content_sizes[MemoryType.DEVICE] == 0
 
         # Buffer 1: oldest messages should still be in device
@@ -90,20 +119,22 @@ def test_make_spill_function(engine: SPMDEngine) -> None:
             desc = buffer_1_descs[mid]
             # Should still be in DEVICE memory
             assert desc.content_sizes[MemoryType.DEVICE] > 0
-            assert desc.content_sizes[MemoryType.HOST] == 0
+            assert desc.content_sizes[spilled_host_mem_type] == 0
+            assert desc.content_sizes[other_host_mem_type] == 0
 
         # Buffer 0 (shortest queue): all messages should still be on device
         buffer_0_descs = buffers[0].get_content_descriptions()
         for mid in message_ids[0]:
             desc = buffer_0_descs[mid]
             assert desc.content_sizes[MemoryType.DEVICE] > 0
-            assert desc.content_sizes[MemoryType.HOST] == 0
+            assert desc.content_sizes[spilled_host_mem_type] == 0
+            assert desc.content_sizes[other_host_mem_type] == 0
 
         # Verify we can extract and make available a spilled message
         spilled_mid = message_ids[1][4]  # Newest message from longest queue
         spilled_msg = buffers[1].extract(mid=spilled_mid)
 
-        chunk = TableChunk.from_message(spilled_msg)
+        chunk = TableChunk.from_message(spilled_msg, br=context.br())
         assert not chunk.is_available()  # Should be on host
 
         # Make it available should bring it back to device

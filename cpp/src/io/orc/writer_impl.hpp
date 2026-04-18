@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -20,8 +20,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
 #include <string>
@@ -45,8 +45,8 @@ struct stripe_rowgroups {
   size_type id;     // stripe id
   size_type first;  // first rowgroup in the stripe
   size_type size;   // number of rowgroups in the stripe
-  [[nodiscard]] auto cbegin() const { return thrust::make_counting_iterator(first); }
-  [[nodiscard]] auto cend() const { return thrust::make_counting_iterator(first + size); }
+  [[nodiscard]] auto cbegin() const { return cuda::counting_iterator{first}; }
+  [[nodiscard]] auto cend() const { return cuda::counting_iterator{first + size}; }
 };
 
 /**

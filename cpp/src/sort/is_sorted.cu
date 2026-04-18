@@ -16,8 +16,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/count.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 
@@ -39,23 +39,26 @@ bool is_sorted(cudf::table_view const& in,
     // the comparator speeds up compile-time significantly over using the comparator directly
     // in thrust::is_sorted.
     auto d_results = rmm::device_uvector<bool>(in.num_rows(), stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(in.num_rows()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{in.num_rows()},
                       d_results.begin(),
                       [device_comparator] __device__(auto idx) -> bool {
                         return (idx == 0) || device_comparator(idx - 1, idx);
                       });
 
-    return thrust::count(
-             rmm::exec_policy_nosync(stream), d_results.begin(), d_results.end(), false) == 0;
+    return thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         d_results.begin(),
+                         d_results.end(),
+                         false) == 0;
   } else {
     auto const device_comparator = comparator.less<false>(has_nested_nulls(in));
 
-    return thrust::is_sorted(rmm::exec_policy_nosync(stream),
-                             thrust::counting_iterator<size_type>(0),
-                             thrust::counting_iterator<size_type>(in.num_rows()),
-                             device_comparator);
+    return thrust::is_sorted(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<size_type>{0},
+      cuda::counting_iterator<size_type>{in.num_rows()},
+      device_comparator);
   }
 }
 

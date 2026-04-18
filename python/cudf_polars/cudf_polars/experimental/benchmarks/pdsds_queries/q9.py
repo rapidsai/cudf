@@ -115,23 +115,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         (81, 100, rc[4]),
     ]
 
-    # Calculate each bucket summary
-    bucket_stats = []
+    bucket_expressions = []
     for i, (min_qty, max_qty, _) in enumerate(buckets, 1):
-        # Compute count, avg(aggcthen), avg(aggcelse) for each quantity range
-        stats = store_sales.filter(
-            pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
-        ).select(
+        condition = pl.col("ss_quantity").is_between(min_qty, max_qty, closed="both")
+        bucket_expressions.extend(
             [
-                pl.len().alias(f"count_{i}"),
-                pl.col(aggcthen).mean().alias(f"avg_then_{i}"),
-                pl.col(aggcelse).mean().alias(f"avg_else_{i}"),
+                condition.sum().alias(f"count_{i}"),
+                pl.when(condition)
+                .then(pl.col(aggcthen))
+                .otherwise(None)
+                .mean()
+                .alias(f"avg_then_{i}"),
+                pl.when(condition)
+                .then(pl.col(aggcelse))
+                .otherwise(None)
+                .mean()
+                .alias(f"avg_else_{i}"),
             ]
         )
-        bucket_stats.append(stats)
 
-    # Combine all bucket summaries into one row
-    combined_stats = pl.concat(bucket_stats, how="horizontal")
+    combined_stats = store_sales.select(bucket_expressions)
 
     # Select appropriate value per bucket based on count threshold
     bucket_values = []

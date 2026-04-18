@@ -117,7 +117,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     customer_sales = (
-        store_sales.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        # Note: filtering on is_not_null instead of joining to the customer table is
+        # only valid because we know that the TPC-DS includes a foreign key here, so all
+        # customers in store_sales _must_ be entries that exist somewhere in customer.
+        store_sales.filter(pl.col("ss_customer_sk").is_not_null())
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
         .group_by("ss_customer_sk")
@@ -129,7 +132,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     best_customers = (
-        store_sales.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        store_sales.filter(pl.col("ss_customer_sk").is_not_null())
         .group_by("ss_customer_sk")
         .agg((pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("ssales"))
         .join(threshold, how="cross")
@@ -138,11 +141,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # Pre-filter date_dim to target year/month
+    date_target = date_dim.filter(
+        (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+    ).select("d_date_sk")
+
     catalog_part = (
         catalog_sales.join(
-            customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
+            customer.select(["c_customer_sk", "c_last_name", "c_first_name"]),
+            left_on="cs_bill_customer_sk",
+            right_on="c_customer_sk",
         )
-        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(date_target, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(frequent_ss_items, left_on="cs_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
@@ -150,16 +160,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="ss_customer_sk",
             how="semi",
         )
-        .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .group_by(["c_last_name", "c_first_name"])
         .agg((pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales"))
     )
 
     web_part = (
         web_sales.join(
-            customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
+            customer.select(["c_customer_sk", "c_last_name", "c_first_name"]),
+            left_on="ws_bill_customer_sk",
+            right_on="c_customer_sk",
         )
-        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(date_target, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(frequent_ss_items, left_on="ws_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
@@ -167,7 +178,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="ss_customer_sk",
             how="semi",
         )
-        .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .group_by(["c_last_name", "c_first_name"])
         .agg((pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"))
     )

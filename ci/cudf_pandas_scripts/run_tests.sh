@@ -10,12 +10,8 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${PWD}/test-results"}
 RAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-"${PWD}/coverage-results"}
 mkdir -p "${RAPIDS_TESTS_DIR}" "${RAPIDS_COVERAGE_DIR}"
 
-DEPENDENCIES_PATH="dependencies.yaml"
 # https://github.com/jupyter/jupyter_core/pull/292
 export JUPYTER_PLATFORM_DIRS=1
-
-# Use grep to find the line containing the package name and version constraint
-pandas_version_constraint=$(grep -oP "pandas>=\d+\.\d+(\.\d+)?,<\d+\.\d+(\.\d+)?" $DEPENDENCIES_PATH)
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 
@@ -33,7 +29,7 @@ rapids-generate-pip-constraints test_python_cudf_pandas ./constraints.txt
 #   * need to provide --constraint="${PIP_CONSTRAINT}" because that environment variable is
 #     ignored if any other --constraint are passed via the CLI
 #
-python -m pip install \
+rapids-pip-retry install \
     -v \
     --constraint ./constraints.txt \
     --constraint "${PIP_CONSTRAINT}" \
@@ -85,11 +81,10 @@ python -m pytest -p cudf.pandas \
     ./python/cudf/cudf_pandas_tests/
 
 available_pandas_versions=$(python -m pip index versions pandas --json | jq '.versions')
-output=$(python ci/cudf_pandas_scripts/filter_pandas_versions.py "$available_pandas_versions" "$pandas_version_constraint")
+output=$(python ci/utils/filter_package_versions.py dependencies.yaml run_common pandas "$available_pandas_versions")
 
-# Convert the comma-separated list into an array
-IFS=',' read -r -a versions <<< "$output"
-
+# Convert the space-separated list into an array
+read -r -a versions <<< "${output}"
 
 version_lte() {
   [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
@@ -102,7 +97,7 @@ if version_lte "${RAPIDS_PY_VERSION}" "3.13"; then
         # requiring numpy<2. cupy>=14 dropped support for numpy<2, so we explicitly
         # downgrade cupy here to avoid an import failure when cupy tries
         # to load against the older numpy.
-        python -m pip install "numpy>=1.26,<2.0a0" "pandas==${version}.*" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
+        rapids-pip-retry install "numpy>=1.26,<2.0a0" "pandas==${version}" "cupy-cuda${RAPIDS_CUDA_VERSION%%.*}x<14"
         python -m pytest -p cudf.pandas \
             --ignore=./python/cudf/cudf_pandas_tests/third_party_integration_tests/ \
             --numprocesses=8 \

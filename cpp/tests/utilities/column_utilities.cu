@@ -26,6 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/cmath>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
@@ -33,7 +34,6 @@
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/generate.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/reduce.h>
@@ -527,7 +527,7 @@ struct column_comparator_impl {
     auto differences = rmm::device_uvector<int>(
       lhs_row_indices.size(),
       cudf::test::get_default_stream());  // worst case: everything different
-    auto input_iter = thrust::make_counting_iterator(0);
+    auto input_iter = cuda::counting_iterator<cudf::size_type>{0};
 
     auto diff_map =
       rmm::device_uvector<bool>(lhs_row_indices.size(), cudf::test::get_default_stream());
@@ -598,7 +598,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       cuda::proclaim_return_type<size_type>(
         [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; }));
     auto lhs_valids = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
+      cuda::counting_iterator<cudf::size_type>{0},
       cuda::proclaim_return_type<bool>(
         [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
           return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
@@ -612,7 +612,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       cuda::proclaim_return_type<size_type>(
         [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; }));
     auto rhs_valids = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
+      cuda::counting_iterator<cudf::size_type>{0},
       cuda::proclaim_return_type<bool>(
         [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
           return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
@@ -634,7 +634,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     // B does not.  So the offsets for the remaining valid rows are fundamentally different even
     // though the row lengths are the same.
     //
-    auto input_iter = thrust::make_counting_iterator(0);
+    auto input_iter = cuda::counting_iterator<cudf::size_type>{0};
     auto diff_iter  = thrust::copy_if(
       rmm::exec_policy_nosync(cudf::test::get_default_stream()),
       input_iter,
@@ -921,8 +921,8 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask,
                          size_type number_of_elements)
 {
-  return std::all_of(thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(number_of_elements),
+  return std::all_of(cuda::counting_iterator<cudf::size_type>{0},
+                     cuda::counting_iterator{number_of_elements},
                      [&expected_mask, &got_mask](auto index) {
                        return cudf::bit_is_set(expected_mask.data(), index) ==
                               cudf::bit_is_set(got_mask.data(), index);

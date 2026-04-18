@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -42,9 +43,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/count.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <future>
@@ -792,14 +793,14 @@ table_with_metadata read_csv(cudf::io::datasource* source,
   if (not opts_have_all_col_names) {
     std::vector<size_t> col_loop_order(column_names.size());
     auto unnamed_it = std::copy_if(
-      thrust::make_counting_iterator<size_t>(0),
-      thrust::make_counting_iterator<size_t>(column_names.size()),
+      cuda::counting_iterator<size_t>{0},
+      cuda::counting_iterator<size_t>{column_names.size()},
       col_loop_order.begin(),
       [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
 
     // Rename empty column names to "Unnamed: col_index"
-    std::copy_if(thrust::make_counting_iterator<size_t>(0),
-                 thrust::make_counting_iterator<size_t>(column_names.size()),
+    std::copy_if(cuda::counting_iterator<size_t>{0},
+                 cuda::counting_iterator<size_t>{column_names.size()},
                  unnamed_it,
                  [&column_names](auto col_idx) -> bool {
                    auto is_empty = column_names[col_idx].empty();
@@ -975,8 +976,10 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     auto const num_string_cols = string_col_indices.size();
     if (num_string_cols > 0) {
       auto const quotechar = parse_opts.quotechar;
-      cudf::string_scalar quotechar_scalar(std::string(1, quotechar), true, stream);
-      cudf::string_scalar dblquotechar_scalar(std::string(2, quotechar), true, stream);
+      cudf::string_scalar quotechar_scalar(
+        std::string(1, quotechar), true, stream, cudf::get_current_device_resource_ref());
+      cudf::string_scalar dblquotechar_scalar(
+        std::string(2, quotechar), true, stream, cudf::get_current_device_resource_ref());
       constexpr size_t max_tasks = 4;
       auto const cols_per_task   = cudf::util::div_rounding_up_safe(num_string_cols, max_tasks);
       auto const num_tasks       = cudf::util::div_rounding_up_safe(num_string_cols, cols_per_task);
@@ -989,13 +992,18 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
         // Count how many rows were quoted to determine the fast path
         auto const num_quoted = thrust::count(
-          rmm::exec_policy_nosync(col_stream), is_quoted.begin(), is_quoted.end(), true);
+          rmm::exec_policy_nosync(col_stream, cudf::get_current_device_resource_ref()),
+          is_quoted.begin(),
+          is_quoted.end(),
+          true);
         if (num_quoted == 0) {
           // Fast path: no rows were quoted, skip replacement entirely
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);
         } else {
           auto replaced_all_col = cudf::strings::detail::replace(
-            cudf::make_strings_column(*buffer->_strings, col_stream)->view(),
+            cudf::make_strings_column(
+              *buffer->_strings, col_stream, cudf::get_current_device_resource_ref())
+              ->view(),
             dblquotechar_scalar,
             quotechar_scalar,
             -1,
@@ -1013,7 +1021,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
             auto const* original_pairs = buffer->_strings->data();
             auto const original_iter   = thrust::make_transform_iterator(
-              thrust::make_counting_iterator<size_type>(0),
+              cuda::counting_iterator<size_type>{0},
               cuda::proclaim_return_type<cuda::std::optional<cudf::string_view>>(
                 [original_pairs] __device__(
                   size_type idx) -> cuda::std::optional<cudf::string_view> {
@@ -1055,6 +1063,12 @@ table_with_metadata read_csv(cudf::io::datasource* source,
       }
 
       cudf::detail::join_streams(streams, stream);
+
+      for (auto const col_idx : string_col_indices) {
+        if (out_columns[col_idx]) {
+          out_columns[col_idx] = cudf::rebind_stream(std::move(*out_columns[col_idx]), stream);
+        }
+      }
     }
 
     // Create output columns for the columns that were not processed in the parallel loop
