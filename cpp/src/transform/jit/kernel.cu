@@ -41,7 +41,6 @@ template <null_aware is_null_aware,
           typename OutputAccessors>
 CUDF_KERNEL void transform_kernel(size_type row_size,
                                   bitmask_type const* __restrict__ stencil,
-                                  bool stencil_has_nulls,
                                   void* __restrict__ user_data,
                                   column_device_view_core const* __restrict__ input_cols,
                                   mutable_column_device_view_core const* __restrict__ output_cols)
@@ -52,7 +51,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 
   for (auto element_idx = start; element_idx < row_size; element_idx += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
-      if (stencil_has_nulls && !bit_is_set(stencil, element_idx)) { continue; }
+      if (stencil != nullptr && !bit_is_set(stencil, element_idx)) { continue; }
 
       auto outs = OutputAccessors::map([&]<typename... A>() {
         return cuda::std::tuple{A::output_arg(output_cols, element_idx)...};
