@@ -212,6 +212,16 @@ def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
     gindex = cudf.interval_range(
         start=start, freq=freq, periods=periods, closed="left"
     )
+    if (
+        parse(np.__version__) < parse("2")
+        and pindex.dtype.subtype != gindex.dtype.subtype
+    ):
+        # NEP 50 in numpy 2 changes pandas' subtype result to match cudf
+        pindex = pindex.astype(
+            pd.IntervalDtype(
+                subtype=gindex.dtype.subtype, closed=pindex.dtype.closed
+            )
+        )
     assert_eq(pindex, gindex)
 
 
