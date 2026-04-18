@@ -79,7 +79,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
         (A::assign(output_cols, element_idx, cuda::std::get<A::index>(outs)), ...);
       });
     } else {
-      bool is_valid[OutputAccessors::size];
+      auto active_mask = __ballot_sync(0xFFFF'FFFFU, element_idx < row_size);
 
       auto outs = OutputAccessors::map([&]<typename... A>() {
         return cuda::std::tuple{A::null_output_arg(output_cols, element_idx)...};
@@ -104,12 +104,9 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 
       OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, element_idx, *cuda::std::get<A::index>(outs)), ...);
-        ((is_valid[A::index] = cuda::std::get<A::index>(outs).has_value()), ...);
-      });
-
-      OutputAccessors::map([&]<typename... A>() {
-        auto active_mask = __ballot_sync(0xFFFF'FFFFU, element_idx < row_size);
-        (warp_compact_validity<A>(active_mask, output_cols, element_idx, is_valid[A::index]), ...);
+        (warp_compact_validity<A>(
+           active_mask, output_cols, element_idx, cuda::std::get<A::index>(outs).has_value()),
+         ...);
       });
     }
   }
