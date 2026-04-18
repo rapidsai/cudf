@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -411,13 +411,7 @@ inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
                                                     int32_t ts_scale)
 {
   gpuOutputByteStreamSplit<int64_t>(reinterpret_cast<uint8_t*>(dst), src, stride);
-  if (ts_scale < 0) {
-    // round towards negative infinity
-    int sign = (*dst < 0);
-    *dst     = ((*dst + sign) / -ts_scale) + sign;
-  } else {
-    *dst = *dst * ts_scale;
-  }
+  *dst = convert_to_timestamp64(*dst, ts_scale);
 }
 
 /**

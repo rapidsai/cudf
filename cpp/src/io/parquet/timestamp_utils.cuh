@@ -61,4 +61,22 @@ namespace cudf::io::parquet::detail {
   }
 }
 
+/**
+ * @brief Helper function to convert a int64_t to a timestamp64
+ *
+ * @param value Value to convert
+ * @param timestamp_scale Timestamp scale
+ * @return Converted timestamp64 value
+ */
+__device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
+                                                          int32_t timestamp_scale)
+{
+  if (timestamp_scale < 0) {
+    // round towards negative infinity
+    int32_t const sign = (value < 0);
+    return ((value + sign) / -timestamp_scale) + sign;
+  }
+  return value * timestamp_scale;
+}
+
 }  // namespace cudf::io::parquet::detail

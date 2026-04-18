@@ -239,9 +239,7 @@ aggregate_reader_metadata::filter_row_groups(
       : input_row_group_indices;
 
   // Collect equality literals for each input table column for bloom filtering
-  auto equality_literals =
-    equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
-      .get_literals();
+  auto equality_literals = equality_literals_collector{filter.get(), output_dtypes}.get_literals();
 
   // Skip bloom filter probing for timestamp columns with precision conversion, because the
   // bloom filter was built at the native precision, and hashing at the output precision will

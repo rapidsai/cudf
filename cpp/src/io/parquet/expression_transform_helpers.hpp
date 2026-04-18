@@ -266,7 +266,9 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  public:
   equality_literals_collector() = default;
 
-  equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
+  equality_literals_collector(ast::expression const& expr,
+                              cudf::host_span<cudf::data_type const> output_dtypes,
+                              int32_t timestamp_clock_rate = 0);
 
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
@@ -300,8 +302,11 @@ class equality_literals_collector : public ast::detail::expression_transformer {
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
-  size_type _num_input_columns;
+  cudf::host_span<cudf::data_type const> _output_dtypes;
   std::vector<std::vector<ast::literal*>> _literals;
+
+ private:
+  int32_t _timestamp_clock_rate{0};
 };
 
 /**
