@@ -972,20 +972,19 @@ def test_csv_reader_dtype_inference_whitespace():
     assert list(cu_df.columns.values) == list(pd_df.columns.values)
 
 
-# Disabling until https://github.com/rapidsai/cudf/pull/22094 is fixed
-# def test_csv_reader_empty_dataframe():
-#     dtypes = ["float64", "int64"]
-#     buffer = "float_point, integer"
+def test_csv_reader_empty_dataframe():
+    dtypes = ["float64", "int64"]
+    buffer = "float_point, integer"
 
-#     # should work fine with dtypes
-#     df = read_csv(StringIO(buffer), dtype=dtypes)
-#     assert df.shape == (0, 2)
-#     assert all(df.dtypes == ["float64", "int64"])
+    # should work fine with dtypes
+    df = read_csv(StringIO(buffer), dtype=dtypes)
+    assert df.shape == (0, 2)
+    assert all(df.dtypes == ["float64", "int64"])
 
-#     # should default to string columns without dtypes
-#     df = read_csv(StringIO(buffer))
-#     assert df.shape == (0, 2)
-#     assert all(df.dtypes == ["object", "object"])
+    # should default to string columns without dtypes
+    df = read_csv(StringIO(buffer))
+    assert df.shape == (0, 2)
+    assert all(df.dtypes == ["object", "object"])
 
 
 def test_csv_reader_filenotfound(tmp_path):
