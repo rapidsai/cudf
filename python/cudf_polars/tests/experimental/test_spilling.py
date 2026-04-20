@@ -68,7 +68,7 @@ def test_make_spill_function(
     # Buffer 0: Fast consumer (2 messages)
     # Buffer 1: Slow consumer (5 messages) <- should spill from here first
     # Buffer 2: Medium consumer (3 messages)
-    buffers = [SpillableMessages() for _ in range(3)]
+    buffers = [SpillableMessages(br=engine.context.br()) for _ in range(3)]
     messages_per_buffer = [2, 5, 3]
 
     # Track message IDs for each buffer

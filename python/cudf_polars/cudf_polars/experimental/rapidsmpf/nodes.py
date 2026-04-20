@@ -352,7 +352,9 @@ async def fanout_node_unbounded(
         )
 
         # Spillable FIFO buffer for each output channel
-        output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
+        output_buffers: list[SpillableMessages] = [
+            SpillableMessages(br=context.br()) for _ in chs_out
+        ]
         num_outputs = len(chs_out)
 
         # Track message IDs in FIFO order for each output buffer
