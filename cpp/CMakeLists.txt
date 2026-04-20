@@ -1192,6 +1192,10 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
 
   fixup_target_for_stream_testing(cudf)
   target_compile_definitions(cudf PRIVATE CUDF_BUILD_STREAMS_TEST_UTIL)
+
+  if(TARGET rmm)
+    fixup_target_for_stream_testing(rmm)
+  endif()
 endif()
 
 # ##################################################################################################
