@@ -187,7 +187,6 @@ jobs:
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/test_narwhals.sh
   streams-build:
-    needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}

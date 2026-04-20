@@ -3960,12 +3960,26 @@ def concat_columns(objs: Sequence[ColumnBase]) -> ColumnBase:
     with access_columns(  # type: ignore[assignment]
         *objs_with_len, mode="read", scope="internal"
     ) as objs_with_len:
-        return ColumnBase.create(
+        result = ColumnBase.create(
             plc.concatenate.concatenate(
                 [col.plc_column for col in objs_with_len]
             ),
             objs_with_len[0].dtype,
         )
+    # Preserve cached `_local_time` for DatetimeTZColumn when every input has
+    # it. The stored UTC values produced by `tz_localize` can be inaccurate
+    # near DST transitions (the transition table is not globally sorted), so
+    # `_local_time` is the authoritative source for producing correct pandas
+    # output.
+    if isinstance(result, cudf.core.column.datetime.DatetimeTZColumn) and all(
+        isinstance(o, cudf.core.column.datetime.DatetimeTZColumn)
+        and "_local_time" in o.__dict__
+        for o in objs_with_len
+    ):
+        result._local_time = concat_columns(
+            [o._local_time for o in objs_with_len]  # type: ignore[attr-defined]
+        )  # type: ignore[assignment]
+    return result
 
 
 def _rank_out_dtype(

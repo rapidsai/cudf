@@ -126,6 +126,9 @@ def test_csv_reader_numeric_data(numeric_types_as_str, tmp_path):
     assert_eq(df, out)
 
 
+@pytest.mark.skip(
+    reason="Disabled until https://github.com/rapidsai/cudf/pull/22094 is fixed"
+)
 @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
 def test_csv_reader_datetime(parse_dates):
     df = pd.DataFrame(
