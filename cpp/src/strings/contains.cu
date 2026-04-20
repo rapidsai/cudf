@@ -83,29 +83,26 @@ std::unique_ptr<column> contains_re(strings_column_view const& input,
                                     rmm::device_async_resource_ref mr)
 {
   // check for potential fast-paths
-  auto literal = prog.is_literal_only();
-  if (literal.has_value()) {
-    // single literal with no regex patterns or flags
-    auto const target =
-      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
-    return contains(input, target, stream, mr);
-  }
-  literal = prog.is_starts_with_only();
-  if (literal.has_value()) {
-    // single literal with begin instruction
-    auto const target =
-      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
-    return starts_with(input, target, stream, mr);
-  }
-  literal = prog.is_ends_with_only();
-  if (literal.has_value()) {
-    // single literal with end instruction
-    auto const target =
-      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
-    return ends_with(input, target, stream, mr);
+  auto [fp, literal] = prog.get_literal_fast_path();
+  switch (fp) {
+    case regex_program::literal_fast_path::LITERAL_ONLY: {
+      auto const target =
+        cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
+      return contains(input, target, stream, mr);
+    }
+    case regex_program::literal_fast_path::STARTS_WITH: {
+      auto const target =
+        cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
+      return starts_with(input, target, stream, mr);
+    }
+    case regex_program::literal_fast_path::ENDS_WITH: {
+      auto const target =
+        cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
+      return ends_with(input, target, stream, mr);
+    }
+    default: break;
   }
 
-  // regular regex
   return contains_impl(input, prog, false, stream, mr);
 }
 
@@ -114,26 +111,11 @@ std::unique_ptr<column> matches_re(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  // check for potential fast-paths (all call starts_with)
-  auto literal = prog.is_literal_only();
-  if (literal.has_value()) {
-    // single literal with no regex patterns or flags
+  // check for potential fast-paths (all types call starts_with)
+  auto [fp, literal] = prog.get_literal_fast_path();
+  if (fp != regex_program::literal_fast_path::NO_FAST_PATH) {
     auto const target =
-      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
-    return starts_with(input, target, stream, mr);
-  }
-  literal = prog.is_starts_with_only();
-  if (literal.has_value()) {
-    // single literal with begin instruction
-    auto const target =
-      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
-    return starts_with(input, target, stream, mr);
-  }
-  literal = prog.is_ends_with_only();
-  if (literal.has_value()) {
-    // single literal with end instruction
-    auto const target =
-      cudf::string_scalar(literal.value(), true, stream, cudf::get_current_device_resource_ref());
+      cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
     return starts_with(input, target, stream, mr);
   }
 

@@ -48,22 +48,16 @@ std::size_t regex_program::compute_working_memory_size(int32_t num_strings) cons
   return detail::compute_working_memory_size(num_strings, instructions_count());
 }
 
-std::optional<std::string> regex_program::is_literal_only() const
+std::pair<regex_program::literal_fast_path, std::string> regex_program::get_literal_fast_path()
+  const
 {
   auto literal = _impl->prog.literal_only();
-  return literal.empty() ? std::nullopt : std::optional{literal};
-}
-
-std::optional<std::string> regex_program::is_starts_with_only() const
-{
-  auto literal = _impl->prog.starts_with_only();
-  return literal.empty() ? std::nullopt : std::optional{literal};
-}
-
-std::optional<std::string> regex_program::is_ends_with_only() const
-{
-  auto literal = _impl->prog.ends_with_only();
-  return literal.empty() ? std::nullopt : std::optional{literal};
+  if (!literal.empty()) { return {regex_program::literal_fast_path::LITERAL_ONLY, literal}; }
+  literal = _impl->prog.starts_with_only();
+  if (!literal.empty()) { return {regex_program::literal_fast_path::STARTS_WITH, literal}; }
+  literal = _impl->prog.ends_with_only();
+  if (!literal.empty()) { return {regex_program::literal_fast_path::ENDS_WITH, literal}; }
+  return {regex_program::literal_fast_path::NO_FAST_PATH, literal};
 }
 
 }  // namespace strings
