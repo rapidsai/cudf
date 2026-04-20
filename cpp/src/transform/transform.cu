@@ -194,10 +194,12 @@ void launch(cudf::kernel const& kernel,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &input_cols, &output_cols};
+  void* args[]    = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
   auto kernel_ref = kernel.get();
   auto cfg        = kernel_ref.max_occupancy_config(0, 0);
-  // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
+  CUDF_EXPECTS(cfg.block_size % cudf::detail::warp_size == 0,
+               "Expected block size to be a multiple of warp size",
+               std::runtime_error);
   kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 

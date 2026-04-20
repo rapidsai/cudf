@@ -14,7 +14,7 @@ endif()
 # This function registers a directory of include files to be embedded for JIT compilation. It
 # gathers the specified files, their destinations, and include directories, and stores them in
 # target-specific variables for later use when generating the embed.
-function(jit_add_include_directory)
+function(embed_includes)
   set(TARGET ${ARGV0})
   set(OPTIONS "")
   set(ONE_VALUE_ARGS COPY_DIRECTORY # Source directory where files will be copied from
@@ -66,9 +66,9 @@ function(jit_add_include_directory)
 
   # Set scope variables to accumulate results
 
-  set(SOURCE_FILES ${${TARGET}__jitembed_incdir__source_files})
-  set(SOURCE_FILE_DESTS ${${TARGET}__jitembed_incdir__source_file_dests})
-  set(INCLUDE_DIRECTORIES ${${TARGET}__jitembed_incdir__include_directories})
+  set(SOURCE_FILES ${${TARGET}__embed__source_files})
+  set(SOURCE_FILE_DESTS ${${TARGET}__embed__source_file_dests})
+  set(INCLUDE_DIRECTORIES ${${TARGET}__embed__include_directories})
 
   foreach(SOURCE_FILE IN LISTS ARG_FILES)
     list(APPEND SOURCE_FILES "${ARG_COPY_DIRECTORY}/${SOURCE_FILE}")
@@ -77,23 +77,72 @@ function(jit_add_include_directory)
 
   list(APPEND INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES})
 
-  set(${TARGET}__jitembed_incdir__source_files
+  set(${TARGET}__embed__source_files
       ${SOURCE_FILES}
       PARENT_SCOPE
   )
-  set(${TARGET}__jitembed_incdir__source_file_dests
+  set(${TARGET}__embed__source_file_dests
       ${SOURCE_FILE_DESTS}
       PARENT_SCOPE
   )
-  set(${TARGET}__jitembed_incdir__include_directories
+  set(${TARGET}__embed__include_directories
       ${INCLUDE_DIRECTORIES}
       PARENT_SCOPE
   )
 
 endfunction()
 
+function(embed_blob)
+  set(TARGET ${ARGV0})
+  set(OPTIONS)
+  set(ONE_VALUE_ARGS FILE DEST)
+  set(MULTI_VALUE_ARGS "")
+  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
+
+  if(NOT DEFINED TARGET)
+    message(FATAL_ERROR "TARGET argument is required")
+  endif()
+
+  if(NOT ARG_FILE)
+    message(FATAL_ERROR "FILE argument is required")
+  endif()
+
+  if(NOT ARG_DEST)
+    message(FATAL_ERROR "DEST argument is required")
+  endif()
+
+  set(SOURCE_FILES ${${TARGET}__embed__source_files})
+  set(SOURCE_FILE_DESTS ${${TARGET}__embed__source_file_dests})
+  set(TARGET_DEPS ${${TARGET}__embed__target_deps})
+
+  if(ARG_FILE MATCHES "\\$<TARGET_OBJECTS:([^>]+)>")
+    # If the file is a generator expression for target objects add as dependency
+    list(APPEND TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>)
+  else()
+    if(NOT EXISTS "${ARG_FILE}")
+      message(FATAL_ERROR "Source file '${ARG_FILE}' does not exist")
+    endif()
+  endif()
+  list(APPEND SOURCE_FILES ${ARG_FILE})
+  list(APPEND SOURCE_FILE_DESTS ${ARG_DEST})
+
+  set(${TARGET}__embed__source_files
+      ${SOURCE_FILES}
+      PARENT_SCOPE
+  )
+  set(${TARGET}__embed__source_file_dests
+      ${SOURCE_FILE_DESTS}
+      PARENT_SCOPE
+  )
+  set(${TARGET}__embed__target_deps
+      ${TARGET_DEPS}
+      PARENT_SCOPE
+  )
+
+endfunction()
+
 # pass the encoded args to the embed.py script to generate the embed
-function(jit_embed)
+function(embed)
   set(TARGET ${ARGV0})
   set(OPTIONS "")
   set(ONE_VALUE_ARGS "COMPRESSION")
@@ -112,27 +161,30 @@ function(jit_embed)
     message(FATAL_ERROR "COMPRESSION argument must be either none or zstd")
   endif()
 
-  if(NOT DEFINED ${TARGET}__jitembed_incdir__source_files)
-    message(
-      FATAL_ERROR
-        "No source files registered for target '${TARGET}'. Call jit_add_include_directory() first"
-    )
+  if(NOT DEFINED ${TARGET}__embed__source_files)
+    message(FATAL_ERROR "No source files registered for target '${TARGET}'")
   endif()
 
   set(OUTPUT_DIR "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
-  set(CONFIGURED_EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed.cpp")
-  set(EMBED_SCRIPT_IN "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.cpp")
+  set(EMBED_SCRIPT_TEMPLATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.cpp")
+  set(CONFIGURED_EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed_cfg.cpp")
+  set(EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed.cpp")
 
-  set(RTCX_EMBED_SCRIPT_ARG__ID "${TARGET}")
-  set(RTCX_EMBED_SCRIPT_ARG__FILE_PATHS "${${TARGET}__jitembed_incdir__source_files}")
-  set(RTCX_EMBED_SCRIPT_ARG__FILE_DESTS "${${TARGET}__jitembed_incdir__source_file_dests}")
-  set(RTCX_EMBED_SCRIPT_ARG__INCLUDE_DIRS "${${TARGET}__jitembed_incdir__include_directories}")
-  set(RTCX_EMBED_SCRIPT_ARG__COMPRESSION "${ARG_COMPRESSION}")
-  set(RTCX_EMBED_SCRIPT_ARG__OUTPUT_DIR "${OUTPUT_DIR}")
+  set(EMBED_SCRIPT__ID "${TARGET}")
+  set(EMBED_SCRIPT__FILE_PATHS "${${TARGET}__embed__source_files}")
+  set(EMBED_SCRIPT__FILE_DESTS "${${TARGET}__embed__source_file_dests}")
+  set(EMBED_SCRIPT__INCLUDE_DIRS "${${TARGET}__embed__include_directories}")
+  set(EMBED_SCRIPT__COMPRESSION "${ARG_COMPRESSION}")
+  set(EMBED_SCRIPT__OUTPUT_DIR "${OUTPUT_DIR}")
 
-  configure_file("${EMBED_SCRIPT_IN}" "${CONFIGURED_EMBED_SCRIPT}" @ONLY)
+  configure_file(${EMBED_SCRIPT_TEMPLATE} ${CONFIGURED_EMBED_SCRIPT} @ONLY)
+  file(
+    GENERATE
+    OUTPUT "${EMBED_SCRIPT}"
+    INPUT "${CONFIGURED_EMBED_SCRIPT}"
+  )
 
-  add_executable("${TARGET}__jit_embed_run" EXCLUDE_FROM_ALL "${CONFIGURED_EMBED_SCRIPT}")
+  add_executable("${TARGET}__jit_embed_run" EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
   target_include_directories("${TARGET}__jit_embed_run" PRIVATE ${ZSTD_INCLUDE_DIR})
   target_link_libraries("${TARGET}__jit_embed_run" PRIVATE ${CMAKE_DL_LIBS} zstd)
   set_target_properties(
@@ -144,8 +196,8 @@ function(jit_embed)
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
     BYPRODUCTS ${OUTPUT_DIR}/*
     COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${TARGET}__jit_embed_run>
-    DEPENDS "${EMBED_SCRIPT_IN}" "${CONFIGURED_EMBED_SCRIPT}"
-            ${${TARGET}__jitembed_incdir__source_files}
+    DEPENDS "${CONFIGURED_EMBED_SCRIPT}" "${EMBED_SCRIPT}" ${${TARGET}__embed__source_files}
+            ${${TARGET}__embed__target_deps}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating JIT embed for ${TARGET} into ${OUTPUT_DIR}"
     VERBATIM

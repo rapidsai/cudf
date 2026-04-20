@@ -326,37 +326,37 @@ endif()
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
   cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY cudf/cpp/src/jit
   INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
   cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
   cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
   cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
@@ -366,13 +366,13 @@ get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLU
 foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
 
-  jit_add_include_directory(
+  embed_includes(
     cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
     INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
 endforeach()
 
-jit_embed(cudf_jit_embed COMPRESSION zstd)
+embed(cudf_jit_embed COMPRESSION zstd)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
