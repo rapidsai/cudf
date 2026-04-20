@@ -1297,13 +1297,16 @@ except ImportError:
     pass
 
 
-def _find_user_frame():
+def _find_user_frame(level=0):
     frame = inspect.currentframe()
+    skip = 0
     while frame:
         modname = frame.f_globals.get("__name__", "")
         # TODO: Remove "nvtx." entry once we cross nvtx-0.2.11 as minimum version
         if modname == "__main__" or not modname.startswith(("cudf.", "nvtx.")):
-            return frame
+            if skip == level:
+                return frame
+            skip += 1
         frame = frame.f_back
     raise RuntimeError("Could not find the user's frame.")
 
@@ -1327,7 +1330,7 @@ register_proxy_func(getitem)(getitem)
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
-    frame = _find_user_frame()
+    frame = _find_user_frame(level=level)
     local_dict = dict(frame.f_locals) if local_dict is None else local_dict
     global_dict = dict(frame.f_globals) if global_dict is None else global_dict
     return local_dict, global_dict
