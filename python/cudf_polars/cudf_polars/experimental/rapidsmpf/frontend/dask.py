@@ -44,7 +44,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
 from cudf_polars.utils.config import DaskContext
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
@@ -663,6 +664,9 @@ class DaskEngine(StreamingEngine):
         List of :class:`ClusterInfo`, one per rank.
         """
         return list(self._dask_ctx.client.run(ClusterInfo.local).values())
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return list(self._dask_ctx.client.run(func, *args, **kwargs).values())
 
     def shutdown(self) -> None:
         """
