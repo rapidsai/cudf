@@ -11,50 +11,16 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/roaring_bitmap.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/polymorphic_allocator.hpp>
-
-#include <cuco/roaring_bitmap.cuh>
 
 #include <functional>
 #include <optional>
 #include <queue>
 
 namespace cudf::io::parquet::experimental {
-
-// Type alias for the cuco 64-bit roaring bitmap
-using roaring_bitmap_type =
-  cuco::experimental::roaring_bitmap<cuda::std::uint64_t, rmm::mr::polymorphic_allocator<char>>;
-
-/**
- * @brief Opaque wrapper class for cuco's 64-bit roaring bitmap
- */
-struct chunked_parquet_reader::roaring_bitmap_impl {
-  /// Unique pointer to the roaring bitmap
-  std::unique_ptr<roaring_bitmap_type> roaring_bitmap;
-  /// Host span of the serialized roaring bitmap data
-  cudf::host_span<cuda::std::byte const> const roaring_bitmap_data;
-
-  explicit roaring_bitmap_impl(
-    cudf::host_span<cuda::std::byte const> const& serialized_roaring_bitmap)
-    : roaring_bitmap_data{serialized_roaring_bitmap}
-  {
-  }
-
-  roaring_bitmap_impl(roaring_bitmap_impl&&)      = default;
-  roaring_bitmap_impl(roaring_bitmap_impl const&) = delete;
-
-  /**
-   * @brief Constructs a roaring bitmap from the serialized data if not already constructed
-   *
-   * @param allocator Memory allocator
-   * @param stream CUDA stream to launch the query kernel
-   */
-  void construct_roaring_bitmap(rmm::mr::polymorphic_allocator<char> const& allocator,
-                                rmm::cuda_stream_view stream);
-};
 
 /**
  * @brief Prepends the index column information to the table metadata
@@ -119,7 +85,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  * @brief Computes a BOOL8 row mask column from the specified row index column and deletion vectors
  *
  * @param row_index_column View of the row index column
- * @param deletion_vector_refs Host span of cuco roaring bitmap references
+ * @param deletion_vector_refs Host span of cudf::roaring_bitmap references
  * @param rows_per_deletion_vector Host span of number of rows per deletion vector
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to allocate the output column
@@ -128,7 +94,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  */
 [[nodiscard]] std::unique_ptr<cudf::column> compute_row_mask_column(
   cudf::column_view const& row_index_column,
-  cudf::host_span<std::reference_wrapper<roaring_bitmap_type> const> deletion_vector_refs,
+  cudf::host_span<std::reference_wrapper<cudf::roaring_bitmap const> const> deletion_vector_refs,
   cudf::host_span<size_type const> rows_per_deletion_vector,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
@@ -137,7 +103,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  * @brief Computes the number of rows deleted by the deletion vectors
  *
  * @param row_index_column View of the row index column
- * @param deletion_vector_refs Host span of cuco roaring bitmap references
+ * @param deletion_vector_refs Host span of cudf::roaring_bitmap references
  * @param deletion_vector_row_counts Host span of number of rows per deletion vector
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
@@ -145,7 +111,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  */
 [[nodiscard]] size_t compute_deleted_row_count(
   cudf::column_view const& row_index_column,
-  cudf::host_span<std::reference_wrapper<roaring_bitmap_type> const> deletion_vector_refs,
+  cudf::host_span<std::reference_wrapper<cudf::roaring_bitmap const> const> deletion_vector_refs,
   cudf::host_span<size_type const> deletion_vector_row_counts,
   rmm::cuda_stream_view stream);
 
@@ -153,7 +119,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  * @brief Computes a chunk of the BOOL8 row mask column by consuming deletion vectors from queues
  *
  * @param row_index_column View of the row index column for the current chunk
- * @param[in,out] deletion_vectors Queue of roaring bitmap wrappers to consume from
+ * @param[in,out] deletion_vectors Queue of roaring bitmaps to consume from
  * @param[in,out] deletion_vector_row_counts Queue of per-deletion-vector row counts
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to allocate the output column
@@ -162,7 +128,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  */
 [[nodiscard]] std::unique_ptr<cudf::column> compute_partial_row_mask_column(
   cudf::column_view const& row_index_column,
-  std::queue<chunked_parquet_reader::roaring_bitmap_impl>& deletion_vectors,
+  std::queue<cudf::roaring_bitmap>& deletion_vectors,
   std::queue<size_type>& deletion_vector_row_counts,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
@@ -171,7 +137,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  * @brief Computes the number of deleted rows for a chunk by consuming deletion vectors from queues
  *
  * @param row_index_column View of the row index column for the current chunk
- * @param[in,out] deletion_vectors Queue of roaring bitmap wrappers to consume from
+ * @param[in,out] deletion_vectors Queue of roaring bitmaps to consume from
  * @param[in,out] deletion_vector_row_counts Queue of per-deletion-vector row counts
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
@@ -179,7 +145,7 @@ void prepend_index_column_to_table_metadata(table_metadata& metadata);
  */
 [[nodiscard]] size_t compute_partial_deleted_row_count(
   cudf::column_view const& row_index_column,
-  std::queue<chunked_parquet_reader::roaring_bitmap_impl>& deletion_vectors,
+  std::queue<cudf::roaring_bitmap>& deletion_vectors,
   std::queue<size_type>& deletion_vector_row_counts,
   rmm::cuda_stream_view stream);
 
