@@ -199,8 +199,6 @@ void launch(cudf::kernel const& kernel,
   auto cfg        = kernel_ref.max_occupancy_config(0, 0);
   // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
   kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
-  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
-  kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())->launch_raw(args);
 }
 
 std::string reflect_input_element(column_view const& c) { return type_to_name(c.type()); }
