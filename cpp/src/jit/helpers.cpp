@@ -84,6 +84,7 @@ std::vector<std::string> input_type_names(
 
   std::transform(views.begin(), views.end(), std::back_inserter(names), [&](auto const& view) {
     return std::visit([](auto& a) { return type_to_name(a.type()); }, view);
+    return std::visit([](auto& a) { return type_to_name(a.type()); }, view);
   });
 
   return names;

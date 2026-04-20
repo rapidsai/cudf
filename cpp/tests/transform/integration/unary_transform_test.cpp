@@ -28,6 +28,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -725,6 +726,57 @@ TEST_F(StringOperationTest, OutputOffsetted)
                                       std::nullopt);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
+}
+
+TEST_F(StringOperationTest, OutputOffsettedMixed)
+{
+  auto a = cudf::test::strings_column_wrapper{"x", "xx", "xxx", "xxxx", "xxxxx", "xxxxxx"};
+  auto b = cudf::test::strings_column_wrapper{"aa", "bb", "cc", "dd", "ee", "ff"};
+  auto c = cudf::test::strings_column_wrapper{"1", "2", "3", "4", "5", "67"};
+
+  std::string cuda = R"***(
+    __device__ void concat(int32_t * ab_size, cuda::std::span<char> * out, bool * is_odd, cudf::string_view a, cudf::string_view b, cudf::string_view c){
+      auto iter = out->data();
+      auto begin = iter;
+      memcpy(iter, a.data(), a.size_bytes());
+      iter += a.size_bytes();
+      memcpy(iter, b.data(), b.size_bytes());
+      iter += b.size_bytes();
+      memcpy(iter, c.data(), c.size_bytes());
+      iter += c.size_bytes();
+      auto out_size = static_cast<int32_t>(iter - begin);
+      *is_odd = (out_size % 2) == 1;
+      *ab_size = static_cast<int32_t>(a.size_bytes() + b.size_bytes());
+    }
+    )***";
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 4, 9, 15, 22, 30, 40}.release();
+  std::vector<std::unique_ptr<cudf::column>> strings_offsets;
+
+  strings_offsets.push_back(nullptr);
+  strings_offsets.push_back(std::move(offsets));
+  strings_offsets.push_back(nullptr);
+
+  auto expected_is_odd =
+    cudf::test::fixed_width_column_wrapper<bool>{false, true, false, true, false, false};
+  auto expected_strings = cudf::test::strings_column_wrapper{
+    "xaa1", "xxbb2", "xxxcc3", "xxxxdd4", "xxxxxee5", "xxxxxxff67"};
+  auto expected_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{3, 4, 5, 6, 7, 8};
+  auto expected       = cudf::table_view({expected_sizes, expected_strings, expected_is_odd});
+  cudf::transform_input inputs[]   = {a, b, c};
+  cudf::transform_output outputs[] = {{cudf::data_type(cudf::type_id::INT32)},
+                                      {cudf::data_type(cudf::type_id::STRING)},
+                                      {cudf::data_type(cudf::type_id::BOOL8)}};
+  auto result                      = cudf::multi_transform(cuda,
+                                      cudf::udf_source_type::CUDA,
+                                      cudf::null_aware::NO,
+                                      std::nullopt,
+                                      inputs,
+                                      outputs,
+                                      std::move(strings_offsets),
+                                      std::nullopt);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result->view());
 }
 
 TEST_F(StringOperationTest, StringConcat)

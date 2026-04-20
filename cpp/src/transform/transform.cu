@@ -158,6 +158,7 @@ using handle        = std::variant<
 
 namespace jit_transform {
 
+<<<<<<< HEAD
 cudf::kernel instantiate(null_aware is_null_aware,
                          bool has_user_data,
                          std::string const& ins,
@@ -166,6 +167,16 @@ cudf::kernel instantiate(null_aware is_null_aware,
                          std::vector<std::string> const& ptx_output_types,
                          std::string const& udf,
                          udf_source_type source_type)
+=======
+jitify2::Kernel instantiate(null_aware is_null_aware,
+                            bool has_user_data,
+                            std::string const& ins,
+                            std::string const& outs,
+                            std::vector<std::string> const& ptx_input_types,
+                            std::vector<std::string> const& ptx_output_types,
+                            std::string const& udf,
+                            udf_source_type source_type)
+>>>>>>> upstream/main
 {
   CUDF_FUNC_RANGE();
   auto cuda_source = (source_type == udf_source_type::PTX)
@@ -175,6 +186,7 @@ cudf::kernel instantiate(null_aware is_null_aware,
                            jit::build_ptx_params(ptx_output_types, ptx_input_types, has_user_data))
                        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
+<<<<<<< HEAD
   auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
                                        rtcx::reflect_enum("cudf::null_aware", is_null_aware),
                                        rtcx::reflect_bool(has_user_data),
@@ -189,17 +201,34 @@ void launch(cudf::kernel const& kernel,
             size_type row_size,
             bitmask_type const* stencil,
             bool stencil_has_nulls,
+=======
+  auto kernel = jitify2::reflection::Template("cudf::jit::transform_kernel")
+                  .instantiate(is_null_aware, has_user_data, ins, outs);
+
+  return jit::get_udf_kernel(
+    *transform_jit_kernel_cu_jit, kernel, cuda_source, {"-restrict", "--dopt=on"});
+}
+
+void launch(jitify2::Kernel const& kernel,
+            size_type row_size,
+            bitmask_type const* stencil,
+>>>>>>> upstream/main
             void* user_data,
             column_device_view_core const* input_cols,
             mutable_column_device_view_core const* output_cols,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
+<<<<<<< HEAD
   void* args[] = {&row_size, &stencil, &stencil_has_nulls, &user_data, &input_cols, &output_cols};
   auto kernel_ref = kernel.get();
   auto cfg        = kernel_ref.max_occupancy_config(0, 0);
   // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
   kernel_ref.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
+=======
+  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
+  kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())->launch_raw(args);
+>>>>>>> upstream/main
 }
 
 std::string reflect_input_element(column_view const& c) { return type_to_name(c.type()); }
@@ -251,11 +280,16 @@ auto reflect(udf_source_type source_type,
     auto column    = std::visit([](auto& c) { return reflect_input_column(c); }, in);
     auto element   = std::visit([](auto& c) { return reflect_input_element(c); }, in);
     bool as_scalar = std::holds_alternative<scalar_column_view>(in);
+<<<<<<< HEAD
     auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect_int(i),
                                            column,
                                            element,
                                            rtcx::reflect_bool(as_scalar));
+=======
+    auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
+                      .instantiate(i, column, element, as_scalar);
+>>>>>>> upstream/main
     in_types.push_back(accessor);
   }
 
@@ -266,17 +300,27 @@ auto reflect(udf_source_type source_type,
     auto column    = std::visit([](auto& c) { return reflect_output_column(c); }, out);
     auto element   = std::visit([](auto& c) { return reflect_output_element(c); }, out);
     bool as_scalar = false;  // never scalar
+<<<<<<< HEAD
     auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
                                            rtcx::reflect_int(i),
                                            column,
                                            element,
                                            rtcx::reflect_bool(as_scalar));
+=======
+    auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
+                      .instantiate(i, column, element, as_scalar);
+>>>>>>> upstream/main
 
     out_types.push_back(accessor);
   }
 
+<<<<<<< HEAD
   auto ins  = rtcx::reflect_template("cudf::jit::type_list", in_types);
   auto outs = rtcx::reflect_template("cudf::jit::type_list", out_types);
+=======
+  auto ins  = jitify2::reflection::Template("cudf::jit::type_list").instantiate(in_types);
+  auto outs = jitify2::reflection::Template("cudf::jit::type_list").instantiate(out_types);
+>>>>>>> upstream/main
 
   std::vector<std::string> ptx_in_types;
   std::vector<std::string> ptx_out_types;
@@ -336,7 +380,6 @@ void run(null_aware is_null_aware,
          bool has_user_data,
          size_type row_size,
          bitmask_type const* d_stencil,
-         bool stencil_has_nulls,
          void* user_data,
          std::span<input_column_view const> inputs,
          std::span<output_column const> outputs,
@@ -359,7 +402,7 @@ void run(null_aware is_null_aware,
   auto* output_cols =
     reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
   return launch(
-    kernel, row_size, d_stencil, stencil_has_nulls, user_data, input_cols, output_cols, stream);
+    kernel, row_size, d_stencil, user_data, input_cols, output_cols, stream);
 }
 
 }  // namespace jit_transform
@@ -837,8 +880,7 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
   jit_transform::run(is_null_aware,
                      user_data.has_value(),
                      row_size,
-                     stencil_arg,
-                     stencil_has_nulls,
+                     stencil_has_nulls ? stencil_arg : nullptr,
                      user_data.value_or(nullptr),
                      inputs,
                      output_columns,
