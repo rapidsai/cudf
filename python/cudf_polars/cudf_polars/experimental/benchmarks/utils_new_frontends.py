@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import pprint
-import statistics
 import sys
 import textwrap
 import time
@@ -23,6 +22,7 @@ import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
+from statistics import mean
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
@@ -77,11 +77,11 @@ except ImportError:
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from rapidsmpf.statistics import Statistics
+
     from cudf_polars.experimental.explain import SerializablePlan
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-
-
 POLARS_VALIDATION_OPTIONS = {
     "check_row_order": True,
     "check_column_order": True,
@@ -204,7 +204,7 @@ class SuccessRecord:
     query: int
     iteration: int
     duration: float
-    shuffle_stats: dict[str, dict[str, int | float]] | None = None
+    statistics: Statistics | None = None
     traces: list[dict[str, Any]] | None = None
     validation_result: ValidationResult | None = None
     status: Literal["success"] = "success"
@@ -215,7 +215,7 @@ class SuccessRecord:
         query: int,
         iteration: int,
         duration: float,
-        shuffle_stats: dict[str, dict[str, int | float]] | None = None,
+        statistics: Statistics | None = None,
         traces: list[dict[str, Any]] | None = None,
     ) -> SuccessRecord:
         """Create a Record from plain data."""
@@ -223,7 +223,7 @@ class SuccessRecord:
             query=query,
             iteration=iteration,
             duration=duration,
-            shuffle_stats=shuffle_stats,
+            statistics=statistics,
             traces=traces,
         )
 
@@ -236,6 +236,16 @@ class QueryRunResult:
     plan: SerializablePlan | None
     iteration_failures: list[tuple[int, int]]
     validation_failed: bool
+
+
+def _json_default(obj: Any) -> Any:
+    """JSON fallback for non-native types (e.g. rapidsmpf ``Statistics``)."""
+    # Local import to avoid a hard dependency at module load.
+    from rapidsmpf.statistics import Statistics
+
+    if isinstance(obj, Statistics):
+        return json.loads(obj.write_json_string())["statistics"]
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 @dataclasses.dataclass
@@ -590,13 +600,13 @@ class RunConfig:
                 print("---------------------------------------")
                 print(f"min time : {min(valid_durations):0.4f}")
                 print(f"max time : {max(valid_durations):0.4f}")
-                print(f"mean time: {statistics.mean(valid_durations):0.4f}")
+                print(f"mean time: {mean(valid_durations):0.4f}")
                 print("=======================================")
         any_success = any(record.status == "success" for record in records)
 
         if any_success:
             total_mean_time = sum(
-                statistics.mean(
+                mean(
                     record.duration for record in records if record.status == "success"
                 )
                 for records in self.records.values()
@@ -810,13 +820,21 @@ class QueryResult:
     sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
+def _collect_statistics(run_config: Any, engine: StreamingEngine) -> Statistics | None:
+    """Gather + clear per-rank rapidsmpf statistics into a single merged Statistics."""
+    # Reuse the existing rapidsmpf-side flag (--rapidsmpf-statistics).
+    if engine is None or run_config.streaming_options.statistics is not True:
+        return None
+    return engine.global_statistics(clear=True)
+
+
 def run_polars_query_iteration(
     q_id: int,
     iteration: int,
     q: pl.LazyFrame,
     run_config: RunConfig,
     args: argparse.Namespace,
-    engine: pl.GPUEngine | None,
+    engine: StreamingEngine | None,
     expected: pl.DataFrame | None,
     query_result: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
@@ -835,10 +853,10 @@ def run_polars_query_iteration(
         # Once we support polars 1.40, we should remove this
         result = result.with_columns(*result_casts)
 
-    # TODO: shuffle stats collection is not yet wired up for the new
-    # frontends. The Dask-specific gather_shuffle_statistics API does
-    # not apply to SPMD/Ray; needs a generic rapidsmpf API first.
-    shuffle_stats = None
+    if engine is not None:
+        statistics = _collect_statistics(run_config, engine)
+    else:
+        statistics = None
 
     if expected is not None:
         validation_result = validate_result(
@@ -866,7 +884,7 @@ def run_polars_query_iteration(
         query=q_id,
         iteration=iteration,
         duration=duration,
-        shuffle_stats=shuffle_stats,
+        statistics=statistics,
         validation_result=validation_result,
     )
 
@@ -1067,7 +1085,9 @@ def _finalize_benchmark_run(
             )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write(
+        json.dumps(run_config.serialize(engine=None), default=_json_default)
+    )
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
@@ -1522,7 +1542,9 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     if args.summarize:
         run_config.summarize()
 
-    args.output.write(json.dumps(run_config.serialize(engine=None)))
+    args.output.write(
+        json.dumps(run_config.serialize(engine=None), default=_json_default)
+    )
     args.output.write("\n")
 
 
