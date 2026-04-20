@@ -14,7 +14,6 @@ from rapidsmpf.communicator.single import (
     new_communicator as single_process_communicator,
 )
 from rapidsmpf.config import Options, get_environment_variables
-from rapidsmpf.experimental.parallel import lower_ir_graph
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.buffer_resource import BufferResource, LimitAvailableMemory
 from rapidsmpf.memory.pinned_memory_resource import PinnedMemoryResource
@@ -47,6 +46,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo
+from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
 from cudf_polars.experimental.rapidsmpf.nodes import (
