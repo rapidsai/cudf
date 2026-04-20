@@ -363,6 +363,8 @@ TEST_F(StringsContainsTests, Errors)
 
   EXPECT_THROW(cudf::strings::regex_program::create("aaaa{1234,5678}"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::regex_program::create("aaaa{123,5678}"), cudf::logic_error);
+
+  EXPECT_THROW(cudf::strings::regex_program::create("[a-C]"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, CountTest)
@@ -795,6 +797,32 @@ TEST_F(StringsContainsTests, ASCII)
     results           = cudf::strings::contains_re(view, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_contains);
   }
+}
+
+TEST_F(StringsContainsTests, IgnoreCase)
+{
+  auto input = cudf::test::strings_column_wrapper({"abc", "ABC", "aBc", "123áéſ", "ÁÉS123"});
+  auto view  = cudf::strings_column_view(input);
+
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 0});
+  auto prog = cudf::strings::regex_program::create("abc", cudf::strings::regex_flags::IGNORECASE);
+  auto results = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 0});
+  prog     = cudf::strings::regex_program::create("[a-c]", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1});
+  prog     = cudf::strings::regex_program::create("áéſ", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 1, 1});
+  prog     = cudf::strings::regex_program::create("[á-é]", cudf::strings::regex_flags::IGNORECASE);
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsContainsTests, MediumRegex)

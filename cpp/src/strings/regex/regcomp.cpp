@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <clocale>
+#include <cwctype>
 #include <numeric>
 #include <stack>
 #include <string>
@@ -276,6 +278,13 @@ class regex_parser {
     }
   }
 
+  char32_t swap_case(char32_t chr)
+  {
+    auto const cp = static_cast<wchar_t>(utf8_to_codepoint(chr));
+    auto const lc = std::locale("C.UTF-8");  // always available
+    return codepoint_to_utf8(std::isupper(cp, lc) ? std::tolower(cp, lc) : std::toupper(cp, lc));
+  }
+
   int32_t build_cclass()
   {
     int32_t type = CCLASS;
@@ -368,10 +377,28 @@ class regex_parser {
 
     // transform pairs of literals to ranges
     auto const counter = cuda::counting_iterator<std::size_t>{0};
-    std::transform(
-      counter, counter + (literals.size() / 2), std::back_inserter(ranges), [&literals](auto idx) {
-        return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
-      });
+    std::transform(counter,
+                   counter + (literals.size() / 2),
+                   std::back_inserter(ranges),
+                   [&literals, this](auto idx) {
+                     auto const lhs = literals[idx * 2];
+                     auto const rhs = literals[idx * 2 + 1];
+                     CUDF_EXPECTS(lhs <= rhs,
+                                  "invalid character range in class at " +
+                                    std::to_string(std::distance(_pattern_begin, _expr_ptr)));
+                     return reclass_range{lhs, rhs};
+                   });
+    if (is_ignorecase(_flags)) {
+      // add the swapped case ranges
+      std::transform(counter,
+                     counter + (literals.size() / 2),
+                     std::back_inserter(ranges),
+                     [&literals, this](auto idx) {
+                       auto const swap1 = swap_case(literals[idx * 2]);
+                       auto const swap2 = swap_case(literals[idx * 2 + 1]);
+                       return reclass_range{swap1, swap2};
+                     });
+    }
     // sort the ranges to help with detecting overlapping entries
     std::sort(ranges.begin(), ranges.end(), [](auto l, auto r) {
       return l.first == r.first ? l.last < r.last : l.first < r.first;
@@ -552,6 +579,12 @@ class regex_parser {
 
     if (std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(chr)) ==
         quantifiers.end()) {
+      if (is_ignorecase(_flags)) {
+        auto const swap_chr = swap_case(chr);
+        _cclass_id =
+          _prog.add_class(reclass{0, {reclass_range{chr, chr}, reclass_range{swap_chr, swap_chr}}});
+        return CCLASS;
+      }
       _chr = chr;
       return CHAR;
     }

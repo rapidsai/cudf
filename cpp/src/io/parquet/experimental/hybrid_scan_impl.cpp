@@ -24,9 +24,7 @@
 #include <cuda/iterator>
 #include <thrust/host_vector.h>
 
-#include <bitset>
 #include <iterator>
-#include <limits>
 #include <numeric>
 #include <utility>
 
@@ -387,7 +385,8 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_all_true_row_mask(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
 
   auto const num_rows = total_rows_in_row_groups(row_group_indices);
-  auto true_scalar    = cudf::numeric_scalar<bool>(true, true, stream);
+  auto true_scalar =
+    cudf::numeric_scalar<bool>(true, true, stream, cudf::get_current_device_resource_ref());
   return cudf::make_column_from_scalar(true_scalar, num_rows, stream, mr);
 }
 
@@ -734,90 +733,49 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row
     return {{row_group_indices.begin(), row_group_indices.end()}};
   }
 
-  // TODO(mh): The following logic has been borrowed from `reader_impl::compute_input_passes`
-  // defined in `reader_impl_chunking.cu`. Deduplicate this in a future PR.
-
-  // Percentage of the total available input read limit that should be reserved for compressed
-  // data vs uncompressed data.
-  constexpr float compression_reserve = cudf::io::parquet::detail::input_limit_compression_reserve;
-  auto const comp_read_limit = static_cast<std::size_t>(pass_read_limit * compression_reserve);
-
-  auto constexpr max_rows_per_pass =
-    static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max());
-
   // TODO(mh): Need to handle multiple sources in the future
-  constexpr std::size_t source_index = 0;
+  auto constexpr source_index = 0;
 
-  std::vector<std::vector<cudf::size_type>> passes;
-  std::size_t cur_pass_byte_size       = 0;
-  std::size_t cur_pass_num_leaf_values = 0;
-  std::size_t cur_pass_num_rows        = 0;
-  std::size_t cur_rg_start             = 0;
+  // Construct row group information
+  auto row_groups_info = std::vector<row_group_info>{};
+  row_groups_info.reserve(row_group_indices.size());
+  size_t start_row = 0;
+  std::transform(row_group_indices.begin(),
+                 row_group_indices.end(),
+                 std::back_inserter(row_groups_info),
+                 [&](auto const& rg_index) {
+                   auto const& row_group =
+                     _extended_metadata->get_row_group(rg_index, source_index);
+                   auto const [compressed_size, total_size, num_rows, max_leaf_values] =
+                     _extended_metadata->get_row_group_properties(row_group);
+                   auto rg_info = row_group_info{.index               = rg_index,
+                                                 .start_row           = start_row,
+                                                 .unadjusted_num_rows = num_rows,
+                                                 .source_index        = source_index,
+                                                 .compressed_size     = compressed_size,
+                                                 .max_leaf_values     = max_leaf_values};
+                   start_row += num_rows;
+                   return rg_info;
+                 });
 
-  std::for_each(
-    cuda::counting_iterator<size_t>(0),
-    cuda::counting_iterator<size_t>(row_group_indices.size()),
-    [&](auto const cur_rg_index) {
-      auto const rg_index   = row_group_indices[cur_rg_index];
-      auto const& row_group = _extended_metadata->get_row_group(rg_index, source_index);
+  auto const comp_read_limit = static_cast<std::size_t>(
+    pass_read_limit * cudf::io::parquet::detail::input_limit_compression_reserve);
 
-      auto const compressed_rg_size = std::get<0>(parquet::detail::get_row_group_size(row_group));
-      auto const row_group_rows     = row_group.num_rows;
+  auto const pass_data =
+    cudf::io::parquet::detail::compute_row_group_passes(row_groups_info, comp_read_limit, 0);
 
-      // Max leaf-level num_values across columns in this row group
-      auto const row_group_leaf_values =
-        std::max_element(row_group.columns.cbegin(),
-                         row_group.columns.cend(),
-                         [](auto const& lhs, auto const& rhs) {
-                           return lhs.meta_data.num_values < rhs.meta_data.num_values;
-                         })
-          ->meta_data.num_values;
-
-      // Check if we need to create a pass boundary here?
-      // Note: Here we may end up with an invalid pass (number of rows exceeding the cudf column
-      // size limit) in certain edge case conditions such as:
-      // 1. Number of leaf-level values plus nulls (computed by dremel decoding) exceeds the cudf
-      // column size limit
-      // 2. For nested lists (list<list<list<...>>>), one or more nested list(s) may have number of
-      // rows (computed by dremel decoding) exceeding the cudf column size limit
-      if ((cur_pass_byte_size + compressed_rg_size >= comp_read_limit) or
-          (cur_pass_num_leaf_values + row_group_leaf_values >= max_rows_per_pass) or
-          (cur_pass_num_rows + row_group_rows >= max_rows_per_pass)) {
-        // A single row group (the current one) is larger than the read limit:
-        // We always need to include at least one row group, so end the pass at the end of the
-        // current row group
-        if (cur_rg_start == cur_rg_index) {
-          CUDF_EXPECTS(
-            std::cmp_less_equal(row_group_rows, max_rows_per_pass),
-            "Number of rows in each row group must be smaller than the column size limit");
-          passes.emplace_back(row_group_indices.begin() + cur_rg_start,
-                              row_group_indices.begin() + cur_rg_index + 1);
-          cur_rg_start             = cur_rg_index + 1;
-          cur_pass_byte_size       = 0;
-          cur_pass_num_leaf_values = 0;
-          cur_pass_num_rows        = 0;
-        }
-        // End the pass at the end of the previous row group
-        else {
-          passes.emplace_back(row_group_indices.begin() + cur_rg_start,
-                              row_group_indices.begin() + cur_rg_index);
-          cur_rg_start             = cur_rg_index;
-          cur_pass_byte_size       = compressed_rg_size;
-          cur_pass_num_leaf_values = row_group_leaf_values;
-          cur_pass_num_rows        = row_group_rows;
-        }
-      } else {
-        cur_pass_byte_size += compressed_rg_size;
-        cur_pass_num_leaf_values += row_group_leaf_values;
-        cur_pass_num_rows += row_group_rows;
-      }
-    });
-
-  // Add the last pass if any row groups remain
-  if (cur_rg_start < row_group_indices.size()) {
-    passes.emplace_back(row_group_indices.begin() + cur_rg_start, row_group_indices.end());
-  }
-
+  // Convert offset-based pass boundaries back to vectors of row group indices
+  auto const& offsets = pass_data.pass_row_group_offsets;
+  auto passes         = std::vector<std::vector<cudf::size_type>>{};
+  passes.reserve(offsets.size() - 1);
+  std::transform(offsets.begin(),
+                 offsets.end() - 1,
+                 offsets.begin() + 1,
+                 std::back_inserter(passes),
+                 [&](auto const start, auto const end) {
+                   return std::vector<cudf::size_type>{row_group_indices.begin() + start,
+                                                       row_group_indices.begin() + end};
+                 });
   return passes;
 }
 

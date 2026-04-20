@@ -517,7 +517,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   delimiter_fn.chars_bytes         = chars_bytes;
 
   // count the number of delimiters in the entire column
-  cudf::detail::device_scalar<int64_t> d_count(0, stream);
+  cudf::detail::device_scalar<int64_t> d_count(0, stream, cudf::get_current_device_resource_ref());
   if (chars_bytes > 0) {
     constexpr int64_t block_size         = 512;
     constexpr size_type bytes_per_thread = 4;
@@ -548,7 +548,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   auto d_positions     = delimiter_positions.data();
   auto const zero_iter = cuda::counting_iterator<size_type>{0};
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     zero_iter,
     zero_iter + input.size(),
     token_counts.begin(),
@@ -570,7 +570,10 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
       size_type idx) {
       tokenizer.get_tokens(idx, d_tokens_offsets, d_positions, d_delimiter_offsets, d_tokens);
     };
-  thrust::for_each_n(rmm::exec_policy_nosync(stream), zero_iter, input.size(), get_tokens_fn);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     zero_iter,
+                     input.size(),
+                     get_tokens_fn);
 
   return std::make_pair(std::move(offsets), std::move(tokens));
 }

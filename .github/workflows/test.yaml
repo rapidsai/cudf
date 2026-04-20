@@ -39,8 +39,6 @@ jobs:
       date: ${{ inputs.date }}
       script: ci/test_cpp.sh
       sha: ${{ inputs.sha }}
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-cpp-memcheck-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
@@ -72,8 +70,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_python_cudf.sh"
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
@@ -84,8 +80,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_python_other.sh"
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-java-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
@@ -119,8 +113,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_cudf.sh
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   wheel-tests-dask-cudf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
@@ -130,8 +122,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: ci/test_wheel_dask_cudf.sh
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   unit-tests-cudf-pandas:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main
@@ -169,8 +159,7 @@ jobs:
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000")) | map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: ${{ inputs.build_type }}
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
@@ -186,8 +175,6 @@ jobs:
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
       script: "ci/test_cudf_polars_polars_tests.sh"
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   narwhals-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
@@ -199,3 +186,26 @@ jobs:
       node_type: "gpu-l4-latest-1"
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/test_narwhals.sh
+  streams-build:
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: cpu8
+      container_image: "rapidsai/ci-conda:26.06-latest"
+      script: ci/build_streams.sh
+      artifact-name: stream_tests_${{ matrix.cuda_version }}
+      file_to_upload: cpp/install
+  streams-test:
+    needs: streams-build
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: gpu-l4-latest-1
+      container_image: "rapidsai/ci-conda:26.06-latest"
+      script: ci/test_streams.sh stream_tests_${{ matrix.cuda_version }}

@@ -39,6 +39,21 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn, engine):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {"target_partition_size": 1_000},
+            "engine_options": {"parquet_options": {"use_rapidsmpf_native": True}},
+        }
+    ],
+    indirect=True,
+)
+def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, engine):
+    make_partitioned_source(df, tmp_path, "parquet", n_files=1)
+    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=engine)
+
+
 # ---------------------------------------------------------------------------
 # Tests migrated from tests/experimental/test_scan.py
 # ---------------------------------------------------------------------------

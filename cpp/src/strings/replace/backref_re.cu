@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -110,7 +110,8 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
   auto const parse_result                    = parse_backrefs(replacement, group_count);
   rmm::device_uvector<backref_type> backrefs = cudf::detail::make_device_uvector_async(
     parse_result.second, stream, cudf::get_current_device_resource_ref());
-  string_scalar repl_scalar(parse_result.first, true, stream);
+  string_scalar repl_scalar(
+    parse_result.first, true, stream, cudf::get_current_device_resource_ref());
   string_view const d_repl_template = repl_scalar.value(stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);

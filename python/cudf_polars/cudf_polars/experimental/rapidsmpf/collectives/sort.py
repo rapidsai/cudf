@@ -127,14 +127,15 @@ async def _compute_sort_boundaries(
     stream = local_boundaries_df.stream
 
     if allgather_id is not None:
-        allgather = AllGatherManager(context, comm, allgather_id)
         chunk = TableChunk.from_pylibcudf_table(
             local_boundaries_df.table,
             stream,
             exclusive_view=True,
+            br=context.br(),
         )
-        allgather.insert(comm.rank, chunk)
-        allgather.insert_finished()
+        allgather = AllGatherManager(context, comm, allgather_id)
+        with allgather.inserting() as inserter:
+            inserter.insert(comm.rank, chunk)
         concat_table = await allgather.extract_concatenated(stream, ordered=True)
         return _get_final_sort_boundaries(
             DataFrame.from_table(
@@ -179,7 +180,7 @@ async def _sample_chunks_for_size_estimate(
         msg = await ch_in.recv(context)
         if msg is None:
             break
-        chunk = TableChunk.from_message(msg).make_available_and_spill(
+        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
             context.br(), allow_overbooking=True
         )
         sampled_bytes += chunk.data_alloc_size()
@@ -222,7 +223,7 @@ async def _receive_and_buffer_chunks(
     while (msg := await ch_in.recv(context)) is not None:
         seq_num = msg.sequence_number
         df = chunk_to_frame(
-            TableChunk.from_message(msg).make_available_and_spill(
+            TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
                 context.br(), allow_overbooking=True
             ),
             sort_ir,
@@ -234,6 +235,7 @@ async def _receive_and_buffer_chunks(
                 ).table,
                 df.stream,
                 exclusive_view=True,
+                br=context.br(),
             )
         )
         if sort_ir.stable:
@@ -256,7 +258,9 @@ async def _receive_and_buffer_chunks(
         chunk_store.insert(
             Message(
                 seq_num,
-                TableChunk.from_pylibcudf_table(tbl, df.stream, exclusive_view=True),
+                TableChunk.from_pylibcudf_table(
+                    tbl, df.stream, exclusive_view=True, br=context.br()
+                ),
             )
         )
         del df
@@ -281,6 +285,10 @@ async def _insert_chunks_into_shuffle(
     null_order = list(ir.null_order)
     by_indices = names_to_indices(tuple(by), ir.schema)
 
+    skip_insert = metadata_in.duplicated and comm.rank != 0
+    local_sort_ir = ir.children[0]
+    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
+
     shuffle = ShuffleManager(
         context,
         comm,
@@ -288,37 +296,32 @@ async def _insert_chunks_into_shuffle(
         collective_ids.pop(),
         partition_assignment=PartitionAssignment.CONTIGUOUS,
     )
-    skip_insert = metadata_in.duplicated and comm.rank != 0
-    local_sort_ir = ir.children[0]
-    assert isinstance(local_sort_ir, Sort), "ShuffleSorted must have a Sort child."
+    async with shuffle.inserting() as inserter:
+        for msg in chunk_store:
+            if skip_insert:
+                continue
+            seq_num = msg.sequence_number
+            available_chunk = TableChunk.from_message(
+                msg, br=context.br()
+            ).make_available_and_spill(context.br(), allow_overbooking=True)
+            tbl = available_chunk.table_view()
+            sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
 
-    for msg in chunk_store:
-        if skip_insert:
-            continue
-        seq_num = msg.sequence_number
-        available_chunk = TableChunk.from_message(msg).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        tbl = available_chunk.table_view()
-        sort_cols_tbl = plc.Table([tbl.columns()[i] for i in by_indices])
+            stream = get_joined_cuda_stream(
+                ir_context.get_cuda_stream,
+                upstreams=(available_chunk.stream, sort_boundaries_df.stream),
+            )
 
-        stream = get_joined_cuda_stream(
-            ir_context.get_cuda_stream,
-            upstreams=(available_chunk.stream, sort_boundaries_df.stream),
-        )
-
-        splits = find_sort_splits(
-            sort_cols_tbl,
-            sort_boundaries_df.table,
-            seq_num,
-            column_order,
-            null_order,
-            stream=stream,
-            chunk_relative=True,
-        )
-        shuffle.insert_split(available_chunk, splits)
-
-    await shuffle.insert_finished()
+            splits = find_sort_splits(
+                sort_cols_tbl,
+                sort_boundaries_df.table,
+                seq_num,
+                column_order,
+                null_order,
+                stream=stream,
+                chunk_relative=True,
+            )
+            inserter.insert_split(available_chunk, splits)
 
     post_sort_ir = local_sort_ir
     if local_sort_ir.stable:
@@ -374,7 +377,9 @@ async def _extract_partitions_and_send(
             context,
             Message(
                 partition_id,
-                TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True),
+                TableChunk.from_pylibcudf_table(
+                    table, stream, exclusive_view=True, br=context.br()
+                ),
             ),
         )
 
