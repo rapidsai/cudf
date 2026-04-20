@@ -72,7 +72,7 @@ def _scalar_binop_scalar(
     out_dtype: plc.DataType,
     stream: Stream,
 ) -> plc.Scalar:
-    """Apply ``op`` to two scalars (via 1-row columns); result dtype ``out_dtype``."""
+    """Binary ``op`` on two scalars via single-row columns. Result dtype is ``out_dtype``."""
     lc = plc.Column.from_scalar(lhs, 1, stream=stream)
     rc = plc.Column.from_scalar(rhs, 1, stream=stream)
     out = plc.binaryop.binary_operation(lc, rc, op, out_dtype, stream=stream)
@@ -98,12 +98,7 @@ def _minmax_py(
     *,
     assume_sorted: bool = False,
 ) -> tuple[int, int]:
-    """
-    Return (min, max) of ``col`` as Python ints (``reduce_dtype`` for reduce path).
-
-    If ``assume_sorted`` is True, use first/last rows (caller must guarantee non-decreasing
-    order and no nulls, as for Polars rolling index columns).
-    """
+    """Min and max of ``col`` as Python ints. Sorted columns can set ``assume_sorted``."""
     if assume_sorted:
         n = col.size()
         lo_c = plc.copying.slice(col, [0, 1], stream=stream)[0]
@@ -158,15 +153,12 @@ def _filter_threshold(
 @dataclass
 class _RollingActState:
     left_ctx_df: DataFrame | None = None
-    # Reserved for cross-rank streaming: right halo rows received from the next rank
-    # when ``is_last_chunk`` is false locally but the global partition continues.
-    # Single-rank / local-only pipelines never set this; it stays ``None``.
+    # Cross-rank placeholder. Unused when ``comm.nranks == 1`` (always ``None``).
     right_halo_df: DataFrame | None = None
     prev_ungrouped_int_max: int | None = (
-        None  # ungrouped INT64: max index on prior centers
+        None  # prior center max index (ungrouped INT64 order check)
     )
-    # Chunks already received from the stream that are not the current center yet
-    # (ordered); used to supply a right halo that may span multiple partitions.
+    # Stream chunks read ahead of the current center (FIFO).
     prefetch: deque[tuple[_RollingStreamChunkMeta, Message]] = field(
         default_factory=deque,
         repr=False,
@@ -182,7 +174,7 @@ def _check_ungrouped_int_chunk_order(
     index_col_idx: int,
     seq: int,
 ) -> None:
-    """Ungrouped INT64 only: center min must be >= prior center max (partition order)."""
+    """Raise if ungrouped INT64 index goes backward across center chunks."""
     if ir.keys or ir.index_dtype.id() != plc.TypeId.INT64:
         return
     if (n := exp.center_end - exp.center_begin) == 0:
@@ -204,27 +196,21 @@ def _check_ungrouped_int_chunk_order(
 
 @dataclass(frozen=True)
 class _RollingStreamChunkMeta:
-    """Per-chunk metadata after rank-boundary tagging (internal channel 1 → 2)."""
+    """Chunk metadata after the rank-boundary stage."""
 
     is_local_rank_chunk: bool
 
 
 @dataclass(frozen=True)
 class _RollingExpandedChunkMeta:
-    """Per-chunk metadata for expanded frames (internal channel 2 → 3)."""
+    """Chunk metadata for expanded rolling frames."""
 
     center_begin: int
     center_end: int
 
 
 def _message_peek_copy(msg: Message, br: Any) -> Message:
-    """
-    Deep-copy a table message so ``TableChunk.from_message`` can consume the copy.
-
-    ``TableChunk.from_message`` moves the payload out of the message (it becomes empty);
-    use this for index-bounds / row-count probes that must not invalidate messages still
-    queued for ``_prepare_expanded_rolling_frame``.
-    """
+    """Copy a table message so ``from_message`` can run without draining the original."""
     res = br.reserve_device_memory_and_spill(msg.copy_cost(), allow_overbooking=True)
     return msg.copy(res)
 
@@ -236,7 +222,7 @@ def _chunk_index_int_bounds_from_msg(
     index_col_idx: int,
     index_dtype: plc.DataType,
 ) -> tuple[int, int] | None:
-    """Return (min, max) index for a non-empty chunk, else None (consumes ``msg``)."""
+    """Consume message and return index maxima for one chunk."""
     chunk = TableChunk.from_message(msg, br)
     chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
     table = chunk.table_view()
@@ -254,7 +240,7 @@ def _chunk_index_ts_bounds_from_msg(
     index_col_idx: int,
     index_dtype: plc.DataType,
 ) -> tuple[plc.Scalar, plc.Scalar] | None:
-    """Return (min, max) index scalars (consumes ``msg``)."""
+    """Min and max index as scalars. Returns ``None`` if empty. Consumes ``msg``."""
     chunk = TableChunk.from_message(msg, br)
     chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
     table = chunk.table_view()
@@ -274,7 +260,7 @@ def _int_right_halo_covers_prefetch(
     chunk_mx: int,
     lookahead: int,
 ) -> bool:
-    """True if the last prefetched chunk's max index reaches ``chunk_mx + lookahead``."""
+    """Whether the last prefetched chunk already reaches the right halo upper bound."""
     if not prefetch:
         return False
     _, last_msg = prefetch[-1]
@@ -292,7 +278,7 @@ async def _recv_stream_chunk_pair(
     context: Context,
     ch_in: Channel[TableChunk],
 ) -> tuple[_RollingStreamChunkMeta, Message] | None:
-    """Receive one (metadata, data) pair from ``ch_in``, or None if the stream ended."""
+    """Read one chunk from the channel. Returns ``None`` at end of stream."""
     if (meta_msg := await ch_in.recv_metadata(context)) is None:
         return None
     meta = ArbitraryChunk.from_message(meta_msg).release()
@@ -307,7 +293,7 @@ async def _recv_one_into_prefetch(
     ch_in: Channel[TableChunk],
     state: _RollingActState,
 ) -> bool:
-    """Receive one (metadata, data) pair into ``state.prefetch``; False if stream ended."""
+    """Append one chunk to ``prefetch``. Returns ``False`` at end of stream."""
     pair = await _recv_stream_chunk_pair(context, ch_in)
     if pair is None:
         return False
@@ -316,7 +302,7 @@ async def _recv_one_into_prefetch(
 
 
 def _peek_n_rows_from_message(msg: Message, br: Any) -> int:
-    """Row count without consuming ``msg`` (``from_message`` clears the payload)."""
+    """Row count for ``msg`` without taking ownership (uses a copy)."""
     work = _message_peek_copy(msg, br)
     chunk = TableChunk.from_message(work, br)
     chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
@@ -333,7 +319,7 @@ async def _extend_prefetch_for_int_lookahead(
     index_col_idx: int,
     index_dtype: plc.DataType,
 ) -> None:
-    """Pull successor chunks until the right halo in index space is covered or EOS."""
+    """Buffer enough int-index successors for the right halo or until the stream ends."""
     br = context.br()
     threshold = chunk_mx + lookahead
     if not state.prefetch and not await _recv_one_into_prefetch(context, ch_in, state):
@@ -373,7 +359,7 @@ async def _extend_prefetch_for_ts_lookahead(
     index_col_idx: int,
     cur_stream: Any,
 ) -> None:
-    """Timestamp index: extend prefetch until last chunk max reaches ``chunk_mx + lookahead``."""
+    """Buffer enough timestamp-index successors for the right halo or until the stream ends."""
     br = context.br()
     dur_dt = _duration_dtype_for_timestamp(index_dtype)
     lookahead_s = plc.Scalar.from_py(lookahead, dur_dt, stream=cur_stream)
@@ -429,7 +415,7 @@ async def _ensure_successor_prefetched(
     ch_in: Channel[TableChunk],
     state: _RollingActState,
 ) -> None:
-    """If there may be a chunk after the current center, ensure one is buffered (lookahead==0)."""
+    """When ``lookahead == 0``, peek one successor into ``prefetch`` if none are buffered."""
     if state.prefetch:
         return
     await _recv_one_into_prefetch(context, ch_in, state)
@@ -447,7 +433,7 @@ async def _ensure_right_halo_prefetched(
     index_dtype: plc.DataType,
     lookahead: int,
 ) -> bool:
-    """Extend prefetch until the right halo for ``cur_msg`` is covered. Returns False if empty."""
+    """Fill ``prefetch`` for the right halo. Returns ``False`` if the center chunk is empty."""
     if is_int_index:
         cur_bounds = _chunk_index_int_bounds_from_msg(
             _message_peek_copy(cur_msg, br),
@@ -530,11 +516,8 @@ def _prepare_expanded_rolling_frame(
     )
     is_int_index = index_dtype.id() == plc.TypeId.INT64
 
-    # Chunk index min/max are only needed to trim halo rows by the rolling window
-    # in index-value space (see `rolling_stream_halo_extents` for `lookback` /
-    # `lookahead`).  Left: drop rows in `left_ctx_df` below `chunk_mn - lookback`.
-    # Right: on a following chunk, drop rows above `chunk_mx + lookahead` (no next
-    # chunk on the last partition).
+    # Trim halos using index bounds from ``rolling_stream_halo_extents`` (lookback /
+    # lookahead). Last chunk has no right neighbors on this rank.
     need_chunk_minmax_for_left = (
         left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0
     )
@@ -707,7 +690,7 @@ async def _rolling_do_evaluate(
     non_child_args_no_zlice: tuple[Any, ...],
     combined_df: DataFrame,
 ) -> DataFrame:
-    """Run ``Rolling.do_evaluate`` in a worker thread."""
+    """Run ``Rolling.do_evaluate`` in a background thread."""
     return await asyncio.to_thread(
         Rolling.do_evaluate,
         *non_child_args_no_zlice,
@@ -816,12 +799,7 @@ async def prepare_rank_boundaries(
     ch_out: Channel[TableChunk],
     collective_ids: list[int],
 ) -> None:
-    """
-    Relay chunks with paired per-chunk metadata (single-rank: always local).
-
-    Multi-rank will extend this stage to inject rank-boundary frames with
-    ``is_local_rank_chunk=False`` without changing downstream contracts.
-    """
+    """Tag each chunk with local rank metadata (single-rank only today)."""
     assert len(collective_ids) == 2
     _ = collective_ids
     br = context.br()
@@ -861,12 +839,7 @@ async def prepare_chunks(
     base_col_names: list[str],
     base_dtypes: list[Any],
 ) -> None:
-    """
-    Expand rolling context; each output uses paired metadata + data messages.
-
-    Metadata carries the center row range in the combined table; the data
-    :class:`Message` keeps the upstream ``sequence_number`` for the center chunk.
-    """
+    """Build expanded rolling frames (left halo + center + right halo) per chunk."""
     br = context.br()
     is_int_index = index_dtype.id() == plc.TypeId.INT64
     while True:
@@ -1052,7 +1025,7 @@ async def rolling_actor(
     ch_out: Channel[TableChunk],
     collective_ids: list[int],
 ) -> None:
-    """Rolling pipeline: rank boundaries → chunk prep → eval+send (internal Channels)."""
+    """Rolling actor. Rank boundaries, then expand chunks, then evaluate and send."""
     assert comm.nranks == 1
     ch_after_boundaries: Channel[TableChunk] = context.create_channel()
     ch_prep_to_eval: Channel[TableChunk] = context.create_channel()

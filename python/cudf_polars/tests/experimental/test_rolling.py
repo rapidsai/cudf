@@ -41,7 +41,7 @@ def engine(
 def engine_rolling(
     request: pytest.FixtureRequest,
 ) -> Generator[StreamingEngine, None, None]:
-    """No fallback_mode so unimplemented nodes surface as errors."""
+    """Like ``engine`` but omits ``fallback_mode`` so unsupported nodes fail instead of warning."""
     params: dict[str, Any] = getattr(request, "param", {})
     executor_options = {
         "max_rows_per_partition": 3,
@@ -135,11 +135,7 @@ def test_ungrouped_int_rolling_multiple_aggs(engine_rolling) -> None:
 
 
 def test_ungrouped_int_rolling_right_halo_spans_multiple_chunks(engine_rolling) -> None:
-    """
-    Lookahead only: ``offset`` narrower than ``period`` yields a positive streaming
-    lookahead so the right halo can require more than one downstream partition
-    (``max_rows_per_partition`` is 3 in the ``engine_rolling`` fixture).
-    """
+    """Positive lookahead can pull the right halo from more than one next partition."""
     df = pl.LazyFrame(
         {
             "idx": list(range(1, 13)),
@@ -155,11 +151,7 @@ def test_ungrouped_int_rolling_right_halo_spans_multiple_chunks(engine_rolling) 
 def test_ungrouped_int_rolling_lookback_spans_multiple_prior_chunks(
     engine_rolling,
 ) -> None:
-    """
-    Lookback only: default ``offset=-period`` gives ``lookback == period`` and zero
-    lookahead. A wide integer window must pull many prior rows into ``left_ctx`` across
-    more than one already-processed partition chunk.
-    """
+    """Default offset gives a wide lookback so the left halo spans several prior partitions."""
     df = pl.LazyFrame(
         {
             "idx": list(range(1, 16)),
@@ -173,14 +165,7 @@ def test_ungrouped_int_rolling_lookback_spans_multiple_prior_chunks(
 def test_ungrouped_int_rolling_halo_spans_multiple_chunks_lookahead_and_lookback(
     engine_rolling,
 ) -> None:
-    """
-    Both directions: ``rolling_stream_halo_extents`` uses ``lookback = max(0, -p)`` and
-    ``lookahead = max(0, p + f)`` for ordinals ``(p, f)`` from ``offset`` / ``period``.
-    With ``offset='-5i'`` and ``period='10i'``, lookback and lookahead are both 5 in
-    index units, so a single center partition can need prior rows from more than one
-    upstream chunk and future rows from more than one downstream chunk when
-    ``max_rows_per_partition`` is 3.
-    """
+    """``offset=-5i`` with ``period=10i`` needs wide halos on both sides across several partitions."""
     df = pl.LazyFrame(
         {
             "idx": list(range(1, 16)),
@@ -266,7 +251,7 @@ def test_rolling_with_slice(engine_rolling) -> None:
 
 
 def test_rolling_no_cross_partition_halo(engine_rolling) -> None:
-    """Narrow window so no cross partition rows enter the range (gap larger than window)."""
+    """Narrow window and a wide index gap so halos never reach the next partition."""
     df = pl.LazyFrame(
         {
             "idx": [1, 2, 3, 10, 11, 12],
