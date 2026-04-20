@@ -1076,7 +1076,7 @@ if(CUDF_BUILD_TESTUTIL)
     INTERFACE cuco::cuco
               Threads::Threads
               cudf
-              $<$<NOT:$<BOOL:${CUDF_BUILD_STREAMS_TEST_UTIL}>>:cudftest_default_stream>
+              $<$<NOT:$<BOOL:${CUDF_BUILD_STREAMS_TEST_UTIL}>>:cudf::cudftest_default_stream>
               $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
