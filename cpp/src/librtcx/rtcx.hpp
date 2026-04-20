@@ -963,7 +963,8 @@ template <typename... TemplateArgs>
   requires((true && ... && std::is_constructible_v<std::string_view, TemplateArgs&>))
 std::string reflect_template(std::string_view template_name, TemplateArgs&&... template_args)
 {
-  std::string_view const tparams[sizeof...(TemplateArgs)] = {std::string_view{template_args}...};
+  std::string_view const tparams[sizeof...(TemplateArgs)] =  // NOLINT(modernize-avoid-c-arrays)
+    {std::string_view{template_args}...};
   return reflect_template(template_name, tparams);
 }
 

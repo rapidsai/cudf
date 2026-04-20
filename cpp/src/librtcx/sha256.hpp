@@ -113,16 +113,17 @@ struct [[nodiscard]] sha256 {
 struct sha256_context {
  private:
   static constexpr size_t BLOCK_SIZE = 64;
-  std::uint32_t state_[8]            = {0x6a09'e667ul,
-                                        0xbb67'ae85ul,
-                                        0x3c6e'f372ul,
-                                        0xa54f'f53aul,
-                                        0x510e'527ful,
-                                        0x9b05'688cul,
-                                        0x1f83'd9abul,
-                                        0x5be0'cd19ul};  // NOLINT(modernize-avoid-c-arrays)
-  std::uint64_t size_                = 0;
-  std::uint8_t buf_[BLOCK_SIZE]      = {};  // NOLINT(modernize-avoid-c-arrays)
+  std::uint32_t state_[8]            =  // NOLINT(modernize-avoid-c-arrays)
+    {0x6a09'e667ul,
+     0xbb67'ae85ul,
+     0x3c6e'f372ul,
+     0xa54f'f53aul,
+     0x510e'527ful,
+     0x9b05'688cul,
+     0x1f83'd9abul,
+     0x5be0'cd19ul};
+  std::uint64_t size_           = 0;
+  std::uint8_t buf_[BLOCK_SIZE] = {};  // NOLINT(modernize-avoid-c-arrays)
 
  public:
   sha256_context()                                 = default;
