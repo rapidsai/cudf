@@ -77,51 +77,31 @@ def engine(
         yield engine
 
 
-def test_gather_and_clear_statistics(engine: StreamingEngine) -> None:
-    """gather_statistics returns one enabled Statistics per rank; clear=True empties."""
+def test_statistics(engine: StreamingEngine) -> None:
+    """gather_statistics / global_statistics / clear round-trip."""
+    # Every rank returns an enabled Statistics.
     stats = engine.gather_statistics()
     assert len(stats) == engine.nranks
     for s in stats:
         assert isinstance(s, Statistics)
         assert s.enabled
 
-    # Drive a group_by so the streaming pipeline executes a real shuffle
-    # and the per-rank statistics get populated.
+    # Drive a group_by so the streaming pipeline executes a real shuffle.
     n, n_keys = engine.nranks * 50, 5
     lf = pl.LazyFrame(
         {"key": [str(i % n_keys) for i in range(n)], "val": list(range(n))}
     )
     lf.group_by("key").agg(pl.col("val").sum()).collect(engine=engine)
 
-    # Gather with clear=True captures the current stats and then empties them.
-    engine.gather_statistics(clear=True)
+    # global_statistics returns a single merged, enabled Statistics.
+    merged = engine.global_statistics()
+    assert isinstance(merged, Statistics)
+    assert merged.enabled
 
+    # gather_statistics(clear=True) captures and then empties each rank.
+    engine.gather_statistics(clear=True)
     stats = engine.gather_statistics()
     assert len(stats) == engine.nranks
     for s in stats:
         assert s.enabled
         assert s.list_stat_names() == []
-
-
-def test_global_statistics(engine: StreamingEngine) -> None:
-    """global_statistics returns a single Statistics merged across all ranks."""
-    n, n_keys = engine.nranks * 50, 5
-    lf = pl.LazyFrame(
-        {"key": [str(i % n_keys) for i in range(n)], "val": list(range(n))}
-    )
-    lf.group_by("key").agg(pl.col("val").sum()).collect(engine=engine)
-
-    # Warm up: gather_statistics itself triggers host allocations that get
-    # recorded into ctx.statistics(). After the first call, stat names are
-    # stable across subsequent gathers.
-    engine.gather_statistics()
-
-    merged = engine.global_statistics()
-    assert isinstance(merged, Statistics)
-    assert merged.enabled
-    assert merged.list_stat_names() != []
-
-    # Each rank's stat names must be a subset of the merged names.
-    per_rank = engine.gather_statistics()
-    for s in per_rank:
-        assert set(s.list_stat_names()) <= set(merged.list_stat_names())

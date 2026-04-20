@@ -514,8 +514,22 @@ class SPMDEngine(StreamingEngine):
             results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
         return [ClusterInfo(**json.loads(r)) for r in results]
 
-    def _gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
-        """Collective all-gather of ``ctx.statistics()`` across all ranks."""
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank via an all-gather.
+
+        This is a collective operation, every rank must call it.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
         # Pickle before the optional clear so the returned stats still carry data.
         data = pickle.dumps(self.context.statistics())
         with reserve_op_id() as op_id:

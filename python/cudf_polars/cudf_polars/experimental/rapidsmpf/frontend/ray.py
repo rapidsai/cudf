@@ -627,13 +627,20 @@ class RayEngine(StreamingEngine):
         """
         return ray.get([rank.get_info.remote() for rank in self.rank_actors])
 
-    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
-        return ray.get(
-            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
-        )
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank via Ray.
 
-    def _gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
-        """Fan ``RankActor.get_statistics`` out to every rank via Ray."""
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
         return ray.get(
             [rank.get_statistics.remote(clear=clear) for rank in self.rank_actors]
         )
@@ -667,3 +674,8 @@ class RayEngine(StreamingEngine):
         finally:
             self._rank_actors = None
             super().shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return ray.get(
+            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+        )

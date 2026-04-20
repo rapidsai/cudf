@@ -171,10 +171,6 @@ class StreamingEngine(pl.GPUEngine):
         List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
         ordered by rank index.
         """
-        return self._gather_statistics(clear=clear)
-
-    def _gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
-        """Engine-specific collection hook; overridden by every subclass."""
         raise NotImplementedError
 
     def global_statistics(self, *, clear: bool = False) -> Statistics:

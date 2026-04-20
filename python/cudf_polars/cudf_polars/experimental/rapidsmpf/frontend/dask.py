@@ -674,67 +674,6 @@ class DaskEngine(StreamingEngine):
             engine_options={**engine_options, "memory_resource": None},
         )
 
-    @property
-    def _dask_ctx(self) -> DaskContext:
-        if self._dask_context is None:
-            raise RuntimeError("dask_context is not available after shutdown")
-        return self._dask_context
-
-    def gather_cluster_info(self) -> list[ClusterInfo]:
-        """
-        Collect diagnostic information from every rank.
-
-        Returns
-        -------
-        List of :class:`ClusterInfo`, one per rank.
-        """
-        return list(self._dask_ctx.client.run(ClusterInfo.local).values())
-
-    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
-        return list(self._dask_ctx.client.run(func, *args, **kwargs).values())
-
-    def _gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
-        """Fan ``_get_statistics`` out to every Dask worker and rank-order."""
-        results = self._dask_ctx.client.run(
-            functools.partial(
-                _get_statistics, clear=clear, uid=self._dask_ctx.rapidsmpf_id
-            )
-        )
-        # `client.run` returns a dict keyed by worker address in non-deterministic
-        # order; sort by the rank the worker reports.
-        return [s for _, s in sorted(results.values(), key=lambda p: p[0])]
-
-    def shutdown(self) -> None:
-        """
-        Shut down all Dask workers' GPU resources.
-
-        If the cluster and client were created by this engine, they are also
-        closed. Safe to call more than once. Must be called on the same thread
-        that created the engine.
-
-        Raises
-        ------
-        ExceptionGroup
-            If one or more workers raise an unexpected exception during teardown.
-        """
-        if self._dask_context is None:
-            return  # already shut down
-        ctx = self._dask_context
-        self._dask_context = None
-        exceptions: list[Exception] = []
-        try:
-            ctx.client.run(functools.partial(_teardown_worker, uid=ctx.rapidsmpf_id))
-        except Exception as e:
-            exceptions.append(e)
-        finally:
-            if ctx.owned_client is not None:
-                ctx.owned_client.close()
-            if ctx.owned_cluster is not None:
-                ctx.owned_cluster.close()
-            super().shutdown()
-        if exceptions:
-            raise ExceptionGroup("Worker teardown failed", exceptions)
-
     @classmethod
     def from_options(
         cls,
@@ -777,3 +716,76 @@ class DaskEngine(StreamingEngine):
             executor_options=options.to_executor_options(),
             engine_options=options.to_engine_options(),
         )
+
+    @property
+    def _dask_ctx(self) -> DaskContext:
+        if self._dask_context is None:
+            raise RuntimeError("dask_context is not available after shutdown")
+        return self._dask_context
+
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        return list(self._dask_ctx.client.run(ClusterInfo.local).values())
+
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank via ``client.run``.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
+        results = self._dask_ctx.client.run(
+            functools.partial(
+                _get_statistics, clear=clear, uid=self._dask_ctx.rapidsmpf_id
+            )
+        )
+        # `client.run` returns a dict keyed by worker address in non-deterministic
+        # order; sort by the rank the worker reports.
+        return [s for _, s in sorted(results.values(), key=lambda p: p[0])]
+
+    def shutdown(self) -> None:
+        """
+        Shut down all Dask workers' GPU resources.
+
+        If the cluster and client were created by this engine, they are also
+        closed. Safe to call more than once. Must be called on the same thread
+        that created the engine.
+
+        Raises
+        ------
+        ExceptionGroup
+            If one or more workers raise an unexpected exception during teardown.
+        """
+        if self._dask_context is None:
+            return  # already shut down
+        ctx = self._dask_context
+        self._dask_context = None
+        exceptions: list[Exception] = []
+        try:
+            ctx.client.run(functools.partial(_teardown_worker, uid=ctx.rapidsmpf_id))
+        except Exception as e:
+            exceptions.append(e)
+        finally:
+            if ctx.owned_client is not None:
+                ctx.owned_client.close()
+            if ctx.owned_cluster is not None:
+                ctx.owned_cluster.close()
+            super().shutdown()
+        if exceptions:
+            raise ExceptionGroup("Worker teardown failed", exceptions)
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return list(self._dask_ctx.client.run(func, *args, **kwargs).values())
