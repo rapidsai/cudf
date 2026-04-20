@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -7,10 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 
 
@@ -93,10 +89,6 @@ def test_date_range_start_end_periods(start, end, periods):
     )
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="https://github.com/pandas-dev/pandas/issues/46877",
-)
 def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
@@ -177,10 +169,6 @@ def test_date_range_raise_unsupported(freqstr_unsupported, case):
         cudf.date_range(start=s, end=e, freq=freq)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_date_range_start_freq_periods(start, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
@@ -208,10 +196,6 @@ def test_daterange_pandas_compatibility():
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_date_range_start_end_freq(start, end, freq):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq

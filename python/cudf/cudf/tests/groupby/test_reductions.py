@@ -6,10 +6,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq, assert_groupby_results_equal, assert_neq
 from cudf.testing._utils import assert_exceptions_equal
 
@@ -872,10 +868,6 @@ def test_group_by_pandas_sort_order(groups, sort):
         )
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_group_by_empty_reduction(
     all_supported_types_as_str, groupby_reduction_methods, request
 ):

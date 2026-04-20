@@ -8,7 +8,6 @@ from pandas.api import types as pd_types  # noqa: TID251
 
 import cudf
 from cudf.api import types
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 
 @pytest.mark.parametrize(
@@ -484,22 +483,8 @@ def test_is_integer(obj, expect):
         (pd.Series(dtype="int"), False),
         (pd.Series(dtype="float"), False),
         (pd.Series(dtype="complex"), False),
-        pytest.param(
-            pd.Series(dtype="str"),
-            True,
-            marks=pytest.mark.skipif(
-                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="bug in previous pandas versions",
-            ),
-        ),
-        pytest.param(
-            pd.Series(dtype="unicode"),
-            True,
-            marks=pytest.mark.skipif(
-                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="bug in previous pandas versions",
-            ),
-        ),
+        (pd.Series(dtype="str"), True),
+        (pd.Series(dtype="unicode"), True),
         (pd.Series(dtype="datetime64[s]"), False),
         (pd.Series(dtype="timedelta64[s]"), False),
         (pd.Series(dtype="category"), False),
@@ -951,10 +936,6 @@ def test_is_decimal_dtype(obj, expect):
     assert types.is_decimal_dtype(obj) == expect
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="inconsistent warnings in older pandas versions",
-)
 @pytest.mark.parametrize(
     "obj",
     (

@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import expect_warning_if
 
@@ -133,10 +132,6 @@ def test_any_all_axis_none(data, op):
     assert expected == actual
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Warning not given on older versions of pandas",
-)
 def test_reductions_axis_none(request, reduction_methods):
     if reduction_methods == "quantile":
         pytest.skip(f"pandas {reduction_methods} doesn't support axis=None")
