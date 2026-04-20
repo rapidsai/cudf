@@ -31,7 +31,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -160,8 +160,7 @@ class _RollingEvalChunkMeta:
 
 def _check_ungrouped_int_chunk_order(
     prev_max: int | None,
-    combined: DataFrame,
-    exp: _RollingEvalChunkMeta,
+    cur_df: DataFrame,
     ir: Rolling,
     *,
     index_col_idx: int,
@@ -170,15 +169,10 @@ def _check_ungrouped_int_chunk_order(
     """Raise if ungrouped INT64 index goes backward across center chunks."""
     if ir.keys or ir.index_dtype.id() != plc.TypeId.INT64:
         return prev_max
-    if (n := exp.center_end - exp.center_begin) == 0:
+    if cur_df.num_rows == 0:
         return prev_max
-    idx = _get_idx_col(
-        combined.slice((exp.center_begin, n)).table,
-        index_col_idx,
-        ir.index_dtype,
-        combined.stream,
-    )
-    lo, hi = _minmax_py(idx, _INT64, combined.stream, assume_sorted=True)
+    idx = _get_idx_col(cur_df.table, index_col_idx, ir.index_dtype, cur_df.stream)
+    lo, hi = _minmax_py(idx, _INT64, cur_df.stream, assume_sorted=True)
     if prev_max is not None and lo < prev_max:
         raise RuntimeError(
             f"rolling streaming: INT64 index decreased across chunks "
@@ -250,23 +244,31 @@ def _chunk_index_ts_bounds_from_df(
     return _minmax_scalars(idx, index_dtype, df.stream, assume_sorted=True)
 
 
-def _int_right_halo_covers_prefetch(
+async def _extend_prefetch_until_covered(
+    context: Context,
+    ch_in: Channel[TableChunk],
     prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    br: Any,
+    col_names: list[str],
+    col_dtypes: list[Any],
     *,
-    index_col_idx: int,
-    index_dtype: plc.DataType,
-    chunk_mx: int,
-    lookahead: int,
-) -> bool:
-    """Whether the last prefetched chunk already reaches the right halo upper bound."""
-    if not prefetch:
-        return False
-    _, _, last_df = prefetch[-1]
-    bounds = _chunk_index_int_bounds_from_df(
-        last_df, index_col_idx=index_col_idx, index_dtype=index_dtype
-    )
-    assert bounds is not None
-    return bounds[1] >= chunk_mx + lookahead
+    first_past_upper: Callable[[DataFrame], bool],
+    last_reaches_upper: Callable[[DataFrame], bool],
+) -> None:
+    """Fill prefetch until the last chunk reaches the upper halo bound or the stream ends."""
+    if not prefetch and not await _recv_one_into_prefetch(
+        context, ch_in, prefetch, br, col_names, col_dtypes
+    ):
+        return
+    if first_past_upper(prefetch[0][2]):
+        return
+    while True:
+        if last_reaches_upper(prefetch[-1][2]):
+            return
+        if not await _recv_one_into_prefetch(
+            context, ch_in, prefetch, br, col_names, col_dtypes
+        ):
+            return
 
 
 async def _recv_stream_chunk_pair(
@@ -316,30 +318,24 @@ async def _extend_prefetch_for_int_lookahead(
 ) -> None:
     """Buffer enough int-index successors for the right halo or until the stream ends."""
     threshold = chunk_mx + lookahead
-    if not prefetch and not await _recv_one_into_prefetch(
-        context, ch_in, prefetch, br, col_names, col_dtypes
-    ):
-        return
-    _, _, first_df = prefetch[0]
-    first_bounds = _chunk_index_int_bounds_from_df(
-        first_df, index_col_idx=index_col_idx, index_dtype=index_dtype
+
+    def _bounds(df: DataFrame) -> tuple[int, int]:
+        b = _chunk_index_int_bounds_from_df(
+            df, index_col_idx=index_col_idx, index_dtype=index_dtype
+        )
+        assert b is not None, "prefetch successor chunk must be non-empty"
+        return b
+
+    await _extend_prefetch_until_covered(
+        context,
+        ch_in,
+        prefetch,
+        br,
+        col_names,
+        col_dtypes,
+        first_past_upper=lambda df: _bounds(df)[0] > threshold,
+        last_reaches_upper=lambda df: _bounds(df)[1] >= threshold,
     )
-    assert first_bounds is not None, "prefetch successor chunk must be non-empty"
-    if first_bounds[0] > threshold:
-        return
-    while True:
-        if _int_right_halo_covers_prefetch(
-            prefetch,
-            index_col_idx=index_col_idx,
-            index_dtype=index_dtype,
-            chunk_mx=chunk_mx,
-            lookahead=lookahead,
-        ):
-            return
-        if not await _recv_one_into_prefetch(
-            context, ch_in, prefetch, br, col_names, col_dtypes
-        ):
-            return
 
 
 async def _extend_prefetch_for_ts_lookahead(
@@ -358,51 +354,42 @@ async def _extend_prefetch_for_ts_lookahead(
 ) -> None:
     """Buffer enough timestamp-index successors for the right halo or until the stream ends."""
     dur_dt = _duration_dtype_for_timestamp(index_dtype)
-    lookahead_s = plc.Scalar.from_py(lookahead, dur_dt, stream=cur_stream)
     upper_s = _scalar_binop_scalar(
         chunk_mx_s,
-        lookahead_s,
+        plc.Scalar.from_py(lookahead, dur_dt, stream=cur_stream),
         plc.binaryop.BinaryOperator.ADD,
         index_dtype,
         cur_stream,
     )
-    if not prefetch and not await _recv_one_into_prefetch(
-        context, ch_in, prefetch, br, col_names, col_dtypes
-    ):
-        return
-    _, _, first_df = prefetch[0]
-    b0 = _chunk_index_ts_bounds_from_df(
-        first_df, index_col_idx=index_col_idx, index_dtype=index_dtype
-    )
-    assert b0 is not None, "prefetch successor chunk must be non-empty"
-    mn0_s, _ = b0
-    if _scalar_binop_scalar(
-        mn0_s,
-        upper_s,
-        plc.binaryop.BinaryOperator.GREATER,
-        _BOOL8,
-        cur_stream,
-    ).to_py(stream=cur_stream):
-        return
-    while True:
-        _, _, last_df = prefetch[-1]
-        last_bounds = _chunk_index_ts_bounds_from_df(
-            last_df, index_col_idx=index_col_idx, index_dtype=index_dtype
+
+    def _bounds(df: DataFrame) -> tuple[plc.Scalar, plc.Scalar]:
+        b = _chunk_index_ts_bounds_from_df(
+            df, index_col_idx=index_col_idx, index_dtype=index_dtype
         )
-        assert last_bounds is not None
-        _, last_mx_s = last_bounds
-        if _scalar_binop_scalar(
-            last_mx_s,
-            upper_s,
-            plc.binaryop.BinaryOperator.GREATER_EQUAL,
-            _BOOL8,
-            cur_stream,
-        ).to_py(stream=cur_stream):
-            return
-        if not await _recv_one_into_prefetch(
-            context, ch_in, prefetch, br, col_names, col_dtypes
-        ):
-            return
+        assert b is not None, "prefetch successor chunk must be non-empty"
+        return b
+
+    def _cmp(lhs: plc.Scalar, op: plc.binaryop.BinaryOperator) -> bool:
+        return bool(
+            _scalar_binop_scalar(lhs, upper_s, op, _BOOL8, cur_stream).to_py(
+                stream=cur_stream
+            )
+        )
+
+    await _extend_prefetch_until_covered(
+        context,
+        ch_in,
+        prefetch,
+        br,
+        col_names,
+        col_dtypes,
+        first_past_upper=lambda df: _cmp(
+            _bounds(df)[0], plc.binaryop.BinaryOperator.GREATER
+        ),
+        last_reaches_upper=lambda df: _cmp(
+            _bounds(df)[1], plc.binaryop.BinaryOperator.GREATER_EQUAL
+        ),
+    )
 
 
 async def _ensure_right_halo_prefetched(
@@ -482,13 +469,12 @@ def _prepare_expanded_rolling_frame(
             "Non-local rank boundary chunks are not supported for rolling yet."
         )
 
-    chunk_df = cur_df
-    n_chunk_rows = chunk_df.num_rows
+    n_chunk_rows = cur_df.num_rows
     if n_chunk_rows == 0:
         return None
 
-    chunk_table = chunk_df.table
-    chunk_stream = chunk_df.stream
+    chunk_table = cur_df.table
+    chunk_stream = cur_df.stream
     is_int_index = index_dtype.id() == plc.TypeId.INT64
 
     # Trim halos using index bounds from ``rolling_stream_halo_extents`` (lookback /
@@ -542,7 +528,7 @@ def _prepare_expanded_rolling_frame(
                 index_dtype,
                 chunk_stream,
             )
-            with ir_context.stream_ordered_after(left_ctx_df, chunk_df) as s:
+            with ir_context.stream_ordered_after(left_ctx_df, cur_df) as s:
                 left_ctx_df = DataFrame.from_table(
                     _filter_threshold(
                         left_ctx_df.table,
@@ -599,7 +585,7 @@ def _prepare_expanded_rolling_frame(
                             )
                         )
                 else:
-                    with ir_context.stream_ordered_after(next_df, chunk_df) as s:
+                    with ir_context.stream_ordered_after(next_df, cur_df) as s:
                         right_ctx_table = _filter_threshold(
                             next_table,
                             next_idx,
@@ -622,7 +608,7 @@ def _prepare_expanded_rolling_frame(
                 right_ctx_df = right_tables_filtered[0]
             else:
                 with ir_context.stream_ordered_after(
-                    chunk_df, *right_tables_filtered
+                    cur_df, *right_tables_filtered
                 ) as s:
                     right_ctx_df = DataFrame.from_table(
                         plc.concatenate.concatenate(
@@ -635,7 +621,7 @@ def _prepare_expanded_rolling_frame(
     else:
         right_ctx_df = None
     n_left = left_ctx_df.num_rows if left_ctx_df is not None else 0
-    dfs = [df for df in (left_ctx_df, chunk_df, right_ctx_df) if df is not None]
+    dfs = [df for df in (left_ctx_df, cur_df, right_ctx_df) if df is not None]
     if len(dfs) == 1:
         combined_df = dfs[0]
     else:
@@ -649,7 +635,7 @@ def _prepare_expanded_rolling_frame(
 
     left_ctx_next = _append_left_context_row(
         left_ctx_df,
-        chunk_df,
+        cur_df,
         lookback=lookback,
         ir_context=ir_context,
         col_names=base_col_names,
@@ -660,7 +646,7 @@ def _prepare_expanded_rolling_frame(
 
 def _append_left_context_row(
     left_ctx_df: DataFrame | None,
-    chunk_df: DataFrame,
+    cur_df: DataFrame,
     *,
     lookback: int,
     ir_context: IRExecutionContext,
@@ -670,10 +656,10 @@ def _append_left_context_row(
     if lookback <= 0:
         return left_ctx_df
     if left_ctx_df is None or left_ctx_df.num_rows == 0:
-        return chunk_df
-    with ir_context.stream_ordered_after(left_ctx_df, chunk_df) as s:
+        return cur_df
+    with ir_context.stream_ordered_after(left_ctx_df, cur_df) as s:
         return DataFrame.from_table(
-            plc.concatenate.concatenate([left_ctx_df.table, chunk_df.table], stream=s),
+            plc.concatenate.concatenate([left_ctx_df.table, cur_df.table], stream=s),
             col_names,
             col_dtypes,
             stream=s,
@@ -810,8 +796,7 @@ async def expand_chunks(
 
         prev_max = _check_ungrouped_int_chunk_order(
             prev_max,
-            combined_df,
-            eval_meta,
+            cur_df,
             ir,
             index_col_idx=index_col_idx,
             seq=cur_seq,
