@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
@@ -135,10 +134,6 @@ def test_dataframe_join_how(aa, bb, how):
                 assert direct_equal or nanfilled_equal, msg
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="bug in older version of pandas",
-)
 def test_dataframe_join_suffix():
     rng = np.random.default_rng(seed=0)
 
