@@ -83,14 +83,20 @@ class stats_caster_base {
 
   // uses storage type as T
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(cudf::is_dictionary<T>() or cudf::is_nested<T>())
   {
     CUDF_FAIL("Unsupported type for stats casting");
   }
 
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(cudf::is_boolean<T>())
   {
     CUDF_EXPECTS(type == Type::BOOLEAN, "Invalid type and stats combination");
@@ -143,7 +149,10 @@ class stats_caster_base {
   }
 
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(cudf::is_floating_point<T>())
   {
     switch (type) {
@@ -156,7 +165,10 @@ class stats_caster_base {
   }
 
   template <typename T>
-  static inline T convert(uint8_t const* stats_val, size_t stats_size, Type const type)
+  static inline T convert(uint8_t const* stats_val,
+                          size_t stats_size,
+                          Type const type,
+                          int32_t ts_scale = 0)
     requires(std::is_same_v<T, string_view>)
   {
     switch (type) {
@@ -208,13 +220,9 @@ class stats_caster_base {
             reinterpret_cast<uint8_t const*>(chars.data()) + current_chars_offset,
             binary_value.value().size(),
             type);
-        } else if constexpr ((cudf::is_integral<T>() and !cudf::is_boolean<T>()) or
-                             cudf::is_fixed_point<T>() or cudf::is_chrono<T>()) {
-          val[index] = stats_caster_base::convert<T>(
-            binary_value.value().data(), binary_value.value().size(), type, ts_scale);
         } else {
           val[index] = stats_caster_base::convert<T>(
-            binary_value.value().data(), binary_value.value().size(), type);
+            binary_value.value().data(), binary_value.value().size(), type, ts_scale);
         }
       } else {
         clear_bit_unsafe(null_mask.data(), index);
