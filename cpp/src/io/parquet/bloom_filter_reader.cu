@@ -5,7 +5,9 @@
 
 #include "compact_protocol_reader.hpp"
 #include "expression_transform_helpers.hpp"
+#include "io/utilities/time_utils.hpp"
 #include "reader_impl_helpers.hpp"
+#include "timestamp_utils.cuh"
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -558,9 +560,15 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
 equality_literals_collector::equality_literals_collector(
   ast::expression const& expr,
   cudf::host_span<cudf::data_type const> output_dtypes,
-  int32_t timestamp_clock_rate)
-  : _output_dtypes{output_dtypes}, _timestamp_clock_rate{timestamp_clock_rate}
+  cudf::host_span<cudf::size_type const> output_column_schemas,
+  cudf::host_span<SchemaElement const> schema_tree)
+  : _output_dtypes{output_dtypes},
+    _output_column_schemas{output_column_schemas},
+    _schema_tree{schema_tree}
 {
+  CUDF_EXPECTS(
+    _output_column_schemas.empty() or _output_column_schemas.size() == _output_dtypes.size(),
+    "output_column_schemas must have the same size as output_dtypes when provided");
   _literals.resize(static_cast<size_type>(_output_dtypes.size()));
   expr.accept(*this);
 }
@@ -612,9 +620,17 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
   if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
     col_ref->accept(*this);
     auto const col_idx = col_ref->get_column_index();
-    // Do not collect equality literals for timestamp columns when the output clock rate differs
-    // from the column's native precision as the literal would never match the native values.
-    if (cudf::is_timestamp(_output_dtypes[col_idx]) and _timestamp_clock_rate != 0) { return expr; }
+    // Do not collect literals for timestamp columns whose output precision differs from
+    // the column's native precision as the literal would never match the native values.
+    if (not _output_column_schemas.empty() and cudf::is_timestamp(_output_dtypes[col_idx])) {
+      auto const schema_idx = _output_column_schemas[col_idx];
+      auto const& schema    = _schema_tree[schema_idx];
+      auto const clockrate  = cudf::io::detail::to_clockrate(_output_dtypes[col_idx].id());
+      if (schema.logical_type.has_value() and
+          calc_timestamp_scale(schema.logical_type, clockrate) != 0) {
+        return expr;
+      }
+    }
     if (op == ast_operator::EQUAL) {
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal));
     }

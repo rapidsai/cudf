@@ -4,7 +4,6 @@
  */
 
 #include "expression_transform_helpers.hpp"
-#include "io/utilities/time_utils.hpp"
 #include "reader_impl_helpers.hpp"
 #include "stats_filter_helpers.hpp"
 #include "timestamp_utils.cuh"
@@ -239,22 +238,10 @@ aggregate_reader_metadata::filter_row_groups(
       : input_row_group_indices;
 
   // Collect equality literals for each input table column for bloom filtering
-  auto equality_literals = equality_literals_collector{filter.get(), output_dtypes}.get_literals();
-
-  // Skip bloom filter probing for timestamp columns with precision conversion, because the
-  // bloom filter was built at the native precision, and hashing at the output precision will
-  // never match.
-  for (size_t col_idx = 0; col_idx < output_dtypes.size(); ++col_idx) {
-    if (cudf::is_timestamp(output_dtypes[col_idx]) && !equality_literals[col_idx].empty()) {
-      auto const schema_idx = output_column_schemas[col_idx];
-      auto const& schema    = per_file_metadata[0].schema[schema_idx];
-      auto const output_clk = cudf::io::detail::to_clockrate(output_dtypes[col_idx].id());
-      if (schema.logical_type.has_value() &&
-          calc_timestamp_scale(schema.logical_type, output_clk) != 0) {
-        equality_literals[col_idx].clear();
-      }
-    }
-  }
+  auto const equality_literals =
+    equality_literals_collector{
+      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
+      .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> equality_col_schemas;
