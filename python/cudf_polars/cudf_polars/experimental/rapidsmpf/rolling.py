@@ -713,7 +713,6 @@ async def expand_chunks(
     *,
     lookback: int,
     lookahead: int,
-    total_rows: int,
     index_col_idx: int,
     index_dtype: plc.DataType,
     base_col_names: list[str],
@@ -724,11 +723,12 @@ async def expand_chunks(
     left_ctx_df: DataFrame | None = None
     prev_max: int | None = None
     n_center_prior = 0
-    # Resolve negative-offset zlice (e.g. from .tail()) to a positive offset now
-    # that we know the total row count, so _fused_expanded_zlice works correctly.
+    # Negative-offset zlice (e.g. from .tail()) cannot be resolved without knowing the
+    # total row count. Pass None so all center rows are evaluated; eval_and_send
+    # buffers the results and applies the tail-slice after seeing all chunks.
     zlice = ir.zlice
     if zlice is not None and zlice[0] < 0:
-        zlice = (max(0, total_rows + zlice[0]), zlice[1])
+        zlice = None
     br = context.br()
     is_int_index = index_dtype.id() == plc.TypeId.INT64
 
@@ -836,12 +836,19 @@ async def eval_and_send(
     """Recv expanded chunk + zlice metadata, run rolling, emit downstream."""
     non_child_tail = ir._non_child_args[:-1]
     br = context.br()
+    # Negative-offset zlice (e.g. tail(n)): total row count is not known until all
+    # chunks are processed, so buffer every result and apply the slice at the end.
+    negative_zlice = ir.zlice is not None and ir.zlice[0] < 0
+    buffered: list[DataFrame] = []
+    last_seq = 0
+
     while (meta_msg := await ch_from_extend.recv_metadata(context)) is not None:
         meta = ArbitraryChunk.from_message(meta_msg).release()
         assert isinstance(meta, _RollingEvalChunkMeta)
         data_msg = await ch_from_extend.recv(context)
         assert data_msg is not None, "Expected expanded table after eval metadata."
         seq = data_msg.sequence_number
+        last_seq = seq
         chunk = TableChunk.from_message(data_msg, br)
         chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
         combined = DataFrame.from_table(
@@ -857,8 +864,41 @@ async def eval_and_send(
             combined,
             context=ir_context,
         )
+        if negative_zlice:
+            buffered.append(result_df)
+        else:
+            await _rolling_send_chunk(
+                context, ch_out, result_df, sequence_number=seq, tracer=tracer
+            )
+
+    if negative_zlice and buffered:
+        assert ir.zlice is not None
+        off, length = ir.zlice  # off < 0
+        out_col_names = list(ir.schema.keys())
+        out_col_dtypes = list(ir.schema.values())
+        if len(buffered) == 1:
+            cat_table = buffered[0].table
+            cat_stream = buffered[0].stream
+        else:
+            with ir_context.stream_ordered_after(*buffered) as cat_stream:
+                cat_table = plc.concatenate.concatenate(
+                    [df.table for df in buffered], stream=cat_stream
+                )
+        total = cat_table.num_rows()
+        abs_off = max(0, total + off)
+        ln = (
+            (total - abs_off)
+            if length is None
+            else min(length, max(0, total - abs_off))
+        )
+        sliced_table = plc.copying.slice(
+            cat_table, [abs_off, abs_off + ln], stream=cat_stream
+        )[0]
+        final_df = DataFrame.from_table(
+            sliced_table, out_col_names, out_col_dtypes, stream=cat_stream
+        )
         await _rolling_send_chunk(
-            context, ch_out, result_df, sequence_number=seq, tracer=tracer
+            context, ch_out, final_df, sequence_number=last_seq, tracer=tracer
         )
 
     await _drain_data_messages(context, ch_from_extend, ch_out)
@@ -941,7 +981,6 @@ async def rolling_actor(
                 ir_context,
                 lookback=lookback,
                 lookahead=lookahead,
-                total_rows=metadata_in.local_count,
                 index_col_idx=index_col_idx,
                 index_dtype=ir.index_dtype,
                 base_col_names=base_col_names,
