@@ -11,7 +11,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>
