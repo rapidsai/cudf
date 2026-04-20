@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -174,3 +175,8 @@ def test_empty_dataframe(engine: RayEngine) -> None:
     assert result.shape == (0, 2)
     assert result.columns == ["a", "b"]
     assert result.dtypes == [pl.Int32, pl.Float64]
+
+
+def test_run(engine: RayEngine) -> None:
+    result = engine._run(os.getpid)
+    assert len(set(result)) == engine.nranks

@@ -390,6 +390,10 @@ class DynamicPlanningOptions:
     sample_chunk_count
         The maximum number of chunks to sample before deciding whether
         to shuffle. Default is 2.
+    bloom_filter_threshold
+        Row-count ratio (small / large) below which a bloom filter is applied
+        to pre-filter the large side of an inner or semi shuffle join.
+        Set to 0 to disable bloom filtering. Default is 0.5.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -399,12 +403,21 @@ class DynamicPlanningOptions:
             f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
         )
     )
+    bloom_filter_threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.sample_chunk_count, int):
             raise TypeError("sample_chunk_count must be an int")
         if self.sample_chunk_count < 1:
             raise ValueError("sample_chunk_count must be at least 1")
+        if not isinstance(self.bloom_filter_threshold, float):
+            raise TypeError("bloom_filter_threshold must be a float")
+        if not 0.0 <= self.bloom_filter_threshold <= 1.0:
+            raise ValueError("bloom_filter_threshold must be between 0 and 1")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
