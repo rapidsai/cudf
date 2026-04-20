@@ -974,16 +974,19 @@ def test_csv_reader_dtype_inference_whitespace():
 def test_csv_reader_empty_dataframe():
     dtypes = ["float64", "int64"]
     buffer = "float_point, integer"
+    dtype = dict(zip(buffer.split(","), dtypes, strict=True))
 
     # should work fine with dtypes
-    df = read_csv(StringIO(buffer), dtype=dtypes)
-    assert df.shape == (0, 2)
-    assert all(df.dtypes == ["float64", "int64"])
+    result = read_csv(StringIO(buffer), dtype=dtype)
+    expected = pd.read_csv(StringIO(buffer), dtype=dtype)
+    assert_eq(result, expected)
 
     # should default to string columns without dtypes
-    df = read_csv(StringIO(buffer))
-    assert df.shape == (0, 2)
-    assert all(df.dtypes == ["object", "object"])
+    result = read_csv(StringIO(buffer))
+    expected = pd.read_csv(StringIO(buffer)).astype(
+        pd.StringDtype(na_value=np.nan)
+    )
+    assert_eq(result, expected)
 
 
 def test_csv_reader_filenotfound(tmp_path):
