@@ -11,9 +11,7 @@ if(NOT TARGET zstd)
   )
 endif()
 
-# This function registers a directory of include files to be embedded for JIT compilation. It
-# gathers the specified files, their destinations, and include directories, and stores them in
-# target-specific variables for later use when generating the embed.
+# This function registers a directory of include files to be embedded for JIT compilation.
 function(embed_includes)
   set(TARGET ${ARGV0})
   set(OPTIONS "")
@@ -92,6 +90,7 @@ function(embed_includes)
 
 endfunction()
 
+# This function registers a single file to be embedded for JIT compilation.
 function(embed_blob)
   set(TARGET ${ARGV0})
   set(OPTIONS)
@@ -141,7 +140,8 @@ function(embed_blob)
 
 endfunction()
 
-# pass the encoded args to the embed.py script to generate the embed
+# This function generates the necessary files and build targets to embed the registered source files
+# for JIT compilation.
 function(embed)
   set(TARGET ${ARGV0})
   set(OPTIONS "")
