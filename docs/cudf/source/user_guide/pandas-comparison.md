@@ -155,7 +155,7 @@ a
 cuDF leverages GPUs to execute operations in parallel.  This means the
 order of operations is not always deterministic.  This impacts the
 determinism of floating-point operations because floating-point
-arithmetic is non-associative, that is, `a + b` is not equal to `b + a`.
+arithmetic is non-associative, that is, `(a + b) + c` is not necessarily equal to `a + (b + c)`.
 
 For example, `s.sum()` is not guaranteed to produce identical results
 to Pandas nor produce identical results from run to run, when `s` is a

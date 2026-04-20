@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -26,8 +28,11 @@ import pylibcudf as plc
 import rmm.mr
 from pylibcudf.contiguous_split import pack
 
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
+    all_gather_host_data,
     check_reserved_keys,
     execute_ir_on_rank,
 )
@@ -40,7 +45,7 @@ from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -48,6 +53,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
@@ -373,7 +379,7 @@ class SPMDEngine(StreamingEngine):
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(int, executor_options.get("num_py_executors", 1)),
+            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
@@ -491,6 +497,19 @@ class SPMDEngine(StreamingEngine):
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
 
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        return [ClusterInfo(**json.loads(r)) for r in results]
+
     def shutdown(self) -> None:
         """
         Shut down the engine and release all owned resources.
@@ -503,3 +522,10 @@ class SPMDEngine(StreamingEngine):
         self._comm = None
         self._ctx = None
         super().shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        data = json.dumps(func(*args, **kwargs)).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+
+        return [json.loads(r) for r in results]
