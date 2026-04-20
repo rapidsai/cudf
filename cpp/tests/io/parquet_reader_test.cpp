@@ -4,6 +4,7 @@
  */
 
 #include "compression_common.hpp"
+#include "io/utilities/time_utils.hpp"
 #include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
@@ -4405,236 +4406,85 @@ TEST_F(ParquetReaderTest, DuplicateColumnSelection)
   }
 }
 
-TEST_F(ParquetReaderTest, TimestampTypeWithFilterPushdown)
+template <typename T>
+struct ParquetFilterPushdownTimestampPrecisions : public ParquetReaderTest {};
+using SubSecondTimestampTypes =
+  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
+TYPED_TEST_SUITE(ParquetFilterPushdownTimestampPrecisions, SubSecondTimestampTypes);
+
+TYPED_TEST(ParquetFilterPushdownTimestampPrecisions, AllPrecisions)
 {
-  constexpr auto num_rows = 20000;
+  using NativeTimestamp = TypeParam;
+  using NativeDuration  = typename NativeTimestamp::duration;
 
-  // Write a file with timestamps at microsecond precision
-  auto ts_iter = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return cudf::timestamp_us{cudf::duration_us{i * 1000}}; });
-  auto ts_col =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_us>(ts_iter, ts_iter + num_rows);
-  auto const written_table = cudf::table_view{{ts_col}};
+  constexpr auto native_type        = cudf::type_to_id<NativeTimestamp>();
+  constexpr auto num_rows           = 20000;
+  constexpr auto rows_per_row_group = 5000;
+  static_assert(num_rows % rows_per_row_group == 0,
+                "num_rows must be a multiple of rows_per_row_group");
 
-  cudf::io::table_input_metadata metadata(written_table);
-  metadata.column_metadata[0].set_name("ts");
+  auto iter = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return NativeTimestamp{NativeDuration{i * 100}}; });
+  auto const ts_col =
+    cudf::test::fixed_width_column_wrapper<NativeTimestamp>(iter, iter + num_rows).release();
+  auto const written_table = cudf::table_view{{ts_col->view()}};
 
-  auto const filepath = temp_env->get_temp_filepath("TimestampFilterPushdown.parquet");
-  auto const out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
-      .metadata(std::move(metadata))
-      .row_group_size_rows(5000)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
-      .build();
-  cudf::io::write_parquet(out_opts);
-
-  // Read with timestamp_type = TIMESTAMP_MILLISECONDS and a filter on the timestamp column.
-  // Filter: ts >= 5000 (in milliseconds, which is 5,000,000 us)
-  auto literal_value =
-    cudf::timestamp_scalar<cudf::timestamp_ms>(cudf::timestamp_ms{cudf::duration_ms{5000}});
-  auto literal    = cudf::ast::literal(literal_value);
-  auto col_ref    = cudf::ast::column_reference(0);
-  auto filter_gte = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
-
-  auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                     .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS})
-                     .filter(filter_gte)
-                     .build();
-  auto result = cudf::io::read_parquet(read_opts);
-
-  // 5000 ms = 5,000,000 us. Values are 0, 1000, 2000, ..., 19999000 us.
-  // Values >= 5,000,000 us are at indices 5000..19999 → 15000 rows.
-  EXPECT_EQ(result.tbl->num_rows(), 15000);
-  EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::TIMESTAMP_MILLISECONDS);
-}
-
-TEST_F(ParquetReaderTest, TimestampTypeWithFilterPushdown_NativeMatch)
-{
-  constexpr auto num_rows = 20000;
-
-  // Write a file with timestamps at microsecond precision
-  auto ts_iter = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return cudf::timestamp_us{cudf::duration_us{i * 1000}}; });
-  auto ts_col =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_us>(ts_iter, ts_iter + num_rows);
-  auto const written_table = cudf::table_view{{ts_col}};
-
-  cudf::io::table_input_metadata metadata(written_table);
-  metadata.column_metadata[0].set_name("ts");
-
-  auto const filepath = temp_env->get_temp_filepath("TimestampFilterNativeMatch.parquet");
-  auto const out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
-      .metadata(std::move(metadata))
-      .row_group_size_rows(5000)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
-      .build();
-  cudf::io::write_parquet(out_opts);
-
-  // Read with native precision (TIMESTAMP_MICROSECONDS) and a filter
-  // Filter: ts >= 5,000,000 (in microseconds)
-  auto literal_value =
-    cudf::timestamp_scalar<cudf::timestamp_us>(cudf::timestamp_us{cudf::duration_us{5000000}});
-  auto literal    = cudf::ast::literal(literal_value);
-  auto col_ref    = cudf::ast::column_reference(0);
-  auto filter_gte = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
-
-  auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                     .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS})
-                     .filter(filter_gte)
-                     .build();
-  auto result = cudf::io::read_parquet(read_opts);
-
-  EXPECT_EQ(result.tbl->num_rows(), 15000);
-  EXPECT_EQ(result.tbl->view().column(0).type().id(), cudf::type_id::TIMESTAMP_MICROSECONDS);
-}
-
-TEST_F(ParquetReaderTest, TimestampTypeWithFilterPushdown_AllPrecisions)
-{
-  // Test all combinations of native and output timestamp precision
-  struct precision_info {
-    cudf::type_id type_id;
-    int64_t ticks_per_second;
-  };
-  std::vector<precision_info> precisions = {
-    {cudf::type_id::TIMESTAMP_MILLISECONDS, 1000},
-    {cudf::type_id::TIMESTAMP_MICROSECONDS, 1000000},
-    {cudf::type_id::TIMESTAMP_NANOSECONDS, 1000000000},
-  };
-
-  constexpr auto num_rows = 20000;
-
-  for (auto const& native : precisions) {
-    for (auto const& output : precisions) {
-      // Write file at native precision
-      std::vector<int64_t> raw_values(num_rows);
-      for (int i = 0; i < num_rows; ++i) {
-        raw_values[i] = static_cast<int64_t>(i) * 100;
-      }
-
-      std::unique_ptr<cudf::column> ts_col;
-      if (native.type_id == cudf::type_id::TIMESTAMP_MILLISECONDS) {
-        auto iter = cudf::detail::make_counting_transform_iterator(
-          0, [&](auto i) { return cudf::timestamp_ms{cudf::duration_ms{raw_values[i]}}; });
-        auto wrapper =
-          cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms>(iter, iter + num_rows);
-        ts_col = wrapper.release();
-      } else if (native.type_id == cudf::type_id::TIMESTAMP_MICROSECONDS) {
-        auto iter = cudf::detail::make_counting_transform_iterator(
-          0, [&](auto i) { return cudf::timestamp_us{cudf::duration_us{raw_values[i]}}; });
-        auto wrapper =
-          cudf::test::fixed_width_column_wrapper<cudf::timestamp_us>(iter, iter + num_rows);
-        ts_col = wrapper.release();
-      } else {
-        auto iter = cudf::detail::make_counting_transform_iterator(
-          0, [&](auto i) { return cudf::timestamp_ns{cudf::duration_ns{raw_values[i]}}; });
-        auto wrapper =
-          cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns>(iter, iter + num_rows);
-        ts_col = wrapper.release();
-      }
-      auto const written_table = cudf::table_view{{ts_col->view()}};
-
-      cudf::io::table_input_metadata metadata(written_table);
-      metadata.column_metadata[0].set_name("ts");
-
-      auto const filepath = temp_env->get_temp_filepath("TimestampFilterAllPrec.parquet");
-      auto const out_opts =
-        cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
-          .metadata(std::move(metadata))
-          .row_group_size_rows(5000)
-          .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
-          .build();
-      cudf::io::write_parquet(out_opts);
-
-      // Compute filter threshold: value 10000 (in native ticks) converted to output ticks
-      auto const threshold_native = int64_t{10000} * 100;  // raw_values[10000] = 1000000
-      double const scale =
-        static_cast<double>(output.ticks_per_second) / static_cast<double>(native.ticks_per_second);
-      auto const threshold_output = static_cast<int64_t>(threshold_native * scale);
-
-      // Build filter: ts >= threshold_output (in output precision)
-      auto build_and_run = [&](auto scalar_val) {
-        auto literal = cudf::ast::literal(scalar_val);
-        auto col_ref = cudf::ast::column_reference(0);
-        auto filter_gte =
-          cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
-
-        auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                           .timestamp_type(cudf::data_type{output.type_id})
-                           .filter(filter_gte)
-                           .build();
-        return cudf::io::read_parquet(read_opts);
-      };
-
-      cudf::io::table_with_metadata result;
-      if (output.type_id == cudf::type_id::TIMESTAMP_MILLISECONDS) {
-        auto scalar_val = cudf::timestamp_scalar<cudf::timestamp_ms>(
-          cudf::timestamp_ms{cudf::duration_ms{threshold_output}});
-        result = build_and_run(scalar_val);
-      } else if (output.type_id == cudf::type_id::TIMESTAMP_MICROSECONDS) {
-        auto scalar_val = cudf::timestamp_scalar<cudf::timestamp_us>(
-          cudf::timestamp_us{cudf::duration_us{threshold_output}});
-        result = build_and_run(scalar_val);
-      } else {
-        auto scalar_val = cudf::timestamp_scalar<cudf::timestamp_ns>(
-          cudf::timestamp_ns{cudf::duration_ns{threshold_output}});
-        result = build_and_run(scalar_val);
-      }
-
-      // Expect rows from index 10000 onward → 10000 rows
-      EXPECT_EQ(result.tbl->num_rows(), 10000)
-        << "Failed for native=" << static_cast<int>(native.type_id)
-        << " output=" << static_cast<int>(output.type_id);
-      EXPECT_EQ(result.tbl->view().column(0).type().id(), output.type_id);
-    }
+  // Write file at native precision
+  auto const filepath = temp_env->get_temp_filepath("TimestampFilterAllPrec.parquet");
+  {
+    auto const out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+        .metadata(cudf::io::table_input_metadata(written_table))
+        .row_group_size_rows(rows_per_row_group)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
+        .build();
+    cudf::io::write_parquet(out_opts);
   }
-}
 
-TEST_F(ParquetReaderTest, TimestampTypeWithFilterPushdown_StatsOnly)
-{
-  constexpr auto num_rows = 20000;
+  auto const dispatch_timestamp = [](cudf::type_id id, auto&& fn) {
+    switch (id) {
+      case cudf::type_id::TIMESTAMP_MILLISECONDS:
+        return fn.template operator()<cudf::timestamp_ms>();
+      case cudf::type_id::TIMESTAMP_MICROSECONDS:
+        return fn.template operator()<cudf::timestamp_us>();
+      case cudf::type_id::TIMESTAMP_NANOSECONDS:
+        return fn.template operator()<cudf::timestamp_ns>();
+      default: CUDF_FAIL("Unexpected timestamp type");
+    }
+  };
 
-  // Write a file with timestamps at microsecond precision with multiple row groups
-  auto ts_iter = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return cudf::timestamp_us{cudf::duration_us{i * 1000}}; });
-  auto ts_col =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_us>(ts_iter, ts_iter + num_rows);
-  auto const written_table = cudf::table_view{{ts_col}};
+  // Test filter pushdown with all output timestamp precisions
+  for (auto const target_type : {cudf::type_id::TIMESTAMP_MILLISECONDS,
+                                 cudf::type_id::TIMESTAMP_MICROSECONDS,
+                                 cudf::type_id::TIMESTAMP_NANOSECONDS}) {
+    // Compute filter threshold: value 10000 (in native ticks) converted to output ticks
+    auto const threshold_native = int64_t{10000} * 100;
+    auto const scale            = static_cast<double>(cudf::io::detail::to_clockrate(target_type)) /
+                       static_cast<double>(cudf::io::detail::to_clockrate(native_type));
+    auto const threshold_output = static_cast<int64_t>(threshold_native * scale);
 
-  cudf::io::table_input_metadata metadata(written_table);
-  metadata.column_metadata[0].set_name("ts");
+    // Build filter: ts >= threshold_output (in output precision)
+    auto result = dispatch_timestamp(target_type, [&]<typename OutputTimestamp>() {
+      using OutputDuration = typename OutputTimestamp::duration;
+      auto scalar_val =
+        cudf::timestamp_scalar<OutputTimestamp>(OutputTimestamp{OutputDuration{threshold_output}});
+      auto literal = cudf::ast::literal(scalar_val);
+      auto col_ref = cudf::ast::column_reference(0);
+      auto filter_gte =
+        cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
 
-  auto const filepath = temp_env->get_temp_filepath("TimestampFilterStatsOnly.parquet");
-  auto const out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
-      .metadata(std::move(metadata))
-      .row_group_size_rows(5000)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
-      .build();
-  cudf::io::write_parquet(out_opts);
+      auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                         .timestamp_type(cudf::data_type{target_type})
+                         .filter(filter_gte)
+                         .build();
+      return cudf::io::read_parquet(read_opts).tbl;
+    });
 
-  // Row groups have these microsecond ranges (values: i*1000):
-  //   RG0: [0, 4,999,000]
-  //   RG1: [5,000,000, 9,999,000]
-  //   RG2: [10,000,000, 14,999,000]
-  //   RG3: [15,000,000, 19,999,000]
-  //
-  // Filter: ts >= 15000 ms (= 15,000,000 us). Should eliminate RG0..RG2 via stats.
-  auto literal_value =
-    cudf::timestamp_scalar<cudf::timestamp_ms>(cudf::timestamp_ms{cudf::duration_ms{15000}});
-  auto literal    = cudf::ast::literal(literal_value);
-  auto col_ref    = cudf::ast::column_reference(0);
-  auto filter_gte = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
-
-  auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                     .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS})
-                     .filter(filter_gte)
-                     .build();
-  auto result = cudf::io::read_parquet(read_opts);
-
-  // Only RG3 survives stats pushdown (5000 rows), all of which satisfy the filter.
-  EXPECT_EQ(result.tbl->num_rows(), 5000);
-  // Verify stats-based filtering eliminated row groups
-  EXPECT_TRUE(result.metadata.num_row_groups_after_stats_filter.has_value());
-  EXPECT_LE(result.metadata.num_row_groups_after_stats_filter.value(), 2);
+    // Expect rows from written_table in range [num_rows / 2, num_rows) casted to the target
+    // timestamp type
+    EXPECT_EQ(result->view().column(0).type().id(), target_type);
+    auto const written_table_chunk = cudf::split(written_table, {num_rows / 2}).back();
+    auto const expected = cudf::cast(written_table_chunk.column(0), cudf::data_type{target_type});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected->view());
+  }
 }
