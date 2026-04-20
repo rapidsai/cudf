@@ -13,18 +13,17 @@
 #include <nvbench/nvbench.cuh>
 
 // longer pattern lengths demand more working memory per string
-// std::string patterns[] = {"^\\d+ [a-z]+", "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$", "5W43"};
 static std::vector<std::string> const patterns = {
-  "^\\d+ [a-z]+",                  // 0: anchor pattern (anchors ^ $)
-  "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$",  // 1: anchor pattern (anchors ^ $)
-  "^123A",                         // 2: starts with pattern
-  "5W43$",                         // 3: ends with pattern
-  "5W43",                          // 4: literals only
+  "^\\d+ [a-z]+",                  // 0: classes plus begin anchor pattern
+  "[A-Z ]+\\d+ +\\d+[A-Z]+\\d+$",  // 1: more classes plus end anchor pattern
+  "^123 abc",                      // 2: starts with pattern (literals only)
+  "0987 5W43$",                    // 3: ends with pattern (literals only)
+  "0987 5W43",                     // 4: literals only
   "5[A-Z]\\d+",                    // 5: char class + quantifier (3 instructions)
   "5W43|X9Z8",                     // 6: alternation (9 instructions; only "5W43" branch matches)
-  "5W4{1,3}",                      // 7: bounded repetition (5 instructions)
-  "(?:5W){1,2}",                   // 8: non-capturing group + bounded rep (4 instructions)
-  "5.4.",                          // 9: dot wildcard (4 instructions)
+  "7 5W4{1,3}",                    // 7: bounded repetition (7 instructions)
+  "7 (?:5W){1,2}",                 // 8: non-capturing group + bounded rep (6 instructions)
+  "7 5.4.",                        // 9: dot wildcard (6 instructions)
   ".+5W",                          // 10: late-failure stress (dot prefix)
 };
 
@@ -32,8 +31,8 @@ static void bench_contains(nvbench::state& state)
 {
   auto const num_rows      = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const row_width     = static_cast<cudf::size_type>(state.get_int64("row_width"));
-  auto const pattern_index = static_cast<cudf::size_type>(state.get_int64("pattern"));
   auto const hit_rate      = static_cast<cudf::size_type>(state.get_int64("hit_rate"));
+  auto const pattern_index = state.get_int64("pattern");
 
   auto col   = create_string_column(num_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
