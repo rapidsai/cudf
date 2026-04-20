@@ -155,6 +155,7 @@ def test_select_aggs(df, engine, aggs):
         (pl.col("a").drop_nulls().min(),),
         (pl.col("a").drop_nulls().max(),),
         (pl.col("a").drop_nulls().mean(),),
+        (pl.col("a").null_count(),),
     ],
 )
 def test_select_drop_nulls_aggs(engine, aggs):

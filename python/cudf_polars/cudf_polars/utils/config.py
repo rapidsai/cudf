@@ -390,6 +390,10 @@ class DynamicPlanningOptions:
     sample_chunk_count
         The maximum number of chunks to sample before deciding whether
         to shuffle. Default is 2.
+    bloom_filter_threshold
+        Row-count ratio (small / large) below which a bloom filter is applied
+        to pre-filter the large side of an inner or semi shuffle join.
+        Set to 0 to disable bloom filtering. Default is 0.5.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -399,12 +403,21 @@ class DynamicPlanningOptions:
             f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
         )
     )
+    bloom_filter_threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.sample_chunk_count, int):
             raise TypeError("sample_chunk_count must be an int")
         if self.sample_chunk_count < 1:
             raise ValueError("sample_chunk_count must be at least 1")
+        if not isinstance(self.bloom_filter_threshold, float):
+            raise TypeError("bloom_filter_threshold must be a float")
+        if not 0.0 <= self.bloom_filter_threshold <= 1.0:
+            raise ValueError("bloom_filter_threshold must be between 0 and 1")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -691,8 +704,7 @@ class StreamingExecutor:
         regular pageable host memory.
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor used by
-        the rapidsmpf runtime. Default is None, which uses ThreadPoolExecutor's
-        default behavior. This option is only used by the "rapidsmpf" runtime.
+        the rapidsmpf runtime. Default is 8.
 
     Notes
     -----
@@ -786,9 +798,9 @@ class StreamingExecutor:
             f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
         )
     )
-    num_py_executors: int | None = dataclasses.field(
+    num_py_executors: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=None
+            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
     spmd_context: SPMDContext | None = None
@@ -890,8 +902,8 @@ class StreamingExecutor:
             raise TypeError("max_io_threads must be an int")
         if not isinstance(self.spill_to_pinned_memory, bool):
             raise TypeError("spill_to_pinned_memory must be bool")
-        if not isinstance(self.num_py_executors, (int, type(None))):
-            raise TypeError("num_py_executors must be int or None")
+        if not isinstance(self.num_py_executors, int):
+            raise TypeError("num_py_executors must be an int")
 
         # RapidsMPF spill is only supported for distributed clusters for now.
         # This is because the spilling API is still within the RMPF-Dask integration.
@@ -1044,6 +1056,7 @@ class ConfigOptions(Generic[ExecutorType]):
             "raise_on_fail",
             "memory_resource_config",
             "cuda_stream_policy",
+            "hardware_binding",
         }
 
         extra_options = set(engine.config.keys()) - valid_options

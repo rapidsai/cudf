@@ -789,7 +789,7 @@ size_t __host__ count_blank_rows(cudf::io::parse_options_view const& opts,
   auto const comment  = opts.comment != '\0' ? opts.comment : newline;
   auto const carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(uint64_t const pos) {
@@ -808,7 +808,7 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
   auto const comment  = options.comment != '\0' ? options.comment : newline;
   auto const carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(uint64_t const pos) {
