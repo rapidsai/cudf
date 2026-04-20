@@ -713,6 +713,7 @@ async def expand_chunks(
     *,
     lookback: int,
     lookahead: int,
+    total_rows: int,
     index_col_idx: int,
     index_dtype: plc.DataType,
     base_col_names: list[str],
@@ -723,6 +724,11 @@ async def expand_chunks(
     left_ctx_df: DataFrame | None = None
     prev_max: int | None = None
     n_center_prior = 0
+    # Resolve negative-offset zlice (e.g. from .tail()) to a positive offset now
+    # that we know the total row count, so _fused_expanded_zlice works correctly.
+    zlice = ir.zlice
+    if zlice is not None and zlice[0] < 0:
+        zlice = (max(0, total_rows + zlice[0]), zlice[1])
     br = context.br()
     is_int_index = index_dtype.id() == plc.TypeId.INT64
 
@@ -783,7 +789,7 @@ async def expand_chunks(
         )
         combined_df, n_left, n_chunk_rows, left_ctx_df = prep
         cb, ce = n_left, n_left + n_chunk_rows
-        fused = _fused_expanded_zlice(cb, n_chunk_rows, n_center_prior, ir.zlice)
+        fused = _fused_expanded_zlice(cb, n_chunk_rows, n_center_prior, zlice)
         eval_meta = _RollingEvalChunkMeta(
             do_evaluate_zlice=fused, center_begin=cb, center_end=ce
         )
@@ -935,6 +941,7 @@ async def rolling_actor(
                 ir_context,
                 lookback=lookback,
                 lookahead=lookahead,
+                total_rows=metadata_in.local_count,
                 index_col_idx=index_col_idx,
                 index_dtype=ir.index_dtype,
                 base_col_names=base_col_names,
