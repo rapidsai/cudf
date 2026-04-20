@@ -77,7 +77,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     target_link_libraries(
       ${CMAKE_TEST_NAME} PRIVATE "cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}"
     )
-    fixup_target_for_stream_testing(${CMAKE_TEST_NAME})
+    # fixup_target_for_stream_testing(${CMAKE_TEST_NAME})
   endif()
 endfunction()
 
