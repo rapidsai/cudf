@@ -183,7 +183,22 @@ class StreamingEngine(pl.GPUEngine):
         self.shutdown()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
-        """Execute a function on all ranks."""
+        """
+        Execute a function on all ranks.
+
+        Parameters
+        ----------
+        func
+            Function to execute.
+        args
+            Arguments to pass to the function.
+        kwargs
+            Keyword arguments to pass to the function.
+
+        Returns
+        -------
+        List of results from calling ``func``, one per rank.
+        """
         raise NotImplementedError
 
 
