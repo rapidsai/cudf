@@ -319,12 +319,10 @@ async def _extend_prefetch_for_int_lookahead(
     """Buffer enough int-index successors for the right halo or until the stream ends."""
     threshold = chunk_mx + lookahead
 
-    def _bounds(df: DataFrame) -> tuple[int, int]:
-        b = _chunk_index_int_bounds_from_df(
+    def _bounds(df: DataFrame) -> tuple[int, int] | None:
+        return _chunk_index_int_bounds_from_df(
             df, index_col_idx=index_col_idx, index_dtype=index_dtype
         )
-        assert b is not None, "prefetch successor chunk must be non-empty"
-        return b
 
     await _extend_prefetch_until_covered(
         context,
@@ -333,8 +331,9 @@ async def _extend_prefetch_for_int_lookahead(
         br,
         col_names,
         col_dtypes,
-        first_past_upper=lambda df: _bounds(df)[0] > threshold,
-        last_reaches_upper=lambda df: _bounds(df)[1] >= threshold,
+        first_past_upper=lambda df: (b := _bounds(df)) is not None and b[0] > threshold,
+        last_reaches_upper=lambda df: (b := _bounds(df)) is not None
+        and b[1] >= threshold,
     )
 
 
@@ -362,12 +361,10 @@ async def _extend_prefetch_for_ts_lookahead(
         cur_stream,
     )
 
-    def _bounds(df: DataFrame) -> tuple[plc.Scalar, plc.Scalar]:
-        b = _chunk_index_ts_bounds_from_df(
+    def _bounds(df: DataFrame) -> tuple[plc.Scalar, plc.Scalar] | None:
+        return _chunk_index_ts_bounds_from_df(
             df, index_col_idx=index_col_idx, index_dtype=index_dtype
         )
-        assert b is not None, "prefetch successor chunk must be non-empty"
-        return b
 
     def _cmp(lhs: plc.Scalar, op: plc.binaryop.BinaryOperator) -> bool:
         return bool(
@@ -383,12 +380,10 @@ async def _extend_prefetch_for_ts_lookahead(
         br,
         col_names,
         col_dtypes,
-        first_past_upper=lambda df: _cmp(
-            _bounds(df)[0], plc.binaryop.BinaryOperator.GREATER
-        ),
-        last_reaches_upper=lambda df: _cmp(
-            _bounds(df)[1], plc.binaryop.BinaryOperator.GREATER_EQUAL
-        ),
+        first_past_upper=lambda df: (b := _bounds(df)) is not None
+        and _cmp(b[0], plc.binaryop.BinaryOperator.GREATER),
+        last_reaches_upper=lambda df: (b := _bounds(df)) is not None
+        and _cmp(b[1], plc.binaryop.BinaryOperator.GREATER_EQUAL),
     )
 
 
