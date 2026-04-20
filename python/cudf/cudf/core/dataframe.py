@@ -1010,8 +1010,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         second_index = None
         second_columns = None
         attrs = None
+        allows_duplicate_labels = True
         if isinstance(data, (DataFrame, pd.DataFrame)):
             attrs = deepcopy(data.attrs)
+            allows_duplicate_labels = data.flags.allows_duplicate_labels
             if isinstance(data, pd.DataFrame):
                 cols = {
                     i: as_column(col_value.array, nan_as_null=nan_as_null)
@@ -1207,7 +1209,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype=second_columns.dtype,
             )
 
-        super().__init__(col_accessor, index=index, attrs=attrs)
+        super().__init__(
+            col_accessor,
+            index=index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -1223,8 +1230,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         index: Index | None = None,
         columns: Any = None,
         attrs: dict | None = None,
+        allows_duplicate_labels: bool = True,
     ) -> Self:
-        out = super()._from_data(data=data, index=index, attrs=attrs)
+        out = super()._from_data(
+            data=data,
+            index=index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if columns is not None:
             out.columns = columns
         return out
@@ -5741,6 +5754,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index
         out_df.attrs = deepcopy(self.attrs)
+        out_df.flags.allows_duplicate_labels = (
+            self._flags.allows_duplicate_labels
+        )
 
         return out_df
 

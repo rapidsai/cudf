@@ -8,6 +8,7 @@ import copy
 import itertools
 import textwrap
 import warnings
+import weakref
 from collections import Counter
 from collections.abc import Mapping
 from typing import (
@@ -254,6 +255,124 @@ _LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
 _IlocIndexerClass = TypeVar("_IlocIndexerClass", bound="_FrameIndexer")
 
 
+class Flags:
+    """
+    Flags that apply to cudf objects.
+
+    "Flags" differ from "metadata". Flags reflect properties of the cudf
+    object (the :class:`Series` or :class:`DataFrame`). Metadata refer to
+    properties of the dataset, and should be stored in ``DataFrame.attrs``.
+
+    Mirrors :class:`pandas.Flags`. Currently only ``allows_duplicate_labels``
+    is supported.
+
+    Parameters
+    ----------
+    obj : Series or DataFrame
+        The object these flags are associated with.
+    allows_duplicate_labels : bool, default True
+        Whether to allow duplicate labels in this object. Setting this to
+        ``False`` will cause a :class:`pandas.errors.DuplicateLabelError`
+        to be raised when the index (or columns for DataFrame) is not
+        unique.
+
+    See Also
+    --------
+    DataFrame.attrs : Dictionary of global attributes of this dataset.
+    Series.attrs : Dictionary of global attributes of this dataset.
+
+    Examples
+    --------
+    Attributes can be set in two ways:
+
+    >>> import cudf
+    >>> df = cudf.DataFrame()
+    >>> df.flags
+    <Flags(allows_duplicate_labels=True)>
+    >>> df.flags.allows_duplicate_labels = False
+    >>> df.flags
+    <Flags(allows_duplicate_labels=False)>
+
+    >>> df.flags["allows_duplicate_labels"] = True
+    >>> df.flags
+    <Flags(allows_duplicate_labels=True)>
+    """
+
+    _keys: set[str] = {"allows_duplicate_labels"}
+
+    def __init__(
+        self, obj: "IndexedFrame", *, allows_duplicate_labels: bool = True
+    ) -> None:
+        self._allows_duplicate_labels = allows_duplicate_labels
+        self._obj = weakref.ref(obj)
+
+    @property
+    def allows_duplicate_labels(self) -> bool:
+        """
+        Whether this object allows duplicate labels.
+
+        Setting ``allows_duplicate_labels=False`` ensures that the index
+        (and columns of a :class:`DataFrame`) are unique. Most methods
+        that accept and return a :class:`Series` or :class:`DataFrame`
+        will propagate the value of ``allows_duplicate_labels``.
+
+        See Also
+        --------
+        DataFrame.attrs : Set global metadata on this object.
+        DataFrame.set_flags : Set global flags on this object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2]}, index=["a", "a"])
+        >>> df.flags.allows_duplicate_labels
+        True
+        >>> df.flags.allows_duplicate_labels = False  # doctest: +SKIP
+        Traceback (most recent call last):
+            ...
+        pandas.errors.DuplicateLabelError: Index has duplicates.
+        """
+        return self._allows_duplicate_labels
+
+    @allows_duplicate_labels.setter
+    def allows_duplicate_labels(self, value: bool) -> None:
+        value = bool(value)
+        obj = self._obj()
+        if obj is None:
+            raise ValueError("This flag's object has been deleted.")
+        if not value:
+            for ax in obj.axes:
+                if not ax.is_unique:
+                    from pandas.errors import DuplicateLabelError
+
+                    raise DuplicateLabelError(f"Index has duplicates.\n{ax}")
+        self._allows_duplicate_labels = value
+
+    def __getitem__(self, key: str):
+        if key not in self._keys:
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def __setitem__(self, key: str, value) -> None:
+        if key not in self._keys:
+            raise ValueError(
+                f"Unknown flag {key}. Must be one of {self._keys}"
+            )
+        setattr(self, key, value)
+
+    def __repr__(self) -> str:
+        return (
+            f"<Flags(allows_duplicate_labels={self.allows_duplicate_labels})>"
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, type(self)):
+            return (
+                self.allows_duplicate_labels == other.allows_duplicate_labels
+            )
+        return False
+
+
 class IndexedFrame(Frame):
     """A frame containing an index.
 
@@ -295,6 +414,7 @@ class IndexedFrame(Frame):
         data: ColumnAccessor | MutableMapping[Any, ColumnBase],
         index: Index,
         attrs: dict[Hashable, Any] | None = None,
+        allows_duplicate_labels: bool = True,
     ):
         super().__init__(data=data)
         if not isinstance(index, Index):
@@ -311,6 +431,9 @@ class IndexedFrame(Frame):
             self._attrs = {}
         else:
             self._attrs = attrs
+        self._flags = Flags(
+            self, allows_duplicate_labels=allows_duplicate_labels
+        )
 
     @property
     def _num_rows(self) -> int:
@@ -356,12 +479,100 @@ class IndexedFrame(Frame):
     def attrs(self, value: Mapping[Hashable, Any]) -> None:
         self._attrs = dict(value)
 
+    @property
+    def flags(self) -> Flags:
+        """
+        Get the properties associated with this cudf object.
+
+        The available flags are
+
+        * :attr:`Flags.allows_duplicate_labels`
+
+        See Also
+        --------
+        Flags : Flags that apply to cudf objects.
+        DataFrame.attrs : Global metadata applying to this dataset.
+
+        Notes
+        -----
+        "Flags" differ from "metadata". Flags reflect properties of the
+        :class:`Series` or :class:`DataFrame` (e.g. whether it allows
+        duplicate labels). Metadata refer to properties of the dataset,
+        and should be stored in ``DataFrame.attrs``.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2]})
+        >>> df.flags
+        <Flags(allows_duplicate_labels=True)>
+
+        Flags can be set via ``set_flags`` or by directly mutating the
+        ``Flags`` object:
+
+        >>> df.flags.allows_duplicate_labels = False
+        >>> df.flags
+        <Flags(allows_duplicate_labels=False)>
+        """
+        return self._flags
+
+    def set_flags(
+        self,
+        *,
+        copy: bool = False,
+        allows_duplicate_labels: bool | None = None,
+    ) -> Self:
+        """
+        Return a new object with updated flags.
+
+        Parameters
+        ----------
+        copy : bool, default False
+            Specify if a copy of the object should be made. The default
+            value is preserved for compatibility with pandas.
+        allows_duplicate_labels : bool, optional
+            Whether the returned object allows duplicate labels.
+
+        Returns
+        -------
+        Series or DataFrame
+            The same type as the caller.
+
+        See Also
+        --------
+        DataFrame.attrs : Global metadata applying to this dataset.
+        DataFrame.flags : Global flags applying to this object.
+
+        Notes
+        -----
+        This method returns a new object that's a view on the same data.
+        The returned object will have ``flags.allows_duplicate_labels``
+        set to the value passed. Unlike the pandas version, the default
+        of ``copy=False`` does not share memory between the two objects
+        because cudf backs all operations with copy-on-write buffers.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 2]})
+        >>> df.flags.allows_duplicate_labels
+        True
+        >>> df2 = df.set_flags(allows_duplicate_labels=False)
+        >>> df2.flags.allows_duplicate_labels
+        False
+        """
+        df = self.copy(deep=copy)
+        if allows_duplicate_labels is not None:
+            df.flags["allows_duplicate_labels"] = allows_duplicate_labels
+        return df
+
     @classmethod
     def _from_data(
         cls,
         data: MutableMapping,
         index: Index | None = None,
         attrs: dict | None = None,
+        allows_duplicate_labels: bool = True,
     ):
         out = super()._from_data(data)
         if index is None:
@@ -373,6 +584,9 @@ class IndexedFrame(Frame):
             )
         out._index = index
         out._attrs = {} if attrs is None else attrs
+        out._flags = Flags(
+            out, allows_duplicate_labels=allows_duplicate_labels
+        )
         return out
 
     @_performance_tracking
@@ -393,6 +607,9 @@ class IndexedFrame(Frame):
         out = super()._from_data_like_self(data)
         out.index = self.index
         out._attrs = copy.deepcopy(self._attrs)
+        out._flags = Flags(
+            out, allows_duplicate_labels=self._flags.allows_duplicate_labels
+        )
         return out
 
     @_performance_tracking
@@ -439,7 +656,12 @@ class IndexedFrame(Frame):
                 index._freq = self.index._freq
 
         data = dict(zip(column_names, data_columns, strict=True))
-        return type(self)._from_data(data, index, attrs=self.attrs)
+        return type(self)._from_data(
+            data,
+            index,
+            attrs=self.attrs,
+            allows_duplicate_labels=self._flags.allows_duplicate_labels,
+        )
 
     def __round__(self, digits=0):
         # Shouldn't be added to BinaryOperand
@@ -453,6 +675,10 @@ class IndexedFrame(Frame):
         if inplace:
             self._index = result.index
             self._attrs = result._attrs
+            self._flags = Flags(
+                self,
+                allows_duplicate_labels=result._flags.allows_duplicate_labels,
+            )
         return super()._mimic_inplace(result, inplace)
 
     @_performance_tracking
@@ -647,6 +873,7 @@ class IndexedFrame(Frame):
             self._data.copy(deep=deep),
             self.index.copy(deep=deep),
             attrs=copy.deepcopy(self.attrs) if deep else self._attrs,
+            allows_duplicate_labels=self._flags.allows_duplicate_labels,
         )
 
     @_performance_tracking
@@ -4761,13 +4988,26 @@ class IndexedFrame(Frame):
         )
         if operands is NotImplemented:
             return NotImplemented
+        # Mirror pandas' `__finalize__(self).__finalize__(other)` for binary
+        # ops: `other`'s attrs override `self`'s when non-empty, and
+        # `allows_duplicate_labels` is the AND of both inputs.
+        attrs = self.attrs
+        allows_duplicate_labels = self._flags.allows_duplicate_labels
+        if isinstance(other, IndexedFrame):
+            if other.attrs:
+                attrs = other.attrs
+            allows_duplicate_labels = (
+                allows_duplicate_labels
+                and other._flags.allows_duplicate_labels
+            )
         return self._from_data(
             ColumnAccessor(
                 type(self)._colwise_binop(operands, op),
                 **ca_attributes,
             ),
             index=out_index,
-            attrs=self.attrs,
+            attrs=copy.deepcopy(attrs),
+            allows_duplicate_labels=allows_duplicate_labels,
         )
 
     def _make_operands_and_index_for_binop(
