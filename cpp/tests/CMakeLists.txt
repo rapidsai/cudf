@@ -71,11 +71,13 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   if(CUDF_BUILD_STREAMS_TEST_UTIL)
     set_tests_properties(
-      ${CMAKE_TEST_NAME}
-      PROPERTIES
-        ENVIRONMENT
-        "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
+      ${CMAKE_TEST_NAME} PROPERTIES ENVIRONMENT
+                                    "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default"
     )
+    target_link_libraries(
+      ${CMAKE_TEST_NAME} PRIVATE "cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}"
+    )
+    fixup_target_for_stream_testing(${CMAKE_TEST_NAME})
   endif()
 endfunction()
 

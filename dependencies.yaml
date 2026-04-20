@@ -154,6 +154,7 @@ files:
       - build_base
       - cuda
       - cuda_version
+      - stream_test_dependencies
   docs:
     output: none
     includes:
@@ -1343,3 +1344,9 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - structlog
+  stream_test_dependencies:
+    common:
+      - output_types: conda
+        packages:
+          - python
+          - py-lief

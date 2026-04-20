@@ -61,16 +61,8 @@ option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compila
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
-set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
-
-if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
-  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
-endif()
-
-option(
-  CUDF_BUILD_STREAMS_TEST_UTIL
-  "Whether to build the utilities for stream testing contained in libcudf"
-  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
+option(CUDF_BUILD_STREAMS_TEST_UTIL
+       "Whether to build the utilities for stream testing contained in libcudf" OFF
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
@@ -1080,8 +1072,12 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
-                           $<TARGET_NAME_IF_EXISTS:conda_env>
+    cudftestutil
+    INTERFACE cuco::cuco
+              Threads::Threads
+              cudf
+              $<$<NOT:$<BOOL:${CUDF_BUILD_STREAMS_TEST_UTIL}>>:cudftest_default_stream>
+              $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
@@ -1135,19 +1131,12 @@ endif()
 
 # * build cudf_identify_stream_usage --------------------------------------------------------------
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  if(CUDA_STATIC_RUNTIME)
-    message(
-      FATAL_ERROR
-        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
-    )
-  endif()
-
   # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
   # on and one with it set to off. Each test will then be configured to use the appropriate library
   # depending via ctest and whether it has been updated to expose public stream APIs.
   foreach(_mode cudf testing)
     set(_tgt "cudf_identify_stream_usage_mode_${_mode}")
-    add_library(${_tgt} SHARED tests/utilities/identify_stream_usage.cpp)
+    add_library(${_tgt} STATIC tests/utilities/identify_stream_usage.cpp)
 
     if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
       target_compile_definitions(
@@ -1168,7 +1157,11 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    target_link_libraries(
+      ${_tgt}
+      PUBLIC $<COMPILE_ONLY:CUDA::cudart> rmm::rmm
+      PRIVATE cudf
+    )
 
     rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})
@@ -1177,6 +1170,28 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       target_compile_definitions(${_tgt} PUBLIC STREAM_MODE_TESTING)
     endif()
   endforeach()
+
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+  # Redirect CUDA calls for a target to use our stream testing versions
+  function(fixup_target_for_stream_testing tgt)
+    set(fixup_script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/cmake/fixup_target_for_stream_testing.py")
+    add_custom_command(
+      TARGET ${tgt}
+      PRE_LINK
+      COMMAND Python3::Interpreter "${fixup_script}" $<TARGET_OBJECTS:${tgt}>
+      VERBATIM COMMAND_EXPAND_LISTS
+      COMMENT "Redirecting CUDA calls for ${tgt}"
+    )
+    set_property(
+      TARGET ${tgt}
+      PROPERTY LINK_DEPENDS "${fixup_script}"
+      APPEND
+    )
+  endfunction()
+
+  fixup_target_for_stream_testing(cudf)
+  target_compile_definitions(cudf PRIVATE CUDF_BUILD_STREAMS_TEST_UTIL)
 endif()
 
 # ##################################################################################################

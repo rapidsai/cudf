@@ -19,9 +19,9 @@
 #include <string>
 #include <unordered_map>
 
-// This file is compiled into a separate library that is dynamically loaded with LD_PRELOAD at
-// runtime to libcudf to override some stream-related symbols in libcudf. The goal of such a library
-// is to verify if the stream/stream pool is being correctly forwarded between API calls.
+// This file is compiled into a separate library that is statically linked to tests to
+// override some stream-related symbols in libcudf. The goal of such a library is to
+// verify if the stream/stream pool is being correctly forwarded between API calls.
 //
 // We control whether to override cudf::test::get_default_stream or
 // cudf::get_default_stream with a compile-time flag. The behaviour of tests
@@ -44,19 +44,46 @@
 
 namespace cudf {
 
-#ifdef STREAM_MODE_TESTING
-namespace test {
+namespace detail {
+
+#if defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+rmm::cuda_stream_view const default_stream_value{rmm::cuda_stream_per_thread};
+#else
+rmm::cuda_stream_view const default_stream_value{};
 #endif
+
+}  // namespace detail
 
 rmm::cuda_stream_view const get_default_stream()
 {
+#ifdef STREAM_MODE_TESTING
+  static auto const default_stream = []() {
+    if (std::getenv("CUDF_PER_THREAD_STREAM") != nullptr) {
+      return rmm::cuda_stream_per_thread;
+    } else {
+      return detail::default_stream_value;
+    }
+  }();
+  return default_stream;
+#else
   static rmm::cuda_stream stream{};
   return stream;
+#endif
 }
 
+namespace test {
+
+rmm::cuda_stream_view const get_default_stream()
+{
 #ifdef STREAM_MODE_TESTING
-}  // namespace test
+  static rmm::cuda_stream stream{};
+  return stream;
+#else
+  return cudf::get_default_stream();
 #endif
+}
+
+}  // namespace test
 
 #ifdef STREAM_MODE_TESTING
 namespace detail {
@@ -120,15 +147,6 @@ void check_stream_and_error(cudaStream_t stream)
 }
 
 /**
- * @brief Container for CUDA APIs that have been overloaded using DEFINE_OVERLOAD.
- *
- * This variable must be initialized before everything else.
- *
- * @see find_originals for a description of the priorities
- */
-__attribute__((init_priority(1001))) std::unordered_map<std::string, void*> originals;
-
-/**
  * @brief Macro for generating functions to override existing CUDA functions.
  *
  * Define a new function with the provided signature that checks the used
@@ -145,15 +163,12 @@ __attribute__((init_priority(1001))) std::unordered_map<std::string, void*> orig
  * @param signature The function signature (must include names, not just types).
  * @parameter arguments The function arguments (names only, no types).
  */
-#define DEFINE_OVERLOAD(function, signature, arguments)     \
-  using function##_t = cudaError_t (*)(signature);          \
-                                                            \
-  cudaError_t function(signature)                           \
-  {                                                         \
-    check_stream_and_error(stream);                         \
-    return ((function##_t)originals[#function])(arguments); \
-  }                                                         \
-  __attribute__((constructor(1002))) void queue_##function() { originals[#function] = nullptr; }
+#define DEFINE_OVERLOAD(function, signature, arguments) \
+  extern "C" cudaError_t cudf_##function(signature)     \
+  {                                                     \
+    check_stream_and_error(stream);                     \
+    return function(arguments);                         \
+  }
 
 /**
  * @brief Helper macro to define macro arguments that contain a comma.
@@ -177,6 +192,8 @@ __attribute__((init_priority(1001))) std::unordered_map<std::string, void*> orig
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__INTEROP.html#group__CUDART__INTEROP
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__GRAPH.html#group__CUDART__GRAPH
    - https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__HIGHLEVEL.html#group__CUDART__HIGHLEVEL
+
+   This list must be kept in sync with cpp/cmake/fixup_target_for_stream_testing.py
  */
 // clang-format on
 
@@ -335,18 +352,3 @@ DEFINE_OVERLOAD(cudaMallocAsync,
 DEFINE_OVERLOAD(cudaMallocFromPoolAsync,
                 ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
                 ARG(ptr, size, memPool, stream));
-
-/**
- * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.
- *
- * Note on priorities:
- * - `originals` must be initialized first, so it is 1001.
- * - The function names must be added to originals next in the macro, so those are 1002.
- * - Finally, this function actually finds the original symbols so it is 1003.
- */
-__attribute__((constructor(1003))) void find_originals()
-{
-  for (auto it : originals) {
-    originals[it.first] = dlsym(RTLD_NEXT, it.first.data());
-  }
-}

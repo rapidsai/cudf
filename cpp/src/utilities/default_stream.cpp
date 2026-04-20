@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,18 @@ rmm::cuda_stream_view const default_stream_value{rmm::cuda_stream_per_thread};
 #else
 rmm::cuda_stream_view const default_stream_value{};
 #endif
+
+rmm::cuda_stream_view const get_default_stream()
+{
+  static auto const default_stream = []() {
+    if (std::getenv("CUDF_PER_THREAD_STREAM") != nullptr) {
+      return rmm::cuda_stream_per_thread;
+    } else {
+      return detail::default_stream_value;
+    }
+  }();
+  return default_stream;
+}
 
 }  // namespace detail
 
