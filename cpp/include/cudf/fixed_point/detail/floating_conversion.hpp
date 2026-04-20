@@ -10,11 +10,10 @@
 
 #include <cuda/std/bit>
 #include <cuda/std/cmath>
+#include <cuda/std/cstring>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
-
-#include <cstring>
 
 namespace numeric {
 namespace detail {
@@ -120,7 +119,7 @@ struct floating_converter {
   {
     // Convert floating to integer
     IntegralType integer_rep;
-    memcpy(&integer_rep, &floating, sizeof(floating));
+    cuda::std::memcpy(&integer_rep, &floating, sizeof(floating));
     return integer_rep;
   }
 
@@ -134,7 +133,7 @@ struct floating_converter {
   {
     // Convert back to float
     FloatingType floating;
-    memcpy(&floating, &integer, sizeof(floating));
+    cuda::std::memcpy(&floating, &integer, sizeof(floating));
     return floating;
   }
 

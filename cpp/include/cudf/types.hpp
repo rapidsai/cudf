@@ -30,7 +30,12 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+
+#if defined(__CUDACC_RTC__)
+#include <cuda/std/iterator>
+#else
 #include <iterator>
+#endif
 
 /**
  * @file
@@ -98,7 +103,11 @@ using char_utf8         = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 template <typename T>
 size_type distance(T f, T l)
 {
+#if defined(__CUDACC_RTC__)
+  return static_cast<size_type>(cuda::std::distance(f, l));
+#else
   return static_cast<size_type>(std::distance(f, l));
+#endif
 }
 
 /**
@@ -352,7 +361,7 @@ class data_type {
  */
 constexpr bool operator==(data_type const& lhs, data_type const& rhs)
 {
-  // use std::tie in the future, breaks JITIFY currently
+  // use std::tie in the future, breaks NVRTC currently
   return lhs.id() == rhs.id() && lhs.scale() == rhs.scale();
 }
 

@@ -69,13 +69,14 @@ class span_base {
    */
   CUDF_HOST_DEVICE constexpr span_base(pointer data, size_type size) : _data(data), _size(size) {}
   // constexpr span_base(pointer begin, pointer end) : _data(begin), _size(end - begin) {}
-  CUDF_HOST_DEVICE constexpr span_base(span_base const&) noexcept = default;  ///< Copy constructor
+  constexpr span_base(span_base const&) noexcept = default;  ///< Copy constructor
+
   /**
    * @brief Copy assignment operator.
    *
    * @return Reference to this span.
    */
-  CUDF_HOST_DEVICE constexpr span_base& operator=(span_base const&) noexcept = default;
+  constexpr span_base& operator=(span_base const&) noexcept = default;
 
   /**
    * @brief Returns an iterator to the first element of the span.

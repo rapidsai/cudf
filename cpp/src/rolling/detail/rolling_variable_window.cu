@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "rolling.cuh"
+#include "rolling_jit.cuh"
 #include "rolling_udf.cuh"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -37,15 +38,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   if (agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX) {
     // TODO: In future, might need to clamp preceding/following to column boundaries.
-    return cudf::detail::rolling_window_udf(input,
-                                            preceding_window.begin<size_type>(),
-                                            "cudf::size_type*",
-                                            following_window.begin<size_type>(),
-                                            "cudf::size_type*",
-                                            min_periods,
-                                            agg,
-                                            stream,
-                                            mr);
+    return cudf::detail::rolling_window_udf(
+      input,
+      cudf::detail::variable_window_wrapper{preceding_window.begin<size_type>()},
+      cudf::detail::variable_window_wrapper{following_window.begin<size_type>()},
+      min_periods,
+      agg,
+      stream,
+      mr);
   } else {
     auto defaults_col =
       cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;

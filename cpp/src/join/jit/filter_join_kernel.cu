@@ -11,8 +11,9 @@
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
 
-#include <jit/accessors.cuh>
+#include <jit/join_column_accessor.cuh>
 #include <jit/span.cuh>
+#include <jit/type_list.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
                     // it. Each UDF will have a different operation-udf.hpp generated for it, so we
@@ -21,6 +22,7 @@
 // clang-format off
 // This header is an inlined header that defines the GENERIC_JOIN_FILTER_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
@@ -92,3 +94,14 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
 }
 
 }  // namespace cudf::join::jit
+
+extern "C" __global__ void kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
+                                  cudf::jit::device_span<cudf::size_type const> right_indices,
+                                  cudf::column_device_view_core const* left_tables,
+                                  cudf::column_device_view_core const* right_tables,
+                                  bool* predicate_results,
+                                  void* user_data)
+{
+  KERNEL_INSTANCE(
+    left_indices, right_indices, left_tables, right_tables, predicate_results, user_data);
+}

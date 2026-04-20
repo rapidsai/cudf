@@ -1,14 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/types.hpp>
 
+#if defined(__CUDACC_RTC__)
+#include <cuda/std/iterator>
+#else
 #include <cuda_runtime.h>
 
 #include <iterator>
+#endif
 
 /**
  * @file
@@ -64,11 +68,17 @@ class string_view {
   class const_iterator {
     /// @cond
    public:
-    using difference_type   = ptrdiff_t;
-    using value_type        = char_utf8;
-    using reference         = char_utf8&;
-    using pointer           = char_utf8*;
+    using difference_type = ptrdiff_t;
+    using value_type      = char_utf8;
+    using reference       = char_utf8&;
+    using pointer         = char_utf8*;
+
+#if defined(__CUDACC_RTC__)
+    using iterator_category = cuda::std::input_iterator_tag;
+#else
     using iterator_category = std::input_iterator_tag;
+#endif
+
     __device__ inline const_iterator(string_view const& str, size_type pos);
     const_iterator(const_iterator const& mit)        = default;
     const_iterator(const_iterator&& mit)             = default;
