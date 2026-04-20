@@ -12,7 +12,6 @@
 #include <cuda/std/bit>
 
 namespace cudf {
-namespace jit {
 
 __device__ inline bool warp_elect(unsigned int mask)
 {
@@ -26,6 +25,8 @@ __device__ inline bool warp_elect(unsigned int mask)
   return (lane == leader);
 #endif
 }
+
+namespace jit {
 
 template <typename Out>
 __device__ void warp_compact_validity(unsigned int active_mask,

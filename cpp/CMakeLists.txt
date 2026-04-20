@@ -326,37 +326,149 @@ endif()
 set(CUDF_CXX_STANDARD 20)
 set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
 
-jit_add_include_directory(
+set(CUDF_LTO_JIT_ARCHITECTURES "80;90;100;120")
+
+macro(add_fragment)
+  set(TARGET ${ARGV0})
+  set(ONE_VALUE_ARGS FRAGMENT SOURCE)
+  set(MULTI_VALUE_ARGS "DEFINITIONS")
+  cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
+
+  foreach(ARCH IN LISTS CUDF_LTO_JIT_ARCHITECTURES)
+    set(TARGET_ID "sm${ARCH}_${TARGET}_${ARG_FRAGMENT}")
+    add_library(${TARGET_ID} OBJECT ${ARG_SOURCE})
+    target_compile_options(
+      ${TARGET_ID} PRIVATE --compress-mode=none --gen-opt-lto --relaxed-constexpr --extended-lambda
+    )
+    target_compile_definitions(${TARGET_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
+    set_target_properties(
+      ${TARGET_ID}
+      PROPERTIES CUDA_ARCHITECTURES "${ARCH}-real"
+                 CUDA_SEPARABLE_COMPILATION ON
+                 CUDA_FATBIN_COMPILATION ON
+                 POSITION_INDEPENDENT_CODE ON
+                 INTERPROCEDURAL_OPTIMIZATION ON
+                 CXX_STANDARD ${CUDF_CUDA_STANDARD}
+                 CXX_STANDARD_REQUIRED ON
+                 CXX_EXTENSIONS ON
+                 CXX_VISIBILITY_PRESET hidden
+                 CUDA_STANDARD ${CUDF_CUDA_STANDARD}
+                 CUDA_STANDARD_REQUIRED ON
+                 CUDA_VISIBILITY_PRESET hidden
+    )
+    target_link_libraries(${TARGET_ID} PRIVATE CCCL::CCCL)
+    target_include_directories(
+      ${TARGET_ID} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
+                           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+    )
+
+    embed_blob(
+      ${TARGET} FILE $<TARGET_OBJECTS:${TARGET_ID}> DEST
+      fragments/sm_${ARCH}_${ARG_FRAGMENT}.fatbin
+    )
+  endforeach()
+
+endmacro()
+
+add_fragment(
+  cudf_jit_embed
+  FRAGMENT
+  compute_columns_kernel_hasnonulls_32
+  SOURCE
+  src/transform/jit/compute_columns_kernel.cu
+  DEFINITIONS
+  COMPUTE_COLUMNS_HAS_NULLS=0
+  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=4
+)
+
+add_fragment(
+  cudf_jit_embed
+  FRAGMENT
+  compute_columns_kernel_hasnulls_32
+  SOURCE
+  src/transform/jit/compute_columns_kernel.cu
+  DEFINITIONS
+  COMPUTE_COLUMNS_HAS_NULLS=1
+  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=4
+)
+
+add_fragment(
+  cudf_jit_embed
+  FRAGMENT
+  compute_columns_kernel_hasnonulls_64
+  SOURCE
+  src/transform/jit/compute_columns_kernel.cu
+  DEFINITIONS
+  COMPUTE_COLUMNS_HAS_NULLS=0
+  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=8
+)
+
+add_fragment(
+  cudf_jit_embed
+  FRAGMENT
+  compute_columns_kernel_hasnulls_64
+  SOURCE
+  src/transform/jit/compute_columns_kernel.cu
+  DEFINITIONS
+  COMPUTE_COLUMNS_HAS_NULLS=1
+  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=8
+)
+
+add_fragment(
+  cudf_jit_embed
+  FRAGMENT
+  compute_columns_kernel_hasnonulls_128
+  SOURCE
+  src/transform/jit/compute_columns_kernel.cu
+  DEFINITIONS
+  COMPUTE_COLUMNS_HAS_NULLS=0
+  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=16
+)
+
+add_fragment(
+  cudf_jit_embed
+  FRAGMENT
+  compute_columns_kernel_hasnulls_128
+  SOURCE
+  src/transform/jit/compute_columns_kernel.cu
+  DEFINITIONS
+  COMPUTE_COLUMNS_HAS_NULLS=1
+  COMPUTE_COLUMNS_MAX_ELEMENT_SIZE=16
+)
+
+add_fragment(cudf_jit_embed FRAGMENT operators SOURCE src/jit/lite/operators.cu)
+
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
   cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY cudf/cpp/src/jit
   INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
   cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
   cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
   cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-jit_add_include_directory(
+embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
@@ -366,13 +478,13 @@ get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLU
 foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
 
-  jit_add_include_directory(
+  embed_includes(
     cudf_jit_embed COPY_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
     INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
 endforeach()
 
-jit_embed(cudf_jit_embed COMPRESSION zstd)
+embed(cudf_jit_embed COMPRESSION zstd)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------

@@ -142,11 +142,18 @@ namespace __attribute__((visibility("hidden"))) cudf
       return decimal{scaled, r, scale};
     }
 
-    __device__ constexpr int operator<=>(decimal rhs) const
+    __device__ constexpr int compare(decimal rhs) const
     {
       auto scale = min(_scale, rhs._scale);
       return rescale(scale)._value - rhs.rescale(scale)._value;
     }
+
+    __device__ constexpr bool operator==(decimal rhs) const { return compare(rhs) == 0; }
+    __device__ constexpr bool operator!=(decimal rhs) const { return compare(rhs) != 0; }
+    __device__ constexpr bool operator<(decimal rhs) const { return compare(rhs) < 0; }
+    __device__ constexpr bool operator<=(decimal rhs) const { return compare(rhs) <= 0; }
+    __device__ constexpr bool operator>(decimal rhs) const { return compare(rhs) > 0; }
+    __device__ constexpr bool operator>=(decimal rhs) const { return compare(rhs) >= 0; }
   };
 
   using decimal32  = decimal<int32_t>;
@@ -163,7 +170,14 @@ namespace __attribute__((visibility("hidden"))) cudf
 
     __device__ constexpr R count() const { return _rep; }
 
-    __device__ constexpr int operator<=>(timestamp rhs) const { return _rep - rhs._rep; }
+    __device__ constexpr int compare(timestamp rhs) const { return _rep - rhs._rep; }
+
+    __device__ constexpr bool operator==(timestamp rhs) const { return compare(rhs) == 0; }
+    __device__ constexpr bool operator!=(timestamp rhs) const { return compare(rhs) != 0; }
+    __device__ constexpr bool operator<(timestamp rhs) const { return compare(rhs) < 0; }
+    __device__ constexpr bool operator<=(timestamp rhs) const { return compare(rhs) <= 0; }
+    __device__ constexpr bool operator>(timestamp rhs) const { return compare(rhs) > 0; }
+    __device__ constexpr bool operator>=(timestamp rhs) const { return compare(rhs) >= 0; }
   };
 
   using timestamp_D  = timestamp<int32_t, timestamp_unit::D>;
@@ -192,7 +206,14 @@ namespace __attribute__((visibility("hidden"))) cudf
       return duration{_rep - rhs._rep};
     }
 
-    __device__ constexpr int operator<=>(duration rhs) const { return _rep - rhs._rep; }
+    __device__ constexpr int compare(duration rhs) const { return _rep - rhs._rep; }
+
+    __device__ constexpr bool operator==(duration rhs) const { return compare(rhs) == 0; }
+    __device__ constexpr bool operator!=(duration rhs) const { return compare(rhs) != 0; }
+    __device__ constexpr bool operator<(duration rhs) const { return compare(rhs) < 0; }
+    __device__ constexpr bool operator<=(duration rhs) const { return compare(rhs) <= 0; }
+    __device__ constexpr bool operator>(duration rhs) const { return compare(rhs) > 0; }
+    __device__ constexpr bool operator>=(duration rhs) const { return compare(rhs) >= 0; }
   };
 
   using duration_D  = duration<int32_t, timestamp_unit::D>;
@@ -353,7 +374,12 @@ namespace __attribute__((visibility("hidden"))) cudf
       return 0;
     }
 
-    __device__ constexpr int operator<=>(string_view const& rhs) const { return compare(rhs); }
+    __device__ constexpr bool operator==(string_view const& rhs) const { return compare(rhs) == 0; }
+    __device__ constexpr bool operator!=(string_view const& rhs) const { return compare(rhs) != 0; }
+    __device__ constexpr bool operator<(string_view const& rhs) const { return compare(rhs) < 0; }
+    __device__ constexpr bool operator<=(string_view const& rhs) const { return compare(rhs) <= 0; }
+    __device__ constexpr bool operator>(string_view const& rhs) const { return compare(rhs) > 0; }
+    __device__ constexpr bool operator>=(string_view const& rhs) const { return compare(rhs) >= 0; }
   };
 
   struct mutable_string_view {
@@ -389,6 +415,37 @@ namespace __attribute__((visibility("hidden"))) cudf
 
     __device__ explicit operator string_view() const { return string_view{_data, _bytes, _length}; }
   };
+
+  // Aliases for codegen
+  using b8     = bool;
+  using i8     = int8_t;
+  using i16    = int16_t;
+  using i32    = int32_t;
+  using i64    = int64_t;
+  using u8     = uint8_t;
+  using u16    = uint16_t;
+  using u32    = uint32_t;
+  using u64    = uint64_t;
+  using f32    = float;
+  using f64    = double;
+  using dec32  = decimal32;
+  using dec64  = decimal64;
+  using dec128 = decimal128;
+  using ts_D   = timestamp_D;
+  using ts_h   = timestamp_h;
+  using ts_m   = timestamp_m;
+  using ts_s   = timestamp_s;
+  using ts_ms  = timestamp_ms;
+  using ts_us  = timestamp_us;
+  using ts_ns  = timestamp_ns;
+  using dur_D  = duration_D;
+  using dur_h  = duration_h;
+  using dur_m  = duration_m;
+  using dur_s  = duration_s;
+  using dur_ms = duration_ms;
+  using dur_us = duration_us;
+  using dur_ns = duration_ns;
+  using str    = string_view;
 
   namespace operators {
 
@@ -693,18 +750,18 @@ namespace __attribute__((visibility("hidden"))) cudf
   }
 
   template <typename T>
-  __device__ inline int cast_to_float64(float64_t* out, T const* a)
+  __device__ inline int to_i32(int32_t* out, T const* a)
   {
-    *out = static_cast<float64_t>(*a);
+    *out = static_cast<int32_t>(*a);
     return 0;
   }
 
   template <typename T>
-  __device__ inline int cast_to_float64(optional<float64_t>* out, optional<T> const* a)
+  __device__ inline int to_i32(optional<int32_t>* out, optional<T> const* a)
   {
     if (a->is_valid()) {
-      float64_t r;
-      cast_to_float64(&r, &a->value());
+      int32_t r;
+      to_i32(&r, &a->value());
       *out = r;
     } else {
       *out = nullopt;
@@ -713,18 +770,18 @@ namespace __attribute__((visibility("hidden"))) cudf
   }
 
   template <typename T>
-  __device__ inline int cast_to_int64(int64_t* out, T const* a)
+  __device__ inline int to_i64(int64_t* out, T const* a)
   {
     *out = static_cast<int64_t>(*a);
     return 0;
   }
 
   template <typename T>
-  __device__ inline int cast_to_int64(optional<int64_t>* out, optional<T> const* a)
+  __device__ inline int to_i64(optional<int64_t>* out, optional<T> const* a)
   {
     if (a->is_valid()) {
       int64_t r;
-      cast_to_int64(&r, &a->value());
+      to_i64(&r, &a->value());
       *out = r;
     } else {
       *out = nullopt;
@@ -733,18 +790,78 @@ namespace __attribute__((visibility("hidden"))) cudf
   }
 
   template <typename T>
-  __device__ inline int cast_to_uint64(uint64_t* out, T const* a)
+  __device__ inline int to_u32(uint32_t* out, T const* a)
+  {
+    *out = static_cast<uint32_t>(*a);
+    return 0;
+  }
+
+  template <typename T>
+  __device__ inline int to_u32(optional<uint32_t>* out, optional<T> const* a)
+  {
+    if (a->is_valid()) {
+      uint32_t r;
+      to_u32(&r, &a->value());
+      *out = r;
+    } else {
+      *out = nullopt;
+    }
+    return 0;
+  }
+
+  template <typename T>
+  __device__ inline int to_u64(uint64_t* out, T const* a)
   {
     *out = static_cast<uint64_t>(*a);
     return 0;
   }
 
   template <typename T>
-  __device__ inline int cast_to_uint64(optional<uint64_t>* out, optional<T> const* a)
+  __device__ inline int to_u64(optional<uint64_t>* out, optional<T> const* a)
   {
     if (a->is_valid()) {
       uint64_t r;
-      cast_to_uint64(&r, &a->value());
+      to_u64(&r, &a->value());
+      *out = r;
+    } else {
+      *out = nullopt;
+    }
+    return 0;
+  }
+
+  template <typename T>
+  __device__ inline int to_f32(float32_t* out, T const* a)
+  {
+    *out = static_cast<float32_t>(*a);
+    return 0;
+  }
+
+  template <typename T>
+  __device__ inline int to_f32(optional<float32_t>* out, optional<T> const* a)
+  {
+    if (a->is_valid()) {
+      float32_t r;
+      to_f32(&r, &a->value());
+      *out = r;
+    } else {
+      *out = nullopt;
+    }
+    return 0;
+  }
+
+  template <typename T>
+  __device__ inline int to_f64(float64_t* out, T const* a)
+  {
+    *out = static_cast<float64_t>(*a);
+    return 0;
+  }
+
+  template <typename T>
+  __device__ inline int to_f64(optional<float64_t>* out, optional<T> const* a)
+  {
+    if (a->is_valid()) {
+      float64_t r;
+      to_f64(&r, &a->value());
       *out = r;
     } else {
       *out = nullopt;
@@ -903,7 +1020,9 @@ namespace __attribute__((visibility("hidden"))) cudf
   __device__ inline int equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a == *b);
+      bool r;
+      equal(&r, &a->value(), &b->value());
+      *out = r;
     } else if (a->is_null() && b->is_null()) {
       *out = true;
     } else {
@@ -983,7 +1102,9 @@ namespace __attribute__((visibility("hidden"))) cudf
   __device__ inline int greater(optional<bool>* out, optional<T> const* a, optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a > *b);
+      bool r;
+      greater(&r, &a->value(), &b->value());
+      *out = r;
     } else {
       *out = false;
     }
@@ -1003,7 +1124,9 @@ namespace __attribute__((visibility("hidden"))) cudf
                                       optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a >= *b);
+      bool r;
+      greater_equal(&r, &a->value(), &b->value());
+      *out = r;
     } else {
       *out = false;
     }
@@ -1049,7 +1172,9 @@ namespace __attribute__((visibility("hidden"))) cudf
   __device__ inline int less(optional<bool>* out, optional<T> const* a, optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a < *b);
+      bool r;
+      less(&r, &a->value(), &b->value());
+      *out = r;
     } else {
       *out = false;
     }
@@ -1067,7 +1192,9 @@ namespace __attribute__((visibility("hidden"))) cudf
   __device__ inline int less_equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a <= *b);
+      bool r;
+      less_equal(&r, &a->value(), &b->value());
+      *out = r;
     } else {
       *out = false;
     }
@@ -1151,13 +1278,15 @@ namespace __attribute__((visibility("hidden"))) cudf
     return 0;
   }
 
-  __device__ inline int mod(float32_t* out, float32_t const* a, float32_t const* b)
+  template <>
+  __device__ inline int mod<float32_t>(float32_t* out, float32_t const* a, float32_t const* b)
   {
     *out = ::fmodf(*a, *b);
     return 0;
   }
 
-  __device__ inline int mod(float64_t* out, float64_t const* a, float64_t const* b)
+  template <>
+  __device__ inline int mod<float64_t>(float64_t* out, float64_t const* a, float64_t const* b)
   {
     *out = ::fmod(*a, *b);
     return 0;
@@ -1207,7 +1336,7 @@ namespace __attribute__((visibility("hidden"))) cudf
   __device__ inline int null_equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a == *b);
+      *out = (*(*a) == *(*b));
     } else if (a->is_null() && b->is_null()) {
       *out = true;
     } else {
@@ -1229,11 +1358,13 @@ namespace __attribute__((visibility("hidden"))) cudf
                                          optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a && *b);
+      bool r;
+      null_logical_and(&r, &a->value(), &b->value());
+      *out = r;
     } else if (a->is_null() && b->is_null()) {
       *out = nullopt;
     } else {
-      if (a->is_valid() ? *a : *b) {
+      if (a->is_valid() ? *(*a) : *(*b)) {
         *out = nullopt;
       } else {
         *out = false;
@@ -1255,11 +1386,13 @@ namespace __attribute__((visibility("hidden"))) cudf
                                         optional<T> const* b)
   {
     if (a->is_valid() && b->is_valid()) {
-      *out = (*a || *b);
+      bool r;
+      null_logical_or(&r, &a->value(), &b->value());
+      *out = r;
     } else if (a->is_null() && b->is_null()) {
       *out = nullopt;
     } else {
-      if (a->is_valid() ? *a : *b) {
+      if (a->is_valid() ? *(*a) : *(*b)) {
         *out = true;
       } else {
         *out = nullopt;
