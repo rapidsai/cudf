@@ -167,7 +167,7 @@ void binary_operation(mutable_column_view& out,
   auto lhs_arg  = cudf::jit::get_data_ptr(lhs);
   auto rhs_arg  = cudf::jit::get_data_ptr(rhs);
 
-  void* args[] = {&size_arg, &out_arg, &lhs_arg, &rhs_arg};
+  void* args[] = {&size_arg, &out_arg, &lhs_arg, &rhs_arg};  // NOLINT(modernize-avoid-c-arrays)
 
   auto cfg = kernel.max_occupancy_config(0, 0);
   kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);

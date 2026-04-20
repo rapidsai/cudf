@@ -27,11 +27,11 @@
 #define RTCX_DEFER(...)                      ::rtcx::defer RTCX_DEFER__CONCATENATE(defer_, __COUNTER__)(__VA_ARGS__)
 
 extern "C" {
-typedef struct evp_md_ctx_st EVP_MD_CTX;
+typedef struct evp_md_ctx_st EVP_MD_CTX;  // NOLINT(modernize-use-using)
 
-typedef struct CUlib_st* CUlibrary;
-typedef struct CUkern_st* CUkernel;
-typedef struct CUstream_st* CUstream;
+typedef struct CUlib_st* CUlibrary;    // NOLINT(modernize-use-using)
+typedef struct CUkern_st* CUkernel;    // NOLINT(modernize-use-using)
+typedef struct CUstream_st* CUstream;  // NOLINT(modernize-use-using)
 }
 
 namespace rtcx {
@@ -110,7 +110,7 @@ struct [[nodiscard]] sha256_hasher {
   constexpr std::uint64_t operator()(sha256 const& obj) const
   {
     struct u64x4 {
-      alignas(16) std::uint64_t v[4];
+      alignas(16) std::uint64_t v[4];  // NOLINT(modernize-avoid-c-arrays)
     };
 
     auto value = std::bit_cast<u64x4>(obj);
@@ -588,7 +588,7 @@ using library_compile_func = func<std::tuple<library, blob>()>;
  * debugging. The interface is zero-copy, using shared pointers, mmap, and spans to avoid
  * unnecessary data copying across threads and disk.
  */
-struct cache_t {
+struct cache_t {  // NOLINT
  private:
   bool enabled_;
 

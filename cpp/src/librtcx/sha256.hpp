@@ -53,7 +53,7 @@ std::uint32_t get_be32(void const* ptr)
 }  // namespace
 
 struct [[nodiscard]] sha256_hex_string {
-  char data_[65];
+  char data_[65];  // NOLINT(modernize-avoid-c-arrays)
 
   [[nodiscard]] constexpr std::string_view view() const { return std::string_view{data_, 64}; }
 
@@ -67,7 +67,7 @@ struct [[nodiscard]] sha256_hex_string {
 
   static sha256_hex_string make(std::span<std::uint8_t const, 32> input)
   {
-    constexpr char const HEX_CHARS[] = "0123456789abcdef";
+    constexpr char const HEX_CHARS[] = "0123456789abcdef";  // NOLINT(modernize-avoid-c-arrays)
     sha256_hex_string hex;
     for (std::size_t i = 0; i < 32; ++i) {
       hex.data_[i * 2]     = HEX_CHARS[(input[i] >> 4) & 0x0F];
@@ -79,7 +79,7 @@ struct [[nodiscard]] sha256_hex_string {
 };
 
 struct [[nodiscard]] sha256 {
-  alignas(16) std::uint8_t data_[32];
+  alignas(16) std::uint8_t data_[32];  // NOLINT(modernize-avoid-c-arrays)
 
   [[nodiscard]] std::uint8_t operator[](std::size_t index) const { return data_[index]; }
 
@@ -120,9 +120,9 @@ struct sha256_context {
                                         0x510e'527ful,
                                         0x9b05'688cul,
                                         0x1f83'd9abul,
-                                        0x5be0'cd19ul};
+                                        0x5be0'cd19ul};  // NOLINT(modernize-avoid-c-arrays)
   std::uint64_t size_                = 0;
-  std::uint8_t buf_[BLOCK_SIZE]      = {};
+  std::uint8_t buf_[BLOCK_SIZE]      = {};  // NOLINT(modernize-avoid-c-arrays)
 
  public:
   sha256_context()                                 = default;
@@ -135,7 +135,7 @@ struct sha256_context {
  private:
   void transform_(std::uint8_t const* buf)
   {
-    std::uint32_t S[8], W[64], t0, t1;
+    std::uint32_t S[8], W[64], t0, t1;  // NOLINT(modernize-avoid-c-arrays)
     int i;
 
     /* copy state into S */
@@ -258,8 +258,8 @@ struct sha256_context {
 
   sha256 finalize()
   {
-    static std::uint8_t const pad[64] = {0x80};
-    std::uint32_t padlen[2];
+    static std::uint8_t const pad[64] = {0x80};  // NOLINT(modernize-avoid-c-arrays)
+    std::uint32_t padlen[2];                     // NOLINT(modernize-avoid-c-arrays)
     int i;
 
     /* Pad with a binary 1 (ie 0x80), then zeroes, then length */
