@@ -149,6 +149,13 @@ files:
       - develop
       - iwyu
       - py_version
+  stream_tests:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - cuda
+      - cuda_version
   docs:
     output: none
     includes:

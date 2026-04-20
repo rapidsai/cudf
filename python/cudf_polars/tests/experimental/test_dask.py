@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 import pytest
@@ -142,3 +143,8 @@ def test_empty_dataframe(engine: DaskEngine) -> None:
         {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
     )
     assert_gpu_result_equal(lf, engine=engine)
+
+
+def test_run(engine: DaskEngine) -> None:
+    result = engine._run(os.getpid)
+    assert len(set(result)) == engine.nranks

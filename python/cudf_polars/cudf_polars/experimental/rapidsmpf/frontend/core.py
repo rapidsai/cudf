@@ -8,7 +8,7 @@ import contextlib
 import dataclasses
 import os
 import socket
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 import cuda.core
 from rapidsmpf.coll import AllGather
@@ -26,7 +26,7 @@ from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
     from concurrent.futures import ThreadPoolExecutor
 
     from rapidsmpf.communicator.communicator import Communicator
@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
+
+
+T = TypeVar("T")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -178,6 +181,25 @@ class StreamingEngine(pl.GPUEngine):
     def __exit__(self, *_: object) -> None:
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        """
+        Execute a function on all ranks.
+
+        Parameters
+        ----------
+        func
+            Function to execute.
+        args
+            Arguments to pass to the function.
+        kwargs
+            Keyword arguments to pass to the function.
+
+        Returns
+        -------
+        List of results from calling ``func``, one per rank.
+        """
+        raise NotImplementedError
 
 
 def execute_ir_on_rank(
