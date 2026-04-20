@@ -757,7 +757,7 @@ TEST_F(StringOperationTest, OutputOffsettedMixed)
   strings_offsets.push_back(nullptr);
 
   auto expected_is_odd =
-    cudf::test::fixed_width_column_wrapper<bool>{true, false, true, false, true, false};
+    cudf::test::fixed_width_column_wrapper<bool>{false, true, false, true, false, false};
   auto expected_strings = cudf::test::strings_column_wrapper{
     "xaa1", "xxbb2", "xxxcc3", "xxxxdd4", "xxxxxee5", "xxxxxxff67"};
   auto expected_sizes = cudf::test::fixed_width_column_wrapper<int32_t>{3, 4, 5, 6, 7, 8};
