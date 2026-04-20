@@ -1162,6 +1162,8 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
+                 BUILD_RPATH "\$ORIGIN"
+                 INSTALL_RPATH "\$ORIGIN"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
@@ -1238,8 +1240,16 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
 )
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
-  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
+  install(
+    TARGETS cudf_identify_stream_usage_mode_cudf
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
+  install(
+    TARGETS cudf_identify_stream_usage_mode_testing
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
 endif()
 
 set(doc_string

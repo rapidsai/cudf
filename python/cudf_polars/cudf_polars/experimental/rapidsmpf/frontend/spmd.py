@@ -45,7 +45,7 @@ from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
@@ -521,3 +522,10 @@ class SPMDEngine(StreamingEngine):
         self._comm = None
         self._ctx = None
         super().shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        data = json.dumps(func(*args, **kwargs)).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+
+        return [json.loads(r) for r in results]
