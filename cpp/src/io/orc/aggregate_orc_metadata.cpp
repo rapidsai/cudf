@@ -246,19 +246,19 @@ aggregate_orc_metadata::select_stripes(
       auto const file_size = per_file_metadata[mapping.source_idx].source->size();
       CUDF_EXPECTS(stripe->offset <= file_size,
                    "Invalid stripe information: offset exceeds file size",
-                   std::overflow_error);
+                   std::out_of_range);
       auto remaining = file_size - stripe->offset;
       CUDF_EXPECTS(stripe->indexLength <= remaining,
                    "Invalid stripe information: indexLength exceeds file size",
-                   std::overflow_error);
+                   std::out_of_range);
       remaining -= stripe->indexLength;
       CUDF_EXPECTS(stripe->dataLength <= remaining,
                    "Invalid stripe information: dataLength exceeds file size",
-                   std::overflow_error);
+                   std::out_of_range);
       remaining -= stripe->dataLength;
       CUDF_EXPECTS(stripe->footerLength <= remaining,
                    "Invalid stripe information: footerLength exceeds file size",
-                   std::overflow_error);
+                   std::out_of_range);
       auto const sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
       auto const sf_comp_length = stripe->footerLength;
       auto const buffer =

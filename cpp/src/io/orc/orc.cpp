@@ -475,7 +475,7 @@ metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source
   size_t const ps_length = buffer->data()[max_ps_size - 1];
   CUDF_EXPECTS(ps_length + 1 <= max_ps_size,
                "ORC PostScript length byte exceeds file size",
-               std::overflow_error);
+               std::out_of_range);
   uint8_t const* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
   protobuf_reader(ps_data, ps_length).read(ps);
 
@@ -483,14 +483,14 @@ metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source
   auto const ps_size     = static_cast<uint64_t>(ps_length);
   CUDF_EXPECTS(ps.footerLength <= file_length - (ps_size + 1),
                "ORC file is too small to contain the footer",
-               std::overflow_error);
+               std::out_of_range);
   CUDF_EXPECTS(ps.metadataLength <= file_length - (ps_size + 1) - ps.footerLength,
                "ORC file is too small to contain the metadata",
-               std::overflow_error);
+               std::out_of_range);
 
   CUDF_EXPECTS(ps.compressionBlockSize <= 1ULL << 30,
                "Compression block size exceeds maximum allowed (1 GiB)",
-               std::overflow_error);
+               std::out_of_range);
 
   // If compression is used, the rest of the metadata is compressed
   // If no compressed is used, the decompressor is simply a pass-through
