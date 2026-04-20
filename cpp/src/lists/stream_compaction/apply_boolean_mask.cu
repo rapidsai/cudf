@@ -23,9 +23,9 @@
 namespace cudf::lists {
 namespace detail {
 
-std::unique_ptr<column> apply_mask(cudf::detail::mask_type mask_kind,
-                                   lists_column_view const& input,
+std::unique_ptr<column> apply_mask(lists_column_view const& input,
                                    lists_column_view const& boolean_mask,
+                                   cudf::detail::mask_type mask_kind,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
@@ -41,9 +41,9 @@ std::unique_ptr<column> apply_mask(cudf::detail::mask_type mask_kind,
   auto const mask_sliced_child = boolean_mask.get_sliced_child(stream);
 
   auto const make_filtered_child = [&] {
-    auto filtered = cudf::detail::apply_mask(mask_kind,
-                                             cudf::table_view{{input.get_sliced_child(stream)}},
+    auto filtered = cudf::detail::apply_mask(cudf::table_view{{input.get_sliced_child(stream)}},
                                              mask_sliced_child,
+                                             mask_kind,
                                              stream,
                                              mr)
                       ->release();
@@ -56,28 +56,27 @@ std::unique_ptr<column> apply_mask(cudf::detail::mask_type mask_kind,
         boolean_mask.offsets(), {boolean_mask.offset(), boolean_mask.size() + 1}, stream)
         .front();
 
-    auto const [inverted_mask_child, effective_mask_sliced_child] = [&] {
-      if (mask_kind == cudf::detail::mask_type::RETENTION) {
-        return std::pair{std::unique_ptr<column>{}, mask_sliced_child};
-      }
+    auto const sizes = [&] {
       // For DELETION, invert the `mask_sliced_child` so segmented_sum only counts `non-null` and
       // `false` elements in the original mask.
-      auto inverted_mask_child =
-        cudf::detail::unary_operation(mask_sliced_child,
-                                      cudf::unary_operator::NOT,
-                                      stream,
-                                      cudf::get_current_device_resource_ref());
-      return std::pair{std::move(inverted_mask_child), inverted_mask_child->view()};
+      auto const inverted_mask_child =
+        (mask_kind == cudf::detail::mask_type::RETENTION)
+          ? std::unique_ptr<column>{}
+          : cudf::detail::unary_operation(mask_sliced_child,
+                                          cudf::unary_operator::NOT,
+                                          stream,
+                                          cudf::get_current_device_resource_ref());
+      auto const effective_mask_sliced_child = (mask_kind == cudf::detail::mask_type::RETENTION)
+                                                 ? mask_sliced_child
+                                                 : inverted_mask_child->view();
+      return cudf::reduction::detail::segmented_sum(effective_mask_sliced_child,
+                                                    mask_sliced_offsets,
+                                                    offset_data_type,
+                                                    null_policy::EXCLUDE,
+                                                    std::nullopt,
+                                                    stream,
+                                                    cudf::get_current_device_resource_ref());
     }();
-
-    auto const sizes =
-      cudf::reduction::detail::segmented_sum(effective_mask_sliced_child,
-                                             mask_sliced_offsets,
-                                             offset_data_type,
-                                             null_policy::EXCLUDE,
-                                             std::nullopt,
-                                             stream,
-                                             cudf::get_current_device_resource_ref());
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, size_type{0});
     auto const sizes_end   = sizes_begin + sizes->size();
@@ -110,7 +109,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_mask(cudf::detail::mask_type::RETENTION, input, boolean_mask, stream, mr);
+  return detail::apply_mask(input, boolean_mask, cudf::detail::mask_type::RETENTION, stream, mr);
 }
 
 std::unique_ptr<column> apply_deletion_mask(lists_column_view const& input,
@@ -119,7 +118,7 @@ std::unique_ptr<column> apply_deletion_mask(lists_column_view const& input,
                                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_mask(cudf::detail::mask_type::DELETION, input, deletion_mask, stream, mr);
+  return detail::apply_mask(input, deletion_mask, cudf::detail::mask_type::DELETION, stream, mr);
 }
 
 }  // namespace cudf::lists

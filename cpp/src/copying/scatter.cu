@@ -396,9 +396,9 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map  = detail::apply_mask(mask_type::RETENTION,
-                                        table_view{{indices->view()}},
+  auto scatter_map  = detail::apply_mask(table_view{{indices->view()}},
                                         boolean_mask,
+                                        mask_type::RETENTION,
                                         stream,
                                         cudf::get_current_device_resource_ref());
   auto output_table = detail::scatter(

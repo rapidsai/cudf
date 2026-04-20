@@ -49,9 +49,9 @@ enum class mask_type : bool {
  *
  * @param mask_kind Specifies how the boolean mask is treated (retentions or deletions)
  */
-std::unique_ptr<table> apply_mask(mask_type mask_kind,
-                                  table_view const& input,
+std::unique_ptr<table> apply_mask(table_view const& input,
                                   column_view const& boolean_mask,
+                                  mask_type mask_kind,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr);
 
