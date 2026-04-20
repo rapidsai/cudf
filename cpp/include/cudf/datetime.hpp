@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -177,9 +177,9 @@ std::unique_ptr<cudf::column> add_calendrical_months(
 /**
  * @brief  Check if the year of the given date is a leap year
  *
- * `output[i] == true` if year of `column[i]` is a leap year
- * `output[i] == false` if year of `column[i]` is not a leap year
- * `output[i] is null` if `column[i]` is null
+ * `output[i] == true` if year of `column[i]` is a leap year, otherwise `output[i] == false`.
+ *
+ * Any null input rows return corresponding null entries in the output columns.
  *
  * @param column cudf::column_view of the input datetime values
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -196,8 +196,9 @@ std::unique_ptr<cudf::column> is_leap_year(
 /**
  * @brief Extract the number of days in the month
  *
- * output[i] contains the number of days in the month of date `column[i]`
- * output[i] is null if `column[i]` is null
+ * `output[i]` contains the number of days in the month of date `column[i]`.
+ *
+ * Any null input rows return corresponding null entries in the output columns.
  *
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  *
@@ -214,8 +215,10 @@ std::unique_ptr<cudf::column> days_in_month(
 /**
  * @brief  Returns the quarter of the date
  *
- * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quarter of month given by
- * `column[i]`. It will be null if the input row at `column[i]` is null.
+ * `output[i]` will be a value from `{1, 2, 3, 4}` corresponding to the quarter of month given by
+ * `column[i]`.
+ *
+ * Any null input rows return corresponding null entries in the output columns.
  *
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  *

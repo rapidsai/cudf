@@ -8,7 +8,6 @@
 #include <cudf/types.hpp>
 
 #include <memory>
-#include <optional>
 #include <string>
 
 namespace CUDF_EXPORT cudf {
@@ -108,25 +107,21 @@ struct regex_program {
   [[nodiscard]] std::size_t compute_working_memory_size(int32_t num_strings) const;
 
   /**
-   * @brief placeholder
-   *
-   * @return literal
+   * @brief Fast-path types for possible literal only patterns
    */
-  std::optional<std::string> is_literal_only() const;
+  enum literal_fast_path : int32_t {
+    NO_FAST_PATH = 0,
+    LITERAL_ONLY = 1,  ///< single literal with no other regex patterns or flags
+    STARTS_WITH  = 2,  ///< single literal with start anchor block (no flags)
+    ENDS_WITH    = 3,  ///< single literal with end anchor block (no flags)
+  };
 
   /**
-   * @brief placeholder
+   * @brief Returns literal string if specific fast-path is possible
    *
-   * @return literal
+   * @return Which fast-path is available and the associate literal string
    */
-  std::optional<std::string> is_starts_with_only() const;
-
-  /**
-   * @brief placeholder
-   *
-   * @return literal
-   */
-  std::optional<std::string> is_ends_with_only() const;
+  std::pair<literal_fast_path, std::string> get_literal_fast_path() const;
 
  private:
   std::string _pattern;
