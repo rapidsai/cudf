@@ -157,6 +157,46 @@ class StreamingEngine(pl.GPUEngine):
         """
         raise NotImplementedError
 
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
+        return self._gather_statistics(clear=clear)
+
+    def _gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """Engine-specific collection hook; overridden by every subclass."""
+        raise NotImplementedError
+
+    def global_statistics(self, *, clear: bool = False) -> Statistics:
+        """
+        Collect statistics from every rank and merge them into a single global statistics.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        A merged :class:`~rapidsmpf.statistics.Statistics`: per-stat counts
+        and values are summed, maxima are reduced with ``max``. Formatters
+        are taken from rank 0.
+        """
+        first, *rest = self.gather_statistics(clear=clear)
+        # rapidsmpf's merge rejects an empty `others`, so short-circuit the
+        # single-rank case by returning the first element.
+        return first.merge(rest) if rest else first
+
     def shutdown(self) -> None:
         """
         Shut down engine and release all owned resources.

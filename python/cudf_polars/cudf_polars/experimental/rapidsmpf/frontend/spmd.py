@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import json
+import pickle
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
@@ -501,6 +503,8 @@ class SPMDEngine(StreamingEngine):
         """
         Collect diagnostic information from every rank.
 
+        This is a collective operation, every rank must call it.
+
         Returns
         -------
         List of :class:`ClusterInfo`, one per rank.
@@ -509,6 +513,16 @@ class SPMDEngine(StreamingEngine):
         with reserve_op_id() as op_id:
             results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
         return [ClusterInfo(**json.loads(r)) for r in results]
+
+    def _gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """Collective all-gather of ``ctx.statistics()`` across all ranks."""
+        # Pickle before the optional clear so the returned stats still carry data.
+        data = pickle.dumps(self.context.statistics())
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        if clear:
+            self.context.statistics().clear()
+        return [pickle.loads(r) for r in results]
 
     def shutdown(self) -> None:
         """
