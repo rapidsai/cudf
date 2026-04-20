@@ -54,7 +54,6 @@ class roaring_bitmap::impl {
 
   template <roaring_bitmap_type Type>
   void materialize(rmm::cuda_stream_view stream)
-    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
   {
     auto const bytes = _serialized_bitmap_data.data();
 
@@ -73,7 +72,6 @@ class roaring_bitmap::impl {
 
   template <roaring_bitmap_type Type>
   [[nodiscard]] bool empty() const
-    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
   {
     if constexpr (Type == roaring_bitmap_type::BITS_32) {
       CUDF_EXPECTS(_bitmap32,
@@ -88,7 +86,6 @@ class roaring_bitmap::impl {
 
   template <roaring_bitmap_type Type>
   [[nodiscard]] cuda::std::size_t size() const
-    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
   {
     if constexpr (Type == roaring_bitmap_type::BITS_32) {
       CUDF_EXPECTS(_bitmap32,
@@ -103,7 +100,6 @@ class roaring_bitmap::impl {
 
   template <roaring_bitmap_type Type>
   [[nodiscard]] cuda::std::size_t size_bytes() const
-    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
   {
     if constexpr (Type == roaring_bitmap_type::BITS_32) {
       CUDF_EXPECTS(_bitmap32,
@@ -118,7 +114,6 @@ class roaring_bitmap::impl {
 
   template <roaring_bitmap_type Type, typename InputIt, typename OutputIt>
   void contains_async(InputIt first, InputIt last, OutputIt output, rmm::cuda_stream_view stream)
-    requires(Type == roaring_bitmap_type::BITS_32 or Type == roaring_bitmap_type::BITS_64)
   {
     // Return early if the input range is empty
     if (first == last) { return; }
