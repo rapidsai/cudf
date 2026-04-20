@@ -405,20 +405,6 @@ async def _extend_prefetch_for_ts_lookahead(
             return
 
 
-async def _ensure_successor_prefetched(
-    context: Context,
-    ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
-    br: Any,
-    col_names: list[str],
-    col_dtypes: list[Any],
-) -> None:
-    """When ``lookahead == 0``, peek one successor into ``prefetch`` if none are buffered."""
-    if prefetch:
-        return
-    await _recv_one_into_prefetch(context, ch_in, prefetch, br, col_names, col_dtypes)
-
-
 async def _ensure_right_halo_prefetched(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -576,6 +562,19 @@ def _prepare_expanded_rolling_frame(
         else:
             assert next_dfs is not None
             right_tables_filtered: list[DataFrame] = []
+            right_upper: int | plc.Scalar
+            if is_int_index:
+                right_upper = chunk_mx + lookahead
+            else:
+                assert chunk_mx_s is not None
+                assert dur_dt is not None
+                right_upper = _scalar_binop_scalar(
+                    chunk_mx_s,
+                    plc.Scalar.from_py(lookahead, dur_dt, stream=chunk_stream),
+                    plc.binaryop.BinaryOperator.ADD,
+                    index_dtype,
+                    chunk_stream,
+                )
             for next_df in next_dfs:
                 next_table = next_df.table
                 next_stream = next_df.stream
@@ -586,7 +585,7 @@ def _prepare_expanded_rolling_frame(
                     right_ctx_table = _filter_threshold(
                         next_table,
                         next_idx,
-                        chunk_mx + lookahead,
+                        right_upper,
                         plc.binaryop.BinaryOperator.LESS_EQUAL,
                         next_stream,
                     )
@@ -600,23 +599,11 @@ def _prepare_expanded_rolling_frame(
                             )
                         )
                 else:
-                    assert chunk_mx_s is not None
-                    assert dur_dt is not None
-                    lookahead_s = plc.Scalar.from_py(
-                        lookahead, dur_dt, stream=chunk_stream
-                    )
-                    upper_s = _scalar_binop_scalar(
-                        chunk_mx_s,
-                        lookahead_s,
-                        plc.binaryop.BinaryOperator.ADD,
-                        index_dtype,
-                        chunk_stream,
-                    )
                     with ir_context.stream_ordered_after(next_df, chunk_df) as s:
                         right_ctx_table = _filter_threshold(
                             next_table,
                             next_idx,
-                            upper_s,
+                            right_upper,
                             plc.binaryop.BinaryOperator.LESS_EQUAL,
                             s,
                         )
@@ -736,7 +723,7 @@ async def prepare_rank_boundaries(
     await ch_out.drain(context)
 
 
-async def extend_chunks(
+async def expand_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
     ch_to_eval: Channel[TableChunk],
@@ -750,7 +737,7 @@ async def extend_chunks(
     base_col_names: list[str],
     base_dtypes: list[Any],
 ) -> None:
-    """Prefetch lookahead chunks, build expanded frames, fuse zlice, and ship to eval."""
+    """Prepare expanded chunks for evaluation."""
     prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]] = deque()
     left_ctx_df: DataFrame | None = None
     prev_max: int | None = None
@@ -782,10 +769,10 @@ async def extend_chunks(
                 col_dtypes=base_dtypes,
             ):
                 continue
-        else:
-            if cur_df.num_rows == 0:
-                continue  # no center rows — skip without emitting to eval_and_send
-            await _ensure_successor_prefetched(
+        elif cur_df.num_rows == 0:
+            continue  # no center rows to send
+        elif not prefetch:
+            await _recv_one_into_prefetch(
                 context, ch_in, prefetch, br, base_col_names, base_dtypes
             )
 
@@ -960,7 +947,7 @@ async def rolling_actor(
                 ch_after_boundaries,
                 collective_ids,
             ),
-            extend_chunks(
+            expand_chunks(
                 context,
                 ch_after_boundaries,
                 ch_to_eval,
