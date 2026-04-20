@@ -8,162 +8,106 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/cstddef>
+#include <cuda/std/tuple>
+#include <cuda/std/utility>
 
-#include <jit/accessors.cuh>
-#include <jit/span.cuh>
+#include <jit/column_accessor.cuh>
+#include <jit/column_device_view_wrappers.cuh>
+#include <jit/sync.cuh>
+#include <jit/type_list.cuh>
 
 #pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
                     // it. Each UDF will have a different operation-udf.hpp generated for it, so we
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
-// This header is an inlined header that defines the GENERIC_FILTER_OP function. It is placed here
+// This header is an inlined header that defines the GENERIC_TRANSFORM_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
 namespace cudf {
-namespace transformation {
 namespace jit {
 
-template <null_aware is_null_aware,
-          bool may_evaluate_null,
-          bool has_user_data,
-          typename Out,
-          typename... In>
-CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
-                        cudf::column_device_view_core const* inputs,
-                        bool* intermediate_null_mask,
-                        void* user_data)
+template <bool has_user_data, typename Args>
+__device__ void execute_transform_op(void* user_data, size_type element_idx, Args args)
 {
-  // inputs to JITIFY kernels have to be either sized-integral types or pointers. Structs or
-  // references can't be passed directly/correctly as they will be crossing an ABI boundary
-
-  auto const start  = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const size   = outputs[0].size();
-
-  for (auto i = start; i < size; i += stride) {
-    if constexpr (is_null_aware == null_aware::NO) {
-      if constexpr (may_evaluate_null) {
-        if (Out::is_null(outputs, i)) { continue; }
-      }
-
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
-      }
-
-    } else {  // is_null_aware == null_aware::YES
-      cuda::std::optional<typename Out::type> result;
-
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::nullable_element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&result, In::nullable_element(inputs, i)...);
-      }
-
-      Out::assign(outputs, i, *result);
-
-      if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
-    }
+  // TODO: static assert invocable
+  if constexpr (has_user_data) {
+    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); },
+                     cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, args));
+  } else {
+    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); }, args);
   }
 }
 
+/// @brief The generic transform kernel. Supports all types and nullability combinations.
 template <null_aware is_null_aware,
-          bool may_evaluate_null,
           bool has_user_data,
-          typename Out,
-          typename... In>
-CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
-                                    cudf::column_device_view_core const* inputs,
-                                    bool* intermediate_null_mask,
-                                    void* user_data)
+          typename InputAccessors,
+          typename OutputAccessors>
+CUDF_KERNEL void transform_kernel(size_type row_size,
+                                  bitmask_type const* __restrict__ stencil,
+                                  void* __restrict__ user_data,
+                                  column_device_view_core const* __restrict__ input_cols,
+                                  mutable_column_device_view_core const* __restrict__ output_cols)
 {
-  auto const start        = cudf::detail::grid_1d::global_thread_id();
-  auto const stride       = cudf::detail::grid_1d::grid_stride();
-  auto const size         = outputs[0].size();
-  auto const output_scale = static_cast<numeric::scale_type>(outputs[0].type().scale());
+  // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
+  auto start  = detail::grid_1d::global_thread_id();
+  auto stride = detail::grid_1d::grid_stride();
 
-  for (auto i = start; i < size; i += stride) {
+  for (auto element_idx = start; element_idx < row_size; element_idx += stride) {
     if constexpr (is_null_aware == null_aware::NO) {
-      if constexpr (may_evaluate_null) {
-        if (Out::is_null(outputs, i)) { continue; }
-      }
+      if (stencil != nullptr && !bit_is_set(stencil, element_idx)) { continue; }
 
-      typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
+      auto ins = InputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, element_idx)...}; });
 
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&result, In::element(inputs, i)...);
-      }
+      auto outs = OutputAccessors::map([&]<typename... A>() {
+        return cuda::std::tuple{A::output_arg(output_cols, element_idx)...};
+      });
 
-      Out::assign(outputs, i, result);
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-    } else {  // is_null_aware == null_aware::YES
-      cuda::std::optional<typename Out::type> result{
-        typename Out::type{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}}};
+      execute_transform_op<has_user_data>(
+        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
 
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::nullable_element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&result, In::nullable_element(inputs, i)...);
-      }
+      OutputAccessors::map([&]<typename... A>() {
+        (A::assign(output_cols, element_idx, cuda::std::get<A::index>(outs)), ...);
+      });
 
-      Out::assign(outputs, i, *result);
+    } else {
+      auto active_mask = __ballot_sync(0xFFFF'FFFFU, element_idx < row_size);
 
-      if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
-    }
-  }
-}
+      auto ins = InputAccessors::map([&]<typename... A>() {
+        return cuda::std::tuple{A::nullable_element(input_cols, element_idx)...};
+      });
 
-template <null_aware is_null_aware,
-          bool may_evaluate_null,
-          bool has_user_data,
-          typename Out,
-          typename... In>
-CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
-                             cudf::column_device_view_core const* inputs,
-                             bool* intermediate_null_mask,
-                             void* user_data)
-{
-  auto const start  = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const size   = outputs[0].size();
+      auto outs = OutputAccessors::map([&]<typename... A>() {
+        return cuda::std::tuple{A::null_output_arg(output_cols, element_idx)...};
+      });
 
-  for (auto i = start; i < size; i += stride) {
-    if constexpr (is_null_aware == null_aware::NO) {
-      if constexpr (may_evaluate_null) {
-        if (Out::is_null(outputs, i)) { continue; }
-      }
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
-      }
-    } else {  // is_null_aware == null_aware::YES
-      cuda::std::optional<typename Out::type> result;
+      execute_transform_op<has_user_data>(
+        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
 
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::nullable_element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&result, In::nullable_element(inputs, i)...);
-      }
-
-      Out::assign(outputs, i, *result);
-
-      if constexpr (may_evaluate_null) { intermediate_null_mask[i] = result.has_value(); }
+      OutputAccessors::map([&]<typename... A>() {
+        (A::assign(output_cols, element_idx, *cuda::std::get<A::index>(outs)), ...);
+        (warp_compact_validity<A>(
+           active_mask, output_cols, element_idx, cuda::std::get<A::index>(outs).has_value()),
+         ...);
+      });
     }
   }
 }
 
 }  // namespace jit
-}  // namespace transformation
 }  // namespace cudf

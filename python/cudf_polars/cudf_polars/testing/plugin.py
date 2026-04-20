@@ -12,7 +12,7 @@ import pytest
 
 import polars
 
-from cudf_polars.utils.config import StreamingFallbackMode
+from cudf_polars.utils.config import Runtime, StreamingFallbackMode
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -46,6 +46,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "to run most tests with multiple partitions."
         ),
     )
+    group.addoption(
+        "--runtime",
+        action="store",
+        default="tasks",
+        choices=("tasks", "rapidsmpf"),
+        help="Runtime to use for the 'streaming' executor.",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -53,6 +60,7 @@ def pytest_configure(config: pytest.Config) -> None:
     no_fallback = config.getoption("--cudf-polars-no-fallback")
     executor = config.getoption("--executor")
     blocksize_mode = config.getoption("--blocksize-mode")
+    runtime = config.getoption("--runtime")
     if no_fallback:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
@@ -68,6 +76,7 @@ def pytest_configure(config: pytest.Config) -> None:
         executor_options["target_partition_size"] = 10
         # We expect many tests to fall back, so silence the warnings
         executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
+        executor_options["runtime"] = Runtime[runtime.upper()]
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
         polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
@@ -254,6 +263,146 @@ STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
     # Add tests that are expected to fail with the streaming executor
 }
 
+# Generally skip for:
+# 1) Tests that are too slow with --blocksize-mode small due to many small partitions for large data
+# 2) Tests that fail during cudf_polars execution and segfaults later due to https://github.com/rapidsai/cudf/issues/22138
+RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q4": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q5": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q7": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_group_by.py::test_groupby_h2oai_q10": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_join_where.py::test_single_inequality": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_join_where.py::test_non_strict_inequalities": "Too slow with --blocksize-mode small",
+    "tests/benchmark/test_join_where.py::test_strict_inequalities": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_partition.py::test_partition_approximate_size": "Too slow for CI",
+    "tests/unit/io/test_lazy_parquet.py::test_parquet_many_row_groups_12297": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-async]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan[single-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-async]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[glob-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-async]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter[single-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-async]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[glob-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_filter_and_limit[single-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-async]": "Takes >60 seconds to run locally",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --blocksize-mode small",
+    "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --blocksize-mode small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --blocksize-mode small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --blocksize-mode small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --blocksize-mode small",
+    "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
+    "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-10432-True]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-10432-True]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-True]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Categorical-10432-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[String-1056-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Boolean-1056-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-1056-False]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[Int32]": "Too slow with --blocksize-mode small",
+    "tests/unit/operations/test_group_by.py::test_overflow_mean_partitioned_group_by_5194[UInt32]": "Too slow with --blocksize-mode small",
+    "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort_varying_order_and_dtypes[sort_by0]": "Too slow for CI",
+}
+
+# xfail for tests that produce different results than CPU Polars
+RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072",
+    "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072",
+    "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
+    "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072",
+    "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072",
+    "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
+    "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
+    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/rapidsai/cudf/issues/22075",
+    "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
+    "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/rapidsai/cudf/issues/22084",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes12]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes13]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes14]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes15]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes17]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes18]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes19]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes20]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes21]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes22]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes23]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes25]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes26]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes27]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes28]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes38]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes39]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes40]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes41]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes42]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes43]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes12]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes13]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes14]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes15]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes17]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes18]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes19]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes20]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes21]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes22]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes23]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes25]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes26]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes27]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes28]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes38]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes39]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes40]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes41]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes42]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes43]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_order": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_join_panic_on_binary_expr_5915": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/operations/test_join.py::test_join_rewrite_panic_23307": "https://github.com/rapidsai/cudf/issues/22085",
+    "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
+    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "https://github.com/rapidsai/cudf/issues/22074",
+    "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
+    "tests/unit/sql/test_joins.py::test_join_anti_semi[SELECT * FROM tbl_a LEFT SEMI JOIN tbl_b USING (a)-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df10-df20-df1.category = df2.category AND (df1.code * 2) = df2.code_doubled-df1.name, df1.code, df2.type-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
+    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df11-df21-df1.id = df2.id AND LOWER(df1.name) = df2.match-df1.id, df1.name, df2.match-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
+    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[LOWER(df1.text) = df2.text-2]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[SUBSTR(df1.code, 1, 2) = SUBSTR(df2.code, 1, 2)-3]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[LENGTH(df1.text) = LENGTH(df2.text)-5]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_expression_with_literals[df10-df20-df1.id = df2.id AND df1.multiplier * 5 = df2.base AND df1.category = 'A'-df1.id, df1.multiplier, df2.base-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
+    "tests/unit/sql/test_joins.py::test_join_on_expression_with_literals[df11-df21-df1.id = df2.id AND (df1.value * 2) = df2.target AND df1.id = 2-df1.id, df1.value, df2.target-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df12-df22-df1.x * 2 = df2.a AND df1.y = df2.b-df1.x, df1.y, df2.a-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df10-df20-LOWER(TRIM(df1.text)) = df2.text-expected0]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df11-df21-LOWER(SUBSTR(df1.code,1,6)) = df2.code-expected1]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df12-df22-LENGTH(df1.name) = df2.len-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_reversed_constraint_order[df12-df22-(df1.a + df1.a) = df2.b-df2.b = (df1.a + df1.a)-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df11-df21-x + y = sum-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df12-df22-LENGTH(name) = len-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_qualify.py::test_qualify_constraints[above_avg]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_constraints[equals_max]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_constraints[compound_expr]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_distinct": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[sum_window]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[count_window]": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_multiple_clauses": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_with_internal_cumulative_sum": "https://github.com/rapidsai/cudf/issues/22050",
+    "tests/unit/sql/test_qualify.py::test_qualify_with_where_clause": "https://github.com/rapidsai/cudf/issues/22050",
+}
+
 
 def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
@@ -262,14 +411,26 @@ def pytest_collection_modifyitems(
     if config.getoption("--cudf-polars-no-fallback"):
         # Don't xfail tests if running without fallback
         return
+    with_rapidsmpf = config.getoption("--runtime") == "rapidsmpf"
+    with_streaming = config.getoption("--executor") == "streaming"
     for item in items:
-        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None:
+        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
+            with_rapidsmpf
+            and (reason := RAPIDSMPF_TESTS_TO_SKIP.get(item.nodeid, None)) is not None
+        ):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (
-            config.getoption("--executor") == "streaming"
+            with_rapidsmpf
+            and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            is not None
+        ):
+            item.add_marker(pytest.mark.xfail(reason=r_reason))
+        elif (
+            with_streaming
             and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
             is not None
         ):
+            # Also sets --runtime=rapidsmpf also sets --executor=streaming, so check last
             item.add_marker(pytest.mark.xfail(reason=s_reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):
