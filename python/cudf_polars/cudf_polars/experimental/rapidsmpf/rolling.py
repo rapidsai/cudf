@@ -211,51 +211,47 @@ def _fused_expanded_zlice(
     return (center_begin + lo, hi - lo)
 
 
-def _message_peek_copy(msg: Message, br: Any) -> Message:
-    """Copy a table message so ``from_message`` can run without draining the original."""
-    res = br.reserve_device_memory_and_spill(msg.copy_cost(), allow_overbooking=True)
-    return msg.copy(res)
-
-
-def _chunk_index_int_bounds_from_msg(
+def _msg_to_df(
     msg: Message,
     br: Any,
+    col_names: list[str],
+    col_dtypes: list[Any],
+) -> tuple[int, DataFrame]:
+    """Decode a TableChunk message into (sequence_number, DataFrame)."""
+    seq = msg.sequence_number
+    chunk = TableChunk.from_message(msg, br)
+    chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
+    return seq, DataFrame.from_table(
+        chunk.table_view(), col_names, col_dtypes, stream=chunk.stream
+    )
+
+
+def _chunk_index_int_bounds_from_df(
+    df: DataFrame,
     *,
     index_col_idx: int,
     index_dtype: plc.DataType,
 ) -> tuple[int, int] | None:
-    """Consume message and return index maxima for one chunk."""
-    chunk = TableChunk.from_message(msg, br)
-    chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-    table = chunk.table_view()
-    if table.num_rows() == 0:
+    if df.num_rows == 0:
         return None
-    stream = chunk.stream
-    idx = _get_idx_col(table, index_col_idx, index_dtype, stream)
-    return _minmax_py(idx, _INT64, stream, assume_sorted=True)
+    idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
+    return _minmax_py(idx, _INT64, df.stream, assume_sorted=True)
 
 
-def _chunk_index_ts_bounds_from_msg(
-    msg: Message,
-    br: Any,
+def _chunk_index_ts_bounds_from_df(
+    df: DataFrame,
     *,
     index_col_idx: int,
     index_dtype: plc.DataType,
 ) -> tuple[plc.Scalar, plc.Scalar] | None:
-    """Min and max index as scalars. Returns ``None`` if empty. Consumes ``msg``."""
-    chunk = TableChunk.from_message(msg, br)
-    chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-    table = chunk.table_view()
-    if table.num_rows() == 0:
+    if df.num_rows == 0:
         return None
-    stream = chunk.stream
-    idx = _get_idx_col(table, index_col_idx, index_dtype, stream)
-    return _minmax_scalars(idx, index_dtype, stream, assume_sorted=True)
+    idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
+    return _minmax_scalars(idx, index_dtype, df.stream, assume_sorted=True)
 
 
 def _int_right_halo_covers_prefetch(
-    prefetch: deque[tuple[_RollingStreamChunkMeta, Message]],
-    br: Any,
+    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
     *,
     index_col_idx: int,
     index_dtype: plc.DataType,
@@ -265,12 +261,9 @@ def _int_right_halo_covers_prefetch(
     """Whether the last prefetched chunk already reaches the right halo upper bound."""
     if not prefetch:
         return False
-    _, last_msg = prefetch[-1]
-    bounds = _chunk_index_int_bounds_from_msg(
-        _message_peek_copy(last_msg, br),
-        br,
-        index_col_idx=index_col_idx,
-        index_dtype=index_dtype,
+    _, _, last_df = prefetch[-1]
+    bounds = _chunk_index_int_bounds_from_df(
+        last_df, index_col_idx=index_col_idx, index_dtype=index_dtype
     )
     assert bounds is not None
     return bounds[1] >= chunk_mx + lookahead
@@ -293,28 +286,28 @@ async def _recv_stream_chunk_pair(
 async def _recv_one_into_prefetch(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, Message]],
+    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    br: Any,
+    col_names: list[str],
+    col_dtypes: list[Any],
 ) -> bool:
-    """Append one chunk to ``prefetch``. Returns ``False`` at end of stream."""
+    """Decode one chunk and append to ``prefetch``. Returns ``False`` at end of stream."""
     pair = await _recv_stream_chunk_pair(context, ch_in)
     if pair is None:
         return False
-    prefetch.append(pair)
+    meta, msg = pair
+    seq, df = _msg_to_df(msg, br, col_names, col_dtypes)
+    prefetch.append((meta, seq, df))
     return True
-
-
-def _peek_n_rows_from_message(msg: Message, br: Any) -> int:
-    """Row count for ``msg`` without taking ownership (uses a copy)."""
-    work = _message_peek_copy(msg, br)
-    chunk = TableChunk.from_message(work, br)
-    chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-    return chunk.table_view().num_rows()
 
 
 async def _extend_prefetch_for_int_lookahead(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, Message]],
+    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    br: Any,
+    col_names: list[str],
+    col_dtypes: list[Any],
     *,
     chunk_mx: int,
     lookahead: int,
@@ -322,38 +315,40 @@ async def _extend_prefetch_for_int_lookahead(
     index_dtype: plc.DataType,
 ) -> None:
     """Buffer enough int-index successors for the right halo or until the stream ends."""
-    br = context.br()
     threshold = chunk_mx + lookahead
-    if not prefetch and not await _recv_one_into_prefetch(context, ch_in, prefetch):
+    if not prefetch and not await _recv_one_into_prefetch(
+        context, ch_in, prefetch, br, col_names, col_dtypes
+    ):
         return
-    first_bounds = _chunk_index_int_bounds_from_msg(
-        _message_peek_copy(prefetch[0][1], br),
-        br,
-        index_col_idx=index_col_idx,
-        index_dtype=index_dtype,
+    _, _, first_df = prefetch[0]
+    first_bounds = _chunk_index_int_bounds_from_df(
+        first_df, index_col_idx=index_col_idx, index_dtype=index_dtype
     )
     assert first_bounds is not None, "prefetch successor chunk must be non-empty"
-    mn0, _ = first_bounds
-    if mn0 > threshold:
+    if first_bounds[0] > threshold:
         return
     while True:
         if _int_right_halo_covers_prefetch(
             prefetch,
-            br,
             index_col_idx=index_col_idx,
             index_dtype=index_dtype,
             chunk_mx=chunk_mx,
             lookahead=lookahead,
         ):
             return
-        if not await _recv_one_into_prefetch(context, ch_in, prefetch):
+        if not await _recv_one_into_prefetch(
+            context, ch_in, prefetch, br, col_names, col_dtypes
+        ):
             return
 
 
 async def _extend_prefetch_for_ts_lookahead(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, Message]],
+    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    br: Any,
+    col_names: list[str],
+    col_dtypes: list[Any],
     *,
     chunk_mx_s: plc.Scalar,
     lookahead: int,
@@ -362,7 +357,6 @@ async def _extend_prefetch_for_ts_lookahead(
     cur_stream: Any,
 ) -> None:
     """Buffer enough timestamp-index successors for the right halo or until the stream ends."""
-    br = context.br()
     dur_dt = _duration_dtype_for_timestamp(index_dtype)
     lookahead_s = plc.Scalar.from_py(lookahead, dur_dt, stream=cur_stream)
     upper_s = _scalar_binop_scalar(
@@ -372,13 +366,13 @@ async def _extend_prefetch_for_ts_lookahead(
         index_dtype,
         cur_stream,
     )
-    if not prefetch and not await _recv_one_into_prefetch(context, ch_in, prefetch):
+    if not prefetch and not await _recv_one_into_prefetch(
+        context, ch_in, prefetch, br, col_names, col_dtypes
+    ):
         return
-    b0 = _chunk_index_ts_bounds_from_msg(
-        _message_peek_copy(prefetch[0][1], br),
-        br,
-        index_col_idx=index_col_idx,
-        index_dtype=index_dtype,
+    _, _, first_df = prefetch[0]
+    b0 = _chunk_index_ts_bounds_from_df(
+        first_df, index_col_idx=index_col_idx, index_dtype=index_dtype
     )
     assert b0 is not None, "prefetch successor chunk must be non-empty"
     mn0_s, _ = b0
@@ -391,12 +385,9 @@ async def _extend_prefetch_for_ts_lookahead(
     ).to_py(stream=cur_stream):
         return
     while True:
-        _, last_msg = prefetch[-1]
-        last_bounds = _chunk_index_ts_bounds_from_msg(
-            _message_peek_copy(last_msg, br),
-            br,
-            index_col_idx=index_col_idx,
-            index_dtype=index_dtype,
+        _, _, last_df = prefetch[-1]
+        last_bounds = _chunk_index_ts_bounds_from_df(
+            last_df, index_col_idx=index_col_idx, index_dtype=index_dtype
         )
         assert last_bounds is not None
         _, last_mx_s = last_bounds
@@ -408,40 +399,44 @@ async def _extend_prefetch_for_ts_lookahead(
             cur_stream,
         ).to_py(stream=cur_stream):
             return
-        if not await _recv_one_into_prefetch(context, ch_in, prefetch):
+        if not await _recv_one_into_prefetch(
+            context, ch_in, prefetch, br, col_names, col_dtypes
+        ):
             return
 
 
 async def _ensure_successor_prefetched(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, Message]],
+    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    br: Any,
+    col_names: list[str],
+    col_dtypes: list[Any],
 ) -> None:
     """When ``lookahead == 0``, peek one successor into ``prefetch`` if none are buffered."""
     if prefetch:
         return
-    await _recv_one_into_prefetch(context, ch_in, prefetch)
+    await _recv_one_into_prefetch(context, ch_in, prefetch, br, col_names, col_dtypes)
 
 
 async def _ensure_right_halo_prefetched(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, Message]],
-    cur_msg: Message,
+    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    cur_df: DataFrame,
     br: Any,
     *,
     is_int_index: bool,
     index_col_idx: int,
     index_dtype: plc.DataType,
     lookahead: int,
+    col_names: list[str],
+    col_dtypes: list[Any],
 ) -> bool:
     """Fill ``prefetch`` for the right halo. Returns ``False`` if the center chunk is empty."""
     if is_int_index:
-        cur_bounds = _chunk_index_int_bounds_from_msg(
-            _message_peek_copy(cur_msg, br),
-            br,
-            index_col_idx=index_col_idx,
-            index_dtype=index_dtype,
+        cur_bounds = _chunk_index_int_bounds_from_df(
+            cur_df, index_col_idx=index_col_idx, index_dtype=index_dtype
         )
         if cur_bounds is None:
             return False
@@ -449,44 +444,42 @@ async def _ensure_right_halo_prefetched(
             context,
             ch_in,
             prefetch,
+            br,
+            col_names,
+            col_dtypes,
             chunk_mx=cur_bounds[1],
             lookahead=lookahead,
             index_col_idx=index_col_idx,
             index_dtype=index_dtype,
         )
     else:
-        cur_peek_chunk = TableChunk.from_message(_message_peek_copy(cur_msg, br), br)
-        cur_peek_chunk = cur_peek_chunk.make_available_and_spill(
-            br, allow_overbooking=True
-        )
-        peek_table = cur_peek_chunk.table_view()
-        if peek_table.num_rows() == 0:
+        if cur_df.num_rows == 0:
             return False
-        peek_stream = cur_peek_chunk.stream
-        peek_idx = _get_idx_col(peek_table, index_col_idx, index_dtype, peek_stream)
+        cur_idx = _get_idx_col(cur_df.table, index_col_idx, index_dtype, cur_df.stream)
         _, chunk_mx_s = _minmax_scalars(
-            peek_idx, index_dtype, peek_stream, assume_sorted=True
+            cur_idx, index_dtype, cur_df.stream, assume_sorted=True
         )
         await _extend_prefetch_for_ts_lookahead(
             context,
             ch_in,
             prefetch,
+            br,
+            col_names,
+            col_dtypes,
             chunk_mx_s=chunk_mx_s,
             lookahead=lookahead,
             index_dtype=index_dtype,
             index_col_idx=index_col_idx,
-            cur_stream=peek_stream,
+            cur_stream=cur_df.stream,
         )
     return True
 
 
 def _prepare_expanded_rolling_frame(
     left_ctx_df: DataFrame | None,
-    right_halo_df: DataFrame | None,
     *,
-    context: Context,
-    cur_msg: Message,
-    next_msgs: Sequence[Message] | None,
+    cur_df: DataFrame,
+    next_dfs: Sequence[DataFrame] | None,
     is_last_chunk: bool,
     ir_context: IRExecutionContext,
     index_col_idx: int,
@@ -497,24 +490,19 @@ def _prepare_expanded_rolling_frame(
     base_dtypes: list[Any],
     is_local_rank_chunk: bool,
 ) -> tuple[DataFrame, int, int, DataFrame | None] | None:
+    """Build the ``[left | center | right]`` frame. Returns updated ``left_ctx`` built from ``cur_df``."""
     if not is_local_rank_chunk:
         raise NotImplementedError(
             "Non-local rank boundary chunks are not supported for rolling yet."
         )
 
-    br = context.br()
-
-    chunk = TableChunk.from_message(cur_msg, br)
-    chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-    chunk_table = chunk.table_view()
-    n_chunk_rows = chunk_table.num_rows()
+    chunk_df = cur_df
+    n_chunk_rows = chunk_df.num_rows
     if n_chunk_rows == 0:
         return None
 
-    chunk_stream = chunk.stream
-    chunk_df = DataFrame.from_table(
-        chunk_table, base_col_names, base_dtypes, stream=chunk_stream
-    )
+    chunk_table = chunk_df.table
+    chunk_stream = chunk_df.stream
     is_int_index = index_dtype.id() == plc.TypeId.INT64
 
     # Trim halos using index bounds from ``rolling_stream_halo_extents`` (lookback /
@@ -584,20 +572,13 @@ def _prepare_expanded_rolling_frame(
 
     if lookahead > 0:
         if is_last_chunk:
-            right_ctx_df = right_halo_df
+            right_ctx_df = None
         else:
-            assert next_msgs is not None
+            assert next_dfs is not None
             right_tables_filtered: list[DataFrame] = []
-            for next_msg in next_msgs:
-                next_chunk = TableChunk.from_message(next_msg, br)
-                next_chunk = next_chunk.make_available_and_spill(
-                    br, allow_overbooking=True
-                )
-                next_table = next_chunk.table_view()
-                next_stream = next_chunk.stream
-                next_df = DataFrame.from_table(
-                    next_table, base_col_names, base_dtypes, stream=next_stream
-                )
+            for next_df in next_dfs:
+                next_table = next_df.table
+                next_stream = next_df.stream
                 next_idx = _get_idx_col(
                     next_table, index_col_idx, index_dtype, next_stream
                 )
@@ -665,7 +646,7 @@ def _prepare_expanded_rolling_frame(
                         stream=s,
                     )
     else:
-        right_ctx_df = right_halo_df if is_last_chunk else None
+        right_ctx_df = None
     n_left = left_ctx_df.num_rows if left_ctx_df is not None else 0
     dfs = [df for df in (left_ctx_df, chunk_df, right_ctx_df) if df is not None]
     if len(dfs) == 1:
@@ -679,7 +660,15 @@ def _prepare_expanded_rolling_frame(
                 stream=s,
             )
 
-    return combined_df, n_left, n_chunk_rows, left_ctx_df
+    left_ctx_next = _append_left_context_row(
+        left_ctx_df,
+        chunk_df,
+        lookback=lookback,
+        ir_context=ir_context,
+        col_names=base_col_names,
+        col_dtypes=base_dtypes,
+    )
+    return combined_df, n_left, n_chunk_rows, left_ctx_next
 
 
 def _append_left_context_row(
@@ -761,10 +750,9 @@ async def extend_chunks(
     base_col_names: list[str],
     base_dtypes: list[Any],
 ) -> None:
-    """Prefetch, expand frames, fuse global ``ir.zlice`` with center punch-out; ship to eval."""
-    prefetch: deque[tuple[_RollingStreamChunkMeta, Message]] = deque()
+    """Prefetch lookahead chunks, build expanded frames, fuse zlice, and ship to eval."""
+    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]] = deque()
     left_ctx_df: DataFrame | None = None
-    right_halo_df: DataFrame | None = None
     prev_max: int | None = None
     n_center_prior = 0
     br = context.br()
@@ -772,48 +760,46 @@ async def extend_chunks(
 
     while True:
         if prefetch:
-            cur_meta, cur_msg = prefetch.popleft()
+            cur_meta, cur_seq, cur_df = prefetch.popleft()
         else:
-            if (cur_meta_msg := await ch_in.recv_metadata(context)) is None:
+            if (pair := await _recv_stream_chunk_pair(context, ch_in)) is None:
                 break
-            cur_meta = ArbitraryChunk.from_message(cur_meta_msg).release()
-            assert isinstance(cur_meta, _RollingStreamChunkMeta)
-            cur_msg = await ch_in.recv(context)
-            assert cur_msg is not None, "Expected data message after metadata."
-
-        cur_seq = cur_msg.sequence_number
+            cur_meta, cur_msg = pair
+            cur_seq, cur_df = _msg_to_df(cur_msg, br, base_col_names, base_dtypes)
 
         if lookahead > 0:
             if not await _ensure_right_halo_prefetched(
                 context,
                 ch_in,
                 prefetch,
-                cur_msg,
+                cur_df,
                 br,
                 is_int_index=is_int_index,
                 index_col_idx=index_col_idx,
                 index_dtype=index_dtype,
                 lookahead=lookahead,
+                col_names=base_col_names,
+                col_dtypes=base_dtypes,
             ):
                 continue
         else:
-            if _peek_n_rows_from_message(cur_msg, br) == 0:
-                continue
-            await _ensure_successor_prefetched(context, ch_in, prefetch)
+            if cur_df.num_rows == 0:
+                continue  # no center rows — skip without emitting to eval_and_send
+            await _ensure_successor_prefetched(
+                context, ch_in, prefetch, br, base_col_names, base_dtypes
+            )
 
         is_last_chunk = not prefetch
-        next_msgs: Sequence[Message] | None = (
-            tuple(_message_peek_copy(m, br) for _, m in prefetch)
+        next_dfs: Sequence[DataFrame] | None = (
+            tuple(df for _, _, df in prefetch)
             if lookahead > 0 and not is_last_chunk
             else None
         )
 
         prep = _prepare_expanded_rolling_frame(
             left_ctx_df,
-            right_halo_df,
-            context=context,
-            cur_msg=cur_msg,
-            next_msgs=next_msgs,
+            cur_df=cur_df,
+            next_dfs=next_dfs,
             is_last_chunk=is_last_chunk,
             ir_context=ir_context,
             index_col_idx=index_col_idx,
@@ -842,16 +828,6 @@ async def extend_chunks(
             ir,
             index_col_idx=index_col_idx,
             seq=cur_seq,
-        )
-        n_c = ce - cb
-        center_only = combined_df.slice((cb, n_c)).select(base_col_names)
-        left_ctx_df = _append_left_context_row(
-            left_ctx_df,
-            center_only,
-            lookback=lookback,
-            ir_context=ir_context,
-            col_names=base_col_names,
-            col_dtypes=base_dtypes,
         )
         await ch_to_eval.send_metadata(
             context,
