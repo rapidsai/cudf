@@ -449,8 +449,7 @@ struct StringsCopyIfElseTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsCopyIfElseTest, CopyIfElse)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   std::vector<char const*> h_strings1{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), valids);
@@ -476,8 +475,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   std::vector<char const*> h_string1{"eee"};
   cudf::string_scalar strings1{h_string1[0]};
@@ -504,8 +502,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   std::vector<char const*> h_string1{"eee"};
   cudf::string_scalar strings1{h_string1[0]};
@@ -531,8 +528,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
   std::vector<char const*> h_string1{"eee"};
   cudf::string_scalar string1{h_string1[0]};

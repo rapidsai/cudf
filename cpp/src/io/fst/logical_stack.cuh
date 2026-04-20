@@ -9,6 +9,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -537,7 +538,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     stream));
 
   // Fill the output tape with read-symbol
-  thrust::fill(rmm::exec_policy_nosync(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                thrust::device_ptr<StackSymbolT>{d_top_of_stack},
                thrust::device_ptr<StackSymbolT>{d_top_of_stack + num_symbols_out},
                read_symbol);
@@ -548,7 +549,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // Scatter the stack symbols to the output tape (spots that are not scattered to have been
   // pre-filled with the read-symbol)
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   kv_op_to_stack_sym_it,
                   kv_op_to_stack_sym_it + num_symbols_in,
                   d_symbol_positions_db.Current(),

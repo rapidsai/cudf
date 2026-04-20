@@ -147,7 +147,7 @@ struct normalize_nans_and_zeros_kernel_forwarder {
                   rmm::cuda_stream_view stream)
     requires(std::is_floating_point_v<T>)
   {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<cudf::size_type>{0},
                       cuda::counting_iterator{in.size()},
                       out.head<T>(),
