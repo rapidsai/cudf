@@ -54,7 +54,7 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
     data_type{type_id::INT32}, total_count, rmm::device_buffer{0, stream, mr}, 0, stream, mr);
 
   // fill output column with position values
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>{0},
                     cuda::counting_iterator<size_type>{total_count},
                     results->mutable_view().begin<int32_t>(),
@@ -67,11 +67,12 @@ std::unique_ptr<column> find_multiple(strings_column_view const& input,
                     });
   results->set_null_count(0);
 
-  auto offsets = cudf::detail::sequence(strings_count + 1,
-                                        numeric_scalar<size_type>(0, true, stream),
-                                        numeric_scalar<size_type>(targets_count, true, stream),
-                                        stream,
-                                        mr);
+  auto offsets = cudf::detail::sequence(
+    strings_count + 1,
+    numeric_scalar<size_type>(0, true, stream, cudf::get_current_device_resource_ref()),
+    numeric_scalar<size_type>(targets_count, true, stream, cudf::get_current_device_resource_ref()),
+    stream,
+    mr);
   return make_lists_column(
     strings_count, std::move(offsets), std::move(results), 0, rmm::device_buffer{0, stream, mr});
 }

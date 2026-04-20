@@ -5,11 +5,13 @@
 from __future__ import annotations
 
 import contextlib
+from unittest.mock import patch
 
 import pytest
 
 import polars as pl
 
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -308,3 +310,24 @@ def test_groupby_agg_config_options(df, op, keys, engine):
 def test_groupby_count_type_mismatch(df, engine):
     q = df.group_by("key", maintain_order=True).agg(pl.col("value").count())
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"target_partition_size": 10, "max_rows_per_partition": 5}}],
+    indirect=True,
+)
+def test_shuffle_reduce_insert_finished_called_on_oom(engine):
+    # Tests that an exception raised inside insert_hash() must not leave the
+    # C++ ShufflerAsync without insert_finished() being called.
+
+    def foo(*args, **kwargs):
+        raise MemoryError("OOM in insert_hash()")
+
+    df = pl.LazyFrame({"a": range(10), "b": range(10)})
+    with (
+        patch.object(ShuffleManager.Inserter, "insert_hash", foo),
+        pytest.raises(ExceptionGroup) as exc_info,
+    ):
+        df.group_by("a").agg(pl.col("b").sum()).collect(engine=engine)
+    assert any("OOM in insert_hash" in str(e) for e in exc_info.value.exceptions)

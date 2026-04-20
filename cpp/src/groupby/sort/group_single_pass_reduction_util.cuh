@@ -156,14 +156,15 @@ struct group_reduction_functor<
 
     // Perform segmented reduction.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            inp_iter,
-                            cuda::make_discard_iterator(),
-                            out_iter,
-                            cuda::std::equal_to{},
-                            binop);
+      thrust::reduce_by_key(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        group_labels.data(),
+        group_labels.data() + group_labels.size(),
+        inp_iter,
+        cuda::make_discard_iterator(),
+        out_iter,
+        cuda::std::equal_to{},
+        binop);
     };
 
     auto const d_values_ptr = column_device_view::create(values, stream);
@@ -219,14 +220,15 @@ struct group_reduction_functor<
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            inp_iter,
-                            cuda::make_discard_iterator(),
-                            out_iter,
-                            cuda::std::equal_to{},
-                            binop);
+      thrust::reduce_by_key(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        group_labels.data(),
+        group_labels.data() + group_labels.size(),
+        inp_iter,
+        cuda::make_discard_iterator(),
+        out_iter,
+        cuda::std::equal_to{},
+        binop);
     };
 
     auto const count_iter   = cuda::counting_iterator<ResultType>{0};

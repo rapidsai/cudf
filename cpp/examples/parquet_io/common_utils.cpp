@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -90,8 +90,7 @@ void check_tables_equal(cudf::table_view const& lhs_table,
   try {
     // Left anti-join the original and transcoded tables identical tables should not throw an
     // exception and return an empty indices vector
-    cudf::filtered_join join_obj(
-      lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
+    cudf::filtered_join join_obj(lhs_table, cudf::null_equality::EQUAL, stream);
     auto const indices = join_obj.anti_join(rhs_table, stream);
 
     // No exception thrown, check indices

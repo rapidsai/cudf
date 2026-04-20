@@ -16,6 +16,7 @@ from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expr import (
     Agg,
     BinOp,
+    BooleanFunction,
     Cast,
     Col,
     Len,
@@ -67,9 +68,9 @@ class _StructCreate(Expr):
         """Evaluate this expression given a dataframe for context."""
         child_columns = [child.evaluate(df, context=context) for child in self.children]
         # struct_from_children requires all children to have equal null counts.
-        # Strip null masks from all children: the only nullable field is mean
-        # (null when count=0), and MERGE_M2 skips count=0 rows before reading
-        # MEAN or M2, so the underlying values at those positions are never used.
+        # Strip null masks from all children.  MERGE_M2 uses count to decide
+        # whether to read MEAN or M2: it skips rows where count=0, so the
+        # underlying values at those positions are never used.
         return Column(
             plc.Column.struct_from_children(
                 [c.obj.with_mask(None, 0) for c in child_columns]
@@ -209,6 +210,7 @@ def decompose(
             (child,) = expr.children
             f64 = DataType(pl.Float64())
             i64 = DataType(pl.Int64())
+            bool_dtype = DataType(pl.Boolean())
             struct_dtype = DataType(
                 pl.Struct(
                     [
@@ -218,30 +220,45 @@ def decompose(
                     ]
                 )
             )
-            count_name = f"{next(names)}__m2_count"
-            mean_name = f"{next(names)}__m2_mean"
-            m2_name = f"{next(names)}__m2_val"
             struct_name = f"{next(names)}__m2_struct"
+            # Build the per-row initial Welford state (n=1, mean=value, M2=0)
+            # for each non-null input row.  For a single observation these
+            # values are exact: M2=0 by definition, and M2 accumulates through
+            # merge_m2 as states are combined across the group.
+            # See: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+            # For null rows, count=0 and mean/m2 are null; _StructCreate strips
+            # null masks before packing, so their underlying values are
+            # unspecified.  MERGE_M2 checks count first and skips count=0 rows,
+            # so those values are never read.
+            welford_state = _StructCreate(
+                struct_dtype,
+                Cast(
+                    i64,
+                    False,  # noqa: FBT003
+                    BooleanFunction(
+                        bool_dtype, BooleanFunction.Name.IsNotNull, (), child
+                    ),
+                ),
+                Cast(f64, False, child),  # noqa: FBT003
+                BinOp(
+                    f64,
+                    plc.binaryop.BinaryOperator.MUL,
+                    Cast(f64, False, child),  # noqa: FBT003
+                    Literal(f64, 0.0),
+                ),
+            )
             aggregations = [
                 NamedExpr(
-                    count_name,
-                    Agg(i64, "count", False, ExecutionContext.GROUPBY, child),  # noqa: FBT003
-                ),
-                NamedExpr(
-                    mean_name,
-                    Agg(f64, "mean", None, ExecutionContext.GROUPBY, child),
-                ),
-                NamedExpr(
-                    m2_name,
-                    Agg(f64, "m2", None, ExecutionContext.GROUPBY, child),
-                ),
+                    struct_name,
+                    Agg(
+                        struct_dtype,
+                        "merge_m2",
+                        None,
+                        ExecutionContext.GROUPBY,
+                        welford_state,
+                    ),
+                )
             ]
-            struct_expr = _StructCreate(
-                struct_dtype,
-                Cast(i64, False, Col(i64, count_name)),  # noqa: FBT003
-                Col(f64, mean_name),
-                Col(f64, m2_name),
-            )
             reductions = [
                 NamedExpr(
                     struct_name,
@@ -250,7 +267,7 @@ def decompose(
                         "merge_m2",
                         None,
                         ExecutionContext.GROUPBY,
-                        struct_expr,
+                        Col(struct_dtype, struct_name),
                     ),
                 ),
             ]

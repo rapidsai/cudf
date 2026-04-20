@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/debug_utilities.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -189,9 +190,8 @@ TYPED_TEST(FromArrowDeviceTestDurationsTest, DurationTable)
 
 TEST_F(FromArrowDeviceTest, NestedList)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::iterators::nulls_at_multiples_of(3);
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view expected_table_view({col});
 
@@ -253,8 +253,7 @@ TEST_F(FromArrowDeviceTest, StructColumn)
     cudf::test::strings_column_wrapper{
       "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
-  auto str_col2 =
-    cudf::test::strings_column_wrapper{{"CUDF", "ROCKS", "EVERYWHERE"}, {0, 1, 0}}.release();
+  auto str_col2 = cudf::test::strings_column_wrapper{{"", "ROCKS", ""}, {0, 1, 0}}.release();
   int num_rows{str_col->size()};
   auto int_col = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>{{48, 27, 25}}.release();
   auto int_col2 =
