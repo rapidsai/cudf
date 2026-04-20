@@ -311,3 +311,130 @@ def test_binop_flag_propagation_with_operators():
         operator.floordiv,
     ):
         assert op(a, b).flags.allows_duplicate_labels is False
+
+
+def test_series_rename_preserves_flags():
+    s = cudf.Series([0, 1], index=["a", "b"]).set_flags(
+        allows_duplicate_labels=False
+    )
+    assert s.rename("renamed").flags.allows_duplicate_labels is False
+
+
+def test_series_to_frame_preserves_flags():
+    s = cudf.Series([1, 2], name="a").set_flags(allows_duplicate_labels=False)
+    assert s.to_frame().flags.allows_duplicate_labels is False
+
+
+def test_dataframe_getitem_preserves_flags():
+    df = cudf.DataFrame({"A": [1, 2], "B": [3, 4]}).set_flags(
+        allows_duplicate_labels=False
+    )
+    # column-list indexing
+    assert df[["A"]].flags.allows_duplicate_labels is False
+    # scalar column access (returns Series)
+    assert df["A"].flags.allows_duplicate_labels is False
+
+
+def test_dataframe_loc_preserves_flags():
+    df = cudf.DataFrame(
+        {"A": [1, 2], "B": [3, 4]}, index=["x", "y"]
+    ).set_flags(allows_duplicate_labels=False)
+    # scalar row (returns Series)
+    assert df.loc["x"].flags.allows_duplicate_labels is False
+    # list row
+    assert df.loc[["x"]].flags.allows_duplicate_labels is False
+    # scalar row + column list
+    assert df.loc["x", ["A"]].flags.allows_duplicate_labels is False
+
+
+def test_dataframe_iloc_preserves_flags():
+    df = cudf.DataFrame({"A": [1, 2]}).set_flags(allows_duplicate_labels=False)
+    assert df.iloc[[0]].flags.allows_duplicate_labels is False
+
+
+def test_loc_raises_duplicate_label_error():
+    df = cudf.DataFrame({"A": [1, 2]}, index=["a", "b"]).set_flags(
+        allows_duplicate_labels=False
+    )
+    with pytest.raises(DuplicateLabelError):
+        df.loc[["a", "a"]]
+
+
+def test_iloc_raises_duplicate_label_error():
+    df = cudf.DataFrame({"A": [1, 2]}).set_flags(allows_duplicate_labels=False)
+    with pytest.raises(DuplicateLabelError):
+        df.iloc[[0, 0]]
+
+
+@pytest.mark.parametrize(
+    "left_flag, right_flag, expected",
+    [
+        (True, True, True),
+        (True, False, False),
+        (False, True, False),
+        (False, False, False),
+    ],
+)
+def test_concat_flags_anded(frame_or_series, left_flag, right_flag, expected):
+    if frame_or_series is cudf.Series:
+        a = cudf.Series([1], index=["a"]).set_flags(
+            allows_duplicate_labels=left_flag
+        )
+        b = cudf.Series([2], index=["b"]).set_flags(
+            allows_duplicate_labels=right_flag
+        )
+    else:
+        a = cudf.DataFrame({"x": [1]}, index=["a"]).set_flags(
+            allows_duplicate_labels=left_flag
+        )
+        b = cudf.DataFrame({"x": [2]}, index=["b"]).set_flags(
+            allows_duplicate_labels=right_flag
+        )
+    assert cudf.concat([a, b]).flags.allows_duplicate_labels is expected
+
+
+def test_concat_raises_on_duplicate_labels():
+    a = cudf.Series([1], index=["a"]).set_flags(allows_duplicate_labels=False)
+    b = cudf.Series([2], index=["a"]).set_flags(allows_duplicate_labels=False)
+    with pytest.raises(DuplicateLabelError):
+        cudf.concat([a, b])
+
+
+def test_concat_propagates_attrs_only_when_equal():
+    a = cudf.DataFrame({"x": [1]})
+    b = cudf.DataFrame({"x": [2]})
+    a.attrs = {"k": 1}
+    b.attrs = {"k": 1}
+    assert cudf.concat([a, b]).attrs == {"k": 1}
+    b.attrs = {"k": 2}
+    assert cudf.concat([a, b]).attrs == {}
+
+
+def test_set_index_inplace_raises_when_flags_false():
+    df = cudf.DataFrame({"A": [0, 1], "B": [1, 2]}).set_flags(
+        allows_duplicate_labels=False
+    )
+    with pytest.raises(ValueError, match="Cannot specify"):
+        df.set_index("A", inplace=True)
+
+
+def test_reset_index_inplace_raises_when_flags_false():
+    df = cudf.DataFrame({"A": [0, 1]}, index=["a", "b"]).set_flags(
+        allows_duplicate_labels=False
+    )
+    with pytest.raises(ValueError, match="Cannot specify"):
+        df.reset_index(inplace=True)
+
+
+def test_set_index_inplace_ok_when_flags_true():
+    # Sanity: the inplace guard doesn't fire when the flag isn't set.
+    df = cudf.DataFrame({"A": [0, 1], "B": [1, 2]})
+    df.set_index("A", inplace=True)
+    assert list(df.index.to_pandas()) == [0, 1]
+
+
+def test_reset_index_preserves_flags():
+    df = cudf.DataFrame({"A": [0, 1]}, index=["a", "b"]).set_flags(
+        allows_duplicate_labels=False
+    )
+    assert df.reset_index().flags.allows_duplicate_labels is False

@@ -589,6 +589,28 @@ class IndexedFrame(Frame):
         )
         return out
 
+    def _propagate_metadata(self, result: "IndexedFrame") -> "IndexedFrame":
+        """Copy ``attrs`` and ``flags`` from ``self`` onto ``result``.
+
+        Mirrors pandas' ``__finalize__``: ``attrs`` are deep-copied and
+        ``allows_duplicate_labels`` is propagated unchanged. Also performs
+        an :class:`~pandas.errors.DuplicateLabelError` check when
+        ``allows_duplicate_labels`` is ``False`` and ``result`` has duplicate
+        labels on any axis.
+        """
+        result._attrs = copy.deepcopy(self._attrs)
+        result._flags = Flags(
+            result,
+            allows_duplicate_labels=self._flags.allows_duplicate_labels,
+        )
+        if not self._flags.allows_duplicate_labels:
+            for ax in result.axes:
+                if not ax.is_unique:
+                    from pandas.errors import DuplicateLabelError
+
+                    raise DuplicateLabelError(f"Index has duplicates.\n{ax}")
+        return result
+
     @_performance_tracking
     def _get_columns_by_label(self, labels) -> Self:
         """
@@ -596,11 +618,12 @@ class IndexedFrame(Frame):
 
         Akin to cudf.DataFrame(...).loc[:, labels]
         """
-        return self._from_data(
+        out = self._from_data(
             self._data.select_by_label(labels),
             index=self.index,
-            attrs=self.attrs,
         )
+        self._propagate_metadata(out)
+        return out
 
     @_performance_tracking
     def _from_data_like_self(self, data: MutableMapping):
@@ -656,12 +679,9 @@ class IndexedFrame(Frame):
                 index._freq = self.index._freq
 
         data = dict(zip(column_names, data_columns, strict=True))
-        return type(self)._from_data(
-            data,
-            index,
-            attrs=self.attrs,
-            allows_duplicate_labels=self._flags.allows_duplicate_labels,
-        )
+        out = type(self)._from_data(data, index)
+        self._propagate_metadata(out)
+        return out
 
     def __round__(self, digits=0):
         # Shouldn't be added to BinaryOperand

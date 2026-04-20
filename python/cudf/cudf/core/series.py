@@ -1035,7 +1035,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         15      d
         """
         res = self._to_frame(name=name, index=self.index)
-        res._attrs = self.attrs  # type: ignore[has-type]
+        self._propagate_metadata(res)
         return res
 
     @_performance_tracking
@@ -3587,9 +3587,9 @@ class Series(SingleColumnFrame, IndexedFrame):
                 ".rename does not currently support relabeling the index."
             )
         out_data = self._data.copy(deep=copy)
-        return Series._from_data(
-            out_data, self.index, name=index, attrs=self.attrs
-        )
+        out = Series._from_data(out_data, self.index, name=index)
+        self._propagate_metadata(out)
+        return out
 
     @_performance_tracking
     def add_prefix(self, prefix, axis=None):
