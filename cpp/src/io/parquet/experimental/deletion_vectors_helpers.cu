@@ -5,6 +5,8 @@
 
 #include "deletion_vectors_helpers.hpp"
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -20,24 +22,18 @@
 #include <thrust/fill.h>
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 #include <algorithm>
+#include <functional>
+#include <memory>
 #include <numeric>
+#include <queue>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 namespace cudf::io::parquet::experimental {
-
-void chunked_parquet_reader::roaring_bitmap_impl::construct_roaring_bitmap(
-  rmm::mr::polymorphic_allocator<char> const& allocator, rmm::cuda_stream_view stream)
-{
-  if (roaring_bitmap == nullptr) {
-    CUDF_EXPECTS(not roaring_bitmap_data.empty(),
-                 "Encountered empty data while constructing roaring bitmap");
-    roaring_bitmap = std::make_unique<roaring_bitmap_type>(
-      static_cast<cuda::std::byte const*>(roaring_bitmap_data.data()), allocator, stream);
-  }
-}
 
 void prepend_index_column_to_table_metadata(table_metadata& metadata)
 {
@@ -185,22 +181,20 @@ std::unique_ptr<cudf::column> compute_partial_row_index_column(
 namespace {
 
 /**
- * @brief Queries the deletion vectors and writes the result to the output iterator
- *
- * @tparam OutputIterator The output iterator type
+ * @brief Queries the deletion vectors and writes the membership result into the specified BOOL8
+ * mutable column view
  *
  * @param row_index_column Row index column
  * @param deletion_vector_refs Deletion vector refs
  * @param rows_per_deletion_vector Rows per deletion vector
- * @param output Output iterator
+ * @param output BOOL8 mutable column view to receive membership results
  * @param stream CUDA stream to launch the query kernel
  */
-template <typename OutputIterator>
 void query_deletion_vectors(
   cudf::column_view const& row_index_column,
-  cudf::host_span<std::reference_wrapper<roaring_bitmap_type> const> deletion_vector_refs,
+  cudf::host_span<std::reference_wrapper<cudf::roaring_bitmap const> const> deletion_vector_refs,
   cudf::host_span<size_type const> rows_per_deletion_vector,
-  OutputIterator output,
+  cudf::mutable_column_view const& output,
   rmm::cuda_stream_view stream)
 {
   auto const num_rows             = row_index_column.size();
@@ -210,8 +204,7 @@ void query_deletion_vectors(
     CUDF_EXPECTS(
       std::cmp_greater_equal(rows_per_deletion_vector.front(), num_rows),
       "Encountered insufficient deletion vector size to query the entire row index column");
-    deletion_vector_refs.front().get().contains(
-      row_index_column.begin<size_t>(), row_index_column.end<size_t>(), output, stream);
+    deletion_vector_refs.front().get().contains_async(row_index_column, output, stream);
     return;
   }
 
@@ -228,27 +221,28 @@ void query_deletion_vectors(
   constexpr auto stream_fork_threshold = 8;
   if (num_deletion_vectors >= stream_fork_threshold) {
     auto streams = cudf::detail::fork_streams(stream, num_deletion_vectors);
-    std::for_each(cuda::counting_iterator(0),
-                  cuda::counting_iterator(num_deletion_vectors),
+    std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                  cuda::counting_iterator{num_deletion_vectors},
                   [&](auto const dv_idx) {
+                    auto const begin = deletion_vector_row_offsets[dv_idx];
+                    auto const end   = deletion_vector_row_offsets[dv_idx + 1];
                     deletion_vector_refs[dv_idx].get().contains_async(
-                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
-                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx + 1],
-                      output + deletion_vector_row_offsets[dv_idx],
+                      cudf::detail::slice(row_index_column, begin, end, streams[dv_idx]),
+                      cudf::detail::slice(output, begin, end, streams[dv_idx]),
                       streams[dv_idx]);
                   });
     cudf::detail::join_streams(streams, stream);
   } else {
-    std::for_each(cuda::counting_iterator(0),
-                  cuda::counting_iterator(num_deletion_vectors),
+    std::for_each(cuda::counting_iterator<cudf::size_type>{0},
+                  cuda::counting_iterator{num_deletion_vectors},
                   [&](auto const dv_idx) {
+                    auto const begin = deletion_vector_row_offsets[dv_idx];
+                    auto const end   = deletion_vector_row_offsets[dv_idx + 1];
                     deletion_vector_refs[dv_idx].get().contains_async(
-                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx],
-                      row_index_column.begin<size_t>() + deletion_vector_row_offsets[dv_idx + 1],
-                      output + deletion_vector_row_offsets[dv_idx],
+                      cudf::detail::slice(row_index_column, begin, end, stream),
+                      cudf::detail::slice(output, begin, end, stream),
                       stream);
                   });
-    stream.synchronize();
   }
 }
 
@@ -256,40 +250,49 @@ void query_deletion_vectors(
 
 std::unique_ptr<cudf::column> compute_row_mask_column(
   cudf::column_view const& row_index_column,
-  cudf::host_span<std::reference_wrapper<roaring_bitmap_type> const> deletion_vector_refs,
+  cudf::host_span<std::reference_wrapper<cudf::roaring_bitmap const> const> deletion_vector_refs,
   cudf::host_span<size_type const> rows_per_deletion_vector,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const num_rows = row_index_column.size();
-  auto row_mask       = rmm::device_buffer(num_rows * sizeof(bool), stream, mr);
-  auto row_mask_iter  = cuda::make_transform_output_iterator(
-    static_cast<bool*>(row_mask.data()), [] __device__(auto b) { return not b; });
+  auto const num_rows  = row_index_column.size();
+  auto row_mask_column = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::BOOL8}, num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto const row_mask_view = row_mask_column->mutable_view();
+
   query_deletion_vectors(
-    row_index_column, deletion_vector_refs, rows_per_deletion_vector, row_mask_iter, stream);
-  return std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::BOOL8},
-                                        num_rows,
-                                        std::move(row_mask),
-                                        rmm::device_buffer{0, stream, mr},
-                                        0);
+    row_index_column, deletion_vector_refs, rows_per_deletion_vector, row_mask_view, stream);
+
+  // Invert the membership result so that `true` indicates a non-deleted row
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    row_mask_view.begin<bool>(),
+                    row_mask_view.end<bool>(),
+                    row_mask_view.begin<bool>(),
+                    cuda::std::logical_not<bool>{});
+  return row_mask_column;
 }
 
 size_t compute_deleted_row_count(
   cudf::column_view const& row_index_column,
-  cudf::host_span<std::reference_wrapper<roaring_bitmap_type> const> deletion_vector_refs,
+  cudf::host_span<std::reference_wrapper<cudf::roaring_bitmap const> const> deletion_vector_refs,
   cudf::host_span<size_type const> deletion_vector_row_counts,
   rmm::cuda_stream_view stream)
 {
-  auto const num_rows = row_index_column.size();
-  auto row_mask =
-    rmm::device_buffer(num_rows * sizeof(bool), stream, cudf::get_current_device_resource_ref());
-  auto row_mask_iter = static_cast<bool*>(row_mask.data());
+  auto const num_rows      = row_index_column.size();
+  auto row_mask_column     = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8},
+                                                       num_rows,
+                                                       mask_state::UNALLOCATED,
+                                                       stream,
+                                                       cudf::get_current_device_resource_ref());
+  auto const row_mask_view = row_mask_column->mutable_view();
+
   query_deletion_vectors(
-    row_index_column, deletion_vector_refs, deletion_vector_row_counts, row_mask_iter, stream);
+    row_index_column, deletion_vector_refs, deletion_vector_row_counts, row_mask_view, stream);
+
   return static_cast<size_t>(
     thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                  row_mask_iter,
-                  row_mask_iter + num_rows,
+                  row_mask_view.begin<bool>(),
+                  row_mask_view.end<bool>(),
                   true));
 }
 
@@ -297,23 +300,32 @@ namespace {
 
 /**
  * @brief Consumes a specified number of rows from a queue of deletion vectors into vectors of
- * currently active deletion vectors, their corresponding refs, and row counts
+ * currently active deletion vectors and their corresponding references and row counts
  *
- * @param num_rows The number of rows
- * @param deletion_vectors The deletion vectors
- * @param deletion_vector_row_counts The deletion vector row counts
- * @param stream The stream
- * @return A tuple of currently active deletion vectors, their corresponding refs, and row counts
+ * Fully consumed deletion vectors are moved out of the input queue into a returned owning vector
+ * so that references into them remain valid until the caller is done. References are taken
+ * against the stable storage of either the input queue (for partially-consumed vectors) or the
+ * returned owning vector (for fully-consumed vectors). The caller must reserve enough space in
+ * the returned vectors to avoid implicit reallocations that would invalidate references.
+ *
+ * @param num_rows The number of rows to consume
+ * @param[in,out] deletion_vectors Queue of deletion vectors to consume from
+ * @param[in,out] deletion_vector_row_counts Queue of per-deletion-vector row counts
+ * @return Tuple of (owning storage for fully-consumed deletion vectors, references to active
+ * deletion vectors, row counts per active deletion vector)
  */
-auto consume_deletion_vectors(
-  size_type num_rows,
-  std::queue<chunked_parquet_reader::roaring_bitmap_impl>& deletion_vectors,
-  std::queue<size_type>& deletion_vector_row_counts,
-  rmm::cuda_stream_view stream)
+auto consume_deletion_vectors(size_type num_rows,
+                              std::queue<cudf::roaring_bitmap>& deletion_vectors,
+                              std::queue<size_type>& deletion_vector_row_counts)
 {
   std::vector<size_type> row_counts;
-  std::vector<chunked_parquet_reader::roaring_bitmap_impl> deletion_vectors_impls;
-  std::vector<std::reference_wrapper<roaring_bitmap_type>> deletion_vector_refs;
+  std::vector<cudf::roaring_bitmap> temp_deletion_vectors;
+  std::vector<std::reference_wrapper<cudf::roaring_bitmap const>> deletion_vector_refs;
+  // Must reserve enough space for the temporary deletion vectors and references to avoid implicit
+  // re-allocations in emplace_back leading to dangling references
+  row_counts.reserve(deletion_vectors.size());
+  temp_deletion_vectors.reserve(deletion_vectors.size());
+  deletion_vector_refs.reserve(deletion_vectors.size());
   size_type rows_filled = 0;
 
   while (std::cmp_less(rows_filled, num_rows)) {
@@ -323,19 +335,21 @@ auto consume_deletion_vectors(
         std::to_string(deletion_vector_row_counts.size()) + " " +
         std::to_string(deletion_vectors.size()));
 
+    // Compute how many rows can be queried from the current roaring bitmap
     auto const row_count =
       std::min<size_type>(num_rows - rows_filled, deletion_vector_row_counts.front());
     row_counts.emplace_back(row_count);
 
-    auto& deletion_vector = deletion_vectors.front();
-    deletion_vector.construct_roaring_bitmap(rmm::mr::polymorphic_allocator<char>{}, stream);
-    CUDF_EXPECTS(deletion_vector.roaring_bitmap != nullptr, "Failed to construct roaring_bitmap");
-    deletion_vector_refs.emplace_back(std::ref(*(deletion_vector.roaring_bitmap)));
-
+    // If we still have remaining rows to query from the current roaring bitmap, update its row
+    // count and take a reference into the queue's stable storage
     if (std::cmp_less(row_count, deletion_vector_row_counts.front())) {
       deletion_vector_row_counts.front() = deletion_vector_row_counts.front() - row_count;
+      deletion_vector_refs.emplace_back(std::ref(deletion_vectors.front()));
     } else {
-      deletion_vectors_impls.emplace_back(std::move(deletion_vectors.front()));
+      // Else if the deletion vector is fully queried, move it to the temporary vector and pop it
+      // from the queues so that the reference remains valid for the caller
+      temp_deletion_vectors.emplace_back(std::move(deletion_vectors.front()));
+      deletion_vector_refs.emplace_back(std::ref(temp_deletion_vectors.back()));
       deletion_vectors.pop();
       deletion_vector_row_counts.pop();
     }
@@ -344,31 +358,30 @@ auto consume_deletion_vectors(
   }
 
   return std::tuple{
-    std::move(deletion_vectors_impls), std::move(deletion_vector_refs), std::move(row_counts)};
+    std::move(temp_deletion_vectors), std::move(deletion_vector_refs), std::move(row_counts)};
 }
 
 }  // namespace
 
 std::unique_ptr<cudf::column> compute_partial_row_mask_column(
   cudf::column_view const& row_index_column,
-  std::queue<chunked_parquet_reader::roaring_bitmap_impl>& deletion_vectors,
+  std::queue<cudf::roaring_bitmap>& deletion_vectors,
   std::queue<size_type>& deletion_vector_row_counts,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto [_, dv_refs, dv_row_counts] = consume_deletion_vectors(
-    row_index_column.size(), deletion_vectors, deletion_vector_row_counts, stream);
+  auto [_, dv_refs, dv_row_counts] =
+    consume_deletion_vectors(row_index_column.size(), deletion_vectors, deletion_vector_row_counts);
   return compute_row_mask_column(row_index_column, dv_refs, dv_row_counts, stream, mr);
 }
 
-size_t compute_partial_deleted_row_count(
-  cudf::column_view const& row_index_column,
-  std::queue<chunked_parquet_reader::roaring_bitmap_impl>& deletion_vectors,
-  std::queue<size_type>& deletion_vector_row_counts,
-  rmm::cuda_stream_view stream)
+size_t compute_partial_deleted_row_count(cudf::column_view const& row_index_column,
+                                         std::queue<cudf::roaring_bitmap>& deletion_vectors,
+                                         std::queue<size_type>& deletion_vector_row_counts,
+                                         rmm::cuda_stream_view stream)
 {
-  auto [_, dv_refs, dv_row_counts] = consume_deletion_vectors(
-    row_index_column.size(), deletion_vectors, deletion_vector_row_counts, stream);
+  auto [_, dv_refs, dv_row_counts] =
+    consume_deletion_vectors(row_index_column.size(), deletion_vectors, deletion_vector_row_counts);
   return compute_deleted_row_count(row_index_column, dv_refs, dv_row_counts, stream);
 }
 

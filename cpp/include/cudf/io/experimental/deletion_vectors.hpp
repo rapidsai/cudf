@@ -9,6 +9,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/roaring_bitmap.hpp>
 
 #include <queue>
 
@@ -60,9 +61,6 @@ struct deletion_vector_info {
  */
 class chunked_parquet_reader {
  public:
-  //! Forward declaration of the opaque wrapper of cuco's 64-bit roaring bitmap
-  struct roaring_bitmap_impl;
-
   /**
    * @brief Constructor for the chunked reader
    *
@@ -141,7 +139,7 @@ class chunked_parquet_reader {
   std::unique_ptr<cudf::io::chunked_parquet_reader> _reader;
   std::queue<size_t> _row_group_row_offsets;
   std::queue<size_type> _row_group_row_counts;
-  std::queue<roaring_bitmap_impl> _deletion_vectors;
+  std::queue<cudf::roaring_bitmap> _deletion_vectors;
   std::queue<size_type> _deletion_vector_row_counts;
   size_t _start_row;
   bool _is_unspecified_row_group_data;
