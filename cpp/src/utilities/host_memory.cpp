@@ -3,20 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// clang-format off
-// Forward declaring this type with hidden visibility supersedes the upstream
-// declaration and therefore hides instantiations in this file. This prevents
-// the specific symbol conflict observed in
-// https://github.com/rapidsai/rmm/issues/2219 between nvcomp's instantiation
-// of pool_memory_resource<pinned_host_memory_resource> and libcudf's, but it
-// does not fix the broader issues around rmm's symbol visibility that are
-// raised in that issue. Those will be fixed upstream at a later date.
-namespace rmm::mr {
-template <typename Upstream>
-class pool_memory_resource;
-}
-// clang-format on
-
 #include "io/utilities/getenv_or.hpp"
 
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -26,9 +12,9 @@ class pool_memory_resource;
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -42,9 +28,14 @@ namespace cudf {
 
 namespace {
 
-class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_resource {
+class pinned_pool_with_fallback_memory_resource {
   using upstream_mr    = rmm::mr::pinned_host_memory_resource;
-  using host_pooled_mr = rmm::mr::pool_memory_resource<upstream_mr>;
+  using host_pooled_mr = rmm::mr::pool_memory_resource;
+
+  struct fallback_state {
+    mutable std::shared_mutex mutex;
+    std::unordered_set<void*> allocations;
+  };
 
  private:
   upstream_mr upstream_mr_{};
@@ -54,9 +45,8 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
   host_pooled_mr* pool_{nullptr};
   cuda::stream_ref stream_{cudf::detail::global_cuda_stream_pool().get_stream().value()};
 
-  // Hash set to track fallback allocations
-  mutable std::shared_mutex fallback_allocations_mutex_;
-  std::unordered_set<void*> fallback_allocations_;
+  // Wrapped in shared_ptr so the outer class is copyable (required by any_resource)
+  std::shared_ptr<fallback_state> fallback_{std::make_shared<fallback_state>()};
 
  public:
   pinned_pool_with_fallback_memory_resource(size_t initial_size, size_t max_size)
@@ -86,49 +76,69 @@ class pinned_pool_with_fallback_memory_resource : public rmm::mr::device_memory_
   {
   }
 
- private:
-  void* do_allocate(std::size_t bytes, rmm::cuda_stream_view stream) override
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
+  }
+
+  void deallocate_sync(void* ptr,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, ptr, bytes, alignment);
+  }
+
+  void* allocate(cuda::stream_ref stream,
+                 std::size_t bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
     try {
-      return pool_->allocate(stream, bytes);
+      return pool_->allocate(stream, bytes, alignment);
     } catch (...) {
       CUDF_LOG_INFO("Pinned pool exhausted, falling back to new pinned allocation for %zu bytes",
                     bytes);
       // fall back to upstream
-      auto* ptr = upstream_mr_.allocate(stream, bytes);
+      auto* ptr = upstream_mr_.allocate(stream, bytes, alignment);
 
       {
-        std::unique_lock lock(fallback_allocations_mutex_);
-        fallback_allocations_.insert(ptr);
+        std::unique_lock lock(fallback_->mutex);
+        fallback_->allocations.insert(ptr);
       }
 
       return ptr;
     }
   }
 
-  void do_deallocate(void* ptr, std::size_t bytes, rmm::cuda_stream_view stream) noexcept override
+  void deallocate(cuda::stream_ref stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
     bool is_fallback{false};
     {
-      std::shared_lock lock(fallback_allocations_mutex_);
-      is_fallback = fallback_allocations_.find(ptr) != fallback_allocations_.end();
+      std::shared_lock lock(fallback_->mutex);
+      is_fallback = fallback_->allocations.find(ptr) != fallback_->allocations.end();
     }
 
     if (is_fallback) {
       {
-        std::unique_lock lock(fallback_allocations_mutex_);
-        fallback_allocations_.erase(ptr);
+        std::unique_lock lock(fallback_->mutex);
+        fallback_->allocations.erase(ptr);
       }
-      upstream_mr_.deallocate(stream, ptr, bytes);
+      upstream_mr_.deallocate(stream, ptr, bytes, alignment);
     } else {
-      pool_->deallocate(stream, ptr, bytes);
+      pool_->deallocate(stream, ptr, bytes, alignment);
     }
   }
 
-  [[nodiscard]] bool do_is_equal(device_memory_resource const& other) const noexcept override
+  bool operator==(pinned_pool_with_fallback_memory_resource const& other) const noexcept
   {
-    auto const* other_ptr = dynamic_cast<pinned_pool_with_fallback_memory_resource const*>(&other);
-    return other_ptr != nullptr && pool_ == other_ptr->pool_ && stream_ == other_ptr->stream_;
+    return pool_ == other.pool_ && stream_ == other.stream_;
+  }
+
+  bool operator!=(pinned_pool_with_fallback_memory_resource const& other) const noexcept
+  {
+    return !(*this == other);
   }
 };
 
