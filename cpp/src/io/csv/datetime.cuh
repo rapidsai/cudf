@@ -50,8 +50,8 @@ __inline__ __device__ T to_non_negative_integer(char const* begin, char const* e
  * Supports abbreviated names (e.g. "Jan") and full names (e.g. "January"). Matching is
  * case-insensitive for ASCII characters.
  *
- * When @p locale_names is non-null it must point to a device array of 24 `cudf::string_view`
- * objects laid out as follows (matching the order returned by `nl_langinfo`):
+ * @p locale_names must point to a device array of 24 `cudf::string_view` objects laid
+ * out as follows (matching the order returned by `nl_langinfo`):
  *   - indices  0–11 : abbreviated month names (ABMON_1 .. ABMON_12)
  *   - indices 12–23 : full month names        (MON_1   .. MON_12)
  *
@@ -59,8 +59,9 @@ __inline__ __device__ T to_non_negative_integer(char const* begin, char const* e
  * which accepts names derived from `nl_langinfo(ABMON_*)` / `nl_langinfo(MON_*)` on the
  * host and passes them into the GPU kernel — see `cudf/strings/convert/convert_datetime.hpp`.
  *
- * When @p locale_names is null the function falls back to the hard-coded English ASCII table
- * (same behaviour as before locale support was added).
+ * When @p locale_names is null the token is treated as unrecognized and 0 is returned;
+ * callers that need named-month support are expected to pre-fill @p locale_names in host
+ * code (e.g. via `nl_langinfo`).
  *
  * @param begin        Pointer to the first character of the month-name token
  * @param end          Pointer one past the last character of the token
@@ -69,68 +70,28 @@ __inline__ __device__ T to_non_negative_integer(char const* begin, char const* e
  */
 __inline__ __device__ int month_from_name(char const* begin,
                                           char const* end,
-                                          cudf::string_view const* locale_names = nullptr)
+                                          cudf::string_view const* locale_names)
 {
+  if (locale_names == nullptr) { return 0; }
+
   auto const len = static_cast<cudf::size_type>(end - begin);
 
-  if (locale_names != nullptr) {
-    // Locale-aware path: compare the token case-insensitively against every abbreviated
-    // (indices 0–11) and full (indices 12–23) locale month name.
-    for (int i = 0; i < 12; ++i) {
-      // Check abbreviated name first (shorter, so try first to avoid a prefix match
-      // of, e.g., "Mar" matching the full name "March").
-      for (int pass = 0; pass < 2; ++pass) {
-        auto const& sv = locale_names[(pass == 0) ? i : (12 + i)];
-        if (sv.size_bytes() == 0 || sv.size_bytes() != len) { continue; }
-        bool match = true;
-        for (cudf::size_type j = 0; j < len && match; ++j) {
-          // Case-insensitive ASCII comparison via | 0x20 (works for ASCII A-Z only;
-          // locale names that require multi-byte case-folding are compared as-is).
-          match = ((begin[j] | 0x20) == (sv.data()[j] | 0x20));
-        }
-        if (match) { return i + 1; }
+  // Locale-aware path: compare the token case-insensitively against every abbreviated
+  // (indices 0–11) and full (indices 12–23) locale month name.
+  for (int i = 0; i < 12; ++i) {
+    // Check abbreviated name first (shorter, so try first to avoid a prefix match
+    // of, e.g., "Mar" matching the full name "March").
+    for (int pass = 0; pass < 2; ++pass) {
+      auto const& sv = locale_names[(pass == 0) ? i : (12 + i)];
+      if (sv.size_bytes() == 0 || sv.size_bytes() != len) { continue; }
+      bool match = true;
+      for (cudf::size_type j = 0; j < len && match; ++j) {
+        // Case-insensitive ASCII comparison via | 0x20 (works for ASCII A-Z only;
+        // locale names that require multi-byte case-folding are compared as-is).
+        match = ((begin[j] | 0x20) == (sv.data()[j] | 0x20));
       }
+      if (match) { return i + 1; }
     }
-    return 0;
-  }
-
-  // English ASCII fallback: match on the first 3 characters only, so both abbreviated
-  // ("Jan") and full ("January") names are recognised with a single switch.
-  // The | 0x20 trick folds ASCII upper-case to lower-case; it is acceptable here
-  // because English month names are always ASCII.
-  if (len < 3) { return 0; }
-  char const c0 = (*begin | 0x20);
-  char const c1 = (*(begin + 1) | 0x20);
-  char const c2 = (*(begin + 2) | 0x20);
-  switch (c0) {
-    case 'j':
-      if (c1 == 'a' && c2 == 'n') return 1;  // Jan / January
-      if (c1 == 'u' && c2 == 'n') return 6;  // Jun / June
-      if (c1 == 'u' && c2 == 'l') return 7;  // Jul / July
-      break;
-    case 'f':
-      if (c1 == 'e' && c2 == 'b') return 2;  // Feb / February
-      break;
-    case 'm':
-      if (c1 == 'a' && c2 == 'r') return 3;  // Mar / March
-      if (c1 == 'a' && c2 == 'y') return 5;  // May
-      break;
-    case 'a':
-      if (c1 == 'p' && c2 == 'r') return 4;  // Apr / April
-      if (c1 == 'u' && c2 == 'g') return 8;  // Aug / August
-      break;
-    case 's':
-      if (c1 == 'e' && c2 == 'p') return 9;  // Sep / September
-      break;
-    case 'o':
-      if (c1 == 'c' && c2 == 't') return 10;  // Oct / October
-      break;
-    case 'n':
-      if (c1 == 'o' && c2 == 'v') return 11;  // Nov / November
-      break;
-    case 'd':
-      if (c1 == 'e' && c2 == 'c') return 12;  // Dec / December
-      break;
   }
   return 0;
 }

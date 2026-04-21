@@ -56,7 +56,7 @@ struct parse_options_view {
   /// Device pointer to 24 locale-aware month name string_views:
   /// indices  0-11 = abbreviated names (ABMON_1 .. ABMON_12, e.g. "Jan")
   /// indices 12-23 = full names        (MON_1   .. MON_12,   e.g. "January")
-  /// nullptr means fall back to the hard-coded English ASCII table.
+  /// nullptr means named-month parsing is disabled (numeric-only dates still parse).
   cudf::string_view const* month_names{nullptr};
 };
 
