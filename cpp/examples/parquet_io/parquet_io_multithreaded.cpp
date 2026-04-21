@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "benchmark.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
 #include "timer.hpp"
@@ -337,7 +338,7 @@ int32_t main(int argc, char const** argv)
   switch (argc) {
     case 7: write_and_validate = get_boolean(argv[6]); [[fallthrough]];
     case 6: thread_count = std::max(thread_count, std::stoi(std::string{argv[5]})); [[fallthrough]];
-    case 5: num_reads = std::max(1, std::stoi(argv[4])); [[fallthrough]];
+    case 5: num_reads = std::max(num_reads, std::stoi(argv[4])); [[fallthrough]];
     case 4: io_source_type = get_io_source_type(argv[3]); [[fallthrough]];
     case 3:
       input_multiplier = std::max(input_multiplier, std::stoi(std::string{argv[2]}));
@@ -383,15 +384,16 @@ int32_t main(int argc, char const** argv)
                    "growth.\n\n";
     }
 
-    timer timer;
-    std::for_each(cuda::counting_iterator<int32_t>{0},
-                  cuda::counting_iterator{num_reads},
-                  [&](auto i) {  // Read parquet files and discard the tables
-                    std::ignore = read_parquet_multithreaded<read_mode::NO_CONCATENATE>(
-                      input_sources, thread_count, stream_pool);
-                  });
-    default_stream.synchronize();
-    timer.print_elapsed_millis();
+    benchmark(
+      [&] {
+        std::ignore = read_parquet_multithreaded<read_mode::NO_CONCATENATE>(
+          input_sources, thread_count, stream_pool);
+        default_stream.synchronize();
+      },
+      num_reads);
+
+    // Print peak memory
+    std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1'048'576.0) << " MB\n\n";
   }
 
   // Write parquet files and validate if needed
@@ -446,9 +448,6 @@ int32_t main(int argc, char const** argv)
     // Remove the created temp directory and parquet data
     std::filesystem::remove_all(output_path);
   }
-
-  // Print peak memory
-  std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1048576.0) << " MB\n\n";
 
   return 0;
 }
