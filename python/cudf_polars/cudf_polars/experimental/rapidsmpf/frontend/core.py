@@ -188,10 +188,7 @@ class StreamingEngine(pl.GPUEngine):
         and values are summed, maxima are reduced with ``max``. Formatters
         are taken from rank 0.
         """
-        first, *rest = self.gather_statistics(clear=clear)
-        # rapidsmpf's merge rejects an empty `others`, so short-circuit the
-        # single-rank case by returning the first element.
-        return first.merge(rest) if rest else first
+        return Statistics.merge(self.gather_statistics(clear=clear))
 
     def shutdown(self) -> None:
         """
