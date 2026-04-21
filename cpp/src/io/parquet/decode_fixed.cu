@@ -956,7 +956,7 @@ CUDF_HOST_DEVICE constexpr bool has_dict()
 }
 
 template <decode_kernel_mask kernel_mask_t>
-constexpr bool is_dict_int32_output()
+CUDF_HOST_DEVICE constexpr bool is_dict_int32_output()
 {
   return (kernel_mask_t == decode_kernel_mask::DICT_INT32) ||
          (kernel_mask_t == decode_kernel_mask::DICT_INT32_NESTED) ||

@@ -190,6 +190,41 @@ class reader_impl {
   void preprocess_chunk_strings(read_mode mode, row_range const& read_info);
 
   /**
+   * @brief Detect per-column eligibility for direct Parquet-dict → DICTIONARY32 transcode, and
+   * apply the required host-side mutations to `_output_buffers` and `subpass.pages` so that the
+   * subsequent allocate/decode path produces INT32 indices for eligible columns.
+   *
+   * Must be called after `prepare_data()` (so that `pass.chunks`, `pass.pages` and
+   * `subpass.pages` are populated on the host) and before `preprocess_chunk_strings()` /
+   * `allocate_columns()` / `decode_page_data()`.
+   *
+   * Populates `_dict_transcode_eligible` with a bool per input column indicating whether the
+   * column will be assembled as a DICTIONARY32 output later in `assemble_dict_transcoded_columns`.
+   */
+  void prepare_dict_transcode();
+
+  /**
+   * @brief Zero-initialize the INT32 output buffers of dict-transcoded columns so that null rows
+   * carry a well-defined dictionary index (the `DICT_INT32` kernel skips null positions).
+   *
+   * Must be called after `allocate_columns` and before `decode_page_data`.
+   */
+  void zero_init_dict_transcoded_index_buffers();
+
+  /**
+   * @brief Assemble DICTIONARY32 output columns for input columns that were marked eligible by
+   * `prepare_dict_transcode`. Each chunk's INT32 indices produced by the `DICT_INT32` kernel are
+   * shifted by the cumulative number of keys from prior chunks, and the per-chunk keys (built
+   * from `pass.str_dict_index`) are concatenated into a single keys child.
+   *
+   * Non-eligible flat STRING columns are left untouched here and are expected to go through the
+   * post-hoc `cudf::dictionary::encode` fallback in `finalize_output`.
+   *
+   * @param out_columns The output columns vector to mutate in place.
+   */
+  void assemble_dict_transcoded_columns(std::vector<std::unique_ptr<column>>& out_columns);
+
+  /**
    * @brief Copies over the relevant page mask information for the subpass
    */
   void set_subpass_page_mask();
@@ -519,6 +554,11 @@ class reader_impl {
 
   std::size_t _output_chunk_read_limit{0};  // output chunk size limit in bytes
   std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
+
+  // Per-input-column flag indicating whether that column was selected for direct
+  // Parquet-dict → DICTIONARY32 transcode in `prepare_dict_transcode()`. Populated before decode
+  // and consumed in `assemble_dict_transcoded_columns()`.
+  std::vector<bool> _dict_transcode_eligible;
 };
 
 }  // namespace cudf::io::parquet::detail
