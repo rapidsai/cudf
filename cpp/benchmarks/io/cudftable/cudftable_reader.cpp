@@ -149,7 +149,7 @@ NVBENCH_BENCH_TYPES(BM_cudftable_read_num_columns,
   .add_int64_axis("data_size", {128 << 20})
   .add_int64_power_of_two_axis("num_cols", nvbench::range(0, 12, 2));  // 1 to 4096
 
-// V1 vs V2 compression comparison benchmarks
+// Compression comparison benchmarks
 
 void BM_cudftable_read_compressed(nvbench::state& state)
 {

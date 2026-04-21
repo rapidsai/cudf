@@ -79,17 +79,18 @@ class cudftable_writer_options {
   [[nodiscard]] table_view const& get_table() const noexcept { return _table; }
 
   /**
-   * @brief Returns compression type used.
+   * @brief Returns compression type used for block compression.
    *
-   * When set to `compression_type::NONE`, the V1 (uncompressed) format is written.
-   * Any other value writes the V2 format with block-level compression.
+   * `compression_type::NONE` writes blocks uncompressed.
    *
    * @return Compression type
    */
   [[nodiscard]] compression_type get_compression() const noexcept { return _compression; }
 
   /**
-   * @brief Returns the uncompressed block size in bytes for V2 block compression.
+   * @brief Returns the uncompressed block size in bytes for block compression.
+   *
+   * Has no effect when compression is `compression_type::NONE`.
    *
    * @return Block size in bytes
    */
@@ -103,17 +104,19 @@ class cudftable_writer_options {
   void set_sink(sink_info sink) { _sink = std::move(sink); }
 
   /**
-   * @brief Sets compression type.
+   * @brief Sets the compression type used for block compression.
    *
-   * When set to `compression_type::NONE`, the V1 (uncompressed) format is written.
-   * Any other value writes the V2 format with block-level compression.
+   * `compression_type::NONE` writes blocks uncompressed.
    *
    * @param compression The compression type to use
    */
   void set_compression(compression_type compression) { _compression = compression; }
 
   /**
-   * @brief Sets the uncompressed block size in bytes for V2 block compression.
+   * @brief Sets the uncompressed block size in bytes for block compression.
+   *
+   * Has no effect when compression is `compression_type::NONE`; supplying a
+   * non-default value together with `NONE` will emit a warning at write time.
    *
    * @param block_size Block size in bytes
    */
@@ -149,7 +152,10 @@ class cudftable_writer_options_builder {
   }
 
   /**
-   * @brief Sets the uncompressed block size in bytes for V2 block compression.
+   * @brief Sets the uncompressed block size in bytes for block compression.
+   *
+   * Has no effect when compression is `compression_type::NONE`; supplying a
+   * non-default value together with `NONE` will emit a warning at write time.
    *
    * @param size Block size in bytes
    * @return this for chaining
