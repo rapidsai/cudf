@@ -12,6 +12,8 @@
 #include <cudf/utilities/roaring_bitmap.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 #include <rmm/resource_ref.hpp>
 
