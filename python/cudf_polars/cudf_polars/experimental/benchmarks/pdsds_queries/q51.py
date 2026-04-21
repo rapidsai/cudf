@@ -191,4 +191,5 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+        nulls_last=False,
     )

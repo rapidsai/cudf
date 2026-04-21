@@ -13,14 +13,13 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 import os
 from typing import TYPE_CHECKING, ClassVar
 
 import polars as pl
 
-with contextlib.suppress(ImportError):
+try:
     from cudf_polars.experimental.benchmarks.utils import (
         COUNT_DTYPE,
         build_parser,
@@ -28,6 +27,9 @@ with contextlib.suppress(ImportError):
         run_duckdb,
         run_polars,
     )
+except ImportError as e:
+    if e.name is not None and not e.name.startswith("cudf_polars"):
+        raise
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -198,6 +200,19 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         80: [pl.col("sales").cast(pl.Decimal(18, 2))],
         81: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
+        86: [pl.col("total_sum").cast(pl.Decimal(18, 2))],
+        89: [pl.col("sum_sales").cast(pl.Decimal(18, 2))],
+        91: [pl.col("Returns_Loss").cast(pl.Decimal(18, 2))],
+        92: [pl.col("Excess Discount Amount").cast(pl.Decimal(18, 2))],
+        94: [
+            pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
+            pl.col("total net profit").cast(pl.Decimal(18, 2)),
+        ],
+        95: [
+            pl.col("total shipping cost").cast(pl.Decimal(18, 2)),
+            pl.col("total net profit").cast(pl.Decimal(18, 2)),
+        ],
+        98: [pl.col("itemrevenue").cast(pl.Decimal(18, 2))],
     }
     EXPECTED_CASTS: ClassVar[dict] = {
         6: [pl.col("cnt").cast(COUNT_DTYPE)],
@@ -276,6 +291,26 @@ class PDSDSPolarsQueries(PDSDSQueries):
         78: [
             pl.col("store_qty").cast(pl.Int64),
             pl.col("other_chan_qty").cast(pl.Int64),
+        ],
+        83: [
+            pl.col("sr_item_qty").cast(pl.Int64),
+            pl.col("cr_item_qty").cast(pl.Int64),
+            pl.col("wr_item_qty").cast(pl.Int64),
+        ],
+        94: [pl.col("order count").cast(COUNT_DTYPE)],
+        95: [pl.col("order count").cast(COUNT_DTYPE)],
+        96: [pl.col("count_star()").cast(COUNT_DTYPE)],
+        97: [
+            pl.col("store_only").cast(pl.Int32),
+            pl.col("catalog_only").cast(pl.Int32),
+            pl.col("store_and_catalog").cast(pl.Int32),
+        ],
+        99: [
+            pl.col("30 days").cast(pl.Int32),
+            pl.col("31-60 days").cast(pl.Int32),
+            pl.col("61-90 days").cast(pl.Int32),
+            pl.col("91-120 days").cast(pl.Int32),
+            pl.col(">120 days").cast(pl.Int32),
         ],
     }
 

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -69,7 +69,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 95."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -108,45 +108,48 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
         .select("wr_order_number")
     )
-    return (
-        web_sales.join(
-            date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk", how="inner"
-        )
-        .join(
-            customer_address,
-            left_on="ws_ship_addr_sk",
-            right_on="ca_address_sk",
-            how="inner",
-        )
-        .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk", how="inner")
-        .filter(
-            (pl.col("d_date") >= start_date)
-            & (pl.col("d_date") <= end_date)
-            & (pl.col("ca_state") == state)
-            & (pl.col("web_company_name") == web_company_name)
-        )
-        .join(
-            multi_warehouse_orders,
-            left_on="ws_order_number",
-            right_on="ws_order_number",
-            how="inner",
-        )
-        .join(
-            returned_multi_warehouse_orders,
-            left_on="ws_order_number",
-            right_on="wr_order_number",
-            how="inner",
-        )
-        .select(
-            [
-                pl.col("ws_order_number")
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("order count"),
-                pl.col("ws_ext_ship_cost").sum().alias("total shipping cost"),
-                pl.col("ws_net_profit").sum().alias("total net profit"),
-            ]
-        )
-        .sort("order count", nulls_last=True)
-        .limit(100)
+    return QueryResult(
+        frame=(
+            web_sales.join(
+                date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk", how="inner"
+            )
+            .join(
+                customer_address,
+                left_on="ws_ship_addr_sk",
+                right_on="ca_address_sk",
+                how="inner",
+            )
+            .join(
+                web_site, left_on="ws_web_site_sk", right_on="web_site_sk", how="inner"
+            )
+            .filter(
+                (pl.col("d_date") >= start_date)
+                & (pl.col("d_date") <= end_date)
+                & (pl.col("ca_state") == state)
+                & (pl.col("web_company_name") == web_company_name)
+            )
+            .join(
+                multi_warehouse_orders,
+                left_on="ws_order_number",
+                right_on="ws_order_number",
+                how="inner",
+            )
+            .join(
+                returned_multi_warehouse_orders,
+                left_on="ws_order_number",
+                right_on="wr_order_number",
+                how="inner",
+            )
+            .select(
+                [
+                    pl.col("ws_order_number").n_unique().alias("order count"),
+                    pl.col("ws_ext_ship_cost").sum().alias("total shipping cost"),
+                    pl.col("ws_net_profit").sum().alias("total net profit"),
+                ]
+            )
+            .sort("order count", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("order count", False)],
+        limit=100,
     )

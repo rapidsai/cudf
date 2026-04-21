@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,7 +10,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 
 template <typename V>
 struct groupby_lists_test : public cudf::test::BaseFixture {};
@@ -20,7 +20,7 @@ TYPED_TEST_SUITE(groupby_lists_test, cudf::test::FixedWidthTypes);
 using namespace cudf::test::iterators;
 
 // Type of aggregation result.
-using agg_result_t = cudf::detail::target_type_t<int32_t, cudf::aggregation::SUM>;
+using agg_result_t = int64_t;
 
 template <typename T>
 using fwcw = cudf::test::fixed_width_column_wrapper<T>;

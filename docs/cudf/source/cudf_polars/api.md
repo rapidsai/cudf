@@ -8,14 +8,12 @@ For the most part, the public API of `cudf-polars` is the polars API.
    :members:
       Cluster,
       ConfigOptions,
-      CUDAStreamPolicy,
+      CUDAStreamPoolConfig,
       DynamicPlanningOptions,
       ExecutorType,
       InMemoryExecutor,
       ParquetOptions,
       ShuffleMethod,
-      ShufflerInsertionMethod,
-      StatsPlanningOptions,
       StreamingExecutor,
       StreamingFallbackMode,
 ```

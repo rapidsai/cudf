@@ -89,11 +89,10 @@ def dtype(arbitrary: Any) -> DtypeObj:
         if np_dtype.kind == "O":
             return CUDF_STRING_DTYPE
         elif np_dtype.kind == "U":
-            if cudf.get_option("mode.pandas_compatible"):
-                # Like pandas, allow users to pass this object to signal "string"
-                # but the dtype metadata should result in np.dtype(object)
-                return np_dtype
-            return CUDF_STRING_DTYPE
+            # Like pandas, allow users to pass this object to signal "string"
+            # but the dtype metadata must result in np.dtype(object)
+            # which is handled in Column.create
+            return np_dtype
         elif np_dtype not in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype

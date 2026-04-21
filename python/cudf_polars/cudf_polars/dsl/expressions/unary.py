@@ -130,6 +130,15 @@ class UnaryFunction(Expr):
     _supported_fns = frozenset().union(
         _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
     )
+    _pointwise_fns = frozenset(
+        {
+            "fill_null",
+            "fill_null_with_strategy",
+            "mask_nans",
+            "round",
+            "set_sorted",
+        }
+    ).union(_OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -138,19 +147,7 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        self.is_pointwise = self.name not in (
-            "as_struct",
-            "cum_max",
-            "cum_min",
-            "cum_prod",
-            "cum_sum",
-            "drop_nulls",
-            "rank",
-            "shift",
-            "shift_and_fill",
-            "top_k",
-            "unique",
-        )
+        self.is_pointwise = self.name in UnaryFunction._pointwise_fns
 
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover
@@ -421,7 +418,7 @@ class UnaryFunction(Expr):
                     1, dtype=column.dtype.plc_type, stream=df.stream
                 )
             else:
-                assert_never(strategy)  # pragma: no cover
+                assert_never(strategy)
 
             if strategy == "mean":
                 return Column(
@@ -522,9 +519,7 @@ class UnaryFunction(Expr):
                 offset = n_expr.value
             else:
                 n_col = n_expr.evaluate(df, context=context)
-                offset_py = plc.copying.get_element(
-                    n_col.obj, 0, stream=df.stream
-                ).to_py()
+                offset_py = n_col.obj_scalar(stream=df.stream).to_py(stream=df.stream)
                 assert isinstance(offset_py, int)
                 offset = offset_py
             if self.name == "shift":

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,6 +21,7 @@ void nvbench_merge_strings(nvbench::state& state)
   if (static_cast<std::size_t>(2 * num_rows) * static_cast<std::size_t>(row_width) >=
       static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
     state.skip("Skip benchmarks greater than size_type limit");
+    return;
   }
 
   data_profile const table_profile =

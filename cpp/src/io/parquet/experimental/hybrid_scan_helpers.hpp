@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/parquet_gpu.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
 
@@ -14,7 +15,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -57,6 +57,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param literals Lists of literals, one per column with (in)equality predicate
    * @param operators Lists of operators, one per column with (in)equality predicate
    * @param total_row_groups Total number of row groups in `input_row_group_indices`
+   * @param output_dtypes Output data types for the filtered columns
    * @param dictionary_col_schemas Schema indices of columns with (in)equality predicate
    * @param filter AST expression to filter row groups based on dictionary pages
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -138,12 +139,13 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @brief Filters and reduces down to the selection of payload columns
    *
    * @param payload_column_names List of paths of select payload column names, if any
-   * @param filter_columns_names List of paths of column names present only in filter, if any
+   * @param filter_column_names List of paths of column names present only in filter, if any
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param ignore_missing_columns Whether to ignore non-existent columns
    * @param timestamp_type_id Type conversion parameter
    * @param decimal_type_id Type conversion parameter
+   * @param case_sensitive_names Boolean indicating if column names are case sensitive
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -156,7 +158,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            bool strings_to_categorical,
                            bool ignore_missing_columns,
                            type_id timestamp_type_id,
-                           type_id decimal_type_id);
+                           type_id decimal_type_id,
+                           bool case_sensitive_names);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
@@ -367,7 +370,8 @@ class named_to_reference_converter : public parquet::detail::named_to_reference_
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
                                std::vector<SchemaElement> const& schema_tree,
-                               cudf::io::parquet_reader_options const& options);
+                               cudf::io::parquet_reader_options const& options,
+                               bool case_sensitive_names);
 
   using parquet::detail::named_to_reference_converter::visit;
 

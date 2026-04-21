@@ -7,17 +7,14 @@
 
 #include "parquet_gpu.hpp"
 
-#include <cudf/ast/detail/expression_transformer.hpp>
-#include <cudf/ast/expressions.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
-#include <list>
+#include <string_view>
 #include <tuple>
-#include <unordered_set>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -66,17 +63,13 @@ struct row_group_info {
   size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
                     // called with index and source_index
   size_t start_row;
-  size_type source_index;  // file index.
+  size_t unadjusted_num_rows;  // number of unadjusted rows in the row group
+  size_type source_index;      // file index.
+  size_t compressed_size;      // compressed size of the row group
+  size_t max_leaf_values;      // maximum number of leaf values in the row group
 
   // Optional metadata pulled from the column and offset indexes, if present.
   std::optional<std::vector<column_chunk_info>> column_chunks;
-
-  row_group_info() = default;
-
-  row_group_info(size_type index, size_t start_row, size_type source_index)
-    : index{index}, start_row{start_row}, source_index{source_index}
-  {
-  }
 
   /**
    * @brief Indicates the presence of page-level indexes.
@@ -85,7 +78,32 @@ struct row_group_info {
 };
 
 /**
- * @brief Function that translates Parquet datatype to cuDF type enum
+ * @brief Returns a normalized (lowercased) column name or path when case-insensitive matching is
+ * enabled
+ *
+ * @param col_path The column name or path to normalize
+ * @param case_sensitive_names Whether to normalize the column path case-insensitively
+ *
+ * @return The normalized column path
+ */
+[[nodiscard]] std::string normalize_column_path(std::string_view col_path,
+                                                bool case_sensitive_names);
+
+/**
+ * @brief Compares two column paths with specified case sensitivity
+ *
+ * @param lhs The left-hand side column path
+ * @param rhs The right-hand side column path
+ * @param case_sensitive Whether to compare the column paths case-sensitively
+ *
+ * @return Boolean indicating if the column paths are equal
+ */
+[[nodiscard]] bool are_column_paths_equal(std::string_view lhs,
+                                          std::string_view rhs,
+                                          bool case_sensitive);
+
+/**
+ * @brief Translates Parquet datatype to cuDF type enum
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
                                  bool strings_to_categorical,
@@ -219,8 +237,8 @@ class aggregate_reader_metadata {
    *
    * @param sources Dataset sources
    * @param row_group_indices Lists of row groups to read bloom filters from, one per source
-   * @param[out] bloom_filter_data List of bloom filter data device buffers
    * @param column_schemas Schema indices of columns whose bloom filters will be read
+   * @param num_row_groups Number of row groups in the file
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
    *
@@ -250,6 +268,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters the row groups using row bounds (`skip_rows` and `num_rows`)
    *
+   * @param input_row_group_indices Input row group indices to filter
    * @param rows_to_skip Number of rows to skip
    * @param rows_to_read Number of rows to read
    *
@@ -515,6 +534,18 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
   /**
+   * @brief Computes the compressed and total size, the number of rows, and the maximum number of
+   * leaf values in the specified row group
+   *
+   * @param row_group The row group
+   *
+   * @return A tuple of row group compressed size, total size, number of rows, and maximum leaf
+   * values
+   */
+  [[nodiscard]] std::tuple<size_t, size_t, size_t, size_t> get_row_group_properties(
+    RowGroup const& rg) const;
+
+  /**
    * @brief Filters the row groups using stats and bloom filters based on predicate filter
    *
    * @param sources Lists of input datasources
@@ -598,194 +629,8 @@ class aggregate_reader_metadata {
                  bool strings_to_categorical,
                  bool ignore_missing_columns,
                  type_id timestamp_type_id,
-                 type_id decimal_type_id);
+                 type_id decimal_type_id,
+                 bool case_sensitive_names);
 };
-
-/**
- * @brief Collects column names from the expression ignoring the `skip_names`
- */
-class names_from_expression : public ast::detail::expression_transformer {
- public:
-  names_from_expression() = default;
-
-  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                        std::vector<std::string> const& skip_names,
-                        cudf::io::parquet_reader_options const& options,
-                        std::vector<SchemaElement> const& schema_tree);
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
-
-  /**
-   * @brief Returns the column names in AST.
-   *
-   * @return AST operation expression
-   */
-  [[nodiscard]] std::vector<std::string> to_vector() &&;
-
- private:
-  void visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
-  std::unordered_map<cudf::size_type, std::string> _column_indices_to_names;
-  std::unordered_set<std::string> _column_names;
-  std::unordered_set<std::string> _skip_names;
-};
-
-/**
- * @brief Converts named columns to index reference columns
- */
-class named_to_reference_converter : public ast::detail::expression_transformer {
- public:
-  named_to_reference_converter() = default;
-
-  named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
-                               table_metadata const& metadata);
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override;
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
-
-  /**
-   * @brief Returns the converted AST expression
-   *
-   * @return AST operation expression
-   */
-  [[nodiscard]] std::optional<std::reference_wrapper<ast::expression const>> get_converted_expr()
-    const
-  {
-    return _converted_expr;
-  }
-
- protected:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
-  std::unordered_map<std::string, size_type> _column_name_to_index;
-  std::optional<std::reference_wrapper<ast::expression const>> _converted_expr;
-  // Using std::list or std::deque to avoid reference invalidation
-  std::list<ast::column_reference> _col_ref;
-  std::list<ast::operation> _operators;
-};
-
-/**
- * @brief Collects lists of equality predicate literals in the AST expression, one list per input
- * table column. This is used in row group filtering based on bloom filters.
- */
-class equality_literals_collector : public ast::detail::expression_transformer {
- public:
-  equality_literals_collector() = default;
-
-  equality_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(
-    ast::column_name_reference const& expr) override;
-
-  /**
-   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
-   */
-  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
-
-  /**
-   * @brief Vectors of equality literals in the AST expression, one per input table column
-   *
-   * @return Vectors of equality literals, one per input table column
-   */
-  [[nodiscard]] std::vector<std::vector<ast::literal*>> get_literals() &&;
-
- protected:
-  std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
-    cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
-
-  size_type _num_input_columns;
-  std::vector<std::vector<ast::literal*>> _literals;
-};
-
-/**
- * @brief Maps indices of (all or selected) columns to their names
- *
- * @param options Parquet reader options
- * @param schema_tree Parquet schema tree
- *
- * @return Map of column indices to their names
- */
-[[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
-  cudf::io::parquet_reader_options const& options, std::vector<SchemaElement> const& schema_tree);
-
-/**
- * @brief Get the column names in expression object
- *
- * @param expr The optional expression object to get the column names from
- * @param skip_names The names of column names to skip in returned column names
- * @return The column names present in expression object except the skip_names
- */
-[[nodiscard]] std::vector<std::string> get_column_names_in_expression(
-  std::optional<std::reference_wrapper<ast::expression const>> expr,
-  std::vector<std::string> const& skip_names,
-  cudf::io::parquet_reader_options const& options,
-  std::vector<SchemaElement> const& schema_tree);
-
-/**
- * @brief Filter table using the provided (StatsAST or BloomfilterAST) expression and
- * collect filtered row group indices
- *
- * @param table Table of stats or bloom filter membership columns
- * @param ast_expr StatsAST or BloomfilterAST expression to filter with
- * @param input_row_group_indices Lists of input row groups to read, one per source
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return Collected filtered row group indices, one vector per source, if any. A std::nullopt if
- * all row groups are required or if the computed predicate is all nulls
- */
-[[nodiscard]] std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
-  cudf::table_view ast_table,
-  std::reference_wrapper<ast::expression const> ast_expr,
-  host_span<std::vector<size_type> const> input_row_group_indices,
-  rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail

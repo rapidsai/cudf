@@ -135,7 +135,7 @@ rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_st
 {
   auto table_vector = rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
   auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy_nosync(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                table + cp_section1_end,
                table + codepoint_metadata_size,
                codepoint_metadata_default_value);
@@ -159,7 +159,7 @@ rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_st
 {
   auto table_vector = rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
   auto table        = table_vector.data();
-  thrust::fill(rmm::exec_policy_nosync(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                table + aux_section1_end,
                table + aux_codepoint_data_size,
                aux_codepoint_default_value);
@@ -270,6 +270,7 @@ namespace {
  * @param d_normalized The normalized set of UTF-8 characters; 3 uints per input byte
  * @param total_count Number of bytes represented by d_normalized; len(d_normalized)/3
  * @param special_tokens Tokens to check against
+ * @param do_lower_case Whether to convert text to lower case
  */
 CUDF_KERNEL void special_tokens_kernel(uint32_t* d_normalized,
                                        int64_t total_count,
@@ -459,8 +460,13 @@ OutputIterator remove_copy_safe(InputIterator first,
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
-    result = thrust::remove_copy(rmm::exec_policy_nosync(stream), itr, copy_end, result, value);
-    itr    = copy_end;
+    result =
+      thrust::remove_copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          itr,
+                          copy_end,
+                          result,
+                          value);
+    itr = copy_end;
   }
   return result;
 }
@@ -476,8 +482,9 @@ Iterator remove_safe(Iterator first, Iterator last, T const& value, rmm::cuda_st
   auto itr    = first;
   while (itr != last) {
     auto end = static_cast<std::size_t>(std::distance(itr, last)) <= size ? last : itr + size;
-    result   = thrust::remove(rmm::exec_policy_nosync(stream), itr, end, value);
-    itr      = end;
+    result   = thrust::remove(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()), itr, end, value);
+    itr = end;
   }
   return result;
 }

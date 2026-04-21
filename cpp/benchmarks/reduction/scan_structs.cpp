@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,7 +8,7 @@
 #include <benchmarks/common/table_utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/scan.hpp>
+#include <cudf/reduction.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -46,8 +46,7 @@ static void nvbench_structs_scan(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   std::unique_ptr<cudf::column> result = nullptr;
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    result = cudf::detail::scan_inclusive(
-      input_view, *agg, null_policy, stream, cudf::get_current_device_resource_ref());
+    result = cudf::scan(input_view, *agg, cudf::scan_type::INCLUSIVE, null_policy, stream);
   });
 
   state.add_element_count(input_view.size());

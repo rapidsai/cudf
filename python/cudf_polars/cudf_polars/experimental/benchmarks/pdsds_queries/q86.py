@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -98,7 +98,7 @@ def _rollup_level(
     return out
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 86."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -130,33 +130,53 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
 
     combined = pl.concat([lvl0, lvl1, lvl2])
 
-    return (
-        combined.with_columns(
-            pl.when(pl.col("lochierarchy") == 0)
-            .then(pl.col("i_category"))
-            .otherwise(None)
-            .alias("partition_category")
-        )
-        .with_columns(
-            pl.col("total_sum")
-            .rank(method="min", descending=True)
-            .over([pl.col("lochierarchy"), pl.col("partition_category")])
-            .cast(pl.Int64)
-            .alias("rank_within_parent")
-        )
-        .select(
-            ["total_sum", "i_category", "i_class", "lochierarchy", "rank_within_parent"]
-        )
-        .sort(
-            [
-                "lochierarchy",
+    return QueryResult(
+        frame=(
+            combined.with_columns(
+                pl.when(pl.col("lochierarchy") == 0)
+                .then(pl.col("i_category"))
+                .otherwise(None)
+                .alias("partition_category")
+            )
+            .with_columns(
+                pl.col("total_sum")
+                .rank(method="min", descending=True)
+                .over([pl.col("lochierarchy"), pl.col("partition_category")])
+                .cast(pl.Int64)
+                .alias("rank_within_parent")
+            )
+            .select(
+                [
+                    "total_sum",
+                    "i_category",
+                    "i_class",
+                    "lochierarchy",
+                    "rank_within_parent",
+                ]
+            )
+            .sort(
+                [
+                    "lochierarchy",
+                    pl.when(pl.col("lochierarchy") == 0)
+                    .then(pl.col("i_category"))
+                    .otherwise(None),
+                    "rank_within_parent",
+                ],
+                descending=[True, False, False],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[("lochierarchy", True), ("rank_within_parent", False)],
+        limit=100,
+        sort_keys=[
+            (pl.col("lochierarchy"), True),
+            (
                 pl.when(pl.col("lochierarchy") == 0)
                 .then(pl.col("i_category"))
                 .otherwise(None),
-                "rank_within_parent",
-            ],
-            descending=[True, False, False],
-            nulls_last=True,
-        )
-        .limit(100)
+                False,
+            ),
+            (pl.col("rank_within_parent"), False),
+        ],
     )

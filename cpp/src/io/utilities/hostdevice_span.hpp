@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -56,7 +56,7 @@ class hostdevice_span {
                              void>* = nullptr>
   [[nodiscard]] operator cudf::device_span<U>() const noexcept
   {
-    return {_device_data, size()};
+    return cudf::device_span<U>(_device_data, size());
   }
 
   /**

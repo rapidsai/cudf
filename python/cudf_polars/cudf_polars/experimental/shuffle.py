@@ -18,7 +18,6 @@ from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.experimental.base import get_key_name
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
 from cudf_polars.experimental.utils import _concat, _dynamic_planning_on
-from cudf_polars.utils.config import ShufflerInsertionMethod
 from cudf_polars.utils.cuda_stream import get_dask_cuda_stream
 
 if TYPE_CHECKING:
@@ -44,7 +43,6 @@ class ShuffleOptions(TypedDict):
     column_names: Sequence[str]
     dtypes: Sequence[DataType]
     cluster_kind: Literal["dask", "single"]
-    shuffler_insertion_method: ShufflerInsertionMethod
 
 
 # Experimental rapidsmpf shuffler integration
@@ -83,13 +81,7 @@ class RMPFIntegration:  # pragma: no cover
             stream=DEFAULT_STREAM,
         )
 
-        if (
-            options["shuffler_insertion_method"]
-            == ShufflerInsertionMethod.CONCAT_INSERT
-        ):
-            shuffler.concat_insert(packed_inputs)
-        else:
-            shuffler.insert_chunks(packed_inputs)
+        shuffler.insert_chunks(packed_inputs)
 
     @staticmethod
     @nvtx_annotate_cudf_polars(message="RMPFIntegration.extract_partition")
@@ -112,7 +104,7 @@ class RMPFIntegration:  # pragma: no cover
 
         context = get_worker_context()
 
-        shuffler.wait_on(partition_id)
+        shuffler.wait()
         column_names = options["column_names"]
         dtypes = options["dtypes"]
         return DataFrame.from_table(
@@ -141,29 +133,25 @@ class Shuffle(IR):
     `ShuffleSorted` for sorting-based shuffling.
     """
 
-    __slots__ = ("keys", "shuffle_method", "shuffler_insertion_method")
-    _non_child = ("schema", "keys", "shuffle_method", "shuffler_insertion_method")
-    _n_non_child_args = 4
+    __slots__ = ("keys", "shuffle_method")
+    _non_child = ("schema", "keys", "shuffle_method")
+    _n_non_child_args = 3
     keys: tuple[NamedExpr, ...]
     """Keys to shuffle on."""
     shuffle_method: ShuffleMethod
     """Shuffle method to use."""
-    shuffler_insertion_method: ShufflerInsertionMethod
-    """Insertion method for rapidsmpf shuffler."""
 
     def __init__(
         self,
         schema: Schema,
         keys: tuple[NamedExpr, ...],
         shuffle_method: ShuffleMethod,
-        shuffler_insertion_method: ShufflerInsertionMethod,
         df: IR,
     ):
         self.schema = schema
         self.keys = keys
         self.shuffle_method = shuffle_method
-        self.shuffler_insertion_method = shuffler_insertion_method
-        self._non_child_args = (schema, keys, shuffle_method, shuffler_insertion_method)
+        self._non_child_args = (schema, keys, shuffle_method)
         self.children = (df,)
 
     # the type-ignore is for
@@ -370,7 +358,6 @@ def _(
                     "column_names": list(ir.schema.keys()),
                     "dtypes": list(ir.schema.values()),
                     "cluster_kind": cluster_kind,
-                    "shuffler_insertion_method": ir.shuffler_insertion_method,
                 },
             )
         except ValueError as err:

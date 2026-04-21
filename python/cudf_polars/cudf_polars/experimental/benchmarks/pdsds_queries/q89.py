@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -73,7 +73,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 89."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -123,32 +123,40 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         )
     )
 
-    return (
-        tmp1.with_columns(
-            pl.when(pl.col("avg_monthly_sales") != 0)
-            .then(
-                (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
-                / pl.col("avg_monthly_sales")
+    return QueryResult(
+        frame=(
+            tmp1.with_columns(
+                pl.when(pl.col("avg_monthly_sales") != 0)
+                .then(
+                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                    / pl.col("avg_monthly_sales")
+                )
+                .otherwise(None)
+                .alias("deviation_ratio")
             )
-            .otherwise(None)
-            .alias("deviation_ratio")
-        )
-        .filter(pl.col("deviation_ratio") > 0.1)
-        .select(
-            [
-                "i_category",
-                "i_class",
-                "i_brand",
-                "s_store_name",
-                "s_company_name",
-                "d_moy",
-                "sum_sales",
-                "avg_monthly_sales",
-            ]
-        )
-        .sort(
-            [(pl.col("sum_sales") - pl.col("avg_monthly_sales")), "s_store_name"],
-            nulls_last=True,
-        )
-        .limit(100)
+            .filter(pl.col("deviation_ratio") > 0.1)
+            .select(
+                [
+                    "i_category",
+                    "i_class",
+                    "i_brand",
+                    "s_store_name",
+                    "s_company_name",
+                    "d_moy",
+                    "sum_sales",
+                    "avg_monthly_sales",
+                ]
+            )
+            .sort(
+                [(pl.col("sum_sales") - pl.col("avg_monthly_sales")), "s_store_name"],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[("s_store_name", False)],
+        limit=100,
+        sort_keys=[
+            (pl.col("sum_sales") - pl.col("avg_monthly_sales"), False),
+            (pl.col("s_store_name"), False),
+        ],
     )

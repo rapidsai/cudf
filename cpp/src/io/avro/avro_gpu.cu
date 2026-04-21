@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "avro_gpu.hpp"
@@ -52,7 +52,7 @@ static inline int64_t __device__ avro_decode_zigzag_varint(uint8_t const*& cur, 
  *                       destination data.
  * @param[in] cur Current input data pointer
  * @param[in] end End of input data
- * @param[in] global_Dictionary Global dictionary entries
+ * @param[in] global_dictionary Global dictionary entries
  * @param[out] skipped_row Whether the row was skipped; set to false
  *                         if the row was saved (caller should ensure
  *                         this is initialized to true)
@@ -305,8 +305,8 @@ avro_decode_row(schemadesc_s const* schema,
  * @brief Decode column data
  *
  * @param[in] blocks Data block descriptions
- * @param[in] schema Schema description
- * @param[in] global_Dictionary Global dictionary entries
+ * @param[in] schema_g Schema description
+ * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
  * @param[in] schema_len Number of entries in schema
  * @param[in] min_row_size Minimum size in bytes of a row

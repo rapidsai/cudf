@@ -461,17 +461,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(JNIEnv* env
 
     std::unique_ptr<cudf::column> ret;
     if (n_default_output_col != nullptr) {
-      if (n_preceding_col != nullptr && n_following_col != nullptr) {
-        CUDF_FAIL(
-          "A default output column is not currently supported with variable length "
-          "preceding and following");
-        // ret = cudf::rolling_window(*n_input_col, *n_default_output_col,
-        //        *n_preceding_col, *n_following_col, min_periods, agg);
-      } else {
-        ret = cudf::rolling_window(
-          *n_input_col, *n_default_output_col, preceding, following, min_periods, *agg);
-      }
-
+      CUDF_EXPECTS(n_preceding_col == nullptr || n_following_col == nullptr,
+                   "A default output column is not currently supported with variable length "
+                   "preceding and following");
+      ret = cudf::rolling_window(
+        *n_input_col, *n_default_output_col, preceding, following, min_periods, *agg);
     } else {
       if (n_preceding_col != nullptr && n_following_col != nullptr) {
         ret =

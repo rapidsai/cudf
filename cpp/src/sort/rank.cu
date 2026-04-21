@@ -23,9 +23,9 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -65,15 +65,15 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
   auto const comparator = cudf::detail::row::equality::self_comparator{t_input, stream};
 
   auto const sorted_index_order = thrust::make_permutation_iterator(
-    sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
+    sorted_order_view.begin<size_type>(), cuda::counting_iterator<size_type>{0});
 
   auto const input_size = input_col.size();
   rmm::device_uvector<size_type> dense_rank_sorted(input_size, stream);
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(input_size),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{input_size},
                       dense_rank_sorted.data(),
                       unique_functor<decltype(sorted_index_order), decltype(device_comparator)>{
                         sorted_index_order, device_comparator});
@@ -89,7 +89,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
     comparator_helper(device_comparator);
   }
 
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          dense_rank_sorted.begin(),
                          dense_rank_sorted.end(),
                          dense_rank_sorted.data());
@@ -101,7 +101,7 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
  * @brief Breaks the ties among equal value groups using binary operator and
  * transform this tied value to final rank.
  *
- * @param dense_rank dense rank of sorted input column (acts as key for value
+ * @param dense_rank_sorted dense rank of sorted input column (acts as key for value
  * groups).
  * @param tie_iter  iterator of rank to break ties among equal value groups.
  * @param sorted_order_view sorted order indices of input column
@@ -127,7 +127,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
   // algorithm: reduce_by_key(dense_rank, 1, n, reduction_tie_breaker)
   // reduction_tie_breaker = min, max, min_count
   rmm::device_uvector<TieType> tie_sorted(sorted_order_view.size(), stream);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         dense_rank_sorted.begin(),
                         dense_rank_sorted.end(),
                         tie_iter,
@@ -143,7 +143,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
       [tied_rank = tie_sorted.begin(), transformer] __device__(auto dense_pos) {
         return transformer(tied_rank[dense_pos - 1]);
       }));
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   sorted_tied_rank,
                   sorted_tied_rank + input_size,
                   sorted_order_view.begin<size_type>(),
@@ -156,9 +156,9 @@ void rank_first(column_view sorted_order_view,
                 rmm::cuda_stream_view stream)
 {
   // stable sort order ranking (no ties)
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_counting_iterator<size_type>(1),
-                  thrust::make_counting_iterator<size_type>(rank_mutable_view.size() + 1),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                  cuda::counting_iterator<size_type>{1},
+                  cuda::counting_iterator<size_type>{rank_mutable_view.size() + 1},
                   sorted_order_view.begin<size_type>(),
                   rank_mutable_view.begin<outputType>());
 }
@@ -170,7 +170,7 @@ void rank_dense(cudf::device_span<size_type const> dense_rank_sorted,
                 rmm::cuda_stream_view stream)
 {
   // All equal values have same rank and rank always increases by 1 between groups
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   dense_rank_sorted.begin(),
                   dense_rank_sorted.end(),
                   sorted_order_view.begin<size_type>(),
@@ -187,7 +187,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
   // All equal values have min of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, min), scatter
   tie_break_ranks_transform<size_type>(group_keys,
-                                       thrust::make_counting_iterator<size_type>(1),
+                                       cuda::counting_iterator<size_type>{1},
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
                                        cuda::minimum{},
@@ -205,7 +205,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
   // All equal values have max of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, max), scatter
   tie_break_ranks_transform<size_type>(group_keys,
-                                       thrust::make_counting_iterator<size_type>(1),
+                                       cuda::counting_iterator<size_type>{1},
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
                                        cuda::maximum{},
@@ -239,7 +239,7 @@ void rank_average(cudf::device_span<size_type const> group_keys,
     sorted_order_view,
     rank_mutable_view.begin<double>(),
     cuda::proclaim_return_type<MinCount>([] __device__(auto rank_count1, auto rank_count2) {
-      return MinCount{std::min(rank_count1.first, rank_count2.first),
+      return MinCount{cuda::std::min(rank_count1.first, rank_count2.first),
                       rank_count1.second + rank_count2.second};
     }),
     cuda::proclaim_return_type<double>([] __device__(MinCount minrank_count) {  // min+(count-1)/2
@@ -342,7 +342,7 @@ std::unique_ptr<column> rank(column_view const& input,
     auto drs            = dense_rank_sorted.data();
     bool const is_dense = (method == rank_method::DENSE);
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       rank_iter,
       rank_iter + input.size(),
       rank_iter,

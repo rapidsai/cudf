@@ -1261,6 +1261,19 @@ class Series(SingleColumnFrame, IndexedFrame):
             result = res["s"]
             result.name = self.name
             result.index = self.index
+        elif arg is str:
+            if self.dtype.kind == "M":
+                from cudf.core.column.datetime import (
+                    _dtype_to_format_conversion,
+                )
+
+                result = self.dt.strftime(
+                    _dtype_to_format_conversion.get(
+                        self.dtype.name, "%Y-%m-%d %H:%M:%S"
+                    )
+                )
+            else:
+                result = self.astype(str)
         else:
             result = self.apply(arg)
         return result
@@ -2625,6 +2638,10 @@ class Series(SingleColumnFrame, IndexedFrame):
             raise ValueError("Series.apply only supports convert_dtype=True")
         elif by_row != "compat":
             raise NotImplementedError("by_row is currently not supported.")
+        elif func is str:
+            result = self.map(func)
+            result.name = self.name
+            return result
 
         result = self._apply(func, SeriesApplyKernel, *args, **kwargs)
         result.name = self.name

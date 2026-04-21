@@ -942,6 +942,7 @@ def read_parquet(
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
     ignore_missing_columns=True,
+    case_sensitive_names=True,
     *args,
     **kwargs,
 ):
@@ -1105,18 +1106,32 @@ def read_parquet(
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
         ignore_missing_columns=ignore_missing_columns,
+        case_sensitive_names=case_sensitive_names,
         filters=ast_filter,
         **kwargs,
     )
+    # Build a lookup from (possibly lowered) name -> actual DataFrame column name
+    _key = str.lower if not case_sensitive_names else str
+    col_names = {_key(name): name for name in df._column_names}
+
     # Apply filters row-wise (if any are defined), and return
     if ast_filter is None:
+        if not case_sensitive_names and filters:
+            filters = [
+                [
+                    (col_names[_key(col)], op, val)
+                    for col, op, val in conjunction
+                ]
+                for conjunction in filters
+            ]
         df = _apply_post_filters(df, filters)
 
     if projected_columns:
         # Elements of `projected_columns` may now be in the index.
-        # We must filter these names from our projection
+        # We must filter these names from our projection. For structs,
+        # only the top-level name needs remapping via col_names
         projected_columns = [
-            col for col in projected_columns if col in df._column_names
+            col_names[_key(col.split(".")[0])] for col in projected_columns
         ]
         return df[projected_columns]
     return df
@@ -1238,6 +1253,7 @@ def _parquet_to_frame(
     dataset_kwargs=None,
     nrows=None,
     skip_rows=None,
+    case_sensitive_names=True,
     **kwargs,
 ):
     # If this is not a partitioned read, only need
@@ -1247,6 +1263,7 @@ def _parquet_to_frame(
             paths_or_buffers,
             nrows=nrows,
             skip_rows=skip_rows,
+            case_sensitive_names=case_sensitive_names,
             *args,
             row_groups=row_groups,
             **kwargs,
@@ -1288,6 +1305,7 @@ def _parquet_to_frame(
                 key_paths,
                 *args,
                 row_groups=key_row_groups,
+                case_sensitive_names=case_sensitive_names,
                 **kwargs,
             )
         )
@@ -1342,6 +1360,7 @@ def _read_parquet(
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
     ignore_missing_columns: bool = True,
+    case_sensitive_names: bool = True,
     filters: plc_expr.Expression | None = None,
     *args,
     **kwargs,
@@ -1379,6 +1398,7 @@ def _read_parquet(
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
                 .ignore_missing_columns(ignore_missing_columns)
+                .case_sensitive_names(case_sensitive_names)
                 .build()
             )
             if row_groups is not None:
@@ -1447,6 +1467,7 @@ def _read_parquet(
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
                 .ignore_missing_columns(ignore_missing_columns)
+                .case_sensitive_names(case_sensitive_names)
                 .build()
             )
             if row_groups is not None:

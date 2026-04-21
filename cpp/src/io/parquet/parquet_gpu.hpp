@@ -767,7 +767,8 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
- * @param min_rows crop all rows below min_row
+ * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+ * @param min_row crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
  * computed
@@ -794,11 +795,13 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
  * @param[in] page_mask Boolean vector indicating if a page needs to be decoded or is pruned
- * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
- * @param[in] min_rows crop all rows below min_row
+ * @param[out] page_string_offset_indices Temporary space needed for decoding DELTA_BYTE_ARRAY
+ * strings
+ * @param[in] min_row crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] kernel_mask Mask of kernels to run
  * @param[in] all_rows If true, all rows will be read, regardless of `min_row` and `num_rows`
+ * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] stream CUDA stream to use
  */
 void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -1093,14 +1096,16 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
  *
  * @param[in,out] chunks Column chunks [rowgroup][column]
  * @param[out] pages Encode page array (null if just counting pages)
+ * @param[out] page_sizes Page sizes in bytes
+ * @param[in] comp_page_sizes Compressed page sizes in bytes
  * @param[in] col_desc Column description array [column_id]
- * @param[in] num_rowgroups Number of fragments per column
  * @param[in] num_columns Number of columns
- * @param[in] page_grstats Setup for page-level stats
+ * @param[in] max_page_size_bytes Maximum uncompressed page size in bytes
+ * @param[in] max_page_size_rows Maximum number of rows per page
  * @param[in] page_align Required alignment for uncompressed pages
  * @param[in] write_v2_headers True if V2 page headers should be written
+ * @param[in] page_grstats Setup for page-level stats
  * @param[in] chunk_grstats Setup for chunk-level stats
- * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,

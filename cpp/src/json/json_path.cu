@@ -660,9 +660,9 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
   int max_stack_depth = 1;
   do {
     op = p_state.get_next_operator();
-    if (op.type == path_operator_type::ERROR) {
-      CUDF_FAIL("Encountered invalid JSONPath input string", std::invalid_argument);
-    }
+    CUDF_EXPECTS(op.type != path_operator_type::ERROR,
+                 "Encountered invalid JSONPath input string",
+                 std::invalid_argument);
     if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer
     if (op.name.size_bytes() > 0) {
@@ -983,7 +983,10 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   if (!std::get<0>(preprocess).has_value()) {
     // Create a proper all-null strings column with valid structure (offsets + chars children)
     auto offsets = cudf::make_column_from_scalar(
-      cudf::numeric_scalar<int32_t>(0, true, stream), col.size() + 1, stream, mr);
+      cudf::numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref()),
+      col.size() + 1,
+      stream,
+      mr);
 
     return make_strings_column(
       col.size(),
@@ -1027,7 +1030,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::create_null_mask(col.size(), mask_state::UNINITIALIZED, stream, mr);
 
   // compute results
-  cudf::detail::device_scalar<size_type> d_valid_count{0, stream};
+  cudf::detail::device_scalar<size_type> d_valid_count{
+    0, stream, cudf::get_current_device_resource_ref()};
 
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(

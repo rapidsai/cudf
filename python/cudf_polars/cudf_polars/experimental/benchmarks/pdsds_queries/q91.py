@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -68,7 +68,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 91."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -107,64 +107,75 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
         (pl.col("cd_marital_status") == marital_status2)
         & (pl.col("cd_education_status") == education_status2)
     )
-    return (
-        catalog_returns.join(
-            call_center,
-            left_on="cr_call_center_sk",
-            right_on="cc_call_center_sk",
-            how="inner",
-        )
-        .join(
-            date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk", how="inner"
-        )
-        .join(
-            customer,
-            left_on="cr_returning_customer_sk",
-            right_on="c_customer_sk",
-            how="inner",
-        )
-        .join(
-            customer_demographics,
-            left_on="c_current_cdemo_sk",
-            right_on="cd_demo_sk",
-            how="inner",
-        )
-        .join(
-            household_demographics,
-            left_on="c_current_hdemo_sk",
-            right_on="hd_demo_sk",
-            how="inner",
-        )
-        .join(
-            customer_address,
-            left_on="c_current_addr_sk",
-            right_on="ca_address_sk",
-            how="inner",
-        )
-        .filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == month)
-            & demo_filter
-            & (pl.col("hd_buy_potential").str.starts_with(hd_buy_potential))
-            & (pl.col("ca_gmt_offset") == ca_gmt_offset)
-        )
-        .group_by(
-            [
-                "cc_call_center_id",
-                "cc_name",
-                "cc_manager",
-                "cd_marital_status",
-                "cd_education_status",
-            ]
-        )
-        .agg([pl.col("cr_net_loss").sum().alias("sum(cr_net_loss)")])
-        .select(
-            [
-                pl.col("cc_call_center_id").alias("Call_Center"),
-                pl.col("cc_name").alias("Call_Center_Name"),
-                pl.col("cc_manager").alias("Manager"),
-                pl.col("sum(cr_net_loss)").alias("Returns_Loss"),
-            ]
-        )
-        .sort("Returns_Loss", descending=True, nulls_last=True)
+    return QueryResult(
+        frame=(
+            catalog_returns.join(
+                call_center,
+                left_on="cr_call_center_sk",
+                right_on="cc_call_center_sk",
+                how="inner",
+            )
+            .join(
+                date_dim,
+                left_on="cr_returned_date_sk",
+                right_on="d_date_sk",
+                how="inner",
+            )
+            .join(
+                customer,
+                left_on="cr_returning_customer_sk",
+                right_on="c_customer_sk",
+                how="inner",
+            )
+            .join(
+                customer_demographics,
+                left_on="c_current_cdemo_sk",
+                right_on="cd_demo_sk",
+                how="inner",
+            )
+            .join(
+                household_demographics,
+                left_on="c_current_hdemo_sk",
+                right_on="hd_demo_sk",
+                how="inner",
+            )
+            .join(
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
+                how="inner",
+            )
+            .filter(
+                (pl.col("d_year") == year)
+                & (pl.col("d_moy") == month)
+                & demo_filter
+                & (
+                    pl.col("hd_buy_potential").str.starts_with(
+                        hd_buy_potential.rstrip("%")
+                    )
+                )
+                & (pl.col("ca_gmt_offset") == ca_gmt_offset)
+            )
+            .group_by(
+                [
+                    "cc_call_center_id",
+                    "cc_name",
+                    "cc_manager",
+                    "cd_marital_status",
+                    "cd_education_status",
+                ]
+            )
+            .agg([pl.col("cr_net_loss").sum().alias("sum(cr_net_loss)")])
+            .select(
+                [
+                    pl.col("cc_call_center_id").alias("Call_Center"),
+                    pl.col("cc_name").alias("Call_Center_Name"),
+                    pl.col("cc_manager").alias("Manager"),
+                    pl.col("sum(cr_net_loss)").alias("Returns_Loss"),
+                ]
+            )
+            .sort("Returns_Loss", descending=True, nulls_last=True)
+        ),
+        sort_by=[("Returns_Loss", True)],
+        limit=None,
     )

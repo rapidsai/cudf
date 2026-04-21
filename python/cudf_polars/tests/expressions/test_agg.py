@@ -14,7 +14,11 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_135, POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_134,
+    POLARS_VERSION_LT_135,
+    POLARS_VERSION_LT_136,
+)
 
 
 @pytest.fixture(
@@ -199,6 +203,24 @@ def test_decimal_aggs(decimal_df: pl.LazyFrame) -> None:
         median=pl.col("a").median(),
         mean_f32=pl.col("a").mean().cast(pl.Float32),
         median_f32=pl.col("a").median().cast(pl.Float32),
+    )
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.parametrize("interp", ["nearest", "higher", "lower", "midpoint", "linear"])
+def test_decimal_quantile(decimal_df, interp):
+    q = decimal_df.select(pl.col("a").quantile(0.5, interpolation=interp))
+    assert_gpu_result_equal(q)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_134,
+    reason="std/var on decimal not supported before polars 1.34",
+)
+def test_decimal_std_var(decimal_df):
+    q = decimal_df.select(
+        std=pl.col("a").std(),
+        var=pl.col("a").var(),
     )
     assert_gpu_result_equal(q)
 

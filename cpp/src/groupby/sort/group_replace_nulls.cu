@@ -12,10 +12,9 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
-#include <cuda/std/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
@@ -35,7 +34,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   cudf::size_type size = grouped_value.size();
 
   auto device_in = cudf::column_device_view::create(grouped_value, stream);
-  auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto index     = cuda::counting_iterator<cudf::size_type>{0};
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
 
@@ -46,25 +45,32 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto func = cudf::detail::replace_policy_functor();
   cuda::std::equal_to<cudf::size_type> eq;
   if (replace_policy == cudf::replace_policy::PRECEDING) {
-    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                  group_labels.begin(),
-                                  group_labels.begin() + size,
-                                  in_begin,
-                                  gm_begin,
-                                  eq,
-                                  func);
+    thrust::inclusive_scan_by_key(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      group_labels.begin(),
+      group_labels.begin() + size,
+      in_begin,
+      gm_begin,
+      eq,
+      func);
   } else {
     auto gl_rbegin = cuda::std::make_reverse_iterator(group_labels.begin() + size);
     auto in_rbegin = cuda::std::make_reverse_iterator(in_begin + size);
     auto gm_rbegin = cuda::std::make_reverse_iterator(gm_begin + size);
     thrust::inclusive_scan_by_key(
-      rmm::exec_policy_nosync(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      gl_rbegin,
+      gl_rbegin + size,
+      in_rbegin,
+      gm_rbegin,
+      eq,
+      func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),
                                      gather_map,
                                      cudf::out_of_bounds_policy::DONT_CHECK,
-                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                     cudf::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
 

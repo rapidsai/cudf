@@ -45,9 +45,14 @@ using ByteLikeTypes = cudf::test::Types<int8_t, char, uint8_t, unsigned char, st
 // them.
 using UnsupportedChronoTypes =
   cudf::test::Types<cudf::timestamp_s, cudf::duration_D, cudf::duration_s>;
-// Also fixed point types unsupported, because AST does not support them yet.
-using SupportedTestTypes = cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>,
-                                                cudf::test::ComparableTypes>;
+
+// Support types for AST expression evaluator
+using SupportedTestTypesAST =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<UnsupportedChronoTypes>, ComparableAndFixedTypes>;
+
+// JIT does not yet support fixed point types
+using SupportedTestTypesJIT =
+  cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::FixedPointTypes>, SupportedTestTypesAST>;
 
 // removing duration_D, duration_s, and timestamp_s as they don't appear to be supported properly.
 // see definition of UnsupportedChronoTypes above.

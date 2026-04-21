@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
-from cudf_polars.experimental.benchmarks.utils import get_data
+from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
     from cudf_polars.experimental.benchmarks.utils import RunConfig
@@ -69,7 +69,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
+def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 97."""
     params = load_parameters(
         int(run_config.scale_factor),
@@ -117,35 +117,41 @@ def polars_impl(run_config: RunConfig) -> pl.LazyFrame:
             ]
         )
     )
-    return (
-        ssci.join(csci, on=["customer_sk", "item_sk"], how="full", suffix="_catalog")
-        .select(
-            [
-                pl.when(
-                    pl.col("customer_sk").is_not_null()
-                    & pl.col("customer_sk_catalog").is_null()
-                )
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .alias("store_only"),
-                pl.when(
-                    pl.col("customer_sk").is_null()
-                    & pl.col("customer_sk_catalog").is_not_null()
-                )
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .alias("catalog_only"),
-                pl.when(
-                    pl.col("customer_sk").is_not_null()
-                    & pl.col("customer_sk_catalog").is_not_null()
-                )
-                .then(1)
-                .otherwise(0)
-                .sum()
-                .alias("store_and_catalog"),
-            ]
-        )
-        .limit(100)
+    return QueryResult(
+        frame=(
+            ssci.join(
+                csci, on=["customer_sk", "item_sk"], how="full", suffix="_catalog"
+            )
+            .select(
+                [
+                    pl.when(
+                        pl.col("customer_sk").is_not_null()
+                        & pl.col("customer_sk_catalog").is_null()
+                    )
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("store_only"),
+                    pl.when(
+                        pl.col("customer_sk").is_null()
+                        & pl.col("customer_sk_catalog").is_not_null()
+                    )
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("catalog_only"),
+                    pl.when(
+                        pl.col("customer_sk").is_not_null()
+                        & pl.col("customer_sk_catalog").is_not_null()
+                    )
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("store_and_catalog"),
+                ]
+            )
+            .limit(100)
+        ),
+        sort_by=[],
+        limit=100,
     )

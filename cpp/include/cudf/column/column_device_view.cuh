@@ -16,8 +16,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <functional>
@@ -92,7 +92,7 @@ class alignas(16) column_device_view : public column_device_view_core {
                               this->null_count(),
                               this->null_mask(),
                               this->offset() + offset,
-                              static_cast<column_device_view*>(d_children),
+                              static_cast<column_device_view*>(_children),
                               this->num_child_columns()};
   }
 
@@ -221,7 +221,7 @@ class alignas(16) column_device_view : public column_device_view_core {
   }
 
   /// Counting iterator
-  using count_it = thrust::counting_iterator<size_type>;
+  using count_it = cuda::counting_iterator<size_type>;
   /**
    * @brief Iterator for navigating this column
    */
@@ -529,7 +529,7 @@ class alignas(16) column_device_view : public column_device_view_core {
    */
   [[nodiscard]] __device__ column_device_view child(size_type child_index) const noexcept
   {
-    return static_cast<column_device_view*>(d_children)[child_index];
+    return static_cast<column_device_view*>(_children)[child_index];
   }
 
   /**
@@ -539,7 +539,7 @@ class alignas(16) column_device_view : public column_device_view_core {
    */
   [[nodiscard]] __device__ device_span<column_device_view const> children() const noexcept
   {
-    return {static_cast<column_device_view*>(d_children), static_cast<std::size_t>(_num_children)};
+    return {static_cast<column_device_view*>(_children), static_cast<std::size_t>(_num_children)};
   }
 
   /**
@@ -689,7 +689,7 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
   }
 
   /// Counting iterator
-  using count_it = thrust::counting_iterator<size_type>;
+  using count_it = cuda::counting_iterator<size_type>;
   /**
    * @brief Iterator for navigating this column
    */
@@ -736,7 +736,7 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
    */
   [[nodiscard]] __device__ mutable_column_device_view child(size_type child_index) const noexcept
   {
-    return static_cast<mutable_column_device_view*>(d_children)[child_index];
+    return static_cast<mutable_column_device_view*>(_children)[child_index];
   }
 
   /**
@@ -748,6 +748,31 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
    * device view of the specified column and its children
    */
   static std::size_t extent(mutable_column_view source_view);
+
+  /**
+   * @brief Factory to construct a mutable column view that is usable in device memory from
+   * pre-existing device memory pointers to data, nullmask, and offset.
+   *
+   * @param type The type of the column
+   * @param size The number of elements in the column
+   * @param data Pointer to the device memory containing the data
+   * @param null_mask Pointer to the device memory containing the null bitmask
+   * @param offset The index of the first element in the column
+   * @param children Pointer to the device memory containing child data
+   * @param num_children The number of child columns
+   * @return A `mutable_column_device_view` instance representing the specified column data
+   * in device memory
+   */
+  [[nodiscard]] static auto create(data_type type,
+                                   size_type size,
+                                   void const* data,
+                                   bitmask_type const* null_mask,
+                                   size_type offset,
+                                   mutable_column_device_view* children,
+                                   size_type num_children)
+  {
+    return mutable_column_device_view{type, size, data, null_mask, offset, children, num_children};
+  }
 
   /**
    * @brief Destroy the `mutable_column_device_view` object.
@@ -767,14 +792,30 @@ class alignas(16) mutable_column_device_view : public mutable_column_device_view
    *`mutable_column_device_view::create()` function should be used.
    */
   mutable_column_device_view(mutable_column_view source);
+
+  /**
+   * @brief Creates an instance of this class using pre-existing device memory pointers to data,
+   * nullmask, and offset.
+   *
+   * @param type The type of the column
+   * @param size The number of elements in the column
+   * @param data Pointer to the device memory containing the data
+   * @param null_mask Pointer to the device memory containing the null bitmask
+   * @param offset The index of the first element in the column
+   * @param children Pointer to the device memory containing child data
+   * @param num_children The number of child columns
+   */
+  CUDF_HOST_DEVICE mutable_column_device_view(data_type type,
+                                              size_type size,
+                                              void const* data,
+                                              bitmask_type const* null_mask,
+                                              size_type offset,
+                                              mutable_column_device_view* children,
+                                              size_type num_children)
+    : mutable_column_device_view_core{type, size, data, null_mask, offset, children, num_children}
+  {
+  }
 };
-
-static_assert(sizeof(column_device_view) == sizeof(column_device_view_core),
-              "column_device_view and raw_column_device_view must be bitwise-compatible");
-
-static_assert(
-  sizeof(mutable_column_device_view) == sizeof(mutable_column_device_view_core),
-  "mutable_column_device_view and raw_mutable_column_device_view must be bitwise-compatible");
 
 namespace detail {
 

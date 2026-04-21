@@ -18,22 +18,11 @@ from cudf_polars.experimental.explain import (
     explain_query,
     serialize_query,
 )
-from cudf_polars.testing.asserts import (
-    DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
-    assert_gpu_result_equal,
-)
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-# Only rapidsmpf emits "Sort does not support multiple partitions"; apply filter conditionally.
-_maybe_ignore_sort_warning = (
-    pytest.mark.filterwarnings("ignore:Sort does not support multiple partitions")
-    if DEFAULT_RUNTIME == "rapidsmpf"
-    else lambda f: f
-)
 
 
 @pytest.fixture(scope="module")
@@ -48,20 +37,13 @@ def df():
 
 
 @pytest.fixture(scope="module")
-def engine():
+def explain_engine():
     return pl.GPUEngine(
         raise_on_fail=True,
         executor="streaming",
         executor_options={
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": DEFAULT_RUNTIME,  # Names coincide
             "target_partition_size": 10_000,
             "max_rows_per_partition": 1_000,
-            "stats_planning": {
-                "use_reduction_planning": True,
-                "default_selectivity": 0.5,
-            },
         },
     )
 
@@ -91,35 +73,6 @@ def test_explain_logical_plan(tmp_path, df, executor):
     assert "GROUPBY ('bucket',)" in plan
 
 
-def test_explain_physical_plan(tmp_path, df):
-    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=5)
-
-    q = (
-        pl.scan_parquet(tmp_path)
-        .filter((pl.col("x") < 40_000) & (pl.col("z") > 1.0))
-        .with_columns((pl.col("x") + pl.col("z")).alias("sum"))
-        .select(["sum", "y"])
-    )
-
-    engine = pl.GPUEngine(
-        executor="streaming",
-        raise_on_fail=True,
-        executor_options={
-            "target_partition_size": 10_000,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-        },
-    )
-
-    plan = explain_query(q, engine)
-
-    if DEFAULT_RUNTIME == "tasks":
-        # rapidsmpf runtime does not split Scan nodes at lowering time
-        assert "UNION" in plan
-        assert "SPLITSCAN" in plan
-    assert "SELECT ('sum', 'y')" in plan or "PROJECTION ('sum', 'y')" in plan
-
-
 def test_explain_physical_plan_with_groupby(tmp_path, df):
     make_partitioned_source(df, tmp_path, fmt="parquet", n_files=1)
 
@@ -135,8 +88,6 @@ def test_explain_physical_plan_with_groupby(tmp_path, df):
         raise_on_fail=True,
         executor_options={
             "target_partition_size": 10_000,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
         },
     )
 
@@ -156,7 +107,6 @@ def test_explain_logical_plan_with_join(tmp_path, df):
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
-        executor_options={"runtime": DEFAULT_RUNTIME},
     )
     plan = explain_query(q, engine, physical=False)
 
@@ -171,7 +121,6 @@ def test_explain_logical_plan_with_sort(tmp_path, df):
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
-        executor_options={"runtime": DEFAULT_RUNTIME},
     )
     plan = explain_query(q, engine, physical=False)
 
@@ -186,7 +135,6 @@ def test_explain_physical_plan_with_union_without_scan(df):
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
-        executor_options={"runtime": DEFAULT_RUNTIME},
     )
     plan = explain_query(q, engine, physical=False)
 
@@ -202,7 +150,6 @@ def test_explain_logical_plan_wide_table_with_scan(tmp_path):
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
-        executor_options={"runtime": DEFAULT_RUNTIME},
     )
     plan = explain_query(q, engine, physical=False)
 
@@ -216,7 +163,6 @@ def test_explain_logical_plan_wide_table():
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
-        executor_options={"runtime": DEFAULT_RUNTIME},
     )
     plan = explain_query(q, engine, physical=False)
 
@@ -231,11 +177,13 @@ def test_fmt_row_count():
     assert _fmt_row_count(1_250_000_000) == "1.25 B"
 
 
-@_maybe_ignore_sort_warning
+@pytest.mark.filterwarnings("ignore:Sort does not support multiple partitions")
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize("n_rows", [None, 3])
 @pytest.mark.parametrize("select", [True, False])
-def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select):
+def test_explain_logical_io_then_distinct(
+    explain_engine, tmp_path, kind, n_rows, select
+):
     # Create simple Distinct or Select(unique) + Sort query
     df0 = pl.DataFrame(
         {
@@ -253,31 +201,26 @@ def test_explain_logical_io_then_distinct(engine, tmp_path, kind, n_rows, select
 
     # Verify the query runs correctly
     # TODO: Is the cpu engine doing the right thing here?
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check query plan
-    repr = explain_query(q, engine, physical=False)
-    if kind == "csv":
-        # CSV will NOT provide row-count statistics unless n_rows is provided,
-        # and it will never provide unique-count statistics.
-        if n_rows is None:
-            assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-        else:
-            value = _fmt_row_count(n_rows)
-            assert re.search(
-                rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE
-            )
-    else:
-        value = _fmt_row_count(q.collect().height)
-        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+    # Check query plan - only SCAN nodes carry row_count annotations
+    repr = explain_query(q, explain_engine, physical=False)
+    assert "SORT" in repr
+    if kind == "parquet":
+        # Parquet footer always reports full file row count, regardless of n_rows
+        source_count = _fmt_row_count(df0.height)
+        assert re.search(rf"SCAN PARQUET.*row_count='~{source_count}'", repr)
+    elif kind == "frame":
+        expected_rows = n_rows if n_rows is not None else df0.height
+        source_count = _fmt_row_count(expected_rows)
+        assert re.search(rf"DATAFRAMESCAN.*row_count='~{source_count}'", repr)
+    # CSV has no row_count annotation in explain output
 
 
-@_maybe_ignore_sort_warning
+@pytest.mark.filterwarnings("ignore:Sort does not support multiple partitions")
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_logical_io_then_filter(engine, tmp_path, kind):
+def test_explain_logical_io_then_filter(explain_engine, tmp_path, kind):
     # Create simple Distinct or Select(unique) + Sort query.
-    # NOTE: This test depends on a "default_selectivity" of 0.5
-    # and a very-specific DataFrame and predicate.
     df = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -293,19 +236,20 @@ def test_explain_logical_io_then_filter(engine, tmp_path, kind):
     )
 
     # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check query plan
-    repr = explain_query(q, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        value = _fmt_row_count(q.collect().height)
-        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+    # Check query plan - only SCAN nodes carry row_count annotations
+    repr = explain_query(q, explain_engine, physical=False)
+    assert "SORT" in repr
+    if kind == "parquet":
+        assert re.search(r"SCAN PARQUET.*row_count='~8'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~8'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_logical_agg(engine, tmp_path, kind):
+def test_explain_logical_agg(explain_engine, tmp_path, kind):
     # Create simple aggregation query
     df = pl.DataFrame(
         {
@@ -319,17 +263,20 @@ def test_explain_logical_agg(engine, tmp_path, kind):
     q = df.select(pl.sum("customer_id"))
 
     # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check query plan - We should know that sum produces a single row.
-    repr = explain_query(q, engine, physical=False)
-    assert re.search(
-        rf"^\s*SELECT.*row_count=\'~{q.collect().height}\'\s*$", repr, re.MULTILINE
-    )
+    # Check query plan - only SCAN nodes carry row_count annotations
+    repr = explain_query(q, explain_engine, physical=False)
+    assert "SELECT" in repr
+    if kind == "parquet":
+        assert re.search(r"SCAN PARQUET.*row_count='~6'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~6'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_logical_io_then_join(engine, tmp_path, kind):
+def test_explain_logical_io_then_join(explain_engine, tmp_path, kind):
     # Create simple Join + Sort query
     sales = pl.DataFrame(
         {
@@ -351,19 +298,24 @@ def test_explain_logical_io_then_join(engine, tmp_path, kind):
     q = sales.join(customers, on="customer_id", how="inner").sort("customer_id")
 
     # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check the query plan
-    repr = explain_query(q, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        value = _fmt_row_count(q.collect().height)
-        assert re.search(rf"^\s*SORT.*row_count=\'~{value}\'\s*$", repr, re.MULTILINE)
+    # Check the query plan - only SCAN nodes carry row_count annotations
+    repr = explain_query(q, explain_engine, physical=False)
+    assert "SORT" in repr
+    assert "JOIN Inner" in repr
+    if kind == "parquet":
+        # sales has 6 rows, customers has 3 rows
+        assert re.search(r"SCAN PARQUET.*row_count='~6'", repr)
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~6'", repr)
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_logical_io_then_join_then_groupby(engine, tmp_path, kind):
+def test_explain_logical_io_then_join_then_groupby(explain_engine, tmp_path, kind):
     # Create simple Join + GroupBy + Sort query
     sales = pl.DataFrame(
         {
@@ -394,29 +346,25 @@ def test_explain_logical_io_then_join_then_groupby(engine, tmp_path, kind):
     q = q_gb.sort("customer_id")
 
     # Verify the query runs correctly
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=explain_engine)
 
-    # Check the query plan
-    repr = explain_query(q, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        join_count = _fmt_row_count(q_join.collect().height)
-        gb_count = _fmt_row_count(q_gb.collect().height)
-        final_count = _fmt_row_count(q.collect().height)
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*JOIN Inner.*row_count=\'~{join_count}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count}\'\s*$", repr, re.MULTILINE
-        )
+    # Check the query plan - only SCAN nodes carry row_count annotations
+    repr = explain_query(q, explain_engine, physical=False)
+    assert "SORT" in repr
+    assert "GROUPBY" in repr
+    assert "JOIN Inner" in repr
+    if kind == "parquet":
+        # sales has 6 rows, customers has 3 rows
+        assert re.search(r"SCAN PARQUET.*row_count='~6'", repr)
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~6'", repr)
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
-def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
+def test_explain_logical_io_then_concat_then_groupby(explain_engine, tmp_path, kind):
     # Create first table - sales data from 2023
     sales_2023 = pl.DataFrame(
         {
@@ -469,52 +417,31 @@ def test_explain_logical_io_then_concat_then_groupby(engine, tmp_path, kind):
     q_2 = q_concat_2.sort("customer_id").head(2)
 
     # Verify the query runs correctly
-    assert_gpu_result_equal(q_1, engine=engine)
-    assert_gpu_result_equal(q_2, engine=engine)
+    assert_gpu_result_equal(q_1, engine=explain_engine)
+    assert_gpu_result_equal(q_2, engine=explain_engine)
 
-    # Check query plan q_1
-    repr = explain_query(q_1, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
-        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
-        final_count_1 = _fmt_row_count(q_1.collect().height)
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count_1}\'\s*$", repr, re.MULTILINE
-        )
+    # Check query plan q_1 - only SCAN nodes carry row_count annotations
+    repr = explain_query(q_1, explain_engine, physical=False)
+    assert "SORT" in repr
+    assert "GROUPBY" in repr
+    assert "UNION" in repr
+    if kind == "parquet":
+        # Each source file has 3 rows
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
-    # Check query plan q_2
-    repr = explain_query(q_2, engine, physical=False)
-    if kind == "csv":
-        assert re.search(r"^\s*SORT.*row_count='unknown'\s*$", repr, re.MULTILINE)
-    else:
-        concat_count_1 = _fmt_row_count(q_concat_1.collect().height)
-        concat_count_2 = _fmt_row_count(q_concat_2.collect().height)
-        gb_count_1 = _fmt_row_count(q_gb_1.collect().height)
-        gb_count_2 = _fmt_row_count(q_gb_2.collect().height)
-        final_count_2 = _fmt_row_count(q_2.collect().height)
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*UNION.*row_count=\'~{concat_count_2}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_1}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*GROUPBY.*row_count=\'~{gb_count_2}\'\s*$", repr, re.MULTILINE
-        )
-        assert re.search(
-            rf"^\s*SORT.*row_count=\'~{final_count_2}\'\s*$", repr, re.MULTILINE
-        )
+    # Check query plan q_2 - only SCAN nodes carry row_count annotations
+    repr = explain_query(q_2, explain_engine, physical=False)
+    assert "SORT" in repr
+    assert "GROUPBY" in repr
+    assert "UNION" in repr
+    if kind == "parquet":
+        assert re.search(r"SCAN PARQUET.*row_count='~3'", repr)
+    elif kind == "frame":
+        assert re.search(r"DATAFRAMESCAN.*row_count='~3'", repr)
+    # CSV has no row_count annotation in explain output
 
 
 def test_serialize_query():
@@ -588,11 +515,14 @@ def test_serialize_query():
 
 @pytest.mark.parametrize("predicate", [None, pl.col("a") > 1])
 def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
-    pl.DataFrame({"a": [1, 2, 3]}).write_parquet(tmp_path / "test.parquet")
+    root = tmp_path.joinpath("test.parquet")
+    root.mkdir(parents=True, exist_ok=True)
+    for path in ["a", "b", "c"]:
+        pl.DataFrame({"a": [1, 2, 3]}).write_parquet(root / path)
 
     q = pl.scan_parquet(tmp_path / "test.parquet")
     expected_properties: dict[str, Any] = {
-        "paths": [str(tmp_path / "test.parquet")],
+        "prefix": f"{root}/",
         "typ": "parquet",
         "predicate": None,
     }
@@ -707,49 +637,28 @@ def test_hstack_properties():
     assert node.properties == {"columns": ["a", "b"]}
 
 
-def test_shuffle_properties():
-    # Join with broadcast_join_limit=1 forces shuffle-based join, producing
-    # Shuffle nodes in the lowered plan.
-    left = pl.LazyFrame({"a": ["x", "y", "x"], "b": [1, 2, 3]})
-    right = pl.LazyFrame({"a": ["x", "y", "z"], "c": [4, 5, 6]})
-    q = left.join(right, on="a", how="inner")
+def test_explain_physical_plan(tmp_path, df):
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=5)
+
+    q = (
+        pl.scan_parquet(tmp_path)
+        .filter((pl.col("x") < 40_000) & (pl.col("z") > 1.0))
+        .with_columns((pl.col("x") + pl.col("z")).alias("sum"))
+        .select(["sum", "y"])
+    )
+
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
         executor_options={
-            "max_rows_per_partition": 1,
-            "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": DEFAULT_RUNTIME,
-            "broadcast_join_limit": 1,
-            "shuffler_insertion_method": "insert_chunks",
-            "dynamic_planning": None,  # Requires static planning
+            "target_partition_size": 10_000,
         },
     )
-    dag = serialize_query(q, engine)
+    plan = explain_query(q, engine)
 
-    shuffle_nodes = [n for n in dag.nodes.values() if n.type == "Shuffle"]
-    assert len(shuffle_nodes) >= 1, "Expected at least one Shuffle node in lowered plan"
-    node = shuffle_nodes[0]
-
-    if DEFAULT_RUNTIME == "tasks":
-        shuffle_method = "tasks"
-    elif DEFAULT_CLUSTER == "single":
-        shuffle_method = "rapidsmpf-single"
-    else:
-        shuffle_method = "rapidsmpf"
-
-    assert node.properties == {
-        "keys": ["a"],
-        "shuffle_method": shuffle_method,
-        "shuffler_insertion_method": "insert_chunks",
-    }
+    assert "SELECT ('sum', 'y')" in plan or "PROJECTION ('sum', 'y')" in plan
 
 
-@pytest.mark.skipif(
-    DEFAULT_RUNTIME != "rapidsmpf",
-    reason="Requires the rapidsmpf runtime",
-)
 @pytest.mark.parametrize("op", ["sort", "sum"])
 def test_dynamic_planning_adds_repartition(df, op):
     # With dynamic planning, even single-partition data needs a REPARTITION
@@ -771,6 +680,9 @@ def test_dynamic_planning_adds_repartition(df, op):
     )
     plan = explain_query(q, engine, physical=True)
 
-    # With dynamic planning enabled, these operations should include
-    # a REPARTITION to collapse partitions.
-    assert "REPARTITION" in plan
+    # With dynamic planning enabled, sum needs a REPARTITION to collapse
+    # partitions for global aggregation. Sort uses SHUFFLESORTED and does not.
+    if op == "sort":
+        assert "SHUFFLESORTED" in plan
+    else:
+        assert "REPARTITION" in plan

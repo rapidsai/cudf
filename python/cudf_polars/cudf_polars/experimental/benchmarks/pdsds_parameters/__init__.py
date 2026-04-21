@@ -5,12 +5,11 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-_PARAMS_FILE = Path(__file__).parent / "parameter_substitutions.json"
-_PARAMS_CACHE = None
+from cudf_polars.experimental.benchmarks.pdsds_parameters.parameter_substitutions import (
+    PARAMETERS,
+)
 
 
 def load_parameters(
@@ -37,34 +36,28 @@ def load_parameters(
 
     Raises
     ------
-    ValueError
+    KeyError
         If parameters are not found for the given scale factor or query ID
     """
-    global _PARAMS_CACHE  # noqa: PLW0603
-
-    if _PARAMS_CACHE is None:
-        with _PARAMS_FILE.open() as f:
-            _PARAMS_CACHE = json.load(f)
-
     sf_key = "qualification" if qualification else str(scale_factor)
 
-    scale_params = _PARAMS_CACHE["scale_factors"].get(sf_key)
-    if scale_params is None:
+    try:
+        scale_params = PARAMETERS["scale_factors"][sf_key]
+    except KeyError as e:
         if qualification:
             msg = "No qualification parameters found"
         else:
             msg = f"No parameters found for scale factor {scale_factor}"
-        raise ValueError(msg)
+        raise KeyError(msg) from e
 
-    params = scale_params.get(str(query_id))
-    if params is None:
+    try:
+        return scale_params[str(query_id)]
+    except KeyError as e:
         param_type = (
             "qualification" if qualification else f"scale factor {scale_factor}"
         )
         msg = f"No parameters found for query {query_id} at {param_type}"
-        raise ValueError(msg)
-
-    return params
+        raise KeyError(msg) from e
 
 
 __all__ = ["load_parameters"]

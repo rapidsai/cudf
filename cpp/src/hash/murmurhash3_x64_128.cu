@@ -13,6 +13,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/array>
 #include <cuda/std/limits>
 #include <thrust/for_each.h>
@@ -117,7 +118,7 @@ std::unique_ptr<table> murmurhash3_x64_128(table_view const& input,
 
     // Compute the hash value for each row
     thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                       thrust::counting_iterator<size_type>(0),
+                       cuda::counting_iterator<size_type>{0},
                        input.num_rows(),
                        murmur_device_row_hasher(nullable, *input_view, seed, d_output1, d_output2));
   }
