@@ -58,9 +58,6 @@ TYPED_TEST(RoaringBitmapTest, Basics)
   auto const is_even =
     cudf::detail::make_counting_transform_iterator(0, [](auto const i) { return i % 2 == 0; });
 
-  auto const is_odd =
-    cudf::detail::make_counting_transform_iterator(0, [](auto const i) { return i % 2 != 0; });
-
   {
     auto result_col = bitmap.contains_async(keys_col, stream, mr);
     auto results    = cudf::detail::make_host_vector_async(
@@ -68,13 +65,7 @@ TYPED_TEST(RoaringBitmapTest, Basics)
     stream.synchronize();
     EXPECT_TRUE(std::equal(results.begin(), results.end(), is_even));
   }
-  {
-    auto result_col = bitmap.not_contains_async(keys_col, stream, mr);
-    auto results    = cudf::detail::make_host_vector_async(
-      cudf::device_span<bool const>(result_col->view().template data<bool>(), num_keys), stream);
-    stream.synchronize();
-    EXPECT_TRUE(std::equal(results.begin(), results.end(), is_odd));
-  }
+
   {
     auto result_iter = cuda::constant_iterator<bool>(false);
     auto result_col =
@@ -84,16 +75,6 @@ TYPED_TEST(RoaringBitmapTest, Basics)
       cudf::device_span<bool const>(result_col->view().template data<bool>(), num_keys), stream);
     stream.synchronize();
     EXPECT_TRUE(std::equal(results.begin(), results.end(), is_even));
-  }
-  {
-    auto result_iter = cuda::constant_iterator<bool>(false);
-    auto result_col =
-      cudf::test::fixed_width_column_wrapper<bool>(result_iter, result_iter + num_keys).release();
-    bitmap.not_contains_async(keys_col, result_col->mutable_view(), stream);
-    auto results = cudf::detail::make_host_vector_async(
-      cudf::device_span<bool const>(result_col->view().template data<bool>(), num_keys), stream);
-    stream.synchronize();
-    EXPECT_TRUE(std::equal(results.begin(), results.end(), is_odd));
   }
 }
 struct RoaringBitmapErrorTest : public cudf::test::BaseFixture {};

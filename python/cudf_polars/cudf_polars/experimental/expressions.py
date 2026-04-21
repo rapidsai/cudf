@@ -463,6 +463,23 @@ def _decompose_expr_node(
             config_options,
             names=names,
         )
+    elif isinstance(expr, UnaryFunction) and expr.name == "null_count":
+        columns, input_ir, partition_info = select(
+            [expr],
+            input_ir,
+            partition_info,
+            names=names,
+            repartition=True,
+        )
+        (column,) = columns
+        columns, input_ir, partition_info = select(
+            [Agg(expr.dtype, "sum", None, ExecutionContext.FRAME, column)],
+            input_ir,
+            partition_info,
+            names=names,
+        )
+        (expr,) = columns
+        return expr, input_ir, partition_info
     else:
         # This is an un-supported expression - raise.
         raise NotImplementedError(

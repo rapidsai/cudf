@@ -18,8 +18,6 @@
 #include <cuda/std/cstddef>
 
 #include <memory>
-#include <string>
-#include <string_view>
 
 namespace CUDF_EXPORT cudf {
 
@@ -54,9 +52,6 @@ enum class roaring_bitmap_type : uint8_t {
  */
 class roaring_bitmap {
  public:
-  //! Forward declaration of the opaque wrapper of cuco's roaring bitmap
-  struct roaring_bitmap_impl;
-
   /**
    * @brief Constructs a roaring_bitmap from serialized bitmap data (payload)
    *
@@ -67,7 +62,7 @@ class roaring_bitmap {
    * @param serialized_bitmap_data Host span of bytes containing a roaring bitmap serialized in
    * portable format
    *
-   * @throws std::invalid_argument if the serialized bitmap data is empty
+   * @throw std::invalid_argument if the serialized bitmap data is empty
    */
   explicit roaring_bitmap(roaring_bitmap_type type,
                           cudf::host_span<cuda::std::byte const> serialized_bitmap_data);
@@ -97,9 +92,9 @@ class roaring_bitmap {
   roaring_bitmap& operator=(roaring_bitmap const&) = delete;
 
   /**
-   * @brief Materialize the underlying cuco roaring bitmap.
+   * @brief Materialize the underlying cuco roaring bitmap
    *
-   * The serialized bitmap data may be released after this.
+   * The serialized bitmap data span is cleared after this call.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
@@ -113,6 +108,27 @@ class roaring_bitmap {
   [[nodiscard]] roaring_bitmap_type type() const;
 
   /**
+   * @brief Checks whether the bitmap contains no keys
+   *
+   * @return Whether the roaring bitmap contains no keys
+   */
+  [[nodiscard]] bool empty() const;
+
+  /**
+   * @brief Returns the number of keys stored in the bitmap
+   *
+   * @return Number of keys stored in the bitmap
+   */
+  [[nodiscard]] cuda::std::size_t size() const;
+
+  /**
+   * @brief Returns the size of the serialized bitmap storage in bytes
+   *
+   * @return Size of the serialized bitmap storage in bytes
+   */
+  [[nodiscard]] cuda::std::size_t size_bytes() const;
+
+  /**
    * @brief Asynchronously queries the bitmap for membership of each key in the input column.
    *
    * The input column must have dtype UINT32 (for `BITS_32`) or UINT64 (for `BITS_64`).
@@ -123,7 +139,7 @@ class roaring_bitmap {
    *
    * @return A BOOL8 column indicating positions of the present keys
    *
-   * @throws std::invalid_argument if the key column dtype is invalid
+   * @throw std::invalid_argument if the key column dtype is invalid
    */
   [[nodiscard]] std::unique_ptr<cudf::column> contains_async(
     cudf::column_view const& keys,
@@ -141,47 +157,17 @@ class roaring_bitmap {
    * @param output Output column to store the result
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if the key or output column dtypes are invalid
+   * @throw std::invalid_argument if the key or output column dtypes are invalid
    */
   void contains_async(cudf::column_view const& keys,
                       cudf::mutable_column_view const& output,
                       rmm::cuda_stream_view stream) const;
-
-  /**
-   * @brief Asynchronously queries the bitmap for non-membership of each key in the input column.
-   *
-   * The input column must have dtype UINT32 (for `BITS_32`) or UINT64 (for `BITS_64`).
-   *
-   * @param keys Key column to query
-   * @param output Output column to store the result
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @throws std::invalid_argument if the key or output column dtypes are invalid
-   */
-  void not_contains_async(cudf::column_view const& keys,
-                          cudf::mutable_column_view const& output,
-                          rmm::cuda_stream_view stream) const;
-
-  /**
-   * @brief Asynchronously queries the bitmap for non-membership of each key in the input column.
-   *
-   * The input column must have dtype UINT32 (for `BITS_32`) or UINT64 (for `BITS_64`).
-   *
-   * @param keys Key column to query
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource for the output column allocation
-   * @return A BOOL8 column indicating positions of the absent keys
-   *
-   * @throws std::invalid_argument if the key column dtype is invalid
-   */
-  [[nodiscard]] std::unique_ptr<cudf::column> not_contains_async(
-    cudf::column_view const& keys,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
-
+  
  private:
+  //! Forward declaration of the opaque wrapper of cuco's roaring bitmap
+  class impl;
   roaring_bitmap_type _type;
-  std::unique_ptr<roaring_bitmap_impl> _impl;
+  std::unique_ptr<impl> _impl;
 };
 
 namespace iceberg {

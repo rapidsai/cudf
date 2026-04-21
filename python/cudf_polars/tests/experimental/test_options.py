@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import pytest
@@ -323,3 +324,59 @@ def test_to_dict_roundtrip() -> None:
 def test_to_dict_roundtrip_empty() -> None:
     opts = StreamingOptions()
     assert StreamingOptions.from_dict(opts.to_dict()) == opts
+
+
+# ---------------------------------------------------------------------------
+# hardware_binding
+# ---------------------------------------------------------------------------
+
+
+def test_hardware_binding_in_engine_options() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    result = StreamingOptions(
+        hardware_binding=HardwareBindingPolicy(enabled=False)
+    ).to_engine_options()
+    assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
+
+
+def test_hardware_binding_env_var_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    monkeypatch.setenv("CUDF_POLARS__HARDWARE_BINDING", '{"enabled": false}')
+    result = StreamingOptions().to_engine_options()
+    assert result["hardware_binding"] == HardwareBindingPolicy(enabled=False)
+
+
+def test_hardware_binding_cli_json() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(["--hardware-binding", '{"raise_on_fail": true}'])
+    opts = StreamingOptions._from_argparse(args)
+    assert opts.hardware_binding == HardwareBindingPolicy(raise_on_fail=True)
+
+
+def test_hardware_binding_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CUDF_POLARS__HARDWARE_BINDING", "not json")
+    with pytest.raises(json.JSONDecodeError):
+        StreamingOptions()
+
+
+def test_hardware_binding_cli_disabled() -> None:
+    from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+        HardwareBindingPolicy,
+    )
+
+    parser = argparse.ArgumentParser()
+    StreamingOptions._add_cli_args(parser)
+    args = parser.parse_args(["--hardware-binding", '{"enabled": false}'])
+    opts = StreamingOptions._from_argparse(args)
+    assert opts.hardware_binding == HardwareBindingPolicy(enabled=False)

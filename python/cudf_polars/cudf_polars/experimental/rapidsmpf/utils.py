@@ -1066,8 +1066,10 @@ async def allgather_reduce(
     packed = PackedData.from_host_bytes(data, context.br())
 
     allgather = AllGather(context, comm, op_id)
-    allgather.insert(0, packed)
-    allgather.insert_finished()
+    try:
+        allgather.insert(0, packed)
+    finally:
+        allgather.insert_finished()
 
     results = await allgather.extract_all(context, ordered=False)
 
