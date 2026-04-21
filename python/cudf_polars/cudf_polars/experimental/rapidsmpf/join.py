@@ -561,9 +561,9 @@ async def _shuffle_join(
                 ir_context,
                 ch_left_shuffle,
                 ch_left,
-                strategy.left_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
+                columns_to_hash=strategy.left_indices,
             ),
             _global_shuffle(
                 context,
@@ -571,9 +571,9 @@ async def _shuffle_join(
                 ir_context,
                 ch_right_shuffle,
                 ch_right,
-                strategy.right_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
+                columns_to_hash=strategy.right_indices,
             ),
             _join_chunks(
                 context,
