@@ -10,8 +10,6 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device_memory_resource.hpp>
-
 namespace cudf {
 namespace lists::detail {
 
