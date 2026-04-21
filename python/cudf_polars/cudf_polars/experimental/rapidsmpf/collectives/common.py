@@ -105,18 +105,11 @@ class ReserveOpIDs:
             node for node in traversal([ir]) if isinstance(node, collective_types)
         ]
         if self.dynamic_planning_enabled:
-            from cudf_polars.dsl.ir import HStack, Select
-            from cudf_polars.experimental.utils import _extract_over_shuffle_indices
+            from cudf_polars.experimental.over import Over
 
             for node in traversal([ir]):
-                if isinstance(node, (Select, HStack)) and node.children:
-                    exprs = (
-                        [e.value for e in node.exprs]
-                        if isinstance(node, Select)
-                        else [e.value for e in node.columns]
-                    )
-                    if _extract_over_shuffle_indices(exprs, node.children[0].schema):
-                        self.collective_nodes.append(node)
+                if isinstance(node, Over):
+                    self.collective_nodes.append(node)
         self.collective_id_map: dict[IR, list[int]] = {}
 
     def __enter__(self) -> dict[IR, list[int]]:

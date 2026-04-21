@@ -472,7 +472,9 @@ def _(
                     [e.value for e in ir.exprs], child.schema
                 )
                 if indices:
-                    new_node = ir.reconstruct([child])
+                    from cudf_polars.experimental.over import make_over_node
+
+                    new_node = make_over_node(ir, child, indices)
                     partition_info[new_node] = pi
                     return new_node, partition_info
             return _lower_ir_fallback(

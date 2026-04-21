@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
@@ -21,12 +21,11 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame, DataType
-from cudf_polars.dsl.expr import Col, GroupedWindow, NamedExpr
+from cudf_polars.dsl.expr import GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
-from cudf_polars.dsl.ir import IR, GroupBy, HStack, Select
-from cudf_polars.dsl.utils.naming import unique_names
+from cudf_polars.dsl.ir import IR, HStack, Select
 from cudf_polars.dsl.utils.reshape import broadcast
-from cudf_polars.experimental.groupby import combine, decompose
+from cudf_polars.experimental.over import Over
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import ShuffleManager
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
@@ -45,11 +44,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
     shutdown_on_error,
 )
-from cudf_polars.experimental.utils import (
-    _all_over_scalar_and_top_level,
-    _concat,
-    _extract_over_shuffle_indices,
-)
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
@@ -60,104 +55,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
-
-
-def _build_over_groupby_irs(
-    gw_nodes: list[GroupedWindow],
-    child_ir: IR,
-) -> tuple[GroupBy, GroupBy, Select | None]:
-    """
-    Build piecewise, reduction, and (optionally) selection GroupBy IRs.
-
-    Parameters
-    ----------
-    gw_nodes
-        Top-level GroupedWindow nodes sharing the same partition-by keys;
-        all must be scalar (Agg/Len only in named_aggs).
-    child_ir
-        Child IR of the enclosing Select/HStack; defines the input schema.
-
-    Returns
-    -------
-    piecewise_ir
-        GroupBy IR that computes partial aggregates per chunk.
-    reduction_ir
-        GroupBy IR that reduces partial aggregates to a single result.
-    select_ir
-        Select IR for post-aggregation expressions (e.g. division for mean);
-        None when all aggregations are pass-through.
-    """
-    gw = gw_nodes[0]
-    # All by_exprs are Col; guaranteed by _all_over_scalar_and_top_level in the caller.
-    by_exprs = cast("list[Col]", list(gw.children[: gw.by_count]))
-    key_named_exprs = [NamedExpr(e.name, e) for e in by_exprs]
-    key_schema = {e.name: child_ir.schema[e.name] for e in by_exprs}
-
-    seen: set[str] = set()
-    all_scalar_named: list[NamedExpr] = []
-    for gw_node in gw_nodes:
-        reductions, _ = gw_node._split_named_expr()
-        for ne in reductions:
-            if ne.name not in seen:
-                all_scalar_named.append(ne)
-                seen.add(ne.name)
-
-    name_gen = unique_names(child_ir.schema.keys())
-    decompositions = [
-        decompose(ne.name, ne.value, names=name_gen) for ne in all_scalar_named
-    ]
-    selection_exprs, piecewise_exprs, reduction_exprs, _ = combine(*decompositions)
-
-    pwise_schema = dict(key_schema) | {
-        ne.name: ne.value.dtype for ne in piecewise_exprs
-    }
-    piecewise_ir = GroupBy(
-        pwise_schema,
-        key_named_exprs,
-        piecewise_exprs,
-        False,  # noqa: FBT003
-        None,
-        child_ir,
-    )
-
-    reduction_key_exprs = [
-        NamedExpr(ne.name, Col(pwise_schema[ne.name], ne.name))
-        for ne in key_named_exprs
-    ]
-    reduction_schema = {ne.name: pwise_schema[ne.name] for ne in key_named_exprs} | {
-        ne.name: ne.value.dtype for ne in reduction_exprs
-    }
-    reduction_ir = GroupBy(
-        reduction_schema,
-        reduction_key_exprs,
-        reduction_exprs,
-        False,  # noqa: FBT003
-        None,
-        piecewise_ir,
-    )
-
-    select_ir: Select | None
-    if any(
-        ne.name not in reduction_schema or reduction_schema[ne.name] != ne.value.dtype
-        for ne in selection_exprs
-    ):
-        select_key_exprs = [
-            NamedExpr(ne.name, Col(reduction_schema[ne.name], ne.name))
-            for ne in key_named_exprs
-        ]
-        select_schema = {
-            ne.name: reduction_schema[ne.name] for ne in key_named_exprs
-        } | {ne.name: ne.value.dtype for ne in selection_exprs}
-        select_ir = Select(
-            select_schema,
-            [*select_key_exprs, *selection_exprs],
-            False,  # noqa: FBT003
-            reduction_ir,
-        )
-    else:
-        select_ir = None
-
-    return piecewise_ir, reduction_ir, select_ir
 
 
 def _broadcast_gw_sync(
@@ -199,7 +96,7 @@ def _evaluate_ir_broadcast_sync(
     ir_context: IRExecutionContext,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
-    gw_nodes: list[GroupedWindow],
+    gw_nodes: tuple[GroupedWindow, ...],
 ) -> DataFrame:
     """Evaluate Select/HStack using a pre-computed global aggregate for each GroupedWindow."""
     child_schema = ir.children[0].schema
@@ -239,7 +136,7 @@ async def _evaluate_broadcast_chunk(
     ir_context: IRExecutionContext,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
-    gw_nodes: list[GroupedWindow],
+    gw_nodes: tuple[GroupedWindow, ...],
 ) -> TableChunk:
     """Make chunk available then evaluate it against the pre-computed global aggregate."""
     chunk, extra = await make_table_chunks_available_or_wait(
@@ -497,7 +394,7 @@ def _concat_sort_boundary_sync(
 async def over_actor(
     context: Context,
     comm: Communicator,
-    ir: Select | HStack,
+    ir: Over,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
@@ -518,7 +415,7 @@ async def over_actor(
     comm
         The communicator.
     ir
-        The Select or HStack IR node containing GroupedWindow expressions.
+        The Over IR node carrying the wrapped Select/HStack and pre-computed metadata.
     ir_context
         The IR execution context.
     ch_out
@@ -531,11 +428,10 @@ async def over_actor(
     async with shutdown_on_error(
         context, ch_in, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
+        wrapped_ir: Select | HStack = ir.children[0]  # type: ignore[assignment]
         metadata_in = await recv_metadata(ch_in, context)
 
-        exprs = [e.value for e in (ir.exprs if isinstance(ir, Select) else ir.columns)]
-        key_indices = _extract_over_shuffle_indices(exprs, ir.children[0].schema)
-        assert key_indices is not None
+        key_indices = ir.key_indices
         assert len(key_indices) > 0
 
         partitioning = NormalizedPartitioning.from_indices(
@@ -547,25 +443,32 @@ async def over_actor(
         if partitioning:
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
-                partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+                partitioning=maybe_remap_partitioning(
+                    wrapped_ir, metadata_in.partitioning
+                ),
                 duplicated=metadata_in.duplicated,
             )
             await chunkwise_evaluate(
-                context, ir, ir_context, ch_out, ch_in, metadata_out, tracer=tracer
+                context,
+                wrapped_ir,
+                ir_context,
+                ch_out,
+                ch_in,
+                metadata_out,
+                tracer=tracer,
             )
             return
 
-        if _all_over_scalar_and_top_level(exprs):
-            gw_nodes = [e for e in exprs if isinstance(e, GroupedWindow)]
-            key_names = tuple(
-                e.name
-                for e in gw_nodes[0].children[: gw_nodes[0].by_count]
-                if isinstance(e, Col)
-            )
-
-            piecewise_ir, reduction_ir, select_ir = _build_over_groupby_irs(
-                gw_nodes, ir.children[0]
-            )
+        if ir.is_scalar:
+            gw_nodes = ir.gw_nodes
+            key_names = ir.key_names
+            piecewise_ir = ir.piecewise_ir
+            reduction_ir = ir.reduction_ir
+            agg_select_ir = ir.agg_select_ir
+            assert gw_nodes is not None
+            assert key_names is not None
+            assert piecewise_ir is not None
+            assert reduction_ir is not None
 
             # make_table_chunks_available_or_wait releases the original chunk,
             # so we make each chunk available once and reuse it for both buffering
@@ -602,7 +505,7 @@ async def over_actor(
                 )
 
             # AllGather the unreduced form so the final reduction operates over
-            # all ranks' partial results; select_ir is applied only once after.
+            # all ranks' partial results; agg_select_ir is applied only once after.
             if comm.nranks > 1 and not metadata_in.duplicated:
                 allgather = AllGatherManager(context, comm, collective_id)
                 with allgather.inserting() as inserter:
@@ -620,17 +523,19 @@ async def over_actor(
             else:
                 global_agg = local_agg
 
-            if select_ir is not None:
+            if agg_select_ir is not None:
                 global_agg = await evaluate_chunk(
-                    context, global_agg, select_ir, ir_context=ir_context
+                    context, global_agg, agg_select_ir, ir_context=ir_context
                 )
 
-            final_agg_ir = select_ir if select_ir is not None else reduction_ir
+            final_agg_ir = agg_select_ir if agg_select_ir is not None else reduction_ir
             global_agg_df = chunk_to_frame(global_agg, final_agg_ir)
 
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
-                partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+                partitioning=maybe_remap_partitioning(
+                    wrapped_ir, metadata_in.partitioning
+                ),
                 duplicated=metadata_in.duplicated,
             )
             await send_metadata(ch_out, context, metadata_out)
@@ -639,7 +544,7 @@ async def over_actor(
                 result = await _evaluate_broadcast_chunk(
                     context,
                     chunk,
-                    ir,
+                    wrapped_ir,
                     ir_context,
                     global_agg_df,
                     key_names,
@@ -652,17 +557,19 @@ async def over_actor(
             await ch_out.drain(context)
             return
 
+        row_idx_col = ir.row_idx_col
+        assert row_idx_col is not None
+
         modulus = max(comm.nranks, metadata_in.local_count)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+            partitioning=maybe_remap_partitioning(wrapped_ir, metadata_in.partitioning),
             duplicated=metadata_in.duplicated,
         )
         await send_metadata(ch_out, context, metadata_out)
 
         shuffle = ShuffleManager(context, comm, modulus, collective_id)
         row_counter = 0
-        row_idx_col = next(unique_names(ir.children[0].schema.keys()))
         boundaries: list[tuple[int, int, int]] = []
 
         # Phase 1: stamp each row with its absolute position and insert into the shuffle
@@ -719,7 +626,7 @@ async def over_actor(
             result_df = await asyncio.to_thread(
                 _evaluate_with_row_idx_sync,
                 partition_chunk,
-                ir,
+                wrapped_ir,
                 ir_context,
                 row_idx_col,
             )
@@ -789,23 +696,12 @@ async def over_actor(
         await ch_out.drain(context)
 
 
-@generate_ir_sub_network.register(Select)
-@generate_ir_sub_network.register(HStack)
+@generate_ir_sub_network.register(Over)
 def _(
-    ir: Select | HStack, rec: SubNetGenerator
+    ir: Over, rec: SubNetGenerator
 ) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
-    config_options = rec.state["config_options"]
-
-    if config_options.executor.dynamic_planning is None:
-        return generate_ir_sub_network.dispatch(IR)(ir, rec)
-
-    exprs = [e.value for e in (ir.exprs if isinstance(ir, Select) else ir.columns)]
-    indices = _extract_over_shuffle_indices(exprs, ir.children[0].schema)
-
-    if not indices:
-        return generate_ir_sub_network.dispatch(IR)(ir, rec)
-
-    actors, channels = process_children(ir, rec)
+    wrapped_ir = ir.children[0]
+    actors, channels = process_children(wrapped_ir, rec)
     channels[ir] = ChannelManager(rec.state["context"])
     collective_ids = list(rec.state["collective_id_map"].get(ir, []))
     actors[ir] = [
@@ -815,7 +711,7 @@ def _(
             ir,
             rec.state["ir_context"],
             channels[ir].reserve_input_slot(),
-            channels[ir.children[0]].reserve_output_slot(),
+            channels[wrapped_ir.children[0]].reserve_output_slot(),
             collective_ids.pop(),
         )
     ]
