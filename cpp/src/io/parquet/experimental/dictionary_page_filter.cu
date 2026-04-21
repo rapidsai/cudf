@@ -489,7 +489,7 @@ __device__ T decode_fixed_width_value(PageInfo const& page,
           cudf::io::unaligned_load<uint64_t>(page_data + (value_idx * sizeof(int64_t)));
         if (timestamp_scale != 0) {
           decoded_value = T{typename T::duration(static_cast<typename T::rep>(
-            parquet::detail::convert_to_timestamp64(timestamp, timestamp_scale)))};
+            parquet::detail::apply_ts_scale(timestamp, timestamp_scale)))};
         } else {
           decoded_value = T{typename T::duration(static_cast<typename T::rep>(timestamp))};
         }

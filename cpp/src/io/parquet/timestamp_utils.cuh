@@ -45,38 +45,23 @@ namespace cudf::io::parquet::detail {
 /**
  * @brief Apply timestamp scaling to a raw decoded value.
  *
- * @param value Raw decoded integer value
- * @param ts_scale Scale factor from calc_timestamp_scale()
- * @return Scaled value
+ * @param value Raw decoded int64 integer value
+ * @param ts_scale Timestamp scale
+ * @return Scaled 64-bit timestamp value
  */
 [[nodiscard]] CUDF_HOST_DEVICE inline int64_t apply_ts_scale(int64_t value, int32_t ts_scale)
 {
   if (ts_scale == 0) {
     return value;
   } else if (ts_scale < 0) {
-    auto const sign = static_cast<int>(value < 0);
-    return ((value + sign) / -ts_scale) + sign;
+    // Floor division towards negative infinity
+    auto const divisor   = -ts_scale;
+    auto quotient        = value / divisor;
+    auto const remainder = value % divisor;
+    return (remainder < 0) ? quotient - 1 : quotient;
   } else {
     return value * ts_scale;
   }
-}
-
-/**
- * @brief Helper function to convert a int64_t to a timestamp64
- *
- * @param value Value to convert
- * @param timestamp_scale Timestamp scale
- * @return Converted timestamp64 value
- */
-__device__ __forceinline__ int64_t convert_to_timestamp64(int64_t const value,
-                                                          int32_t timestamp_scale)
-{
-  if (timestamp_scale < 0) {
-    // round towards negative infinity
-    int32_t const sign = (value < 0);
-    return ((value + sign) / -timestamp_scale) + sign;
-  }
-  return value * timestamp_scale;
 }
 
 }  // namespace cudf::io::parquet::detail

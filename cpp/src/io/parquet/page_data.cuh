@@ -411,7 +411,7 @@ inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
                                                     int32_t ts_scale)
 {
   gpuOutputByteStreamSplit<int64_t>(reinterpret_cast<uint8_t*>(dst), src, stride);
-  *dst = convert_to_timestamp64(*dst, ts_scale);
+  *dst = apply_ts_scale(*dst, ts_scale);
 }
 
 /**
