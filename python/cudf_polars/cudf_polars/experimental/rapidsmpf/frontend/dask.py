@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
 import distributed
+import distributed.system
 import pynvml
 import ucxx._lib.libucxx as ucx_api
 from rapidsmpf import bootstrap
@@ -574,6 +575,9 @@ class DaskEngine(StreamingEngine):
         owned_client: distributed.Client | None = None
         if dask_client is None:
             gpu_ids = _get_visible_gpu_ids()
+            n_gpus = len(gpu_ids)
+            memory_limit = distributed.system.MEMORY_LIMIT / n_gpus
+
             worker_spec: dict[str, Any] = {}
             for i, gpu_id in enumerate(gpu_ids):
                 worker_spec[str(gpu_id)] = {
@@ -583,6 +587,7 @@ class DaskEngine(StreamingEngine):
                         # Set worker subprocess log level to WARNING
                         # (is INFO by default).
                         "silence_logs": logging.WARNING,
+                        "memory_limit": memory_limit,
                         "env": {
                             "CUDA_VISIBLE_DEVICES": gpu_ids[i],
                         },
