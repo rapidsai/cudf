@@ -12,16 +12,12 @@
 #include <mutex>
 
 namespace rtcx {
-class cache_t;
+struct cache_t;
 }  // namespace rtcx
 
 namespace cudf {
 
-namespace jit {
-class program_cache;
-}
-
-class jit_bundle_t;
+struct jit_bundle_t;
 
 struct [[nodiscard]] context_config {
   bool dump_codegen      : 1          = false;
