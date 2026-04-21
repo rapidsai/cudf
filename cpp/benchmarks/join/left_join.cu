@@ -135,12 +135,14 @@ void nvbench_mark_left_semi_join_selectivity(
 {
   auto const num_probes  = static_cast<cudf::size_type>(state.get_int64("num_probes"));
   auto const selectivity = state.get_float64("selectivity");
+  auto const prefilter =
+    state.get_int64("use_prefilter") != 0 ? cudf::join_prefilter::YES : cudf::join_prefilter::NO;
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
-  auto join = [num_probes](cudf::table_view const& left,
-                           cudf::table_view const& right,
-                           cudf::null_equality compare_nulls) {
-    cudf::mark_join obj(left, compare_nulls, cudf::join_prefilter::YES, cudf::get_default_stream());
+  auto join = [num_probes, prefilter](cudf::table_view const& left,
+                                      cudf::table_view const& right,
+                                      cudf::null_equality compare_nulls) {
+    cudf::mark_join obj(left, compare_nulls, prefilter, cudf::get_default_stream());
     for (auto i = 0; i < num_probes - 1; i++) {
       [[maybe_unused]] auto result = obj.semi_join(right);
     }
@@ -205,4 +207,5 @@ NVBENCH_BENCH_TYPES(nvbench_mark_left_semi_join_selectivity,
   .add_int64_axis("right_size", {100'000'000})
   .add_int64_axis("num_probes", {4})
   .add_float64_axis("selectivity", JOIN_SELECTIVITY_RANGE)
+  .add_int64_axis("use_prefilter", {1})
   .add_int64_axis("skip_large_sizes", {1});
