@@ -571,8 +571,9 @@ def _(
             f"Falling back to shuffle_method={shuffle_method}.",
             config_options,
         )
-
-    if partition_info[child].count == 1 and not _dynamic_planning_on(config_options):
+    if partition_info[child].count == 1 or not _dynamic_planning_on(config_options):
+        while isinstance(child, (ShuffleSorted, Repartition)):
+            child = child.children[0]
         single_part_node = ir.reconstruct([child])
         partition_info[single_part_node] = partition_info[child]
         return single_part_node, partition_info
