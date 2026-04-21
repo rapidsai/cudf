@@ -108,6 +108,130 @@ def combine(
     )
 
 
+def _decompose_std_var(
+    name: str, expr: Agg, *, names: Generator[str, None, None]
+) -> tuple[NamedExpr, list[NamedExpr], list[NamedExpr], bool]:
+    """Decompose a std or var aggregation using Welford's online algorithm."""
+    ddof = expr.options
+    (child,) = expr.children
+    f64 = DataType(pl.Float64())
+    i64 = DataType(pl.Int64())
+    bool_dtype = DataType(pl.Boolean())
+    struct_dtype = DataType(
+        pl.Struct(
+            [
+                pl.Field("count", pl.Int64()),
+                pl.Field("mean", pl.Float64()),
+                pl.Field("m2", pl.Float64()),
+            ]
+        )
+    )
+    struct_name = f"{next(names)}__m2_struct"
+    # Build the per-row initial Welford state (n=1, mean=value, M2=0)
+    # for each non-null input row.  For a single observation these
+    # values are exact: M2=0 by definition, and M2 accumulates through
+    # merge_m2 as states are combined across the group.
+    # See: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+    # For null rows, count=0 and mean/m2 are null; _StructCreate strips
+    # null masks before packing, so their underlying values are
+    # unspecified.  MERGE_M2 checks count first and skips count=0 rows,
+    # so those values are never read.
+    welford_state = _StructCreate(
+        struct_dtype,
+        Cast(
+            i64,
+            False,  # noqa: FBT003
+            BooleanFunction(bool_dtype, BooleanFunction.Name.IsNotNull, (), child),
+        ),
+        Cast(f64, False, child),  # noqa: FBT003
+        BinOp(
+            f64,
+            plc.binaryop.BinaryOperator.MUL,
+            Cast(f64, False, child),  # noqa: FBT003
+            Literal(f64, 0.0),
+        ),
+    )
+    struct_col = Col(struct_dtype, struct_name)
+    aggregations = [
+        NamedExpr(
+            struct_name,
+            Agg(
+                struct_dtype,
+                "merge_m2",
+                None,
+                ExecutionContext.GROUPBY,
+                welford_state,
+            ),
+        )
+    ]
+    reductions = [
+        NamedExpr(
+            struct_name,
+            Agg(
+                struct_dtype,
+                "merge_m2",
+                None,
+                ExecutionContext.GROUPBY,
+                struct_col,
+            ),
+        ),
+    ]
+    merged_count = StructFunction(
+        i64,
+        StructFunction.Name.FieldByName,
+        ("count",),
+        struct_col,
+    )
+    merged_m2 = StructFunction(
+        f64,
+        StructFunction.Name.FieldByName,
+        ("m2",),
+        struct_col,
+    )
+    count_minus_ddof = BinOp(
+        f64,
+        plc.binaryop.BinaryOperator.SUB,
+        Cast(f64, False, merged_count),  # noqa: FBT003
+        Literal(f64, float(ddof)),
+    )
+    # When n <= ddof the result is invalid: variance is negative (n < ddof)
+    # or inf (n == ddof, non-zero population variance). Adding 0 * sqrt(variance)
+    # converts both to NaN using IEEE 754 rules: sqrt(negative) = NaN and 0 * inf = NaN,
+    # so any invalid variance becomes NaN before mask_nans converts it to null.
+    sanitized = Ternary(
+        f64,
+        BinOp(
+            DataType(pl.Boolean()),
+            plc.binaryop.BinaryOperator.GREATER,
+            count_minus_ddof,
+            Literal(f64, 0.0),
+        ),
+        count_minus_ddof,
+        Literal(f64, float("nan")),
+    )
+    variance = BinOp(
+        f64,
+        plc.binaryop.BinaryOperator.DIV,
+        merged_m2,
+        sanitized,
+    )
+    # mask_nans converts NaN -> null to match Polars semantics.
+    selection = NamedExpr(
+        name,
+        UnaryFunction(
+            expr.dtype,
+            "mask_nans",
+            (),
+            (
+                UnaryFunction(f64, "sqrt", (), variance)
+                if expr.name == "std"
+                else variance
+            ),
+        ),
+    )
+    return selection, aggregations, reductions, False
+
+
 def decompose(
     name: str, expr: Expr, *, names: Generator[str, None, None]
 ) -> tuple[NamedExpr, list[NamedExpr], list[NamedExpr], bool]:
@@ -206,125 +330,7 @@ def decompose(
             )
             return selection, aggregations, reductions, need_preshuffle
         elif expr.name in {"std", "var"}:
-            ddof = expr.options
-            (child,) = expr.children
-            f64 = DataType(pl.Float64())
-            i64 = DataType(pl.Int64())
-            bool_dtype = DataType(pl.Boolean())
-            struct_dtype = DataType(
-                pl.Struct(
-                    [
-                        pl.Field("count", pl.Int64()),
-                        pl.Field("mean", pl.Float64()),
-                        pl.Field("m2", pl.Float64()),
-                    ]
-                )
-            )
-            struct_name = f"{next(names)}__m2_struct"
-            # Build the per-row initial Welford state (n=1, mean=value, M2=0)
-            # for each non-null input row.  For a single observation these
-            # values are exact: M2=0 by definition, and M2 accumulates through
-            # merge_m2 as states are combined across the group.
-            # See: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
-            # For null rows, count=0 and mean/m2 are null; _StructCreate strips
-            # null masks before packing, so their underlying values are
-            # unspecified.  MERGE_M2 checks count first and skips count=0 rows,
-            # so those values are never read.
-            welford_state = _StructCreate(
-                struct_dtype,
-                Cast(
-                    i64,
-                    False,  # noqa: FBT003
-                    BooleanFunction(
-                        bool_dtype, BooleanFunction.Name.IsNotNull, (), child
-                    ),
-                ),
-                Cast(f64, False, child),  # noqa: FBT003
-                BinOp(
-                    f64,
-                    plc.binaryop.BinaryOperator.MUL,
-                    Cast(f64, False, child),  # noqa: FBT003
-                    Literal(f64, 0.0),
-                ),
-            )
-            aggregations = [
-                NamedExpr(
-                    struct_name,
-                    Agg(
-                        struct_dtype,
-                        "merge_m2",
-                        None,
-                        ExecutionContext.GROUPBY,
-                        welford_state,
-                    ),
-                )
-            ]
-            reductions = [
-                NamedExpr(
-                    struct_name,
-                    Agg(
-                        struct_dtype,
-                        "merge_m2",
-                        None,
-                        ExecutionContext.GROUPBY,
-                        Col(struct_dtype, struct_name),
-                    ),
-                ),
-            ]
-            merged_count = StructFunction(
-                i64,
-                StructFunction.Name.FieldByName,
-                ("count",),
-                Col(struct_dtype, struct_name),
-            )
-            merged_m2 = StructFunction(
-                f64,
-                StructFunction.Name.FieldByName,
-                ("m2",),
-                Col(struct_dtype, struct_name),
-            )
-            count_minus_ddof = BinOp(
-                f64,
-                plc.binaryop.BinaryOperator.SUB,
-                Cast(f64, False, merged_count),  # noqa: FBT003
-                Literal(f64, float(ddof)),
-            )
-            # When n <= ddof the result is invalid: variance is negative (n < ddof)
-            # or inf (n == ddof, non-zero population variance). Adding 0 * sqrt(variance)
-            # converts both to NaN using IEEE 754 rules: sqrt(negative) = NaN and 0 * inf = NaN,
-            # so any invalid variance becomes NaN before mask_nans converts it to null.
-            sanitized = Ternary(
-                f64,
-                BinOp(
-                    DataType(pl.Boolean()),
-                    plc.binaryop.BinaryOperator.GREATER,
-                    count_minus_ddof,
-                    Literal(f64, 0.0),
-                ),
-                count_minus_ddof,
-                Literal(f64, float("nan")),
-            )
-            variance = BinOp(
-                f64,
-                plc.binaryop.BinaryOperator.DIV,
-                merged_m2,
-                sanitized,
-            )
-            # mask_nans converts NaN -> null to match Polars semantics.
-            selection = NamedExpr(
-                name,
-                UnaryFunction(
-                    dtype,
-                    "mask_nans",
-                    (),
-                    (
-                        UnaryFunction(f64, "sqrt", (), variance)
-                        if expr.name == "std"
-                        else variance
-                    ),
-                ),
-            )
-            return selection, aggregations, reductions, False
+            return _decompose_std_var(name, expr, names=names)
         else:
             raise NotImplementedError(
                 "group_by does not support multiple partitions "
