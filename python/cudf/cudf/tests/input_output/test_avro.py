@@ -12,7 +12,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -294,10 +293,6 @@ def get_days_from_epoch(date: datetime.date | None) -> int | None:
 
 
 @pytest.mark.parametrize("namespace", [None, "root_ns"])
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas (datetime(9999, ...) too large)",
-)
 def test_can_parse_avro_date_logical_type(namespace, nullable, prepend_null):
     avro_type = {"logicalType": "date", "type": "int"}
     if nullable:

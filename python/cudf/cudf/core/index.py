@@ -3686,7 +3686,7 @@ class DatetimeIndex(Index):
         >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
         ...             periods=3, freq="D"))
         >>> datetime_index
-        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[us]', freq='24h')
+        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[us]', freq='D')
         >>> datetime_index.day
         Index([1, 2, 3], dtype='int32')
         """
@@ -3820,7 +3820,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[us]', freq='24h')
+                    dtype='datetime64[us]', freq='D')
         >>> datetime_index.weekday
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int32')
         """
@@ -3843,7 +3843,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[us]', freq='24h')
+                    dtype='datetime64[us]', freq='D')
         >>> datetime_index.dayofweek
         Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int32')
         """
@@ -3867,7 +3867,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[us]', freq='24h')
+                    dtype='datetime64[us]', freq='D')
         >>> datetime_index.dayofyear
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -3891,7 +3891,7 @@ class DatetimeIndex(Index):
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
                     '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
                     '2017-01-08'],
-                    dtype='datetime64[us]', freq='24h')
+                    dtype='datetime64[us]', freq='D')
         >>> datetime_index.day_of_year
         Index([366, 1, 2, 3, 4, 5, 6, 7, 8], dtype='int16')
         """
@@ -3980,7 +3980,7 @@ class DatetimeIndex(Index):
         >>> datetime_index
         DatetimeIndex(['2017-12-30', '2018-01-06', '2018-01-13', '2018-01-20',
                     '2018-01-27', '2018-02-03'],
-                      dtype='datetime64[us]', freq='168h')
+                      dtype='datetime64[us]', freq='W')
         >>> datetime_index.month_name()
         Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='str')
         """

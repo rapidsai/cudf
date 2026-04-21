@@ -10,7 +10,6 @@ import pytest
 from packaging import version
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 
 pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
 _SKIP_DOCTESTS = frozenset(
@@ -121,10 +120,6 @@ class TestDoctests:
         "docstring",
         _all_doctests,
         ids=lambda docstring: docstring.name,
-    )
-    @pytest.mark.skipif(
-        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-        reason="Doctests not expected to pass on older versions of pandas",
     )
     def test_docstring(self, docstring, monkeypatch, tmp_path):
         if docstring.name in _SKIP_DOCTESTS:

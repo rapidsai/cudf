@@ -11,12 +11,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column.column import as_column
 from cudf.errors import MixedTypeError
@@ -1274,10 +1271,6 @@ def test_datetime_array_timeunit_cast(dtype):
 
 
 @pytest.mark.parametrize("timeunit", ["D", "W", "M", "Y"])
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_datetime_scalar_timeunit_cast(timeunit):
     testscalar = np.datetime64("2016-11-20", timeunit)
 
@@ -1298,10 +1291,6 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     assert_eq(pdf, gdf, check_dtype=True)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_datetime_string_to_datetime_resolution_loss_raises():
     data = ["2020-01-01 00:00:00.00001"]
     dtype = "datetime64[s]"
@@ -1577,18 +1566,13 @@ def test_series_constructor_dtype_is_pandas_nullable_extension_type(
 
 def test_series_constructor_dtype_is_pandas_arrowdtype(
     all_supported_pandas_arrowdtypes,
-    request,
 ):
     scalar, dtype = all_supported_pandas_arrowdtypes
-    if PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION:
-        if dtype.kind == "M" and dtype.pyarrow_dtype.tz is not None:
-            pytest.skip(
-                f"RecursionError occurs in older versions of pandas/pyarrow for {dtype}"
-            )
-        elif pa.types.is_decimal(dtype.pyarrow_dtype):
-            pytest.skip(
-                "Decimal types coerced to object in older versions of pandas/pyarrow"
-            )
+    if (
+        pa.types.is_decimal32(dtype.pyarrow_dtype)
+        or pa.types.is_decimal64(dtype.pyarrow_dtype)
+    ) and parse(pa.__version__) < parse("20"):
+        pytest.skip("pyarrow < 19 converts decimal32/64 to object")
     result = cudf.Series([scalar], dtype=dtype)
     expected = pd.Series([scalar], dtype=dtype)
     assert result.dtype == expected.dtype

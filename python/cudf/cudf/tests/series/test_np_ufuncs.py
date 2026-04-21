@@ -9,18 +9,10 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import set_random_null_mask_inplace
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 @pytest.mark.parametrize("has_nulls", [True, False])
 @pytest.mark.parametrize("indexed", [True, False])
 def test_ufunc_series(request, numpy_ufunc, has_nulls, indexed):
