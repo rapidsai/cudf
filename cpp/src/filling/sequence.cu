@@ -140,6 +140,7 @@ std::unique_ptr<column> sequence(size_type size,
   CUDF_EXPECTS(is_numeric(init.type()), "init scalar type must be numeric", cudf::data_type_error);
   CUDF_EXPECTS(init.is_valid(stream), "init must be a valid scalar", std::invalid_argument);
 
+  // Test comment
   return type_dispatcher(init.type(), sequence_functor{}, size, init, stream, mr);
 }
 
