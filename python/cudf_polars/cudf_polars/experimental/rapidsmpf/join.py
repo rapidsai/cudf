@@ -14,6 +14,7 @@ from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
+from rapidsmpf.streaming.cudf.bloom_filter import BloomFilter
 from rapidsmpf.streaming.cudf.channel_metadata import (
     ChannelMetadata,
     HashScheme,
@@ -24,10 +25,16 @@ from rapidsmpf.streaming.cudf.table_chunk import (
     make_table_chunks_available_or_wait,
 )
 
+import pylibcudf as plc
+from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
+
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import _global_shuffle
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
+    _global_shuffle,
+    _is_already_partitioned,
+)
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -51,11 +58,13 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Iterable, MutableMapping
+    from types import CoroutineType
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
+    from rapidsmpf.streaming.cudf.bloom_filter import BloomFilterChunk
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.base import PartitionInfo
@@ -87,6 +96,10 @@ class JoinSideStats:
 class JoinStrategy:
     """Summary of sampling and strategy selection for a dynamic join."""
 
+    left_meta: ChannelMetadata | None = None
+    """Metadata from left channel"""
+    right_meta: ChannelMetadata | None = None
+    """Metadata from right channel"""
     broadcast_side: Literal["left", "right"] | None = None
     """The side to broadcast. If None, the strategy is a shuffle join."""
     shuffle_modulus: int = 0
@@ -515,6 +528,187 @@ def _log_shuffle_strategy_decision(
         tracer.decision = "shuffle"
 
 
+async def passthrough_split(
+    context: Context,
+    ch_in: Channel[TableChunk],
+    ch_split: Channel[TableChunk],
+    ch_out: Channel[TableChunk],
+    *,
+    indices: Iterable[int],
+) -> None:
+    """
+    Pass all messages from ch_in to ch_out, copying key columns to ch_split.
+
+    Parameters
+    ----------
+    context
+         Streaming context
+    ch_in
+         Channel to consume
+    ch_split
+         Channel to send key columns to
+    ch_out
+         Channel to forward ch_in to
+    indices
+         Column indices of the input table to send to ch_split
+
+    Notes
+    -----
+    This sends everything to ch_split before forwarding to ch_out, so the
+    consumer must consume all of ch_split before consuming ch_out.
+    """
+    meta = await recv_metadata(ch_in, context)
+    await send_metadata(ch_out, context, meta)
+    buffer = context.spillable_messages()
+    mids = []
+    while (msg := await ch_in.recv(context)) is not None:
+        chunk = await TableChunk.from_message(
+            msg, br=context.br()
+        ).make_available_or_wait(context, net_memory_delta=0)
+        columns = chunk.table_view().columns()
+        key_table = TableChunk.from_pylibcudf_table(
+            plc.Table(
+                [
+                    columns[i].copy(chunk.stream, mr=context.br().device_mr)
+                    for i in indices
+                ]
+            ),
+            chunk.stream,
+            exclusive_view=True,
+            br=context.br(),
+        )
+        mids.append(buffer.insert(Message(msg.sequence_number, chunk)))
+        await ch_split.send(context, Message(msg.sequence_number, key_table))
+    await ch_split.drain(context)
+    for mid in mids:
+        await ch_out.send(context, buffer.extract(mid=mid))
+    await ch_out.drain(context)
+
+
+def use_bloom_filter(
+    join_type: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
+    left_rows: int,
+    right_rows: int,
+    threshold: float,
+) -> bool:
+    """Return True if bloom filter pre-filtering should be applied."""
+    if (
+        threshold == 0.0
+        or join_type not in ("Inner", "Semi", "Left", "Right")
+        or (join_type == "Left" and right_rows <= left_rows)
+        or (join_type == "Right" and left_rows <= right_rows)
+    ):
+        return False
+    small_rows, large_rows = sorted([left_rows, right_rows])
+    return large_rows > 0 and small_rows / large_rows < threshold
+
+
+def make_filter_tasks(
+    context: Context,
+    comm: Communicator,
+    *,
+    ch_left: Channel[TableChunk],
+    ch_right: Channel[TableChunk],
+    strategy: JoinStrategy,
+    left_rows: int,
+    right_rows: int,
+    tag: int,
+) -> tuple[
+    Channel[TableChunk],
+    Channel[TableChunk],
+    list[CoroutineType[Any, Any, None]],
+    list[Channel],
+]:
+    """
+    Create bloom filter tasks for a pair of channels participating in a shuffle join.
+
+    Parameters
+    ----------
+    context
+        Streaming context
+    comm
+        Communicator
+    ch_left
+        Left input channel
+    ch_right
+        Right input channel
+    strategy
+        Selected join strategy
+    left_rows
+        Estimate of number of rows in left table
+    right_rows
+        Estimate of number of rows in right table
+    tag
+        Collective ID for combining partial filters across ranks
+
+    Returns
+    -------
+    tuple
+       Of new left and right channels, coroutines to await, and new channels to shutdown on error.
+    """
+    bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
+    bloom_build_input: Channel[TableChunk] = context.create_channel()
+    passthrough_output: Channel[TableChunk] = context.create_channel()
+    if left_rows < right_rows:
+        passthrough_input = ch_left
+        ch_left = passthrough_output
+        build_indices = strategy.left_indices
+        bloom_apply_input = ch_right
+        apply_indices = strategy.right_indices
+        ch_right = context.create_channel()
+        bloom_apply_output = ch_right
+        apply_meta = strategy.right_meta
+    else:
+        passthrough_input = ch_right
+        ch_right = passthrough_output
+        build_indices = strategy.right_indices
+        bloom_apply_input = ch_left
+        apply_indices = strategy.left_indices
+        ch_left = context.create_channel()
+        bloom_apply_output = ch_left
+        apply_meta = strategy.left_meta
+    assert apply_meta is not None
+    if _is_already_partitioned(
+        apply_meta, apply_indices, strategy.shuffle_modulus, comm.nranks
+    ):
+        # "large" side is already shuffled so no need to pre-filter
+        # TODO: Really we should pushdown the filter as far as possible,
+        # but the current implementation only prefilters "locally" in the
+        # query DAG.
+        return ch_left, ch_right, [], []
+    # TODO: configure based on GPU L2 size
+    nblocks = BloomFilter.fitting_num_blocks(32 * 1024 * 1024)
+    filter = BloomFilter(context, comm, LIBCUDF_DEFAULT_HASH_SEED, nblocks)
+    filter_tasks = [
+        passthrough_split(
+            context,
+            passthrough_input,
+            bloom_build_input,
+            passthrough_output,
+            indices=build_indices,
+        ),
+        filter.build(
+            context,
+            bloom_build_input,
+            bloom_build_output,
+            tag,
+        ),
+        filter.apply(
+            context,
+            bloom_build_output,
+            bloom_apply_input,
+            bloom_apply_output,
+            apply_indices,
+        ),
+    ]
+    chs_to_shutdown = [
+        bloom_build_output,
+        bloom_build_input,
+        passthrough_output,
+    ]
+    return ch_left, ch_right, filter_tasks, chs_to_shutdown
+
+
 async def _shuffle_join(
     context: Context,
     comm: Communicator,
@@ -526,7 +720,9 @@ async def _shuffle_join(
     strategy: JoinStrategy,
     collective_ids: list[int],
     *,
+    row_counts: tuple[int, int],
     tracer: ActorTracer | None,
+    bloom_threshold: float,
 ) -> None:
     """Execute a shuffle (hash) join."""
     # Send output metadata
@@ -544,7 +740,24 @@ async def _shuffle_join(
         duplicated=False,
     )
     await send_metadata(ch_out, context, metadata_out)
-
+    left_rows, right_rows = row_counts
+    bloom_tag = collective_ids.pop(0)
+    if use_bloom_filter(ir.options[0], left_rows, right_rows, bloom_threshold):
+        if tracer is not None:
+            tracer.decision = f"{tracer.decision or 'shuffle'}_filtered"
+        ch_left, ch_right, filter_tasks, chs_to_shutdown = make_filter_tasks(
+            context,
+            comm,
+            ch_left=ch_left,
+            ch_right=ch_right,
+            strategy=strategy,
+            left_rows=left_rows,
+            right_rows=right_rows,
+            tag=bloom_tag,
+        )
+    else:
+        filter_tasks = []
+        chs_to_shutdown = []
     # Construct a shuffle-shuffle-join pipeline.
     # The shuffle operations will pass chunks through unchanged
     # if the data is already partitioned correctly.
@@ -552,9 +765,15 @@ async def _shuffle_join(
     ch_right_shuffle = context.create_channel()
     # note: this is an actor inside of an actor. How should we log that in our traces?
     async with shutdown_on_error(
-        context, ch_left_shuffle, ch_right_shuffle, trace_ir=ir, ir_context=ir_context
+        context,
+        *chs_to_shutdown,
+        ch_left_shuffle,
+        ch_right_shuffle,
+        trace_ir=ir,
+        ir_context=ir_context,
     ):
         actor_tasks = [
+            *filter_tasks,
             _global_shuffle(
                 context,
                 comm,
@@ -593,6 +812,8 @@ def _make_shuffle_strategy(
     shuffle_modulus: int,
     left_partitioning: NormalizedPartitioning,
     right_partitioning: NormalizedPartitioning,
+    left_metadata: ChannelMetadata,
+    right_metadata: ChannelMetadata,
 ) -> JoinStrategy:
     """Make a shuffle strategy."""
     # Use the coarsest prefix so we only shuffle on keys one side may already have
@@ -610,6 +831,8 @@ def _make_shuffle_strategy(
     )
 
     return JoinStrategy(
+        left_meta=left_metadata,
+        right_meta=right_metadata,
         shuffle_modulus=shuffle_modulus,
         output_indices=output_key_indices,
         left_indices=left_key_indices,
@@ -636,7 +859,7 @@ async def _aggregate_estimates(
     ) = await allgather_reduce(
         context,
         comm,
-        collective_ids.pop(),
+        collective_ids.pop(0),
         left_sample.total_size,
         right_sample.total_size,
         left_sample.total_rows,
@@ -685,6 +908,8 @@ async def _choose_strategy_from_samples(
             left_partitioning.inter_rank_modulus,
             left_partitioning,
             right_partitioning,
+            left_metadata,
+            right_metadata,
         )
 
     left_total, right_total = left_sample.total_size, right_sample.total_size
@@ -760,7 +985,12 @@ async def _choose_strategy_from_samples(
     )  # Global modulus
 
     strategy = _make_shuffle_strategy(
-        ir, shuffle_modulus, left_partitioning, right_partitioning
+        ir,
+        shuffle_modulus,
+        left_partitioning,
+        right_partitioning,
+        left_metadata,
+        right_metadata,
     )
 
     if tracer is not None:
@@ -994,7 +1224,6 @@ async def join_actor(
             collective_ids,
             tracer=tracer,
         )
-
         ch_left_replay = context.create_channel()
         ch_right_replay = context.create_channel()
         async with shutdown_on_error(
@@ -1053,7 +1282,16 @@ async def join_actor(
                         ch_right,
                         strategy,
                         collective_ids,
+                        row_counts=(
+                            left_sample.total_rows,
+                            right_sample.total_rows,
+                        ),
                         tracer=tracer,
+                        bloom_threshold=(
+                            executor.dynamic_planning.bloom_filter_threshold
+                            if executor.dynamic_planning is not None
+                            else 0.0
+                        ),
                     )
                 )
             await gather_in_task_group(*actor_tasks)
@@ -1134,10 +1372,10 @@ def _(
         # Dynamic join - decide strategy at runtime
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
         # Join uses up to 3 collective IDs: 1 allgather + up to 2 (left/right shuffle)
-        if len(collective_ids) < 3:
+        if len(collective_ids) < 4:
             raise ValueError(
                 "Dynamic join requires 3 reserved collective IDs "
-                "(allgather + left shuffle + right shuffle); got "
+                "(allgather + left shuffle + right shuffle + bloom filter); got "
                 f"{len(collective_ids)} for this Join. "
                 "Ensure ReserveOpIDs is run with dynamic_planning enabled."
             )
