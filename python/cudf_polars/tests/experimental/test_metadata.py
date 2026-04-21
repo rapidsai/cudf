@@ -174,11 +174,19 @@ def test_rapidsmpf_join_metadata(
     ],
 )
 def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) -> None:
-    """NormalizedPartitioning.from_indices returns (inter_rank_modulus, local_modulus) (allow_subset=False)."""
-    state = NormalizedPartitioning.from_indices(
+    """NormalizedPartitioning.from_keys returns expected (inter_rank modulus, local modulus) (allow_subset=False)."""
+    state = NormalizedPartitioning.from_keys(
         partitioning, nranks, indices=key_indices, allow_subset=False
     )
-    assert (state.inter_rank_modulus, state.local_modulus) == expected
+    ir = state.inter_rank_scheme
+    loc = state.local_scheme
+    inter_rank_mod = ir.modulus if isinstance(ir, HashScheme) else 0
+    local_mod = (
+        None
+        if loc == "inherit"
+        else (loc.modulus if isinstance(loc, HashScheme) else 0)
+    )
+    assert (inter_rank_mod, local_mod) == expected
 
 
 @pytest.mark.parametrize(
@@ -241,11 +249,19 @@ def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) ->
 def test_get_partitioning_moduli_allow_subset(
     partitioning, key_indices, nranks, expected
 ) -> None:
-    """NormalizedPartitioning.from_indices with allow_subset=True matches on prefix of key_indices."""
-    state = NormalizedPartitioning.from_indices(
+    """NormalizedPartitioning.from_keys with allow_subset=True matches on a prefix of key_indices."""
+    state = NormalizedPartitioning.from_keys(
         partitioning, nranks, indices=key_indices, allow_subset=True
     )
-    assert (state.inter_rank_modulus, state.local_modulus) == expected
+    ir = state.inter_rank_scheme
+    loc = state.local_scheme
+    inter_rank_mod = ir.modulus if isinstance(ir, HashScheme) else 0
+    local_mod = (
+        None
+        if loc == "inherit"
+        else (loc.modulus if isinstance(loc, HashScheme) else 0)
+    )
+    assert (inter_rank_mod, local_mod) == expected
 
 
 def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
