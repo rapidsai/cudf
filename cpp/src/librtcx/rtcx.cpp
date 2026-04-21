@@ -1009,7 +1009,7 @@ void evict_disk_entries(std::string const& cache_dir, std::uint32_t limit)
   std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
 
   std::sort(ranking_indices.begin(), ranking_indices.end(), [&](auto a, auto b) {
-    return access_times[a] < access_times[b];
+    return access_times[a] < access_times[b];  // NOLINT(clang-analyzer-core.CallAndMessage)
   });
 
   // evict half of the least recently accessed
@@ -1270,7 +1270,7 @@ void cache_t::preload_from_disk()
   ranking_indices.resize(paths.size());
   std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
   std::sort(ranking_indices.begin(), ranking_indices.end(), [&](auto a, auto b) {
-    return access_times[a] > access_times[b];
+    return access_times[a] > access_times[b];  // NOLINT(clang-analyzer-core.CallAndMessage)
   });
 
   auto load_count = std::min<std::size_t>(ranking_indices.size(),
