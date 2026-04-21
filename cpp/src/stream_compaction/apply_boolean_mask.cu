@@ -26,7 +26,7 @@ template <bool has_nulls = true>
 struct retention_mask_filter {
   cudf::column_device_view mask;
 
-  __device__ inline bool operator()(cudf::size_type i) const
+  __device__ inline bool operator()(cudf::size_type i) const noexcept
   {
     if constexpr (has_nulls) {
       return mask.is_valid(i) and mask.data<bool>()[i];
@@ -41,7 +41,7 @@ template <bool has_nulls = true>
 struct deletion_mask_filter {
   cudf::column_device_view mask;
 
-  __device__ inline bool operator()(cudf::size_type i) const
+  __device__ inline bool operator()(cudf::size_type i) const noexcept
   {
     if constexpr (has_nulls) {
       return mask.is_valid(i) and not mask.data<bool>()[i];
