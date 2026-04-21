@@ -214,64 +214,68 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto const trimmed_field_range = trim_whitespaces_quotes(field_start, next_delimiter);
         auto const trimmed_field_len   = trimmed_field_range.second - trimmed_field_range.first;
 
-        for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
-          if (is_digit(*cur)) {
-            count_number++;
-            continue;
+        if (trimmed_field_len == 0) {
+          atomicAdd(&d_column_data[actual_col].string_count, 1);
+        } else {
+          for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
+            if (is_digit(*cur)) {
+              count_number++;
+              continue;
+            }
+            if (*cur == opts.decimal) {
+              count_decimal++;
+              continue;
+            }
+            if (*cur == opts.thousands) {
+              count_thousands++;
+              continue;
+            }
+            // Looking for unique characters that will help identify column types.
+            switch (*cur) {
+              case '-': count_dash++; break;
+              case '+': count_plus++; break;
+              case '/': count_slash++; break;
+              case ':': count_colon++; break;
+              case 'e':
+              case 'E':
+                if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
+                  count_exponent++;
+                break;
+              default: count_string++; break;
+            }
           }
-          if (*cur == opts.decimal) {
-            count_decimal++;
-            continue;
-          }
-          if (*cur == opts.thousands) {
-            count_thousands++;
-            continue;
-          }
-          // Looking for unique characters that will help identify column types.
-          switch (*cur) {
-            case '-': count_dash++; break;
-            case '+': count_plus++; break;
-            case '/': count_slash++; break;
-            case ':': count_colon++; break;
-            case 'e':
-            case 'E':
-              if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
-                count_exponent++;
-              break;
-            default: count_string++; break;
-          }
-        }
 
-        // Integers have to have the length of the string
-        // Off by one if they start with a minus sign
-        auto const int_req_number_cnt =
-          trimmed_field_len - count_thousands -
-          ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
-           trimmed_field_len > 1);
+          // Integers have to have the length of the string
+          // Off by one if they start with a minus sign
+          auto const int_req_number_cnt =
+            trimmed_field_len - count_thousands -
+            ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
+             trimmed_field_len > 1);
 
-        if (column_flags[col] & column_parse::as_datetime) {
-          // PANDAS uses `object` dtype if the date is unparseable
-          if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
-            atomicAdd(&d_column_data[actual_col].datetime_count, 1);
+          if (column_flags[col] & column_parse::as_datetime) {
+            // PANDAS uses `object` dtype if the date is unparseable
+            if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
+              atomicAdd(&d_column_data[actual_col].datetime_count, 1);
+            } else {
+              atomicAdd(&d_column_data[actual_col].string_count, 1);
+            }
+          } else if (count_number == int_req_number_cnt) {
+            auto const is_negative = (*trimmed_field_range.first == '-');
+            auto const data_begin =
+              trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
+            cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
+              data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
+            atomicAdd(ptr, 1);
+          } else if (is_floatingpoint(trimmed_field_len,
+                                      count_number,
+                                      count_decimal,
+                                      count_thousands,
+                                      count_dash + count_plus,
+                                      count_exponent)) {
+            atomicAdd(&d_column_data[actual_col].float_count, 1);
           } else {
             atomicAdd(&d_column_data[actual_col].string_count, 1);
           }
-        } else if (count_number == int_req_number_cnt) {
-          auto const is_negative = (*trimmed_field_range.first == '-');
-          auto const data_begin =
-            trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
-          cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
-            data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
-          atomicAdd(ptr, 1);
-        } else if (is_floatingpoint(trimmed_field_len,
-                                    count_number,
-                                    count_decimal,
-                                    count_thousands,
-                                    count_dash + count_plus,
-                                    count_exponent)) {
-          atomicAdd(&d_column_data[actual_col].float_count, 1);
-        } else {
-          atomicAdd(&d_column_data[actual_col].string_count, 1);
         }
       }
       actual_col++;
@@ -656,7 +660,14 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   auto start            = data.data();
   auto const bk_ctxtree = ctxtree.subspan(blockIdx.x * bk_ctxtree_size, bk_ctxtree_size);
 
-  char const* end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
+  // file-level end position for this scan, clamped to the file size
+  size_t const end_in_file = (parse_pos >= data_size || chunk_size > data_size - parse_pos)
+                               ? data_size
+                               : parse_pos + chunk_size;
+  // offset into the local `data` window (which begins at `start_offset`)
+  size_t const end_off = end_in_file > start_offset ? end_in_file - start_offset : 0;
+  // offset clamped to the actual buffer length
+  char const* end = start + min(end_off, data.size());
   uint32_t t      = threadIdx.x;
   size_t block_pos =
     (parse_pos - start_offset) + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
@@ -710,7 +721,8 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
         ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
-      char const* data_end = start + data_size - start_offset;
+      size_t const data_end_off = data_size > start_offset ? data_size - start_offset : 0;
+      char const* data_end      = start + min(data_end_off, data.size());
       if (cur <= end && cur == data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
         ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, 1, 1, 1);
