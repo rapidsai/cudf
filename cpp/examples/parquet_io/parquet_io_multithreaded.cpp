@@ -428,9 +428,6 @@ int32_t main(int argc, char const** argv)
       },
       1);
 
-    // Print peak memory
-    std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1'048'576.0) << " MB\n\n";
-
     // Verify the output
     std::cout << "Verifying output..\n";
 
