@@ -71,7 +71,7 @@ def _scalar_binop_scalar(
     out_dtype: plc.DataType,
     stream: Stream,
 ) -> plc.Scalar:
-    """Binary ``op`` on two scalars via single-row columns. Result dtype is ``out_dtype``."""
+    """Apply ``op`` to two scalars using one-row columns. Output dtype is ``out_dtype``."""
     lc = plc.Column.from_scalar(lhs, 1, stream=stream)
     rc = plc.Column.from_scalar(rhs, 1, stream=stream)
     out = plc.binaryop.binary_operation(lc, rc, op, out_dtype, stream=stream)
@@ -90,47 +90,30 @@ def _get_idx_col(
     return col
 
 
-def _minmax_py(
-    col: plc.Column,
-    reduce_dtype: plc.DataType,
-    stream: Stream,
-    *,
-    assume_sorted: bool = False,
-) -> tuple[int, int]:
-    """Min and max of ``col`` as Python ints. Sorted columns can set ``assume_sorted``."""
-    if assume_sorted:
-        n = col.size()
-        lo_c = plc.copying.slice(col, [0, 1], stream=stream)[0]
-        hi_c = plc.copying.slice(col, [n - 1, n], stream=stream)[0]
-        mn_val = lo_c.to_scalar(stream=stream).to_py(stream=stream)
-        mx_val = hi_c.to_scalar(stream=stream).to_py(stream=stream)
-    else:
-        mn_val = plc.reduce.reduce(
-            col, plc.aggregation.min(), reduce_dtype, stream=stream
-        ).to_py(stream=stream)
-        mx_val = plc.reduce.reduce(
-            col, plc.aggregation.max(), reduce_dtype, stream=stream
-        ).to_py(stream=stream)
+def _minmax_scalars(col: plc.Column, stream: Stream) -> tuple[plc.Scalar, plc.Scalar]:
+    """
+    First and last values in ``col`` as scalars.
+
+    Index must be sorted in ascending order.
+    """
+    n = col.size()
+    lo_c = plc.copying.slice(col, [0, 1], stream=stream)[0]
+    hi_c = plc.copying.slice(col, [n - 1, n], stream=stream)[0]
+    return lo_c.to_scalar(stream=stream), hi_c.to_scalar(stream=stream)
+
+
+def _py_minmax_sorted(col: plc.Column, stream: Stream) -> tuple[int, int]:
+    """
+    First and last values in ``col`` as Python ints.
+
+    Expects INT64 index sorted in ascending order.
+    """
+    lo_s, hi_s = _minmax_scalars(col, stream)
+    mn_val = lo_s.to_py(stream=stream)
+    mx_val = hi_s.to_py(stream=stream)
     assert isinstance(mn_val, int)
     assert isinstance(mx_val, int)
     return mn_val, mx_val
-
-
-def _minmax_scalars(
-    col: plc.Column,
-    value_dtype: plc.DataType,
-    stream: Stream,
-    *,
-    assume_sorted: bool = False,
-) -> tuple[plc.Scalar, plc.Scalar]:
-    if assume_sorted:
-        n = col.size()
-        lo_c = plc.copying.slice(col, [0, 1], stream=stream)[0]
-        hi_c = plc.copying.slice(col, [n - 1, n], stream=stream)[0]
-        return lo_c.to_scalar(stream=stream), hi_c.to_scalar(stream=stream)
-    mn = plc.reduce.reduce(col, plc.aggregation.min(), value_dtype, stream=stream)
-    mx = plc.reduce.reduce(col, plc.aggregation.max(), value_dtype, stream=stream)
-    return mn, mx
 
 
 def _filter_threshold(
@@ -151,7 +134,7 @@ def _filter_threshold(
 
 @dataclass(frozen=True)
 class _RollingEvalChunkMeta:
-    """Per-chunk metadata for ``eval_and_send``: expanded-space ``Rolling.do_evaluate`` zlice."""
+    """Per-chunk metadata for ``eval_and_send``. Carries expanded-frame zlice for ``Rolling.do_evaluate``."""
 
     do_evaluate_zlice: tuple[int, int]
     center_begin: int
@@ -166,13 +149,13 @@ def _check_ungrouped_int_chunk_order(
     index_col_idx: int,
     seq: int,
 ) -> int | None:
-    """Raise if ungrouped INT64 index goes backward across center chunks."""
+    """Raise when the ungrouped INT64 index decreases across center chunks."""
     if ir.keys or ir.index_dtype.id() != plc.TypeId.INT64:
         return prev_max
     if cur_df.num_rows == 0:
         return prev_max
     idx = _get_idx_col(cur_df.table, index_col_idx, ir.index_dtype, cur_df.stream)
-    lo, hi = _minmax_py(idx, _INT64, cur_df.stream, assume_sorted=True)
+    lo, hi = _py_minmax_sorted(idx, cur_df.stream)
     if prev_max is not None and lo < prev_max:
         raise RuntimeError(
             f"rolling streaming: INT64 index decreased across chunks "
@@ -183,7 +166,7 @@ def _check_ungrouped_int_chunk_order(
 
 @dataclass(frozen=True)
 class _RollingStreamChunkMeta:
-    """Chunk metadata after the rank-boundary stage."""
+    """Chunk metadata after rank-boundary tagging."""
 
     is_local_rank_chunk: bool
 
@@ -194,7 +177,7 @@ def _fused_expanded_zlice(
     n_center_prior: int,
     global_zlice: tuple[int, int | None] | None,
 ) -> tuple[int, int]:
-    """Row slice (offset, length) in expanded-frame coordinates for ``Rolling.do_evaluate``."""
+    """Row offset and length in expanded-frame coordinates for ``Rolling.do_evaluate``."""
     if global_zlice is None:
         return (center_begin, n_center)
     off, length = global_zlice
@@ -211,7 +194,7 @@ def _msg_to_df(
     col_names: list[str],
     col_dtypes: list[Any],
 ) -> tuple[int, DataFrame]:
-    """Decode a TableChunk message into (sequence_number, DataFrame)."""
+    """Decode a table chunk message to a sequence number and dataframe."""
     seq = msg.sequence_number
     chunk = TableChunk.from_message(msg, br)
     chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
@@ -229,7 +212,7 @@ def _chunk_index_int_bounds_from_df(
     if df.num_rows == 0:
         return None
     idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
-    return _minmax_py(idx, _INT64, df.stream, assume_sorted=True)
+    return _py_minmax_sorted(idx, df.stream)
 
 
 def _chunk_index_ts_bounds_from_df(
@@ -241,7 +224,7 @@ def _chunk_index_ts_bounds_from_df(
     if df.num_rows == 0:
         return None
     idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
-    return _minmax_scalars(idx, index_dtype, df.stream, assume_sorted=True)
+    return _minmax_scalars(idx, df.stream)
 
 
 async def _extend_prefetch_until_covered(
@@ -255,7 +238,7 @@ async def _extend_prefetch_until_covered(
     first_past_upper: Callable[[DataFrame], bool],
     last_reaches_upper: Callable[[DataFrame], bool],
 ) -> None:
-    """Fill prefetch until the last chunk reaches the upper halo bound or the stream ends."""
+    """Grow prefetch until the right halo is covered or the input stream ends."""
     if not prefetch and not await _recv_one_into_prefetch(
         context, ch_in, prefetch, br, col_names, col_dtypes
     ):
@@ -275,7 +258,7 @@ async def _recv_stream_chunk_pair(
     context: Context,
     ch_in: Channel[TableChunk],
 ) -> tuple[_RollingStreamChunkMeta, Message] | None:
-    """Read one chunk from the channel. Returns ``None`` at end of stream."""
+    """Read one chunk pair from the channel. Returns ``None`` at end of stream."""
     if (meta_msg := await ch_in.recv_metadata(context)) is None:
         return None
     meta = ArbitraryChunk.from_message(meta_msg).release()
@@ -293,7 +276,7 @@ async def _recv_one_into_prefetch(
     col_names: list[str],
     col_dtypes: list[Any],
 ) -> bool:
-    """Decode one chunk and append to ``prefetch``. Returns ``False`` at end of stream."""
+    """Decode one chunk and append it to ``prefetch``. Returns ``False`` at end of stream."""
     pair = await _recv_stream_chunk_pair(context, ch_in)
     if pair is None:
         return False
@@ -316,7 +299,7 @@ async def _extend_prefetch_for_int_lookahead(
     index_col_idx: int,
     index_dtype: plc.DataType,
 ) -> None:
-    """Buffer enough int-index successors for the right halo or until the stream ends."""
+    """Prefetch int-index chunks until the right halo is covered or the stream ends."""
     threshold = chunk_mx + lookahead
 
     def _bounds(df: DataFrame) -> tuple[int, int] | None:
@@ -351,7 +334,7 @@ async def _extend_prefetch_for_ts_lookahead(
     index_col_idx: int,
     cur_stream: Any,
 ) -> None:
-    """Buffer enough timestamp-index successors for the right halo or until the stream ends."""
+    """Prefetch timestamp-index chunks until the right halo is covered or the stream ends."""
     dur_dt = _duration_dtype_for_timestamp(index_dtype)
     upper_s = _scalar_binop_scalar(
         chunk_mx_s,
@@ -401,7 +384,7 @@ async def _ensure_right_halo_prefetched(
     col_names: list[str],
     col_dtypes: list[Any],
 ) -> bool:
-    """Fill ``prefetch`` for the right halo. Returns ``False`` if the center chunk is empty."""
+    """Prefetch the right halo. Returns ``False`` when the center chunk is empty."""
     if is_int_index:
         cur_bounds = _chunk_index_int_bounds_from_df(
             cur_df, index_col_idx=index_col_idx, index_dtype=index_dtype
@@ -424,9 +407,7 @@ async def _ensure_right_halo_prefetched(
         if cur_df.num_rows == 0:
             return False
         cur_idx = _get_idx_col(cur_df.table, index_col_idx, index_dtype, cur_df.stream)
-        _, chunk_mx_s = _minmax_scalars(
-            cur_idx, index_dtype, cur_df.stream, assume_sorted=True
-        )
+        _, chunk_mx_s = _minmax_scalars(cur_idx, cur_df.stream)
         await _extend_prefetch_for_ts_lookahead(
             context,
             ch_in,
@@ -458,7 +439,7 @@ def _prepare_expanded_rolling_frame(
     base_dtypes: list[Any],
     is_local_rank_chunk: bool,
 ) -> tuple[DataFrame, int, int, DataFrame | None] | None:
-    """Build the ``[left | center | right]`` frame. Returns updated ``left_ctx`` built from ``cur_df``."""
+    """Build the left, center, and right rolling frame. Updates ``left_ctx`` from ``cur_df``."""
     if not is_local_rank_chunk:
         raise NotImplementedError(
             "Non-local rank boundary chunks are not supported for rolling yet."
@@ -486,14 +467,10 @@ def _prepare_expanded_rolling_frame(
     if need_chunk_minmax:
         chunk_idx = _get_idx_col(chunk_table, index_col_idx, index_dtype, chunk_stream)
         if is_int_index:
-            chunk_mn, chunk_mx = _minmax_py(
-                chunk_idx, _INT64, chunk_stream, assume_sorted=True
-            )
+            chunk_mn, chunk_mx = _py_minmax_sorted(chunk_idx, chunk_stream)
         else:
             dur_dt = _duration_dtype_for_timestamp(index_dtype)
-            chunk_mn_s, chunk_mx_s = _minmax_scalars(
-                chunk_idx, index_dtype, chunk_stream, assume_sorted=True
-            )
+            chunk_mn_s, chunk_mx_s = _minmax_scalars(chunk_idx, chunk_stream)
 
     if left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0:
         left_idx = _get_idx_col(
@@ -666,7 +643,7 @@ async def _drain_data_messages(
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
 ) -> None:
-    """Ensure all data messages are drained."""
+    """Drain all remaining data messages."""
     remaining_msg = await ch_in.recv(context)
     if remaining_msg is not None:
         raise RuntimeError("Expected all messages to be drained.")
@@ -679,7 +656,7 @@ async def prepare_rank_boundaries(
     ch_out: Channel[TableChunk],
     collective_ids: list[int],
 ) -> None:
-    """Tag each chunk with local rank metadata (single-rank only today)."""
+    """Tag each chunk with local rank metadata. Only single-rank is supported today."""
     assert len(collective_ids) == 2
     _ = collective_ids
     br = context.br()
@@ -718,7 +695,7 @@ async def expand_chunks(
     base_col_names: list[str],
     base_dtypes: list[Any],
 ) -> None:
-    """Prepare expanded chunks for evaluation."""
+    """Expand chunks with halos and send them for rolling evaluation."""
     prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]] = deque()
     left_ctx_df: DataFrame | None = None
     prev_max: int | None = None
@@ -833,7 +810,7 @@ async def eval_and_send(
     base_dtypes: list[Any],
     tracer: ActorTracer | None,
 ) -> None:
-    """Recv expanded chunk + zlice metadata, run rolling, emit downstream."""
+    """Receive expanded chunks and per-chunk zlice metadata, evaluate rolling, send downstream."""
     non_child_tail = ir._non_child_args[:-1]
     br = context.br()
     # Negative-offset zlice (e.g. tail(n)): total row count is not known until all
@@ -933,7 +910,7 @@ async def rolling_actor(
     ch_out: Channel[TableChunk],
     collective_ids: list[int],
 ) -> None:
-    """Rolling actor. Rank boundaries, then expand chunks, then evaluate and send."""
+    """Streaming rolling actor. Rank boundaries, expand halos, evaluate, and send."""
     assert comm.nranks == 1
     ch_after_boundaries: Channel[TableChunk] = context.create_channel()
     ch_to_eval: Channel[TableChunk] = context.create_channel()
