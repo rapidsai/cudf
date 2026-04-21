@@ -13,7 +13,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -335,10 +334,6 @@ def json_input(request, tmp_path):
         return Path(fname).as_uri()
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_json_lines_basic(json_input, engine):
     can_warn = isinstance(json_input, str) and not json_input.endswith(".json")
@@ -363,10 +358,6 @@ def test_nonexistent_json_correct_error(engine):
         cudf.read_json(json_input, engine=engine)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_json_lines_multiple(tmp_path, json_input, engine):
     if engine == "pandas":
@@ -390,10 +381,6 @@ def test_json_lines_multiple(tmp_path, json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="warning not present in older pandas versions",
-)
 def test_json_read_directory(tmp_path, json_input, engine):
     if engine == "pandas":
         pytest.skip("pandas engine does not support directories")
@@ -1166,10 +1153,6 @@ class TestNestedJsonReaderCommon:
         df = cudf.concat(chunks, ignore_index=True)
         assert expected.to_arrow().equals(df.to_arrow())
 
-    @pytest.mark.skipif(
-        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-        reason="https://github.com/pandas-dev/pandas/pull/57439",
-    )
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
         target = cudf.read_json(StringIO(data), lines=True)

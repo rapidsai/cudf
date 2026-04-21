@@ -1522,7 +1522,12 @@ class Series(SingleColumnFrame, IndexedFrame):
         col = concat_columns([o._column for o in objs])
 
         if len(objs):
+            local_time = col.__dict__.get("_local_time")
             col = ColumnBase.create(col.plc_column, objs[0].dtype)
+            if local_time is not None and isinstance(
+                col, cudf.core.column.datetime.DatetimeTZColumn
+            ):
+                col._local_time = local_time
 
         result = cls._from_column(col, name=name, index=result_index)
         if isinstance(result.index, DatetimeIndex):

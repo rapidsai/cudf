@@ -9,10 +9,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 
 
@@ -184,10 +180,6 @@ def test_round(datetime_types_as_str, resolution):
     assert_eq(expect, got)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="https://github.com/pandas-dev/pandas/issues/52761",
-)
 @pytest.mark.parametrize(
     "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
 )
@@ -210,10 +202,6 @@ def test_floor(datetime_types_as_str, resolution):
     assert_eq(expect, got)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="https://github.com/pandas-dev/pandas/issues/52761",
-)
 @pytest.mark.parametrize(
     "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
 )
