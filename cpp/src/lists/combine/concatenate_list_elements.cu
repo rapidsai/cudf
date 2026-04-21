@@ -14,6 +14,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -24,7 +25,6 @@
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/execution_policy.h>
-#include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -257,20 +257,15 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
   // which simply copies the outer null mask — exactly what we do below.
   if (child.size() == 0) {
     auto const num_rows = input.size();
-    auto out_offsets    = make_numeric_column(
-      data_type{type_to_id<size_type>()}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
-    thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                 out_offsets->mutable_view().begin<size_type>(),
-                 out_offsets->mutable_view().end<size_type>(),
-                 size_type{0});
+    auto out_offsets =
+      cudf::make_column_from_scalar(numeric_scalar<size_type>(0, true, stream, mr), num_rows + 1, stream, mr);
     // Copy the 0-row grandchild to preserve the element type (and any nested structure).
     auto out_entries = std::make_unique<column>(lists_column_view(child).child(), stream, mr);
-    auto [null_mask, null_count] =
-      input.has_nulls()
-        ? std::pair(cudf::detail::copy_bitmask(input, stream, mr), input.null_count())
-        : std::pair(rmm::device_buffer{}, cudf::size_type{0});
-    return make_lists_column(
-      num_rows, std::move(out_offsets), std::move(out_entries), null_count, std::move(null_mask));
+    return make_lists_column(num_rows,
+                             std::move(out_offsets),
+                             std::move(out_entries),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input, stream, mr));
   }
 
   bool const has_null_list = child.has_nulls();
