@@ -103,6 +103,8 @@ class parquet_reader_options {
   type_id _decimal_width{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
+  // Best-effort: try to output DICTIONARY32 columns for fully dict-encoded string columns
+  bool _try_output_dict_columns = false;
   // Whether column name matching is case sensitive. In case of multiple
   // case-insensitive matches, the first matched column is selected
   bool _case_sensitive_names = true;
@@ -297,6 +299,18 @@ class parquet_reader_options {
    * @return `true` if column name matching is case sensitive (default)
    */
   [[nodiscard]] bool is_enabled_case_sensitive_names() const { return _case_sensitive_names; }
+
+  /**
+   * @brief Returns whether the reader should try to output DICTIONARY32 columns.
+   *
+   * When true, the reader may output DICTIONARY32 columns for fully dict-encoded
+   * string columns instead of fully decoded STRING columns. A DICTIONARY32 column
+   * consists of an INT32 indices child and a STRING keys child.
+   * Best-effort: falls back to STRING if the column has mixed encoding.
+   *
+   * @return `true` if the reader should try to output DICTIONARY32 columns
+   */
+  [[nodiscard]] bool is_enabled_try_output_dict_columns() const { return _try_output_dict_columns; }
 
   /**
    * @brief Set a new source location
@@ -533,6 +547,13 @@ class parquet_reader_options {
    * @param val Boolean indicating whether to enable case-sensitive matching.
    */
   void enable_case_sensitive_names(bool val) { _case_sensitive_names = val; }
+
+  /**
+   * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
+   *
+   * @param val Boolean indicating whether to try to output DICTIONARY32 columns
+   */
+  void enable_try_output_dict_columns(bool val) { _try_output_dict_columns = val; }
 };
 
 /**
@@ -793,6 +814,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& case_sensitive_names(bool val)
   {
     options._case_sensitive_names = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
+   *
+   * @param val Boolean value whether to try to output DICTIONARY32 columns
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& try_output_dict_columns(bool val)
+  {
+    options._try_output_dict_columns = val;
     return *this;
   }
 

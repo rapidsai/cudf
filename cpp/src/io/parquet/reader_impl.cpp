@@ -13,7 +13,9 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/io/parquet_schema.hpp>
+#include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -260,6 +262,21 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
   // launch string decoder for byte-stream-split encoded list columns
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING_STREAM_SPLIT_LIST) != 0) {
     decode_data(decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
+  }
+
+  // launch dict-index-as-int32 decoder for flat columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32) != 0) {
+    decode_data(decode_kernel_mask::DICT_INT32);
+  }
+
+  // launch dict-index-as-int32 decoder for nested columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32_NESTED) != 0) {
+    decode_data(decode_kernel_mask::DICT_INT32_NESTED);
+  }
+
+  // launch dict-index-as-int32 decoder for list columns
+  if (BitAnd(kernel_mask, decode_kernel_mask::DICT_INT32_LIST) != 0) {
+    decode_data(decode_kernel_mask::DICT_INT32_LIST);
   }
 
   // launch delta byte array decoder
@@ -513,7 +530,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_num_bytes(),
              options.get_row_groups(),
              options.is_enabled_use_jit_filter(),
-             options.is_enabled_case_sensitive_names()},
+             options.is_enabled_case_sensitive_names(),
+             options.is_enabled_try_output_dict_columns()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -877,6 +895,32 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   }
 
   apply_decimal_width_cast(out_columns);
+
+  // Best-effort: when the user requested DICTIONARY32 output for dict-encoded string columns,
+  // and the direct parquet-dict transcode fast path has not been wired up yet, fall back to
+  // dictionary-encoding each decoded STRING column post-hoc.
+  //
+  // TODO: replace this fallback with a direct transcode path that:
+  //   1) detects at preprocess time whether all chunks of a string column are fully dict-encoded,
+  //   2) flips the page kernel_mask from STRING_DICT* to DICT_INT32*,
+  //   3) allocates the output buffer as INT32 (indices) instead of STRING,
+  //   4) builds the keys child directly from the page dictionary's string bytes,
+  //   5) assembles a DICTIONARY32 column without a second pass through cudf::dictionary::encode.
+  if (_options.try_output_dict_columns) {
+    static bool logged_fallback = false;
+    if (!logged_fallback) {
+      CUDF_LOG_WARN(
+        "Parquet reader: try_output_dict_columns is enabled, but the direct parquet-dict "
+        "transcode fast path is not yet available; falling back to dictionary::encode() on "
+        "decoded STRING columns.");
+      logged_fallback = true;
+    }
+    for (auto& col : out_columns) {
+      if (col and col->type().id() == type_id::STRING) {
+        col = cudf::dictionary::encode(col->view(), data_type{type_id::INT32}, _stream, _mr);
+      }
+    }
+  }
 
   if (!_output_metadata) {
     populate_metadata(out_metadata);

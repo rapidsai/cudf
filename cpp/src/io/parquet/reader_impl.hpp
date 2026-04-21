@@ -459,6 +459,8 @@ class reader_impl {
     bool use_jit_filter = false;
     // Whether to use case-sensitive matching for column names
     bool case_sensitive_names = true;
+    // Whether to try outputting DICTIONARY32 columns for fully dict-encoded string columns
+    bool try_output_dict_columns = false;
   } _options;
 
   // name to reference converter to extract AST output filter
