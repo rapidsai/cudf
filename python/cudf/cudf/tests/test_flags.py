@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.indexed_frame import Flags
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
@@ -389,7 +388,7 @@ def test_from_data_accepts_allows_duplicate_labels():
 
 def test_flags_class_is_exposed():
     # Used by users who want to type-hint or isinstance-check.
-    assert isinstance(cudf.DataFrame().flags, Flags)
+    assert isinstance(cudf.DataFrame().flags, pd.Flags)
 
 
 def test_binop_attrs_deepcopied():

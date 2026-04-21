@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # If libcudf was installed as a wheel, we must request it to load the library symbols.
@@ -47,7 +47,6 @@ from cudf.core.index import (
     TimedeltaIndex,
     interval_range,
 )
-from cudf.core.indexed_frame import Flags
 from cudf.core.missing import NA, NaT
 from cudf.core.multiindex import MultiIndex
 from cudf.core.reshape import (
@@ -98,7 +97,6 @@ __all__ = [
     "Decimal32Dtype",
     "Decimal64Dtype",
     "Decimal128Dtype",
-    "Flags",
     "Grouper",
     "Index",
     "IntervalDtype",

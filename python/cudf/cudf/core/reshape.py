@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import copy
 import itertools
 from typing import TYPE_CHECKING, Literal
 
@@ -145,8 +146,6 @@ def _finalize_concat_metadata(result, inputs):
     :class:`~pandas.errors.DuplicateLabelError` when the resulting flag
     is ``False`` and ``result`` has duplicate labels on any axis.
     """
-    import copy as _copy
-
     inputs = [
         obj for obj in inputs if isinstance(obj, (cudf.Series, cudf.DataFrame))
     ]
@@ -155,7 +154,7 @@ def _finalize_concat_metadata(result, inputs):
     if all(bool(obj.attrs) for obj in inputs):
         first_attrs = inputs[0].attrs
         if all(obj.attrs == first_attrs for obj in inputs[1:]):
-            result._attrs = _copy.deepcopy(first_attrs)
+            result._attrs = copy.deepcopy(first_attrs)
     allows = all(obj.flags.allows_duplicate_labels for obj in inputs)
     if not allows:
         for ax in result.axes:
@@ -178,43 +177,7 @@ def concat(
     verify_integrity=False,
     sort=None,
 ):
-    # Materialize the input sequence so both `concat`'s implementation and
-    # `_finalize_concat_metadata` see identical objects (concat consumes
-    # dicts/iterators).
-    if isinstance(objs, dict):
-        inputs = list(objs.values())
-    else:
-        inputs = list(objs)
-    result = _concat_impl(
-        objs,
-        axis=axis,
-        join=join,
-        ignore_index=ignore_index,
-        keys=keys,
-        levels=levels,
-        names=names,
-        verify_integrity=verify_integrity,
-        sort=sort,
-    )
-    return _finalize_concat_metadata(result, inputs)
-
-
-def _concat_impl(
-    objs,
-    axis=0,
-    join="outer",
-    ignore_index=False,
-    keys=None,
-    levels=None,
-    names=None,
-    verify_integrity=False,
-    sort=None,
-):
-    """Internal implementation of :func:`cudf.concat`.
-
-    Original docstring:
-
-    Concatenate DataFrames, Series, or Indices row-wise.
+    """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
     ----------
@@ -353,6 +316,38 @@ def _concat_impl(
     0      a       1       c       3
     1      b       2       d       4
     """
+    # Materialize the input sequence so both `concat`'s implementation and
+    # `_finalize_concat_metadata` see identical objects (concat consumes
+    # dicts/iterators).
+    if isinstance(objs, dict):
+        inputs = list(objs.values())
+    else:
+        inputs = list(objs)
+    result = _concat_impl(
+        objs,
+        axis=axis,
+        join=join,
+        ignore_index=ignore_index,
+        keys=keys,
+        levels=levels,
+        names=names,
+        verify_integrity=verify_integrity,
+        sort=sort,
+    )
+    return _finalize_concat_metadata(result, inputs)
+
+
+def _concat_impl(
+    objs,
+    axis=0,
+    join="outer",
+    ignore_index=False,
+    keys=None,
+    levels=None,
+    names=None,
+    verify_integrity=False,
+    sort=None,
+):
     if keys is not None:
         raise NotImplementedError("keys is currently not supported")
     if levels is not None:
@@ -605,9 +600,6 @@ def _concat_impl(
         return cudf.Index._concat(objs)
     else:
         raise TypeError(f"cannot concatenate object of type {typ}")
-
-
-concat.__doc__ = _concat_impl.__doc__
 
 
 def melt(
