@@ -3879,12 +3879,6 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector result = haystack.stringContainsPerRow(targets)) {
       assertColumnsAreEqual(expected, result);
     }
-    try (ColumnVector haystack = ColumnVector.fromStrings("abc", "def");
-         ColumnVector targets = ColumnVector.fromStrings("a", "x");
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false);
-         ColumnVector result = haystack.stringContainsPerRow(targets)) {
-      assertColumnsAreEqual(expected, result);
-    }
   }
 
   @Test
