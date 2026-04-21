@@ -41,7 +41,7 @@ from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
@@ -356,6 +357,9 @@ class RankActor:
             collect_metadata=collect_metadata,
         )
 
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+        return func(*args, **kwargs)
+
 
 def get_num_gpus_in_ray_cluster() -> int:
     """
@@ -600,6 +604,11 @@ class RayEngine(StreamingEngine):
         List of :class:`ClusterInfo`, one per rank.
         """
         return ray.get([rank.get_info.remote() for rank in self.rank_actors])
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return ray.get(
+            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+        )
 
     def shutdown(self) -> None:
         """
