@@ -13,7 +13,7 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
-#include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/null_mask.hpp>
@@ -926,12 +926,13 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // assembled DICTIONARY32 columns for all *eligible* flat STRING columns (i.e. those whose
   // chunks were fully dictionary-encoded). For columns that were *not* eligible (e.g. chunks
   // with mixed or non-dictionary encodings, nested schemas, or columns added as empty columns
-  // above), fall back to a post-hoc `cudf::dictionary::encode` so the user still gets a
+  // above), fall back to a post-hoc `dictionary::detail::encode` so the user still gets a
   // DICTIONARY32 column from every flat string column in the output table.
   if (_options.try_output_dict_columns) {
     for (auto& col : out_columns) {
       if (col and col->type().id() == type_id::STRING) {
-        col = cudf::dictionary::encode(col->view(), data_type{type_id::INT32}, _stream, _mr);
+        col = cudf::dictionary::detail::encode(
+          col->view(), data_type{type_id::INT32}, _stream, _mr);
       }
     }
   }
