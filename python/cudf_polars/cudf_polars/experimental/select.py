@@ -372,6 +372,54 @@ def _fuse_simple_reductions(
     return list(decomposed_select_irs), pi
 
 
+def _decompose_mixed_over_select(
+    ir: Select,
+    child: IR,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    pi: PartitionInfo,
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]] | None:
+    """
+    Decompose a Select with multiple distinct over() key groups into per-key Over nodes.
+
+    Returns None if decomposition is not possible (e.g. non-Col partition keys).
+    Each distinct key group becomes its own Over node; pass-through expressions
+    (no GroupedWindow) become a plain Select.  The results are combined with HConcat.
+    """
+    from cudf_polars.experimental.over import make_over_node
+
+    key_groups: dict[tuple[int, ...], list[expr.NamedExpr]] = defaultdict(list)
+    for ne in ir.exprs:
+        indices = _extract_over_shuffle_indices([ne.value], child.schema)
+        if indices is None:
+            return None  # non-Col key or mixed keys within a single expression
+        key_groups[indices].append(ne)
+
+    if len(key_groups) <= 1:
+        return None
+
+    selections: list[IR] = []
+    for indices, group_exprs in key_groups.items():
+        sub_select = Select(
+            {ne.name: ne.value.dtype for ne in group_exprs},
+            group_exprs,
+            ir.should_broadcast,
+            child,
+        )
+        if indices:
+            node: IR = make_over_node(sub_select, child, indices)
+        else:
+            node = sub_select  # passthrough: no GroupedWindow
+        partition_info[node] = pi
+        selections.append(node)
+
+    if len(selections) == 1:
+        return selections[0], partition_info
+
+    new_ir = HConcat(ir.schema, True, *selections)  # noqa: FBT003
+    partition_info[new_ir] = pi
+    return new_ir, partition_info
+
+
 @lower_ir_node.register(Select)
 def _(
     ir: Select, rec: LowerIRTransformer
@@ -477,6 +525,12 @@ def _(
                     new_node = make_over_node(ir, child, indices)
                     partition_info[new_node] = pi
                     return new_node, partition_info
+                if indices is None:
+                    result = _decompose_mixed_over_select(
+                        ir, child, partition_info, pi
+                    )
+                    if result is not None:
+                        return result
             return _lower_ir_fallback(
                 ir, rec, msg="This selection is not supported for multiple partitions."
             )

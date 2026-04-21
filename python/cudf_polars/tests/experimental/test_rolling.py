@@ -148,8 +148,9 @@ def test_over_noncol_key_fallback(engine, expr) -> None:
     [{"executor_options": {"max_rows_per_partition": 2}}],
     indirect=True,
 )
-def test_over_mixed_keys_fallback(engine) -> None:
-    # Multiple over expressions with different partition by keys
+def test_over_mixed_keys(engine) -> None:
+    # Multiple over expressions with different partition-by keys are decomposed
+    # into separate Over nodes (one per key group) and combined with HConcat.
     df = pl.LazyFrame(
         {
             "g": [1, 1, 2, 2, 2, 1],
@@ -161,8 +162,7 @@ def test_over_mixed_keys_fallback(engine) -> None:
         pl.col("x").sum().over("g").alias("s_g"),
         pl.col("x").sum().over("g2").alias("s_g2"),
     )
-    with pytest.warns(UserWarning, match=r"not supported for multiple partitions"):
-        assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
