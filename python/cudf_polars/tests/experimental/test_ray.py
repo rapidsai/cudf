@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -101,17 +102,14 @@ def test_executor_options_forwarded(
 
 
 def test_gather_cluster_info(engine: RayEngine) -> None:
-    """gather_cluster_info returns one info dict per rank with expected fields."""
+    """gather_cluster_info returns one ClusterInfo per rank with expected fields."""
     infos = engine.gather_cluster_info()
     assert len(infos) == engine.nranks
     for info in infos:
-        assert "node_id" in info
-        assert "hostname" in info
-        assert "pid" in info
-        assert "cuda_visible_devices" in info
-        assert isinstance(info["pid"], int)
+        assert isinstance(info.hostname, str)
+        assert isinstance(info.pid, int)
     # Each actor runs in its own process.
-    assert len({info["pid"] for info in infos}) == engine.nranks
+    assert len({info.pid for info in infos}) == engine.nranks
 
 
 def test_scan(engine: RayEngine) -> None:
@@ -177,3 +175,8 @@ def test_empty_dataframe(engine: RayEngine) -> None:
     assert result.shape == (0, 2)
     assert result.columns == ["a", "b"]
     assert result.dtypes == [pl.Int32, pl.Float64]
+
+
+def test_run(engine: RayEngine) -> None:
+    result = engine._run(os.getpid)
+    assert len(set(result)) == engine.nranks

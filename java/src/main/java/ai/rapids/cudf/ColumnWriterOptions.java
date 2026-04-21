@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -624,6 +624,28 @@ public class ColumnWriterOptions {
    */
   public ColumnWriterOptions[] getChildColumnOptions() {
     return childColumnOptions;
+  }
+
+  /**
+   * Returns true if this column is a binary (byte array) column in Parquet.
+   */
+  public boolean isBinary() {
+    return isBinary;
+  }
+
+  /**
+   * Returns true if a Parquet field ID was set on this column.
+   */
+  public boolean hasParquetFieldId() {
+    return hasParquetFieldId;
+  }
+
+  /**
+   * Return the Parquet field ID for this column. The value is only meaningful when
+   * {@link #hasParquetFieldId()} returns true.
+   */
+  public int getParquetFieldId() {
+    return parquetFieldId;
   }
 
   public static class StructColumnWriterOptions extends ColumnWriterOptions {

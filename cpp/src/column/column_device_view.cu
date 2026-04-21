@@ -15,6 +15,23 @@
 #include <numeric>
 
 namespace cudf {
+
+template <typename A, typename B>
+inline constexpr bool layout_compatible = (sizeof(A) == sizeof(B)) && (alignof(A) == alignof(B));
+
+static_assert(
+  layout_compatible<detail::column_device_view_base, column_device_view_core>,
+  "detail::column_device_view_base and column_device_view_core must be layout-compatible");
+static_assert(layout_compatible<column_device_view_core, column_device_view>,
+              "column_device_view_core and column_device_view must be layout-compatible");
+
+static_assert(
+  layout_compatible<detail::column_device_view_base, mutable_column_device_view_core>,
+  "detail::column_device_view_base and mutable_column_device_view_core must be layout-compatible");
+static_assert(
+  layout_compatible<mutable_column_device_view_core, mutable_column_device_view>,
+  "mutable_column_device_view_core and mutable_column_device_view must be layout-compatible");
+
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
   : column_device_view_core{source.type(),
@@ -86,7 +103,7 @@ column_device_view::column_device_view(column_view source, void* h_ptr, void* d_
                             nullptr,
                             source.num_children()}
 {
-  d_children = detail::child_columns_to_device_array<column_device_view>(
+  _children = detail::child_columns_to_device_array<column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 
@@ -135,7 +152,7 @@ mutable_column_device_view::mutable_column_device_view(mutable_column_view sourc
                                     nullptr,
                                     source.num_children()}
 {
-  d_children = detail::child_columns_to_device_array<mutable_column_device_view>(
+  _children = detail::child_columns_to_device_array<mutable_column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 

@@ -7,7 +7,6 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import os
-import socket
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -29,6 +28,7 @@ import polars as pl
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
     execute_ir_on_rank,
@@ -41,7 +41,7 @@ from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
@@ -281,7 +282,7 @@ class RankActor:
         self._mr = None
         ray.actor.exit_actor()
 
-    def get_info(self) -> dict[str, Any]:
+    def get_info(self) -> ClusterInfo:
         """
         Return diagnostic information about actor placement.
 
@@ -289,12 +290,7 @@ class RankActor:
         -------
         Diagnostic information about this actor's placement and state.
         """
-        return {
-            "pid": os.getpid(),
-            "hostname": socket.gethostname(),
-            "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-            "node_id": ray.get_runtime_context().get_node_id(),
-        }
+        return ClusterInfo.local()
 
     def evaluate_polars_ir(
         self,
@@ -360,6 +356,9 @@ class RankActor:
             collective_id_map,
             collect_metadata=collect_metadata,
         )
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+        return func(*args, **kwargs)
 
 
 def get_num_gpus_in_ray_cluster() -> int:
@@ -503,7 +502,7 @@ class RayEngine(StreamingEngine):
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
                         int,
-                        executor_options.get("num_py_executors", 1),
+                        executor_options.get("num_py_executors", 8),
                     ),
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
@@ -596,22 +595,20 @@ class RayEngine(StreamingEngine):
             raise RuntimeError("rank_actors is not available after shutdown")
         return self._rank_actors
 
-    def gather_cluster_info(self) -> list[dict]:
+    def gather_cluster_info(self) -> list[ClusterInfo]:
         """
-        Collect diagnostic information from every rank actor.
+        Collect diagnostic information from every rank.
 
         Returns
         -------
-        List of info dicts (see :meth:`RankActor.get_info`), one per rank
-        in rank order.
-
-        Examples
-        --------
-        >>> with RayEngine() as engine:  # doctest: +SKIP
-        ...     for i, info in enumerate(engine.gather_cluster_info()):
-        ...         print(f"rank {i}: {info}")
+        List of :class:`ClusterInfo`, one per rank.
         """
         return ray.get([rank.get_info.remote() for rank in self.rank_actors])
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return ray.get(
+            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+        )
 
     def shutdown(self) -> None:
         """

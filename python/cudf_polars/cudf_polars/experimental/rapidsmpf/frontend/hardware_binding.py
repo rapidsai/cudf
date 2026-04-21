@@ -43,10 +43,9 @@ class HardwareBindingPolicy:
         subsequent calls to :func:`bind_to_gpu` are no-ops. When
         ``False``, binding is attempted on every call.
     raise_on_fail
-        When ``True``, binding failures raise an exception. Currently
-        ``rrun.bind()`` only prints warnings to stderr on per-subsystem
-        failures; setting this flag enables ``verbose=True`` so those
-        warnings are visible.
+        When ``True``, binding failures (e.g. CPU affinity, NUMA memory
+        policy, or topology discovery) raise an exception.  When
+        ``False`` (the default), failures are silently ignored.
     """
 
     skip_under_rrun: bool = True
@@ -95,14 +94,12 @@ def bind_to_gpu(policy: HardwareBindingPolicy) -> None:
 
 def _do_bind(policy: HardwareBindingPolicy) -> None:
     """Execute the actual bind call according to *policy*."""
-    verbose = policy.raise_on_fail
-    # TODO(rapidsmpf): rrun.bind() does not currently report per-subsystem
-    # failures programmatically — it only prints warnings to stderr when
-    # verbose=True. When a return value or exception is available, check it
-    # here and raise if policy.raise_on_fail is True.
-    # See: https://github.com/rapidsai/rapidsmpf/issues/963
     try:
-        bind(verbose=verbose)
+        try:
+            bind()
+        except RuntimeError:
+            # CUDA_VISIBLE_DEVICES is unset; fall back to GPU 0.
+            bind(gpu_id=0)
     except RuntimeError:
-        # CUDA_VISIBLE_DEVICES is unset; fall back to GPU 0.
-        bind(gpu_id=0, verbose=verbose)
+        if policy.raise_on_fail:
+            raise

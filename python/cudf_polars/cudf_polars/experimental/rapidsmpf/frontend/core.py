@@ -5,8 +5,15 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any, Self
+import dataclasses
+import os
+import socket
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
+import cuda.core
+from rapidsmpf.coll import AllGather
+from rapidsmpf.memory.packed_data import PackedData
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
@@ -19,10 +26,11 @@ from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
     from concurrent.futures import ThreadPoolExecutor
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
@@ -30,6 +38,168 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
+
+
+T = TypeVar("T")
+
+
+@dataclasses.dataclass(frozen=True)
+class ClusterInfo:
+    """
+    Diagnostic information about a single rank in the cluster.
+
+    Attributes
+    ----------
+    pid
+        Process ID of the current rank.
+    hostname
+        Hostname of the machine running this rank.
+    cuda_visible_devices
+        Value of ``CUDA_VISIBLE_DEVICES``, or ``None`` if unset.
+    gpu_uuid
+        UUID of the current CUDA device.
+    """
+
+    pid: int
+    hostname: str
+    cuda_visible_devices: str | None
+    gpu_uuid: str
+
+    @classmethod
+    def local(cls) -> ClusterInfo:
+        """
+        Build a :class:`ClusterInfo` for the current process and GPU.
+
+        Returns
+        -------
+        Diagnostic information for this rank.
+        """
+        return cls(
+            pid=os.getpid(),
+            hostname=socket.gethostname(),
+            cuda_visible_devices=os.environ.get("CUDA_VISIBLE_DEVICES"),
+            gpu_uuid=cuda.core.Device().uuid,
+        )
+
+
+class StreamingEngine(pl.GPUEngine):
+    """
+    Base class for multi-GPU Polars engines.
+
+    The engine manages the lifecycle of a streaming execution and can
+    be used as a context manager. On exit, :meth:`shutdown` is called.
+
+    Notes
+    -----
+    The engine must be created and shut down on the same thread. In particular,
+    destruction and context manager exit must occur on the thread that created
+    the instance.
+
+    Parameters
+    ----------
+    nranks
+        Number of ranks (workers or GPUs) in the cluster.
+    executor_options
+        Executor-specific options (e.g. ``max_rows_per_partition``).
+    engine_options
+        Engine-specific keyword arguments (e.g. ``raise_on_fail``,
+        ``parquet_options``).
+    exit_stack
+        A :class:`contextlib.ExitStack` whose registered contexts are closed
+        when :meth:`shutdown` is called. If ``None``, an empty stack is created.
+    """
+
+    def __init__(
+        self,
+        *,
+        nranks: int,
+        executor_options: dict[str, Any],
+        engine_options: dict[str, Any],
+        exit_stack: contextlib.ExitStack | None = None,
+    ):
+        self._nranks = nranks
+        self._exit_stack: contextlib.ExitStack | None = (
+            exit_stack or contextlib.ExitStack()
+        )
+        super().__init__(
+            executor="streaming",
+            executor_options=executor_options,
+            **engine_options,
+        )
+        if nranks > 1 and engine_options.get("allow_gpu_sharing", False) is False:
+            uuids = [info.gpu_uuid for info in self.gather_cluster_info()]
+            if len(uuids) != len(set(uuids)):
+                raise RuntimeError(
+                    "Multiple ranks share the same GPU (UUID collision detected). "
+                    f"UUIDs: {uuids}. Set allow_gpu_sharing=True to allow this."
+                )
+
+    @property
+    def nranks(self) -> int:
+        """
+        Number of ranks (for example GPUs or workers) in the cluster.
+
+        Local execution without a cluster returns 1.
+
+        Returns
+        -------
+        Number of ranks.
+        """
+        return self._nranks
+
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        raise NotImplementedError
+
+    def shutdown(self) -> None:
+        """
+        Shut down engine and release all owned resources.
+
+        Idempotent: safe to call more than once. Must be called on the same
+        thread that created the engine.
+        """
+        if self._exit_stack is None:
+            return  # already shut down
+        try:
+            self._exit_stack.close()
+        finally:
+            self._exit_stack = None
+            self.device = None
+            self.memory_resource = None
+            self.config = {}
+
+    def __enter__(self) -> Self:
+        """Enter the context manager, returning ``self``."""
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        """Exit the context manager, calling :meth:`shutdown`."""
+        self.shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        """
+        Execute a function on all ranks.
+
+        Parameters
+        ----------
+        func
+            Function to execute.
+        args
+            Arguments to pass to the function.
+        kwargs
+            Keyword arguments to pass to the function.
+
+        Returns
+        -------
+        List of results from calling ``func``, one per rank.
+        """
+        raise NotImplementedError
 
 
 def execute_ir_on_rank(
@@ -160,85 +330,47 @@ def check_reserved_keys(
         raise TypeError(f"engine_options may not contain reserved keys: {bad}")
 
 
-class StreamingEngine(pl.GPUEngine):
+def all_gather_host_data(
+    comm: Communicator,
+    br: BufferResource,
+    op_id: int,
+    data: bytes | bytearray,
+) -> list[bytes]:
     """
-    Base class for multi-GPU Polars engines.
+    Gather host data from every rank using an AllGather collective.
 
-    The engine manages the lifecycle of a streaming execution and can
-    be used as a context manager. On exit, :meth:`shutdown` is called.
+    Each rank contributes a buffer of host bytes; every rank receives back
+    an ordered list containing the contributions from all ranks (index `i`
+    holds the bytes sent by rank `i`).
 
-    Notes
-    -----
-    The engine must be created and shut down on the same thread. In particular,
-    destruction and context manager exit must occur on the thread that created
-    the instance.
+    This function is blocking: all ranks must call it, and each rank
+    waits until the collective completes. The input buffer is copied
+    and cannot be stream-ordered.
 
     Parameters
     ----------
-    nranks
-        Number of ranks (workers or GPUs) in the cluster.
-    executor_options
-        Executor-specific options (e.g. ``max_rows_per_partition``).
-    engine_options
-        Engine-specific keyword arguments (e.g. ``raise_on_fail``,
-        ``parquet_options``).
-    exit_stack
-        A :class:`contextlib.ExitStack` whose registered contexts are closed
-        when :meth:`shutdown` is called. If ``None``, an empty stack is created.
+    comm
+        The communicator shared by all participating ranks.
+    br
+        Buffer resource for memory allocation.
+    op_id
+        Unique operation identifier for this collective.
+    data
+        Host-side buffer to broadcast from this rank.  Accepts any object
+        that implements the buffer protocol (``bytes``, ``bytearray``,
+        ``memoryview``, etc.).
+
+    Returns
+    -------
+    List of bytes, one element per rank, ordered by rank index.
     """
-
-    def __init__(
-        self,
-        *,
-        nranks: int,
-        executor_options: dict[str, Any],
-        engine_options: dict[str, Any],
-        exit_stack: contextlib.ExitStack | None = None,
-    ):
-        self._nranks = nranks
-        self._exit_stack: contextlib.ExitStack | None = (
-            exit_stack or contextlib.ExitStack()
-        )
-        super().__init__(
-            executor="streaming",
-            executor_options=executor_options,
-            **engine_options,
-        )
-
-    @property
-    def nranks(self) -> int:
-        """
-        Number of ranks (for example GPUs or workers) in the cluster.
-
-        Local execution without a cluster returns 1.
-
-        Returns
-        -------
-        Number of ranks.
-        """
-        return self._nranks
-
-    def shutdown(self) -> None:
-        """
-        Shut down engine and release all owned resources.
-
-        Idempotent: safe to call more than once. Must be called on the same
-        thread that created the engine.
-        """
-        if self._exit_stack is None:
-            return  # already shut down
-        try:
-            self._exit_stack.close()
-        finally:
-            self._exit_stack = None
-            self.device = None
-            self.memory_resource = None
-            self.config = {}
-
-    def __enter__(self) -> Self:
-        """Enter the context manager, returning ``self``."""
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        """Exit the context manager, calling :meth:`shutdown`."""
-        self.shutdown()
+    allgather = AllGather(
+        comm=comm,
+        op_id=op_id,
+        br=br,
+        statistics=Statistics(enable=False),
+    )
+    allgather.insert(0, PackedData.from_host_bytes(data, br))
+    allgather.insert_finished()
+    results = allgather.wait_and_extract(ordered=True)
+    return [r.to_host_bytes() for r in results]

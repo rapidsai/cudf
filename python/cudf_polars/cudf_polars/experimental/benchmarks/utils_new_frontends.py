@@ -9,6 +9,7 @@ import argparse
 import dataclasses
 import importlib
 import io
+import itertools
 import json
 import logging
 import os
@@ -59,6 +60,7 @@ except ImportError:
 
 try:
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.benchmarks.asserts import (
         ValidationError,
@@ -76,6 +78,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from cudf_polars.experimental.explain import SerializablePlan
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
 
@@ -386,6 +389,7 @@ class RunConfig:
     executor: ExecutorType  # "in-memory" | "streaming" | "cpu"
     frontend: str  # "spmd" | "ray" | "duckdb"
     connect: str | None = None
+    num_gpus: int | None = None
 
     # Run parameters
     iterations: int
@@ -514,6 +518,7 @@ class RunConfig:
             max_io_threads=args.max_io_threads,
             streaming_options=streaming_options,
             connect=args.connect,
+            num_gpus=args.num_gpus,
             validation_method=validation_method,
             extra_info=args.extra_info,
         )
@@ -814,7 +819,6 @@ def run_polars_query_iteration(
     engine: pl.GPUEngine | None,
     expected: pl.DataFrame | None,
     query_result: Any,
-    client: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
     result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
@@ -872,8 +876,7 @@ def run_polars_query(
     benchmark: Any,
     run_config: RunConfig,
     args: argparse.Namespace,
-    engine: pl.GPUEngine | None,
-    client: Any,
+    engine: StreamingEngine | None,
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
@@ -933,8 +936,8 @@ def run_polars_query(
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
-            if client is not None:
-                client.run(setup_logging, q_id, i)
+            if engine is not None:
+                engine._run(setup_logging, q_id, i)
 
         try:
             record = run_polars_query_iteration(
@@ -946,7 +949,6 @@ def run_polars_query(
                 engine=engine,
                 expected=expected,
                 query_result=query_result,
-                client=client,
                 prepare_validation_result=prepare_validation_result,
                 result_casts=casts if casts else None,
             )
@@ -990,8 +992,7 @@ def _run_query_loop(
     benchmark: Any,
     args: argparse.Namespace,
     run_config: RunConfig,
-    engine: pl.GPUEngine | None,
-    client: Any,
+    engine: StreamingEngine | None,
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
@@ -1016,7 +1017,6 @@ def _run_query_loop(
                 run_config=run_config,
                 args=args,
                 engine=engine,
-                client=client,
                 numeric_type=numeric_type,
                 date_type=date_type,
                 validation_files=validation_files,
@@ -1084,10 +1084,6 @@ def run_polars_spmd(
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
-    if run_config.collect_traces:
-        raise NotImplementedError(
-            "--collect-traces is not yet supported with --frontend spmd"
-        )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
@@ -1120,7 +1116,6 @@ def run_polars_spmd(
             args,
             run_config,
             engine,
-            None,
             numeric_type,
             date_type,
             validation_files,
@@ -1129,6 +1124,9 @@ def run_polars_spmd(
         if engine.rank > 0:
             sys.exit(1 if (query_failures or validation_failures) else 0)
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = _consolidate_logs(
+            run_config, engine=engine, gather_client_logs=False
+        )
         _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
@@ -1144,10 +1142,6 @@ def run_polars_ray(
     """Run benchmark queries using Ray actor-based distributed execution."""
     from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
-    if run_config.collect_traces:
-        raise NotImplementedError(
-            "--collect-traces is not yet supported with --frontend ray."
-        )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — RayEngine sets them
     executor_options.pop("runtime", None)
@@ -1159,6 +1153,8 @@ def run_polars_ray(
     ray_init_options: dict[str, Any] = {}
     if run_config.connect is not None:
         ray_init_options["address"] = run_config.connect
+    if run_config.num_gpus is not None:
+        ray_init_options["num_gpus"] = run_config.num_gpus
 
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
@@ -1172,12 +1168,13 @@ def run_polars_ray(
             args,
             run_config,
             engine,
-            None,
             numeric_type,
             date_type,
             validation_files,
         )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = _consolidate_logs(run_config, engine=engine)
+
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
@@ -1195,10 +1192,6 @@ def run_polars_dask(
 
     from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 
-    if run_config.collect_traces:
-        raise NotImplementedError(
-            "--collect-traces is not yet supported with --frontend dask."
-        )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — DaskEngine sets them
     executor_options.pop("runtime", None)
@@ -1214,6 +1207,11 @@ def run_polars_dask(
         else:
             dask_client = distributed.Client(address=run_config.connect)
 
+    if run_config.num_gpus is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+            str(i) for i in range(run_config.num_gpus)
+        )
+
     try:
         with DaskEngine(
             rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
@@ -1227,15 +1225,17 @@ def run_polars_dask(
                 args,
                 run_config,
                 engine,
-                None,
                 numeric_type,
                 date_type,
                 validation_files,
             )
+            run_config = dataclasses.replace(
+                run_config, records=dict(records), plans=plans
+            )
+            run_config = _consolidate_logs(run_config, engine)
     finally:
         if dask_client is not None:
             dask_client.close()
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
@@ -1312,6 +1312,60 @@ def setup_logging(query_id: int, iteration: int) -> None:
             wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
             cache_logger_on_first_use=True,
         )
+
+
+def _consolidate_logs(
+    run_config: RunConfig, engine: StreamingEngine, *, gather_client_logs: bool = True
+) -> RunConfig:
+    """Merge structlog traces from the local process and Dask workers into run_config."""
+    if not (_HAS_STRUCTLOG and run_config.collect_traces):
+        return run_config
+
+    def gather_logs() -> str:
+        logger = logging.getLogger()
+        return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
+
+    all_logs = "\n".join(engine._run(gather_logs))
+    if gather_client_logs:
+        all_logs += "\n" + gather_logs()
+
+    parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
+    # Some other log records can end up in here. Filter those out.
+    scope_values = {s.value for s in Scope}
+    parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
+    # Now we want to augment the existing Records with the trace data.
+
+    def group_key(x: dict) -> int:
+        return x["query_id"]
+
+    def sort_key(x: dict) -> tuple[int, int]:
+        return x["query_id"], x["iteration"]
+
+    grouped = itertools.groupby(
+        sorted(parsed_logs, key=sort_key),
+        key=group_key,
+    )
+
+    for query_id, run_logs_group in grouped:
+        run_logs = list(run_logs_group)
+        by_iteration = [
+            list(x)
+            for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
+        ]
+        run_records = run_config.records[query_id]
+        assert len(by_iteration) == len(run_records)  # same number of iterations
+        all_traces = [list(iteration) for iteration in by_iteration]
+
+        new_records: list[SuccessRecord | FailedRecord] = []
+        for rec, traces in zip(run_records, all_traces, strict=True):
+            if rec.status == "success":
+                new_records.append(dataclasses.replace(rec, traces=traces))
+            else:
+                new_records.append(rec)
+
+        run_config.records[query_id] = new_records
+
+    return run_config
 
 
 PDSDS_TABLE_NAMES: list[str] = [
@@ -1638,6 +1692,14 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
             Not supported with --frontend spmd."""),
     )
     parser.add_argument(
+        "--num-gpus",
+        dest="num_gpus",
+        default=None,
+        type=int,
+        help="Number of GPUs for local cluster creation (--frontend ray/dask only). "
+        "Cannot be used with --connect. Defaults to all visible GPUs.",
+    )
+    parser.add_argument(
         "--iterations",
         default=1,
         type=int,
@@ -1770,10 +1832,16 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
 
     StreamingOptions._add_cli_args(parser)
 
-    # Trap the legacy --spill-device flag so we can emit a clear error.
+    # Trap legacy flags so we can emit clear errors.
     parser.add_argument(
         "--spill-device",
         dest="spill_device",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--blocksize",
+        dest="blocksize",
         default=None,
         help=argparse.SUPPRESS,
     )
@@ -1794,7 +1862,13 @@ def parse_args(
     if parsed_args.spill_device is not None:
         parser.error(
             "--spill-device is not supported with --frontend; "
-            "use --spill-device-limit instead."
+            "use --spill-device-limit instead, which takes a "
+            'percentage, not a fraction (e.g. "80%").'
+        )
+    if parsed_args.blocksize is not None:
+        parser.error(
+            "--blocksize is not supported with --frontend; "
+            "use --target-partition-size instead."
         )
 
     if parsed_args.validate_directory and parsed_args.validate:
@@ -1824,6 +1898,19 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
 
     if run_config.connect is not None and run_config.frontend == "spmd":
         raise ValueError("--connect is not supported with --frontend spmd.")
+
+    if run_config.num_gpus is not None:
+        if run_config.connect is not None:
+            raise ValueError("--num-gpus cannot be used with --connect.")
+        if run_config.frontend not in ("ray", "dask"):
+            raise ValueError(
+                "--num-gpus is only supported with --frontend ray or dask."
+            )
+        if "CUDA_VISIBLE_DEVICES" in os.environ:
+            raise ValueError(
+                "--num-gpus cannot be used when CUDA_VISIBLE_DEVICES is already set. "
+                "Unset CUDA_VISIBLE_DEVICES or use it directly to control GPU visibility."
+            )
 
     parquet_options = {"use_rapidsmpf_native": run_config.native_parquet}
     validation_files = (
