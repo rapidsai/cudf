@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -284,3 +285,10 @@ def test_comm_and_context_unavailable_after_shutdown(spmd_comm: Communicator) ->
         _ = engine.comm
     with pytest.raises(RuntimeError, match="shutdown"):
         _ = engine.context
+
+
+def test_run(spmd_comm):
+    with SPMDEngine(comm=spmd_comm) as engine:
+        result = engine._run(os.getpid)
+
+    assert result == [os.getpid()]

@@ -14,6 +14,7 @@
 #include <cudf/io/text/byte_range_info.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>

@@ -94,7 +94,7 @@ CUDF_HOST_DEVICE inline void clear_bit_unsafe(bitmask_type* bitmask, size_type b
 /**
  * @brief Indicates whether the specified bit is set to `1`
  *
- * @param bitmask The bitmask containing the bit to clear
+ * @param bitmask The bitmask containing the bit to test
  * @param bit_index Index of the bit to test
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
