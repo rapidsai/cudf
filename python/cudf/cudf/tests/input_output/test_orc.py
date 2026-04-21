@@ -16,7 +16,6 @@ from packaging import version
 from pyarrow import orc
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.io.orc import (
     ORCWriter,
     is_supported_read_orc,
@@ -142,10 +141,6 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
     assert_eq(expect, got)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Bug in older version of pandas",
-)
 def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
     expect = pd.read_orc(path)
@@ -1664,19 +1659,7 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
 @pytest.mark.parametrize("index", [True, False, None])
-@pytest.mark.parametrize(
-    "columns",
-    [
-        None,
-        pytest.param(
-            [],
-            marks=pytest.mark.skipif(
-                PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="Bug in older version of pandas",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("columns", [None, []])
 def test_orc_columns_and_index_param(index_obj, index, columns):
     run_orc_columns_and_index_param(index_obj, index, columns)
 

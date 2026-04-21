@@ -14,10 +14,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     _decimal_series,
@@ -1396,8 +1392,7 @@ def test_operator_func_series_and_scalar_logical(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
-            and fill_value == 1.0
+            fill_value == 1.0
             and scalar is np.nan
             and (
                 has_nulls
@@ -1567,8 +1562,7 @@ def test_datetime_dateoffset_binaryop(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
-            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            dtype in {"datetime64[ms]", "datetime64[s]"}
             and frequency == "microseconds"
             and n_periods == 0,
             reason="https://github.com/pandas-dev/pandas/issues/57448",
@@ -1638,10 +1632,6 @@ def test_datetime_dateoffset_binaryop(
     "ignore:Discarding nonzero nanoseconds:UserWarning"
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_datetime_dateoffset_binaryop_multiple(kwargs, op):
     gsr = cudf.Series(
         [

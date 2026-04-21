@@ -8,10 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
@@ -284,7 +280,6 @@ def test_numeric_series_replace_dtype(
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                condition=PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
                 reason="https://github.com/pandas-dev/pandas/issues/43232"
                 "https://github.com/pandas-dev/pandas/issues/53358",
             ),

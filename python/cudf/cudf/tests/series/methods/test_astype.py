@@ -11,7 +11,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.column.decimal import Decimal32Column, Decimal64Column
 from cudf.core.column.numerical import NumericalColumn
 from cudf.testing import assert_eq
@@ -346,10 +345,6 @@ def test_timedelta_astype_unicode_dtype_pandas_compat():
         "timedelta64[ms]",
         "timedelta64[s]",
     ],
-)
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Bug in older pandas versions",
 )
 def test_timedelta_astype_str_pandas_compat(data, min_unit, unit):
     ptd = pd.to_timedelta(data).astype(unit)

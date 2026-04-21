@@ -15,10 +15,6 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
@@ -130,6 +126,9 @@ def test_csv_reader_numeric_data(numeric_types_as_str, tmp_path):
     assert_eq(df, out)
 
 
+@pytest.mark.skip(
+    reason="Disabled until https://github.com/rapidsai/cudf/pull/22094 is fixed"
+)
 @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
 def test_csv_reader_datetime(parse_dates):
     df = pd.DataFrame(
@@ -492,10 +491,6 @@ def test_csv_reader_dtype_extremes(use_names, numeric_extremes_dataframe):
     assert_eq(gdf, pdf)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="https://github.com/pandas-dev/pandas/issues/52449",
-)
 def test_csv_reader_skiprows_skipfooter(tmp_path, pd_mixed_dataframe):
     fname = tmp_path / "tmp_csvreader_file5.csv"
 

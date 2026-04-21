@@ -9,10 +9,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
@@ -687,8 +683,7 @@ def test_tupleize_cols_False_set():
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(
         pytest.mark.xfail(
-            condition=PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
-            and len(col_data) == 0,
+            condition=len(col_data) == 0,
             reason="https://github.com/pandas-dev/pandas/issues/56679",
         )
     )
