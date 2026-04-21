@@ -194,10 +194,9 @@ def _decompose_std_var(
         Cast(f64, False, merged_count),  # noqa: FBT003
         Literal(f64, float(ddof)),
     )
-    # When n <= ddof the result is invalid: variance is negative (n < ddof)
-    # or inf (n == ddof, non-zero population variance). Adding 0 * sqrt(variance)
-    # converts both to NaN using IEEE 754 rules: sqrt(negative) = NaN and 0 * inf = NaN,
-    # so any invalid variance becomes NaN before mask_nans converts it to null.
+    # When n <= ddof the result is invalid; use null so it propagates through
+    # division. mask_nans below still handles any NaN from sqrt of a negative
+    # variance due to floating-point rounding.
     sanitized = Ternary(
         f64,
         BinOp(
@@ -207,7 +206,7 @@ def _decompose_std_var(
             Literal(f64, 0.0),
         ),
         count_minus_ddof,
-        Literal(f64, float("nan")),
+        Literal(f64, None),
     )
     variance = BinOp(
         f64,
