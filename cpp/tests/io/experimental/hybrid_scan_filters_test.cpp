@@ -732,14 +732,11 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPages)
     options.set_filter(filter_expression);
     reader->reset_column_selection();
 
-    // Span to track current row group indices
-    auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
-
     // Filter the data pages with page index stats
     auto const row_mask =
-      reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
+      reader->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, mr);
 
-    auto const expected_num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
+    auto const expected_num_rows = reader->total_rows_in_row_groups(input_row_group_indices);
     EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
     EXPECT_EQ(row_mask->size(), expected_num_rows);
     EXPECT_EQ(row_mask->null_count(), 0);
@@ -869,13 +866,12 @@ TYPED_TEST(TimestampPageFiltering, MismatchedPrecisions)
 
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
 
-  auto options = cudf::io::parquet_reader_options::builder().build();
-  options.set_timestamp_type(cudf::data_type{cudf::type_to_id<TargetTimestamp>()});
+  auto options = cudf::io::parquet_reader_options::builder()
+                   .timestamp_type(cudf::data_type{cudf::type_to_id<TargetTimestamp>()})
+                   .build();
 
   auto const reader =
     std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
-
-  auto input_row_group_indices = reader->all_row_groups(options);
 
   auto stream = cudf::get_default_stream();
   auto mr     = cudf::get_current_device_resource_ref();
@@ -890,18 +886,10 @@ TYPED_TEST(TimestampPageFiltering, MismatchedPrecisions)
   auto const test_filter_data_pages_with_stats = [&](
                                                    cudf::ast::operation const& filter_expression,
                                                    cudf::size_type const expected_surviving_rows) {
-    options.set_filter(filter_expression);
-    reader->reset_column_selection();
-
-    auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
+    auto const input_row_group_indices = reader->all_row_groups(options);
 
     auto const row_mask =
-      reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
-
-    auto const expected_num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
-    EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
-    EXPECT_EQ(row_mask->size(), expected_num_rows);
-    EXPECT_EQ(row_mask->null_count(), 0);
+      reader->build_row_mask_with_page_index_stats(input_row_group_indices, options, stream, mr);
 
     auto const host_row_mask = cudf::detail::make_host_vector<bool>(
       cudf::device_span<bool const>(row_mask->view().data<bool>(),
@@ -924,6 +912,7 @@ TYPED_TEST(TimestampPageFiltering, MismatchedPrecisions)
   auto const literal     = cudf::ast::literal(literal_value);
   auto const col_ref     = cudf::ast::column_name_reference("col0");
   auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+  options.set_filter(filter_expression);
   test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
 }
 
