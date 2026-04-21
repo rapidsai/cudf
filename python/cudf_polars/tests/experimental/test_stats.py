@@ -117,7 +117,7 @@ def test_dataframescan_stats_pickle(stats_engine):
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -128,7 +128,7 @@ def test_dataframescan_stats_pickle(stats_engine):
     ],
     indirect=True,
 )
-def test_stats_planning(tmp_path, kind, engine):
+def test_stats_planning(tmp_path, kind, streaming_engine):
     sales = pl.DataFrame(
         {
             "order_id": [1, 2, 3, 4, 5, 6],
@@ -157,4 +157,4 @@ def test_stats_planning(tmp_path, kind, engine):
             pl.col("region").first().alias("region"),
         ]
     )
-    assert_gpu_result_equal(q_gb.sort("customer_id"), engine=engine)
+    assert_gpu_result_equal(q_gb.sort("customer_id"), engine=streaming_engine)

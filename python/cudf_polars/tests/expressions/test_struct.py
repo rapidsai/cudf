@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def ldf():
     )
 
 
-def test_field_getitem(request, ldf):
+def test_field_getitem(engine: pl.GPUEngine, request, ldf):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_131,
@@ -28,11 +28,11 @@ def test_field_getitem(request, ldf):
         )
     )
     q = ldf.select(pl.col("a").struct[0])
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("fields", [("b",), ("b", "d"), ("^b.*|f.*$",)])
-def test_field(request, ldf, fields):
+def test_field(engine: pl.GPUEngine, request, ldf, fields):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_131,
@@ -40,10 +40,10 @@ def test_field(request, ldf, fields):
         )
     )
     q = ldf.select(pl.col("a").struct.field(*fields))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_unnest(request, ldf):
+def test_unnest(engine: pl.GPUEngine, request, ldf):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_131,
@@ -51,10 +51,10 @@ def test_unnest(request, ldf):
         )
     )
     q = ldf.select(pl.col("a").struct.unnest())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_json_encode(request, ldf):
+def test_json_encode(engine: pl.GPUEngine, request, ldf):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_131,
@@ -62,14 +62,14 @@ def test_json_encode(request, ldf):
         )
     )
     q = ldf.select(pl.col("a").struct.json_encode())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
     ldf_newlines = pl.LazyFrame({"a": [{"b": "c\nd", "d": "\r\nz"}]})
     q = ldf_newlines.select(pl.col("a").struct.json_encode())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_rename_fields(request, ldf):
+def test_rename_fields(engine: pl.GPUEngine, request, ldf):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_131,
@@ -77,7 +77,7 @@ def test_rename_fields(request, ldf):
         )
     )
     q = ldf.select(pl.col("a").struct.rename_fields(["1", "2", "3"]).struct.unnest())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_with_fields(ldf):
@@ -92,7 +92,7 @@ def test_with_fields(ldf):
     [pl.col("a").name.prefix_fields, pl.col("a").name.suffix_fields],
     ids=lambda x: x.__name__,
 )
-def test_prefix_suffix_fields(request, ldf, expr):
+def test_prefix_suffix_fields(engine: pl.GPUEngine, request, ldf, expr):
     request.applymarker(
         pytest.mark.xfail(
             condition=POLARS_VERSION_LT_131,
@@ -100,7 +100,7 @@ def test_prefix_suffix_fields(request, ldf, expr):
         )
     )
     q = ldf.select(expr("foo").struct.unnest())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_map_field_names(ldf):
@@ -110,16 +110,16 @@ def test_map_field_names(ldf):
 
 @pytest.mark.parametrize("name", [None, "my_count"])
 @pytest.mark.parametrize("normalize", [True, False])
-def test_value_counts(ldf, name, normalize):
+def test_value_counts(engine: pl.GPUEngine, ldf, name, normalize):
     # sort=True since order is non-deterministic
     q = ldf.select(pl.col("a").value_counts(sort=True, name=name, normalize=normalize))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_value_counts_normalize_div_by_zero():
+def test_value_counts_normalize_div_by_zero(engine: pl.GPUEngine):
     ldf = pl.LazyFrame({"a": []}, schema={"a": pl.Int64()})
     q = ldf.select(pl.col("a").value_counts(normalize=True))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_groupby_value_counts_notimplemented():
@@ -132,18 +132,18 @@ def test_groupby_value_counts_notimplemented():
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_struct(ldf):
+def test_struct(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.struct(pl.all()))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_nested_struct():
+def test_nested_struct(engine: pl.GPUEngine):
     ldf = pl.LazyFrame({"a": [{"x": {"i": 0, "j": 0}, "y": {"i": 0, "k": 1}}]})
     q = ldf.select(pl.struct(pl.all()))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_value_counts_with_nulls(ldf):
+def test_value_counts_with_nulls(engine: pl.GPUEngine, ldf):
     ldf_with_nulls = ldf.select(c=pl.Series(["x", None, "y", "x", None, "x"]))
     q = ldf_with_nulls.select(pl.col("c").value_counts(sort=True))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)

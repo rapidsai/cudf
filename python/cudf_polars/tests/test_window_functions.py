@@ -77,7 +77,7 @@ def unsupported_agg_expr(request):
     return request.param
 
 
-def test_over(df: pl.LazyFrame, partition_by, agg_expr):
+def test_over(engine: pl.GPUEngine, df: pl.LazyFrame, partition_by, agg_expr):
     """Test window functions over partitions."""
 
     window_expr = agg_expr.over(partition_by)
@@ -91,8 +91,8 @@ def test_over(df: pl.LazyFrame, partition_by, agg_expr):
     # GPU: 1.333333333333334
     # Classic floating-point gotcha: looks the same, but the test fails
     assert_gpu_result_equal(
-        q, check_exact=False, rtol=1e-15, atol=1e-15
-    ) if "var" in str(agg_expr) else assert_gpu_result_equal(q)
+        q, engine=engine, check_exact=False, rtol=1e-15, atol=1e-15
+    ) if "var" in str(agg_expr) else assert_gpu_result_equal(q, engine=engine)
 
 
 def test_over_with_sort(df: pl.LazyFrame):
@@ -102,7 +102,9 @@ def test_over_with_sort(df: pl.LazyFrame):
 
 
 @pytest.mark.parametrize("mapping_strategy", ["group_to_rows", "explode", "join"])
-def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
+def test_over_mapping_strategy(
+    engine: pl.GPUEngine, df: pl.LazyFrame, mapping_strategy: str
+):
     """Test window functions with different mapping strategies."""
     # ignore is for polars' WindowMappingStrategy, which isn't publicly exported.
     # https://github.com/pola-rs/polars/issues/17420
@@ -119,13 +121,15 @@ def test_over_mapping_strategy(df: pl.LazyFrame, mapping_strategy: str):
         ]
     )
     if not POLARS_VERSION_LT_132 and mapping_strategy == "group_to_rows":
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=engine)
     else:
         assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("period", ["2d", "3d"])
-def test_rolling(request, df: pl.LazyFrame, agg_expr, period: str):
+def test_rolling(
+    engine: pl.GPUEngine, request, df: pl.LazyFrame, agg_expr, period: str
+):
     """Test rolling window functions over time series."""
     if not POLARS_VERSION_LT_136:
         request.applymarker(
@@ -137,7 +141,7 @@ def test_rolling(request, df: pl.LazyFrame, agg_expr, period: str):
 
     query = df.with_columns(window_expr)
 
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
 def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
@@ -152,7 +156,7 @@ def test_rolling_unsupported(df: pl.LazyFrame, unsupported_agg_expr):
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "none"])
-def test_rolling_closed(request, df: pl.LazyFrame, closed: str):
+def test_rolling_closed(engine: pl.GPUEngine, request, df: pl.LazyFrame, closed: str):
     """Test rolling window functions with different closed parameters."""
     if not POLARS_VERSION_LT_136:
         request.applymarker(
@@ -171,4 +175,4 @@ def test_rolling_closed(request, df: pl.LazyFrame, closed: str):
             )
         ]
     )
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)

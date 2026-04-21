@@ -44,30 +44,30 @@ def right():
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full"])
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": 2}},
         {"executor_options": {"max_rows_per_partition": 5, "broadcast_join_limit": 2}},
     ],
     indirect=True,
 )
-def test_dynamic_join_how(left, right, engine, how):
+def test_dynamic_join_how(left, right, streaming_engine, how):
     """Dynamic join path: all join types including Right and Full."""
     q = left.join(right, on="y", how=how)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("how", ["right", "full"])
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": 2}}],
     indirect=True,
 )
-def test_dynamic_join_right_full_reverse(left, right, engine, how):
+def test_dynamic_join_right_full_reverse(left, right, streaming_engine, how):
     """Dynamic join path: Right/Full with reversed left/right (stress ordering)."""
     # Reverse so "right" frame is larger; exercises right-side preservation
     q = right.join(left, on="y", how=how)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 # ---------------------------------------------------------------------------
@@ -76,23 +76,23 @@ def test_dynamic_join_right_full_reverse(left, right, engine, how):
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"executor_options": {"max_rows_per_partition": 2, "broadcast_join_limit": 1}}],
     indirect=True,
 )
-def test_join_then_shuffle(left, right, engine):
+def test_join_then_shuffle(left, right, streaming_engine):
     q = left.join(right, on="y", how="inner").select(
         pl.col("x").sum(),
         pl.col("xx").mean(),
         pl.col("y").n_unique(),
         (pl.col("y") * pl.col("y")).n_unique().alias("y2"),
     )
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("reverse", [True, False])
 @pytest.mark.parametrize(
-    "max_rows_per_partition,engine",
+    "max_rows_per_partition,streaming_engine",
     [
         (
             3,
@@ -115,9 +115,9 @@ def test_join_then_shuffle(left, right, engine):
             },
         ),
     ],
-    indirect=["engine"],
+    indirect=["streaming_engine"],
 )
-def test_join_conditional(reverse, max_rows_per_partition, engine):
+def test_join_conditional(reverse, max_rows_per_partition, streaming_engine):
     left = pl.LazyFrame({"x": range(15), "y": [1, 2, 3] * 5})
     right = pl.LazyFrame({"xx": range(9), "yy": [2, 4, 3] * 3})
     if reverse:
@@ -127,9 +127,9 @@ def test_join_conditional(reverse, max_rows_per_partition, engine):
         with pytest.warns(
             UserWarning, match="ConditionalJoin not supported for multiple partitions."
         ):
-            assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+            assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
     else:
-        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+        assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ def test_join_conditional(reverse, max_rows_per_partition, engine):
 @pytest.mark.parametrize("how", ["inner", "left", "right", "full", "semi", "anti"])
 @pytest.mark.parametrize("reverse", [True, False])
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {"executor_options": {"max_rows_per_partition": 1, "broadcast_join_limit": 1}},
         {"executor_options": {"max_rows_per_partition": 1, "broadcast_join_limit": 16}},
@@ -168,13 +168,13 @@ def test_join_conditional(reverse, max_rows_per_partition, engine):
     ],
     indirect=True,
 )
-def test_join(left, right, how, reverse, engine):
+def test_join(left, right, how, reverse, streaming_engine):
     if reverse:
         left, right = right, left
 
     q = left.join(right, on="y", how=how)
 
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
     # Join again on the same key.
     # (covers code path that avoids redundant shuffles)
@@ -187,12 +187,12 @@ def test_join(left, right, how, reverse, engine):
             }
         )
         q2 = q.join(right2, left_on="y", right_on="yyy", how=how)
-        assert_gpu_result_equal(q2, engine=engine, check_row_order=False)
+        assert_gpu_result_equal(q2, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("zlice", [(0, 2), (2, 2), (-2, None)])
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -204,7 +204,7 @@ def test_join(left, right, how, reverse, engine):
     ],
     indirect=True,
 )
-def test_join_and_slice(zlice, engine):
+def test_join_and_slice(zlice, streaming_engine):
     left = pl.LazyFrame(
         {
             "a": [1, 2, 3, 1, None],
@@ -226,9 +226,9 @@ def test_join_and_slice(zlice, engine):
         with pytest.warns(
             UserWarning, match="This slice not supported for multiple partitions."
         ):
-            assert q.collect(engine=engine).height == q.collect().height
+            assert q.collect(engine=streaming_engine).height == q.collect().height
     else:
-        assert q.collect(engine=engine).height == q.collect().height
+        assert q.collect(engine=streaming_engine).height == q.collect().height
 
     # Need sort to match order after a join
     q = left.join(right, on="a", how="inner").sort(pl.col("a")).slice(*zlice)
@@ -237,14 +237,14 @@ def test_join_and_slice(zlice, engine):
             UserWarning,
             match="does not support a multi-partition slice with an offset.",
         ):
-            assert_gpu_result_equal(q, engine=engine)
+            assert_gpu_result_equal(q, engine=streaming_engine)
     else:
-        assert_gpu_result_equal(q, engine=engine)
+        assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 @pytest.mark.parametrize("how", ["inner", "semi", "left", "right"])
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -256,19 +256,19 @@ def test_join_and_slice(zlice, engine):
     ],
     indirect=True,
 )
-def test_bloom_filter_join(how, engine):
+def test_bloom_filter_join(how, streaming_engine):
     dim = pl.LazyFrame({"key": range(10), "val": range(10)})
     fact = pl.LazyFrame({"key": range(200), "data": range(200)})
     left, right = (dim, fact) if how == "right" else (fact, dim)
     q = left.join(right, on="key", how=how)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -280,14 +280,16 @@ def test_bloom_filter_join(how, engine):
     ],
     indirect=True,
 )
-def test_join_maintain_order_fallback_streaming(left, right, maintain_order, engine):
+def test_join_maintain_order_fallback_streaming(
+    left, right, maintain_order, streaming_engine
+):
     q = left.join(right, on="y", how="inner", maintain_order=maintain_order)
 
     with pytest.warns(
         UserWarning,
         match=r"Join\(maintain_order=.*\) not supported for multiple partitions\.",
     ):
-        assert_gpu_result_equal(q, engine=engine)
+        assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 # ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ from cudf_polars.testing.asserts import (
 )
 
 
-def test_translation_assert_raises():
+def test_translation_assert_raises(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "time": pl.datetime_range(
@@ -37,7 +37,7 @@ def test_translation_assert_raises():
     )
 
     # This should succeed
-    assert_gpu_result_equal(df)
+    assert_gpu_result_equal(df, engine=engine)
 
     with pytest.raises(AssertionError):
         # This should fail, because we can translate this query.
