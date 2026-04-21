@@ -20,13 +20,12 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
-#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
+
+#include <cuda/iterator>
 
 #include <filesystem>
 #include <fstream>
-#include <memory>
 #include <numeric>
 
 /**
@@ -85,8 +84,8 @@ namespace {
 
         // For all pages in this column chunk, update page row counts and offsets.
         std::for_each(
-          thrust::counting_iterator<size_t>(0),
-          thrust::counting_iterator(row_group_num_pages),
+          cuda::counting_iterator<std::size_t>{0},
+          cuda::counting_iterator{row_group_num_pages},
           [&](auto const page_idx) {
             int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
             // For the last page, this is simply the total number of rows in the
@@ -192,13 +191,13 @@ auto make_page_data_list_column(cudf::host_span<T const> data,
 
 }  // namespace
 
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used)
 {
   if (is_pool_used) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      std::make_shared<rmm::mr::cuda_memory_resource>(), rmm::percent_of_free_device_memory(50));
+    return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
+                                         rmm::percent_of_free_device_memory(50)};
   }
-  return std::make_shared<rmm::mr::cuda_async_memory_resource>();
+  return rmm::mr::cuda_async_memory_resource{};
 }
 
 std::tuple<cudf::io::parquet::FileMetaData, bool> read_parquet_file_metadata(
@@ -332,8 +331,8 @@ void write_page_metadata(cudf::io::parquet::FileMetaData const& metadata,
   columns.emplace_back(make_index_column(num_row_groups, stream));
 
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(num_columns),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{num_columns},
     [&](auto const col_idx) {
       auto const [page_row_counts, page_row_offsets, page_byte_offsets, col_page_offsets] =
         compute_page_row_counts_and_offsets(metadata, col_idx, stream);
@@ -360,8 +359,8 @@ void write_page_metadata(cudf::io::parquet::FileMetaData const& metadata,
   cudf::io::table_input_metadata out_metadata(table->view());
   out_metadata.column_metadata[0].set_name("row group index");
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(num_columns),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{num_columns},
                 [&](auto const col_idx) {
                   std::string const col_name = "col" + std::to_string(col_idx);
                   out_metadata.column_metadata[1 + col_idx * output_cols_per_column].set_name(

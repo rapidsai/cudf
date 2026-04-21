@@ -28,8 +28,10 @@
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <cuda/iterator>
+#include <cuda/memory_resource>
 
 #include <fstream>
 #include <limits>
@@ -946,8 +948,7 @@ TEST_P(JsonReaderRecordTest, JsonLinesObjectsMissingData)
   EXPECT_EQ(result.metadata.schema_info[1].name, "col3");
   EXPECT_EQ(result.metadata.schema_info[2].name, "col1");
 
-  auto col1_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto col1_validity = cudf::test::iterators::null_at(0);
   auto col2_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i == 0; });
 
@@ -2136,9 +2137,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
 {
   // Set up host pinned memory pool to avoid implicit synchronizations to test for any potential
   // races due to missing host-device synchronizations
-  using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  auto pinned_mr       = std::make_shared<rmm::mr::pinned_host_memory_resource>();
-  host_pooled_mr mr{pinned_mr.get(), size_t{128} * 1024 * 1024};
+  cudf::test::pinned_pool mr{size_t{128} * 1024 * 1024};
 
   // Set new resource
   auto last_mr = cudf::set_pinned_memory_resource(mr);

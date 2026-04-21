@@ -23,7 +23,6 @@
 #include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <iterator>
 
@@ -280,7 +279,8 @@ std::unique_ptr<column> md5(table_view const& input,
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.
-    string_scalar const string_128bit("d41d8cd98f00b204e9orig98ecf8427e", true, stream);
+    string_scalar const string_128bit(
+      "d41d8cd98f00b204e9orig98ecf8427e", true, stream, cudf::get_current_device_resource_ref());
     return make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
   }
 
@@ -311,8 +311,8 @@ std::unique_ptr<column> md5(table_view const& input,
   // Hash each row, hashing each element sequentially left to right
   thrust::for_each(
     rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{input.num_rows()},
     [d_chars, device_input = *device_input] __device__(auto row_index) {
       MD5Hasher hasher(d_chars + (static_cast<int64_t>(row_index) * digest_size));
       for (auto const& col : device_input) {

@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import functools
+import os.path
 from collections.abc import Mapping, Sequence
 from itertools import groupby
 from typing import TYPE_CHECKING, Any, Self, TypeAlias
@@ -25,7 +26,6 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.experimental.base import ColumnStat
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.statistics import (
@@ -82,17 +82,7 @@ def explain_query(
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
     if physical:
-        if (
-            config.executor.name == "streaming"
-            and config.executor.runtime == "rapidsmpf"
-        ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
-            from cudf_polars.experimental.rapidsmpf.core import (
-                lower_ir_graph as rapidsmpf_lower_ir_graph,
-            )
-
-            lowered_ir, partition_info, _ = rapidsmpf_lower_ir_graph(ir, config)
-        else:
-            lowered_ir, partition_info, _ = lower_ir_graph(ir, config)
+        lowered_ir, partition_info, _ = lower_ir_graph(ir, config)
         return _repr_ir_tree(lowered_ir, partition_info)
     else:
         if config.executor.name == "streaming":
@@ -195,11 +185,9 @@ def _repr_ir_tree(
 ) -> str:
     header = _repr_ir(ir, offset=offset)
     count = partition_info[ir].count if partition_info else None
-    if stats is not None:
-        # Include row-count estimate (if available)
-        row_count_estimate = _fmt_row_count(
-            stats.row_count.get(ir, ColumnStat[int](None)).value
-        )
+    if stats is not None and (source := stats.scan_stats.get(ir)) is not None:
+        # Only annotate leaf scan nodes that have a row-count estimate
+        row_count_estimate = _fmt_row_count(source.row_count)
         row_count = f"~{row_count_estimate}" if row_count_estimate else "unknown"
         header = header.rstrip("\n") + f" {row_count=}\n"
     if count is not None:
@@ -274,11 +262,9 @@ def _serialize_properties(ir: IR) -> dict[str, Serializable]:
 
 @_serialize_properties.register
 def _(ir: Scan) -> dict[str, Serializable]:
-    # for polars<1.31, paths is a list[Path]
-    # for polars>=1.31, paths is a list[str]
     return {
         "typ": ir.typ,
-        "paths": [str(path) for path in ir.paths],
+        "prefix": os.path.commonprefix(ir.paths),
         "predicate": _serialize_expr(ir.predicate) if ir.predicate else None,
     }
 
@@ -460,17 +446,7 @@ class SerializablePlan:
         """
         partition_info_dict: dict[str, SerializablePartitionInfo] | None = None
         if lowered:
-            if (
-                config_options.executor.name == "streaming"
-                and config_options.executor.runtime == "rapidsmpf"
-            ):  # pragma: no cover; rapidsmpf runtime not tested in CI yet
-                from cudf_polars.experimental.rapidsmpf.core import (
-                    lower_ir_graph as rapidsmpf_lower_ir_graph,
-                )
-
-                ir, partition_info_d, _ = rapidsmpf_lower_ir_graph(ir, config_options)
-            else:
-                ir, partition_info_d, _ = lower_ir_graph(ir, config_options)
+            ir, partition_info_d, _ = lower_ir_graph(ir, config_options)
             partition_info_dict = {}
 
         nodes: dict[str, SerializableIRNode] = {}

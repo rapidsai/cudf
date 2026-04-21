@@ -1,5 +1,5 @@
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 
@@ -28,67 +28,25 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 list(APPEND CUDF_CUDA_FLAGS --expt-extended-lambda --expt-relaxed-constexpr)
 
-add_executable(compute_checksum_jit compute_checksum_jit.cpp)
-target_compile_features(compute_checksum_jit PRIVATE cxx_std_20)
-target_compile_options(
-  compute_checksum_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-target_link_libraries(
-  compute_checksum_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-)
-install(TARGETS compute_checksum_jit DESTINATION bin/examples/libcudf/string_transformers)
+# Creates a string transforms example executable and installs it.
+#
+# Arguments: target_name  - Name of the CMake target and resulting executable source_file  - Source
+# file to compile for the example
+function(add_string_transforms_example target_name source_file)
+  add_executable(${target_name} ${source_file})
+  target_compile_features(${target_name} PRIVATE cxx_std_20)
+  target_compile_options(${target_name} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+  target_link_libraries(${target_name} PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
+  install(TARGETS ${target_name} DESTINATION bin/examples/libcudf/string_transformers)
+endfunction()
 
-add_executable(extract_email_jit extract_email_jit.cpp)
-target_compile_features(extract_email_jit PRIVATE cxx_std_20)
-target_compile_options(extract_email_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(
-  extract_email_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-)
-install(TARGETS extract_email_jit DESTINATION bin/examples/libcudf/string_transformers)
-
-add_executable(extract_email_precompiled extract_email_precompiled.cpp)
-target_compile_features(extract_email_precompiled PRIVATE cxx_std_20)
-target_compile_options(
-  extract_email_precompiled PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-target_link_libraries(
-  extract_email_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-)
-install(TARGETS extract_email_precompiled DESTINATION bin/examples/libcudf/string_transformers)
-
-add_executable(format_phone_jit format_phone_jit.cpp)
-target_compile_features(format_phone_jit PRIVATE cxx_std_20)
-target_compile_options(format_phone_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(format_phone_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>)
-install(TARGETS format_phone_jit DESTINATION bin/examples/libcudf/string_transformers)
-
-add_executable(format_phone_precompiled format_phone_precompiled.cpp)
-target_compile_features(format_phone_precompiled PRIVATE cxx_std_20)
-target_compile_options(
-  format_phone_precompiled PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-target_link_libraries(
-  format_phone_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-)
-install(TARGETS format_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
-
-add_executable(localize_phone_jit localize_phone_jit.cpp)
-target_compile_features(localize_phone_jit PRIVATE cxx_std_20)
-target_compile_options(localize_phone_jit PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
-target_link_libraries(
-  localize_phone_jit PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-)
-install(TARGETS localize_phone_jit DESTINATION bin/examples/libcudf/string_transformers)
-
-add_executable(localize_phone_precompiled localize_phone_precompiled.cpp)
-target_compile_features(localize_phone_precompiled PRIVATE cxx_std_20)
-target_compile_options(
-  localize_phone_precompiled PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-target_link_libraries(
-  localize_phone_precompiled PRIVATE cudf::cudf $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
-)
-install(TARGETS localize_phone_precompiled DESTINATION bin/examples/libcudf/string_transformers)
+add_string_transforms_example(compute_checksum_jit compute_checksum_jit.cpp)
+add_string_transforms_example(extract_email_jit extract_email_jit.cpp)
+add_string_transforms_example(extract_email_precompiled extract_email_precompiled.cpp)
+add_string_transforms_example(format_phone_jit format_phone_jit.cpp)
+add_string_transforms_example(format_phone_precompiled format_phone_precompiled.cpp)
+add_string_transforms_example(localize_phone_jit localize_phone_jit.cpp)
+add_string_transforms_example(localize_phone_precompiled localize_phone_precompiled.cpp)
 
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
         DESTINATION bin/examples/libcudf/string_transformers

@@ -15,7 +15,7 @@
 
 #include <memory>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 
 namespace rolling {
@@ -100,4 +100,4 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

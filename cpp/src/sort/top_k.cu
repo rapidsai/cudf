@@ -140,7 +140,10 @@ std::unique_ptr<column> top_k_order(column_view const& col,
   if (k == 0 || col.is_empty()) { return make_empty_column(cudf::type_to_id<size_type>()); }
   if (k >= col.size()) {
     return cudf::detail::sequence(
-      col.size(), numeric_scalar<size_type>(0, true, stream), stream, mr);
+      col.size(),
+      numeric_scalar<size_type>(0, true, stream, cudf::get_current_device_resource_ref()),
+      stream,
+      mr);
   }
 
   auto const temp_mr = cudf::get_current_device_resource_ref();

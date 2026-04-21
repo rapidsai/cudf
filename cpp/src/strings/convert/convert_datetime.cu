@@ -25,10 +25,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/algorithm>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
@@ -220,7 +221,8 @@ struct parse_datetime {
     auto length = d_string.size_bytes();
     for (auto item : d_format_items) {
       if (item.value != 'f')
-        item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
+        item.length =
+          static_cast<int8_t>(cuda::std::min(static_cast<size_type>(item.length), length));
 
       if (item.item_type == format_char_type::literal) {
         // static character we'll just skip;
@@ -284,7 +286,7 @@ struct parse_datetime {
         }
         case 'f': {
           int32_t const read_size =
-            std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
+            cuda::std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
           auto const [fraction, left] = parse_int(ptr, read_size);
           timeparts.subsecond =
             static_cast<int32_t>(fraction * power_of_ten(item.length - read_size + left));
@@ -406,9 +408,9 @@ struct dispatch_to_timestamps_fn {
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(results_view.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{results_view.size()},
                       results_view.data<T>(),
                       pfn);
   }
@@ -528,7 +530,8 @@ struct check_datetime_format {
       }
       // allow for specifiers to be truncated
       if (item.value != 'f')
-        item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
+        item.length =
+          static_cast<int8_t>(cuda::std::min(static_cast<size_type>(item.length), length));
 
       // special logic for each specifier
       // reference: https://man7.org/linux/man-pages/man3/strptime.3.html
@@ -595,7 +598,7 @@ struct check_datetime_format {
         }
         case 'f': {
           int32_t const read_size =
-            std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
+            cuda::std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
           result     = check_digits(ptr, read_size);
           bytes_read = read_size;
           break;
@@ -685,9 +688,9 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings_count},
                     d_results,
                     check_datetime_format{*d_strings, compiler.format_items()});
 

@@ -1,8 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
+import pickle
 from typing import TYPE_CHECKING
 
 import pytest
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
             expr.Col(DataType(pl.Int64()), "foo"),
             expr.Literal(DataType(pl.Int64()), 1),
         ),
-        expr.GroupedRollingWindow(
+        expr.GroupedWindow(
             DataType(pl.Float64),
             ("groups_to_rows", True, False, False),
             [
@@ -60,3 +61,35 @@ if TYPE_CHECKING:
 )
 def test_reconstruct(node: Node):
     assert node.reconstruct(node.children) == node
+
+
+@pytest.mark.parametrize(
+    "node",
+    [
+        expr.Col(DataType(pl.Int64()), "foo"),
+        expr.Literal(DataType(pl.Int64()), 42),
+        expr.BinOp(
+            DataType(pl.Int64()),
+            plc.binaryop.BinaryOperator.ADD,
+            expr.Col(DataType(pl.Int64()), "foo"),
+            expr.Literal(DataType(pl.Int64()), 1),
+        ),
+    ],
+)
+def test_pickle(node: Node):
+    unpickled = pickle.loads(pickle.dumps(node))
+    assert unpickled == node
+
+
+@pytest.mark.parametrize(
+    "node",
+    [
+        expr.Col(DataType(pl.Int64()), "foo"),
+        expr.Literal(DataType(pl.Int64()), 42),
+    ],
+)
+def test_get_stable_id(node: Node):
+    node_id = node.get_stable_id()
+    assert isinstance(node_id, int)
+    # Second call should return the cached value
+    assert node.get_stable_id() == node_id

@@ -14,10 +14,10 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
@@ -60,8 +60,8 @@ std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
     return !list_row.bind_to_column(source_lists, target_lists).is_null(element_index);
   };
 
-  return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
-                                thrust::make_counting_iterator<size_type>(num_child_rows),
+  return cudf::detail::valid_if(cuda::counting_iterator<size_type>{0},
+                                cuda::counting_iterator<size_type>{num_child_rows},
                                 is_valid_predicate,
                                 stream,
                                 mr);
@@ -176,9 +176,9 @@ struct list_child_constructor {
                                                       mr);
 
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(child_column->size()),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<cudf::size_type>{0},
+      cuda::counting_iterator{child_column->size()},
       child_column->mutable_view().begin<T>(),
       cuda::proclaim_return_type<T>([offset_begin  = list_offsets.begin<size_type>(),
                                      offset_size   = list_offsets.size(),
@@ -228,9 +228,9 @@ struct list_child_constructor {
     auto const null_string_view = string_view{nullptr, 0};  // placeholder for factory function
 
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(string_views.size()),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<size_type>{0},
+      cuda::counting_iterator{static_cast<size_type>(string_views.size())},
       string_views.begin(),
       cuda::proclaim_return_type<string_view>([offset_begin  = list_offsets.begin<size_type>(),
                                                offset_size   = list_offsets.size(),
@@ -295,9 +295,9 @@ struct list_child_constructor {
     // For instance, if a parent list_device_view has 3 elements, it should have 3 corresponding
     // child list_device_view instances.
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(child_list_views.size()),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<size_type>{0},
+      cuda::counting_iterator{static_cast<size_type>(child_list_views.size())},
       child_list_views.begin(),
       cuda::proclaim_return_type<unbound_list_view>([offset_begin = list_offsets.begin<size_type>(),
                                                      offset_size  = list_offsets.size(),
@@ -401,7 +401,7 @@ struct list_child_constructor {
     };
 
     auto const iter_source_member_as_list = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<cudf::size_type>(0), [&](auto child_idx) {
+      cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
         return project_member_as_list_view(source_structs.child(child_idx),
                                            source_lists_column_view.size(),
                                            source_lists_column_view.offsets(),
@@ -410,7 +410,7 @@ struct list_child_constructor {
       });
 
     auto const iter_target_member_as_list = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<cudf::size_type>(0), [&](auto child_idx) {
+      cuda::counting_iterator<cudf::size_type>{0}, [&](auto child_idx) {
         return project_member_as_list_view(target_structs.child(child_idx),
                                            target_lists_column_view.size(),
                                            target_lists_column_view.offsets(),

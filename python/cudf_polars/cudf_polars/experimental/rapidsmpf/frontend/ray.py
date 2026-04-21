@@ -4,9 +4,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import os
-import socket
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -21,23 +21,27 @@ from rapidsmpf.config import (
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
-from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.context import Context
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
 import rmm.mr
 
-from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.experimental.rapidsmpf.core import generate_network
-from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
-from cudf_polars.experimental.utils import _concat
+from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
+    StreamingEngine,
+    check_reserved_keys,
+    execute_ir_on_rank,
+)
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
+)
 from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    import uuid
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -46,7 +50,9 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_ray_mode(
@@ -57,6 +63,7 @@ def evaluate_pipeline_ray_mode(
     collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
+    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a RapidsMPF streaming pipeline in Ray mode.
@@ -83,6 +90,8 @@ def evaluate_pipeline_ray_mode(
         IDs.
     collect_metadata
         Whether to collect runtime metadata.
+    query_id
+        A unique identifier for the query.
 
     Returns
     -------
@@ -97,7 +106,7 @@ def evaluate_pipeline_ray_mode(
     RuntimeError
         If the configured executor runtime is not ``"rapidsmpf"``.
     RuntimeError
-        If ``config_options.executor.ray_context`` is ``None``.
+        If ``config_options.executor.ray_context`` is not set.
     """
     if config_options.executor.runtime != "rapidsmpf":
         raise RuntimeError("Runtime must be rapidsmpf")
@@ -161,9 +170,18 @@ class RankActor:
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options produced by
         :meth:`rapidsmpf.config.Options.serialize`.
-    py_executor_max_workers
+    num_py_executors
         Maximum number of threads for the actor's Python thread-pool executor.
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
+    hardware_binding
+        Policy controlling topology-aware hardware binding.
+
+    Notes
+    -----
+    Calls :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.
     """
 
     def __init__(
@@ -171,9 +189,17 @@ class RankActor:
         *,
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
-        py_executor_max_workers: int,
+        num_py_executors: int,
+        hardware_binding: HardwareBindingPolicy,
+        memory_resource_config: MemoryResourceConfig | None,
     ) -> None:
-        self._mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
+        bind_to_gpu(hardware_binding)
+        base_mr = (
+            memory_resource_config.create_memory_resource()
+            if memory_resource_config is not None
+            else rmm.mr.CudaAsyncMemoryResource()
+        )
+        self._mr = RmmResourceAdaptor(base_mr)
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
@@ -182,7 +208,7 @@ class RankActor:
         )
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
-            max_workers=py_executor_max_workers,
+            max_workers=num_py_executors,
             thread_name_prefix="ray-executor",
         )
         self._comm: Communicator | None = None
@@ -256,7 +282,7 @@ class RankActor:
         self._mr = None
         ray.actor.exit_actor()
 
-    def get_info(self) -> dict[str, Any]:
+    def get_info(self) -> ClusterInfo:
         """
         Return diagnostic information about actor placement.
 
@@ -264,12 +290,7 @@ class RankActor:
         -------
         Diagnostic information about this actor's placement and state.
         """
-        return {
-            "pid": os.getpid(),
-            "hostname": socket.gethostname(),
-            "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-            "node_id": ray.get_runtime_context().get_node_id(),
-        }
+        return ClusterInfo.local()
 
     def evaluate_polars_ir(
         self,
@@ -320,272 +341,37 @@ class RankActor:
         ir, partition_info, stats, collective_id_map = query_bundle
         if self._ctx is None:
             raise RuntimeError("setup_worker must be called before evaluate_polars_ir")
-        ir_context = IRExecutionContext(get_cuda_stream=self._ctx.get_stream_from_pool)
-        metadata_collector: list[ChannelMetadata] | None = (
-            [] if collect_metadata else None
-        )
-
-        nodes, output = generate_network(
-            self._ctx,
-            self._comm,
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            ir_context=ir_context,
-            collective_id_map=collective_id_map,
-            metadata_collector=metadata_collector,
-        )
-
-        run_actor_network(actors=nodes, py_executor=self._py_executor)
-
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg).make_available_and_spill(
-                self._ctx.br(), allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        if chunks:
-            dfs = [
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
-                )
-                for chunk in chunks
-            ]
-            df = _concat(*dfs, context=ir_context)
-        else:
-            # No chunks received, create an empty DataFrame with the correct schema.
-            stream = ir_context.get_cuda_stream()
-            chunk = empty_table_chunk(ir, self._ctx, stream)
-            df = DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                stream,
-            )
         # Ray transfers the returned Polars DataFrame back to the client via the
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        result = df.to_polars()
-        return result, metadata_collector
+        return execute_ir_on_rank(
+            self._ctx,
+            self._comm,
+            self._py_executor,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            collective_id_map,
+            collect_metadata=collect_metadata,
+        )
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+        return func(*args, **kwargs)
 
 
-class RayClient:
+def get_num_gpus_in_ray_cluster() -> int:
     """
-    User handle for a RapidsMPF Ray cluster.
-
-    Typically created via :func:`ray_execution`. See that function for usage
-    and detailed documentation.
-
-    Parameters
-    ----------
-    engine
-        Polars GPU engine configured to execute queries on the Ray-backed
-        RapidsMPF cluster. Must have been created with ``"ray_context"`` in
-        its ``executor_options``.
-    owns_ray
-        If ``True``, this client initialized Ray and is responsible for
-        calling :func:`ray.shutdown` in :meth:`shutdown`.
-    """
-
-    def __init__(
-        self,
-        engine: pl.GPUEngine,
-        *,
-        owns_ray: bool,
-    ) -> None:
-        self._engine: pl.GPUEngine | None = engine
-        self._owns_ray: bool = owns_ray
-
-    @property
-    def rank_actors(self) -> list[ActorHandle[RankActor]]:
-        """List of Ray rank actor handles."""
-        if self._engine is None:
-            raise RuntimeError("rank_actors is not available after shutdown")
-        return self._engine.config["executor_options"]["ray_context"].rank_actors
-
-    @property
-    def nranks(self) -> int:
-        """
-        Number of Ray rank actors.
-
-        Returns
-        -------
-        Number of ranks/nodes in the Ray cluster.
-        """
-        return len(self.rank_actors)
-
-    @property
-    def engine(self) -> pl.GPUEngine:
-        """The Polars GPU engine bound to this cluster."""
-        if self._engine is None:
-            raise RuntimeError("engine is not available after shutdown")
-        return self._engine
-
-    def gather_cluster_info(self) -> list[dict]:
-        """
-        Collect diagnostic information from every rank actor.
-
-        Returns
-        -------
-        List of info dicts (see :meth:`RankActor.get_info`), one per rank
-        in rank order.
-
-        Examples
-        --------
-        >>> with ray_execution() as (ray_client, engine):  # doctest: +SKIP
-        ...     for i, info in enumerate(ray_client.gather_cluster_info()):
-        ...         print(f"rank {i}: {info}")
-        """
-        return ray.get([rank.get_info.remote() for rank in self.rank_actors])
-
-    def shutdown(self) -> None:
-        """
-        Shut down all rank actors.
-
-        If Ray was initialized by this client, also calls :func:`ray.shutdown`.
-        Safe to call more than once.
-
-        Raises
-        ------
-        ExceptionGroup
-            If one or more actors raise an unexpected exception during shutdown.
-        """
-        if self._engine is None:
-            return  # already shut down; idempotent
-        exceptions: list[Exception] = []
-        try:
-            refs = [a.shutdown.remote() for a in self.rank_actors]
-            for ref in refs:
-                try:
-                    ray.get(ref)
-                except ray.exceptions.RayActorError:
-                    pass  # expected: exit_actor() terminates the process immediately
-                except Exception as e:
-                    exceptions.append(e)
-            if exceptions:
-                raise ExceptionGroup("Actor shutdown failed", exceptions)
-        finally:
-            # Setting _engine to None serves two purposes: it marks this client as
-            # shut down (so engine/rank_actors/nranks raise) and releases the
-            # reference to RayContext, allowing its now-dead actor handles to be GC'd.
-            self._engine = None
-            if self._owns_ray:
-                self._owns_ray = False
-                ray.shutdown()
-
-    def __enter__(self) -> tuple[RayClient, pl.GPUEngine]:
-        """Enter the context manager, returning ``(self, engine)``."""
-        return self, self.engine
-
-    def __exit__(self, *_: object) -> None:
-        """Exit the context manager, calling :meth:`shutdown`."""
-        self.shutdown()
-
-
-def ray_execution(
-    *,
-    rapidsmpf_options: Options | None = None,
-    executor_options: dict[str, object] | None = None,
-    engine_options: dict[str, Any] | None = None,
-    ray_init_options: dict[str, object] | None = None,
-) -> RayClient:
-    """
-    Create a RapidsMPF Ray cluster and return a :class:`RayClient`.
-
-    The returned client supports both direct use and the context-manager
-    protocol. Prefer the context-manager form in scripts: it guarantees that
-    actors and Ray are shut down even if an exception is raised. In interactive
-    environments such as Jupyter notebooks, the direct form lets the cluster
-    persist across multiple cells without tearing it down after every query.
-
-    If Ray is not already initialized, :func:`ray.init` is called here and
-    :func:`ray.shutdown` is called by :meth:`RayClient.shutdown`. If Ray is
-    already initialized, cluster lifetime remains managed by the caller.
-
-    Parameters
-    ----------
-    rapidsmpf_options
-        RapidsMPF options forwarded to every actor. If ``None``, defaults to
-        ``Options(get_environment_variables())``.
-    executor_options
-        Additional key-value pairs forwarded to the Polars executor options.
-    engine_options
-        Additional keyword arguments forwarded to :class:`polars.GPUEngine`.
-    ray_init_options
-        Keyword arguments forwarded to :func:`ray.init` when Ray is not
-        already initialized.
-
-    Returns
-    -------
-    A client connected to the newly created Ray actor cluster.
-    Call :meth:`RayClient.shutdown` (or use it as a context manager)
-    to release resources when done.
+    Return the number of free GPUs available for Ray actor creation.
 
     Raises
     ------
     RuntimeError
-        If called from within an ``rrun`` cluster.
-    RuntimeError
         If not all GPUs in the Ray cluster are free at startup.
     RuntimeError
         If no GPUs are available in the Ray cluster.
-    TypeError
-        If ``executor_options`` contains a reserved key.
-    TypeError
-        If ``engine_options`` contains a reserved key.
-
-    Examples
-    --------
-    Context-manager style:
-
-    >>> with ray_execution() as (ray_client, engine):  # doctest: +SKIP
-    ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
-
-    Jupyter / manual style:
-
-    >>> client, engine = ray_execution()  # doctest: +SKIP
-    >>> result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
-    >>> client.shutdown()
     """
-    executor_options = executor_options or {}
-    engine_options = engine_options or {}
-    ray_init_options = ray_init_options or {}
-
-    if bootstrap.is_running_with_rrun():
-        raise RuntimeError(
-            "ray_execution() must not be called from within an rrun cluster. Instead "
-            "launch the rrun cluster separately and let this client connect to its "
-            "cluster nodes."
-        )
-
-    # Check for reserved keys.
-    if bad := {"runtime", "cluster", "spmd", "ray_context"} & executor_options.keys():
-        raise TypeError(f"executor_options may not contain reserved keys: {bad}")
-    if bad := {"memory_resource", "executor"} & engine_options.keys():
-        raise TypeError(f"engine_options may not contain reserved keys: {bad}")
-
-    rapidsmpf_options = (
-        rapidsmpf_options
-        if rapidsmpf_options is not None
-        else Options(get_environment_variables())
-    )
-    rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
-    rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
-
-    ray_was_initialized: bool = ray.is_initialized()
-    if not ray_was_initialized:
-        # Prevent Ray from overriding CUDA_VISIBLE_DEVICES to "" when a worker
-        # process starts with zero visible GPUs (e.g., the driver process itself).
-        # In the future, this behavior will become the default in Ray.
-        os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
-        ray.init(**ray_init_options)
-
     total_gpus = int(ray.cluster_resources().get("GPU", 0.0))
     # Note: available_resources() returns a snapshot and is inherently racy.
     # This is only a best-effort guard, another process could claim GPUs between
@@ -598,37 +384,258 @@ def ray_execution(
         )
     if free_gpus == 0:
         raise RuntimeError("No available GPUs in the Ray cluster at startup")
+    return free_gpus
 
-    # Create one actor per GPU.
-    rank_actors: list[ActorHandle[RankActor]] = [
-        RankActor.remote(  # type: ignore[attr-defined]
-            nranks=free_gpus,
-            rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
-            py_executor_max_workers=cast(
-                int,
-                executor_options.get("rapidsmpf_py_executor_max_workers", 1),
-            ),
+
+class RayEngine(StreamingEngine):
+    """
+    Multi-GPU Polars engine for Ray cluster execution.
+
+    Creates a RapidsMPF Ray cluster and returns an engine that can be passed
+    to ``LazyFrame.collect(engine=engine)``.
+
+    Prefer :meth:`from_options` for typical use — pass a
+    :class:`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`
+    instance for a unified, typed interface. The ``__init__`` parameters
+    (``rapidsmpf_options``, ``executor_options``, ``engine_options``) are
+    intended for advanced use when fine-grained control is needed.
+
+    Prefer the context-manager form in scripts: it guarantees that actors and
+    Ray are shut down even if an exception is raised. In interactive environments
+    such as Jupyter notebooks, the direct form lets the cluster persist across
+    multiple cells without tearing it down after every query.
+
+    If Ray is not already initialized, :func:`ray.init` is called here and
+    :func:`ray.shutdown` is called by :meth:`shutdown`. If Ray is already
+    initialized, cluster lifetime remains managed by the caller.
+
+    Parameters
+    ----------
+    rapidsmpf_options
+        RapidsMPF-specific options. Defaults to the reading ``RAPIDSMPF_*``
+        environment variables.
+    executor_options
+        Executor-specific options (e.g. ``max_rows_per_partition``).
+    engine_options
+        Engine-specific keyword arguments (e.g. ``raise_on_fail``,
+        ``parquet_options``).
+    ray_init_options
+        Keyword arguments forwarded to :func:`ray.init` when Ray is not
+        already initialized.
+
+    Raises
+    ------
+    RuntimeError
+        If called from within an ``rrun`` cluster.
+    RuntimeError
+        If not all GPUs in the Ray cluster are free at startup.
+    RuntimeError
+        If no GPUs are available in the Ray cluster.
+    TypeError
+        If ``executor_options`` or ``engine_options`` contains a reserved key.
+
+    Examples
+    --------
+    Context-manager style:
+
+    >>> with RayEngine() as engine:  # doctest: +SKIP
+    ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+
+    Jupyter / manual style:
+
+    >>> engine = RayEngine()  # doctest: +SKIP
+    >>> result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)  # doctest: +SKIP
+    >>> engine.shutdown()  # doctest: +SKIP
+    """
+
+    def __init__(
+        self,
+        *,
+        rapidsmpf_options: Options | None = None,
+        executor_options: dict[str, Any] | None = None,
+        engine_options: dict[str, Any] | None = None,
+        ray_init_options: dict[str, Any] | None = None,
+    ) -> None:
+        executor_options = executor_options or {}
+        engine_options = engine_options or {}
+        ray_init_options = ray_init_options or {}
+
+        if bootstrap.is_running_with_rrun():
+            raise RuntimeError(
+                "RayEngine must not be created from within an rrun cluster. Instead "
+                "launch the rrun cluster separately and let this client connect to its "
+                "cluster nodes."
+            )
+
+        check_reserved_keys(executor_options, engine_options)
+        hw_binding = engine_options.get("hardware_binding", HardwareBindingPolicy())
+
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
         )
-        for _ in range(free_gpus)
-    ]
 
-    root_ucxx_address_as_bytes = ray.get(rank_actors[0].setup_root.remote())
-    # Call setup_worker on all actors concurrently, including the root.
-    # The root skips communicator creation and proceeds directly to the barrier.
-    # Non-root actors create their communicators and then join the barrier.
-    ray.get(
-        [rank.setup_worker.remote(root_ucxx_address_as_bytes) for rank in rank_actors]
-    )
+        rapidsmpf_options = (
+            rapidsmpf_options
+            if rapidsmpf_options is not None
+            else Options(get_environment_variables())
+        )
+        rapidsmpf_options.insert_if_absent({"num_streaming_threads": "4"})
+        rapidsmpf_options_as_bytes = rapidsmpf_options.serialize()
 
-    engine = pl.GPUEngine(
-        memory_resource=None,
-        executor="streaming",
-        executor_options={
-            **executor_options,
-            "runtime": "rapidsmpf",
-            "cluster": "ray",
-            "ray_context": RayContext(rank_actors),
-        },
-        **engine_options,
-    )
-    return RayClient(engine, owns_ray=not ray_was_initialized)
+        exit_stack = contextlib.ExitStack()
+        if not ray.is_initialized():
+            # Prevent Ray from overriding CUDA_VISIBLE_DEVICES to "" when a worker
+            # process starts with zero visible GPUs (e.g., the driver process itself).
+            # In the future, this behavior will become the default in Ray.
+            os.environ.setdefault("RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO", "0")
+            ray.init(**ray_init_options)
+            # Ensure Ray is shut down when RayEngine shuts down.
+            exit_stack.callback(ray.shutdown)
+
+        try:
+            num_gpus = get_num_gpus_in_ray_cluster()
+
+            # Create one actor per GPU.
+            rank_actors: list[ActorHandle[RankActor]] = [
+                RankActor.remote(  # type: ignore[attr-defined]
+                    nranks=num_gpus,
+                    rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
+                    num_py_executors=cast(
+                        int,
+                        executor_options.get("num_py_executors", 8),
+                    ),
+                    hardware_binding=hw_binding,
+                    memory_resource_config=mr_config,
+                )
+                for _ in range(num_gpus)
+            ]
+
+            root_ucxx_address_as_bytes = ray.get(rank_actors[0].setup_root.remote())
+            # Call setup_worker on all actors concurrently, including the root.
+            # The root skips communicator creation and proceeds directly to the barrier.
+            # Non-root actors create their communicators and then join the barrier.
+            ray.get(
+                [
+                    rank.setup_worker.remote(root_ucxx_address_as_bytes)
+                    for rank in rank_actors
+                ]
+            )
+
+            self._rank_actors: list[ActorHandle[RankActor]] | None = rank_actors
+            super().__init__(
+                nranks=num_gpus,
+                executor_options={
+                    **executor_options,
+                    "runtime": "rapidsmpf",
+                    "cluster": "ray",
+                    "ray_context": RayContext(rank_actors),
+                },
+                engine_options=engine_options,
+                exit_stack=exit_stack,
+            )
+        except Exception:
+            exit_stack.close()
+            raise
+
+    @classmethod
+    def from_options(
+        cls,
+        options: StreamingOptions,
+        *,
+        ray_init_options: dict[str, object] | None = None,
+    ) -> RayEngine:
+        """
+        Create a :class:`RayEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct a ``RayEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+        ray_init_options
+            Keyword arguments forwarded to :func:`ray.init` when Ray is not
+            already initialized. These are Ray infrastructure settings and are
+            kept separate from streaming behavior options.
+
+        Returns
+        -------
+        A new :class:`RayEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=4, fallback_mode="silent")
+        >>> with RayEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+        """
+        return cls(
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+            ray_init_options=ray_init_options,
+        )
+
+    @property
+    def rank_actors(self) -> list[ActorHandle[RankActor]]:
+        """
+        List of Ray rank actor handles.
+
+        Raises
+        ------
+        RuntimeError
+            If called after :meth:`shutdown`.
+        """
+        if self._rank_actors is None:
+            raise RuntimeError("rank_actors is not available after shutdown")
+        return self._rank_actors
+
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        return ray.get([rank.get_info.remote() for rank in self.rank_actors])
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return ray.get(
+            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+        )
+
+    def shutdown(self) -> None:
+        """
+        Shut down all rank actors and release resources.
+
+        If Ray was initialized by this engine, also calls :func:`ray.shutdown`.
+        Safe to call more than once.
+
+        Raises
+        ------
+        ExceptionGroup
+            If one or more actors raise an unexpected exception during shutdown.
+        """
+        if self._rank_actors is None:
+            return  # already shut down; idempotent
+        exceptions: list[Exception] = []
+        try:
+            refs = [a.shutdown.remote() for a in self._rank_actors]
+            for ref in refs:
+                try:
+                    ray.get(ref)
+                except ray.exceptions.RayActorError:
+                    pass  # expected: exit_actor() terminates the process immediately
+                except Exception as e:
+                    exceptions.append(e)
+            if exceptions:
+                raise ExceptionGroup("Actor shutdown failed", exceptions)
+        finally:
+            self._rank_actors = None
+            super().shutdown()

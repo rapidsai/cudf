@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
@@ -15,8 +16,7 @@
 #include <cudf/utilities/pinned_memory.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/pinned_host_memory_resource.hpp>
-#include <rmm/mr/pool_memory_resource.hpp>
+#include <cuda/iterator>
 
 using cudf::host_span;
 using cudf::detail::host_2dspan;
@@ -48,9 +48,7 @@ TEST_F(PinnedMemoryTest, MemoryResourceGetAndSet)
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
   // pinned/pooled host memory resource
-  using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  auto pinned_mr       = std::make_shared<rmm::mr::pinned_host_memory_resource>();
-  host_pooled_mr mr{pinned_mr.get(), 4 * 1024 * 1024};
+  cudf::test::pinned_pool mr{4 * 1024 * 1024};
 
   // set new resource
   auto last_mr = cudf::get_pinned_memory_resource();
@@ -59,7 +57,7 @@ TEST_F(PinnedMemoryTest, MemoryResourceGetAndSet)
   constexpr int num_rows = 32 * 1024;
   auto valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 2; });
-  auto values = thrust::make_counting_iterator(0);
+  auto values = cuda::counting_iterator<int>{0};
 
   cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
 

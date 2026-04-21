@@ -508,6 +508,7 @@ add_library(
   src/io/json/read_json.cu
   src/io/json/parser_features.cpp
   src/io/json/process_tokens.cu
+  src/io/json/write_json.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -529,6 +530,7 @@ add_library(
   src/io/parquet/decode_preprocess.cu
   src/io/parquet/experimental/dictionary_page_filter.cu
   src/io/parquet/experimental/deletion_vectors.cu
+  src/io/parquet/experimental/deletion_vectors_helpers.cu
   src/io/parquet/experimental/hybrid_scan.cpp
   src/io/parquet/experimental/hybrid_scan_chunking.cu
   src/io/parquet/experimental/hybrid_scan_helpers.cpp
@@ -587,8 +589,19 @@ add_library(
   src/join/filter_join_indices_kernel_null_primitive.cu
   src/join/filter_join_indices_kernel_primitive.cu
   src/join/filtered_join.cu
+  src/join/hash_join/full_join_match_context.cpp
+  src/join/hash_join/full_join_retrieve.cu
+  src/join/hash_join/full_join_size.cu
+  src/join/hash_join/full_join_size_impl.cu
+  src/join/hash_join/hash_join.cu
+  src/join/hash_join/inner_join_match_context.cpp
+  src/join/hash_join/inner_join_retrieve.cu
+  src/join/hash_join/inner_join_size.cu
+  src/join/hash_join/left_join_match_context.cpp
+  src/join/hash_join/left_join_retrieve.cu
+  src/join/hash_join/left_join_size.cu
+  src/join/hash_join/match_context.cu
   src/join/mark_join.cu
-  src/join/hash_join.cu
   src/join/filter_join_indices_jit.cu
   src/join/join.cu
   src/join/join_utils.cu
@@ -841,6 +854,7 @@ add_library(
   src/utilities/linked_column.cpp
   src/utilities/logger.cpp
   src/utilities/prefetch.cpp
+  src/utilities/roaring_bitmap.cu
   src/utilities/stream_pool.cpp
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
@@ -1148,6 +1162,8 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD 20
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
+                 BUILD_RPATH "\$ORIGIN"
+                 INSTALL_RPATH "\$ORIGIN"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
@@ -1224,8 +1240,16 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
 )
 
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  install(TARGETS cudf_identify_stream_usage_mode_cudf DESTINATION ${lib_dir})
-  install(TARGETS cudf_identify_stream_usage_mode_testing DESTINATION ${lib_dir})
+  install(
+    TARGETS cudf_identify_stream_usage_mode_cudf
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
+  install(
+    TARGETS cudf_identify_stream_usage_mode_testing
+    DESTINATION ${lib_dir}
+    COMPONENT testing
+  )
 endif()
 
 set(doc_string

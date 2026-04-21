@@ -42,6 +42,8 @@ jobs:
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
+      - streams-build
+      - streams-test
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
@@ -490,7 +492,7 @@ jobs:
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: "ci/test_cudf_polars_with_rapidsmpf.sh"
+      script: "ci/test_cudf_polars_experimental.sh"
   cudf-polars-polars-tests:
     needs: [wheel-build-cudf-polars, changed-files]
     secrets: inherit
@@ -597,6 +599,31 @@ jobs:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
+  streams-build:
+    needs: checks
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: pull-request
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: cpu8
+      container_image: "rapidsai/ci-conda:26.06-latest"
+      script: ci/build_streams.sh
+      artifact-name: stream_tests_${{ matrix.cuda_version }}
+      file_to_upload: cpp/install
+  streams-test:
+    needs: [streams-build, changed-files]
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
+    with:
+      build_type: pull-request
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: gpu-l4-latest-1
+      container_image: "rapidsai/ci-conda:26.06-latest"
+      script: ci/test_streams.sh stream_tests_${{ matrix.cuda_version }}
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.

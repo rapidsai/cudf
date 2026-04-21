@@ -128,18 +128,23 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "store_returns", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    # Filter date_dim to just the target year to reduce data volume.
+    # The final query filters ss_sold_year == year and joins on sold_year,
+    # so all three CTEs only need data for that single year.
+    date_year = date_dim.filter(pl.col("d_year") == year).select("d_date_sk")
+
     ws = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(date_year, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(
             web_returns,
             left_on=["ws_order_number", "ws_item_sk"],
             right_on=["wr_order_number", "wr_item_sk"],
             how="anti",
         )
-        .group_by(["d_year", "ws_item_sk", "ws_bill_customer_sk"])
+        .group_by(["ws_item_sk", "ws_bill_customer_sk"])
         .agg(
             [
-                pl.col("d_year").first().alias("ws_sold_year"),
                 pl.when(pl.col("ws_quantity").count() > 0)
                 .then(pl.col("ws_quantity").sum())
                 .otherwise(None)
@@ -154,30 +159,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .alias("ws_sp"),
             ]
         )
-        .select(
-            [
-                "ws_sold_year",
-                "ws_item_sk",
-                "ws_bill_customer_sk",
-                "ws_qty",
-                "ws_wc",
-                "ws_sp",
-            ]
-        )
-        .with_columns([pl.col("ws_bill_customer_sk").alias("ws_customer_sk")])
+        .rename({"ws_bill_customer_sk": "ws_customer_sk"})
     )
     cs = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        catalog_sales.join(date_year, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(
             catalog_returns,
             left_on=["cs_order_number", "cs_item_sk"],
             right_on=["cr_order_number", "cr_item_sk"],
             how="anti",
         )
-        .group_by(["d_year", "cs_item_sk", "cs_bill_customer_sk"])
+        .group_by(["cs_item_sk", "cs_bill_customer_sk"])
         .agg(
             [
-                pl.col("d_year").first().alias("cs_sold_year"),
                 pl.when(pl.col("cs_quantity").count() > 0)
                 .then(pl.col("cs_quantity").sum())
                 .otherwise(None)
@@ -192,30 +186,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .alias("cs_sp"),
             ]
         )
-        .select(
-            [
-                "cs_sold_year",
-                "cs_item_sk",
-                "cs_bill_customer_sk",
-                "cs_qty",
-                "cs_wc",
-                "cs_sp",
-            ]
-        )
-        .with_columns([pl.col("cs_bill_customer_sk").alias("cs_customer_sk")])
+        .rename({"cs_bill_customer_sk": "cs_customer_sk"})
     )
     ss = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(date_year, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(
             store_returns,
             left_on=["ss_ticket_number", "ss_item_sk"],
             right_on=["sr_ticket_number", "sr_item_sk"],
             how="anti",
         )
-        .group_by(["d_year", "ss_item_sk", "ss_customer_sk"])
+        .group_by(["ss_item_sk", "ss_customer_sk"])
         .agg(
             [
-                pl.col("d_year").first().alias("ss_sold_year"),
                 pl.when(pl.col("ss_quantity").count() > 0)
                 .then(pl.col("ss_quantity").sum())
                 .otherwise(None)
@@ -234,23 +217,22 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     result = (
         ss.join(
             ws,
-            left_on=["ss_sold_year", "ss_item_sk", "ss_customer_sk"],
-            right_on=["ws_sold_year", "ws_item_sk", "ws_customer_sk"],
+            left_on=["ss_item_sk", "ss_customer_sk"],
+            right_on=["ws_item_sk", "ws_customer_sk"],
             how="left",
         )
         .join(
             cs,
-            left_on=["ss_sold_year", "ss_item_sk", "ss_customer_sk"],
-            right_on=["cs_sold_year", "cs_item_sk", "cs_customer_sk"],
+            left_on=["ss_item_sk", "ss_customer_sk"],
+            right_on=["cs_item_sk", "cs_customer_sk"],
             how="left",
         )
         .filter(
-            ((pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0))
-            & (pl.col("ss_sold_year") == year)
+            (pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0)
         )
         .select(
             [
-                pl.col("ss_sold_year"),
+                pl.lit(year, dtype=pl.Int64).alias("ss_sold_year"),
                 pl.col("ss_item_sk"),
                 pl.col("ss_customer_sk"),
                 (

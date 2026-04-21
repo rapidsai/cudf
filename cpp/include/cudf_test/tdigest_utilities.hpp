@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,8 +18,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 
 // for use with groupby and reduction aggregation tests.
 
@@ -256,7 +256,7 @@ void tdigest_merge_simple(Func op, MergeFunc merge_op)
 
     // generate separate digests
     std::vector<std::unique_ptr<column>> parts;
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<int>{0};
     std::transform(iter,
                    iter + split_values.size(),
                    std::back_inserter(parts),

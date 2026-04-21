@@ -23,7 +23,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type, size_type, type_id
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
@@ -40,6 +40,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         bool is_enabled_allow_mismatched_pq_schemas() except +libcudf_exception_handler
         bool is_enabled_ignore_missing_columns() except +libcudf_exception_handler
         bool is_enabled_use_jit_filter() noexcept
+        bool is_enabled_case_sensitive_names() noexcept
         # setter
 
         void set_source(source_info src) except +libcudf_exception_handler
@@ -65,6 +66,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void enable_use_pandas_metadata(bool val) except +libcudf_exception_handler
         void set_timestamp_type(data_type type) except +libcudf_exception_handler
         void set_decimal_width(type_id width) noexcept
+        void enable_case_sensitive_names(bool val) noexcept
 
         @staticmethod
         parquet_reader_options_builder builder(
@@ -115,12 +117,15 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_reader_options_builder& use_jit_filter(
             bool use_jit_filter
         ) noexcept
+        parquet_reader_options_builder& case_sensitive_names(
+            bool val
+        ) noexcept
         parquet_reader_options build() except +libcudf_exception_handler
 
     cdef table_with_metadata read_parquet(
         parquet_reader_options args,
         cuda_stream_view stream,
-        device_memory_resource* mr
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef cppclass parquet_writer_options_base:
@@ -299,14 +304,14 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_t chunk_read_limit,
             const parquet_reader_options& options,
             cuda_stream_view stream,
-            device_memory_resource* mr
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         chunked_parquet_reader(
             size_t chunk_read_limit,
             size_t pass_read_limit,
             const parquet_reader_options& options,
             cuda_stream_view stream,
-            device_memory_resource* mr
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         bool has_next() except +libcudf_exception_handler
         table_with_metadata read_chunk() except +libcudf_exception_handler

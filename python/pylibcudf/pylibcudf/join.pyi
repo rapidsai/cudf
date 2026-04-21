@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
@@ -147,8 +147,7 @@ class FilteredJoin:
         self,
         build: Table,
         compare_nulls: NullEquality,
-        reuse_tbl: SetAsBuildTable,
-        load_factor: float,
+        load_factor: float = ...,
         stream: Stream | None = None,
     ) -> None: ...
     def semi_join(
