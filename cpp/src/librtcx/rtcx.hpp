@@ -606,7 +606,7 @@ struct cache_t {  // NOLINT
 
   detail::cache_stats_counter counter_;
 
-  alignas(CACHELINE_ALIGNMENT) std::uint64_t tick_;
+  alignas(CACHELINE_ALIGNMENT) std::uint64_t tick_;  // NOLINT(modernize-use-default-member-init)
 
  public:
   /**

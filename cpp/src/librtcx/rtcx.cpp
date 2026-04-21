@@ -303,7 +303,7 @@ struct LibCuda {
 
   static void* _load()
   {
-    std::string lib_names[] = {"libcuda.so"};
+    std::string lib_names[] = {"libcuda.so"};  // NOLINT(modernize-avoid-c-arrays)
     return load_dll("libcuda.so", lib_names);
   }
 
@@ -338,9 +338,10 @@ struct LibNVRTC {
     std::int32_t major = major_version(cuda_version);
     std::int32_t minor = minor_version(cuda_version);
 
-    std::string lib_names[] = {std::format("libnvrtc.so.{}.{}", major, minor),
-                               std::format("libnvrtc.so.{}", major),
-                               "libnvrtc.so"};
+    std::string lib_names[] =  // NOLINT(modernize-avoid-c-arrays)
+      {std::format("libnvrtc.so.{}.{}", major, minor),
+       std::format("libnvrtc.so.{}", major),
+       "libnvrtc.so"};
 
     return load_dll("libnvrtc.so", lib_names);
   }
@@ -377,9 +378,10 @@ struct LibNVJitLink {
     std::int32_t major = major_version(cuda_version);
     std::int32_t minor = minor_version(cuda_version);
 
-    std::string lib_names[] = {std::format("libnvJitLink.so.{}.{}", major, minor),
-                               std::format("libnvJitLink.so.{}", major),
-                               "libnvJitLink.so"};
+    std::string lib_names[] =  // NOLINT(modernize-avoid-c-arrays)
+      {std::format("libnvJitLink.so.{}.{}", major, minor),
+       std::format("libnvJitLink.so.{}", major),
+       "libnvJitLink.so"};
 
     return load_dll("libnvJitLink.so", lib_names);
   }
@@ -972,7 +974,7 @@ std::pair<std::vector<std::string>, std::vector<std::chrono::nanoseconds>> get_d
         if (ent->d_type == DT_REG) {
           auto path = std::format("{}/{}", cache_dir, ent->d_name);
           struct stat st;
-          if (::stat(path.c_str(), &st) == -1 && errno != ENOENT) {
+          if (::stat(path.c_str(), &st) == -1) {
             throw_posix("Failed to get RTCX cache file stats", "stat");
           }
 

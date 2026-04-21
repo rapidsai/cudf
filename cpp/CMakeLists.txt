@@ -909,9 +909,6 @@ add_library(
 )
 
 add_dependencies(cudf cudf_jit_embed)
-target_include_directories(
-  cudf PRIVATE ${cudf_jit_embed_INCLUDE_DIRS} ${CMAKE_CURRENT_LIST_DIR}/src/librtcx
-)
 
 foreach(incbin_dir IN LISTS cudf_jit_embed_INCLUDE_DIRS)
   target_compile_options(cudf PRIVATE $<$<COMPILE_LANGUAGE:ASM>:-Wa,-I${incbin_dir}>)
@@ -995,6 +992,9 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
+          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/src/librtcx>"
+          "$<BUILD_INTERFACE:${cudf_jit_embed_INCLUDE_DIRS}>"
+          "$<BUILD_INTERFACE:${CUDAToolkit_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -1038,7 +1038,7 @@ target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
-          kvikio::kvikio nanoarrow::nanoarrow zstd CUDA::nvJitLink CUDA::nvrtc CUDA::cuda_driver
+          kvikio::kvikio nanoarrow::nanoarrow zstd
 )
 
 # Add Conda library, and include paths if specified
