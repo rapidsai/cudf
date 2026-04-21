@@ -97,13 +97,14 @@ kernel get_udf_kernel(std::string const& source_file,
 {
   CUDF_FUNC_RANGE();
 
-  auto kernel_instance_source   = std::format(R"***(
+  auto kernel_instance_source = std::format(R"***(
 #define KERNEL_INSTANCE {}
 )***",
                                             kernel_name);
-  char const* include_names[]   = {"cudf/detail/operation-udf.hpp",
-                                   "cudf/detail/kernel-instance.hpp"};
-  char const* include_headers[] = {udf_cuda_source.c_str(), kernel_instance_source.c_str()};
+  char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)
+    {"cudf/detail/operation-udf.hpp", "cudf/detail/kernel-instance.hpp"};
+  char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)
+    {udf_cuda_source.c_str(), kernel_instance_source.c_str()};
 
   constexpr int min_pch_cuda_version     = 12800;  // CUDA 12.8
   constexpr int min_minimal_cuda_version = 12800;  // CUDA 12.8
