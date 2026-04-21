@@ -177,6 +177,7 @@
  *   @defgroup utility_bitmask Bitmask
  *   @defgroup utility_error Exception
  *   @defgroup utility_span Exception
+ *   @defgroup utility_roaring_bitmap Roaring Bitmap
  * @}
  * @defgroup labeling_apis Labeling
  * @{
