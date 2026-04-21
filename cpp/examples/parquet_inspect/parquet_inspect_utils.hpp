@@ -10,7 +10,11 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/memory_resource>
 
 /**
  * @file parquet_inspect_utils.hpp
@@ -23,7 +27,7 @@
  * @param pool Whether to use a pool memory resource.
  * @return Memory resource instance
  */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used);
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used);
 
 /**
  * @brief Reads parquet metadata (FileMetaData struct) from a file
