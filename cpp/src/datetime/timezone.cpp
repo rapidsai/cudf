@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -10,6 +10,11 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <unordered_map>
 
 namespace cudf {
 
@@ -17,6 +22,67 @@ namespace {
 
 constexpr uint32_t tzif_magic           = ('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24);
 std::string const tzif_system_directory = "/usr/share/zoneinfo/";
+
+/**
+ * @brief Resolves a timezone alias via `Link` entries in `<tzif_dir>/tzdata.zi`.
+ */
+std::optional<std::string> resolve_tz_alias(std::filesystem::path const& tzif_dir,
+                                            std::string_view timezone_name)
+{
+  std::ifstream fin{tzif_dir / "tzdata.zi"};
+  if (!fin) { return std::nullopt; }
+
+  // Parse all link entries into an alias -> target map
+  std::unordered_map<std::string, std::string> links;
+  for (std::string line; std::getline(fin, line);) {
+    std::string_view v{line};
+    auto const first = v.find_first_not_of(" \t");
+    if (first == std::string_view::npos) { continue; }
+    v.remove_prefix(first);
+    if (v.empty() || v.front() == '#') { continue; }
+
+    // Match a leading "Link" or "L" token followed by whitespace.
+    if (v.starts_with("Link") && v.size() > 4 && (v[4] == ' ' || v[4] == '\t')) {
+      v.remove_prefix(4);
+    } else if (v.starts_with("L") && v.size() > 1 && (v[1] == ' ' || v[1] == '\t')) {
+      v.remove_prefix(1);
+    } else {
+      continue;
+    }
+
+    auto const take_token = [&]() -> std::string_view {
+      auto const ws_start = v.find_first_not_of(" \t");
+      if (ws_start == std::string_view::npos) {
+        v = {};
+        return {};
+      }
+      v.remove_prefix(ws_start);
+      auto const tok_end = v.find_first_of(" \t");
+      auto const tok     = v.substr(0, tok_end);
+      v.remove_prefix(tok_end == std::string_view::npos ? v.size() : tok_end);
+      return tok;
+    };
+
+    auto const target = take_token();
+    auto const alias  = take_token();
+    if (target.empty() || alias.empty()) { continue; }
+    links.emplace(std::string{alias}, std::string{target});
+  }
+
+  std::string name{timezone_name};
+  // Bound the hop count to avoid loops in pathological input
+  constexpr int max_hops = 16;
+  for (int hops = 0; hops < max_hops; ++hops) {
+    auto const it = links.find(name);
+    if (it == links.end()) { break; }
+    name = it->second;
+  }
+  if (name == std::string{timezone_name}) { return std::nullopt; }
+
+  std::error_code ec;
+  if (!std::filesystem::exists(tzif_dir / name, ec)) { return std::nullopt; }
+  return name;
+}
 
 #pragma pack(push, 1)
 /**
@@ -120,11 +186,19 @@ struct timezone_file {
   {
     using std::ios_base;
 
-    // Open the input file
-    auto const tz_filename =
-      std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
+    auto const tz_dir      = std::filesystem::path{tzif_dir.value_or(tzif_system_directory)};
+    auto const tz_filename = tz_dir / timezone_name;
+    auto const open_flags  = ios_base::in | ios_base::binary | ios_base::ate;
     std::ifstream fin;
-    fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
+    fin.open(tz_filename, open_flags);
+
+    // Fall back to resolving the alias through the tzdata.zi index file
+    if (!fin) {
+      if (auto const resolved = resolve_tz_alias(tz_dir, timezone_name)) {
+        fin.clear();
+        fin.open(tz_dir / *resolved, open_flags);
+      }
+    }
     CUDF_EXPECTS(fin, "Failed to open the timezone file '" + tz_filename.string() + "'");
     auto const file_size = fin.tellg();
     fin.seekg(0);
