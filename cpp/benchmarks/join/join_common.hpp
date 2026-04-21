@@ -88,9 +88,12 @@ template <bool Nullable,
 void BM_join(state_type& state,
              std::vector<cudf::type_id>& key_types,
              Join JoinFunc,
-             int multiplicity   = 1,
-             double selectivity = 0.3)
+             int multiplicity    = 1,
+             double selectivity  = 0.3,
+             bool build_is_right = true)
 {
+  if (should_skip_large_sizes(state, build_is_right)) { return; }
+
   auto const right_size = static_cast<size_t>(state.get_int64("right_size"));
   auto const left_size  = static_cast<size_t>(state.get_int64("left_size"));
 

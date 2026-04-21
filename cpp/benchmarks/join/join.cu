@@ -23,7 +23,6 @@ void nvbench_inner_join(nvbench::state& state,
                  cudf::null_equality compare_nulls) {
     return cudf::inner_join(left_input, right_input, compare_nulls);
   };
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
 
@@ -41,7 +40,6 @@ void nvbench_left_join(nvbench::state& state,
                  cudf::null_equality compare_nulls) {
     return cudf::left_join(left_input, right_input, compare_nulls);
   };
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
 
@@ -59,7 +57,6 @@ void nvbench_full_join(nvbench::state& state,
                  cudf::null_equality compare_nulls) {
     return cudf::full_join(left_input, right_input, compare_nulls);
   };
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
 
@@ -83,7 +80,6 @@ void nvbench_inner_join_selectivity(
     return hash_join.inner_join(left_input);
   };
 
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
 }
 

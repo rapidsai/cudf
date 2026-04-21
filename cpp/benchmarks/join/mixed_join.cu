@@ -30,7 +30,6 @@ void nvbench_mixed_inner_join(nvbench::state& state,
   };
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
@@ -55,7 +54,6 @@ void nvbench_mixed_left_join(nvbench::state& state,
   };
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
@@ -80,7 +78,6 @@ void nvbench_mixed_full_join(nvbench::state& state,
   };
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
@@ -105,7 +102,6 @@ void nvbench_mixed_left_semi_join(nvbench::state& state,
   };
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
@@ -130,7 +126,6 @@ void nvbench_mixed_left_anti_join(nvbench::state& state,
   };
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 
@@ -161,7 +156,6 @@ void nvbench_mixed_inner_join_complex_ast(nvbench::state& state,
   };
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::MIXED, NullEquality>(state, dtypes, join);
 }
 

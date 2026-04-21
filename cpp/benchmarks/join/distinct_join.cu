@@ -25,7 +25,6 @@ void nvbench_distinct_inner_join(nvbench::state& state,
     return hj_obj.inner_join(probe_input);
   };
 
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
 
@@ -44,7 +43,6 @@ void nvbench_distinct_left_join(nvbench::state& state,
     return hj_obj.left_join(probe_input);
   };
 
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
 }
 

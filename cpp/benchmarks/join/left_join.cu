@@ -22,7 +22,6 @@ void nvbench_left_anti_join(nvbench::state& state,
   auto const join_type   = state.get_string("join_type");
   // filtered_join builds on the right side; mark_join builds on the left side.
   auto const build_is_right = (join_type == "filtered_join");
-  if (should_skip_large_sizes(state, build_is_right)) { return; }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [num_probes, &join_type](cudf::table_view const& left,
@@ -44,7 +43,8 @@ void nvbench_left_anti_join(nvbench::state& state,
     }
   };
 
-  BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
+  BM_join<Nullable, join_t::HASH, NullEquality>(
+    state, dtypes, join, 1, selectivity, build_is_right);
 }
 
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
@@ -58,7 +58,6 @@ void nvbench_left_semi_join(nvbench::state& state,
   auto const join_type   = state.get_string("join_type");
   // filtered_join builds on the right side; mark_join builds on the left side.
   auto const build_is_right = (join_type == "filtered_join");
-  if (should_skip_large_sizes(state, build_is_right)) { return; }
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
   auto join = [num_probes, &join_type](cudf::table_view const& left,
@@ -79,7 +78,8 @@ void nvbench_left_semi_join(nvbench::state& state,
       return obj.semi_join(left);
     }
   };
-  BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
+  BM_join<Nullable, join_t::HASH, NullEquality>(
+    state, dtypes, join, 1, selectivity, build_is_right);
 }
 
 template <cudf::null_equality NullEquality, data_type DataType>
@@ -101,7 +101,6 @@ void nvbench_filtered_left_anti_join_selectivity(
     return obj.anti_join(left);
   };
 
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
 }
 
@@ -124,7 +123,6 @@ void nvbench_filtered_left_semi_join_selectivity(
     return obj.semi_join(left);
   };
 
-  if (should_skip_large_sizes(state)) { return; }
   BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
 }
 
@@ -149,8 +147,7 @@ void nvbench_mark_left_semi_join_selectivity(
     return obj.semi_join(right);
   };
 
-  if (should_skip_large_sizes(state, /*build_is_right=*/false)) { return; }
-  BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity);
+  BM_join<false, join_t::HASH, NullEquality>(state, dtypes, join, 1, selectivity, false);
 }
 
 NVBENCH_BENCH_TYPES(nvbench_left_anti_join,
