@@ -35,6 +35,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     _is_already_partitioned,
     chunk_to_frame,
+    names_to_indices,
     recv_metadata,
     send_metadata,
 )
@@ -241,11 +242,9 @@ async def _global_shuffle(
     # For Col-only keys derive column indices so we can check whether
     # the data is already correctly partitioned and skip the shuffle.
     key_values = [ne.value for ne in keys_to_hash]
-    col_keys = [k for k in key_values if isinstance(k, Col)]
     col_indices: tuple[int, ...] | None = None
-    if len(col_keys) == len(key_values):
-        schema_keys = list(child_ir.schema.keys())
-        col_indices = tuple(schema_keys.index(k.name) for k in col_keys)
+    if all(isinstance(k, Col) for k in key_values):
+        col_indices = names_to_indices(keys_to_hash, child_ir.schema)
 
     metadata_in = await recv_metadata(ch_in, context)
 
