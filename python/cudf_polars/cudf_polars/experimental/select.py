@@ -526,9 +526,7 @@ def _(
                     partition_info[new_node] = pi
                     return new_node, partition_info
                 if indices is None:
-                    result = _decompose_mixed_over_select(
-                        ir, child, partition_info, pi
-                    )
+                    result = _decompose_mixed_over_select(ir, child, partition_info, pi)
                     if result is not None:
                         return result
             return _lower_ir_fallback(

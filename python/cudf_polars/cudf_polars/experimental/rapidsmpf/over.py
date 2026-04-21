@@ -23,7 +23,7 @@ import pylibcudf as plc
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.expr import GroupedWindow
 from cudf_polars.dsl.expressions.base import ExecutionContext
-from cudf_polars.dsl.ir import IR, HStack, Select
+from cudf_polars.dsl.ir import HStack, Select
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.experimental.over import Over
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
     from rmm.pylibrmm.stream import Stream
 
-    from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.ir import IRExecutionContext, IR
     from cudf_polars.experimental.rapidsmpf.dispatch import SubNetGenerator
 
 
