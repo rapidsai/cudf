@@ -15,12 +15,17 @@ from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.coll.shuffler import ShufflerAsync
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
+from rapidsmpf.streaming.cudf.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
 from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
@@ -28,6 +33,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    _is_already_partitioned,
     chunk_to_frame,
     recv_metadata,
     send_metadata,
@@ -232,15 +238,37 @@ async def _global_shuffle(
         The child IR node, used to wrap incoming chunks as DataFrames
         for expression evaluation.
     """
+    # For Col-only keys derive column indices so we can check whether
+    # the data is already correctly partitioned and skip the shuffle.
+    key_values = [ne.value for ne in keys_to_hash]
+    col_keys = [k for k in key_values if isinstance(k, Col)]
+    col_indices: tuple[int, ...] | None = None
+    if len(col_keys) == len(key_values):
+        schema_keys = list(child_ir.schema.keys())
+        col_indices = tuple(schema_keys.index(k.name) for k in col_keys)
+
     metadata_in = await recv_metadata(ch_in, context)
 
-    # NOTE: We always shuffle here even if the data is already
-    # partitioned by the key expressions, since we can't efficiently
-    # check partitioning for expression-based keys. This may cause
-    # over-shuffling for Col-only keys where the data is already
-    # correctly partitioned.
+    if col_indices is not None and _is_already_partitioned(
+        metadata_in, col_indices, num_partitions, comm.nranks
+    ):
+        await send_metadata(ch_out, context, metadata_in)
+        while (msg := await ch_in.recv(context)) is not None:
+            await ch_out.send(context, msg)
+        await ch_out.drain(context)
+        return
+
+    # For Col-only keys describe the output partitioning so downstream
+    # operations can skip redundant shuffles. For expression-based keys
+    # we can't express the partitioning in terms of column indices.
     output_metadata = ChannelMetadata(
         local_count=max(1, num_partitions // comm.nranks),
+        partitioning=Partitioning(
+            inter_rank=HashScheme(col_indices, num_partitions),
+            local="inherit",
+        )
+        if col_indices is not None
+        else None,
     )
     await send_metadata(ch_out, context, output_metadata)
 
