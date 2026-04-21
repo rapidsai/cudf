@@ -338,6 +338,30 @@ def _Series_dtype(self):
     return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
 
 
+# def _make_identity_attr(name: str):
+#     """Create a property that returns an attribute stable by Python ``is``.
+
+#     Accessing these attributes on the proxy pins it to the SLOW (pandas)
+#     representation and blocks subsequent conversions back to FAST.  This
+#     matches pandas' contract — e.g. ``ser._values`` returns the *same*
+#     ndarray every call and survives in-place mutation — which the proxy
+#     layer would otherwise break by ping-ponging between cudf and pandas
+#     objects across attribute accesses.
+#     """
+
+#     def getter(self):
+#         # Forcing SLOW state also sets the TO_FAST transfer block, so
+#         # later operations on ``self`` stay on the pandas side and can
+#         # mutate the underlying array in place.
+#         self.force_state(_State.SLOW)
+#         return _maybe_wrap_result(
+#             getattr(self._fsproxy_wrapped, name), None
+#         )
+
+#     getter.__name__ = name
+#     return property(getter)
+
+
 _SeriesAtIndexer = make_intermediate_proxy_type(
     "_SeriesAtIndexer",
     cudf.core.series._SeriesAtIndexer,
@@ -389,6 +413,8 @@ Series = make_final_proxy_type(
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_values": _FastSlowAttribute("_values", private=True),
+        "values": _FastSlowAttribute("values"),
         "sparse": _FastSlowAttribute("sparse", private=True),
         "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
         "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(

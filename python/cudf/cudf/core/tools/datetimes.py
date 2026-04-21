@@ -711,7 +711,13 @@ class DateOffset:
                 else:
                     datetime_col += as_column(value, length=len(datetime_col))
 
-            if tz is not None:
+            if tz is not None and not isinstance(
+                datetime_col.dtype, pd.DatetimeTZDtype
+            ):
+                # Older arithmetic stripped the tz; restore it. When the
+                # arithmetic already preserves tz (e.g. datetime+timedelta),
+                # the column is already tz-aware and another tz_localize
+                # would raise "Already tz-aware".
                 datetime_col = datetime_col.tz_localize("UTC").tz_convert(tz)
 
         return datetime_col
