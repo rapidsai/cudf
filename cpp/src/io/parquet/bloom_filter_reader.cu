@@ -226,8 +226,8 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         auto const col_idx            = col_ref->get_column_index();
         auto const& equality_literals = _equality_literals[col_idx];
         auto col_literal_offset       = _col_literals_offsets[col_idx];
-        // Skip bloom filter probing for timestamp columns with non-zero output clock rate as the
-        // provided literal would never match the native values.
+        // Skip bloom filter probing for timestamp columns with empty vector of literals due to
+        // a timestamp scale mismatch — the literal can never match the native values.
         if (cudf::is_timestamp(_output_dtypes[col_idx]) and equality_literals.empty()) {
           return *_always_true;
         }

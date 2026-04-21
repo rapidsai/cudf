@@ -4408,9 +4408,9 @@ TEST_F(ParquetReaderTest, DuplicateColumnSelection)
 
 template <typename T>
 struct ParquetFilterPushdownTimestampPrecisions : public ParquetReaderTest {};
-using SubSecondTimestampTypes =
+using SupportedTimestampTypes =
   cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
-TYPED_TEST_SUITE(ParquetFilterPushdownTimestampPrecisions, SubSecondTimestampTypes);
+TYPED_TEST_SUITE(ParquetFilterPushdownTimestampPrecisions, SupportedTimestampTypes);
 
 TYPED_TEST(ParquetFilterPushdownTimestampPrecisions, AllPrecisions)
 {
@@ -4423,8 +4423,9 @@ TYPED_TEST(ParquetFilterPushdownTimestampPrecisions, AllPrecisions)
   static_assert(num_rows % rows_per_row_group == 0,
                 "num_rows must be a multiple of rows_per_row_group");
 
-  auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return NativeTimestamp{NativeDuration{i * 100}}; });
+  constexpr auto tick_offset = int64_t{num_rows / 2} * 100;
+  auto iter                  = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return NativeTimestamp{NativeDuration{i * 100 - tick_offset}}; });
   auto const ts_col =
     cudf::test::fixed_width_column_wrapper<NativeTimestamp>(iter, iter + num_rows).release();
   auto const written_table = cudf::table_view{{ts_col->view()}};
@@ -4457,8 +4458,9 @@ TYPED_TEST(ParquetFilterPushdownTimestampPrecisions, AllPrecisions)
   for (auto const target_type : {cudf::type_id::TIMESTAMP_MILLISECONDS,
                                  cudf::type_id::TIMESTAMP_MICROSECONDS,
                                  cudf::type_id::TIMESTAMP_NANOSECONDS}) {
-    // Compute filter threshold: value 10000 (in native ticks) converted to output ticks
-    auto const threshold_native = int64_t{10000} * 100;
+    // Compute filter threshold: value at row (num_rows / 2) in native ticks, converted to output
+    // ticks. With the negative tick offset applied to the iterator, this threshold is 0
+    auto const threshold_native = int64_t{num_rows / 2} * 100 - tick_offset;
     auto const scale            = static_cast<double>(cudf::io::detail::to_clockrate(target_type)) /
                        static_cast<double>(cudf::io::detail::to_clockrate(native_type));
     auto const threshold_output = static_cast<int64_t>(threshold_native * scale);

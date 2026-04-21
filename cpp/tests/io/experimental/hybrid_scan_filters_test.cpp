@@ -693,7 +693,7 @@ using PageFilteringTestTypes =
 
 TYPED_TEST_SUITE(PageFilteringWithPageIndexStats, PageFilteringTestTypes);
 
-TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
+TYPED_TEST(PageFilteringWithPageIndexStats, FilterPages)
 {
   using T = TypeParam;
 
@@ -839,6 +839,90 @@ TYPED_TEST(PageFilteringWithPageIndexStats, FilterPagesWithPageIndexStats)
     auto constexpr expected_surviving_rows = 2 * num_concat * page_size_for_ordered_tests;
     test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
   }
+}
+
+template <typename T>
+struct TimestampPageFiltering : public HybridScanFiltersTest {};
+
+using MismatchedTimestampTypes = cudf::test::Types<cudf::timestamp_us, cudf::timestamp_ns>;
+TYPED_TEST_SUITE(TimestampPageFiltering, MismatchedTimestampTypes);
+
+TYPED_TEST(TimestampPageFiltering, MismatchedPrecisions)
+{
+  using NativeTimestamp = cudf::timestamp_ms;
+  using NativeDuration  = typename NativeTimestamp::duration;
+  using NativeRep       = typename NativeDuration::rep;
+
+  using TargetTimestamp = TypeParam;
+  using TargetDuration  = typename TargetTimestamp::duration;
+
+  srand(31337);
+
+  // Concatenate the table twice so we get multiple row groups with identical data. This forces
+  // pruning to happen at the page level rather than at the row-group level.
+  auto constexpr num_concat = 2;
+  auto const file_buffer    = std::get<1>(create_parquet_with_stats<NativeTimestamp, num_concat>());
+
+  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+
+  auto options = cudf::io::parquet_reader_options::builder().build();
+  options.set_timestamp_type(cudf::data_type{cudf::type_to_id<TargetTimestamp>()});
+
+  auto const reader =
+    std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*footer_buffer, options);
+
+  auto input_row_group_indices = reader->all_row_groups(options);
+
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  // Set up the page index before running any page-level filtering.
+  auto const page_index_byte_range = reader->page_index_byte_range();
+  auto const page_index_buffer =
+    cudf::io::parquet::fetch_page_index_to_host(*datasource, page_index_byte_range);
+  reader->setup_page_index(cudf::host_span<uint8_t const>{
+    static_cast<uint8_t const*>(page_index_buffer->data()), page_index_buffer->size()});
+
+  auto const test_filter_data_pages_with_stats = [&](
+                                                   cudf::ast::operation const& filter_expression,
+                                                   cudf::size_type const expected_surviving_rows) {
+    options.set_filter(filter_expression);
+    reader->reset_column_selection();
+
+    auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
+
+    auto const row_mask =
+      reader->build_row_mask_with_page_index_stats(current_row_group_indices, options, stream, mr);
+
+    auto const expected_num_rows = reader->total_rows_in_row_groups(current_row_group_indices);
+    EXPECT_EQ(row_mask->type().id(), cudf::type_id::BOOL8);
+    EXPECT_EQ(row_mask->size(), expected_num_rows);
+    EXPECT_EQ(row_mask->null_count(), 0);
+
+    auto const host_row_mask = cudf::detail::make_host_vector<bool>(
+      cudf::device_span<bool const>(row_mask->view().data<bool>(),
+                                    static_cast<size_t>(row_mask->view().size())),
+      stream);
+    EXPECT_EQ(std::count(host_row_mask.begin(), host_row_mask.end(), true),
+              expected_surviving_rows);
+  };
+
+  auto constexpr page_size        = page_size_for_ordered_tests;
+  auto constexpr page_boundary_ms = NativeRep{2 * page_size};
+  auto const threshold_output =
+    std::chrono::duration_cast<TargetDuration>(NativeDuration{page_boundary_ms});
+
+  // Only the first two pages per row group should survive (values < 10000 ms).
+  auto constexpr expected_surviving_rows = num_concat * 2 * page_size;
+
+  auto literal_value = cudf::timestamp_scalar<TargetTimestamp>(TargetDuration{threshold_output});
+  auto const literal = cudf::ast::literal(literal_value);
+  auto const col_ref = cudf::ast::column_name_reference("col0");
+  auto filter_expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+  test_filter_data_pages_with_stats(filter_expression, expected_surviving_rows);
 }
 
 TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
