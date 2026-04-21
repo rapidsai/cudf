@@ -22,7 +22,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <algorithm>
-#include <numeric>
 
 namespace cudf::io::experimental {
 namespace detail {
@@ -217,15 +216,13 @@ packed_table read_cudftable(datasource* source,
                             rmm::device_async_resource_ref mr)
 {
   auto const header_size = sizeof(cudftable_header);
-  CUDF_EXPECTS(source->size() >= header_size,
-               "File too small to contain a valid cudftable header");
+  CUDF_EXPECTS(source->size() >= header_size, "File too small to contain a valid cudftable header");
 
   auto header = cudftable_header{};
   source->host_read(0, header_size, reinterpret_cast<uint8_t*>(&header));
   CUDF_EXPECTS(header.magic == magic_number, "Invalid magic number in cudftable header");
   CUDF_EXPECTS(header.format_version == cudftable_header::version,
-               "Unsupported cudftable format version: " +
-                 std::to_string(header.format_version));
+               "Unsupported cudftable format version: " + std::to_string(header.format_version));
 
   auto const comp = static_cast<compression_type>(header.compression);
 
@@ -247,8 +244,7 @@ packed_table read_cudftable(datasource* source,
   }
 
   if (comp == compression_type::NONE) {
-    CUDF_EXPECTS(header.num_blocks <= 1,
-                 "Uncompressed cudftable must have at most one block");
+    CUDF_EXPECTS(header.num_blocks <= 1, "Uncompressed cudftable must have at most one block");
     CUDF_EXPECTS(header.compressed_data_length == header.uncompressed_data_length,
                  "Uncompressed cudftable must have matching compressed and uncompressed sizes");
     if (header.num_blocks == 1) {
@@ -267,10 +263,8 @@ packed_table read_cudftable(datasource* source,
                             stream);
       } else {
         auto host_buffer = source->host_read(blocks_offset, header.uncompressed_data_length);
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(packed.gpu_data->data(),
-                                                 host_buffer->data(),
-                                                 header.uncompressed_data_length,
-                                                 stream));
+        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+          packed.gpu_data->data(), host_buffer->data(), header.uncompressed_data_length, stream));
         stream.synchronize();
       }
     }
@@ -320,10 +314,8 @@ packed_table read_cudftable(datasource* source,
   auto d_outputs = cudf::detail::make_device_uvector_async(h_outputs, stream, mr);
   auto d_results =
     rmm::device_uvector<cudf::io::detail::codec_exec_result>(header.num_blocks, stream, mr);
-  CUDF_CUDA_TRY(cudaMemsetAsync(d_results.data(),
-                                0,
-                                header.num_blocks * sizeof(cudf::io::detail::codec_exec_result),
-                                stream));
+  CUDF_CUDA_TRY(cudaMemsetAsync(
+    d_results.data(), 0, header.num_blocks * sizeof(cudf::io::detail::codec_exec_result), stream));
 
   cudf::io::detail::decompress(comp,
                                d_inputs,

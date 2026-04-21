@@ -258,11 +258,15 @@ class cudftable_reader_options_builder {
 /**
  * @brief Write a table using the CudfTable binary format.
  *
- * This function uses `cudf::pack` to serialize a table into a contiguous format,
- * then writes it to the specified sink with a simple header containing metadata
- * and data lengths.
+ * This function uses `cudf::pack` to serialize a table into a contiguous format
+ * and writes it to the specified sink. The on-disk layout is a single header
+ * describing the compression type and block size, followed by the packed
+ * metadata, a block index, and the (optionally compressed) data blocks. When
+ * `options.get_compression() == compression_type::NONE`, the data is written
+ * as a single uncompressed block.
  *
- * @param options Options specifying the sink and table to write
+ * @param options Options specifying the sink, table, compression type and
+ *                block size
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void write_cudftable(cudftable_writer_options const& options,
