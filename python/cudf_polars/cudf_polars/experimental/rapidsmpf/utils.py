@@ -675,22 +675,18 @@ class NormalizedPartitioning:
         )
 
     def is_aligned_with(self, other: NormalizedPartitioning) -> bool:
-        """
-        True when both sides share a compatible hash layout for a chunkwise operation.
-
-        Checks moduli and key counts rather than exact column indices, since left
-        and right schemas may use different positions for semantically equivalent keys.
-        Requires both sides to have a non-trivial local layout (bool(self) and bool(other)).
-        """
+        """True when both sides share a compatible hash layout for a chunkwise operation."""
         if not bool(self) or not bool(other):
             return False
-        lhs_ir = self.inter_rank_scheme
-        rhs_ir = other.inter_rank_scheme
-        if not isinstance(lhs_ir, HashScheme) or not isinstance(rhs_ir, HashScheme):
+        lhs_inter = self.inter_rank_scheme
+        rhs_inter = other.inter_rank_scheme
+        if not isinstance(lhs_inter, HashScheme) or not isinstance(
+            rhs_inter, HashScheme
+        ):
             return False
-        if lhs_ir.modulus != rhs_ir.modulus:
+        if lhs_inter.modulus != rhs_inter.modulus:
             return False
-        if len(lhs_ir.column_indices) != len(rhs_ir.column_indices):
+        if len(lhs_inter.column_indices) != len(rhs_inter.column_indices):
             return False
         lhs_loc = self.local_scheme
         rhs_loc = other.local_scheme
