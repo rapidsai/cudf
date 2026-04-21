@@ -62,6 +62,9 @@ def test_trace_basic(
 
 
 def test_import_without_structlog() -> None:
+    # This test could avoid the subprocess by monkeypatching sys.modules, but
+    # that was flaky. https://github.com/rapidsai/cudf/pull/22012#issuecomment-4284536686
+    # has more details.
     code = textwrap.dedent("""\
     import sys
     sys.modules["structlog"] = None
