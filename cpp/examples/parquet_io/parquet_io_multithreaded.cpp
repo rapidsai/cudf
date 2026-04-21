@@ -6,7 +6,6 @@
 #include "benchmark.hpp"
 #include "common_utils.hpp"
 #include "io_source.hpp"
-#include "timer.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
@@ -421,10 +420,16 @@ int32_t main(int argc, char const** argv)
     std::string output_path =
       std::filesystem::temp_directory_path().string() + "/output_" + current_date_and_time();
     std::filesystem::create_directory({output_path});
-    timer timer;
-    write_parquet_multithreaded(output_path, table_views, thread_count, stream_pool);
-    default_stream.synchronize();
-    timer.print_elapsed_millis();
+
+    benchmark(
+      [&] {
+        write_parquet_multithreaded(output_path, table_views, thread_count, stream_pool);
+        default_stream.synchronize();
+      },
+      1);
+
+    // Print peak memory
+    std::cout << "Peak memory: " << (stats_mr.get_bytes_counter().peak / 1'048'576.0) << " MB\n\n";
 
     // Verify the output
     std::cout << "Verifying output..\n";
