@@ -29,12 +29,10 @@ import pylibcudf as plc
 from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
-    _global_shuffle,
-    _is_already_partitioned,
-)
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import _global_shuffle
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -42,6 +40,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import default_node_multi
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
+    _is_already_partitioned,
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
@@ -772,6 +771,17 @@ async def _shuffle_join(
         trace_ir=ir,
         ir_context=ir_context,
     ):
+        left, right = ir.children
+        left_keys = list(left.schema.keys())
+        right_keys = list(right.schema.keys())
+        left_keys_to_hash = tuple(
+            NamedExpr(left_keys[i], Col(left.schema[left_keys[i]], left_keys[i]))
+            for i in strategy.left_indices
+        )
+        right_keys_to_hash = tuple(
+            NamedExpr(right_keys[i], Col(right.schema[right_keys[i]], right_keys[i]))
+            for i in strategy.right_indices
+        )
         actor_tasks = [
             *filter_tasks,
             _global_shuffle(
@@ -782,7 +792,8 @@ async def _shuffle_join(
                 ch_left,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
-                columns_to_hash=strategy.left_indices,
+                left_keys_to_hash,
+                left,
             ),
             _global_shuffle(
                 context,
@@ -792,7 +803,8 @@ async def _shuffle_join(
                 ch_right,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
-                columns_to_hash=strategy.right_indices,
+                right_keys_to_hash,
+                right,
             ),
             _join_chunks(
                 context,

@@ -12,9 +12,7 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
-    _is_already_partitioned,
-)
+from cudf_polars.experimental.rapidsmpf.utils import _is_already_partitioned
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 

@@ -962,6 +962,28 @@ def chunk_to_frame(chunk: TableChunk, ir: IR) -> DataFrame:
     )
 
 
+def _is_already_partitioned(
+    metadata: ChannelMetadata,
+    columns_to_hash: tuple[int, ...],
+    num_partitions: int,
+    nranks: int,
+) -> bool:
+    """Check if data is already partitioned on the required keys."""
+    partitioning = NormalizedPartitioning.from_indices(
+        metadata.partitioning,
+        nranks,
+        indices=columns_to_hash,
+        allow_subset=False,
+    )
+    partitioning_desired = NormalizedPartitioning(
+        inter_rank_modulus=num_partitions,
+        inter_rank_indices=columns_to_hash,
+        local_modulus=None,
+        local_indices=(),
+    )
+    return bool(partitioning and partitioning == partitioning_desired)
+
+
 def make_spill_function(
     spillable_messages_list: list[SpillableMessages],
     context: Context,
