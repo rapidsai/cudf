@@ -284,7 +284,10 @@ ConfigureNVBench(BITMASK_NVBENCH bitmask/bitmask_and.cpp bitmask/set_null_mask.c
 # ##################################################################################################
 # * parquet writer benchmark ----------------------------------------------------------------------
 ConfigureNVBench(
-  PARQUET_WRITER_NVBENCH io/parquet/parquet_writer.cpp io/parquet/parquet_writer_chunks.cpp
+  PARQUET_WRITER_NVBENCH
+  io/parquet/parquet_writer.cpp
+  io/parquet/parquet_writer_chunks.cpp
+  io/parquet/parquet_writer_dict.cpp
 )
 
 # ##################################################################################################
