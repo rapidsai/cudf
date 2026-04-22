@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int32_t
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -13,7 +13,7 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "dlpack/dlpack.h" nogil:
@@ -41,13 +41,13 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
     cdef unique_ptr[table] from_dlpack(
         const DLManagedTensor* managed_tensor,
         cuda_stream_view stream,
-        device_memory_resource* mr
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     DLManagedTensor* to_dlpack(
         const table_view& input,
         cuda_stream_view stream,
-        device_memory_resource* mr
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef cppclass column_metadata:
@@ -66,18 +66,18 @@ cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
             ArrowSchema&& schema,
             ArrowArray&& array,
             cuda_stream_view stream,
-            device_memory_resource* mr
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         arrow_column(
             ArrowSchema&& schema,
             ArrowDeviceArray&& array,
             cuda_stream_view stream,
-            device_memory_resource* mr
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         arrow_column(
             ArrowArrayStream&& stream,
             cuda_stream_view cuda_stream,
-            device_memory_resource* mr
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         column_view view() except +libcudf_exception_handler
 
@@ -85,13 +85,13 @@ cdef extern from "cudf/interop.hpp" namespace "cudf::interop" \
         arrow_table(
             ArrowArrayStream&& stream,
             cuda_stream_view cuda_stream,
-            device_memory_resource* mr
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         arrow_table(
             ArrowSchema&& schema,
             ArrowDeviceArray&& array,
             cuda_stream_view stream,
-            device_memory_resource* mr
+            device_async_resource_ref mr
         ) except +libcudf_exception_handler
         table_view view() except +libcudf_exception_handler
 
