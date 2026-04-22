@@ -45,7 +45,6 @@ from cudf.utils.dtypes import (
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import (
     _external_only_api,
-    _find_user_stack_level,
     _is_same_name,
     _warn_no_dask_cudf,
 )
@@ -935,18 +934,6 @@ class MultiIndex(Index):
                     f"{row_tuple}: boolean values can not be used in a slice"
                 )
         self._validate_indexer(row_tuple)
-        if (
-            isinstance(row_tuple, tuple)
-            and len(row_tuple) > 0
-            and len(row_tuple) < self.nlevels
-            and not self.is_monotonic_increasing
-            and pd.get_option("mode.performance_warnings")
-        ):
-            warnings.warn(
-                "indexing past lexsort depth may impact performance.",
-                pd.errors.PerformanceWarning,
-                stacklevel=_find_user_stack_level(),
-            )
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df)
         )

@@ -182,38 +182,6 @@ def is_na_like(obj: Any) -> bool:
     )
 
 
-def _find_user_stack_level() -> int:
-    """Return a stacklevel pointing to the first non-cudf, non-pandas frame.
-
-    Walks up the call stack starting from the caller and counts frames that
-    originate in cudf or pandas package directories. Used with
-    ``warnings.warn(stacklevel=...)`` so the reported source matches the
-    user's calling code rather than cudf/pandas internals.
-    """
-    import inspect
-
-    cudf_dir = os.path.dirname(cudf.__file__)
-    pandas_dir = os.path.dirname(pd.__file__)
-    frame = inspect.currentframe()
-    # Start from caller's frame
-    if frame is not None:
-        frame = frame.f_back
-    n = 1
-    try:
-        while frame is not None:
-            filename = frame.f_code.co_filename
-            if filename.startswith(cudf_dir) or filename.startswith(
-                pandas_dir
-            ):
-                frame = frame.f_back
-                n += 1
-            else:
-                break
-    finally:
-        del frame
-    return n
-
-
 def _warn_no_dask_cudf(fn):
     @functools.wraps(fn)
     def wrapper(self):
