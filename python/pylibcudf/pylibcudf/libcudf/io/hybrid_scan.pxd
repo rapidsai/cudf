@@ -167,4 +167,9 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
             const column_view& row_mask
         ) except +libcudf_exception_handler
 
+        vector[vector[size_type]] construct_row_group_passes(
+            host_span[const_size_type] row_group_indices,
+            size_t pass_read_limit,
+        ) except +libcudf_exception_handler
+
         bool has_next_table_chunk() except +libcudf_exception_handler
