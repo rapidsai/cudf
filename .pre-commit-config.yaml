@@ -38,6 +38,7 @@ repos:
           polars,
           "numpy",
           pyarrow-stubs,
+          "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           pytest,
           types-cachetools,
           "rmm-cu12==26.6.*,>=0.0.0a0; sys_platform=='linux'",

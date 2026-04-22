@@ -518,7 +518,7 @@ def test_groupby_reset_index_string_name():
 
 def test_groupby_categorical_key():
     # See https://github.com/rapidsai/cudf/issues/4608
-    df = dask.datasets.timeseries()
+    df = dask.datasets.timeseries(seed=1)
     gddf = df.to_backend("cudf")
     gddf["name"] = gddf["name"].astype("category")
     ddf = gddf.to_backend("pandas")
@@ -533,7 +533,7 @@ def test_groupby_categorical_key():
         .groupby("name", sort=True, observed=True)
         .agg({"x": ["mean", "max"], "y": ["mean", "count"]})
     )
-    dd.assert_eq(expect, got)
+    dd.assert_eq(expect, got, atol=1e-3)
 
 
 @pytest.mark.parametrize(

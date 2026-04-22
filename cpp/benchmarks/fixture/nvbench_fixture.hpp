@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -14,9 +14,10 @@
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/managed_memory_resource.hpp>
-#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
+
+#include <cuda/memory_resource>
 
 #include <string>
 
@@ -34,30 +35,25 @@ static std::string cuio_host_mem_param{
  * Initializes the default memory resource to use the RMM pool device resource.
  */
 struct nvbench_base_fixture {
-  inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
+  inline auto make_cuda() { return rmm::mr::cuda_memory_resource{}; }
 
   inline auto make_pool()
   {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      make_cuda(), rmm::percent_of_free_device_memory(50));
+    return rmm::mr::pool_memory_resource{make_cuda(), rmm::percent_of_free_device_memory(50)};
   }
 
-  inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
+  inline auto make_async() { return rmm::mr::cuda_async_memory_resource{}; }
 
-  inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
+  inline auto make_managed() { return rmm::mr::managed_memory_resource{}; }
 
-  inline auto make_arena()
-  {
-    return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
-  }
+  inline auto make_arena() { return rmm::mr::arena_memory_resource{make_cuda()}; }
 
   inline auto make_managed_pool()
   {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      make_managed(), rmm::percent_of_free_device_memory(50));
+    return rmm::mr::pool_memory_resource{make_managed(), rmm::percent_of_free_device_memory(50)};
   }
 
-  inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
+  inline cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(
     std::string const& mode)
   {
     if (mode == "cuda") return make_cuda();
@@ -101,7 +97,7 @@ struct nvbench_base_fixture {
     }
 
     mr = create_memory_resource(rmm_mode);
-    cudf::set_current_device_resource(mr.get());
+    cudf::set_current_device_resource(mr);
     std::cout << "RMM memory resource = " << rmm_mode << "\n";
 
     cudf::set_pinned_memory_resource(create_cuio_host_memory_resource(cuio_host_mode));
@@ -114,7 +110,7 @@ struct nvbench_base_fixture {
     cudf::set_pinned_memory_resource(this->make_cuio_host_pinned());
   }
 
-  std::shared_ptr<rmm::mr::device_memory_resource> mr;
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr;
   std::string rmm_mode{"pool"};
 
   std::string cuio_host_mode{"pinned_pool"};

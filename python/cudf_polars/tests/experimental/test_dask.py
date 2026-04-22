@@ -82,6 +82,13 @@ def test_gather_cluster_info(engine: DaskEngine) -> None:
     assert len({info.pid for info in infos}) == engine.nranks
 
 
+def test_worker_host_memory_limit(engine: DaskEngine) -> None:
+    """Memory limit is respected."""
+    scheduler_info = engine._dask_ctx.client.scheduler_info(n_workers=-1)
+    worker = next(iter(scheduler_info["workers"].values()))
+    assert worker["memory_limit"] == distributed.system.MEMORY_LIMIT
+
+
 def test_from_options_creates_engine() -> None:
     """DaskEngine.from_options produces a working engine and runs a query."""
     opts = StreamingOptions(max_rows_per_partition=10, fallback_mode="silent")
