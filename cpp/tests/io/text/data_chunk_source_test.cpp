@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,8 +10,6 @@
 
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/detail/bgzip_utils.hpp>
-
-#include <rmm/mr/pinned_host_memory_resource.hpp>
 
 #include <fstream>
 #include <random>
@@ -30,9 +28,7 @@ std::string chunk_to_host(cudf::io::text::device_data_chunk const& chunk)
 
 void test_source(std::string const& content, cudf::io::text::data_chunk_source const& source)
 {
-  using host_pooled_mr  = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  auto static pinned_mr = std::make_shared<rmm::mr::pinned_host_memory_resource>();
-  host_pooled_mr mr{pinned_mr.get(), size_t{128} * 1024 * 1024};
+  static cudf::test::pinned_pool mr{size_t{128} * 1024 * 1024};
   auto last_mr = cudf::set_pinned_memory_resource(mr);
 
   auto stream = cudf::get_default_stream();
