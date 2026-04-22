@@ -27,7 +27,6 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.experimental.base import (
-    DataSourceInfo,
     IOPartitionFlavor,
     IOPartitionPlan,
     PartitionInfo,
@@ -43,7 +42,7 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.experimental.base import StatsCollector
+    from cudf_polars.experimental.base import DataSourceInfo, StatsCollector
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import (
@@ -764,27 +763,32 @@ def _sample_rg_sizes(
     return result
 
 
-class ParquetSourceInfo(DataSourceInfo):
+class ParquetSourceInfo:
     """Parquet datasource information, fully computed at construction time."""
 
-    __slots__ = ("_per_file_means", "_row_count")
+    type: Literal["parquet"] = "parquet"
 
-    def __init__(
-        self,
+    def __init__(self, row_count: int | None, per_file_means: dict[str, int]):
+        self.row_count = row_count
+        self.per_file_means = per_file_means
+
+    @classmethod
+    def from_paths(
+        cls,
         paths: tuple[str, ...],
         needed_cols: frozenset[str],
         max_footer_samples: int,
         max_row_group_samples: int,
-    ) -> None:
+    ) -> ParquetSourceInfo:
+        """Build a ParquetSourceInfo from a list of paths."""
         metadata = ParquetMetadata(paths, max_footer_samples)
-        self._row_count = metadata.row_count
+        row_count = metadata.row_count
 
         file_count = len(paths)
-        row_count = metadata.row_count
-        self._per_file_means: dict[str, int] = {}
+        per_file_means: dict[str, int] = {}
 
         if not (file_count and row_count and needed_cols):
-            return
+            return cls(row_count, {})
 
         # Floor on size: dictionary encoding can make in-memory size much larger
         # than what the compressed footer metadata reports.
@@ -798,7 +802,7 @@ class ParquetSourceInfo(DataSourceInfo):
             if footer_mean < min_floor:
                 suspicious.append(col)
             else:
-                self._per_file_means[col] = footer_mean
+                per_file_means[col] = footer_mean
 
         if suspicious and max_row_group_samples > 0:
             rg_sizes = _sample_rg_sizes(metadata, suspicious, max_row_group_samples)
@@ -809,44 +813,73 @@ class ParquetSourceInfo(DataSourceInfo):
             )
             for col in suspicious:
                 rg_size = rg_sizes.get(col)
-                self._per_file_means[col] = (
+                per_file_means[col] = (
                     max(min_floor, int(rg_size * mean_rg_count))
                     if rg_size
                     else min_floor
                 )
         else:
             for col in suspicious:
-                self._per_file_means[col] = min_floor
+                per_file_means[col] = min_floor
 
-    @property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self._row_count
+        return cls(row_count, per_file_means)
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
-        return self._per_file_means.get(column)
+        return self.per_file_means.get(column)
+
+    def serialize(self) -> dict[str, Any]:
+        """Return JSON-serializable representation of the data source info."""
+        return {
+            "type": self.type,
+            "row_count": self.row_count,
+            "per_file_means": self.per_file_means,
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict[str, Any]) -> ParquetSourceInfo:
+        """Deserialize a ParquetSourceInfo from a dictionary."""
+        return cls(data["row_count"], data["per_file_means"])
 
 
-class DataFrameSourceInfo(DataSourceInfo):
+class DataFrameSourceInfo:
     """
     In-memory DataFrame source information.
 
     Parameters
     ----------
-    df
-        In-memory DataFrame source.
+    row_count
+        Exact row-count for the polars dataframe.
     """
 
-    def __init__(self, df: pl.DataFrame):
-        self._pdf = df
+    type: Literal["dataframe"] = "dataframe"
 
-    @functools.cached_property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self._pdf.height
+    def __init__(self, row_count: int):
+        self.row_count = row_count
+
+    @classmethod
+    def from_polars(cls, df: pl.DataFrame) -> DataFrameSourceInfo:
+        """Build a DataFrameSourceInfo from a polars dataframe."""
+        return cls(df.height)
+
+    def column_storage_size(self, column: str) -> int | None:
+        """Return the average storage size for a single column in one file."""
+        return None
+
+    def serialize(self) -> dict[str, Any]:
+        """Return JSON-serializable representation of the data source info."""
+        return {
+            "type": self.type,
+            "row_count": self.row_count,
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict[str, Any]) -> DataFrameSourceInfo:
+        """Deserialize a DataFrameSourceInfo from a dictionary."""
+        return cls(data["row_count"])
 
 
+# TODO: reevaluate the need for this cache
 @functools.cache
 def _build_parquet_source(
     paths: tuple[str, ...],
@@ -855,7 +888,7 @@ def _build_parquet_source(
     max_row_group_samples: int,
 ) -> ParquetSourceInfo:
     """Return cached, fully-computed Parquet datasource information."""
-    return ParquetSourceInfo(
+    return ParquetSourceInfo.from_paths(
         paths, needed_cols, max_footer_samples, max_row_group_samples
     )
 
@@ -868,7 +901,7 @@ def _build_source_info(
 ) -> DataSourceInfo:
     """Return DataSourceInfo for a Scan or DataFrameScan node."""
     if isinstance(ir, DataFrameScan):
-        return DataFrameSourceInfo(pl.DataFrame._from_pydf(ir.df))
+        return DataFrameSourceInfo.from_polars(pl.DataFrame._from_pydf(ir.df))
     elif isinstance(ir, Scan) and ir.typ == "parquet":
         max_footer = config_options.parquet_options.max_footer_samples
         max_rg = config_options.parquet_options.max_row_group_samples

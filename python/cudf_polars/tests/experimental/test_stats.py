@@ -10,7 +10,11 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.experimental.io import _clear_source_info_cache
+from cudf_polars.experimental.io import (
+    DataFrameSourceInfo,
+    ParquetSourceInfo,
+    _clear_source_info_cache,
+)
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
@@ -113,6 +117,64 @@ def test_dataframescan_stats_pickle(stats_engine):
     # Verify the unpickled stats are equivalent
     assert type(unpickled_stats) is type(stats)
     assert unpickled_stats.scan_stats[ir].row_count == 100
+
+
+def test_parquet_round_trip() -> None:
+    info = ParquetSourceInfo(1000, {"x": 200, "y": 400})
+    data = info.serialize()
+    restored = ParquetSourceInfo.deserialize(data)
+
+    assert restored.type == "parquet"
+    assert restored.row_count == info.row_count
+    assert restored.per_file_means == info.per_file_means
+
+
+def test_parquet_round_trip_empty() -> None:
+    info = ParquetSourceInfo(None, {})
+    data = info.serialize()
+    restored = ParquetSourceInfo.deserialize(data)
+
+    assert restored.row_count is None
+    assert restored.per_file_means == {}
+
+
+def test_parquet_serialize_schema() -> None:
+    info = ParquetSourceInfo(500, {"a": 100})
+    data = info.serialize()
+    assert data == {
+        "type": "parquet",
+        "row_count": 500,
+        "per_file_means": {"a": 100},
+    }
+
+
+def test_parquet_column_storage_size_preserved() -> None:
+    info = ParquetSourceInfo(100, {"col1": 50, "col2": 75})
+    restored = ParquetSourceInfo.deserialize(info.serialize())
+
+    assert restored.column_storage_size("col1") == 50
+    assert restored.column_storage_size("col2") == 75
+    assert restored.column_storage_size("missing") is None
+
+
+def test_dataframe_round_trip() -> None:
+    info = DataFrameSourceInfo(2500)
+    data = info.serialize()
+    restored = DataFrameSourceInfo.deserialize(data)
+
+    assert restored.type == "dataframe"
+    assert restored.row_count == info.row_count
+
+
+def test_dataframe_serialize_schema() -> None:
+    info = DataFrameSourceInfo(42)
+    data = info.serialize()
+    assert data == {"type": "dataframe", "row_count": 42}
+
+
+def test_dataframe_column_storage_size_always_none() -> None:
+    restored = DataFrameSourceInfo.deserialize(DataFrameSourceInfo(10).serialize())
+    assert restored.column_storage_size("anything") is None
 
 
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])

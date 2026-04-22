@@ -4,10 +4,9 @@
 
 from __future__ import annotations
 
-import abc
 import enum
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -55,7 +54,7 @@ def get_key_name(node: Node) -> str:
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
-class DataSourceInfo(abc.ABC):
+class DataSourceInfo(Protocol):
     """
     Table data source information.
 
@@ -65,13 +64,23 @@ class DataSourceInfo(abc.ABC):
     """
 
     @property
-    @abc.abstractmethod
+    def type(self) -> Literal["parquet", "dataframe"]:
+        """The type of the data source. Useful for serialization and deserialization."""
+        ...
+
+    @property
     def row_count(self) -> int | None:
         """Data source row-count estimate."""
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
-        return None
+
+    def serialize(self) -> dict[str, Any]:
+        """Return JSON-serializable representation of the data source info."""
+
+    @classmethod
+    def deserialize(cls, data: dict[str, Any]) -> DataSourceInfo:
+        """Deserialize a DataSourceInfo from a dictionary."""
 
 
 class StatsCollector:
