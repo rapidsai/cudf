@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -18,11 +18,12 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 import pylibcudf as plc
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import Rolling
+from cudf_polars.dsl.ir import IR, Rolling
 from cudf_polars.dsl.utils.windows import rolling_stream_halo_extents
 from cudf_polars.experimental.rapidsmpf.dispatch import generate_ir_sub_network
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    chunk_to_frame,
     gather_in_task_group,
     process_children,
     recv_metadata,
@@ -31,7 +32,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -159,8 +160,16 @@ def _check_ungrouped_int_chunk_order(
 class RollingInputChunk:
     """Input chunk for rolling evaluation."""
 
-    is_ghost_chunk: bool
     chunk: TableChunk
+    is_ghost_chunk: bool
+
+
+@dataclass(frozen=True)
+class RollingInputKey:
+    """Key for rolling input chunk."""
+
+    sequence_number: int
+    is_ghost_chunk: bool
 
 
 @dataclass(frozen=True)
@@ -171,24 +180,431 @@ class RollingExpandedChunk:
     do_evaluate_zlice: tuple[int, int]
 
 
-async def _recv_rolling_input(
-    context: Context,
-    ch_in: Channel[TableChunk],
+def _make_expanded_chunk(
+    *,
+    left_ctx_df: DataFrame | None,
+    center_meta: RollingInputChunk,
+    center_df: DataFrame,
+    next_dfs: Sequence[DataFrame] | None,
+    is_last_chunk: bool,
+    ir_context: IRExecutionContext,
+    index_col_idx: int,
+    index_dtype: plc.DataType,
+    lookback: int,
+    lookahead: int,
+    frame_ir: IR,
     br: Any,
-    col_names: list[str],
-    col_dtypes: list[Any],
-) -> tuple[RollingInputChunk, int, DataFrame] | None:
-    msg = await ch_in.recv(context)
-    if msg is None:
-        return None
-    seq = msg.sequence_number
-    inner = ArbitraryChunk.from_message(msg).release()
-    assert isinstance(inner, RollingInputChunk)
-    chunk = inner.chunk.make_available_and_spill(br, allow_overbooking=True)
-    df = DataFrame.from_table(
-        chunk.table_view(), col_names, col_dtypes, stream=chunk.stream
+) -> tuple[TableChunk, tuple[int, int], DataFrame | None] | None:
+    """
+    Concatenate left halo, center, and right halo then pack a ``TableChunk``.
+
+    Parameters
+    ----------
+    left_ctx_df
+        Rows retained from earlier partitions for the left halo.
+    center_meta
+        Wrapper for the current center partition.
+    center_df
+        Decoded center table.
+    next_dfs
+        Decoded partitions strictly after the center used for the right halo,
+        or ``None`` when this rank has no trailing partitions.
+    is_last_chunk
+        True when no further partitions will arrive on this rank.
+    ir_context
+        Execution context for CUDA stream ordering between frames.
+    index_col_idx
+        Rolling index column index inside each frame.
+    index_dtype
+        Physical dtype of the rolling index column.
+    lookback
+        Left halo width in host window units.
+    lookahead
+        Right halo width in host window units.
+    frame_ir
+        Child IR node whose schema matches every staged frame.
+    br
+        Buffer resource used when materializing the packed chunk.
+
+    Returns
+    -------
+    tuple[TableChunk, tuple[int, int], DataFrame | None] | None
+        ``(packed_chunk, do_evaluate_zlice, new_left_ctx)`` when the center has
+        rows, otherwise ``None`` if the center is empty and must be skipped.
+    """
+    base_col_names = list(frame_ir.schema.keys())
+    base_dtypes = list(frame_ir.schema.values())
+    prep = _prepare_expanded_rolling_frame(
+        left_ctx_df,
+        cur_df=center_df,
+        next_dfs=next_dfs,
+        is_last_chunk=is_last_chunk,
+        ir_context=ir_context,
+        index_col_idx=index_col_idx,
+        index_dtype=index_dtype,
+        lookback=lookback,
+        lookahead=lookahead,
+        base_col_names=base_col_names,
+        base_dtypes=base_dtypes,
+        is_ghost_chunk=center_meta.is_ghost_chunk,
     )
-    return (inner, seq, df)
+    if prep is None:
+        return None
+    combined_df, n_left, n_chunk_rows, left_ctx_next = prep
+    out_chunk = TableChunk.from_pylibcudf_table(
+        combined_df.table,
+        combined_df.stream,
+        exclusive_view=True,
+        br=br,
+    )
+    return (out_chunk, (n_left, n_chunk_rows), left_ctx_next)
+
+
+def _merge_pending_left_ghosts_into_left_ctx(
+    pending_left_dfs: list[DataFrame],
+    left_ctx_df: DataFrame | None,
+    *,
+    ir_context: IRExecutionContext,
+    frame_ir: IR,
+) -> DataFrame | None:
+    """Concatenate left-ghost tables (ascending ``sequence_number``) then ``left_ctx_df``."""
+    base_col_names = list(frame_ir.schema.keys())
+    base_dtypes = list(frame_ir.schema.values())
+    parts: list[DataFrame] = [df for df in pending_left_dfs if df.num_rows > 0]
+    if left_ctx_df is not None and left_ctx_df.num_rows > 0:
+        parts.append(left_ctx_df)
+    if not parts:
+        return left_ctx_df
+    if len(parts) == 1:
+        return parts[0]
+    with ir_context.stream_ordered_after(*parts) as s:
+        return DataFrame.from_table(
+            plc.concatenate.concatenate([df.table for df in parts], stream=s),
+            base_col_names,
+            base_dtypes,
+            stream=s,
+        )
+
+
+# ``(sequence_number, is_ghost_chunk)`` → ``(RollingInputChunk, decoded DataFrame)``
+RollingStageMap = dict[tuple[int, bool], tuple[RollingInputChunk, DataFrame]]
+
+
+def _next_owned_seq(staging: RollingStageMap) -> int | None:
+    owned = [k[0] for k in staging if not k[1]]
+    return min(owned) if owned else None
+
+
+def _left_ghost_dfs_for_center(
+    staging: RollingStageMap, center_seq: int
+) -> list[DataFrame]:
+    keys = sorted(
+        (k for k in staging if k[1] and k[0] < center_seq), key=lambda t: t[0]
+    )
+    return [staging[k][1] for k in keys]
+
+
+def _next_dfs_right_of_center(
+    staging: RollingStageMap,
+    center_seq: int,
+    *,
+    lookahead: int,
+    is_last_chunk: bool,
+) -> Sequence[DataFrame] | None:
+    if lookahead <= 0 or is_last_chunk:
+        return None
+    keys = sorted((k for k in staging if k[0] > center_seq), key=lambda t: t[0])
+    return tuple(staging[k][1] for k in keys)
+
+
+def _purge_staging_after_emit(staging: RollingStageMap, center_seq: int) -> None:
+    for k in list(staging.keys()):
+        if k[1] and k[0] < center_seq:
+            del staging[k]
+    staging.pop((center_seq, False), None)
+
+
+async def _extend_staging_until_covered(
+    staging: RollingStageMap,
+    center_seq: int,
+    recv_next: Callable[[], Awaitable[bool]],
+    *,
+    first_past_upper: Callable[[DataFrame], bool],
+    last_reaches_upper: Callable[[DataFrame], bool],
+) -> None:
+    """Pull via ``recv_next`` into ``staging`` until the right halo is covered or EOS."""
+
+    def _first_right_df() -> DataFrame | None:
+        ks = sorted((k for k in staging if k[0] > center_seq), key=lambda t: t[0])
+        return staging[ks[0]][1] if ks else None
+
+    def _last_right_df() -> DataFrame | None:
+        ks = sorted((k for k in staging if k[0] > center_seq), key=lambda t: t[0])
+        return staging[ks[-1]][1] if ks else None
+
+    if _first_right_df() is None and not await recv_next():
+        return
+    first = _first_right_df()
+    assert first is not None
+    if first_past_upper(first):
+        return
+    while True:
+        last = _last_right_df()
+        assert last is not None
+        if last_reaches_upper(last):
+            return
+        if not await recv_next():
+            return
+
+
+async def _extend_staging_for_int_lookahead(
+    staging: RollingStageMap,
+    recv_next: Callable[[], Awaitable[bool]],
+    *,
+    center_seq: int,
+    chunk_mx: int,
+    lookahead: int,
+    index_col_idx: int,
+    index_dtype: plc.DataType,
+) -> None:
+    threshold = chunk_mx + lookahead
+
+    def _bounds(df: DataFrame) -> tuple[int, int] | None:
+        return _chunk_index_int_bounds_from_df(
+            df, index_col_idx=index_col_idx, index_dtype=index_dtype
+        )
+
+    await _extend_staging_until_covered(
+        staging,
+        center_seq,
+        recv_next,
+        first_past_upper=lambda df: (b := _bounds(df)) is not None and b[0] > threshold,
+        last_reaches_upper=lambda df: (b := _bounds(df)) is not None
+        and b[1] >= threshold,
+    )
+
+
+async def _extend_staging_for_ts_lookahead(
+    staging: RollingStageMap,
+    recv_next: Callable[[], Awaitable[bool]],
+    *,
+    center_seq: int,
+    chunk_mx_s: plc.Scalar,
+    lookahead: int,
+    index_dtype: plc.DataType,
+    index_col_idx: int,
+    cur_stream: Any,
+) -> None:
+    dur_dt = _duration_dtype_for_timestamp(index_dtype)
+    upper_s = _scalar_binop_scalar(
+        chunk_mx_s,
+        plc.Scalar.from_py(lookahead, dur_dt, stream=cur_stream),
+        plc.binaryop.BinaryOperator.ADD,
+        index_dtype,
+        cur_stream,
+    )
+
+    def _bounds(df: DataFrame) -> tuple[plc.Scalar, plc.Scalar] | None:
+        return _chunk_index_ts_bounds_from_df(
+            df, index_col_idx=index_col_idx, index_dtype=index_dtype
+        )
+
+    def _cmp(lhs: plc.Scalar, op: plc.binaryop.BinaryOperator) -> bool:
+        return bool(
+            _scalar_binop_scalar(lhs, upper_s, op, _BOOL8, cur_stream).to_py(
+                stream=cur_stream
+            )
+        )
+
+    await _extend_staging_until_covered(
+        staging,
+        center_seq,
+        recv_next,
+        first_past_upper=lambda df: (b := _bounds(df)) is not None
+        and _cmp(b[0], plc.binaryop.BinaryOperator.GREATER),
+        last_reaches_upper=lambda df: (b := _bounds(df)) is not None
+        and _cmp(b[1], plc.binaryop.BinaryOperator.GREATER_EQUAL),
+    )
+
+
+async def _ensure_right_halo_staged(
+    staging: RollingStageMap,
+    center_seq: int,
+    cur_df: DataFrame,
+    recv_next: Callable[[], Awaitable[bool]],
+    *,
+    is_int_index: bool,
+    index_col_idx: int,
+    index_dtype: plc.DataType,
+    lookahead: int,
+) -> bool:
+    """Pull via ``recv_next`` until the right halo is covered or EOS."""
+    if is_int_index:
+        cur_bounds = _chunk_index_int_bounds_from_df(
+            cur_df, index_col_idx=index_col_idx, index_dtype=index_dtype
+        )
+        if cur_bounds is None:
+            return False
+        await _extend_staging_for_int_lookahead(
+            staging,
+            recv_next,
+            center_seq=center_seq,
+            chunk_mx=cur_bounds[1],
+            lookahead=lookahead,
+            index_col_idx=index_col_idx,
+            index_dtype=index_dtype,
+        )
+    else:
+        if cur_df.num_rows == 0:
+            return False
+        cur_idx = _get_idx_col(cur_df.table, index_col_idx, index_dtype, cur_df.stream)
+        _, chunk_mx_s = _minmax_scalars(cur_idx, cur_df.stream)
+        await _extend_staging_for_ts_lookahead(
+            staging,
+            recv_next,
+            center_seq=center_seq,
+            chunk_mx_s=chunk_mx_s,
+            lookahead=lookahead,
+            index_dtype=index_dtype,
+            index_col_idx=index_col_idx,
+            cur_stream=cur_df.stream,
+        )
+    return True
+
+
+class _RollingChunkExpander:
+    """Stage ``(sequence_number, is_ghost_chunk)`` → frame, recv until ready, emit expanded."""
+
+    __slots__ = (
+        "_staging",
+        "frame_ir",
+        "index_col_idx",
+        "index_dtype",
+        "ir",
+        "left_ctx_df",
+        "lookahead",
+        "lookback",
+        "prev_max",
+        "stream_done",
+    )
+
+    def __init__(
+        self,
+        *,
+        ir: Rolling,
+        frame_ir: IR,
+        lookback: int,
+        lookahead: int,
+        index_col_idx: int,
+        index_dtype: plc.DataType,
+    ) -> None:
+        self.ir = ir
+        self.frame_ir = frame_ir
+        self.lookback = lookback
+        self.lookahead = lookahead
+        self.index_col_idx = index_col_idx
+        self.index_dtype = index_dtype
+        self._staging: RollingStageMap = {}
+        self.stream_done = False
+        self.left_ctx_df: DataFrame | None = None
+        self.prev_max: int | None = None
+
+    async def run(
+        self,
+        context: Context,
+        ch_to_eval: Channel[TableChunk],
+        ir_context: IRExecutionContext,
+        recv_next: Callable[[], Awaitable[bool]],
+    ) -> None:
+        br = context.br()
+        is_int_index = self.index_dtype.id() == plc.TypeId.INT64
+
+        while True:
+            while _next_owned_seq(self._staging) is None:
+                if not await recv_next():
+                    break
+            if _next_owned_seq(self._staging) is None:
+                break
+
+            cur_seq = _next_owned_seq(self._staging)
+            assert cur_seq is not None
+            cur_meta, cur_df = self._staging[(cur_seq, False)]
+            left_for_prepare = _merge_pending_left_ghosts_into_left_ctx(
+                _left_ghost_dfs_for_center(self._staging, cur_seq),
+                self.left_ctx_df,
+                ir_context=ir_context,
+                frame_ir=self.frame_ir,
+            )
+
+            if self.lookahead > 0:
+                if not await _ensure_right_halo_staged(
+                    self._staging,
+                    cur_seq,
+                    cur_df,
+                    recv_next,
+                    is_int_index=is_int_index,
+                    index_col_idx=self.index_col_idx,
+                    index_dtype=self.index_dtype,
+                    lookahead=self.lookahead,
+                ):
+                    continue
+            elif cur_df.num_rows == 0:
+                continue
+            elif not any(k[0] > cur_seq for k in self._staging):
+                await recv_next()
+
+            is_last_chunk = self.stream_done and not any(
+                k[0] > cur_seq for k in self._staging
+            )
+            next_dfs = _next_dfs_right_of_center(
+                self._staging,
+                cur_seq,
+                lookahead=self.lookahead,
+                is_last_chunk=is_last_chunk,
+            )
+
+            built = _make_expanded_chunk(
+                left_ctx_df=left_for_prepare,
+                center_meta=cur_meta,
+                center_df=cur_df,
+                next_dfs=next_dfs,
+                is_last_chunk=is_last_chunk,
+                ir_context=ir_context,
+                index_col_idx=self.index_col_idx,
+                index_dtype=self.index_dtype,
+                lookback=self.lookback,
+                lookahead=self.lookahead,
+                frame_ir=self.frame_ir,
+                br=br,
+            )
+            if built is None:
+                continue
+            out_chunk, do_evaluate_zlice, self.left_ctx_df = built
+
+            self.prev_max = _check_ungrouped_int_chunk_order(
+                self.prev_max,
+                cur_df,
+                self.ir,
+                index_col_idx=self.index_col_idx,
+                seq=cur_seq,
+            )
+            await ch_to_eval.send(
+                context,
+                Message(
+                    cur_seq,
+                    ArbitraryChunk(
+                        RollingExpandedChunk(
+                            chunk=out_chunk,
+                            do_evaluate_zlice=do_evaluate_zlice,
+                        )
+                    ),
+                ),
+            )
+
+            _purge_staging_after_emit(self._staging, cur_seq)
+
+            if is_last_chunk:
+                break
 
 
 def _chunk_index_int_bounds_from_df(
@@ -213,187 +629,6 @@ def _chunk_index_ts_bounds_from_df(
         return None
     idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
     return _minmax_scalars(idx, df.stream)
-
-
-async def _extend_prefetch_until_covered(
-    context: Context,
-    ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
-    br: Any,
-    col_names: list[str],
-    col_dtypes: list[Any],
-    *,
-    first_past_upper: Callable[[DataFrame], bool],
-    last_reaches_upper: Callable[[DataFrame], bool],
-) -> None:
-    """Grow prefetch until the right halo is covered or the input stream ends."""
-    if not prefetch and not await _recv_one_into_prefetch(
-        context, ch_in, prefetch, br, col_names, col_dtypes
-    ):
-        return
-    if first_past_upper(prefetch[0][2]):
-        return
-    while True:
-        if last_reaches_upper(prefetch[-1][2]):
-            return
-        if not await _recv_one_into_prefetch(
-            context, ch_in, prefetch, br, col_names, col_dtypes
-        ):
-            return
-
-
-async def _recv_one_into_prefetch(
-    context: Context,
-    ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
-    br: Any,
-    col_names: list[str],
-    col_dtypes: list[Any],
-) -> bool:
-    """Decode one chunk and append it to ``prefetch``. Returns ``False`` at end of stream."""
-    got = await _recv_rolling_input(context, ch_in, br, col_names, col_dtypes)
-    if got is None:
-        return False
-    prefetch.append(got)
-    return True
-
-
-async def _extend_prefetch_for_int_lookahead(
-    context: Context,
-    ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
-    br: Any,
-    col_names: list[str],
-    col_dtypes: list[Any],
-    *,
-    chunk_mx: int,
-    lookahead: int,
-    index_col_idx: int,
-    index_dtype: plc.DataType,
-) -> None:
-    """Prefetch int-index chunks until the right halo is covered or the stream ends."""
-    threshold = chunk_mx + lookahead
-
-    def _bounds(df: DataFrame) -> tuple[int, int] | None:
-        return _chunk_index_int_bounds_from_df(
-            df, index_col_idx=index_col_idx, index_dtype=index_dtype
-        )
-
-    await _extend_prefetch_until_covered(
-        context,
-        ch_in,
-        prefetch,
-        br,
-        col_names,
-        col_dtypes,
-        first_past_upper=lambda df: (b := _bounds(df)) is not None and b[0] > threshold,
-        last_reaches_upper=lambda df: (b := _bounds(df)) is not None
-        and b[1] >= threshold,
-    )
-
-
-async def _extend_prefetch_for_ts_lookahead(
-    context: Context,
-    ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
-    br: Any,
-    col_names: list[str],
-    col_dtypes: list[Any],
-    *,
-    chunk_mx_s: plc.Scalar,
-    lookahead: int,
-    index_dtype: plc.DataType,
-    index_col_idx: int,
-    cur_stream: Any,
-) -> None:
-    """Prefetch timestamp-index chunks until the right halo is covered or the stream ends."""
-    dur_dt = _duration_dtype_for_timestamp(index_dtype)
-    upper_s = _scalar_binop_scalar(
-        chunk_mx_s,
-        plc.Scalar.from_py(lookahead, dur_dt, stream=cur_stream),
-        plc.binaryop.BinaryOperator.ADD,
-        index_dtype,
-        cur_stream,
-    )
-
-    def _bounds(df: DataFrame) -> tuple[plc.Scalar, plc.Scalar] | None:
-        return _chunk_index_ts_bounds_from_df(
-            df, index_col_idx=index_col_idx, index_dtype=index_dtype
-        )
-
-    def _cmp(lhs: plc.Scalar, op: plc.binaryop.BinaryOperator) -> bool:
-        return bool(
-            _scalar_binop_scalar(lhs, upper_s, op, _BOOL8, cur_stream).to_py(
-                stream=cur_stream
-            )
-        )
-
-    await _extend_prefetch_until_covered(
-        context,
-        ch_in,
-        prefetch,
-        br,
-        col_names,
-        col_dtypes,
-        first_past_upper=lambda df: (b := _bounds(df)) is not None
-        and _cmp(b[0], plc.binaryop.BinaryOperator.GREATER),
-        last_reaches_upper=lambda df: (b := _bounds(df)) is not None
-        and _cmp(b[1], plc.binaryop.BinaryOperator.GREATER_EQUAL),
-    )
-
-
-async def _ensure_right_halo_prefetched(
-    context: Context,
-    ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
-    cur_df: DataFrame,
-    br: Any,
-    *,
-    is_int_index: bool,
-    index_col_idx: int,
-    index_dtype: plc.DataType,
-    lookahead: int,
-    col_names: list[str],
-    col_dtypes: list[Any],
-) -> bool:
-    """Prefetch the right halo. Returns ``False`` when the center chunk is empty."""
-    if is_int_index:
-        cur_bounds = _chunk_index_int_bounds_from_df(
-            cur_df, index_col_idx=index_col_idx, index_dtype=index_dtype
-        )
-        if cur_bounds is None:
-            return False
-        await _extend_prefetch_for_int_lookahead(
-            context,
-            ch_in,
-            prefetch,
-            br,
-            col_names,
-            col_dtypes,
-            chunk_mx=cur_bounds[1],
-            lookahead=lookahead,
-            index_col_idx=index_col_idx,
-            index_dtype=index_dtype,
-        )
-    else:
-        if cur_df.num_rows == 0:
-            return False
-        cur_idx = _get_idx_col(cur_df.table, index_col_idx, index_dtype, cur_df.stream)
-        _, chunk_mx_s = _minmax_scalars(cur_idx, cur_df.stream)
-        await _extend_prefetch_for_ts_lookahead(
-            context,
-            ch_in,
-            prefetch,
-            br,
-            col_names,
-            col_dtypes,
-            chunk_mx_s=chunk_mx_s,
-            lookahead=lookahead,
-            index_dtype=index_dtype,
-            index_col_idx=index_col_idx,
-            cur_stream=cur_df.stream,
-        )
-    return True
 
 
 def _prepare_expanded_rolling_frame(
@@ -647,106 +882,33 @@ async def expand_chunks(
     lookahead: int,
     index_col_idx: int,
     index_dtype: plc.DataType,
-    base_col_names: list[str],
-    base_dtypes: list[Any],
+    frame_ir: IR,
 ) -> None:
     """Expand chunks with halos and send them for rolling evaluation."""
-    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]] = deque()
-    left_ctx_df: DataFrame | None = None
-    prev_max: int | None = None
-    n_center_prior = 0
+    expander = _RollingChunkExpander(
+        ir=ir,
+        frame_ir=frame_ir,
+        lookback=lookback,
+        lookahead=lookahead,
+        index_col_idx=index_col_idx,
+        index_dtype=index_dtype,
+    )
     br = context.br()
-    is_int_index = index_dtype.id() == plc.TypeId.INT64
 
-    while True:
-        if prefetch:
-            cur_meta, cur_seq, cur_df = prefetch.popleft()
-        else:
-            got = await _recv_rolling_input(
-                context, ch_in, br, base_col_names, base_dtypes
-            )
-            if got is None:
-                break
-            cur_meta, cur_seq, cur_df = got
+    async def recv_next_into_staging() -> bool:
+        msg = await ch_in.recv(context)
+        if msg is None:
+            expander.stream_done = True
+            return False
+        seq = msg.sequence_number
+        inner = ArbitraryChunk.from_message(msg).release()
+        assert isinstance(inner, RollingInputChunk)
+        chunk = inner.chunk.make_available_and_spill(br, allow_overbooking=True)
+        df = chunk_to_frame(chunk, frame_ir)
+        expander._staging[(seq, inner.is_ghost_chunk)] = (inner, df)
+        return True
 
-        if lookahead > 0:
-            if not await _ensure_right_halo_prefetched(
-                context,
-                ch_in,
-                prefetch,
-                cur_df,
-                br,
-                is_int_index=is_int_index,
-                index_col_idx=index_col_idx,
-                index_dtype=index_dtype,
-                lookahead=lookahead,
-                col_names=base_col_names,
-                col_dtypes=base_dtypes,
-            ):
-                continue
-        elif cur_df.num_rows == 0:
-            continue  # no center rows to send
-        elif not prefetch:
-            await _recv_one_into_prefetch(
-                context, ch_in, prefetch, br, base_col_names, base_dtypes
-            )
-
-        is_last_chunk = not prefetch
-        next_dfs: Sequence[DataFrame] | None = (
-            tuple(df for _, _, df in prefetch)
-            if lookahead > 0 and not is_last_chunk
-            else None
-        )
-
-        prep = _prepare_expanded_rolling_frame(
-            left_ctx_df,
-            cur_df=cur_df,
-            next_dfs=next_dfs,
-            is_last_chunk=is_last_chunk,
-            ir_context=ir_context,
-            index_col_idx=index_col_idx,
-            index_dtype=index_dtype,
-            lookback=lookback,
-            lookahead=lookahead,
-            base_col_names=base_col_names,
-            base_dtypes=base_dtypes,
-            is_ghost_chunk=cur_meta.is_ghost_chunk,
-        )
-        assert prep is not None, (
-            "empty center must be skipped before _prepare_expanded_rolling_frame"
-        )
-        combined_df, n_left, n_chunk_rows, left_ctx_df = prep
-
-        prev_max = _check_ungrouped_int_chunk_order(
-            prev_max,
-            cur_df,
-            ir,
-            index_col_idx=index_col_idx,
-            seq=cur_seq,
-        )
-        out_chunk = TableChunk.from_pylibcudf_table(
-            combined_df.table,
-            combined_df.stream,
-            exclusive_view=True,
-            br=br,
-        )
-        await ch_to_eval.send(
-            context,
-            Message(
-                cur_seq,
-                ArbitraryChunk(
-                    RollingExpandedChunk(
-                        chunk=out_chunk,
-                        do_evaluate_zlice=(n_left, n_chunk_rows),
-                    )
-                ),
-            ),
-        )
-        n_center_prior += n_chunk_rows
-
-        if is_last_chunk:
-            break
-
+    await expander.run(context, ch_to_eval, ir_context, recv_next_into_staging)
     await ch_to_eval.drain(context)
 
 
@@ -757,8 +919,6 @@ async def eval_and_send(
     ir: Rolling,
     ir_context: IRExecutionContext,
     *,
-    base_col_names: list[str],
-    base_dtypes: list[Any],
     tracer: ActorTracer | None,
 ) -> None:
     """Receive expanded chunks and per-chunk zlice metadata, evaluate rolling, send downstream."""
@@ -770,43 +930,24 @@ async def eval_and_send(
         chunk = inner.chunk.make_available_and_spill(
             context.br(), allow_overbooking=True
         )
-        combined = DataFrame.from_table(
-            chunk.table_view(),
-            base_col_names,
-            base_dtypes,
-            stream=chunk.stream,
-        )
         result_df = await asyncio.to_thread(
             Rolling.do_evaluate,
             *_non_child_args_static,
             inner.do_evaluate_zlice,
-            combined,
+            chunk_to_frame(chunk, ir.children[0]),
             context=ir_context,
         )
-        await _rolling_send_chunk(
-            context, ch_out, result_df, sequence_number=seq, tracer=tracer
+        result_chunk = TableChunk.from_pylibcudf_table(
+            result_df.table,
+            result_df.stream,
+            exclusive_view=True,
+            br=context.br(),
         )
+        if tracer is not None:
+            tracer.add_chunk(table=result_chunk.table_view())
+        await ch_out.send(context, Message(seq, result_chunk))
 
     await ch_out.drain(context)
-
-
-async def _rolling_send_chunk(
-    context: Context,
-    ch_out: Channel[TableChunk],
-    result_df: DataFrame,
-    *,
-    sequence_number: int,
-    tracer: ActorTracer | None,
-) -> None:
-    result_chunk = TableChunk.from_pylibcudf_table(
-        result_df.table,
-        result_df.stream,
-        exclusive_view=True,
-        br=context.br(),
-    )
-    if tracer is not None:
-        tracer.add_chunk(table=result_chunk.table_view())
-    await ch_out.send(context, Message(sequence_number, result_chunk))
 
 
 @define_actor()
@@ -839,13 +980,11 @@ async def rolling_actor(
             ChannelMetadata(local_count=metadata_in.local_count, partitioning=None),
         )
 
-        base_col_names = list(ir.children[0].schema.keys())
-        base_dtypes = list(ir.children[0].schema.values())
-
+        frame_ir = ir.children[0]
         lookback, lookahead = rolling_stream_halo_extents(
             ir.index_dtype, ir.preceding_ordinal, ir.following_ordinal
         )
-        index_col_idx = base_col_names.index(ir.index.name)
+        index_col_idx = list(frame_ir.schema.keys()).index(ir.index.name)
 
         # TODO: The incoming data should be ordered on grouping
         # keys and the index column. When OrderScheme is available,
@@ -869,8 +1008,7 @@ async def rolling_actor(
                 lookahead=lookahead,
                 index_col_idx=index_col_idx,
                 index_dtype=ir.index_dtype,
-                base_col_names=base_col_names,
-                base_dtypes=base_dtypes,
+                frame_ir=frame_ir,
             ),
             eval_and_send(
                 context,
@@ -878,8 +1016,6 @@ async def rolling_actor(
                 ch_out,
                 ir,
                 ir_context,
-                base_col_names=base_col_names,
-                base_dtypes=base_dtypes,
                 tracer=tracer,
             ),
         )
