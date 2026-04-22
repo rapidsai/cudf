@@ -3637,7 +3637,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if dtype.kind == "O" and isinstance(value, str):
                     dtype = DEFAULT_STRING_DTYPE
             if is_na_like(value):
-                dtype = DEFAULT_STRING_DTYPE
+                if isinstance(value, np.timedelta64):
+                    dtype = np.dtype("timedelta64[ns]")
+                elif isinstance(value, np.datetime64):
+                    dtype = np.dtype("datetime64[ns]")
+                else:
+                    dtype = DEFAULT_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),

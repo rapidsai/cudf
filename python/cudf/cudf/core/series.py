@@ -213,6 +213,14 @@ class _SeriesIlocIndexer(_FrameIndexer):
             if not (value is None or value is cudf.NA or value is np.nan):
                 tmp_value = as_column(value)
                 if (
+                    self._frame.dtype.kind in "uifb"
+                    and tmp_value.dtype.kind == "O"
+                ):
+                    raise TypeError(
+                        f"Invalid value '{value!s}' for dtype "
+                        f"'{self._frame.dtype}'"
+                    )
+                if (
                     not tmp_value.can_cast_safely(self._frame.dtype)
                     and not is_pandas_nullable_extension_dtype(
                         self._frame.dtype

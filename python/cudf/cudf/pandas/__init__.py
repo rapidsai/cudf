@@ -37,6 +37,7 @@ def install():
     loader = ModuleAccelerator.install("pandas", "cudf", "pandas")
     global LOADED
     LOADED = loader is not None
+
     if (
         "RAPIDS_NO_INITIALIZE" in os.environ
         or "CUDF_NO_INITIALIZE" in os.environ
