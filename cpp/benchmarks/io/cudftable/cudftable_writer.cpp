@@ -12,6 +12,8 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <optional>
+
 constexpr cudf::size_type num_cols = 64;
 
 void cudftable_write_common(cudf::table_view const& view, io_type sink_type, nvbench::state& state)
@@ -122,11 +124,12 @@ NVBENCH_BENCH_TYPES(BM_cudftable_write_num_columns,
   .add_int64_axis("data_size", {128 << 20})
   .add_int64_power_of_two_axis("num_cols", nvbench::range(0, 12, 2));  // 1 to 4096
 
-// Compression comparison benchmarks
+// Compression comparison and block size sweep benchmarks
 
 void cudftable_write_compressed_common(cudf::table_view const& view,
                                        io_type sink_type,
                                        cudf::io::compression_type compression,
+                                       std::optional<uint32_t> block_size,
                                        nvbench::state& state)
 {
   auto const data_size          = static_cast<size_t>(state.get_int64("data_size"));
@@ -139,11 +142,13 @@ void cudftable_write_compressed_common(cudf::table_view const& view,
                auto const& sink_info = source_sink.make_sink_info();
                drop_page_cache_if_enabled(sink_info.filepaths());
 
-               timer.start();
-               cudf::io::experimental::write_cudftable(
+               auto builder =
                  cudf::io::experimental::cudftable_writer_options::builder(sink_info, view)
-                   .compression(compression)
-                   .build());
+                   .compression(compression);
+               if (block_size.has_value()) { builder.block_size(*block_size); }
+
+               timer.start();
+               cudf::io::experimental::write_cudftable(builder.build());
                timer.stop();
 
                encoded_file_size = source_sink.size();
@@ -164,7 +169,7 @@ void BM_cudftable_write_compressed(nvbench::state& state)
   auto const tbl = create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  cudftable_write_compressed_common(view, sink_type, compression, state);
+  cudftable_write_compressed_common(view, sink_type, compression, std::nullopt, state);
 }
 
 NVBENCH_BENCH(BM_cudftable_write_compressed)
@@ -174,8 +179,6 @@ NVBENCH_BENCH(BM_cudftable_write_compressed)
   .add_string_axis("compression_type", {"NONE", "SNAPPY"})
   .add_int64_power_of_two_axis("data_size", nvbench::range(24, 30, 2));  // 16MB to 1GB
 
-// Snappy block size sweep benchmarks
-
 void BM_cudftable_write_snappy_block_size(nvbench::state& state)
 {
   auto const d_type     = get_type_or_group(static_cast<int32_t>(data_type::INTEGRAL));
@@ -184,30 +187,10 @@ void BM_cudftable_write_snappy_block_size(nvbench::state& state)
   auto const block_size = static_cast<uint32_t>(state.get_int64("block_size"));
 
   auto const tbl = create_random_table(cycle_dtypes(d_type, num_cols), table_size_bytes{data_size});
-  auto const view               = tbl->view();
-  std::size_t encoded_file_size = 0;
+  auto const view = tbl->view();
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch&, auto& timer) {
-               cuio_source_sink_pair source_sink(sink_type);
-               auto const& sink_info = source_sink.make_sink_info();
-               drop_page_cache_if_enabled(sink_info.filepaths());
-
-               timer.start();
-               cudf::io::experimental::write_cudftable(
-                 cudf::io::experimental::cudftable_writer_options::builder(sink_info, view)
-                   .compression(cudf::io::compression_type::SNAPPY)
-                   .block_size(block_size)
-                   .build());
-               timer.stop();
-
-               encoded_file_size = source_sink.size();
-             });
-
-  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
-  state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
-  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
+  cudftable_write_compressed_common(
+    view, sink_type, cudf::io::compression_type::SNAPPY, block_size, state);
 }
 
 NVBENCH_BENCH(BM_cudftable_write_snappy_block_size)

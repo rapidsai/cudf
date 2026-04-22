@@ -35,10 +35,15 @@ class cudftable_writer_options_builder;
  * @brief Settings for `write_cudftable()`.
  */
 class cudftable_writer_options {
+ public:
+  /// Default uncompressed block size (in bytes) used when compression is enabled.
+  static constexpr uint32_t default_block_size = 256 * 1024;
+
+ private:
   sink_info _sink;
   table_view _table;
   compression_type _compression = compression_type::NONE;
-  uint32_t _block_size          = 256 * 1024;
+  uint32_t _block_size          = default_block_size;
 
   friend cudftable_writer_options_builder;
 
@@ -115,8 +120,9 @@ class cudftable_writer_options {
   /**
    * @brief Sets the uncompressed block size in bytes for block compression.
    *
-   * Has no effect when compression is `compression_type::NONE`; supplying a
-   * non-default value together with `NONE` will emit a warning at write time.
+   * Must be greater than zero when compression is enabled. Is ignored when
+   * compression is `compression_type::NONE`; supplying a non-default value
+   * together with `NONE` will emit a warning at write time.
    *
    * @param block_size Block size in bytes
    */
@@ -154,8 +160,9 @@ class cudftable_writer_options_builder {
   /**
    * @brief Sets the uncompressed block size in bytes for block compression.
    *
-   * Has no effect when compression is `compression_type::NONE`; supplying a
-   * non-default value together with `NONE` will emit a warning at write time.
+   * Must be greater than zero when compression is enabled. Is ignored when
+   * compression is `compression_type::NONE`; supplying a non-default value
+   * together with `NONE` will emit a warning at write time.
    *
    * @param size Block size in bytes
    * @return this for chaining

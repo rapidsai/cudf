@@ -28,10 +28,11 @@ namespace detail {
 
 namespace {
 
-static constexpr uint32_t magic_number = 0x4C425443;  ///< "CTBL" in little-endian
+constexpr uint32_t magic_number       = 0x4C425443;  ///< "CTBL" in little-endian
+constexpr uint32_t format_version_v1  = 1;
 
 /**
- * @brief Binary file format header for CudfTable (40 bytes)
+ * @brief Binary file format header for CudfTable (48 bytes)
  *
  * Layout: [magic(4)] [version=1(4)] [compression(4)] [block_size(4)]
  *         [metadata_length(8)] [uncompressed_data_length(8)]
@@ -41,11 +42,10 @@ static constexpr uint32_t magic_number = 0x4C425443;  ///< "CTBL" in little-endi
  *              [block payloads (variable)]
  *
  * When `compression == NONE`, exactly one block holds all data and its payload
- * is written uncompressed (no codec invocation on write or read).
+ * is written uncompressed (no codec invocation on write or read). An empty
+ * table is encoded with `num_blocks == 0`, no block index, and no payload.
  */
 struct cudftable_header {
-  static constexpr uint32_t version = 1;
-
   uint32_t magic{};
   uint32_t format_version{};
   uint32_t compression{};
@@ -63,7 +63,7 @@ struct cudftable_header {
                    uint64_t n_blocks,
                    uint64_t comp_data_size)
     : magic{magic_number},
-      format_version{version},
+      format_version{format_version_v1},
       compression{static_cast<uint32_t>(comp)},
       block_size{blk_size},
       metadata_length{metadata_size},
@@ -75,12 +75,76 @@ struct cudftable_header {
 };
 
 /**
- * @brief Block index entry (16 bytes each)
+ * @brief Per-block size entry in the block index (16 bytes each).
  */
 struct block_index_entry {
-  uint64_t compressed_size;
-  uint64_t uncompressed_size;
+  uint64_t compressed_size;    ///< Size of the block payload on disk, in bytes
+  uint64_t uncompressed_size;  ///< Size of the block after decompression, in bytes
 };
+
+/**
+ * @brief Upload `size` bytes from `source` at byte `offset` into device `dst`.
+ *
+ * Prefers `device_read` when the datasource supports it; otherwise reads the
+ * bytes into a pageable host staging buffer and copies them to the device.
+ * Because `cudf::detail::memcpy_async` defers reads of pageable sources until
+ * the stream executes the copy, the stream is synchronized before the staging
+ * buffer goes out of scope.
+ */
+void upload_to_device(datasource* source,
+                      size_t offset,
+                      size_t size,
+                      void* dst,
+                      rmm::cuda_stream_view stream)
+{
+  if (size == 0) { return; }
+  if (source->is_device_read_preferred(size)) {
+    source->device_read(offset, size, static_cast<uint8_t*>(dst), stream);
+  } else {
+    auto host_buffer = source->host_read(offset, size);
+    CUDF_CUDA_TRY(cudf::detail::memcpy_async(dst, host_buffer->data(), size, stream));
+    stream.synchronize();
+  }
+}
+
+/**
+ * @brief Write `size` bytes from device `src` to the sink.
+ *
+ * Uses `device_write` when the sink supports it; otherwise stages the bytes
+ * through a host bounce buffer and writes via `host_write`.
+ */
+void write_from_device(data_sink* sink,
+                       void const* src,
+                       size_t size,
+                       rmm::cuda_stream_view stream)
+{
+  if (size == 0) { return; }
+  if (sink->is_device_write_preferred(size)) {
+    sink->device_write(src, size, stream);
+  } else {
+    auto host_buffer = cudf::detail::make_host_vector(
+      cudf::device_span<uint8_t const>{static_cast<uint8_t const*>(src), size}, stream);
+    sink->host_write(host_buffer.data(), size);
+  }
+}
+
+/**
+ * @brief Build input/output span tables for batched (de)compression.
+ *
+ * Returns pinned host vectors so the H2D transfer performed by
+ * `make_device_uvector_async` is fast and safe without relying on pageable
+ * copy semantics.
+ */
+auto make_io_span_tables(uint64_t num_blocks, rmm::cuda_stream_view stream)
+{
+  struct span_tables {
+    cudf::detail::host_vector<cudf::device_span<uint8_t const>> inputs;
+    cudf::detail::host_vector<cudf::device_span<uint8_t>> outputs;
+  };
+  return span_tables{
+    cudf::detail::make_pinned_vector_async<cudf::device_span<uint8_t const>>(num_blocks, stream),
+    cudf::detail::make_pinned_vector_async<cudf::device_span<uint8_t>>(num_blocks, stream)};
+}
 
 }  // anonymous namespace
 
@@ -90,25 +154,21 @@ void write_cudftable(data_sink* sink,
                      uint32_t block_size,
                      rmm::cuda_stream_view stream)
 {
-  auto const packed = cudf::pack(input, stream, cudf::get_current_device_resource_ref());
-
+  auto const packed    = cudf::pack(input, stream, cudf::get_current_device_resource_ref());
   auto const data_size = packed.gpu_data->size();
+  auto const mr        = cudf::get_current_device_resource_ref();
 
+  // `NONE` path: one pass-through block (or zero blocks for empty data). No
+  // codec invocation, and `block_size` is normalized to 0 on disk so that
+  // readers and file inspectors see a clear "not applicable" marker.
   if (compression == compression_type::NONE) {
-    // block_size has no effect on the uncompressed layout: data is always
-    // written as a single pass-through block. Warn if the caller supplied a
-    // non-default value, and normalize the on-disk value to 0 so that readers
-    // and file inspectors see a clear "not applicable" marker.
-    constexpr uint32_t default_block_size = 256 * 1024;
-    if (block_size != default_block_size) {
+    if (block_size != cudftable_writer_options::default_block_size) {
       CUDF_LOG_WARN(
         "cudftable writer: block_size is ignored when compression is NONE; the "
         "data is always written as a single uncompressed block");
     }
 
-    // Single pass-through block (0 blocks for empty data).
     auto const num_blocks = data_size == 0 ? uint64_t{0} : uint64_t{1};
-
     std::vector<block_index_entry> block_index;
     if (num_blocks > 0) { block_index.push_back({data_size, data_size}); }
 
@@ -122,40 +182,46 @@ void write_cudftable(data_sink* sink,
     sink->host_write(packed.metadata->data(), header.metadata_length);
     if (num_blocks > 0) {
       sink->host_write(block_index.data(), num_blocks * sizeof(block_index_entry));
-
-      if (sink->is_device_write_preferred(data_size)) {
-        sink->device_write(packed.gpu_data->data(), data_size, stream);
-      } else {
-        auto host_buffer = cudf::detail::make_host_vector(
-          cudf::device_span<uint8_t const>{static_cast<uint8_t const*>(packed.gpu_data->data()),
-                                           data_size},
-          stream);
-        sink->host_write(host_buffer.data(), data_size);
-      }
+      write_from_device(sink, packed.gpu_data->data(), data_size, stream);
     }
 
     sink->flush();
     return;
   }
 
-  // Compressed path: batched block compression.
+  // Compressed path: batched block compression. The compress() API transparently
+  // routes per-block work between host and device engines, so check generic
+  // support rather than device-only support.
   CUDF_EXPECTS(cudf::io::detail::is_compression_supported(compression),
                "Unsupported compression type for cudftable");
+  CUDF_EXPECTS(block_size > 0, "block_size must be greater than zero for compressed cudftable");
 
-  auto const num_blocks = data_size == 0 ? uint64_t{0} : (data_size + block_size - 1) / block_size;
+  // Empty-table short-circuit: no payload, no block index.
+  if (data_size == 0) {
+    auto const header = cudftable_header{compression,
+                                         block_size,
+                                         packed.metadata->size(),
+                                         /*uncomp=*/0,
+                                         /*num_blocks=*/0,
+                                         /*comp=*/0};
+    sink->host_write(&header, sizeof(cudftable_header));
+    sink->host_write(packed.metadata->data(), header.metadata_length);
+    sink->flush();
+    return;
+  }
 
-  auto const mr = cudf::get_current_device_resource_ref();
-
+  auto const num_blocks          = (data_size + block_size - 1) / block_size;
   auto const max_comp_block_size = cudf::io::detail::max_compressed_size(compression, block_size);
 
-  // Build input spans (views into packed.gpu_data) and output spans (into a padded output buffer)
+  // Build input spans (views into packed.gpu_data) and output spans (into a
+  // padded output buffer). Pinned host vectors keep the H2D span-table copy
+  // stream-safe.
   rmm::device_buffer d_compressed(max_comp_block_size * num_blocks, stream, mr);
 
-  std::vector<cudf::device_span<uint8_t const>> h_inputs(num_blocks);
-  std::vector<cudf::device_span<uint8_t>> h_outputs(num_blocks);
+  auto [h_inputs, h_outputs] = make_io_span_tables(num_blocks, stream);
   for (uint64_t i = 0; i < num_blocks; ++i) {
     auto const offset      = i * block_size;
-    auto const uncomp_size = std::min(static_cast<uint64_t>(block_size), data_size - offset);
+    auto const uncomp_size = std::min<uint64_t>(block_size, data_size - offset);
     h_inputs[i]            = cudf::device_span<uint8_t const>(
       static_cast<uint8_t const*>(packed.gpu_data->data()) + offset, uncomp_size);
     h_outputs[i] = cudf::device_span<uint8_t>(
@@ -178,17 +244,20 @@ void write_cudftable(data_sink* sink,
     CUDF_EXPECTS(h_results[i].status == cudf::io::detail::codec_status::SUCCESS,
                  "cudftable block compression failed");
     auto const offset      = i * block_size;
-    auto const uncomp_size = std::min(static_cast<uint64_t>(block_size), data_size - offset);
+    auto const uncomp_size = std::min<uint64_t>(block_size, data_size - offset);
     block_index[i]         = {h_results[i].bytes_written, uncomp_size};
     total_compressed += h_results[i].bytes_written;
   }
 
-  // Compact compressed blocks into a contiguous device buffer, then use device_write
+  // Compact the padded per-block outputs into a contiguous device buffer.
   rmm::device_buffer d_compacted(total_compressed, stream, mr);
   {
-    std::vector<void*> h_dsts(num_blocks);
-    std::vector<void const*> h_srcs(num_blocks);
-    std::vector<std::size_t> h_sizes(num_blocks);
+    auto h_dsts =
+      cudf::detail::make_pinned_vector_async<void*>(num_blocks, stream);
+    auto h_srcs =
+      cudf::detail::make_pinned_vector_async<void const*>(num_blocks, stream);
+    auto h_sizes =
+      cudf::detail::make_pinned_vector_async<std::size_t>(num_blocks, stream);
     uint64_t d_offset = 0;
     for (uint64_t i = 0; i < num_blocks; ++i) {
       h_srcs[i]  = static_cast<uint8_t const*>(d_compressed.data()) + i * max_comp_block_size;
@@ -206,7 +275,7 @@ void write_cudftable(data_sink* sink,
   sink->host_write(&header, sizeof(cudftable_header));
   sink->host_write(packed.metadata->data(), header.metadata_length);
   sink->host_write(block_index.data(), num_blocks * sizeof(block_index_entry));
-  sink->device_write(d_compacted.data(), total_compressed, stream);
+  write_from_device(sink, d_compacted.data(), total_compressed, stream);
 
   sink->flush();
 }
@@ -221,7 +290,7 @@ packed_table read_cudftable(datasource* source,
   auto header = cudftable_header{};
   source->host_read(0, header_size, reinterpret_cast<uint8_t*>(&header));
   CUDF_EXPECTS(header.magic == magic_number, "Invalid magic number in cudftable header");
-  CUDF_EXPECTS(header.format_version == cudftable_header::version,
+  CUDF_EXPECTS(header.format_version == format_version_v1,
                "Unsupported cudftable format version: " + std::to_string(header.format_version));
 
   auto const comp = static_cast<compression_type>(header.compression);
@@ -241,62 +310,61 @@ packed_table read_cudftable(datasource* source,
   if (header.num_blocks > 0) {
     source->host_read(
       block_index_offset, block_index_size, reinterpret_cast<uint8_t*>(block_index.data()));
+
+    // Validate the block index against the header: the per-block sizes must
+    // sum to the declared data lengths so that downstream upload/decompress
+    // cannot write past the allocated device buffers.
+    uint64_t total_compressed   = 0;
+    uint64_t total_uncompressed = 0;
+    for (auto const& e : block_index) {
+      total_compressed += e.compressed_size;
+      total_uncompressed += e.uncompressed_size;
+    }
+    CUDF_EXPECTS(total_compressed == header.compressed_data_length,
+                 "cudftable block index compressed-size sum mismatch");
+    CUDF_EXPECTS(total_uncompressed == header.uncompressed_data_length,
+                 "cudftable block index uncompressed-size sum mismatch");
+  } else {
+    CUDF_EXPECTS(header.compressed_data_length == 0 && header.uncompressed_data_length == 0,
+                 "cudftable with zero blocks must have zero data length");
   }
 
   if (comp == compression_type::NONE) {
     CUDF_EXPECTS(header.num_blocks <= 1, "Uncompressed cudftable must have at most one block");
     CUDF_EXPECTS(header.compressed_data_length == header.uncompressed_data_length,
                  "Uncompressed cudftable must have matching compressed and uncompressed sizes");
-    if (header.num_blocks == 1) {
-      CUDF_EXPECTS(block_index[0].compressed_size == block_index[0].uncompressed_size &&
-                     block_index[0].uncompressed_size == header.uncompressed_data_length,
-                   "Uncompressed cudftable block index mismatch");
-    }
 
     packed.gpu_data =
       std::make_unique<rmm::device_buffer>(header.uncompressed_data_length, stream, mr);
-    if (header.uncompressed_data_length > 0) {
-      if (source->is_device_read_preferred(header.uncompressed_data_length)) {
-        source->device_read(blocks_offset,
-                            header.uncompressed_data_length,
-                            static_cast<uint8_t*>(packed.gpu_data->data()),
-                            stream);
-      } else {
-        auto host_buffer = source->host_read(blocks_offset, header.uncompressed_data_length);
-        CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-          packed.gpu_data->data(), host_buffer->data(), header.uncompressed_data_length, stream));
-        stream.synchronize();
-      }
-    }
+    upload_to_device(
+      source, blocks_offset, header.uncompressed_data_length, packed.gpu_data->data(), stream);
 
     auto unpacked_view = cudf::unpack(packed);
     return packed_table{unpacked_view, std::move(packed)};
   }
 
-  // Compressed path: block-batched decompression.
+  // Compressed path: block-batched decompression. The decompress() API
+  // transparently routes per-block work between host and device engines, so
+  // check generic support rather than device-only support.
   CUDF_EXPECTS(cudf::io::detail::is_decompression_supported(comp),
                "Unsupported compression type in cudftable header");
-
-  // Upload compressed data to device
-  rmm::device_buffer d_compressed(header.compressed_data_length, stream, mr);
-  if (header.compressed_data_length > 0) {
-    if (source->is_device_read_preferred(header.compressed_data_length)) {
-      source->device_read(blocks_offset,
-                          header.compressed_data_length,
-                          static_cast<uint8_t*>(d_compressed.data()),
-                          stream);
-    } else {
-      auto host_buffer = source->host_read(blocks_offset, header.compressed_data_length);
-      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
-        d_compressed.data(), host_buffer->data(), header.compressed_data_length, stream));
-    }
-  }
+  CUDF_EXPECTS(header.block_size > 0,
+               "cudftable block_size must be greater than zero for compressed data");
 
   packed.gpu_data =
     std::make_unique<rmm::device_buffer>(header.uncompressed_data_length, stream, mr);
 
-  std::vector<cudf::device_span<uint8_t const>> h_inputs(header.num_blocks);
-  std::vector<cudf::device_span<uint8_t>> h_outputs(header.num_blocks);
+  // Short-circuit empty-table compressed encoding: no block index, no payload.
+  if (header.num_blocks == 0) {
+    auto unpacked_view = cudf::unpack(packed);
+    return packed_table{unpacked_view, std::move(packed)};
+  }
+
+  rmm::device_buffer d_compressed(header.compressed_data_length, stream, mr);
+  upload_to_device(
+    source, blocks_offset, header.compressed_data_length, d_compressed.data(), stream);
+
+  auto [h_inputs, h_outputs] = make_io_span_tables(header.num_blocks, stream);
   uint64_t comp_offset   = 0;
   uint64_t uncomp_offset = 0;
   for (uint64_t i = 0; i < header.num_blocks; ++i) {
