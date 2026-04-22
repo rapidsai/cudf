@@ -86,17 +86,18 @@ def test_statistics(engine: StreamingEngine) -> None:
         assert isinstance(s, Statistics)
         assert s.enabled
 
-    # Drive a group_by so the streaming pipeline executes a real shuffle.
+    # Run a query so the streaming pipeline records some statistics.
     n, n_keys = engine.nranks * 50, 5
     lf = pl.LazyFrame(
         {"key": [str(i % n_keys) for i in range(n)], "val": list(range(n))}
     )
     lf.group_by("key").agg(pl.col("val").sum()).collect(engine=engine)
 
-    # global_statistics returns a single merged, enabled Statistics.
+    # global_statistics returns a single merged, enabled, non-empty Statistics.
     merged = engine.global_statistics()
     assert isinstance(merged, Statistics)
     assert merged.enabled
+    assert merged.list_stat_names(), "expected the pipeline to record some statistics"
 
     # gather_statistics(clear=True) captures and then empties each rank.
     engine.gather_statistics(clear=True)
