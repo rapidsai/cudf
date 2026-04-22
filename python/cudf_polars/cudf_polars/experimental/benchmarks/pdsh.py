@@ -58,8 +58,6 @@ os.environ["KVIKIO_NTHREADS"] = os.environ.get("KVIKIO_NTHREADS", "8")
 if COUNT_DTYPE is not None:
     EXPECTED_CASTS = {
         1: [pl.col("count_order").cast(COUNT_DTYPE)],
-        3: [pl.col("o_orderdate").cast(pl.Date())],
-        18: [pl.col("o_orderdate").cast(pl.Date())],
         4: [pl.col("order_count").cast(COUNT_DTYPE)],
         7: [pl.col("l_year").cast(pl.Int32())],
         8: [pl.col("o_year").cast(pl.Int32())],
