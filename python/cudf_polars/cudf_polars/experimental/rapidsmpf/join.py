@@ -45,6 +45,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     chunk_to_frame,
     empty_table_chunk,
     gather_in_task_group,
+    indices_to_names,
     maybe_remap_partitioning,
     names_to_indices,
     process_children,
@@ -772,15 +773,13 @@ async def _shuffle_join(
         ir_context=ir_context,
     ):
         left, right = ir.children
-        left_keys = list(left.schema.keys())
-        right_keys = list(right.schema.keys())
         left_keys_to_hash = tuple(
-            NamedExpr(left_keys[i], Col(left.schema[left_keys[i]], left_keys[i]))
-            for i in strategy.left_indices
+            NamedExpr(name, Col(left.schema[name], name))
+            for name in indices_to_names(strategy.left_indices, left.schema)
         )
         right_keys_to_hash = tuple(
-            NamedExpr(right_keys[i], Col(right.schema[right_keys[i]], right_keys[i]))
-            for i in strategy.right_indices
+            NamedExpr(name, Col(right.schema[name], name))
+            for name in indices_to_names(strategy.right_indices, right.schema)
         )
         actor_tasks = [
             *filter_tasks,

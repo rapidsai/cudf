@@ -76,16 +76,7 @@ def test_join_maintain_order(left, right, maintain_order):
         ["c", "a"],
     ],
 )
-def test_non_coalesce_join(
-    left, right, how, nulls_equal, join_expr, using_rapidsmpf, request
-):
-    request.applymarker(
-        pytest.mark.xfail(
-            using_rapidsmpf,
-            strict=False,
-            reason="Non deterministic sort/join on nulls",
-        )
-    )
+def test_non_coalesce_join(left, right, how, nulls_equal, join_expr):
     query = left.join(
         right, on=join_expr, how=how, nulls_equal=nulls_equal, coalesce=False
     )

@@ -24,7 +24,6 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
-from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.rapidsmpf.dispatch import (
@@ -283,10 +282,9 @@ async def _global_shuffle(
                     msg, br=context.br()
                 ).make_available_and_spill(context.br(), allow_overbooking=True)
                 df = chunk_to_frame(chunk, child_ir)
-                key_table = DataFrame(
-                    [expr.evaluate(df) for expr in keys_to_hash],
-                    stream=df.stream,
-                ).table
+                key_table = plc.Table(
+                    [expr.evaluate(df).obj for expr in keys_to_hash],
+                )
                 inserter.insert_hash_with_keys(chunk, key_table)
 
     for partition_id in shuffle.shuffler.local_partitions():
