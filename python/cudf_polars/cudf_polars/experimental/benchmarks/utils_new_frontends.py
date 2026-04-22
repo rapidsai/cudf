@@ -820,14 +820,9 @@ class QueryResult:
     sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
-def _collect_statistics(
-    run_config: Any, engine: StreamingEngine | None
-) -> Statistics | None:
+def _collect_statistics(engine: StreamingEngine | None) -> Statistics | None:
     """Gather + clear per-rank rapidsmpf statistics into a single merged Statistics."""
-    # Reuse the existing rapidsmpf-side flag (--rapidsmpf-statistics).
-    if engine is None or run_config.streaming_options.statistics is not True:
-        return None
-    return engine.global_statistics(clear=True)
+    return None if engine is None else engine.global_statistics(clear=True)
 
 
 def run_polars_query_iteration(
@@ -855,7 +850,7 @@ def run_polars_query_iteration(
         # Once we support polars 1.40, we should remove this
         result = result.with_columns(*result_casts)
 
-    statistics = _collect_statistics(run_config, engine)
+    statistics = _collect_statistics(engine)
 
     if expected is not None:
         validation_result = validate_result(
