@@ -575,8 +575,6 @@ class DaskEngine(StreamingEngine):
         owned_client: distributed.Client | None = None
         if dask_client is None:
             gpu_ids = _get_visible_gpu_ids()
-            n_gpus = len(gpu_ids)
-            memory_limit = distributed.system.MEMORY_LIMIT / n_gpus
 
             worker_spec: dict[str, Any] = {}
             for i, gpu_id in enumerate(gpu_ids):
@@ -587,7 +585,11 @@ class DaskEngine(StreamingEngine):
                         # Set worker subprocess log level to WARNING
                         # (is INFO by default).
                         "silence_logs": logging.WARNING,
-                        "memory_limit": memory_limit,
+                        # We oversubscribe the system memory limit on multi-gpu systems.
+                        # In general, Dask won't be aware of what we're doing with we're
+                        # doing with host memory, so just giving each worker access to
+                        # all of it seems like the option with the fewest downsides.
+                        "memory_limit": distributed.system.MEMORY_LIMIT,
                         "env": {
                             "CUDA_VISIBLE_DEVICES": gpu_ids[i],
                         },
