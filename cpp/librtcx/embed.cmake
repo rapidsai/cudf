@@ -194,7 +194,6 @@ function(embed)
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
-    BYPRODUCTS ${OUTPUT_DIR}/*
     COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${TARGET}__jit_embed_run>
     DEPENDS "${CONFIGURED_EMBED_SCRIPT}" "${EMBED_SCRIPT}" ${${TARGET}__embed__source_files}
             ${${TARGET}__embed__target_deps}

@@ -51,7 +51,6 @@ struct embed_output {
   std::string cxx_header;
   std::string cxx_source;
   std::string asm_source;
-  std::string bin_file_name;
   std::vector<uint8_t> bin_file_data;
 };
 
@@ -170,8 +169,6 @@ embed_output generate_cxx_source_files_data(std::string_view id,
   auto hash = compute_embed_hash(
     uncompressed_files_bytes, merged_dests_bytes, merged_include_dirs_bytes, compression);
 
-  auto binary_file_name = std::format("embed_{}.bin", id);
-
   auto include_dirs_list =
     join_formatted(include_dirs, ",\n", [](auto s) { return std::format("\"{}\"", s); });
   auto dests_list =
@@ -260,19 +257,18 @@ constexpr std::uint8_t {}_hash[{}] =
 .section .rodata
 .global rtcx_embed_{}_files_begin
 rtcx_embed_{}_files_begin:
-.incbin "{}"
+.incbin "{}.bin"
 
 .section .note.GNU-stack,"",@progbits
 )***",
     id,
     id,
-    binary_file_name);
+    id);
 
   return embed_output{
     .cxx_header    = cxx_header,
     .cxx_source    = "",
     .asm_source    = asm_source,
-    .bin_file_name = binary_file_name,
     .bin_file_data = compress ? compressed_files_bytes : uncompressed_files_bytes};
 }
 
@@ -294,8 +290,7 @@ void generate_embed(std::string_view id,
   std::ofstream asm_file(std::format("{}/{}.s", output_directory, id));
   asm_file << output.asm_source;
 
-  std::ofstream bin_file(std::format("{}/{}", output_directory, output.bin_file_name),
-                         std::ios::binary);
+  std::ofstream bin_file(std::format("{}/{}.bin", output_directory, id), std::ios::binary);
   bin_file.write(reinterpret_cast<char const*>(output.bin_file_data.data()),
                  static_cast<std::streamsize>(output.bin_file_data.size()));
 }
