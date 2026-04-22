@@ -625,12 +625,35 @@ nitpick_ignore = [
     ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
     ("py:class", "ExecutorType"),
+    # cudf-polars: unqualified refs in autodoc'd docstrings.
+    ("py:class", "StreamingOptions"),
+    ("py:class", "ClusterInfo"),
+    ("py:class", "RankActor"),
+    ("py:class", "ActorHandle"),
+    ("py:class", "Communicator"),
+    ("py:class", "Options"),
+    ("py:func", "reserve_op_id"),
+    ("py:func", "bind_to_gpu"),
+    ("py:attr", "HardwareBindingPolicy.skip_under_rrun"),
+    (
+        "py:func",
+        "cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu",
+    ),
+    # polars aliases that don't match the public intersphinx targets.
+    ("py:class", "polars.LazyFrame"),
+    ("py:class", "polars.DataFrame"),
+    ("py:class", "polars.dataframe.frame.DataFrame"),
 ]
 # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
 nitpick_ignore_regex = [
     ("py:.*", "pandas.*"),
     ("py:.*", "pd.*"),
     ("ref.*", ".*pandas.*"),
+    # External libs without configured intersphinx inventories.
+    ("py:.*", r"rapidsmpf(\..*)?"),
+    ("py:.*", r"ray(\..*)?"),
+    ("py:.*", r"distributed(\..*)?"),
+    ("py:.*", r"dask_cuda(\..*)?"),
 ]
 
 
