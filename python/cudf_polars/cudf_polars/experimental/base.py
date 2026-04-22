@@ -66,7 +66,6 @@ class DataSourceInfo(Protocol):
     @property
     def type(self) -> Literal["parquet", "dataframe"]:
         """The type of the data source. Useful for serialization and deserialization."""
-        ...
 
     @property
     def row_count(self) -> int | None:

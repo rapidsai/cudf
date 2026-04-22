@@ -879,7 +879,6 @@ class DataFrameSourceInfo:
         return cls(data["row_count"])
 
 
-# TODO: reevaluate the need for this cache
 @functools.cache
 def _build_parquet_source(
     paths: tuple[str, ...],
