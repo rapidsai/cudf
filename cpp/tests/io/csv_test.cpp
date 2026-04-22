@@ -1225,7 +1225,7 @@ TEST_F(CsvReaderTest, StringInference)
 
 TEST_F(CsvReaderTest, TypeInferenceEmptyDelimitedFields)
 {
-  std::string buffer = "1,,3\n4,,6\n";
+  std::string const buffer = "1,,3\n4,,6\n";
   cudf::io::csv_reader_options const in_opts =
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{

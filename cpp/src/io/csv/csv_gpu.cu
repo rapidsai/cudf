@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
 #include <thrust/count.h>
 #include <thrust/detail/copy.h>
 #include <thrust/remove.h>
@@ -215,7 +216,9 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto const trimmed_field_len   = trimmed_field_range.second - trimmed_field_range.first;
 
         if (trimmed_field_len == 0) {
-          atomicAdd(&d_column_data[actual_col].string_count, 1);
+          cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> ref{
+            d_column_data[actual_col].string_count};
+          ref.fetch_add(1, cuda::memory_order_relaxed);
         } else {
           for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
             if (is_digit(*cur)) {
