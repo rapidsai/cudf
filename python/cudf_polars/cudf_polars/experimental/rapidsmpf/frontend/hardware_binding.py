@@ -94,12 +94,19 @@ def bind_to_gpu(policy: HardwareBindingPolicy) -> None:
 
 def _do_bind(policy: HardwareBindingPolicy) -> None:
     """Execute the actual bind call according to *policy*."""
+    # Hardcode disabled network bindings. In most cases UCX is capable of
+    # automatically determining affinity to appropriate NICs, and in certain
+    # specific systems a more complex binding is necessary to ensure network
+    # affinity does not cause problems. Disabling it for the moment is the
+    # safe option.
+    network = False
+
     try:
         try:
-            bind()
+            bind(network=network)
         except RuntimeError:
             # CUDA_VISIBLE_DEVICES is unset; fall back to GPU 0.
-            bind(gpu_id=0)
+            bind(gpu_id=0, network=network)
     except RuntimeError:
         if policy.raise_on_fail:
             raise
