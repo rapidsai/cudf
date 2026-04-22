@@ -8,7 +8,9 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/io/variant.hpp>
+#include <cudf/utilities/span.hpp>
 
+#include <string>
 #include <vector>
 
 struct VariantExtractTest : public cudf::test::BaseFixture {};
@@ -584,4 +586,226 @@ TEST_F(VariantExtractTest, ApacheNestedGetVariantField)
 
   cudf::test::strings_column_wrapper expected({"lava monster"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*name_str, expected);
+}
+
+namespace {
+
+// Shared fixture: Apache parquet-testing object_nested blob. Dictionary:
+//   [0]id [1]species [2]name [3]population [4]observation
+//   [5]time [6]location [7]value [8]temperature [9]humidity
+// Value: { id:1, species:{name:"lava monster", population:6789},
+//          observation:{time:"12:34:56", location:"In the Volcano",
+//                       value:{temperature:123, humidity:456}} }
+struct apache_nested_fixture {
+  std::vector<uint8_t> meta;
+  std::vector<uint8_t> val;
+};
+
+apache_nested_fixture make_apache_nested_fixture()
+{
+  // clang-format off
+  std::vector<uint8_t> const meta = {
+    0x01, 0x0a, 0x00, 0x02, 0x09, 0x0d, 0x17, 0x22, 0x26, 0x2e, 0x33, 0x3e, 0x46,
+    0x69, 0x64, 0x73, 0x70, 0x65, 0x63, 0x69, 0x65, 0x73, 0x6e, 0x61, 0x6d, 0x65,
+    0x70, 0x6f, 0x70, 0x75, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x6f, 0x62, 0x73,
+    0x65, 0x72, 0x76, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x74, 0x69, 0x6d, 0x65, 0x6c,
+    0x6f, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x74,
+    0x65, 0x6d, 0x70, 0x65, 0x72, 0x61, 0x74, 0x75, 0x72, 0x65, 0x68, 0x75, 0x6d,
+    0x69, 0x64, 0x69, 0x74, 0x79};
+  std::vector<uint8_t> const val = {
+    0x02, 0x03, 0x00, 0x04, 0x01, 0x00, 0x19, 0x02, 0x46, 0x0c, 0x01, 0x02, 0x02,
+    0x02, 0x03, 0x00, 0x0d, 0x10, 0x31, 0x6c, 0x61, 0x76, 0x61, 0x20, 0x6d, 0x6f,
+    0x6e, 0x73, 0x74, 0x65, 0x72, 0x10, 0x85, 0x1a, 0x02, 0x03, 0x06, 0x05, 0x07,
+    0x09, 0x00, 0x18, 0x24, 0x21, 0x31, 0x32, 0x3a, 0x33, 0x34, 0x3a, 0x35, 0x36,
+    0x39, 0x49, 0x6e, 0x20, 0x74, 0x68, 0x65, 0x20, 0x56, 0x6f, 0x6c, 0x63, 0x61,
+    0x6e, 0x6f, 0x02, 0x02, 0x09, 0x08, 0x02, 0x00, 0x05, 0x0c, 0x7b, 0x10, 0xc8,
+    0x01};
+  // clang-format on
+  return {meta, val};
+}
+
+cudf::test::structs_column_wrapper make_apache_nested_col()
+{
+  auto const f = make_apache_nested_fixture();
+  cudf::test::lists_column_wrapper<uint8_t> m(f.meta.begin(), f.meta.end());
+  cudf::test::lists_column_wrapper<uint8_t> v(f.val.begin(), f.val.end());
+  return cudf::test::structs_column_wrapper{{m, v}};
+}
+
+}  // namespace
+
+TEST_F(VariantExtractTest, GetNestedPathSpeciesName)
+{
+  auto col    = make_apache_nested_col();
+  auto stream = cudf::test::get_default_stream();
+
+  std::vector<std::string> const path = {"species", "name"};
+  auto got                            = cudf::io::parquet::extract_variant_field(
+    col,
+    cudf::host_span<std::string const>{path.data(), path.size()},
+    cudf::data_type{cudf::type_id::STRING},
+    stream);
+
+  cudf::test::strings_column_wrapper expected({"lava monster"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+
+  // Parity: single-call path equals chained calls.
+  auto chained_species = cudf::io::parquet::get_variant_field(col, "species", stream);
+  auto chained_name = cudf::io::parquet::get_variant_field(chained_species->view(), "name", stream);
+  auto chained_str  = cudf::io::parquet::cast_variant(
+    chained_name->view(), cudf::data_type{cudf::type_id::STRING}, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, *chained_str);
+}
+
+TEST_F(VariantExtractTest, GetNestedPathThreeLevel)
+{
+  auto col    = make_apache_nested_col();
+  auto stream = cudf::test::get_default_stream();
+
+  // Depth 3: observation.value.temperature. The encoded value is INT8 (header 0x0c, byte 0x7b),
+  // which cast_variant does not support, so we compare raw VARIANT bytes against the chained
+  // result.
+  std::vector<std::string> const path = {"observation", "value", "temperature"};
+  auto single                         = cudf::io::parquet::get_variant_field(
+    col, cudf::host_span<std::string const>{path.data(), path.size()}, stream);
+
+  auto obs     = cudf::io::parquet::get_variant_field(col, "observation", stream);
+  auto vobj    = cudf::io::parquet::get_variant_field(obs->view(), "value", stream);
+  auto chained = cudf::io::parquet::get_variant_field(vobj->view(), "temperature", stream);
+
+  // Both columns must be VARIANT structs with the same value child contents.
+  EXPECT_EQ(single->type().id(), cudf::type_id::STRUCT);
+  EXPECT_EQ(chained->type().id(), cudf::type_id::STRUCT);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(single->view().child(1), chained->view().child(1));
+}
+
+TEST_F(VariantExtractTest, GetNestedPathMissingIntermediate)
+{
+  auto col    = make_apache_nested_col();
+  auto stream = cudf::test::get_default_stream();
+
+  std::vector<std::string> const path = {"species", "nope"};
+  auto got                            = cudf::io::parquet::extract_variant_field(
+    col,
+    cudf::host_span<std::string const>{path.data(), path.size()},
+    cudf::data_type{cudf::type_id::STRING},
+    stream);
+
+  cudf::test::strings_column_wrapper expected({"donotread"}, {false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, GetNestedPathNonObjectIntermediate)
+{
+  // Dict = {a, b}; value = { a: INT32(5), b: "hi" }. Descending into "a" fails because it is
+  // a primitive, not an object.
+  std::vector<uint8_t> const metab = {0x01, 0x02, 0x00, 0x01, 0x02, 'a', 'b'};
+  std::vector<uint8_t> const valb  = {
+    0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x05, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
+
+  cudf::test::lists_column_wrapper<uint8_t> meta(metab.begin(), metab.end());
+  cudf::test::lists_column_wrapper<uint8_t> val(valb.begin(), valb.end());
+  cudf::test::structs_column_wrapper struc{{meta, val}};
+
+  std::vector<std::string> const path = {"a", "b"};
+  auto got                            = cudf::io::parquet::extract_variant_field(
+    struc,
+    cudf::host_span<std::string const>{path.data(), path.size()},
+    cudf::data_type{cudf::type_id::INT32},
+    cudf::test::get_default_stream());
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({0}, {false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(VariantExtractTest, GetNestedPathEmptyThrows)
+{
+  auto col = make_apache_nested_col();
+  std::vector<std::string> const empty;
+  EXPECT_THROW(cudf::io::parquet::get_variant_field(
+                 col,
+                 cudf::host_span<std::string const>{empty.data(), empty.size()},
+                 cudf::test::get_default_stream()),
+               std::invalid_argument);
+  EXPECT_THROW(cudf::io::parquet::extract_variant_field(
+                 col,
+                 cudf::host_span<std::string const>{empty.data(), empty.size()},
+                 cudf::data_type{cudf::type_id::INT32},
+                 cudf::test::get_default_stream()),
+               std::invalid_argument);
+}
+
+TEST_F(VariantExtractTest, GetNestedPathSingleKeyMatchesOldApi)
+{
+  // Multi-row fixture reused from MultiRowDistinctKeysHandBuilt.
+  std::vector<uint8_t> const m1 = {0x01, 0x02, 0x00, 0x01, 0x02, 'x', 'k'};
+  std::vector<uint8_t> const v1 = {
+    0x02, 0x02, 0x00, 0x01, 0x00, 0x05, 0x08, 0x14, 0x07, 0x00, 0x00, 0x00, 0x09, 'h', 'i'};
+  std::vector<uint8_t> const m2 = {0x01, 0x02, 0x00, 0x01, 0x02, 'x', 'y'};
+  std::vector<uint8_t> const v2 = {0x02,
+                                   0x02,
+                                   0x00,
+                                   0x01,
+                                   0x00,
+                                   0x05,
+                                   0x0a,
+                                   0x14,
+                                   0x2a,
+                                   0x00,
+                                   0x00,
+                                   0x00,
+                                   0x14,
+                                   0x63,
+                                   0x00,
+                                   0x00,
+                                   0x00};
+  std::vector<uint8_t> const m3 = {0x01, 0x01, 0x00, 0x01, 'k'};
+  std::vector<uint8_t> const v3 = {0x02, 0x01, 0x00, 0x00, 0x04, 0x0d, 'z', 'z', 'z'};
+
+  cudf::test::lists_column_wrapper<uint8_t> meta{
+    {m1.begin(), m1.end()}, {m2.begin(), m2.end()}, {m3.begin(), m3.end()}};
+  cudf::test::lists_column_wrapper<uint8_t> val{
+    {v1.begin(), v1.end()}, {v2.begin(), v2.end()}, {v3.begin(), v3.end()}};
+  cudf::test::structs_column_wrapper struc{{meta, val}};
+
+  auto stream = cudf::test::get_default_stream();
+
+  auto via_string = cudf::io::parquet::get_variant_field(struc, "x", stream);
+  std::vector<std::string> const path{"x"};
+  auto via_path = cudf::io::parquet::get_variant_field(
+    struc, cudf::host_span<std::string const>{path.data(), path.size()}, stream);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*via_string, *via_path);
+}
+
+TEST_F(VariantExtractTest, GetNestedPathMultiRowMixedNulls)
+{
+  // Row 0: { a: { b: INT32(1) } } -> path {"a","b"} = 1
+  std::vector<uint8_t> const m0 = {0x01, 0x02, 0x00, 0x01, 0x02, 'a', 'b'};
+  std::vector<uint8_t> const v0 = {
+    0x02, 0x01, 0x00, 0x00, 0x0a, 0x02, 0x01, 0x01, 0x00, 0x05, 0x14, 0x01, 0x00, 0x00, 0x00};
+
+  // Row 1: { a: INT32(5) } -> non-object intermediate -> null
+  std::vector<uint8_t> const m1 = {0x01, 0x01, 0x00, 0x01, 'a'};
+  std::vector<uint8_t> const v1 = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x05, 0x00, 0x00, 0x00};
+
+  // Row 2: { q: INT32(7) } -> key "a" missing from dict -> null
+  std::vector<uint8_t> const m2 = {0x01, 0x01, 0x00, 0x01, 'q'};
+  std::vector<uint8_t> const v2 = {0x02, 0x01, 0x00, 0x00, 0x05, 0x14, 0x07, 0x00, 0x00, 0x00};
+
+  cudf::test::lists_column_wrapper<uint8_t> meta{
+    {m0.begin(), m0.end()}, {m1.begin(), m1.end()}, {m2.begin(), m2.end()}};
+  cudf::test::lists_column_wrapper<uint8_t> val{
+    {v0.begin(), v0.end()}, {v1.begin(), v1.end()}, {v2.begin(), v2.end()}};
+  cudf::test::structs_column_wrapper struc{{meta, val}};
+
+  std::vector<std::string> const path = {"a", "b"};
+  auto got                            = cudf::io::parquet::extract_variant_field(
+    struc,
+    cudf::host_span<std::string const>{path.data(), path.size()},
+    cudf::data_type{cudf::type_id::INT32},
+    cudf::test::get_default_stream());
+
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 0, 0}, {true, false, false});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }

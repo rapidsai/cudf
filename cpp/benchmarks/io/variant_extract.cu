@@ -204,6 +204,79 @@ std::vector<uint8_t> build_bare_int32_value(int32_t v)
           static_cast<uint8_t>((u >> 24) & 0xFF)};
 }
 
+// Build a Variant object blob from sorted `field_ids` where one specific field
+// `descent_fid` carries an arbitrary `inner_value` blob, and all other fields
+// carry a bare INT32(0).  This supports constructing nested-object chains by
+// recursively wrapping a leaf value in `depth` object layers.
+std::vector<uint8_t> build_mixed_object_value(std::vector<int> const& field_ids_sorted,
+                                              int descent_fid,
+                                              std::vector<uint8_t> const& inner_value)
+{
+  int const n      = static_cast<int>(field_ids_sorted.size());
+  int const max_id = n ? field_ids_sorted.back() : 0;
+
+  std::vector<std::vector<uint8_t>> values(n);
+  std::size_t total_value_bytes = 0;
+  for (int i = 0; i < n; ++i) {
+    values[i] = (field_ids_sorted[i] == descent_fid) ? inner_value : build_bare_int32_value(0);
+    total_value_bytes += values[i].size();
+  }
+
+  int const field_id_size = (max_id <= 255) ? 1 : 2;
+  int const field_off_size =
+    (total_value_bytes <= 255) ? 1 : ((total_value_bytes <= 65535) ? 2 : 4);
+  bool const is_large = (n > 255);
+
+  uint8_t const header6 = static_cast<uint8_t>((field_off_size - 1) | ((field_id_size - 1) << 2) |
+                                               (is_large ? (1 << 4) : 0));
+  uint8_t const header_byte = static_cast<uint8_t>((header6 << 2) | 2);
+
+  std::vector<uint8_t> out;
+  out.push_back(header_byte);
+
+  if (is_large) {
+    for (int b = 0; b < 4; ++b) {
+      out.push_back(static_cast<uint8_t>((n >> (8 * b)) & 0xFF));
+    }
+  } else {
+    out.push_back(static_cast<uint8_t>(n));
+  }
+
+  for (int fid : field_ids_sorted) {
+    for (int b = 0; b < field_id_size; ++b) {
+      out.push_back(static_cast<uint8_t>((fid >> (8 * b)) & 0xFF));
+    }
+  }
+
+  std::size_t running = 0;
+  for (int i = 0; i <= n; ++i) {
+    for (int b = 0; b < field_off_size; ++b) {
+      out.push_back(static_cast<uint8_t>((running >> (8 * b)) & 0xFF));
+    }
+    if (i < n) { running += values[i].size(); }
+  }
+
+  for (auto const& v : values) {
+    out.insert(out.end(), v.begin(), v.end());
+  }
+  return out;
+}
+
+// Build a value blob representing `depth` levels of object nesting.  At every
+// level the object has `n_fields` sorted fields (0..n_fields-1); the descent
+// field is `descent_fid` and holds the next inner level.  The innermost value
+// is a bare INT32(0).  `depth == 1` returns a flat object identical in shape to
+// build_object_value(seq_ids(n_fields)).
+std::vector<uint8_t> build_nested_object_value(int n_fields, int depth, int descent_fid)
+{
+  auto const fids    = seq_ids(n_fields);
+  auto current_value = build_bare_int32_value(0);
+  for (int level = 0; level < depth; ++level) {
+    current_value = build_mixed_object_value(fids, descent_fid, current_value);
+  }
+  return current_value;
+}
+
 // ---------------------------------------------------------------------------
 // Column construction helper
 // ---------------------------------------------------------------------------
@@ -431,3 +504,51 @@ static void bench_cast_variant(nvbench::state& state)
 NVBENCH_BENCH(bench_cast_variant)
   .set_name("cast_variant_int32")
   .add_int64_power_of_two_axis("num_rows", {15, 17, 19, 21});
+
+// ---------------------------------------------------------------------------
+// Benchmark: get_variant_field with a nested (multi-key) path
+// ---------------------------------------------------------------------------
+//
+// Measures how the fused path-walking kernel amortizes across increasing path
+// depth.  Dictionary and per-level field count match the `uniform_large/first`
+// case of `bench_get_variant_field` (50 keys, 50 fields per object, target at
+// field id 0 in every level), so depth=1 is directly comparable to that cell.
+//
+
+static void bench_get_variant_field_nested(nvbench::state& state)
+{
+  auto stream = cudf::get_default_stream();
+  auto mr     = cudf::get_current_device_resource_ref();
+
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const depth    = static_cast<int>(state.get_int64("depth"));
+  auto const key_pos  = state.get_string("key_position");
+  bool const first    = (key_pos == "first");
+
+  constexpr int n_fields = 50;
+  int const target_fid   = first ? 0 : (n_fields - 1);
+  auto const keys        = full_keys(n_fields);
+  auto const meta_blob   = build_metadata(keys);
+  auto const val_blob    = build_nested_object_value(n_fields, depth, target_fid);
+
+  std::vector<std::vector<uint8_t>> meta_rows(num_rows, meta_blob);
+  std::vector<std::vector<uint8_t>> val_rows(num_rows, val_blob);
+
+  std::vector<std::string> const path(depth, keys[target_fid]);
+
+  auto col = build_variant_column(meta_rows, val_rows, stream, mr);
+  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
+
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
+    auto result = cudf::io::parquet::get_variant_field(
+      col->view(), cudf::host_span<std::string const>{path.data(), path.size()}, stream, mr);
+  });
+}
+
+NVBENCH_BENCH(bench_get_variant_field_nested)
+  .set_name("get_variant_field_nested")
+  .add_int64_power_of_two_axis("num_rows", {17, 19, 21})
+  .add_int64_axis("depth", {1, 2, 3, 4})
+  .add_string_axis("key_position", {"first", "last"});
