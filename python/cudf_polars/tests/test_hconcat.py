@@ -7,7 +7,6 @@ import polars as pl
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import DataFrameScan, Empty, HConcat, IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.config import ConfigOptions
 
 
 def test_hconcat():
@@ -34,8 +33,7 @@ def test_hconcat_different_heights():
 def test_hconcat_should_broadcast():
     # HConcat with should_broadcast=True is used by the streaming engine to
     # recombine decomposed expressions. Test it by constructing IR directly.
-    config_options = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    context = IRExecutionContext.from_config_options(config_options)
+    context = IRExecutionContext()
 
     df1 = pl.DataFrame({"a": [1, 2, 3]})
     df2 = pl.DataFrame({"b": [4.0]})  # 1 row to be broadcast to 3

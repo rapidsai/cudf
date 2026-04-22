@@ -143,14 +143,16 @@ async def concatenate_node(
             if tracer is not None and output_duplicated:
                 tracer.set_duplicated()
 
-            allgather = AllGatherManager(context, comm, collective_id)
             stream = context.get_stream_from_pool()
             seq_num = 0
-            while (msg := await ch_in.recv(context)) is not None:
-                allgather.insert(seq_num, TableChunk.from_message(msg))
-                seq_num += 1
-                del msg
-            allgather.insert_finished()
+            allgather = AllGatherManager(context, comm, collective_id)
+            with allgather.inserting() as inserter:
+                while (msg := await ch_in.recv(context)) is not None:
+                    inserter.insert(
+                        seq_num, TableChunk.from_message(msg, br=context.br())
+                    )
+                    seq_num += 1
+                    del msg
 
             # Extract concatenated result
             result_table = await allgather.extract_concatenated(stream)
@@ -163,7 +165,7 @@ async def concatenate_node(
                 output_chunk = empty_table_chunk(ir, context, stream)
             else:
                 output_chunk = TableChunk.from_pylibcudf_table(
-                    result_table, stream, exclusive_view=True
+                    result_table, stream, exclusive_view=True, br=context.br()
                 )
 
             await ch_out.send(context, Message(0, output_chunk))
@@ -191,7 +193,7 @@ async def concatenate_node(
                     if msg is None:
                         done_receiving = True
                         break
-                    chunks.append(TableChunk.from_message(msg))
+                    chunks.append(TableChunk.from_message(msg, br=context.br()))
 
                 if chunks:
                     chunks, extra = await make_table_chunks_available_or_wait(
@@ -223,7 +225,10 @@ async def concatenate_node(
                         Message(
                             seq_num,
                             TableChunk.from_pylibcudf_table(
-                                df.table, df.stream, exclusive_view=True
+                                df.table,
+                                df.stream,
+                                exclusive_view=True,
+                                br=context.br(),
                             ),
                         ),
                     )

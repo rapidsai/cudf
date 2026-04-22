@@ -5,6 +5,8 @@
 
 #include "compression.hpp"
 
+#include <cudf/utilities/memory_resource.hpp>
+
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
@@ -20,7 +22,7 @@ writer_compression_statistics collect_compression_statistics(
 {
   // bytes_written on success
   auto const output_size_successful = thrust::transform_reduce(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     results.begin(),
     results.end(),
     cuda::proclaim_return_type<size_t>([] __device__(codec_exec_result const& res) {
@@ -35,7 +37,7 @@ writer_compression_statistics collect_compression_statistics(
     auto const zipped_end = zipped_begin + inputs.size();
 
     return thrust::transform_reduce(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       zipped_begin,
       zipped_end,
       cuda::proclaim_return_type<size_t>([status] __device__(auto tup) {

@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -26,17 +28,24 @@ import pylibcudf as plc
 import rmm.mr
 from pylibcudf.contiguous_split import pack
 
+from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
+    all_gather_host_data,
     check_reserved_keys,
     execute_ir_on_rank,
+)
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
 )
 from cudf_polars.experimental.rapidsmpf.utils import set_memory_resource
 from cudf_polars.utils.config import SPMDContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -44,8 +53,9 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_spmd_mode(
@@ -163,8 +173,10 @@ def allgather_polars_dataframe(
 
     # Bulk AllGather: each rank contributes once (sequence_number=0)
     allgather = AllGather(comm, op_id, ctx.br())
-    allgather.insert(0, packed_data)
-    allgather.insert_finished()
+    try:
+        allgather.insert(0, packed_data)
+    finally:
+        allgather.insert_finished()
     results = allgather.wait_and_extract(ordered=True)
 
     # Deserialize and concatenate each rank's contribution
@@ -293,6 +305,16 @@ class SPMDEngine(StreamingEngine):
     TypeError
         If ``executor_options`` or ``engine_options`` contains a reserved key.
 
+    Notes
+    -----
+    Calls
+    :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.  By default, binding is skipped under ``rrun`` (which already
+    performs its own binding) — see
+    :attr:`HardwareBindingPolicy.skip_under_rrun`.
+
     Examples
     --------
     Context-manager style (recommended for scripts):
@@ -322,13 +344,26 @@ class SPMDEngine(StreamingEngine):
         engine_options = engine_options or {}
 
         check_reserved_keys(executor_options, engine_options)
+        hw_binding = cast(
+            HardwareBindingPolicy,
+            engine_options.get("hardware_binding", HardwareBindingPolicy()),
+        )
+        bind_to_gpu(hw_binding)
 
         rapidsmpf_options = (
             rapidsmpf_options
             if rapidsmpf_options is not None
             else Options(get_environment_variables())
         )
-        mr = RmmResourceAdaptor(rmm.mr.get_current_device_resource())
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
+        base_mr = (
+            mr_config.create_memory_resource()
+            if mr_config is not None
+            else rmm.mr.get_current_device_resource()
+        )
+        mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
@@ -337,11 +372,14 @@ class SPMDEngine(StreamingEngine):
                     options=rapidsmpf_options,
                 )
             else:
-                comm = single_communicator(rapidsmpf_options, ProgressThread())
+                comm = single_communicator(
+                    progress_thread=ProgressThread(),
+                    options=rapidsmpf_options,
+                )
         # else: caller-provided comm; the caller retains ownership
 
         py_executor = ThreadPoolExecutor(
-            max_workers=cast(int, executor_options.get("num_py_executors", 1)),
+            max_workers=cast(int, executor_options.get("num_py_executors", 8)),
             thread_name_prefix="spmd-executor",
         )
         exit_stack = contextlib.ExitStack()
@@ -459,6 +497,19 @@ class SPMDEngine(StreamingEngine):
             raise RuntimeError("context is not available after shutdown")
         return self._ctx
 
+    def gather_cluster_info(self) -> list[ClusterInfo]:
+        """
+        Collect diagnostic information from every rank.
+
+        Returns
+        -------
+        List of :class:`ClusterInfo`, one per rank.
+        """
+        data = json.dumps(dataclasses.asdict(ClusterInfo.local())).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        return [ClusterInfo(**json.loads(r)) for r in results]
+
     def shutdown(self) -> None:
         """
         Shut down the engine and release all owned resources.
@@ -471,3 +522,10 @@ class SPMDEngine(StreamingEngine):
         self._comm = None
         self._ctx = None
         super().shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        data = json.dumps(func(*args, **kwargs)).encode()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+
+        return [json.loads(r) for r in results]

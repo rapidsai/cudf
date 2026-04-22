@@ -176,7 +176,7 @@ async def default_node_multi(
                     finished_channels.add(ch_idx)
                 else:
                     # Store the new chunk (replacing previous if any)
-                    ready_chunks[ch_idx] = TableChunk.from_message(msg)
+                    ready_chunks[ch_idx] = TableChunk.from_message(msg, br=context.br())
                     chunk_count[ch_idx] += 1
                 del msg
 
@@ -229,6 +229,7 @@ async def default_node_multi(
                         df.table,
                         df.stream,
                         exclusive_view=True,
+                        br=context.br(),
                     ),
                 ),
             )
@@ -280,9 +281,9 @@ async def fanout_node_bounded(
         )
 
         while (msg := await ch_in.recv(context)) is not None:
-            table_chunk = TableChunk.from_message(msg).make_available_and_spill(
-                context.br(), allow_overbooking=True
-            )
+            table_chunk = TableChunk.from_message(
+                msg, br=context.br()
+            ).make_available_and_spill(context.br(), allow_overbooking=True)
             seq_num = msg.sequence_number
             del msg
             for ch_out in chs_out:
@@ -294,6 +295,7 @@ async def fanout_node_bounded(
                             table_chunk.table_view(),
                             table_chunk.stream,
                             exclusive_view=False,
+                            br=context.br(),
                         ),
                     ),
                 )
@@ -350,7 +352,9 @@ async def fanout_node_unbounded(
         )
 
         # Spillable FIFO buffer for each output channel
-        output_buffers: list[SpillableMessages] = [SpillableMessages() for _ in chs_out]
+        output_buffers: list[SpillableMessages] = [
+            SpillableMessages(context.br()) for _ in chs_out
+        ]
         num_outputs = len(chs_out)
 
         # Track message IDs in FIFO order for each output buffer
@@ -584,7 +588,7 @@ async def empty_node(
 
         # Return the output chunk (empty but with correct schema)
         chunk = TableChunk.from_pylibcudf_table(
-            df.table, df.stream, exclusive_view=True
+            df.table, df.stream, exclusive_view=True, br=context.br()
         )
         await ch_out.send(context, Message(0, chunk))
 

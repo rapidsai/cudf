@@ -28,17 +28,16 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.config import (
-    CUDAStreamPolicy,
     CUDAStreamPoolConfig,
     Cluster,
     ConfigOptions,
     MemoryResourceConfig,
     StreamingExecutor,
+    _default_cuda_stream_policy,
 )
 from cudf_polars.utils.cuda_stream import (
     get_cuda_stream,
     get_dask_cuda_stream,
-    get_new_cuda_stream,
 )
 
 
@@ -461,7 +460,7 @@ def test_config_option_from_env(
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_JOIN_LIMIT", "44")
         m.setenv("CUDF_POLARS__EXECUTOR__RAPIDSMPF_SPILL", "1")
         m.setenv("CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", "1")
-        m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+        m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
         if rapidsmpf_distributed_available:
             m.setenv("CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", "rapidsmpf")
@@ -480,7 +479,7 @@ def test_config_option_from_env(
         assert config.executor.broadcast_join_limit == 44
         assert config.executor.rapidsmpf_spill is True
         assert config.executor.sink_to_directory is True
-        assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+        assert config.cuda_stream_policy is None
 
         if rapidsmpf_distributed_available:
             assert config.executor.shuffle_method == "rapidsmpf"
@@ -645,21 +644,9 @@ def test_memory_resource_config_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
         }
 
 
-@pytest.mark.parametrize(
-    "cuda_stream_policy, expected",
-    [
-        (CUDAStreamPolicy.DEFAULT, get_cuda_stream),
-        (CUDAStreamPolicy.NEW, get_new_cuda_stream),
-    ],
-)
-def test_ir_execution_context_from_config_options(
-    cuda_stream_policy: CUDAStreamPolicy, expected: Any
-) -> None:
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(cuda_stream_policy=cuda_stream_policy)
-    )
-    context = IRExecutionContext.from_config_options(config)
-    assert context.get_cuda_stream is expected
+def test_ir_execution_context() -> None:
+    context = IRExecutionContext()
+    assert context.get_cuda_stream is get_cuda_stream
     context.get_cuda_stream()  # no exception
 
 
@@ -678,36 +665,31 @@ def test_cuda_stream_pool():
 def test_cuda_stream_policy_default(monkeypatch: pytest.MonkeyPatch) -> None:
     # Default from engine
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
+    assert config.cuda_stream_policy is None
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor_options={"runtime": "tasks"})
     )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.DEFAULT
+    assert config.cuda_stream_policy is None
 
     # Default from env
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
     config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+    assert config.cuda_stream_policy is None
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor_options={"runtime": "tasks"})
     )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+    assert config.cuda_stream_policy is None
 
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(cuda_stream_policy=CUDAStreamPolicy.NEW)
-    )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
 
-    # Default from user argument
-    config = ConfigOptions.from_polars_engine(
-        pl.GPUEngine(
-            executor_options={"runtime": "tasks"},
-            cuda_stream_policy=CUDAStreamPolicy.NEW,
-        )
-    )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+def test_default_cuda_stream_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CUDF_POLARS__CUDA_STREAM_POLICY", raising=False)
+    assert _default_cuda_stream_policy() is None
+
+    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "pool")
+    result = _default_cuda_stream_policy()
+    assert isinstance(result, CUDAStreamPoolConfig)
 
 
 def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> None:
@@ -736,7 +718,6 @@ def test_cuda_stream_policy_from_config(*, rapidsmpf_single_available: bool) -> 
     "env",
     [
         "default",
-        "new",
         "pool",
         '{"pool_size": 32, "flags": "SYNC_DEFAULT"}',
         '{"pool_size": 32, "flags": 0}',
@@ -747,7 +728,7 @@ def test_cuda_stream_policy_from_env(
     monkeypatch: pytest.MonkeyPatch, env: str, *, rapidsmpf_single_available: bool
 ) -> None:
     monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", env)
-    runtime = "tasks" if env in {"default", "new"} else "rapidsmpf"
+    runtime = "tasks" if env == "default" else "rapidsmpf"
     engine = pl.GPUEngine(executor="streaming", executor_options={"runtime": runtime})
     if runtime == "rapidsmpf" and rapidsmpf_single_available:
         config = ConfigOptions.from_polars_engine(engine)
@@ -762,7 +743,7 @@ def test_cuda_stream_policy_from_env(
             ConfigOptions.from_polars_engine(engine)
     else:
         config = ConfigOptions.from_polars_engine(engine)
-        assert config.cuda_stream_policy == env
+        assert config.cuda_stream_policy is None
 
 
 def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
@@ -782,12 +763,12 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
     assert config.cuda_stream_policy.pool_size == 16
     assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
 
-    # "new" user argument
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "new")
+    # "default" user argument overrides pool default
+    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(executor_options={"runtime": "rapidsmpf"})
     )
-    assert config.cuda_stream_policy == CUDAStreamPolicy.NEW
+    assert config.cuda_stream_policy is None
 
 
 @pytest.mark.parametrize(
@@ -802,7 +783,7 @@ def test_cuda_stream_policy_pool_only_supported_by_rapidsmpf(
 ) -> None:
     with pytest.raises(
         ValueError,
-        match="CUDAStreamPolicy.POOL is only supported by the rapidsmpf runtime.",
+        match="A stream pool is only supported by the rapidsmpf runtime.",
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
@@ -843,6 +824,7 @@ def test_dynamic_planning_defaults() -> None:
     # Dynamic planning is enabled by default
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 2
+    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.5
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -864,6 +846,37 @@ def test_dynamic_planning_sample_chunk_count_from_env(
     assert config.executor.name == "streaming"
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 3
+
+
+def test_validate_bloom_filter_threshold_type() -> None:
+    with pytest.raises(TypeError, match="bloom_filter_threshold must be a float"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"bloom_filter_threshold": "bad"}
+                },
+            )
+        )
+
+
+def test_validate_bloom_filter_threshold_range() -> None:
+    with pytest.raises(ValueError, match="bloom_filter_threshold must be between"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"bloom_filter_threshold": 1.5}},
+            )
+        )
+
+
+def test_bloom_filter_threshold_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__BLOOM_FILTER_THRESHOLD", "0.3"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.3
 
 
 def test_dynamic_planning_from_instance() -> None:
@@ -917,7 +930,7 @@ def test_num_py_executors_default() -> None:
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.num_py_executors is None
+    assert config.executor.num_py_executors == 8
 
 
 def test_num_py_executors_from_executor_options() -> None:
