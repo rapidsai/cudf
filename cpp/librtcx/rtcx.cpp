@@ -1079,12 +1079,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
   std::atomic_ref tick{tick_};
   auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
 
-  bool unlocked = false;
-  lock_.lock();
-
-  RTCX_DEFER([&] {
-    if (!unlocked) { lock_.unlock(); }
-  });
+  std::unique_lock lock{lock_};
 
   // check memory cache
   if (auto it = enabled_ ? blobs_cache_.entries_.find(sha) : blobs_cache_.entries_.end();
@@ -1125,8 +1120,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
 
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
-      lock_.unlock();
-      unlocked = true;
+      lock.unlock();
 
       auto result = compile();
       promise.set_value(result);
@@ -1146,12 +1140,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
   std::atomic_ref tick{tick_};
   auto current_tick = tick.fetch_add(1, std::memory_order_relaxed);
 
-  bool unlocked = false;
-  lock_.lock();
-
-  RTCX_DEFER([&] {
-    if (!unlocked) { lock_.unlock(); }
-  });
+  std::unique_lock lock{lock_};
 
   // check memory cache
   if (auto it = enabled_ ? libraries_cache_.entries_.find(sha) : libraries_cache_.entries_.end();
@@ -1183,7 +1172,6 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
       lock_.unlock();
-      unlocked = true;
 
       promise.set_value(std::move(*disk_library));
 
@@ -1196,8 +1184,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
 
       // we can release the lock while calling the maker function since it may be expensive and we
       // have already reserved a spot in the cache for this sha
-      lock_.unlock();
-      unlocked = true;
+      lock.unlock();
 
       auto [library, blob] = compile();
       promise.set_value(library);
