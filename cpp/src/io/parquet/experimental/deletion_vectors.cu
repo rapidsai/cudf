@@ -9,9 +9,13 @@
 #include <cudf/io/experimental/deletion_vectors.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/roaring_bitmap.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>
@@ -20,6 +24,13 @@
 #include <numeric>
 
 namespace cudf::io::parquet::experimental {
+
+namespace {
+
+// We are only working with 64-bit roaring bitmaps here
+auto constexpr roaring_bitmap_type = cudf::roaring_bitmap_type::BITS_64;
+
+}  // namespace
 
 namespace detail {
 
@@ -74,21 +85,21 @@ namespace detail {
   }
 
   // Construct all deletion vectors and store their references
-  auto deletion_vectors      = std::vector<roaring_bitmap_type>{};
-  auto deletion_vectors_refs = std::vector<std::reference_wrapper<roaring_bitmap_type>>{};
+  auto deletion_vectors     = std::vector<cudf::roaring_bitmap>{};
+  auto deletion_vector_refs = std::vector<std::reference_wrapper<cudf::roaring_bitmap const>>{};
+  // Must reserve enough space for the deletion vectors and references to avoid implicit
+  // re-allocations in emplace_back leading to dangling references
   deletion_vectors.reserve(serialized_roaring_bitmaps.size());
-  deletion_vectors_refs.reserve(serialized_roaring_bitmaps.size());
+  deletion_vector_refs.reserve(serialized_roaring_bitmaps.size());
   std::transform(serialized_roaring_bitmaps.begin(),
                  serialized_roaring_bitmaps.end(),
-                 std::back_inserter(deletion_vectors_refs),
+                 std::back_inserter(deletion_vector_refs),
                  [&](auto const& serialized_roaring_bitmap) {
-                   deletion_vectors.emplace_back(serialized_roaring_bitmap.data(),
-                                                 rmm::mr::polymorphic_allocator<char>{},
-                                                 stream);
+                   deletion_vectors.emplace_back(roaring_bitmap_type, serialized_roaring_bitmap);
                    return std::ref(deletion_vectors.back());
                  });
   auto row_mask = compute_row_mask_column(table_with_index->get_column(0).view(),
-                                          deletion_vectors_refs,
+                                          deletion_vector_refs,
                                           deletion_vector_row_counts,
                                           stream,
                                           cudf::get_current_device_resource_ref());
@@ -141,10 +152,10 @@ namespace detail {
     rg_counts_queue.push(row_group_num_rows[i]);
   }
 
-  std::queue<chunked_parquet_reader::roaring_bitmap_impl> dv_queue;
+  std::queue<cudf::roaring_bitmap> dv_queue;
   std::queue<cudf::size_type> dv_row_counts_queue;
   for (size_t i = 0; i < serialized_roaring_bitmaps.size(); ++i) {
-    dv_queue.emplace(serialized_roaring_bitmaps[i]);
+    dv_queue.emplace(roaring_bitmap_type, serialized_roaring_bitmaps[i]);
     dv_row_counts_queue.push(deletion_vector_row_counts[i]);
   }
 
@@ -230,7 +241,7 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
     auto iter = cuda::make_zip_iterator(serialized_roaring_bitmaps.begin(),
                                         deletion_vector_row_counts.begin());
     std::for_each(iter, iter + serialized_roaring_bitmaps.size(), [&](auto const& elem) {
-      _deletion_vectors.emplace(cuda::std::get<0>(elem));
+      _deletion_vectors.emplace(roaring_bitmap_type, cuda::std::get<0>(elem));
       _deletion_vector_row_counts.push(cuda::std::get<1>(elem));
     });
   }
