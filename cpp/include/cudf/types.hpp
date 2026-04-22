@@ -27,15 +27,11 @@
 
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/std/iterator>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-
-#if defined(__CUDACC_RTC__)
-#include <cuda/std/iterator>
-#else
-#include <iterator>
-#endif
 
 /**
  * @file
@@ -103,11 +99,7 @@ using char_utf8         = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 template <typename T>
 size_type distance(T f, T l)
 {
-#if defined(__CUDACC_RTC__)
   return static_cast<size_type>(cuda::std::distance(f, l));
-#else
-  return static_cast<size_type>(std::distance(f, l));
-#endif
 }
 
 /**

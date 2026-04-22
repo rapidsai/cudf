@@ -134,7 +134,7 @@ struct sha256_context {
   ~sha256_context()                                = default;
 
  private:
-  void transform_(std::uint8_t const* buf)
+  void transform(std::uint8_t const* buf)
   {
     std::uint32_t S[8], W[64], t0, t1;  // NOLINT(modernize-avoid-c-arrays)
     int i;
@@ -222,6 +222,8 @@ struct sha256_context {
     RND(S[2], S[3], S[4], S[5], S[6], S[7], S[0], S[1], 62, 0xbef9'a3f7);
     RND(S[1], S[2], S[3], S[4], S[5], S[6], S[7], S[0], 63, 0xc671'78f2);
 
+#undef RND
+
     for (i = 0; i < 8; i++) {
       state_[i] += S[i];
     }
@@ -245,11 +247,11 @@ struct sha256_context {
       len -= left;
       data = (data + left);
       if (len_buf) return;
-      transform_(buf_);
+      transform(buf_);
     }
 
     while (len >= 64) {
-      transform_(data);
+      transform(data);
       data = data + 64;
       len -= 64;
     }

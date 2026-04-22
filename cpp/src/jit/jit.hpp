@@ -8,7 +8,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <librtcx/rtcx.hpp>
+#include <rtcx.hpp>
 
 namespace CUDF_EXPORT cudf {
 

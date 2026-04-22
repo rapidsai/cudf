@@ -419,9 +419,9 @@ void initialize()
 void teardown()
 {
   std::call_once(*teardown_libraries_flag, [] {
-    cu.reset();
-    nvrtc.reset();
     nvjitlink.reset();
+    nvrtc.reset();
+    cu.reset();
     init_libraries_flag.reset();
     teardown_libraries_flag.reset();
   });
@@ -589,6 +589,7 @@ void log_nvJitLink_result(link_params const& params,
 }
 
 }  // namespace
+
 byte_buffer compile(compile_params const& params)
 {
   RTCX_EXPECTS(params.name != nullptr, "Fragment name must not be null", std::logic_error);
@@ -830,10 +831,6 @@ std::string demangle_cuda_symbol(char const* mangled_name)
 
   RTCX_EXPECTS(status == 0, "Demangling CUDA symbol name failed", std::runtime_error);
   RTCX_EXPECTS(demangled_name != nullptr, "Demangling CUDA symbol name failed", std::runtime_error);
-
-  RTCX_DEFER([&] {
-    if (demangled_name != nullptr) ::free(demangled_name);
-  });
 
   std::string result{demangled_name};
 

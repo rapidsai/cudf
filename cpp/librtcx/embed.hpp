@@ -25,29 +25,7 @@
 #include <utility>
 #include <vector>
 
-#define DEFER__CONCATENATE_DETAIL(x, y) x##y
-#define DEFER__CONCATENATE(x, y)        DEFER__CONCATENATE_DETAIL(x, y)
-#define DEFER(...)                      ::defer DEFER__CONCATENATE(defer_, __COUNTER__)(__VA_ARGS__)
-
-template <typename T>
-struct defer {
- private:
-  T func_;
-
- public:
-  template <typename... Args>
-  defer(Args&&... args) : func_{static_cast<Args&&>(args)...}
-  {
-  }
-  defer(defer const&)            = delete;
-  defer& operator=(defer const&) = delete;
-  defer(defer&&)                 = delete;
-  defer& operator=(defer&&)      = delete;
-  ~defer() { func_(); }
-};
-
-template <typename T>
-defer(T) -> defer<T>;
+namespace rtcx_embed {
 
 struct size_range {
   size_t offset = 0;
@@ -339,3 +317,5 @@ std::vector<std::string_view> split_string(std::string_view str, char delimiter)
 
   return tokens;
 }
+
+}  // namespace rtcx_embed

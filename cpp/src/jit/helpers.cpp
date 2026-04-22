@@ -98,7 +98,7 @@ kernel get_udf_kernel(std::string const& source_file,
   CUDF_FUNC_RANGE();
 
   auto kernel_instance_source = std::format(R"***(
-#define KERNEL_INSTANCE {}
+#define CUDF_KERNEL_INSTANCE {}
 )***",
                                             kernel_name);
   char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)

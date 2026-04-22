@@ -88,9 +88,9 @@ static std::optional<context> _context{std::nullopt};
 static std::optional<std::once_flag> _context_init_flag{std::in_place};
 static std::optional<std::once_flag> _context_deinit_flag{std::in_place};
 
-std::filesystem::path get_cudf_root_dir()
+std::filesystem::path get_cudf_kernel_cache_dir()
 {
-  if (auto cudf = getenv_optional<std::string>("LIBCUDF_ROOT_DIR"); cudf.has_value()) {
+  if (auto cudf = getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH"); cudf.has_value()) {
     return std::filesystem::path(*cudf);
   }
 
@@ -99,8 +99,9 @@ std::filesystem::path get_cudf_root_dir()
   }
 
   CUDF_FAIL(
-    "Unable to determine the CUDF root directory. Please set the `LIBCUDF_ROOT_DIR`, "
-    "`HOME` or `LIBCUDF_ROOT_DIR` environment variables to allow automatic resolution of the root "
+    "Unable to determine the CUDF root directory. Please set the `LIBCUDF_KERNEL_CACHE_PATH` or "
+    "`HOME` "
+    "environment variables to allow automatic resolution of the root "
     "directory.",
     std::runtime_error);
 }
@@ -123,10 +124,10 @@ void initialize(init_flags flags)
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
-    auto jit_bundle_dir = get_cudf_root_dir() / "jit" / "bundle";
-    auto rtcx_cache_dir = get_cudf_root_dir() / "jit" / "rtcx_cache";
-    auto jit_pch_dir    = get_cudf_root_dir() / "jit" / "pch";
-    auto jit_tmp_dir    = get_cudf_root_dir() / "jit" / "tmp";
+    auto jit_bundle_dir = get_cudf_kernel_cache_dir() / "jit" / "bundle";
+    auto rtcx_cache_dir = get_cudf_kernel_cache_dir() / "jit" / "rtcx_cache";
+    auto jit_pch_dir    = get_cudf_kernel_cache_dir() / "jit" / "pch";
+    auto jit_tmp_dir    = get_cudf_kernel_cache_dir() / "jit" / "tmp";
 
     context_config cfg{.dump_codegen               = dump_codegen,
                        .use_jit                    = use_jit,

@@ -6,12 +6,10 @@
 
 #include <cudf/types.hpp>
 
-#if defined(__CUDACC_RTC__)
 #include <cuda/std/iterator>
-#else
-#include <cuda_runtime.h>
 
-#include <iterator>
+#if !defined(__CUDACC_RTC__)
+#include <cuda_runtime.h>
 #endif
 
 /**
@@ -68,16 +66,11 @@ class string_view {
   class const_iterator {
     /// @cond
    public:
-    using difference_type = ptrdiff_t;
-    using value_type      = char_utf8;
-    using reference       = char_utf8&;
-    using pointer         = char_utf8*;
-
-#if defined(__CUDACC_RTC__)
+    using difference_type   = ptrdiff_t;
+    using value_type        = char_utf8;
+    using reference         = char_utf8&;
+    using pointer           = char_utf8*;
     using iterator_category = cuda::std::input_iterator_tag;
-#else
-    using iterator_category = std::input_iterator_tag;
-#endif
 
     __device__ inline const_iterator(string_view const& str, size_type pos);
     const_iterator(const_iterator const& mit)        = default;

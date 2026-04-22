@@ -27,8 +27,6 @@
 #define RTCX_DEFER(...)                      ::rtcx::defer RTCX_DEFER__CONCATENATE(defer_, __COUNTER__)(__VA_ARGS__)
 
 extern "C" {
-typedef struct evp_md_ctx_st EVP_MD_CTX;  // NOLINT(modernize-use-using)
-
 typedef struct CUlib_st* CUlibrary;    // NOLINT(modernize-use-using)
 typedef struct CUkern_st* CUkernel;    // NOLINT(modernize-use-using)
 typedef struct CUstream_st* CUstream;  // NOLINT(modernize-use-using)

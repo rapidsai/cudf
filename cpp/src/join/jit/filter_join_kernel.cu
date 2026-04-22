@@ -95,13 +95,13 @@ CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const
 
 }  // namespace cudf::join::jit
 
-extern "C" __global__ void kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
-                                  cudf::jit::device_span<cudf::size_type const> right_indices,
-                                  cudf::column_device_view_core const* left_tables,
-                                  cudf::column_device_view_core const* right_tables,
-                                  bool* predicate_results,
-                                  void* user_data)
+extern "C" __global__ void cudf_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
+                                       cudf::jit::device_span<cudf::size_type const> right_indices,
+                                       cudf::column_device_view_core const* left_tables,
+                                       cudf::column_device_view_core const* right_tables,
+                                       bool* predicate_results,
+                                       void* user_data)
 {
-  KERNEL_INSTANCE(
+  CUDF_KERNEL_INSTANCE(
     left_indices, right_indices, left_tables, right_tables, predicate_results, user_data);
 }

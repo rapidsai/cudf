@@ -12,7 +12,7 @@
 #include <cudf_jit_embed.hpp>
 #include <fcntl.h>
 #include <jit/jit.hpp>
-#include <librtcx/rtcx.hpp>
+#include <rtcx.hpp>
 #include <runtime/context.hpp>
 #include <sys/file.h>
 #include <sys/stat.h>
@@ -96,6 +96,10 @@ rtcx::byte_buffer read_blob_cstring(char const* path)
   if (lseek(fd, 0, SEEK_SET) == -1) {
     throw_posix(std::format("Failed to reset file offset for file ({})", path), "lseek");
   }
+
+  CUDF_EXPECTS(file_size < std::numeric_limits<size_t>::max() - 1,
+               std::format("File ({}) size is too large to read into memory", path),
+               std::runtime_error);
 
   auto contents = rtcx::byte_buffer::make(file_size + 1U);  // +1 for null terminator
 
@@ -299,18 +303,6 @@ std::tuple<rtcx::library, rtcx::blob> compile_library_uncached(
     options.emplace_back(std::format("-I{}", include_dir));
   }
 
-  // TODO: experiment with:
-  // --fdevice-time-trace=jit_comp_trace.json
-  // --time=compile_trace.json
-  // --restrict
-  // --relocatable-device-code
-  // --extensible-whole-program
-  // --dlink-time-opt
-  // --gen-opt-lto
-  // --create-pch
-  // --use-pch
-  // --pch-dir
-
   options.emplace_back(std::format("--gpu-architecture=sm_{}", sm));
 
   options.emplace_back("--diag-suppress=47");
@@ -428,14 +420,14 @@ kernel_instance={}
 
   if (!use_cache) {
     auto [lib, blob] = compile();
-    return kernel{lib, lib->get_kernel("kernel")};
+    return kernel{lib, lib->get_kernel("cudf_kernel")};
   }
 
   auto fut =
     cache.get_or_add_library(cache_key_sha256, rtcx::library_compile_func::from_functor(compile));
 
   auto lib = fut.get();
-  return kernel{lib, lib->get_kernel("kernel")};
+  return kernel{lib, lib->get_kernel("cudf_kernel")};
 }
 
 }  // namespace CUDF_EXPORT cudf
