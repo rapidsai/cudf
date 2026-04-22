@@ -46,12 +46,24 @@ class HardwareBindingPolicy:
         When ``True``, binding failures (e.g. CPU affinity, NUMA memory
         policy, or topology discovery) raise an exception.  When
         ``False`` (the default), failures are silently ignored.
+    cpu
+        Whether to bind CPU cores. Enabled by default.
+    memory
+        Whether to bind NUMA memory nodes. Enabled by default.
+    network
+        Whether to bind network devices. Disabled by default because
+        UCX is usually capable of automatically determining affinity to
+        the appropriate NICs, and on certain systems a more complex
+        binding is necessary to avoid network-affinity problems.
     """
 
     skip_under_rrun: bool = True
     enabled: bool = True
     enable_once: bool = True
     raise_on_fail: bool = False
+    cpu: bool = True
+    memory: bool = True
+    network: bool = False
 
 
 _bind_lock = threading.Lock()
@@ -94,19 +106,17 @@ def bind_to_gpu(policy: HardwareBindingPolicy) -> None:
 
 def _do_bind(policy: HardwareBindingPolicy) -> None:
     """Execute the actual bind call according to *policy*."""
-    # Hardcode disabled network bindings. In most cases UCX is capable of
-    # automatically determining affinity to appropriate NICs, and in certain
-    # specific systems a more complex binding is necessary to ensure network
-    # affinity does not cause problems. Disabling it for the moment is the
-    # safe option.
-    network = False
-
     try:
         try:
-            bind(network=network)
+            bind(cpu=policy.cpu, memory=policy.memory, network=policy.network)
         except RuntimeError:
             # CUDA_VISIBLE_DEVICES is unset; fall back to GPU 0.
-            bind(gpu_id=0, network=network)
+            bind(
+                gpu_id=0,
+                cpu=policy.cpu,
+                memory=policy.memory,
+                network=policy.network,
+            )
     except RuntimeError:
         if policy.raise_on_fail:
             raise
