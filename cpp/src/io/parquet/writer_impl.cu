@@ -1409,7 +1409,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device_async(stream);
-  collect_map_entries(map_storage_data, chunks.device_view().flat_view(), stream);
+  collect_map_entries(map_storage_data, chunks.device_view().flat_view(), frags, stream);
   get_dictionary_indices(map_storage_data, frags, stream);
 
   return std::pair(std::move(dict_data), std::move(dict_index));

@@ -97,12 +97,23 @@ void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
 /**
  * @brief Compact dictionary hash map entries into chunk.dict_data
  *
+ * Each chunk's `dict_id`s are assigned monotonically in fragment-first-
+ * appearance order: values whose slot was first won by an earlier fragment
+ * get strictly lower `dict_id`s than values first won by a later fragment.
+ * This is the ordering prerequisite that lets per-page RLE bit widths shrink
+ * for pages that only touch values in early fragments.
+ *
  * @param map_storage Bulk hashmap storage
  * @param chunks Flat span of chunks to compact hash maps for
+ * @param frags 2D span of per-column page fragments. Used by the collect
+ *              kernel to determine each chunk's column-relative fragment
+ *              range; the span itself matches the one passed to
+ *              `populate_chunk_hash_maps`.
  * @param stream CUDA stream to use
  */
 void collect_map_entries(device_span<slot_type> const map_storage,
                          device_span<EncColumnChunk> chunks,
+                         cudf::detail::device_2dspan<PageFragment const> frags,
                          rmm::cuda_stream_view stream);
 
 /**
