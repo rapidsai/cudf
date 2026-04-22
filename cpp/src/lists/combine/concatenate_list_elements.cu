@@ -257,8 +257,8 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
   // which simply copies the outer null mask — exactly what we do below.
   if (child.size() == 0) {
     auto const num_rows = input.size();
-    auto out_offsets =
-      cudf::make_column_from_scalar(numeric_scalar<size_type>(0, true, stream, mr), num_rows + 1, stream, mr);
+    auto out_offsets    = cudf::make_column_from_scalar(
+      numeric_scalar<size_type>(0, true, stream, mr), num_rows + 1, stream, mr);
     // Use the grandchild's schema (not child's) so out_entries has type T, not list<T>.
     auto out_entries = cudf::empty_like(lists_column_view(child).child());
     return make_lists_column(num_rows,
