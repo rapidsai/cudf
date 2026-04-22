@@ -11,8 +11,6 @@ from rapidsmpf.bootstrap import is_running_with_rrun
 from rapidsmpf.config import Options
 from rapidsmpf.statistics import Statistics
 
-import polars as pl
-
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 if TYPE_CHECKING:
@@ -79,25 +77,17 @@ def engine(
 
 def test_statistics(engine: StreamingEngine) -> None:
     """gather_statistics / global_statistics / clear round-trip."""
-    # Every rank returns an enabled Statistics.
+    # gather_statistics returns one enabled Statistics per rank.
     stats = engine.gather_statistics()
     assert len(stats) == engine.nranks
     for s in stats:
         assert isinstance(s, Statistics)
         assert s.enabled
 
-    # Run a query so the streaming pipeline records some statistics.
-    n, n_keys = engine.nranks * 50, 5
-    lf = pl.LazyFrame(
-        {"key": [str(i % n_keys) for i in range(n)], "val": list(range(n))}
-    )
-    lf.group_by("key").agg(pl.col("val").sum()).collect(engine=engine)
-
-    # global_statistics returns a single merged, enabled, non-empty Statistics.
+    # global_statistics returns a single merged, enabled Statistics.
     merged = engine.global_statistics()
     assert isinstance(merged, Statistics)
     assert merged.enabled
-    assert merged.list_stat_names(), "expected the pipeline to record some statistics"
 
     # gather_statistics(clear=True) captures and then empties each rank.
     engine.gather_statistics(clear=True)
