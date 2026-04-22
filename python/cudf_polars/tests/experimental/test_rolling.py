@@ -247,7 +247,11 @@ def test_rolling_with_slice(engine_rolling) -> None:
         )
         .slice(2, 4)
     )
-    assert_gpu_result_equal(q, engine=engine_rolling)
+    with pytest.warns(
+        UserWarning,
+        match=r"not supported for multiple partitions\.",
+    ):
+        assert_gpu_result_equal(q, engine=engine_rolling)
 
 
 def test_rolling_no_cross_partition_halo(engine_rolling) -> None:

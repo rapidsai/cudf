@@ -132,15 +132,6 @@ def _filter_threshold(
     return plc.stream_compaction.apply_boolean_mask(table, mask, stream=stream)
 
 
-@dataclass(frozen=True)
-class _RollingEvalChunkMeta:
-    """Per-chunk metadata for ``eval_and_send``. Carries expanded-frame zlice for ``Rolling.do_evaluate``."""
-
-    do_evaluate_zlice: tuple[int, int]
-    center_begin: int
-    center_end: int
-
-
 def _check_ungrouped_int_chunk_order(
     prev_max: int | None,
     cur_df: DataFrame,
@@ -165,10 +156,19 @@ def _check_ungrouped_int_chunk_order(
 
 
 @dataclass(frozen=True)
-class _RollingStreamChunkMeta:
-    """Chunk metadata after rank-boundary tagging."""
+class RollingInputChunk:
+    """Input chunk for rolling evaluation."""
 
-    is_local_rank_chunk: bool
+    is_ghost_chunk: bool
+    chunk: TableChunk
+
+
+@dataclass(frozen=True)
+class RollingExpandedChunk:
+    """Expanded chunk for rolling evaluation."""
+
+    chunk: TableChunk
+    do_evaluate_zlice: tuple[int, int]
 
 
 def _fused_expanded_zlice(
@@ -188,19 +188,24 @@ def _fused_expanded_zlice(
     return (center_begin + lo, hi - lo)
 
 
-def _msg_to_df(
-    msg: Message,
+async def _recv_rolling_input(
+    context: Context,
+    ch_in: Channel[TableChunk],
     br: Any,
     col_names: list[str],
     col_dtypes: list[Any],
-) -> tuple[int, DataFrame]:
-    """Decode a table chunk message to a sequence number and dataframe."""
+) -> tuple[RollingInputChunk, int, DataFrame] | None:
+    msg = await ch_in.recv(context)
+    if msg is None:
+        return None
     seq = msg.sequence_number
-    chunk = TableChunk.from_message(msg, br)
-    chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-    return seq, DataFrame.from_table(
+    inner = ArbitraryChunk.from_message(msg).release()
+    assert isinstance(inner, RollingInputChunk)
+    chunk = inner.chunk.make_available_and_spill(br, allow_overbooking=True)
+    df = DataFrame.from_table(
         chunk.table_view(), col_names, col_dtypes, stream=chunk.stream
     )
+    return (inner, seq, df)
 
 
 def _chunk_index_int_bounds_from_df(
@@ -230,7 +235,7 @@ def _chunk_index_ts_bounds_from_df(
 async def _extend_prefetch_until_covered(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
     br: Any,
     col_names: list[str],
     col_dtypes: list[Any],
@@ -254,42 +259,26 @@ async def _extend_prefetch_until_covered(
             return
 
 
-async def _recv_stream_chunk_pair(
-    context: Context,
-    ch_in: Channel[TableChunk],
-) -> tuple[_RollingStreamChunkMeta, Message] | None:
-    """Read one chunk pair from the channel. Returns ``None`` at end of stream."""
-    if (meta_msg := await ch_in.recv_metadata(context)) is None:
-        return None
-    meta = ArbitraryChunk.from_message(meta_msg).release()
-    assert isinstance(meta, _RollingStreamChunkMeta)
-    msg = await ch_in.recv(context)
-    assert msg is not None, "Expected data message after metadata."
-    return (meta, msg)
-
-
 async def _recv_one_into_prefetch(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
     br: Any,
     col_names: list[str],
     col_dtypes: list[Any],
 ) -> bool:
     """Decode one chunk and append it to ``prefetch``. Returns ``False`` at end of stream."""
-    pair = await _recv_stream_chunk_pair(context, ch_in)
-    if pair is None:
+    got = await _recv_rolling_input(context, ch_in, br, col_names, col_dtypes)
+    if got is None:
         return False
-    meta, msg = pair
-    seq, df = _msg_to_df(msg, br, col_names, col_dtypes)
-    prefetch.append((meta, seq, df))
+    prefetch.append(got)
     return True
 
 
 async def _extend_prefetch_for_int_lookahead(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
     br: Any,
     col_names: list[str],
     col_dtypes: list[Any],
@@ -323,7 +312,7 @@ async def _extend_prefetch_for_int_lookahead(
 async def _extend_prefetch_for_ts_lookahead(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
     br: Any,
     col_names: list[str],
     col_dtypes: list[Any],
@@ -373,7 +362,7 @@ async def _extend_prefetch_for_ts_lookahead(
 async def _ensure_right_halo_prefetched(
     context: Context,
     ch_in: Channel[TableChunk],
-    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]],
+    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]],
     cur_df: DataFrame,
     br: Any,
     *,
@@ -437,10 +426,10 @@ def _prepare_expanded_rolling_frame(
     lookahead: int,
     base_col_names: list[str],
     base_dtypes: list[Any],
-    is_local_rank_chunk: bool,
+    is_ghost_chunk: bool,
 ) -> tuple[DataFrame, int, int, DataFrame | None] | None:
     """Build the left, center, and right rolling frame. Updates ``left_ctx`` from ``cur_df``."""
-    if not is_local_rank_chunk:
+    if is_ghost_chunk:
         raise NotImplementedError(
             "Non-local rank boundary chunks are not supported for rolling yet."
         )
@@ -638,46 +627,29 @@ def _append_left_context_row(
         )
 
 
-async def _drain_data_messages(
-    context: Context,
-    ch_in: Channel[TableChunk],
-    ch_out: Channel[TableChunk],
-) -> None:
-    """Drain all remaining data messages."""
-    remaining_msg = await ch_in.recv(context)
-    if remaining_msg is not None:
-        raise RuntimeError("Expected all messages to be drained.")
-    await ch_out.drain(context)
-
-
-async def prepare_rank_boundaries(
+async def add_ghost_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
     ch_out: Channel[TableChunk],
     collective_ids: list[int],
 ) -> None:
-    """Tag each chunk with local rank metadata. Only single-rank is supported today."""
-    assert len(collective_ids) == 2
-    _ = collective_ids
+    """Add ghost chunks to the rolling stream."""
+    assert len(collective_ids), "Placeholder for multi-rank support."
     br = context.br()
     while (msg := await ch_in.recv(context)) is not None:
-        seq_num = msg.sequence_number
-        chunk = TableChunk.from_message(msg, br)
-        chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
-        stream = chunk.stream
-        await ch_out.send_metadata(
+        await ch_out.send(
             context,
             Message(
-                seq_num,
-                ArbitraryChunk(_RollingStreamChunkMeta(is_local_rank_chunk=True)),
+                msg.sequence_number,
+                ArbitraryChunk(
+                    RollingInputChunk(
+                        chunk=TableChunk.from_message(msg, br),
+                        is_ghost_chunk=False,
+                    )
+                ),
             ),
         )
-        out_chunk = TableChunk.from_pylibcudf_table(
-            chunk.table_view(), stream, exclusive_view=True, br=br
-        )
-        await ch_out.send(context, Message(seq_num, out_chunk))
 
-    await ch_out.drain_metadata(context)
     await ch_out.drain(context)
 
 
@@ -696,10 +668,11 @@ async def expand_chunks(
     base_dtypes: list[Any],
 ) -> None:
     """Expand chunks with halos and send them for rolling evaluation."""
-    prefetch: deque[tuple[_RollingStreamChunkMeta, int, DataFrame]] = deque()
+    prefetch: deque[tuple[RollingInputChunk, int, DataFrame]] = deque()
     left_ctx_df: DataFrame | None = None
     prev_max: int | None = None
     n_center_prior = 0
+    assert ir.zlice is None, "Expected no zlice in rolling actor."
     # Negative-offset zlice (e.g. from .tail()) cannot be resolved without knowing the
     # total row count. Pass None so all center rows are evaluated; eval_and_send
     # buffers the results and applies the tail-slice after seeing all chunks.
@@ -713,10 +686,12 @@ async def expand_chunks(
         if prefetch:
             cur_meta, cur_seq, cur_df = prefetch.popleft()
         else:
-            if (pair := await _recv_stream_chunk_pair(context, ch_in)) is None:
+            got = await _recv_rolling_input(
+                context, ch_in, br, base_col_names, base_dtypes
+            )
+            if got is None:
                 break
-            cur_meta, cur_msg = pair
-            cur_seq, cur_df = _msg_to_df(cur_msg, br, base_col_names, base_dtypes)
+            cur_meta, cur_seq, cur_df = got
 
         if lookahead > 0:
             if not await _ensure_right_halo_prefetched(
@@ -759,18 +734,12 @@ async def expand_chunks(
             lookahead=lookahead,
             base_col_names=base_col_names,
             base_dtypes=base_dtypes,
-            is_local_rank_chunk=cur_meta.is_local_rank_chunk,
+            is_ghost_chunk=cur_meta.is_ghost_chunk,
         )
         assert prep is not None, (
             "empty center must be skipped before _prepare_expanded_rolling_frame"
         )
         combined_df, n_left, n_chunk_rows, left_ctx_df = prep
-        cb, ce = n_left, n_left + n_chunk_rows
-        fused = _fused_expanded_zlice(cb, n_chunk_rows, n_center_prior, zlice)
-        eval_meta = _RollingEvalChunkMeta(
-            do_evaluate_zlice=fused, center_begin=cb, center_end=ce
-        )
-        n_center_prior += n_chunk_rows
 
         prev_max = _check_ungrouped_int_chunk_order(
             prev_max,
@@ -779,23 +748,31 @@ async def expand_chunks(
             index_col_idx=index_col_idx,
             seq=cur_seq,
         )
-        await ch_to_eval.send_metadata(
-            context,
-            Message(cur_seq, ArbitraryChunk(eval_meta)),
-        )
         out_chunk = TableChunk.from_pylibcudf_table(
             combined_df.table,
             combined_df.stream,
             exclusive_view=True,
             br=br,
         )
-        await ch_to_eval.send(context, Message(cur_seq, out_chunk))
+        await ch_to_eval.send(
+            context,
+            Message(
+                cur_seq,
+                ArbitraryChunk(
+                    RollingExpandedChunk(
+                        chunk=out_chunk,
+                        do_evaluate_zlice=_fused_expanded_zlice(
+                            n_left, n_chunk_rows, n_center_prior, zlice
+                        ),
+                    )
+                ),
+            ),
+        )
+        n_center_prior += n_chunk_rows
 
         if is_last_chunk:
             break
 
-    await _drain_data_messages(context, ch_in, ch_to_eval)
-    await ch_to_eval.drain_metadata(context)
     await ch_to_eval.drain(context)
 
 
@@ -811,23 +788,14 @@ async def eval_and_send(
     tracer: ActorTracer | None,
 ) -> None:
     """Receive expanded chunks and per-chunk zlice metadata, evaluate rolling, send downstream."""
-    non_child_tail = ir._non_child_args[:-1]
-    br = context.br()
-    # Negative-offset zlice (e.g. tail(n)): total row count is not known until all
-    # chunks are processed, so buffer every result and apply the slice at the end.
-    negative_zlice = ir.zlice is not None and ir.zlice[0] < 0
-    buffered: list[DataFrame] = []
-    last_seq = 0
-
-    while (meta_msg := await ch_from_extend.recv_metadata(context)) is not None:
-        meta = ArbitraryChunk.from_message(meta_msg).release()
-        assert isinstance(meta, _RollingEvalChunkMeta)
-        data_msg = await ch_from_extend.recv(context)
-        assert data_msg is not None, "Expected expanded table after eval metadata."
-        seq = data_msg.sequence_number
-        last_seq = seq
-        chunk = TableChunk.from_message(data_msg, br)
-        chunk = chunk.make_available_and_spill(br, allow_overbooking=True)
+    _non_child_args_static = ir._non_child_args[:-1]
+    while (msg := await ch_from_extend.recv(context)) is not None:
+        seq = msg.sequence_number
+        inner = ArbitraryChunk.from_message(msg).release()
+        assert isinstance(inner, RollingExpandedChunk)
+        chunk = inner.chunk.make_available_and_spill(
+            context.br(), allow_overbooking=True
+        )
         combined = DataFrame.from_table(
             chunk.table_view(),
             base_col_names,
@@ -836,49 +804,16 @@ async def eval_and_send(
         )
         result_df = await asyncio.to_thread(
             Rolling.do_evaluate,
-            *non_child_tail,
-            meta.do_evaluate_zlice,
+            *_non_child_args_static,
+            inner.do_evaluate_zlice,
             combined,
             context=ir_context,
         )
-        if negative_zlice:
-            buffered.append(result_df)
-        else:
-            await _rolling_send_chunk(
-                context, ch_out, result_df, sequence_number=seq, tracer=tracer
-            )
-
-    if negative_zlice and buffered:
-        assert ir.zlice is not None
-        off, length = ir.zlice  # off < 0
-        out_col_names = list(ir.schema.keys())
-        out_col_dtypes = list(ir.schema.values())
-        if len(buffered) == 1:
-            cat_table = buffered[0].table
-            cat_stream = buffered[0].stream
-        else:
-            with ir_context.stream_ordered_after(*buffered) as cat_stream:
-                cat_table = plc.concatenate.concatenate(
-                    [df.table for df in buffered], stream=cat_stream
-                )
-        total = cat_table.num_rows()
-        abs_off = max(0, total + off)
-        ln = (
-            (total - abs_off)
-            if length is None
-            else min(length, max(0, total - abs_off))
-        )
-        sliced_table = plc.copying.slice(
-            cat_table, [abs_off, abs_off + ln], stream=cat_stream
-        )[0]
-        final_df = DataFrame.from_table(
-            sliced_table, out_col_names, out_col_dtypes, stream=cat_stream
-        )
         await _rolling_send_chunk(
-            context, ch_out, final_df, sequence_number=last_seq, tracer=tracer
+            context, ch_out, result_df, sequence_number=seq, tracer=tracer
         )
 
-    await _drain_data_messages(context, ch_from_extend, ch_out)
+    await ch_out.drain(context)
 
 
 async def _rolling_send_chunk(
@@ -944,7 +879,7 @@ async def rolling_actor(
         # Otherwise, we can do a sort here to "correct" the order.
 
         await gather_in_task_group(
-            prepare_rank_boundaries(
+            add_ghost_chunks(
                 context,
                 ch_in,
                 ch_after_boundaries,
