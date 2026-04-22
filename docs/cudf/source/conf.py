@@ -84,6 +84,17 @@ extensions = [
 
 remove_from_toctrees = ["user_guide/api_docs/api/*"]
 
+# Mock optional third-party imports so autodoc can import the cudf_polars
+# streaming-engine modules even in CI environments where the runtime
+# dependencies are not installed.
+autodoc_mock_imports = [
+    "rapidsmpf",
+    "ray",
+    "ucxx",
+    "distributed",
+    "dask_cuda",
+]
+
 
 # Preprocess doxygen xml for compatibility with latest Breathe
 def clean_definitions(root):
