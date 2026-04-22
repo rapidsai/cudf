@@ -1,4 +1,3 @@
-
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
@@ -97,7 +96,7 @@ rtcx::byte_buffer read_blob_cstring(char const* path)
     throw_posix(std::format("Failed to reset file offset for file ({})", path), "lseek");
   }
 
-  CUDF_EXPECTS(file_size < std::numeric_limits<size_t>::max() - 1,
+  CUDF_EXPECTS(file_size < std::numeric_limits<decltype(file_size)>::max() - 1,
                std::format("File ({}) size is too large to read into memory", path),
                std::runtime_error);
 

@@ -1,4 +1,3 @@
-
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
@@ -11,9 +10,9 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <librtcx/rtcx.hpp>
 #include <nvJitLink.h>
 #include <nvrtc.h>
+#include <rtcx.hpp>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>

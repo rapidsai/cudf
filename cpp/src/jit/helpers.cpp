@@ -8,7 +8,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <jit/jit.hpp>
-#include <librtcx/rtcx.hpp>
+#include <rtcx.hpp>
 #include <runtime/context.hpp>
 
 namespace cudf {
