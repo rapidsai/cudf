@@ -62,6 +62,10 @@ def get_joined_cuda_stream(
     -------
     CUDA stream that is joined to the given streams.
     """
+    if len(upstreams) == 1:
+        # Optimization: when there's only one upstream, just use it
+        # and avoid the overhead of joining streams.
+        return upstreams[0]
     downstream = get_cuda_stream()
     join_cuda_streams(downstreams=(downstream,), upstreams=upstreams)
     return downstream

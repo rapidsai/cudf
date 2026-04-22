@@ -61,6 +61,30 @@ def test_trace_basic(
     assert b"overhead_duration" in result
 
 
+def test_trace_gpu_duration_subprocess() -> None:
+    """Subprocess: CUDF_POLARS_LOG_TRACES_GPU emits a separate async GPU timing line."""
+    code = textwrap.dedent("""\
+    import polars as pl
+    import rmm
+
+    q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
+    q.collect(engine=pl.GPUEngine(memory_resource=rmm.mr.ManagedMemoryResource()))
+    """)
+
+    env = {
+        "CUDF_POLARS__EXECUTOR": cudf_polars.testing.asserts.DEFAULT_EXECUTOR,
+        "CUDF_POLARS_LOG_TRACES": "1",
+        "CUDF_POLARS_LOG_TRACES_GPU": "1",
+    }
+
+    result = subprocess.check_output([sys.executable, "-c", code], env=env)
+    assert b"Execute IR" in result
+    assert b"trace_event_id" in result
+    assert b"Execute IR GPU" in result
+    assert b"evaluate_ir_node_gpu" in result
+    assert b"gpu_duration_ns" in result
+
+
 def test_import_without_structlog(monkeypatch: pytest.MonkeyPatch) -> None:
     modules = list(sys.modules)
 
@@ -180,5 +204,9 @@ def test_sets_cudf_polars_query_id():
                     "scope",
                     "actor_ir_id",
                 }
+            case "evaluate_ir_node_gpu":
+                assert "gpu_duration_ns" in log or "gpu_timing_error" in log
+                assert "trace_event_id" in log
+                assert "query_id" in log
             case _:
                 pytest.fail(f"Unexpected scope: {log['scope']}")

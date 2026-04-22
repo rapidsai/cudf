@@ -10,6 +10,7 @@ import enum
 import functools
 import os
 import time
+import uuid
 from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
@@ -19,6 +20,7 @@ import rmm
 import rmm.statistics
 
 from cudf_polars.utils.config import _bool_converter, get_device_handle
+from cudf_polars.utils.cuda_stream import get_joined_cuda_stream
 
 try:  # pragma: no cover; requires structlog
     import structlog
@@ -36,6 +38,9 @@ LOG_MEMORY = LOG_TRACES and _bool_converter(
 )
 LOG_DATAFRAMES = LOG_TRACES and _bool_converter(
     os.environ.get("CUDF_POLARS_LOG_TRACES_DATAFRAMES", "1")
+)
+LOG_TRACES_GPU = LOG_TRACES and _bool_converter(
+    os.environ.get("CUDF_POLARS_LOG_TRACES_GPU", "0")
 )
 
 CUDF_POLARS_NVTX_DOMAIN = "cudf_polars"
@@ -57,6 +62,7 @@ class Scope(str, enum.Enum):
     PLAN = "plan"
     ACTOR = "actor"
     EVALUATE_IR_NODE = "evaluate_ir_node"
+    EVALUATE_IR_NODE_GPU = "evaluate_ir_node_gpu"
 
 
 @functools.cache
@@ -169,6 +175,8 @@ def log_do_evaluate(
             **kwargs: P.kwargs,
         ) -> cudf_polars.containers.DataFrame:
             # do this just once
+            from cudf_polars.dsl import tracing_gpu as _tracing_gpu
+
             pynvml.nvmlInit()
             maybe_handle = get_device_handle()
             pid = _getpid()
@@ -190,16 +198,73 @@ def log_do_evaluate(
             # Each IR.do_evaluate method is a classmethod that takes the IR class as first
             # argument, followed by the method-specific arguments, and returns a DataFrame.
 
+            trace_event_id: str | None = None
+            query_id_str: str | None = None
+            gpu_events = None
+            if LOG_TRACES_GPU:
+                # By convention, kwargs["context"] is an IRExecutionContext
+                exec_ctx: ir.IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
+
+                # The GPU trace is emitted on a different Python thread at some point in
+                # the future, so the context setting actor IDs, etc. might not be available.
+                # We can link GPU traces to a host task through this UUID, and from there
+                # to things like the actor ID.
+                trace_event_id = uuid.uuid4().hex
+                query_id_str = str(exec_ctx.query_id)
+                timing_stream = get_joined_cuda_stream(
+                    exec_ctx.get_cuda_stream,
+                    upstreams=[frame.stream for frame in frames],
+                )
+                gpu_events = _tracing_gpu.begin_gpu_interval(timing_stream)
+
             start = time.monotonic_ns()
-            result = func(cls, *args, **kwargs)
+            try:
+                result = func(cls, *args, **kwargs)
+            except BaseException:
+                if LOG_TRACES_GPU and gpu_events is not None:
+                    ev_s, ev_e = gpu_events
+                    _tracing_gpu.destroy_event_pair(ev_s, ev_e)
+                raise
             stop = time.monotonic_ns()
+            snapshot_extra: dict[str, Any] = {"start": start, "stop": stop}
+
+            if LOG_TRACES_GPU:
+                assert gpu_events is not None
+                assert trace_event_id is not None
+                assert query_id_str is not None
+
+                ev_s, ev_e = gpu_events
+                # Record end on ``result.stream`` after IR work, then join a dedicated
+                # notify stream downstream before ``cudaLaunchHostFunc`` (see tracing_gpu).
+                ok, gpu_err = _tracing_gpu.enqueue_gpu_trace_completion(
+                    interval_end_stream=result.stream,
+                    host_notify_stream=_tracing_gpu.get_host_notify_stream(),
+                    ev_start=ev_s,
+                    ev_end=ev_e,
+                    trace_event_id=trace_event_id,
+                    query_id=query_id_str,
+                    ir_type=cls.__name__,
+                    log=log,
+                )
+                if not ok:
+                    log.warning(
+                        "Execute IR GPU scheduling failed",
+                        scope=Scope.EVALUATE_IR_NODE_GPU.value,
+                        trace_event_id=trace_event_id,
+                        query_id=query_id_str,
+                        type=cls.__name__,
+                        error=gpu_err,
+                    )
+
+                snapshot_extra["trace_event_id"] = trace_event_id
+                snapshot_extra["query_id"] = query_id_str
 
             after_start = time.monotonic_ns()
             after = make_snapshot(
                 cls,
                 [result],
                 phase="output",
-                extra={"start": start, "stop": stop},
+                extra=snapshot_extra,
                 device_handle=maybe_handle,
                 pid=pid,
             )
