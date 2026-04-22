@@ -171,23 +171,6 @@ class RollingExpandedChunk:
     do_evaluate_zlice: tuple[int, int]
 
 
-def _fused_expanded_zlice(
-    center_begin: int,
-    n_center: int,
-    n_center_prior: int,
-    global_zlice: tuple[int, int | None] | None,
-) -> tuple[int, int]:
-    """Row offset and length in expanded-frame coordinates for ``Rolling.do_evaluate``."""
-    if global_zlice is None:
-        return (center_begin, n_center)
-    off, length = global_zlice
-    lo = max(0, off - n_center_prior)
-    hi = n_center if length is None else min(n_center, off + length - n_center_prior)
-    if lo >= hi:
-        return (center_begin, 0)
-    return (center_begin + lo, hi - lo)
-
-
 async def _recv_rolling_input(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -672,13 +655,6 @@ async def expand_chunks(
     left_ctx_df: DataFrame | None = None
     prev_max: int | None = None
     n_center_prior = 0
-    assert ir.zlice is None, "Expected no zlice in rolling actor."
-    # Negative-offset zlice (e.g. from .tail()) cannot be resolved without knowing the
-    # total row count. Pass None so all center rows are evaluated; eval_and_send
-    # buffers the results and applies the tail-slice after seeing all chunks.
-    zlice = ir.zlice
-    if zlice is not None and zlice[0] < 0:
-        zlice = None
     br = context.br()
     is_int_index = index_dtype.id() == plc.TypeId.INT64
 
@@ -761,9 +737,7 @@ async def expand_chunks(
                 ArbitraryChunk(
                     RollingExpandedChunk(
                         chunk=out_chunk,
-                        do_evaluate_zlice=_fused_expanded_zlice(
-                            n_left, n_chunk_rows, n_center_prior, zlice
-                        ),
+                        do_evaluate_zlice=(n_left, n_chunk_rows),
                     )
                 ),
             ),

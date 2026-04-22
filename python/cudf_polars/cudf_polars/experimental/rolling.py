@@ -28,7 +28,7 @@ def _(
         config_options.executor.runtime != "rapidsmpf"
         or config_options.executor.cluster not in ("single", "spmd")
         or (
-            config_options.executor.cluster != "spmd"
+            config_options.executor.cluster == "spmd"
             and (spmd_ctx := config_options.executor.spmd_context) is not None
             and spmd_ctx.comm.nranks > 1
         )
