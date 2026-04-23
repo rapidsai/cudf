@@ -147,3 +147,80 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 65 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=65,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    sc = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        .group_by(["ss_store_sk", "ss_item_sk"])
+        .agg(
+            [
+                pl.col("ss_sales_price").sum().alias("revenue"),
+                pl.col("ss_sales_price").count().alias("revenue_count"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("revenue_count") == 0)
+            .then(None)
+            .otherwise(pl.col("revenue"))
+            .alias("revenue")
+        )
+        .select(["ss_store_sk", "ss_item_sk", "revenue"])
+    )
+    sb = sc.group_by("ss_store_sk").agg(pl.col("revenue").mean().alias("ave"))
+
+    return QueryResult(
+        frame=(
+            sc.join(sb, on="ss_store_sk")
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .filter(pl.col("revenue") <= 0.1 * pl.col("ave"))
+            .select(
+                [
+                    "s_store_name",
+                    "i_item_desc",
+                    "revenue",
+                    "i_current_price",
+                    "i_wholesale_cost",
+                    "i_brand",
+                ]
+            )
+            .sort(
+                [
+                    "s_store_name",
+                    "i_item_desc",
+                    "revenue",
+                    "i_current_price",
+                    "i_wholesale_cost",
+                    "i_brand",
+                ],
+                nulls_last=True,
+                descending=[False, False, False, False, False, False],
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("s_store_name", False),
+            ("i_item_desc", False),
+            ("revenue", False),
+            ("i_current_price", False),
+            ("i_wholesale_cost", False),
+            ("i_brand", False),
+        ],
+        limit=100,
+    )

@@ -224,3 +224,125 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 72 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=72,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    bp = params["bp"]
+    ms = params["ms"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
+    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+
+    sort_by = {
+        "total_cnt": True,
+        "i_item_desc": False,
+        "w_warehouse_name": False,
+        "d_week_seq": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            catalog_sales.join(inventory, left_on="cs_item_sk", right_on="inv_item_sk")
+            .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(
+                customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk"
+            )
+            .join(
+                household_demographics,
+                left_on="cs_bill_hdemo_sk",
+                right_on="hd_demo_sk",
+            )
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            .join(
+                date_dim.select(["d_date_sk", "d_week_seq"]).rename(
+                    {"d_date_sk": "d2_date_sk", "d_week_seq": "d2_week_seq"}
+                ),
+                left_on="inv_date_sk",
+                right_on="d2_date_sk",
+            )
+            .join(
+                date_dim.select(["d_date_sk", "d_date"]).rename(
+                    {"d_date_sk": "d3_date_sk", "d_date": "d3_date"}
+                ),
+                left_on="cs_ship_date_sk",
+                right_on="d3_date_sk",
+            )
+            .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk", how="left")
+            .join(
+                catalog_returns,
+                left_on=["cs_item_sk", "cs_order_number"],
+                right_on=["cr_item_sk", "cr_order_number"],
+                how="left",
+            )
+            .filter(
+                (pl.col("d_week_seq") == pl.col("d2_week_seq"))
+                & (pl.col("inv_quantity_on_hand") < pl.col("cs_quantity"))
+                & (
+                    pl.col("d3_date").cast(pl.Datetime("us"))
+                    > pl.col("d_date").cast(pl.Datetime("us"))
+                    + pl.duration(days=5).cast(pl.Duration("us"))
+                )
+                & (pl.col("hd_buy_potential") == bp)
+                & (pl.col("d_year") == year)
+                & (pl.col("cd_marital_status") == ms)
+            )
+            .with_columns(
+                [
+                    pl.when(pl.col("cs_promo_sk").is_null())
+                    .then(pl.lit(1, dtype=COUNT_DTYPE))
+                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
+                    .alias("no_promo_flag"),
+                    pl.when(pl.col("cs_promo_sk").is_not_null())
+                    .then(pl.lit(1, dtype=COUNT_DTYPE))
+                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
+                    .alias("promo_flag"),
+                ]
+            )
+            .group_by(["i_item_desc", "w_warehouse_name", "d_week_seq"])
+            .agg(
+                [
+                    pl.col("no_promo_flag").sum().alias("no_promo"),
+                    pl.col("promo_flag").sum().alias("promo"),
+                    pl.len().alias("total_cnt"),
+                ]
+            )
+            .select(
+                [
+                    "i_item_desc",
+                    "w_warehouse_name",
+                    pl.col("d_week_seq"),
+                    "no_promo",
+                    "promo",
+                    "total_cnt",
+                ]
+            )
+            .sort(sort_by.keys(), descending=list(sort_by.values()), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

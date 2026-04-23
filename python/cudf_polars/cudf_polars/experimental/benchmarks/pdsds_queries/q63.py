@@ -160,3 +160,91 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 63 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=63,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+
+    inner_query = (
+        item.join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .filter(
+            pl.col("d_month_seq").is_in([dms + i for i in range(12)])
+            & (
+                (
+                    pl.col("i_category").is_in(["Books", "Children", "Electronics"])
+                    & pl.col("i_class").is_in(
+                        ["personal", "portable", "reference", "self-help"]
+                    )
+                    & pl.col("i_brand").is_in(
+                        [
+                            "scholaramalgamalg #14",
+                            "scholaramalgamalg #7",
+                            "exportiunivamalg #9",
+                            "scholaramalgamalg #9",
+                        ]
+                    )
+                )
+                | (
+                    pl.col("i_category").is_in(["Women", "Music", "Men"])
+                    & pl.col("i_class").is_in(
+                        ["accessories", "classical", "fragrances", "pants"]
+                    )
+                    & pl.col("i_brand").is_in(
+                        [
+                            "amalgimporto #1",
+                            "edu packscholar #1",
+                            "exportiimporto #1",
+                            "importoamalg #1",
+                        ]
+                    )
+                )
+            )
+        )
+        .group_by(["i_manager_id", "d_moy"])
+        .agg(pl.col("ss_sales_price").sum().alias("sum_sales"))
+        .with_columns(
+            pl.col("sum_sales").mean().over("i_manager_id").alias("avg_monthly_sales")
+        )
+    )
+
+    return QueryResult(
+        frame=(
+            inner_query.with_columns(
+                pl.when(pl.col("avg_monthly_sales") > 0)
+                .then(
+                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                    / pl.col("avg_monthly_sales")
+                )
+                .otherwise(None)
+                .alias("deviation")
+            )
+            .filter(pl.col("deviation") > 0.1)
+            .select(["i_manager_id", "sum_sales", "avg_monthly_sales"])
+            .sort(
+                ["i_manager_id", "avg_monthly_sales", "sum_sales"],
+                nulls_last=True,
+                descending=[False, False, False],
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("i_manager_id", False),
+            ("avg_monthly_sales", False),
+            ("sum_sales", False),
+        ],
+        limit=100,
+    )
