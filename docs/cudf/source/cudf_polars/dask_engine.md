@@ -113,6 +113,54 @@ deals with GPU assignment.
 
 See the [Dask CLI deployment guide][dask-cli] for more on `dask worker` options.
 
+#### Using `dask-cuda-worker`
+
+As an alternative to the built-in nanny preload, you can launch workers with
+[`dask-cuda-worker`][dask-cuda-worker] from the [dask-cuda][dask-cuda] project. It launches one
+worker per visible GPU and installs a set of plugins on every worker: a `CPUAffinity` plugin
+that pins the worker to the NUMA node of its GPU, an `RMMSetup` plugin, and a nanny preload that
+configures UCX.
+
+`DaskEngine` sets up the same things for its own streaming runtime, so the two need to be
+coordinated or they will fight:
+
+* **CPU affinity is unconditional in `dask-cuda-worker`** — the `CPUAffinity` plugin is always
+  installed and there is no CLI flag to turn it off. Pass
+  `hardware_binding=HardwareBindingPolicy(enabled=False)` to `DaskEngine` so it does not try to
+  re-pin affinity on top of dask-cuda's binding.
+* **Do not pass `--rmm-pool-size`, `--rmm-managed-memory`, or similar RMM flags** to
+  `dask-cuda-worker`. Let `DaskEngine` own the memory resource via its `memory_resource_config`
+  (see {doc}`options`); otherwise two different memory resources will be installed on the same
+  worker.
+* **Do not pass `--enable-tcp-over-ucx`, `--enable-infiniband`, `--enable-nvlink`, or
+  `--enable-rdmacm`** to `dask-cuda-worker`. `DaskEngine` bootstraps its own UCXX communicator
+  and will select transports itself; enabling them on both sides can produce inconsistent UCX
+  configuration across the cluster.
+
+```bash
+# On each node — GPU assignment + CPU affinity only (no RMM, no UCX flags):
+dask-cuda-worker SCHEDULER:8786
+```
+
+```python
+from distributed import Client
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
+
+with Client("SCHEDULER:8786") as dc:
+    with DaskEngine(
+        dask_client=dc,
+        engine_options={
+            # dask-cuda-worker always pins CPU affinity; disable DaskEngine's
+            # binding so the two don't conflict.
+            "hardware_binding": HardwareBindingPolicy(enabled=False),
+        },
+    ) as engine:
+        result = lf.collect(engine=engine)
+```
+
 ## Cluster diagnostics
 
 {meth}`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine.gather_cluster_info` returns
@@ -133,3 +181,5 @@ created inside an `rrun` cluster.
 
 [dask-distributed]: https://distributed.dask.org/
 [dask-cli]: https://docs.dask.org/en/latest/deploying-cli.html
+[dask-cuda]: https://docs.rapids.ai/api/dask-cuda/nightly/
+[dask-cuda-worker]: https://docs.rapids.ai/api/dask-cuda/nightly/quickstart/#dask-cuda-worker

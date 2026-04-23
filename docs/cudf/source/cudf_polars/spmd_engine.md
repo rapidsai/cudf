@@ -6,6 +6,36 @@ in [SPMD][spmd-wiki] mode: the same Python script runs once per GPU, and each pr
 local data fragment. Collective operations (shuffles, all-gathers, joins) coordinate across
 processes to produce a globally consistent result.
 
+## Single-GPU setup
+
+The simplest way to use
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine` is on a single GPU, run as
+a plain Python script — no `rrun` launcher, no external cluster library like Ray or Dask. You
+still get the full streaming executor (partitioned inputs, spilling, scaling past device
+memory); you just don't need any multi-process coordination:
+
+```python
+# python my_script.py
+import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+
+with SPMDEngine() as engine:
+    result = (
+        pl.scan_parquet("/data/dataset/*.parquet")
+          .filter(pl.col("amount") > 100)
+          .group_by("customer_id")
+          .agg(pl.col("amount").sum())
+          .collect(engine=engine)
+    )
+```
+
+With a single rank, the [Query symmetry requirement](#query-symmetry-requirement) and
+[Collecting distributed results](#collecting-distributed-results) steps below do not apply —
+`collect()` returns the full result directly. This makes it the most lightweight way to try
+`SPMDEngine` locally or in a single-GPU pipeline.
+
+## Multi-GPU with `rrun`
+
 The engine selects its communicator automatically:
 
 * **With `rrun`** — the `rrun` launcher starts one process per GPU and

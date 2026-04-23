@@ -98,6 +98,53 @@ engine = pl.GPUEngine(parquet_options={"chunked": True})
 
 See the [Polars GPU support guide][polars-gpu] for the full in-memory usage story.
 
+
+## The options
+
+Environment variables follow these patterns:
+
+* `rapidsmpf`: `RAPIDSMPF_<OPTION_NAME>`
+* `executor`: `CUDF_POLARS__EXECUTOR__<OPTION_NAME>`
+* `engine`: `CUDF_POLARS__<OPTION_NAME>` (or nested prefixes for structured options)
+
+### Category: `rapidsmpf`
+
+| Field                          | Description                                                                | Default   |
+| ------------------------------ | -------------------------------------------------------------------------- | --------- |
+| `num_streaming_threads`        | Number of threads used to execute coroutines.                              | `1`       |
+| `num_streams`                  | Number of CUDA streams for concurrent GPU execution.                       | `16`      |
+| `log`                          | Log level (`"NONE"`, `"PRINT"`, `"WARN"`, `"INFO"`, `"DEBUG"`, `"TRACE"`). | `"WARN"`  |
+| `statistics`                   | Enable performance metrics (see {doc}`profiling`).                         | `False`   |
+| `memory_reserve_timeout`       | Timeout for memory reservations (e.g. `"100ms"`).                          | `"100ms"` |
+| `allow_overbooking_by_default` | Allow overallocation in reservation APIs.                                  | `True`    |
+| `pinned_memory`                | Enable pinned host memory.                                                 | `False`   |
+| `pinned_initial_pool_size`     | Initial pinned memory pool size in bytes.                                  | `0`       |
+| `spill_device_limit`           | Device memory soft limit before spilling (e.g. `"80%"` or bytes).          | `"80%"`   |
+| `periodic_spill_check`         | Interval between spill checks (e.g. `"1ms"`).                              | `"1ms"`   |
+
+### Category: `executor`
+
+| Field                    | Description                                                                                                         | Default                      |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `num_py_executors`       | Number of workers for the internal Python `ThreadPoolExecutor`.                                                     | `8`                          |
+| `fallback_mode`          | Fallback behavior (`"warn"`, `"raise"`, `"silent"`).                                                                | `"warn"`                     |
+| `max_rows_per_partition` | Maximum number of rows per partition.                                                                               | `1_000_000`                  |
+| `broadcast_join_limit`   | Maximum number of partitions for broadcast joins.                                                                   | auto                         |
+| `target_partition_size`  | Target I/O partition size in bytes. `0` means auto.                                                                 | auto                         |
+| `dynamic_planning`       | Dynamic planning configuration, dict or {class}`~cudf_polars.utils.config.DynamicPlanningOptions`. `None` disables. | enabled                      |
+| `unique_fraction`        | Per-column uniqueness estimate (0–1).                                                                               | `{}` (i.e. `1.0` per column) |
+
+### Category: `engine`
+
+| Field                    | Description                                                                                                                                            | Default                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| `raise_on_fail`          | Raise an error instead of falling back to CPU execution.                                                                                               | `False`                   |
+| `parquet_options`        | Parquet configuration, dict or {class}`~cudf_polars.utils.config.ParquetOptions`.                                                                      | —                         |
+| `memory_resource_config` | RMM configuration, dict or {class}`~cudf_polars.utils.config.MemoryResourceConfig`.                                                                    | —                         |
+| `cuda_stream_policy`     | CUDA stream policy (`"default"`, `"pool"`, or a configuration dict).                                                                                   | —                         |
+| `hardware_binding`       | Hardware binding policy. Pass a {class}`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.HardwareBindingPolicy` for fine-grained control. | `HardwareBindingPolicy()` |
+| `allow_gpu_sharing`      | When `False` (default), the engine raises if multiple ranks share the same physical GPU.                                                               | `False`                   |
+
 <!-- Reference links -->
 [polars-gpu]: https://docs.pola.rs/user-guide/gpu-support/
 [polars-gpuengine]: https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.lazyframe.engine_config.GPUEngine.html

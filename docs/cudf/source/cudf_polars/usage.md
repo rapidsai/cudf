@@ -25,6 +25,9 @@ which is the preferred engine for GPU acceleration. Other engines are also avail
 multi-GPU and multi-node execution. They partition inputs and stream data through the query
 graph, allowing execution to scale beyond device memory and across multiple GPUs out of the box.
 
+For the most lightweight streaming setup, a single GPU with no Ray, Dask, or `rrun` launcher,
+see the [Single-GPU setup](spmd_engine.md#single-gpu-setup).
+
 As a separate alternative, `cudf-polars` also provides an *in-memory* engine. This engine uses a
 simpler execution model: each Polars operation is translated into a corresponding GPU operation
 and executed on a single GPU. See [Polars GPU Support](https://docs.pola.rs/user-guide/gpu-support/).

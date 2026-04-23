@@ -667,6 +667,29 @@ nitpick_ignore_regex = [
     ("py:.*", r"dask_cuda(\..*)?"),
 ]
 
+# The cudf_polars streaming-engine modules depend on optional runtime libs
+# (rapidsmpf, ray, ucxx, distributed, dask_cuda). In CI environments where
+# those dependencies are missing or incompatible, autodoc import fails and
+# every cross-reference to those symbols becomes a broken xref. Detect that
+# case here and silence the resulting warnings so the docs build still
+# succeeds; the autodoc/xref content will simply be absent until the
+# environment is fixed.
+try:
+    import cudf_polars.experimental.rapidsmpf.collectives.common
+    import cudf_polars.experimental.rapidsmpf.frontend.core
+    import cudf_polars.experimental.rapidsmpf.frontend.dask
+    import cudf_polars.experimental.rapidsmpf.frontend.hardware_binding
+    import cudf_polars.experimental.rapidsmpf.frontend.options
+    import cudf_polars.experimental.rapidsmpf.frontend.ray
+    import cudf_polars.experimental.rapidsmpf.frontend.spmd  # noqa: F401
+except Exception:
+    nitpick_ignore_regex.append(
+        ("py:.*", r"cudf_polars\.experimental\.rapidsmpf\..*")
+    )
+    _cudf_polars_rapidsmpf_importable = False
+else:
+    _cudf_polars_rapidsmpf_importable = True
+
 
 # Needed for the [source] button on the API docs to link to the github code
 # based on pandas doc/source/conf.py
@@ -728,6 +751,13 @@ def linkcode_resolve(domain, info) -> str | None:
 
 # Needed for avoid build warning for PandasCompat extension
 suppress_warnings = ["myst.domains"]
+
+# When the cudf_polars streaming-engine modules can't be imported (CI env
+# without rapidsmpf/ray/etc.), autodoc emits one import warning per
+# directive. Suppress those so the build survives; the dangling xrefs are
+# handled via nitpick_ignore_regex above.
+if not _cudf_polars_rapidsmpf_importable:
+    suppress_warnings.append("autodoc.import_object")
 
 
 class PLCIntEnumDocumenter(ClassDocumenter):
