@@ -29,7 +29,6 @@
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
-#include <librtcx/rtcx.hpp>
 
 #include <span>
 #include <variant>

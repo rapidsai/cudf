@@ -323,9 +323,6 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
-set(CUDF_CXX_STANDARD 20)
-set(CUDF_CUDA_STANDARD ${CUDF_CXX_STANDARD})
-
 embed_includes(
   cudf_jit_embed COPY_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
@@ -1034,7 +1031,6 @@ target_compile_definitions(cudf PRIVATE $<$<BOOL:${CUDF_KVIKIO_REMOTE_IO}>:CUDF_
 target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_AVOID_SORT_UNROLL=1)
 
 # Specify the target module library dependencies
-
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL rapids_logger::rapids_logger rmm::rmm $<BUILD_LOCAL_INTERFACE:BS::thread_pool>

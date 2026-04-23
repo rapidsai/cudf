@@ -8,7 +8,7 @@
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/utilities/getenv_or.hpp"
 #include "jit/jit.hpp"
-#include "librtcx/rtcx.hpp"
+#include "rtcx.hpp"
 
 #include <cudf/context.hpp>
 #include <cudf/utilities/error.hpp>

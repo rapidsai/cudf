@@ -302,7 +302,7 @@ struct LibCuda {
 
   static void* _load()
   {
-    std::string lib_names[] = {"libcuda.so"};  // NOLINT(modernize-avoid-c-arrays)
+    std::string lib_names[] = {"libcuda.so", "libcuda.so.1"};  // NOLINT(modernize-avoid-c-arrays)
     return load_dll("libcuda.so", lib_names);
   }
 
@@ -426,7 +426,7 @@ void teardown()
   });
 }
 
-blob_t blob_t::from_buffer(byte_buffer&& buffer)
+blob_t blob_t::from_buffer(byte_buffer buffer)
 {
   auto size = buffer.size();
   auto data = buffer.release();
@@ -831,9 +831,7 @@ std::string demangle_cuda_symbol(char const* mangled_name)
   RTCX_EXPECTS(status == 0, "Demangling CUDA symbol name failed", std::runtime_error);
   RTCX_EXPECTS(demangled_name != nullptr, "Demangling CUDA symbol name failed", std::runtime_error);
 
-  std::string result{demangled_name};
-
-  return result;
+  return std::string{demangled_name};
 }
 
 namespace {

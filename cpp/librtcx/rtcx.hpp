@@ -128,7 +128,7 @@ struct [[nodiscard]] sha256_hasher {
 enum class binary_type : std::int8_t { LTO_IR = 0, CUBIN = 2, FATBIN = 3, PTX = 4 };
 
 /**
- * @brief An heap-allocated statically-sized buffer. Its contents are not guaranteed to be
+ * @brief A heap-allocated statically-sized buffer. Its contents are not guaranteed to be
  * initialized.
  */
 template <typename T>
@@ -233,7 +233,8 @@ struct buffer {
 
   /**
    * @brief Releases ownership of the buffer's data and returns a pointer to it. After calling this
-   * function, the buffer is left in an empty state (data pointer is null and size is zero).
+   * function, the buffer is left in an empty state. The caller is responsible for calling `free()`
+   * on the returned pointer when it is no longer needed.
    * @return A pointer to the buffer's data
    */
   [[nodiscard]] T* release()
@@ -299,7 +300,7 @@ struct [[nodiscard]] blob_t {
     return blob_t{data, size, deallocator};
   }
 
-  static blob_t from_buffer(byte_buffer&& buffer);
+  static blob_t from_buffer(byte_buffer buffer);
 
   static blob_t from_static_data(std::span<std::uint8_t const> data);
 
