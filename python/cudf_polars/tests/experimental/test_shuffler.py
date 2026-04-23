@@ -12,9 +12,7 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
-    _is_already_partitioned,
-)
+from cudf_polars.experimental.rapidsmpf.utils import _is_already_partitioned
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
@@ -85,6 +83,46 @@ def test_sort_rapidsmpf(engine) -> None:
     )
     q = df.sort(by=["y", "z"])
     assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+
+
+@pytest.mark.parametrize(
+    "join_expr",
+    [
+        pl.col("y") * 2,
+        [pl.col("y"), pl.col("a") + 1],
+    ],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {
+                "max_rows_per_partition": 1,
+                "broadcast_join_limit": 2,
+                "shuffle_method": "rapidsmpf",
+            }
+        },
+    ],
+    indirect=True,
+)
+def test_join_non_col_keys_rapidsmpf(engine, join_expr) -> None:
+    """Non-Col (expression) shuffle keys should work with the rapidsmpf backend."""
+    left = pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 4] * 3,
+            "y": [10, 20, 30, 40] * 3,
+            "val_l": range(12),
+        }
+    )
+    right = pl.LazyFrame(
+        {
+            "a": [1, 2, 3, 4] * 2,
+            "y": [10, 20, 30, 40] * 2,
+            "val_r": range(8),
+        }
+    )
+    q = left.join(right, on=join_expr, how="inner", coalesce=True)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_is_already_partitioned():

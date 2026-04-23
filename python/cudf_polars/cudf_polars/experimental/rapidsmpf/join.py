@@ -29,12 +29,10 @@ import pylibcudf as plc
 from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
-from cudf_polars.experimental.rapidsmpf.collectives.shuffle import (
-    _global_shuffle,
-    _is_already_partitioned,
-)
+from cudf_polars.experimental.rapidsmpf.collectives.shuffle import _global_shuffle
 from cudf_polars.experimental.rapidsmpf.dispatch import (
     generate_ir_sub_network,
 )
@@ -42,10 +40,12 @@ from cudf_polars.experimental.rapidsmpf.nodes import default_node_multi
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
     NormalizedPartitioning,
+    _is_already_partitioned,
     allgather_reduce,
     chunk_to_frame,
     empty_table_chunk,
     gather_in_task_group,
+    indices_to_names,
     maybe_remap_partitioning,
     names_to_indices,
     process_children,
@@ -772,6 +772,15 @@ async def _shuffle_join(
         trace_ir=ir,
         ir_context=ir_context,
     ):
+        left, right = ir.children
+        left_keys_to_hash = tuple(
+            NamedExpr(name, Col(left.schema[name], name))
+            for name in indices_to_names(strategy.left_indices, left.schema)
+        )
+        right_keys_to_hash = tuple(
+            NamedExpr(name, Col(right.schema[name], name))
+            for name in indices_to_names(strategy.right_indices, right.schema)
+        )
         actor_tasks = [
             *filter_tasks,
             _global_shuffle(
@@ -780,9 +789,10 @@ async def _shuffle_join(
                 ir_context,
                 ch_left_shuffle,
                 ch_left,
-                strategy.left_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
+                left_keys_to_hash,
+                left,
             ),
             _global_shuffle(
                 context,
@@ -790,9 +800,10 @@ async def _shuffle_join(
                 ir_context,
                 ch_right_shuffle,
                 ch_right,
-                strategy.right_indices,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
+                right_keys_to_hash,
+                right,
             ),
             _join_chunks(
                 context,
