@@ -147,3 +147,95 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("order count", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 16 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=16,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    state = params["state"]
+    county = params["county"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
+
+    start_date_obj = date(year, month, 1)
+    end_date_obj = start_date_obj + timedelta(days=60)
+
+    filtered_sales = (
+        catalog_sales.join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
+        .join(customer_address, left_on="cs_ship_addr_sk", right_on="ca_address_sk")
+        .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
+        .filter(
+            pl.col("d_date").is_between(
+                pl.lit(start_date_obj), pl.lit(end_date_obj), closed="both"
+            )
+            & (pl.col("ca_state") == state)
+            & pl.col("cc_county").is_in(county)
+        )
+    )
+
+    exists_order = (
+        filtered_sales.select(["cs_order_number", "cs_warehouse_sk"])
+        .join(
+            catalog_sales.select(["cs_order_number", "cs_warehouse_sk"]).rename(
+                {"cs_warehouse_sk": "cs_warehouse_sk_other"}
+            ),
+            on="cs_order_number",
+        )
+        .filter(pl.col("cs_warehouse_sk") != pl.col("cs_warehouse_sk_other"))
+        .select("cs_order_number")
+        .unique()
+    )
+
+    filtered_with_exists = filtered_sales.join(
+        exists_order, on="cs_order_number", how="inner"
+    )
+
+    returned_orders = catalog_returns.select(
+        [
+            pl.col("cr_order_number"),
+            pl.lit(1).alias("has_return"),
+        ]
+    ).unique()
+    filtered_without_returns = (
+        filtered_with_exists.join(
+            returned_orders,
+            left_on="cs_order_number",
+            right_on="cr_order_number",
+            how="left",
+        )
+        .with_columns(pl.col("has_return").is_null().alias("no_return"))
+        .filter(pl.col("no_return"))
+    )
+
+    return QueryResult(
+        frame=(
+            filtered_without_returns.select(
+                [
+                    pl.col("cs_order_number").n_unique().alias("order count"),
+                    pl.col("cs_ext_ship_cost").sum().alias("total shipping cost"),
+                    pl.col("cs_net_profit").sum().alias("total net profit"),
+                ]
+            )
+            .sort(["order count"])
+            .limit(100)
+        ),
+        sort_by=[("order count", False)],
+        limit=100,
+    )

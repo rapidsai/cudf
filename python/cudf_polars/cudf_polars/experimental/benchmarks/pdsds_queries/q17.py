@@ -179,3 +179,111 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 17 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=17,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    quarter_q1 = f"{year}Q1"
+    quarter_q1_q3 = [f"{year}Q1", f"{year}Q2", f"{year}Q3"]
+
+    store_returns_base = store_returns.join(
+        date_dim.select(["d_date_sk", "d_quarter_name"])
+        .with_columns(pl.col("d_quarter_name").alias("d_quarter_name_d2"))
+        .drop("d_quarter_name"),
+        left_on="sr_returned_date_sk",
+        right_on="d_date_sk",
+        suffix="_d2",
+    )
+    catalog_sales_base = catalog_sales.join(
+        date_dim.select(["d_date_sk", "d_quarter_name"])
+        .with_columns(pl.col("d_quarter_name").alias("d_quarter_name_d3"))
+        .drop("d_quarter_name"),
+        left_on="cs_sold_date_sk",
+        right_on="d_date_sk",
+        suffix="_d3",
+    )
+
+    return QueryResult(
+        frame=(
+            store_sales.join(
+                date_dim.select(["d_date_sk", "d_quarter_name"])
+                .with_columns(pl.col("d_quarter_name").alias("d_quarter_name_d1"))
+                .drop("d_quarter_name"),
+                left_on="ss_sold_date_sk",
+                right_on="d_date_sk",
+                suffix="_d1",
+            )
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(
+                store_returns_base,
+                left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
+                right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
+                how="inner",
+            )
+            .join(
+                catalog_sales_base,
+                left_on=["ss_customer_sk", "ss_item_sk"],
+                right_on=["cs_bill_customer_sk", "cs_item_sk"],
+                how="inner",
+            )
+            .filter(
+                (pl.col("d_quarter_name_d1") == quarter_q1)
+                & pl.col("d_quarter_name_d2").is_in(quarter_q1_q3)
+                & pl.col("d_quarter_name_d3").is_in(quarter_q1_q3)
+            )
+            .group_by(["i_item_id", "i_item_desc", "s_state"])
+            .agg(
+                [
+                    pl.col("ss_quantity").count().alias("store_sales_quantitycount"),
+                    pl.col("ss_quantity").mean().alias("store_sales_quantityave"),
+                    pl.col("ss_quantity").std().alias("store_sales_quantitystdev"),
+                    (pl.col("ss_quantity").std() / pl.col("ss_quantity").mean()).alias(
+                        "store_sales_quantitycov"
+                    ),
+                    pl.col("sr_return_quantity")
+                    .count()
+                    .alias("store_returns_quantitycount"),
+                    pl.col("sr_return_quantity")
+                    .mean()
+                    .alias("store_returns_quantityave"),
+                    pl.col("sr_return_quantity")
+                    .std()
+                    .alias("store_returns_quantitystdev"),
+                    (
+                        pl.col("sr_return_quantity").std()
+                        / pl.col("sr_return_quantity").mean()
+                    ).alias("store_returns_quantitycov"),
+                    pl.col("cs_quantity").count().alias("catalog_sales_quantitycount"),
+                    pl.col("cs_quantity").mean().alias("catalog_sales_quantityave"),
+                    pl.col("cs_quantity").std().alias("catalog_sales_quantitystdev"),
+                    (pl.col("cs_quantity").std() / pl.col("cs_quantity").mean()).alias(
+                        "catalog_sales_quantitycov"
+                    ),
+                ]
+            )
+            .sort(["i_item_id", "i_item_desc", "s_state"], nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("i_item_id", False), ("i_item_desc", False), ("s_state", False)],
+        limit=100,
+    )
