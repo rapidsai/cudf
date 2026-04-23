@@ -84,6 +84,63 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             catalog_sales.join(
+                customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk"
+            )
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
+            .filter(
+                (pl.col("cd_gender") == gen)
+                & (pl.col("cd_marital_status") == ms)
+                & (pl.col("cd_education_status") == es)
+                & (
+                    (pl.col("p_channel_email") == "N")
+                    | (pl.col("p_channel_event") == "N")
+                )
+                & (pl.col("d_year") == year)
+            )
+            .group_by("i_item_id")
+            .agg(
+                [
+                    pl.col("cs_quantity").mean().alias("agg1"),
+                    pl.col("cs_list_price").mean().alias("agg2"),
+                    pl.col("cs_coupon_amt").mean().alias("agg3"),
+                    pl.col("cs_sales_price").mean().alias("agg4"),
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 26 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=26,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gen = params["gen"]
+    ms = params["ms"]
+    es = params["es"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    return QueryResult(
+        frame=(
+            catalog_sales.join(
                 date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk"
             )
             .join(item, left_on="cs_item_sk", right_on="i_item_sk")
@@ -110,9 +167,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("cs_sales_price").mean().alias("agg4"),
                 ]
             )
-            .sort(sort_by.keys(), nulls_last=True)
-            .limit(limit)
+            .sort(["i_item_id"], nulls_last=True)
+            .limit(100)
         ),
-        sort_by=list(sort_by.items()),
-        limit=limit,
+        sort_by=[("i_item_id", False)],
+        limit=100,
     )

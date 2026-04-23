@@ -97,3 +97,53 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 42 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=42,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    return QueryResult(
+        frame=(
+            date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .filter(
+                (pl.col("i_manager_id") == 1)
+                & (pl.col("d_moy") == month)
+                & (pl.col("d_year") == year)
+            )
+            .group_by(["d_year", "i_category_id", "i_category"])
+            .agg([pl.col("ss_ext_sales_price").sum().alias("sum(ss_ext_sales_price)")])
+            .sort(
+                [
+                    "sum(ss_ext_sales_price)",
+                    "d_year",
+                    "i_category_id",
+                    "i_category",
+                ],
+                descending=[True, False, False, False],
+                nulls_last=True,
+            )
+            .select(
+                ["d_year", "i_category_id", "i_category", "sum(ss_ext_sales_price)"]
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("sum(ss_ext_sales_price)", True),
+            ("d_year", False),
+            ("i_category_id", False),
+            ("i_category", False),
+        ],
+        limit=100,
+    )

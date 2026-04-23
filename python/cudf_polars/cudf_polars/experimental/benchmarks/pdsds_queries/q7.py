@@ -77,9 +77,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            store_sales.join(
+                customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk"
+            )
+            .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-            .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
             .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
             .filter(pl.col("cd_gender") == gender)
             .filter(pl.col("cd_marital_status") == marital_status)
@@ -89,6 +91,58 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 | (pl.col("p_channel_event") == promo_channel)
             )
             .filter(pl.col("d_year") == year)
+            .group_by("i_item_id")
+            .agg(
+                [
+                    pl.col("ss_quantity").mean().alias("agg1"),
+                    pl.col("ss_list_price").mean().alias("agg2"),
+                    pl.col("ss_coupon_amt").mean().alias("agg3"),
+                    pl.col("ss_sales_price").mean().alias("agg4"),
+                ]
+            )
+            .sort("i_item_id", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("i_item_id", False)],
+        limit=100,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 7 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=7, qualification=run_config.qualification
+    )
+
+    year = params["year"]
+    gender = params["gender"]
+    marital_status = params["marital_status"]
+    education_status = params["education_status"]
+    promo_channel = params["promo_channel"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    return QueryResult(
+        frame=(
+            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+            .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
+            .filter(
+                (pl.col("cd_gender") == gender)
+                & (pl.col("cd_marital_status") == marital_status)
+                & (pl.col("cd_education_status") == education_status)
+                & (
+                    (pl.col("p_channel_email") == promo_channel)
+                    | (pl.col("p_channel_event") == promo_channel)
+                )
+                & (pl.col("d_year") == year)
+            )
             .group_by("i_item_id")
             .agg(
                 [

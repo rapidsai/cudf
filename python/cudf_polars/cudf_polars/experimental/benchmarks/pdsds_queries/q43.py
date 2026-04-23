@@ -177,3 +177,93 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 43 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=43,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gmt = params["gmt"]
+
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    return QueryResult(
+        frame=(
+            date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .filter((pl.col("s_gmt_offset") == gmt) & (pl.col("d_year") == year))
+            .group_by(["s_store_name", "s_store_id"])
+            .agg(
+                [
+                    pl.when(pl.col("d_day_name") == "Sunday")
+                    .then(pl.col("ss_sales_price"))
+                    .otherwise(None)
+                    .sum()
+                    .alias("sun_sales"),
+                    pl.when(pl.col("d_day_name") == "Monday")
+                    .then(pl.col("ss_sales_price"))
+                    .otherwise(None)
+                    .sum()
+                    .alias("mon_sales"),
+                    pl.when(pl.col("d_day_name") == "Tuesday")
+                    .then(pl.col("ss_sales_price"))
+                    .otherwise(None)
+                    .sum()
+                    .alias("tue_sales"),
+                    pl.when(pl.col("d_day_name") == "Wednesday")
+                    .then(pl.col("ss_sales_price"))
+                    .otherwise(None)
+                    .sum()
+                    .alias("wed_sales"),
+                    pl.when(pl.col("d_day_name") == "Thursday")
+                    .then(pl.col("ss_sales_price"))
+                    .otherwise(None)
+                    .sum()
+                    .alias("thu_sales"),
+                    pl.when(pl.col("d_day_name") == "Friday")
+                    .then(pl.col("ss_sales_price"))
+                    .otherwise(None)
+                    .sum()
+                    .alias("fri_sales"),
+                    pl.when(pl.col("d_day_name") == "Saturday")
+                    .then(pl.col("ss_sales_price"))
+                    .otherwise(None)
+                    .sum()
+                    .alias("sat_sales"),
+                ]
+            )
+            .sort(
+                [
+                    "s_store_name",
+                    "s_store_id",
+                    "sun_sales",
+                    "mon_sales",
+                    "tue_sales",
+                    "wed_sales",
+                    "thu_sales",
+                    "fri_sales",
+                    "sat_sales",
+                ],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("s_store_name", False),
+            ("s_store_id", False),
+            ("sun_sales", False),
+            ("mon_sales", False),
+            ("tue_sales", False),
+            ("wed_sales", False),
+            ("thu_sales", False),
+            ("fri_sales", False),
+            ("sat_sales", False),
+        ],
+        limit=100,
+    )

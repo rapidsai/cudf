@@ -151,3 +151,95 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 27 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=27,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    gen = params["gen"]
+    ms = params["ms"]
+    es = params["es"]
+    state = params["state"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    base_data = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+        .filter(
+            (pl.col("cd_gender") == gen)
+            & (pl.col("cd_marital_status") == ms)
+            & (pl.col("cd_education_status") == es)
+            & (pl.col("d_year") == year)
+            & (pl.col("s_state").is_in(state))
+        )
+    )
+
+    level1 = (
+        base_data.group_by(["i_item_id", "s_state"])
+        .agg(
+            [
+                pl.col("ss_quantity").mean().alias("agg1"),
+                pl.col("ss_list_price").mean().alias("agg2"),
+                pl.col("ss_coupon_amt").mean().alias("agg3"),
+                pl.col("ss_sales_price").mean().alias("agg4"),
+            ]
+        )
+        .select(
+            [
+                "i_item_id",
+                "s_state",
+                pl.lit(0, dtype=pl.Int64).alias("g_state"),
+                "agg1",
+                "agg2",
+                "agg3",
+                "agg4",
+            ]
+        )
+    )
+    level2 = (
+        base_data.group_by(["i_item_id"])
+        .agg(
+            [
+                pl.col("ss_quantity").mean().alias("agg1"),
+                pl.col("ss_list_price").mean().alias("agg2"),
+                pl.col("ss_coupon_amt").mean().alias("agg3"),
+                pl.col("ss_sales_price").mean().alias("agg4"),
+            ]
+        )
+        .select(
+            [
+                "i_item_id",
+                pl.lit(None, dtype=pl.String).alias("s_state"),
+                pl.lit(1, dtype=pl.Int64).alias("g_state"),
+                "agg1",
+                "agg2",
+                "agg3",
+                "agg4",
+            ]
+        )
+    )
+
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2])
+            .sort(["i_item_id", "s_state"], nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("i_item_id", False), ("s_state", False)],
+        limit=100,
+    )
