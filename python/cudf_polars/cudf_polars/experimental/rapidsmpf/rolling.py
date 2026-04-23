@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.actor import define_actor
@@ -29,6 +29,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     send_metadata,
     shutdown_on_error,
 )
+from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -51,9 +52,6 @@ _TIMESTAMP_TO_DURATION: dict[plc.TypeId, plc.TypeId] = {
     plc.TypeId.TIMESTAMP_DAYS: plc.TypeId.DURATION_DAYS,
 }
 
-_INT64 = plc.DataType(plc.TypeId.INT64)
-_BOOL8 = plc.DataType(plc.TypeId.BOOL8)
-
 
 def _duration_dtype_for_timestamp(index_dtype: plc.DataType) -> plc.DataType:
     try:
@@ -64,6 +62,10 @@ def _duration_dtype_for_timestamp(index_dtype: plc.DataType) -> plc.DataType:
         ) from e
 
 
+_INT64 = plc.DataType(plc.TypeId.INT64)
+_BOOL8 = plc.DataType(plc.TypeId.BOOL8)
+
+
 def _scalar_binop_scalar(
     lhs: plc.Scalar,
     rhs: plc.Scalar,
@@ -71,7 +73,7 @@ def _scalar_binop_scalar(
     out_dtype: plc.DataType,
     stream: Stream,
 ) -> plc.Scalar:
-    """Apply ``op`` to two scalars using one-row columns. Output dtype is ``out_dtype``."""
+    """Apply binop using single-row columns."""
     lc = plc.Column.from_scalar(lhs, 1, stream=stream)
     rc = plc.Column.from_scalar(rhs, 1, stream=stream)
     out = plc.binaryop.binary_operation(lc, rc, op, out_dtype, stream=stream)
@@ -90,25 +92,19 @@ def _get_idx_col(
     return col
 
 
-def _minmax_scalars(col: plc.Column, stream: Stream) -> tuple[plc.Scalar, plc.Scalar]:
-    """
-    First and last values in ``col`` as scalars.
-
-    Index must be sorted in ascending order.
-    """
+def _sorted_minmax_scalars(
+    col: plc.Column, stream: Stream
+) -> tuple[plc.Scalar, plc.Scalar]:
+    """First and last values in a sorted column as scalars."""
     n = col.size()
     lo_c = plc.copying.slice(col, [0, 1], stream=stream)[0]
     hi_c = plc.copying.slice(col, [n - 1, n], stream=stream)[0]
     return lo_c.to_scalar(stream=stream), hi_c.to_scalar(stream=stream)
 
 
-def _py_minmax_sorted(col: plc.Column, stream: Stream) -> tuple[int, int]:
-    """
-    First and last values in ``col`` as Python ints.
-
-    Expects INT64 index sorted in ascending order.
-    """
-    lo_s, hi_s = _minmax_scalars(col, stream)
+def _sorted_minmax_py(col: plc.Column, stream: Stream) -> tuple[int, int]:
+    """First and last values in a sorted column as Python ints."""
+    lo_s, hi_s = _sorted_minmax_scalars(col, stream)
     mn_val = lo_s.to_py(stream=stream)
     mx_val = hi_s.to_py(stream=stream)
     assert isinstance(mn_val, int)
@@ -116,20 +112,53 @@ def _py_minmax_sorted(col: plc.Column, stream: Stream) -> tuple[int, int]:
     return mn_val, mx_val
 
 
-def _filter_threshold(
+def _sorted_table_slice_ge(
     table: plc.Table,
     idx_col: plc.Column,
-    threshold: int | plc.Scalar,
-    op: plc.binaryop.BinaryOperator,
+    lower: plc.Scalar,
+    *,
     stream: Stream,
 ) -> plc.Table:
-    thr = (
-        threshold
-        if isinstance(threshold, plc.Scalar)
-        else plc.Scalar.from_py(threshold, _INT64, stream=stream)
+    """Rows with ``idx_col >= lower`` via ``lower_bound`` + slice (``idx_col`` sorted ascending)."""
+    hay = plc.Table([idx_col])
+    needles = plc.Table([plc.Column.from_scalar(lower, 1, stream=stream)])
+    lb = plc.search.lower_bound(
+        hay,
+        needles,
+        [plc.types.Order.ASCENDING],
+        [plc.types.NullOrder.BEFORE],
+        stream=stream,
     )
-    mask = plc.binaryop.binary_operation(idx_col, thr, op, _BOOL8, stream=stream)
-    return plc.stream_compaction.apply_boolean_mask(table, mask, stream=stream)
+    _start_py = plc.copying.get_element(lb, 0, stream=stream).to_py(stream=stream)
+    assert isinstance(_start_py, int)
+    start = _start_py
+    n = table.num_rows()
+    (out,) = plc.copying.slice(table, [min(start, n), n], stream=stream)
+    return out
+
+
+def _sorted_table_slice_le(
+    table: plc.Table,
+    idx_col: plc.Column,
+    upper: plc.Scalar,
+    *,
+    stream: Stream,
+) -> plc.Table:
+    """Return rows up to and including the upper bound."""
+    hay = plc.Table([idx_col])
+    needles = plc.Table([plc.Column.from_scalar(upper, 1, stream=stream)])
+    ub = plc.search.upper_bound(
+        hay,
+        needles,
+        [plc.types.Order.ASCENDING],
+        [plc.types.NullOrder.BEFORE],
+        stream=stream,
+    )
+    _end_py = plc.copying.get_element(ub, 0, stream=stream).to_py(stream=stream)
+    assert isinstance(_end_py, int)
+    end = _end_py
+    (out,) = plc.copying.slice(table, [0, max(end, 0)], stream=stream)
+    return out
 
 
 def _check_ungrouped_int_chunk_order(
@@ -140,13 +169,13 @@ def _check_ungrouped_int_chunk_order(
     index_col_idx: int,
     seq: int,
 ) -> int | None:
-    """Raise when the ungrouped INT64 index decreases across center chunks."""
+    """Raise when the ungrouped index decreases across center chunks."""
     if ir.keys or ir.index_dtype.id() != plc.TypeId.INT64:
         return prev_max
     if cur_df.num_rows == 0:
         return prev_max
     idx = _get_idx_col(cur_df.table, index_col_idx, ir.index_dtype, cur_df.stream)
-    lo, hi = _py_minmax_sorted(idx, cur_df.stream)
+    lo, hi = _sorted_minmax_py(idx, cur_df.stream)
     if prev_max is not None and lo < prev_max:
         raise RuntimeError(
             f"rolling streaming: INT64 index decreased across chunks "
@@ -165,7 +194,7 @@ class RollingInputChunk:
 
 @dataclass(frozen=True)
 class ChunkID:
-    """Key for rolling input chunk."""
+    """Identifier for rolling input chunk."""
 
     sequence_number: int
     is_ghost_chunk: bool
@@ -264,11 +293,8 @@ def _merge_pending_left_ghosts_into_left_ctx(
     left_ctx_df: DataFrame | None,
     *,
     ir_context: IRExecutionContext,
-    frame_ir: IR,
 ) -> DataFrame | None:
     """Concatenate left-ghost tables (ascending ``sequence_number``) then ``left_ctx_df``."""
-    base_col_names = list(frame_ir.schema.keys())
-    base_dtypes = list(frame_ir.schema.values())
     parts: list[DataFrame] = [df for df in pending_left_dfs if df.num_rows > 0]
     if left_ctx_df is not None and left_ctx_df.num_rows > 0:
         parts.append(left_ctx_df)
@@ -276,13 +302,7 @@ def _merge_pending_left_ghosts_into_left_ctx(
         return left_ctx_df
     if len(parts) == 1:
         return parts[0]
-    with ir_context.stream_ordered_after(*parts) as s:
-        return DataFrame.from_table(
-            plc.concatenate.concatenate([df.table for df in parts], stream=s),
-            base_col_names,
-            base_dtypes,
-            stream=s,
-        )
+    return _concat(*parts, context=ir_context)
 
 
 def _chunk_index_int_bounds_from_df(
@@ -294,7 +314,7 @@ def _chunk_index_int_bounds_from_df(
     if df.num_rows == 0:
         return None
     idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
-    return _py_minmax_sorted(idx, df.stream)
+    return _sorted_minmax_py(idx, df.stream)
 
 
 def _chunk_index_ts_bounds_from_df(
@@ -306,7 +326,7 @@ def _chunk_index_ts_bounds_from_df(
     if df.num_rows == 0:
         return None
     idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
-    return _minmax_scalars(idx, df.stream)
+    return _sorted_minmax_scalars(idx, df.stream)
 
 
 def _prepare_expanded_rolling_frame(
@@ -352,23 +372,25 @@ def _prepare_expanded_rolling_frame(
     if need_chunk_minmax:
         chunk_idx = _get_idx_col(chunk_table, index_col_idx, index_dtype, chunk_stream)
         if is_int_index:
-            chunk_mn, chunk_mx = _py_minmax_sorted(chunk_idx, chunk_stream)
+            chunk_mn, chunk_mx = _sorted_minmax_py(chunk_idx, chunk_stream)
         else:
             dur_dt = _duration_dtype_for_timestamp(index_dtype)
-            chunk_mn_s, chunk_mx_s = _minmax_scalars(chunk_idx, chunk_stream)
+            chunk_mn_s, chunk_mx_s = _sorted_minmax_scalars(chunk_idx, chunk_stream)
 
     if left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0:
         left_idx = _get_idx_col(
             left_ctx_df.table, index_col_idx, index_dtype, left_ctx_df.stream
         )
         if is_int_index:
+            lower_s = plc.Scalar.from_py(
+                chunk_mn - lookback, left_idx.type(), stream=left_ctx_df.stream
+            )
             left_ctx_df = DataFrame.from_table(
-                _filter_threshold(
+                _sorted_table_slice_ge(
                     left_ctx_df.table,
                     left_idx,
-                    chunk_mn - lookback,
-                    plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                    left_ctx_df.stream,
+                    lower_s,
+                    stream=left_ctx_df.stream,
                 ),
                 base_col_names,
                 base_dtypes,
@@ -387,12 +409,11 @@ def _prepare_expanded_rolling_frame(
             )
             with ir_context.stream_ordered_after(left_ctx_df, cur_df) as s:
                 left_ctx_df = DataFrame.from_table(
-                    _filter_threshold(
+                    _sorted_table_slice_ge(
                         left_ctx_df.table,
                         left_idx,
                         lower_s,
-                        plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                        s,
+                        stream=s,
                     ),
                     base_col_names,
                     base_dtypes,
@@ -405,13 +426,14 @@ def _prepare_expanded_rolling_frame(
         else:
             assert next_dfs is not None
             right_tables_filtered: list[DataFrame] = []
-            right_upper: int | plc.Scalar
+            right_upper_int: int | None = None
+            right_upper_s: plc.Scalar | None = None
             if is_int_index:
-                right_upper = chunk_mx + lookahead
+                right_upper_int = chunk_mx + lookahead
             else:
                 assert chunk_mx_s is not None
                 assert dur_dt is not None
-                right_upper = _scalar_binop_scalar(
+                right_upper_s = _scalar_binop_scalar(
                     chunk_mx_s,
                     plc.Scalar.from_py(lookahead, dur_dt, stream=chunk_stream),
                     plc.binaryop.BinaryOperator.ADD,
@@ -425,12 +447,15 @@ def _prepare_expanded_rolling_frame(
                     next_table, index_col_idx, index_dtype, next_stream
                 )
                 if is_int_index:
-                    right_ctx_table = _filter_threshold(
+                    assert right_upper_int is not None
+                    upper_s = plc.Scalar.from_py(
+                        right_upper_int, next_idx.type(), stream=next_stream
+                    )
+                    right_ctx_table = _sorted_table_slice_le(
                         next_table,
                         next_idx,
-                        right_upper,
-                        plc.binaryop.BinaryOperator.LESS_EQUAL,
-                        next_stream,
+                        upper_s,
+                        stream=next_stream,
                     )
                     if right_ctx_table.num_rows() > 0:
                         right_tables_filtered.append(
@@ -442,13 +467,13 @@ def _prepare_expanded_rolling_frame(
                             )
                         )
                 else:
+                    assert right_upper_s is not None
                     with ir_context.stream_ordered_after(next_df, cur_df) as s:
-                        right_ctx_table = _filter_threshold(
+                        right_ctx_table = _sorted_table_slice_le(
                             next_table,
                             next_idx,
-                            right_upper,
-                            plc.binaryop.BinaryOperator.LESS_EQUAL,
-                            s,
+                            right_upper_s,
+                            stream=s,
                         )
                         if right_ctx_table.num_rows() > 0:
                             right_tables_filtered.append(
@@ -479,24 +504,13 @@ def _prepare_expanded_rolling_frame(
         right_ctx_df = None
     n_left = left_ctx_df.num_rows if left_ctx_df is not None else 0
     dfs = [df for df in (left_ctx_df, cur_df, right_ctx_df) if df is not None]
-    if len(dfs) == 1:
-        combined_df = dfs[0]
-    else:
-        with ir_context.stream_ordered_after(*dfs) as s:
-            combined_df = DataFrame.from_table(
-                plc.concatenate.concatenate([df.table for df in dfs], stream=s),
-                base_col_names,
-                base_dtypes,
-                stream=s,
-            )
+    combined_df = dfs[0] if len(dfs) == 1 else _concat(*dfs, context=ir_context)
 
     left_ctx_next = _append_left_context_row(
         left_ctx_df,
         cur_df,
         lookback=lookback,
         ir_context=ir_context,
-        col_names=base_col_names,
-        col_dtypes=base_dtypes,
     )
     return combined_df, n_left, n_chunk_rows, left_ctx_next
 
@@ -507,20 +521,12 @@ def _append_left_context_row(
     *,
     lookback: int,
     ir_context: IRExecutionContext,
-    col_names: list[str],
-    col_dtypes: list[Any],
 ) -> DataFrame | None:
     if lookback <= 0:
         return left_ctx_df
     if left_ctx_df is None or left_ctx_df.num_rows == 0:
         return cur_df
-    with ir_context.stream_ordered_after(left_ctx_df, cur_df) as s:
-        return DataFrame.from_table(
-            plc.concatenate.concatenate([left_ctx_df.table, cur_df.table], stream=s),
-            col_names,
-            col_dtypes,
-            stream=s,
-        )
+    return _concat(left_ctx_df, cur_df, context=ir_context)
 
 
 async def add_ghost_chunks(
@@ -640,8 +646,9 @@ class RollingChunkExpander:
 
     async def add_input_chunk(
         self, input_chunk: RollingInputChunk, sequence_number: int
-    ):
-        key = ChunkID(sequence_number, input_chunk.is_ghost_chunk)
+    ) -> None:
+        """Stage a rolling input chunk (owned or ghost) keyed by ``sequence_number``."""
+        key = ChunkID(sequence_number, is_ghost_chunk=input_chunk.is_ghost_chunk)
         chunk = input_chunk.chunk.make_available_and_spill(
             self.context.br(), allow_overbooking=True
         )
@@ -654,7 +661,7 @@ class RollingChunkExpander:
         if not owned:
             return None
         seq = min(k.sequence_number for k in owned)
-        return ChunkID(seq, False)
+        return ChunkID(seq, is_ghost_chunk=False)
 
     async def _has_lookahead_halo(self, chunk_id: ChunkID) -> bool:
         """Return whether staged right-hand chunks satisfy the lookahead halo."""
@@ -675,16 +682,21 @@ class RollingChunkExpander:
         last_b = self.staged_bounds[right_keys[-1]]
         stream = self.staged_inputs[chunk_id].stream
         if self.index_dtype.id() == plc.TypeId.INT64:
+            ib = cast(tuple[int, int], center_bounds)
             return _int_right_halo_lookahead_satisfied(
-                center_bounds[1], self.lookahead, first_b, last_b
+                ib[1],
+                self.lookahead,
+                cast(tuple[int, int] | None, first_b),
+                cast(tuple[int, int] | None, last_b),
             )
+        ib_ts = cast(tuple[plc.Scalar, plc.Scalar], center_bounds)
         return _ts_right_halo_lookahead_satisfied(
-            center_bounds[1],
+            ib_ts[1],
             self.lookahead,
             self.index_dtype,
             stream,
-            first_b,
-            last_b,
+            cast(tuple[plc.Scalar, plc.Scalar] | None, first_b),
+            cast(tuple[plc.Scalar, plc.Scalar] | None, last_b),
         )
 
     def _purge_staging_after_emit_for(self, chunk_id: ChunkID) -> None:
@@ -692,7 +704,7 @@ class RollingChunkExpander:
             if k.is_ghost_chunk and k.sequence_number < chunk_id.sequence_number:
                 del self.staged_inputs[k]
                 del self.staged_bounds[k]
-        owned = ChunkID(chunk_id.sequence_number, False)
+        owned = ChunkID(chunk_id.sequence_number, is_ghost_chunk=False)
         self.staged_inputs.pop(owned, None)
         self.staged_bounds.pop(owned, None)
 
@@ -714,7 +726,6 @@ class RollingChunkExpander:
             left_dfs,
             self.left_ctx_df,
             ir_context=self.ir_context,
-            frame_ir=frame_ir,
         )
         center_tbl = self.staged_inputs[chunk_id]
         center_df = chunk_to_frame(center_tbl, frame_ir)
@@ -766,6 +777,7 @@ class RollingChunkExpander:
 
     async def prepare_output(
         self,
+        *,
         receiving: bool,
     ) -> tuple[TableChunk | None, tuple[int, int] | None, int | None]:
         """Prepare an expanded output chunk and slice specification."""
@@ -823,8 +835,9 @@ async def expand_chunks(
             receiving = False
             expander.stream_done = True
 
-        chunk, zlice, seq = await expander.prepare_output(receiving)
+        chunk, zlice, seq = await expander.prepare_output(receiving=receiving)
         if chunk is not None:
+            assert zlice is not None
             await ch_to_eval.send(
                 context,
                 Message(
