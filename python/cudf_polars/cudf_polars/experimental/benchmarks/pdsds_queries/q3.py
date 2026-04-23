@@ -105,11 +105,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     return QueryResult(
         frame=(
+            # SQL: FROM date_dim dt, store_sales WHERE dt.d_date_sk = store_sales.ss_sold_date_sk
             date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
+            # SQL: JOIN item ON store_sales.ss_item_sk = item.i_item_sk
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            # SQL: WHERE item.i_manufact_id = {manufact} AND dt.d_moy = {month}
             .filter((pl.col("i_manufact_id") == manufact) & (pl.col("d_moy") == month))
+            # SQL: GROUP BY dt.d_year, item.i_brand, item.i_brand_id
             .group_by(["d_year", "i_brand", "i_brand_id"])
+            # SQL: Sum({aggc}) AS sum_agg
             .agg([pl.col(aggc).sum().alias("sum_agg")])
+            # SQL: SELECT d_year, i_brand_id AS brand_id, i_brand AS brand, sum_agg
             .select(
                 [
                     pl.col("d_year"),
@@ -118,7 +124,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("sum_agg"),
                 ],
             )
+            # SQL: ORDER BY d_year, sum_agg DESC, brand_id
             .sort(["d_year", "sum_agg", "brand_id"], descending=[False, True, False])
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("d_year", False), ("sum_agg", True), ("brand_id", False)],

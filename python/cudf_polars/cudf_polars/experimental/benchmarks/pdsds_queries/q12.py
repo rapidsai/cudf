@@ -152,18 +152,24 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: FROM web_sales, item WHERE ws_item_sk = i_item_sk
             web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+            # SQL: JOIN date_dim ON ws_sold_date_sk = d_date_sk
             .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+            # SQL: WHERE i_category IN ({categories}) AND d_date BETWEEN '{sdate}' AND '{sdate}' + 30 days
             .filter(
                 pl.col("i_category").is_in(categories)
                 & pl.col("d_date").is_between(
                     pl.lit(start_date), pl.lit(end_date), closed="both"
                 )
             )
+            # SQL: GROUP BY i_item_id, i_item_desc, i_category, i_class, i_current_price
             .group_by(
                 ["i_item_id", "i_item_desc", "i_category", "i_class", "i_current_price"]
             )
+            # SQL: Sum(ws_ext_sales_price) AS itemrevenue
             .agg(pl.col("ws_ext_sales_price").sum().alias("itemrevenue"))
+            # SQL: Sum(ws_ext_sales_price)*100/Sum(Sum(...)) OVER (PARTITION BY i_class) AS revenueratio
             .with_columns(
                 (
                     pl.col("itemrevenue")
@@ -171,10 +177,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     / pl.col("itemrevenue").sum().over("i_class")
                 ).alias("revenueratio")
             )
+            # SQL: ORDER BY i_category, i_class, i_item_id, i_item_desc, revenueratio
             .sort(
                 ["i_category", "i_class", "i_item_id", "i_item_desc", "revenueratio"],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

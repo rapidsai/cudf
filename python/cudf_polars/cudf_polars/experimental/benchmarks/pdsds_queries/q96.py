@@ -113,24 +113,31 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     return QueryResult(
         frame=(
+            # SQL: FROM store_sales, household_demographics WHERE ss_hdemo_sk = hd_demo_sk
             store_sales.join(
                 household_demographics,
                 left_on="ss_hdemo_sk",
                 right_on="hd_demo_sk",
                 how="inner",
             )
+            # SQL: JOIN time_dim ON ss_sold_time_sk = t_time_sk
             .join(
                 time_dim, left_on="ss_sold_time_sk", right_on="t_time_sk", how="inner"
             )
+            # SQL: JOIN store ON ss_store_sk = s_store_sk
             .join(store, left_on="ss_store_sk", right_on="s_store_sk", how="inner")
+            # SQL: WHERE t_hour={t_hour} AND t_minute>={t_minute} AND hd_dep_count={hd_dep_count} AND s_store_name='{s_store_name}'
             .filter(
                 (pl.col("t_hour") == t_hour)
                 & (pl.col("t_minute") >= t_minute)
                 & (pl.col("hd_dep_count") == hd_dep_count)
                 & (pl.col("s_store_name") == s_store_name)
             )
+            # SQL: SELECT Count(*)
             .select([pl.len().alias("count_star()")])
+            # SQL: ORDER BY Count(*)
             .sort("count_star()")
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("count_star()", False)],

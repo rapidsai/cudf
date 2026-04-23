@@ -132,9 +132,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     return QueryResult(
         frame=(
+            # SQL: FROM item, inventory WHERE inv_item_sk = i_item_sk
             item.join(inventory, left_on="i_item_sk", right_on="inv_item_sk")
+            # SQL: JOIN date_dim ON inv_date_sk = d_date_sk
             .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+            # SQL: JOIN store_sales ON ss_item_sk = i_item_sk
             .join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+            # SQL: WHERE i_current_price BETWEEN {price} AND {price}+30 AND d_date BETWEEN '{sdate}' AND '{sdate}'+60d AND i_manufact_id IN ({manufact}) AND inv_quantity_on_hand BETWEEN {inv_min} AND {inv_max}
             .filter(
                 (pl.col("i_current_price") >= price)
                 & (pl.col("i_current_price") <= price + 30)
@@ -144,10 +148,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 & (pl.col("inv_quantity_on_hand") >= inv_min)
                 & (pl.col("inv_quantity_on_hand") <= inv_max)
             )
+            # SQL: GROUP BY i_item_id, i_item_desc, i_current_price
             .group_by(["i_item_id", "i_item_desc", "i_current_price"])
+            # SQL: (no aggregates — GROUP BY for DISTINCT)
             .agg([])
+            # SQL: SELECT i_item_id, i_item_desc, i_current_price
             .select(["i_item_id", "i_item_desc", "i_current_price"])
+            # SQL: ORDER BY i_item_id
             .sort("i_item_id")
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("i_item_id", False)],

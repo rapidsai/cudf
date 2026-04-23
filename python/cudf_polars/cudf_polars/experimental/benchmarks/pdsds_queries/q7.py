@@ -129,10 +129,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
     return QueryResult(
         frame=(
+            # SQL: FROM store_sales, date_dim WHERE ss_sold_date_sk = d_date_sk
             store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            # SQL: JOIN item ON ss_item_sk = i_item_sk
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            # SQL: JOIN customer_demographics ON ss_cdemo_sk = cd_demo_sk
             .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+            # SQL: JOIN promotion ON ss_promo_sk = p_promo_sk
             .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
+            # SQL: WHERE cd_gender='{gender}' AND cd_marital_status='{marital_status}' AND cd_education_status='{education_status}' AND (p_channel_email OR p_channel_event)='{promo_channel}' AND d_year={year}
             .filter(
                 (pl.col("cd_gender") == gender)
                 & (pl.col("cd_marital_status") == marital_status)
@@ -143,7 +148,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 )
                 & (pl.col("d_year") == year)
             )
+            # SQL: GROUP BY i_item_id
             .group_by("i_item_id")
+            # SQL: Avg(ss_quantity) agg1, Avg(ss_list_price) agg2, Avg(ss_coupon_amt) agg3, Avg(ss_sales_price) agg4
             .agg(
                 [
                     pl.col("ss_quantity").mean().alias("agg1"),
@@ -152,7 +159,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("ss_sales_price").mean().alias("agg4"),
                 ]
             )
+            # SQL: ORDER BY i_item_id
             .sort("i_item_id", nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("i_item_id", False)],

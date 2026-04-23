@@ -127,21 +127,28 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     start_date = pl.date(start_date_obj.year, start_date_obj.month, start_date_obj.day)
     end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
 
+    # SQL: subquery — 1.3 * Avg(cs_ext_discount_amt) per item WHERE d_date BETWEEN '{csdate}' AND '{csdate}' + 90 days
     item_avg_discounts = (
+        # SQL: FROM catalog_sales, date_dim (cross-join simulating implicit join) WHERE d_date_sk = cs_sold_date_sk AND d_date BETWEEN start AND end
         catalog_sales.join(date_dim, how="cross")
         .filter(
             (pl.col("d_date_sk") == pl.col("cs_sold_date_sk"))
             & pl.col("d_date").is_between(start_date, end_date)
         )
+        # SQL: GROUP BY cs_item_sk
         .group_by("cs_item_sk")
+        # SQL: 1.3 * Avg(cs_ext_discount_amt) AS threshold_discount
         .agg([(pl.col("cs_ext_discount_amt").mean() * 1.3).alias("threshold_discount")])
     )
 
     return QueryResult(
         frame=(
+            # SQL: FROM catalog_sales, item, date_dim (cross-join simulating implicit join with WHERE predicates)
             catalog_sales.join(item, how="cross")
             .join(date_dim, how="cross")
+            # SQL: JOIN avg discount subquery ON cs_item_sk
             .join(item_avg_discounts, on="cs_item_sk")
+            # SQL: WHERE i_manufact_id={imid} AND i_item_sk=cs_item_sk AND d_date BETWEEN '{csdate}' AND '{csdate}'+90d AND d_date_sk=cs_sold_date_sk AND cs_ext_discount_amt > 1.3*avg
             .filter(
                 (pl.col("i_manufact_id") == imid)
                 & (pl.col("i_item_sk") == pl.col("cs_item_sk"))
@@ -149,9 +156,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 & (pl.col("d_date_sk") == pl.col("cs_sold_date_sk"))
                 & (pl.col("cs_ext_discount_amt") > pl.col("threshold_discount"))
             )
+            # SQL: SELECT Sum(cs_ext_discount_amt) AS 'excess discount amount'
             .select(
                 [pl.col("cs_ext_discount_amt").sum().alias("excess discount amount")]
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[],

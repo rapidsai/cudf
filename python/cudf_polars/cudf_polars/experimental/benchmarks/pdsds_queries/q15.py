@@ -133,13 +133,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     return QueryResult(
         frame=(
+            # SQL: FROM catalog_sales, customer WHERE cs_bill_customer_sk = c_customer_sk
             catalog_sales.join(
                 customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
             )
+            # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
             .join(
                 customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
             )
+            # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            # SQL: WHERE d_qoy={qoy} AND d_year={year} AND (Substr(ca_zip,1,5) IN (...) OR ca_state IN ('CA','WA','GA') OR cs_sales_price > 500)
             .filter(
                 (pl.col("d_qoy") == qoy)
                 & (pl.col("d_year") == year)
@@ -163,9 +167,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     | (pl.col("cs_sales_price") > 500)
                 )
             )
+            # SQL: GROUP BY ca_zip
             .group_by("ca_zip")
+            # SQL: Sum(cs_sales_price) AS sum(cs_sales_price)
             .agg(pl.col("cs_sales_price").sum().alias("sum(cs_sales_price)"))
+            # SQL: ORDER BY ca_zip
             .sort("ca_zip", nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("ca_zip", False)],

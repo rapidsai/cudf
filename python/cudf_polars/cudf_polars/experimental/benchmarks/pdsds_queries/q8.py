@@ -141,6 +141,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
+    # SQL: subquery V1 — INTERSECT of zip_codes list and preferred customer zips with count > 10
     target_zips_5char = (
         customer_address.with_columns(pl.col("ca_zip").str.slice(0, 5).alias("ca_zip"))
         .filter(pl.col("ca_zip").is_in(zip_codes))
@@ -148,6 +149,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: subquery preferred_customer_zips — FROM customer_address, customer WHERE ca_address_sk = c_current_addr_sk AND c_preferred_cust_flag='Y' GROUP BY ca_zip HAVING Count(*) > 10
     preferred_customer_zips = (
         customer_address.join(
             customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
@@ -159,15 +161,18 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select("ca_zip")
     )
 
+    # SQL: INTERSECT of target zip codes and preferred customer zip codes
     intersect_zips = target_zips_5char.join(
         preferred_customer_zips, on="ca_zip"
     ).unique()
 
     return QueryResult(
         frame=(
+            # SQL: FROM store_sales, date_dim, store, V1 (cross-join simulating SQL implicit join with WHERE predicates)
             store_sales.join(date_dim, how="cross")
             .join(store, how="cross")
             .join(intersect_zips, how="cross")
+            # SQL: WHERE ss_store_sk=s_store_sk AND ss_sold_date_sk=d_date_sk AND d_qoy={qoy} AND d_year={year} AND Substr(s_zip,1,2)=Substr(ca_zip,1,2)
             .filter(
                 (pl.col("ss_store_sk") == pl.col("s_store_sk"))
                 & (pl.col("ss_sold_date_sk") == pl.col("d_date_sk"))
@@ -175,9 +180,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 & (pl.col("d_year") == year)
                 & (pl.col("s_zip").str.slice(0, 2) == pl.col("ca_zip").str.slice(0, 2))
             )
+            # SQL: GROUP BY s_store_name
             .group_by("s_store_name")
+            # SQL: Sum(ss_net_profit) AS sum(ss_net_profit)
             .agg([pl.col("ss_net_profit").sum().alias("sum(ss_net_profit)")])
+            # SQL: ORDER BY s_store_name
             .sort("s_store_name", nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("s_store_name", False)],

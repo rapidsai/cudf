@@ -145,18 +145,23 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
 
+    # SQL: subquery t — store_sales LEFT OUTER JOIN store_returns ON (sr_item_sk=ss_item_sk AND sr_ticket_number=ss_ticket_number), reason WHERE sr_reason_sk=r_reason_sk AND r_reason_desc='{reason_desc}'
     base = (
+        # SQL: FROM store_sales LEFT OUTER JOIN store_returns ON (sr_item_sk=ss_item_sk AND sr_ticket_number=ss_ticket_number)
         store_sales.join(
             store_returns,
             left_on=["ss_item_sk", "ss_ticket_number"],
             right_on=["sr_item_sk", "sr_ticket_number"],
             how="left",
         )
+        # SQL: JOIN reason (cross) WHERE sr_reason_sk = r_reason_sk AND r_reason_desc = '{reason_desc}'
         .join(reason, how="cross")
+        # SQL: WHERE sr_reason_sk = r_reason_sk AND r_reason_desc = '{reason_desc}'
         .filter(
             (pl.col("sr_reason_sk") == pl.col("r_reason_sk"))
             & (pl.col("r_reason_desc") == reason_desc)
         )
+        # SQL: CASE WHEN sr_return_quantity IS NOT NULL THEN (ss_quantity-sr_return_quantity)*ss_sales_price ELSE ss_quantity*ss_sales_price END AS act_sales
         .with_columns(
             pl.when(pl.col("sr_return_quantity").is_not_null())
             .then(
@@ -170,9 +175,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: GROUP BY ss_customer_sk
             base.group_by("ss_customer_sk")
+            # SQL: Sum(act_sales) AS sumsales
             .agg(pl.col("act_sales").sum().alias("sumsales"))
+            # SQL: ORDER BY sumsales, ss_customer_sk
             .sort(["sumsales", "ss_customer_sk"], nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("sumsales", False), ("ss_customer_sk", False)],

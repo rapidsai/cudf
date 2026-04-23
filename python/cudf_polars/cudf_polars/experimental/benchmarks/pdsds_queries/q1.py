@@ -123,12 +123,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
+    # SQL: CTE customer_total_return — sr_customer_sk, sr_store_sk, Sum(sr_return_amt) AS ctr_total_return
     customer_total_return = (
+        # SQL: FROM store_returns, date_dim WHERE sr_returned_date_sk = d_date_sk
         store_returns.join(
             date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk"
         )
+        # SQL: AND d_year = {year}
         .filter(pl.col("d_year") == year)
+        # SQL: GROUP BY sr_customer_sk, sr_store_sk
         .group_by(["sr_customer_sk", "sr_store_sk"])
+        # SQL: Sum(sr_return_amt) AS ctr_total_return
         .agg(pl.col("sr_return_amt").sum().alias("ctr_total_return"))
         .rename(
             {
@@ -138,23 +143,31 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: subquery — Avg(ctr_total_return) * 1.2 per store (WHERE ctr1.ctr_store_sk = ctr2.ctr_store_sk)
     store_avg_returns = customer_total_return.group_by("ctr_store_sk").agg(
         (pl.col("ctr_total_return").mean() * 1.2).alias("avg_return_threshold")
     )
 
     return QueryResult(
         frame=(
+            # SQL: FROM customer_total_return ctr1, store, customer WHERE s_store_sk = ctr1.ctr_store_sk
             customer_total_return.join(
                 store, left_on="ctr_store_sk", right_on="s_store_sk"
             )
+            # SQL: AND ctr1.ctr_customer_sk = c_customer_sk
             .join(customer, left_on="ctr_customer_sk", right_on="c_customer_sk")
+            # SQL: JOIN avg threshold subquery ON ctr_store_sk
             .join(store_avg_returns, on="ctr_store_sk")
+            # SQL: WHERE s_state = '{state}' AND ctr1.ctr_total_return > avg_threshold
             .filter(
                 (pl.col("s_state") == state)
                 & (pl.col("ctr_total_return") > pl.col("avg_return_threshold"))
             )
+            # SQL: SELECT c_customer_id
             .select(["c_customer_id"])
+            # SQL: ORDER BY c_customer_id
             .sort("c_customer_id")
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("c_customer_id", False)],

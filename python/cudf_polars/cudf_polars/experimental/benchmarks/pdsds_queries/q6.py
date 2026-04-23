@@ -126,32 +126,47 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: subquery — d_month_seq WHERE d_year = {year} AND d_moy = {month}
     target_month_seq_table = (
         date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
         .select("d_month_seq")
         .unique()
     )
 
+    # SQL: subquery — Avg(i_current_price) per i_category
     avg_price_per_category = item.group_by("i_category").agg(
         pl.col("i_current_price").mean().alias("avg_price")
     )
 
     return QueryResult(
         frame=(
+            # SQL: FROM customer_address a, customer c WHERE a.ca_address_sk = c.c_current_addr_sk
             customer_address.join(
                 customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
             )
+            # SQL: AND c.c_customer_sk = s.ss_customer_sk
             .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
+            # SQL: AND s.ss_sold_date_sk = d.d_date_sk
             .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            # SQL: AND s.ss_item_sk = i.i_item_sk
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            # SQL: JOIN avg price per category subquery ON i_category
             .join(avg_price_per_category, on="i_category")
+            # SQL: AND d_month_seq = (subquery for d_year={year}, d_moy={month})
             .join(target_month_seq_table, on="d_month_seq", how="semi")
+            # SQL: AND i.i_current_price > 1.2 * Avg(j.i_current_price)
             .filter(pl.col("i_current_price") > 1.2 * pl.col("avg_price"))
+            # SQL: GROUP BY a.ca_state
             .group_by("ca_state")
+            # SQL: Count(*) AS cnt
             .agg(pl.len().alias("cnt"))
+            # SQL: HAVING Count(*) >= 10
             .filter(pl.col("cnt") >= 10)
+            # SQL: ORDER BY cnt, state
             .sort(["cnt", "ca_state"], nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
+            # SQL: SELECT a.ca_state AS state, Count(*) AS cnt
             .select(
                 [
                     pl.col("ca_state").alias("state"),

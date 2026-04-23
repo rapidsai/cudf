@@ -162,10 +162,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: subquery — i_item_id WHERE i_item_sk IN ({item_sks})
     item_ids = (
         item.filter(pl.col("i_item_sk").is_in(item_sks)).select("i_item_id").unique()
     )
 
+    # SQL: FROM web_sales, customer, customer_address, item, date_dim — main join chain + date filter
     joined = (
         web_sales.join(
             customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
@@ -173,22 +175,31 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE d_qoy={qoy} AND d_year={year}
         .filter((pl.col("d_qoy") == qoy) & (pl.col("d_year") == year))
         .with_columns([pl.col("ca_zip").str.slice(0, 5).alias("zip_prefix")])
     )
 
+    # SQL: WHERE Substr(ca_zip,1,5) IN ({zip_codes})
     zip_match = joined.filter(pl.col("zip_prefix").is_in(zip_codes))
+    # SQL: WHERE i_item_id IN (subquery)
     item_match = joined.join(item_ids, on="i_item_id", how="semi")
 
     sort_by = {"ca_zip": False, "ca_state": False}
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: UNION (both WHERE conditions) — OR in original SQL
             pl.concat([zip_match, item_match])
+            # SQL: GROUP BY ca_zip, ca_state
             .group_by(["ca_zip", "ca_state"])
+            # SQL: Sum(ws_sales_price) AS sum(ws_sales_price)
             .agg(pl.col("ws_sales_price").sum().alias("sum(ws_sales_price)"))
+            # SQL: ORDER BY ca_zip, ca_state
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: SELECT ca_zip, ca_state, sum(ws_sales_price)
             .select(["ca_zip", "ca_state", "sum(ws_sales_price)"])
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),
