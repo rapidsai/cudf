@@ -236,6 +236,202 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 pl.col("ss_item_sk"),
                 pl.col("ss_customer_sk"),
                 (
+                    pl.col("ss_qty").cast(pl.Float64)
+                    / (
+                        pl.col("ws_qty").fill_null(0) + pl.col("cs_qty").fill_null(0)
+                    ).cast(pl.Float64)
+                )
+                .round(2)
+                .alias("ratio"),
+                pl.col("ss_qty").alias("store_qty"),
+                pl.col("ss_wc").alias("store_wholesale_cost"),
+                pl.col("ss_sp").alias("store_sales_price"),
+                (pl.col("ws_qty").fill_null(0) + pl.col("cs_qty").fill_null(0)).alias(
+                    "other_chan_qty"
+                ),
+                (pl.col("ws_wc").fill_null(0) + pl.col("cs_wc").fill_null(0)).alias(
+                    "other_chan_wholesale_cost"
+                ),
+                (pl.col("ws_sp").fill_null(0) + pl.col("cs_sp").fill_null(0)).alias(
+                    "other_chan_sales_price"
+                ),
+            ]
+        )
+    )
+    sort_by = {
+        "ss_sold_year": False,
+        "ss_item_sk": False,
+        "ss_customer_sk": False,
+        "store_qty": True,
+        "store_wholesale_cost": True,
+        "store_sales_price": True,
+        "other_chan_qty": False,
+        "other_chan_wholesale_cost": False,
+        "other_chan_sales_price": False,
+        "ratio": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            result.sort(
+                list(sort_by.keys()),
+                descending=list(sort_by.values()),
+                nulls_last=True,
+            ).limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 78 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=78,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_returns = web_returns.with_columns(pl.lit(1).alias("wr_has_return"))
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    catalog_returns = catalog_returns.with_columns(pl.lit(1).alias("cr_has_return"))
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = (
+        get_data(run_config.dataset_path, "store_returns", run_config.suffix)
+        .with_columns(pl.lit(1).alias("sr_has_return"))
+        .select(["sr_ticket_number", "sr_item_sk", "sr_has_return"])
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    ws = (
+        web_sales.join(
+            web_returns,
+            left_on=["ws_order_number", "ws_item_sk"],
+            right_on=["wr_order_number", "wr_item_sk"],
+            how="left",
+        )
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("wr_has_return").is_null())
+        .group_by(["d_year", "ws_item_sk", "ws_bill_customer_sk"])
+        .agg(
+            [
+                pl.when(pl.col("ws_quantity").count() > 0)
+                .then(pl.col("ws_quantity").sum())
+                .otherwise(None)
+                .alias("ws_qty"),
+                pl.when(pl.col("ws_wholesale_cost").count() > 0)
+                .then(pl.col("ws_wholesale_cost").sum())
+                .otherwise(None)
+                .alias("ws_wc"),
+                pl.when(pl.col("ws_sales_price").count() > 0)
+                .then(pl.col("ws_sales_price").sum())
+                .otherwise(None)
+                .alias("ws_sp"),
+            ]
+        )
+        .rename(
+            {
+                "d_year": "ws_sold_year",
+                "ws_bill_customer_sk": "ws_customer_sk",
+            }
+        )
+    )
+
+    cs = (
+        catalog_sales.join(
+            catalog_returns,
+            left_on=["cs_order_number", "cs_item_sk"],
+            right_on=["cr_order_number", "cr_item_sk"],
+            how="left",
+        )
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("cr_has_return").is_null())
+        .group_by(["d_year", "cs_item_sk", "cs_bill_customer_sk"])
+        .agg(
+            [
+                pl.when(pl.col("cs_quantity").count() > 0)
+                .then(pl.col("cs_quantity").sum())
+                .otherwise(None)
+                .alias("cs_qty"),
+                pl.when(pl.col("cs_wholesale_cost").count() > 0)
+                .then(pl.col("cs_wholesale_cost").sum())
+                .otherwise(None)
+                .alias("cs_wc"),
+                pl.when(pl.col("cs_sales_price").count() > 0)
+                .then(pl.col("cs_sales_price").sum())
+                .otherwise(None)
+                .alias("cs_sp"),
+            ]
+        )
+        .rename(
+            {
+                "d_year": "cs_sold_year",
+                "cs_bill_customer_sk": "cs_customer_sk",
+            }
+        )
+    )
+
+    ss = (
+        store_sales.join(
+            store_returns,
+            left_on=["ss_ticket_number", "ss_item_sk"],
+            right_on=["sr_ticket_number", "sr_item_sk"],
+            how="left",
+        )
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("sr_has_return").is_null())
+        .group_by(["d_year", "ss_item_sk", "ss_customer_sk"])
+        .agg(
+            [
+                pl.when(pl.col("ss_quantity").count() > 0)
+                .then(pl.col("ss_quantity").sum())
+                .otherwise(None)
+                .alias("ss_qty"),
+                pl.when(pl.col("ss_wholesale_cost").count() > 0)
+                .then(pl.col("ss_wholesale_cost").sum())
+                .otherwise(None)
+                .alias("ss_wc"),
+                pl.when(pl.col("ss_sales_price").count() > 0)
+                .then(pl.col("ss_sales_price").sum())
+                .otherwise(None)
+                .alias("ss_sp"),
+            ]
+        )
+        .rename({"d_year": "ss_sold_year"})
+    )
+
+    result = (
+        ss.join(
+            ws,
+            left_on=["ss_sold_year", "ss_item_sk", "ss_customer_sk"],
+            right_on=["ws_sold_year", "ws_item_sk", "ws_customer_sk"],
+            how="left",
+        )
+        .join(
+            cs,
+            left_on=["ss_sold_year", "ss_item_sk", "ss_customer_sk"],
+            right_on=["cs_sold_year", "cs_item_sk", "cs_customer_sk"],
+            how="left",
+        )
+        .filter(
+            (pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0)
+        )
+        .filter(pl.col("ss_sold_year") == year)
+        .select(
+            [
+                pl.col("ss_sold_year"),
+                pl.col("ss_item_sk"),
+                pl.col("ss_customer_sk"),
+                (
                     pl.col("ss_qty")
                     / (pl.col("ws_qty").fill_null(0) + pl.col("cs_qty").fill_null(0))
                 )
@@ -256,6 +452,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+
     sort_by = {
         "ss_sold_year": False,
         "ss_item_sk": False,
