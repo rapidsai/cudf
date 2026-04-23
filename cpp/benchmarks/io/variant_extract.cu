@@ -534,7 +534,12 @@ static void bench_get_variant_field_nested(nvbench::state& state)
   std::vector<std::vector<uint8_t>> meta_rows(num_rows, meta_blob);
   std::vector<std::vector<uint8_t>> val_rows(num_rows, val_blob);
 
-  std::vector<std::string> const path(depth, keys[target_fid]);
+  // Build a JSONPath-like "$.key.key. ... .key" with the target key repeated `depth` times.
+  std::string path = "$";
+  for (int i = 0; i < depth; ++i) {
+    path.push_back('.');
+    path.append(keys[target_fid]);
+  }
 
   auto col = build_variant_column(meta_rows, val_rows, stream, mr);
   CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
@@ -542,8 +547,7 @@ static void bench_get_variant_field_nested(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    auto result = cudf::io::parquet::get_variant_field(
-      col->view(), cudf::host_span<std::string const>{path.data(), path.size()}, stream, mr);
+    auto result = cudf::io::parquet::get_variant_field(col->view(), path, stream, mr);
   });
 }
 

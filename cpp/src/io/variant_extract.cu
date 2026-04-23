@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "variant_path.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -26,13 +28,21 @@
 
 #include <thrust/scan.h>
 
-#include <array>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <variant>
+#include <vector>
 
 namespace cudf {
 namespace io::parquet {
 namespace {
 
 constexpr int variant_version_v1 = 1;
+
+// Path-step kinds used on-device.
+constexpr uint8_t step_kind_name  = 0;
+constexpr uint8_t step_kind_index = 1;
 
 // ---------------------------------------------------------------------------
 // Device-side parsing helpers
@@ -180,6 +190,51 @@ __device__ inline field_span device_locate_object_field(uint8_t const* val,
   return {values_base + match_start, match_end - match_start};
 }
 
+// Parse an array value header, return the sub-span of the element at `index` (0-based) relative to
+// the start of this value. Returns {0, 0} if `val` is not an array, if `index` is out of bounds,
+// or if the data is truncated.
+//
+// Array layout per the Variant spec:
+//   byte 0: header (basic_type=3 in low 2 bits; header6 in high 6 bits)
+//     header6 bits: (offset_size - 1) in bits 0-1, is_large in bit 2, bits 3-5 unused
+//   num_elements: 1 byte if !is_large else 4 bytes (little-endian)
+//   offsets: (num_elements + 1) entries, each `offset_size` bytes, relative to the end of offsets
+//   values:  concatenated element blobs
+__device__ inline field_span device_locate_array_element(uint8_t const* val,
+                                                         size_type val_len,
+                                                         size_type index)
+{
+  if (val_len < 1) { return {0, 0}; }
+  uint8_t const vm     = val[0];
+  int const basic_type = vm & 0x03;
+  if (basic_type != 3) { return {0, 0}; }  // not array
+
+  int const header6   = (vm >> 2) & 0x3F;
+  int const off_size  = (header6 & 0x03) + 1;
+  bool const is_large = ((header6 >> 2) & 0x01) != 0;
+
+  size_type pos         = 1;
+  auto const num_elts_r = device_read_uint_le(val, val_len, pos, is_large ? 4 : 1);
+  if (!num_elts_r.ok) { return {0, 0}; }
+  auto const n = static_cast<size_type>(num_elts_r.value);
+  pos += is_large ? 4 : 1;
+
+  if (index < 0 || index >= n) { return {0, 0}; }
+
+  size_type const offs_start = pos;
+  size_type const offs_bytes = (n + 1) * off_size;
+  if (offs_start + offs_bytes > val_len) { return {0, 0}; }
+  size_type const values_base = offs_start + offs_bytes;
+
+  auto const o0 = device_read_uint_le(val, val_len, offs_start + index * off_size, off_size);
+  auto const o1 = device_read_uint_le(val, val_len, offs_start + (index + 1) * off_size, off_size);
+  if (!o0.ok || !o1.ok) { return {0, 0}; }
+  auto const start  = static_cast<size_type>(o0.value);
+  auto const endoff = static_cast<size_type>(o1.value);
+  if (endoff < start || values_base + endoff > val_len) { return {0, 0}; }
+  return {values_base + start, endoff - start};
+}
+
 struct int32_decode_result {
   int32_t value;
   bool ok;
@@ -199,16 +254,18 @@ __device__ inline int32_decode_result device_decode_int32(uint8_t const* enc, si
   return {static_cast<int32_t>(u), true};
 }
 
-// Walk an object key path level by level starting at (val, val_len) and return the span of the
-// final value relative to the root val pointer. Returns {0, 0} on failure (empty path, key absent,
-// non-object intermediate, or truncated data).
-__device__ inline field_span device_locate_object_path(uint8_t const* meta,
-                                                       size_type meta_len,
-                                                       uint8_t const* val,
-                                                       size_type val_len,
-                                                       char const* d_key_bytes,
-                                                       size_type const* d_key_offsets,
-                                                       size_type depth)
+// Walk a path (name or index steps) level by level starting at (val, val_len) and return the span
+// of the final value relative to the root val pointer. Returns {0, 0} on failure (empty path, key
+// absent, index out of bounds, kind mismatch, or truncated data).
+__device__ inline field_span device_locate_path(uint8_t const* meta,
+                                                size_type meta_len,
+                                                uint8_t const* val,
+                                                size_type val_len,
+                                                uint8_t const* d_step_kinds,
+                                                size_type const* d_step_indices,
+                                                char const* d_name_bytes,
+                                                size_type const* d_name_offsets,
+                                                size_type depth)
 {
   if (depth <= 0) { return {0, 0}; }
 
@@ -217,15 +274,20 @@ __device__ inline field_span device_locate_object_path(uint8_t const* meta,
   size_type abs_offset   = 0;
 
   for (size_type i = 0; i < depth; ++i) {
-    auto const key_begin = d_key_offsets[i];
-    auto const key_end   = d_key_offsets[i + 1];
-    auto const key_len   = key_end - key_begin;
-    auto const* key_ptr  = d_key_bytes + key_begin;
+    field_span fs{0, 0};
+    if (d_step_kinds[i] == step_kind_name) {
+      auto const name_begin = d_name_offsets[i];
+      auto const name_end   = d_name_offsets[i + 1];
+      auto const name_len   = name_end - name_begin;
+      auto const* name_ptr  = d_name_bytes + name_begin;
 
-    int const dict_idx = device_find_key_in_metadata(meta, meta_len, key_ptr, key_len);
-    if (dict_idx < 0) { return {0, 0}; }
+      int const dict_idx = device_find_key_in_metadata(meta, meta_len, name_ptr, name_len);
+      if (dict_idx < 0) { return {0, 0}; }
 
-    auto const fs = device_locate_object_field(sub_val, sub_len, dict_idx);
+      fs = device_locate_object_field(sub_val, sub_len, dict_idx);
+    } else {
+      fs = device_locate_array_element(sub_val, sub_len, d_step_indices[i]);
+    }
     if (fs.length == 0) { return {0, 0}; }
 
     sub_val += fs.offset;
@@ -300,8 +362,10 @@ __device__ inline row_list_ptrs get_row_lists(cudf::detail::lists_column_device_
 CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
                                                 cudf::detail::lists_column_device_view d_meta,
                                                 cudf::detail::lists_column_device_view d_val,
-                                                char const* d_key_bytes,
-                                                size_type const* d_key_offsets,
+                                                uint8_t const* d_step_kinds,
+                                                size_type const* d_step_indices,
+                                                char const* d_name_bytes,
+                                                size_type const* d_name_offsets,
                                                 size_type depth,
                                                 size_type* d_sizes,
                                                 bitmask_type* d_null_mask,
@@ -319,8 +383,15 @@ CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
 
   auto const [meta_ptr, meta_len, val_ptr, val_len] = get_row_lists(d_meta, d_val, row);
 
-  auto const fs = device_locate_object_path(
-    meta_ptr, meta_len, val_ptr, val_len, d_key_bytes, d_key_offsets, depth);
+  auto const fs = device_locate_path(meta_ptr,
+                                     meta_len,
+                                     val_ptr,
+                                     val_len,
+                                     d_step_kinds,
+                                     d_step_indices,
+                                     d_name_bytes,
+                                     d_name_offsets,
+                                     depth);
   if (fs.length == 0) {
     d_sizes[row] = 0;
     cudf::clear_bit_unsafe(d_null_mask, row);
@@ -332,8 +403,10 @@ CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
 
 CUDF_KERNEL void get_variant_field_copy_kernel(cudf::detail::lists_column_device_view d_meta,
                                                cudf::detail::lists_column_device_view d_val,
-                                               char const* d_key_bytes,
-                                               size_type const* d_key_offsets,
+                                               uint8_t const* d_step_kinds,
+                                               size_type const* d_step_indices,
+                                               char const* d_name_bytes,
+                                               size_type const* d_name_offsets,
                                                size_type depth,
                                                size_type const* d_offsets,
                                                uint8_t* d_out_bytes,
@@ -348,8 +421,15 @@ CUDF_KERNEL void get_variant_field_copy_kernel(cudf::detail::lists_column_device
 
   auto const [meta_ptr, meta_len, val_ptr, val_len] = get_row_lists(d_meta, d_val, row);
 
-  auto const fs = device_locate_object_path(
-    meta_ptr, meta_len, val_ptr, val_len, d_key_bytes, d_key_offsets, depth);
+  auto const fs = device_locate_path(meta_ptr,
+                                     meta_len,
+                                     val_ptr,
+                                     val_len,
+                                     d_step_kinds,
+                                     d_step_indices,
+                                     d_name_bytes,
+                                     d_name_offsets,
+                                     depth);
   if (fs.length == 0) { return; }
 
   auto* dst = d_out_bytes + d_offsets[row];
@@ -460,6 +540,41 @@ void validate_variant_struct(column_view const& variant_column)
                std::invalid_argument);
 }
 
+// Marshal a parsed path into the three parallel host-side arrays the kernels expect.
+struct marshalled_path {
+  std::vector<uint8_t> kinds;
+  std::vector<size_type> indices;
+  std::string name_bytes;
+  std::vector<size_type> name_offsets;
+};
+
+marshalled_path marshal_path(std::vector<detail::variant_path_step> const& steps)
+{
+  auto const depth = static_cast<size_type>(steps.size());
+  marshalled_path out;
+  out.kinds.resize(depth);
+  out.indices.assign(depth, 0);
+  out.name_offsets.resize(depth + 1);
+
+  size_type running = 0;
+  for (size_type i = 0; i < depth; ++i) {
+    out.name_offsets[i] = running;
+    if (std::holds_alternative<std::string>(steps[i])) {
+      out.kinds[i]     = step_kind_name;
+      auto const& name = std::get<std::string>(steps[i]);
+      out.name_bytes.append(name);
+      running += static_cast<size_type>(name.size());
+    } else {
+      out.kinds[i] = step_kind_index;
+      auto const v = std::get<cudf::size_type>(steps[i]);
+      CUDF_EXPECTS(v >= 0, "array index must be non-negative", std::invalid_argument);
+      out.indices[i] = v;
+    }
+  }
+  out.name_offsets[depth] = running;
+  return out;
+}
+
 constexpr size_type block_size = 256;
 
 }  // namespace
@@ -469,13 +584,15 @@ constexpr size_type block_size = 256;
 // ---------------------------------------------------------------------------
 
 std::unique_ptr<column> get_variant_field(column_view const& variant_column,
-                                          host_span<std::string const> field_path,
+                                          std::string_view path,
                                           rmm::cuda_stream_view stream,
                                           rmm::device_async_resource_ref mr)
 {
   validate_variant_struct(variant_column);
+
+  auto const steps = detail::parse_variant_path(path);
   CUDF_EXPECTS(
-    !field_path.empty(), "field_path must contain at least one key", std::invalid_argument);
+    !steps.empty(), "variant path must contain at least one step", std::invalid_argument);
 
   size_type const num_rows = variant_column.size();
   if (num_rows == 0) {
@@ -489,25 +606,20 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     return make_structs_column(0, std::move(children), 0, {}, stream, mr);
   }
 
-  // Pack the path into a single concatenated char buffer + offsets array.
-  auto const depth = static_cast<size_type>(field_path.size());
-  std::vector<size_type> h_key_offsets(depth + 1);
-  size_type running = 0;
-  for (size_type i = 0; i < depth; ++i) {
-    h_key_offsets[i] = running;
-    running += static_cast<size_type>(field_path[i].size());
-  }
-  h_key_offsets[depth] = running;
-  std::string h_key_bytes;
-  h_key_bytes.reserve(running);
-  for (auto const& k : field_path) {
-    h_key_bytes.append(k);
-  }
+  // Marshal the parsed path into host-side arrays, then copy each to device.
+  auto const host_path = marshal_path(steps);
+  auto const depth     = static_cast<size_type>(steps.size());
 
-  auto d_key_bytes = cudf::detail::make_device_uvector_async(
-    host_span<char const>{h_key_bytes.data(), h_key_bytes.size()}, stream, mr);
-  auto d_key_offsets = cudf::detail::make_device_uvector_async(
-    host_span<size_type const>{h_key_offsets.data(), h_key_offsets.size()}, stream, mr);
+  auto d_step_kinds = cudf::detail::make_device_uvector_async(
+    host_span<uint8_t const>{host_path.kinds.data(), host_path.kinds.size()}, stream, mr);
+  auto d_step_indices = cudf::detail::make_device_uvector_async(
+    host_span<size_type const>{host_path.indices.data(), host_path.indices.size()}, stream, mr);
+  auto d_name_bytes = cudf::detail::make_device_uvector_async(
+    host_span<char const>{host_path.name_bytes.data(), host_path.name_bytes.size()}, stream, mr);
+  auto d_name_offsets = cudf::detail::make_device_uvector_async(
+    host_span<size_type const>{host_path.name_offsets.data(), host_path.name_offsets.size()},
+    stream,
+    mr);
 
   // Create device views for the struct and list children
   auto d_struct_ptr = column_device_view::create(variant_column, stream);
@@ -530,8 +642,10 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     *d_struct_ptr,
     d_meta,
     d_val,
-    d_key_bytes.data(),
-    d_key_offsets.data(),
+    d_step_kinds.data(),
+    d_step_indices.data(),
+    d_name_bytes.data(),
+    d_name_offsets.data(),
     depth,
     d_sizes.data(),
     d_null_mask,
@@ -548,8 +662,10 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
     get_variant_field_copy_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
       d_meta,
       d_val,
-      d_key_bytes.data(),
-      d_key_offsets.data(),
+      d_step_kinds.data(),
+      d_step_indices.data(),
+      d_name_bytes.data(),
+      d_name_offsets.data(),
       depth,
       d_offsets,
       d_out_bytes.data(),
@@ -584,16 +700,6 @@ std::unique_ptr<column> get_variant_field(column_view const& variant_column,
                                   null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
                                   stream,
                                   mr);
-}
-
-std::unique_ptr<column> get_variant_field(column_view const& variant_column,
-                                          std::string const& field_name,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
-{
-  std::array<std::string, 1> path{field_name};
-  return get_variant_field(
-    variant_column, host_span<std::string const>{path.data(), path.size()}, stream, mr);
 }
 
 // ---------------------------------------------------------------------------
@@ -661,27 +767,13 @@ std::unique_ptr<column> cast_variant(column_view const& variant_column,
 // ---------------------------------------------------------------------------
 
 std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
-                                              host_span<std::string const> field_path,
+                                              std::string_view path,
                                               data_type desired_type,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  auto intermediate = get_variant_field(variant_column, field_path, stream, mr);
+  auto intermediate = get_variant_field(variant_column, path, stream, mr);
   return cast_variant(intermediate->view(), desired_type, stream, mr);
-}
-
-std::unique_ptr<column> extract_variant_field(column_view const& variant_column,
-                                              std::string const& field_name,
-                                              data_type desired_type,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::device_async_resource_ref mr)
-{
-  std::array<std::string, 1> path{field_name};
-  return extract_variant_field(variant_column,
-                               host_span<std::string const>{path.data(), path.size()},
-                               desired_type,
-                               stream,
-                               mr);
 }
 
 }  // namespace io::parquet
