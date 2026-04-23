@@ -651,6 +651,10 @@ class StreamingExecutor:
         Each factor estimates the fractional number of unique values in the
         column. By default, ``1.0`` is used for any column not included in
         ``unique_fraction``.
+
+        .. deprecated::
+            The ``unique_fraction`` option is deprecated and will be removed
+            in a future release.
     target_partition_size
         Target partition size, in bytes, for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
@@ -680,6 +684,10 @@ class StreamingExecutor:
         it will first be reduced to ``ceil(64 / 32) = 2`` partitions.
 
         This is useful when the absolute number of partitions is large.
+
+        .. deprecated::
+            The ``groupby_n_ary`` option is deprecated and will be removed
+            in a future release.
     broadcast_join_limit
         The maximum number of partitions to allow for the smaller table in
         a broadcast join. For example, if the target partition size is 1GB and the
@@ -698,6 +706,10 @@ class StreamingExecutor:
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+
+        .. deprecated::
+            The ``rapidsmpf_spill`` option is deprecated and will be removed
+            in a future release.
     client_device_threshold
         Threshold for spilling data from device memory in rapidsmpf.
         Default is 50% of device memory on the client process.
@@ -769,9 +781,9 @@ class StreamingExecutor:
             f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
         )
     )
-    groupby_n_ary: int = dataclasses.field(
+    groupby_n_ary: int | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__GROUPBY_N_ARY", int, default=32
+            f"{_env_prefix}__GROUPBY_N_ARY", int, default=None
         )
     )
     broadcast_join_limit: int = dataclasses.field(
@@ -786,9 +798,9 @@ class StreamingExecutor:
             default=None,
         )
     )
-    rapidsmpf_spill: bool = dataclasses.field(
+    rapidsmpf_spill: bool | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
+            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=None
         )
     )
     client_device_threshold: float = dataclasses.field(
@@ -908,6 +920,32 @@ class StreamingExecutor:
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:
             object.__setattr__(self, "sink_to_directory", False)
+
+        if self.unique_fraction:
+            warnings.warn(
+                "Setting 'unique_fraction' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        if self.groupby_n_ary is not None:
+            warnings.warn(
+                "Setting 'groupby_n_ary' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            object.__setattr__(self, "groupby_n_ary", 32)
+        if self.rapidsmpf_spill is not None:
+            warnings.warn(
+                "Setting 'rapidsmpf_spill' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            object.__setattr__(self, "rapidsmpf_spill", False)
 
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):

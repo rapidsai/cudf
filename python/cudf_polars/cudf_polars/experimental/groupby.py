@@ -495,7 +495,8 @@ def _(
         gb_inter = gb_pwise
         while count > post_aggregation_count:
             gb_inter = Repartition(gb_inter.schema, gb_inter)
-            count = max(math.ceil(count / n_ary), post_aggregation_count)
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            count = max(math.ceil(count / n_ary), post_aggregation_count)  # type: ignore[operator]
             partition_info[gb_inter] = PartitionInfo(count=count)
             if count > post_aggregation_count:
                 gb_inter = GroupBy(
