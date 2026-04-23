@@ -165,7 +165,7 @@ class RollingInputChunk:
 
 
 @dataclass(frozen=True)
-class RollingInputKey:
+class ChunkID:
     """Key for rolling input chunk."""
 
     sequence_number: int
@@ -871,6 +871,136 @@ async def add_ghost_chunks(
     await ch_out.drain(context)
 
 
+class RollingChunkExpander:
+    """Expander for rolling chunks."""
+
+    def __init__(
+        self,
+        context: Context,
+        ir: Rolling,
+        ir_context: IRExecutionContext,
+        lookback: int,
+        lookahead: int,
+        index_col_idx: int,
+        index_dtype: plc.DataType,
+    ):
+        self.context = context
+        self.ir = ir
+        self.ir_context = ir_context
+        self.lookback = lookback
+        self.lookahead = lookahead
+        self.index_col_idx = index_col_idx
+        self.index_dtype = index_dtype
+        self.staged_inputs: dict[ChunkID, TableChunk] = {}
+        self.staged_bounds: dict[
+            ChunkID, tuple[int, int] | tuple[plc.Scalar, plc.Scalar] | None
+        ] = {}
+
+    def _index_bounds_for_staged_chunk(
+        self, chunk: TableChunk
+    ) -> tuple[int, int] | tuple[plc.Scalar, plc.Scalar] | None:
+        df = chunk_to_frame(chunk, self.ir.children[0])
+        if self.index_dtype.id() == plc.TypeId.INT64:
+            return _chunk_index_int_bounds_from_df(
+                df,
+                index_col_idx=self.index_col_idx,
+                index_dtype=self.index_dtype,
+            )
+        return _chunk_index_ts_bounds_from_df(
+            df,
+            index_col_idx=self.index_col_idx,
+            index_dtype=self.index_dtype,
+        )
+
+    async def add_input_chunk(
+        self, input_chunk: RollingInputChunk, sequence_number: int
+    ):
+        key = ChunkID(sequence_number, input_chunk.is_ghost_chunk)
+        chunk = input_chunk.chunk.make_available_and_spill(
+            self.context.br(), allow_overbooking=True
+        )
+        self.staged_inputs[key] = chunk
+        self.staged_bounds[key] = self._index_bounds_for_staged_chunk(chunk)
+
+    def _get_next_chunk_id(self) -> ChunkID | None:
+        """Get the next owned chunk ID."""
+        owned = [k for k in self.staged_inputs if not k.is_ghost_chunk]
+        if not owned:
+            return None
+        seq = min(k.sequence_number for k in owned)
+        return ChunkID(seq, False)
+
+    async def _has_lookahead_halo(self, chunk_id: ChunkID) -> bool:
+        """Check if we have enough lookahead chunks."""
+        if self.lookahead <= 0:
+            return True
+        keys = sorted(
+            (
+                k
+                for k in self.staged_inputs
+                if k.sequence_number > chunk_id.sequence_number
+            ),
+            key=lambda k: k.sequence_number,
+        )
+        if not keys or (cb := self.staged_bounds.get(chunk_id)) is None:
+            return False
+        fb, lb = self.staged_bounds[keys[0]], self.staged_bounds[keys[-1]]
+        if self.index_dtype.id() == plc.TypeId.INT64:
+            th = cb[1] + self.lookahead
+            return (fb is not None and fb[0] > th) or (lb is not None and lb[1] >= th)
+        st = self.staged_inputs[chunk_id].stream
+        dur = _duration_dtype_for_timestamp(self.index_dtype)
+        upper = _scalar_binop_scalar(
+            cb[1],
+            plc.Scalar.from_py(self.lookahead, dur, stream=st),
+            plc.binaryop.BinaryOperator.ADD,
+            self.index_dtype,
+            st,
+        )
+        return (
+            fb is not None
+            and bool(
+                _scalar_binop_scalar(
+                    fb[0], upper, plc.binaryop.BinaryOperator.GREATER, _BOOL8, st
+                ).to_py(stream=st)
+            )
+        ) or (
+            lb is not None
+            and bool(
+                _scalar_binop_scalar(
+                    lb[1], upper, plc.binaryop.BinaryOperator.GREATER_EQUAL, _BOOL8, st
+                ).to_py(stream=st)
+            )
+        )
+
+    async def prepare_output(
+        self,
+        receiving: bool,
+    ) -> tuple[TableChunk | None, tuple[int, int] | None, int | None]:
+        """Prepare an expanded output chunk and slice specification."""
+        if (chunk_id := self._get_next_chunk_id()) is None:
+            # No "owned" chunks available yet.
+            return None, None, None
+
+        # We have an "owned" chunk available.
+        # Check if we also have enough lookahead chunks.
+        if (
+            receiving
+            and self.lookahead > 0
+            and not await self._has_lookahead_halo(chunk_id)
+        ):
+            # Need more lookahead chunks to progress.
+            return None, None, None
+
+        # Pop or copy/gather rows from self.staged_inputs
+        # to construct the expanded chunk for chunk_id.
+        # We need to extract the slice specification for
+        # the center of the expanded chunk.
+        chunk, zlice = self._make_expanded_chunk(chunk_id)
+
+        return chunk, zlice, chunk_id.sequence_number
+
+
 async def expand_chunks(
     context: Context,
     ch_in: Channel[TableChunk],
@@ -882,34 +1012,73 @@ async def expand_chunks(
     lookahead: int,
     index_col_idx: int,
     index_dtype: plc.DataType,
-    frame_ir: IR,
 ) -> None:
     """Expand chunks with halos and send them for rolling evaluation."""
-    expander = _RollingChunkExpander(
+    expander = RollingChunkExpander(
         ir=ir,
-        frame_ir=frame_ir,
+        ir_context=ir_context,
         lookback=lookback,
         lookahead=lookahead,
         index_col_idx=index_col_idx,
         index_dtype=index_dtype,
     )
-    br = context.br()
 
-    async def recv_next_into_staging() -> bool:
-        msg = await ch_in.recv(context)
-        if msg is None:
-            expander.stream_done = True
-            return False
-        seq = msg.sequence_number
-        inner = ArbitraryChunk.from_message(msg).release()
-        assert isinstance(inner, RollingInputChunk)
-        chunk = inner.chunk.make_available_and_spill(br, allow_overbooking=True)
-        df = chunk_to_frame(chunk, frame_ir)
-        expander._staging[(seq, inner.is_ghost_chunk)] = (inner, df)
-        return True
+    receiving: bool = True
+    chunk_id: int | None = None
+    while True:
+        if receiving and (msg := await ch_in.recv(context)) is not None:
+            input_chunk = ArbitraryChunk.from_message(msg).release()
+            assert isinstance(input_chunk, RollingInputChunk)
+            await expander.add_input_chunk(input_chunk, msg.sequence_number)
+        else:
+            receiving = False
 
-    await expander.run(context, ch_to_eval, ir_context, recv_next_into_staging)
+        chunk, chunk_id, zlice = await expander.prepare_output(receiving)
+        if chunk is not None:
+            assert chunk_id is not None
+            await ch_to_eval.send(
+                context,
+                Message(
+                    chunk_id,
+                    ArbitraryChunk(
+                        RollingExpandedChunk(
+                            chunk=chunk,
+                            do_evaluate_zlice=zlice,
+                        )
+                    ),
+                ),
+            )
+
+        if not receiving:
+            break
+
     await ch_to_eval.drain(context)
+
+    # expander = _RollingChunkExpander(
+    #     ir=ir,
+    #     frame_ir=frame_ir,
+    #     lookback=lookback,
+    #     lookahead=lookahead,
+    #     index_col_idx=index_col_idx,
+    #     index_dtype=index_dtype,
+    # )
+    # br = context.br()
+
+    # async def recv_next_into_staging() -> bool:
+    #     msg = await ch_in.recv(context)
+    #     if msg is None:
+    #         expander.stream_done = True
+    #         return False
+    #     seq = msg.sequence_number
+    #     inner = ArbitraryChunk.from_message(msg).release()
+    #     assert isinstance(inner, RollingInputChunk)
+    #     chunk = inner.chunk.make_available_and_spill(br, allow_overbooking=True)
+    #     df = chunk_to_frame(chunk, frame_ir)
+    #     expander._staging[(seq, inner.is_ghost_chunk)] = (inner, df)
+    #     return True
+
+    # await expander.run(context, ch_to_eval, ir_context, recv_next_into_staging)
+    # await ch_to_eval.drain(context)
 
 
 async def eval_and_send(
