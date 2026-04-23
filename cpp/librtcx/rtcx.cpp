@@ -1021,7 +1021,6 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
       auto result = compile();
       promise.set_value(result);
 
-      // store result to disk
       cache_blob_to_disk(cache_dir_, tmp_dir_, "blob", sha, result->view());
 
       return ret_fut;
