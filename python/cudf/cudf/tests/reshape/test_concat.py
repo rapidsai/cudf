@@ -1768,6 +1768,7 @@ def test_concat_struct_column():
     # Field order depends on pyarrow's type inference (alphabetical
     # before pyarrow 23, insertion-order after), so derive the
     # expected output from s1's inferred dtype rather than hardcoding.
+    # See https://github.com/apache/arrow/pull/48813
     fields = list(s1.dtype.fields)
     expected_data = [
         {f: (5 if f == "a" else None) for f in fields},
