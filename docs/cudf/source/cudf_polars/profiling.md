@@ -51,7 +51,7 @@ print(total)
 
 ## GPU Profiling
 
-The streaming executor does not support profiling query execution through the `LazyFrame.profile`
+The streaming engines do not support profiling query execution through the `LazyFrame.profile`
 method. We recommend profiling streaming queries with [NVIDIA NSight Systems][nsight];
 `cudf-polars` includes [nvtx][nvtx] annotations to help you understand where time is being spent.
 
@@ -177,7 +177,7 @@ The different scopes have different schemas. Fields in **bold** are required / a
 
 Setting `CUDF_POLARS_LOG_TRACES=1` enables all the metrics. Depending on the query, the overhead
 from collecting the memory or dataframe metrics can be measurable. You can disable some metrics
-through additional environment variables. For example, do disable the memory related metrics, set:
+through additional environment variables. For example, to disable the memory related metrics, set:
 
 ```
 CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0

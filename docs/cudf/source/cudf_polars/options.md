@@ -43,7 +43,7 @@ The `engine` category surfaces the same knobs as plain `pl.GPUEngine(...)` — f
 `parquet_options` and `memory_resource_config`. You do not need to set them separately when using
 {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`.
 
-The `rapidsmpf` category adds streaming-runtime knobs that have no equivalent on the plain
+The `rapidsmpf` category adds knobs for the streaming runtime that have no equivalent on the plain
 `pl.GPUEngine`. See the [RapidsMPF configuration reference][rapidsmpf-config] for the underlying
 meaning of each `RAPIDSMPF_*` field.
 
@@ -75,7 +75,7 @@ This is convenient when options come from a config file or CLI.
 
 ## When to use StreamingOptions vs. raw keyword arguments
 
-* Use {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` +
+* Use {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` with
   `Engine.from_options(opts)` for typical streaming workflows — it is typed, centralized, and
   handles routing automatically.
 * Use the raw `Engine(rapidsmpf_options=..., executor_options=..., engine_options=...)`
@@ -85,7 +85,7 @@ This is convenient when options come from a config file or CLI.
   {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` does not apply —
   pass keyword arguments to `pl.GPUEngine(...)` directly (see below).
 
-## GPUEngine options
+## In-memory Engine Options
 
 The in-memory GPU engine is configured by passing keyword arguments to
 [`polars.GPUEngine`][polars-gpuengine]:
@@ -99,7 +99,7 @@ engine = pl.GPUEngine(parquet_options={"chunked": True})
 See the [Polars GPU support guide][polars-gpu] for the full in-memory usage story.
 
 
-## The options
+## Options Reference
 
 Environment variables follow these patterns:
 
