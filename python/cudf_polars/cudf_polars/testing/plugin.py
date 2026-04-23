@@ -408,10 +408,10 @@ def pytest_collection_modifyitems(
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (
             with_streaming
-            and (r_reason := STREAMING_EXPECTED_FAILURES.get(item.nodeid, None))
+            and (s_reason := STREAMING_EXPECTED_FAILURES.get(item.nodeid, None))
             is not None
         ):
-            item.add_marker(pytest.mark.xfail(reason=r_reason))
+            item.add_marker(pytest.mark.xfail(reason=s_reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):
                 # the second entry in the tuple is the condition to xfail on
