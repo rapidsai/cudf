@@ -37,10 +37,30 @@
 #include <thrust/logical.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 
 namespace cudf {
 namespace detail {
+
+struct stream_fork_config {
+  std::size_t min_bytes_for_stream_fork;
+  std::size_t max_bytes_for_stream_fork;
+  std::size_t max_forked_streams;
+  std::size_t bytes_for_full_streams;
+};
+
+[[nodiscard]] inline std::size_t max_column_element_bytes(table_view const& table)
+{
+  return std::transform_reduce(
+    table.begin(),
+    table.end(),
+    std::size_t{0},
+    [](auto a, auto b) { return std::max(a, b); },
+    [](column_view const& col) -> std::size_t {
+      return cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : std::size_t{8};
+    });
+}
 
 /**
  * @brief Fork streams for a multi-column table operation when beneficial.
@@ -68,41 +88,46 @@ namespace detail {
 {
   if (num_output_rows <= 0) { return {}; }
 
-  // Stream-pool tuning constants.
-  // Minimum bytes per column before fork/join overhead is worthwhile.
-  // 512KB = 65536 × 8, so for int64 the effective threshold is 65K rows.
-  // For narrow types like int8, this correctly raises the threshold to
-  // 512K rows.
-  constexpr std::size_t min_bytes_for_stream_fork = 512 * 1'024;
-  // Maximum number of forked streams. GPU memory bandwidth saturates
-  // well before this many concurrent gather/scatter kernels.
-  constexpr std::size_t max_forked_streams = 8;
-  // Bytes per column at which the full stream cap is used. Below this,
-  // use half the cap to reduce fork/join API overhead at moderate sizes.
-  constexpr std::size_t bytes_for_full_streams = 8 * 1'024 * 1'024;
-
-  auto const num_columns = table.num_columns();
-  // Identity 0 is correct for max-reduction: an empty table yields
-  // bytes_per_col == 0, which is below min_bytes_for_stream_fork and
-  // therefore correctly skips forking.
-  auto const max_elem_bytes = std::transform_reduce(
-    table.begin(),
-    table.end(),
-    std::size_t{0},
-    [](auto a, auto b) { return std::max(a, b); },
-    [](column_view const& col) -> std::size_t {
-      // Non-fixed-width columns (strings, lists, structs) involve
-      // offset arrays and child data; treat as at least int64-width.
-      return cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : std::size_t{8};
-    });
-
+  constexpr stream_fork_config config{
+    512 * 1'024, std::numeric_limits<std::size_t>::max(), 8, 8 * 1'024 * 1'024};
+  auto const num_columns     = table.num_columns();
+  auto const max_elem_bytes  = max_column_element_bytes(table);
   auto const bytes_per_col   = static_cast<std::size_t>(num_output_rows) * max_elem_bytes;
-  auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
-  auto const effective_cap =
-    bytes_per_col >= bytes_for_full_streams ? max_forked_streams : max_forked_streams / 2;
-  auto const num_streams = use_stream_pool
-                             ? std::min(static_cast<std::size_t>(num_columns), effective_cap)
-                             : std::size_t{0};
+  auto const use_stream_pool = num_columns > 1 && bytes_per_col >= config.min_bytes_for_stream_fork;
+  auto const effective_cap   = bytes_per_col >= config.bytes_for_full_streams
+                                 ? config.max_forked_streams
+                                 : std::max<std::size_t>(1, config.max_forked_streams / 2);
+  auto const num_streams     = use_stream_pool
+                                 ? std::min(static_cast<std::size_t>(num_columns), effective_cap)
+                                 : std::size_t{0};
+  return num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
+                         : std::vector<rmm::cuda_stream_view>{};
+}
+
+/**
+ * @brief Fork streams for scatter only in the moderate-size regime.
+ *
+ * Scatter is more sensitive than gather to cross-stream memory-bandwidth
+ * contention because each column copies the full target and then overwrites
+ * rows according to the scatter map. Use a lower stream cap and stop forking
+ * once per-column work is large enough that a single stream already saturates
+ * device bandwidth effectively.
+ */
+[[nodiscard]] inline std::vector<rmm::cuda_stream_view> maybe_fork_scatter_streams(
+  table_view const& table, size_type num_output_rows, rmm::cuda_stream_view stream)
+{
+  if (num_output_rows <= 0) { return {}; }
+
+  constexpr stream_fork_config config{512 * 1'024, 8 * 1'024 * 1'024, 3, 0};
+  auto const num_columns     = table.num_columns();
+  auto const max_elem_bytes  = max_column_element_bytes(table);
+  auto const bytes_per_col   = static_cast<std::size_t>(num_output_rows) * max_elem_bytes;
+  auto const use_stream_pool = num_columns > 1 &&
+                               bytes_per_col >= config.min_bytes_for_stream_fork &&
+                               bytes_per_col <= config.max_bytes_for_stream_fork;
+  auto const num_streams =
+    use_stream_pool ? std::min(static_cast<std::size_t>(num_columns), config.max_forked_streams)
+                    : std::size_t{0};
   return num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
                          : std::vector<rmm::cuda_stream_view>{};
 }

@@ -397,7 +397,7 @@ std::unique_ptr<table> scatter(table_view const& source,
   // to amortize the fork/join overhead. Use target.num_rows() as the size proxy
   // since the dominant cost per column is copying the full target before
   // overwriting the scattered rows.
-  auto const streams = maybe_fork_streams(target, target.num_rows(), stream);
+  auto const streams = maybe_fork_scatter_streams(target, target.num_rows(), stream);
 
   auto const stream_for = [&](size_type i) -> rmm::cuda_stream_view {
     return !streams.empty() ? streams[i % streams.size()] : stream;
