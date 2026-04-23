@@ -301,8 +301,8 @@ def _(
             partition_info,
             left,
             right,
-            config_options.executor.shuffle_method,
-            # error: Item "None" of "Runtime | None" has no attribute "value"
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            config_options.executor.shuffle_method,  # type: ignore[arg-type]
             # Validated in StreamingExecutor.__post_init__ to not be None
             streaming_runtime=config_options.executor.runtime.value,  # type: ignore[union-attr]
         )
@@ -314,7 +314,8 @@ def _(
             partition_info,
             left,
             right,
-            config_options.executor.shuffle_method,
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            config_options.executor.shuffle_method,  # type: ignore[arg-type]
         )
 
 

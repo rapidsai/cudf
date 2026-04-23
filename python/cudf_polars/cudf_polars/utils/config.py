@@ -186,6 +186,11 @@ class ShuffleMethod(enum.StrEnum):
     """
     The method to use for shuffling data between workers with the streaming executor.
 
+    .. deprecated::
+        The ``shuffle_method`` option is deprecated. The shuffle method is now
+        determined automatically based on the cluster configuration. This enum
+        will be removed in a future release.
+
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf shuffler.
     * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
@@ -686,6 +691,10 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
+        .. deprecated::
+            The ``shuffle_method`` option is deprecated. The shuffle method is now
+            determined automatically based on the cluster configuration. This argument
+            will be removed in a future release.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
@@ -770,11 +779,11 @@ class StreamingExecutor:
             f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
         )
     )
-    shuffle_method: ShuffleMethod = dataclasses.field(
+    shuffle_method: ShuffleMethod | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
-            default=ShuffleMethod.TASKS,
+            default=None,
         )
     )
     rapidsmpf_spill: bool = dataclasses.field(
@@ -828,39 +837,38 @@ class StreamingExecutor:
             object.__setattr__(self, "runtime", Runtime.RAPIDSMPF)
         assert self.runtime is not None, "Expected runtime to be set"
 
-        # Check for rapidsmpf runtime
-        if self.runtime == "rapidsmpf":
-            object.__setattr__(self, "shuffle_method", "rapidsmpf")
-
         if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
-        # Handle shuffle_method defaults for streaming executor
+        if self.shuffle_method is not None:
+            warnings.warn(
+                "Setting 'shuffle_method' is deprecated and will be removed "
+                "in a future release. The shuffle method will be determined "
+                "automatically based on the cluster configuration in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            if self.shuffle_method == "rapidsmpf-single":
+                raise ValueError("rapidsmpf-single is not a supported shuffle method.")
+            elif self.shuffle_method == "rapidsmpf":
+                if (
+                    self.cluster == "distributed"
+                    and not rapidsmpf_distributed_available()
+                ):
+                    raise ValueError(
+                        "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
+                    )
+                if self.cluster == "single":
+                    object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
+
+        # Resolve shuffle_method from cluster when not explicitly set
         if self.shuffle_method is None:
-            if self.cluster == "distributed" and rapidsmpf_distributed_available():
-                # For distributed cluster, prefer rapidsmpf if available
+            if self.cluster == "distributed":
                 object.__setattr__(self, "shuffle_method", "rapidsmpf")
             else:
-                # Otherwise, use task-based shuffle for now.
-                # TODO: Evaluate single-process shuffle by default.
-                object.__setattr__(self, "shuffle_method", "tasks")
-        elif self.shuffle_method == "rapidsmpf-single":
-            # The user should NOT specify "rapidsmpf-single" directly.
-            raise ValueError("rapidsmpf-single is not a supported shuffle method.")
-        elif self.shuffle_method == "rapidsmpf":
-            # Check that we have rapidsmpf installed
-            if self.cluster == "distributed" and not rapidsmpf_distributed_available():
-                raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
-                )
-            elif self.cluster == "single" and not rapidsmpf_single_available():
-                raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
-                )
-            # Select "rapidsmpf-single" for single-GPU
-            if self.cluster == "single":
                 object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
+        assert self.shuffle_method is not None, "Expected shuffle_method to be set"
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(
@@ -1120,19 +1128,6 @@ class ConfigOptions(Generic[ExecutorType]):
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
-                # Handle the interaction between the default shuffle method, the
-                # cluster, and whether rapidsmpf is available.
-                env_shuffle_method = os.environ.get(
-                    "CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", None
-                )
-                if env_shuffle_method is not None:
-                    shuffle_method_default = ShuffleMethod(env_shuffle_method)
-                else:
-                    shuffle_method_default = None
-
-                user_executor_options.setdefault(
-                    "shuffle_method", shuffle_method_default
-                )
 
                 # Handle dynamic_planning: check user config, then env var
                 user_dynamic_planning = user_executor_options.get(

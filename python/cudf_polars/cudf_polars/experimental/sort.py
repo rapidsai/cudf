@@ -563,6 +563,7 @@ def _(
         if (ir.stable and executor.runtime == "tasks")
         else config_options.executor.shuffle_method
     )
+    assert isinstance(shuffle_method, ShuffleMethod)
     if (
         shuffle_method != config_options.executor.shuffle_method
     ):  # pragma: no cover; Requires rapidsmpf

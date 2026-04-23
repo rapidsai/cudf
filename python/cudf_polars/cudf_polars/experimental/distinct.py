@@ -122,7 +122,8 @@ def lower_distinct(
         new_node = Shuffle(
             new_node.schema,
             distinct_keys,
-            config_options.executor.shuffle_method,
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            config_options.executor.shuffle_method,  # type: ignore[arg-type]
             new_node,
         )
         partition_info[new_node] = PartitionInfo(count=output_count)
@@ -172,7 +173,8 @@ def _(
             child = Shuffle(
                 child.schema,
                 distinct_keys,
-                config_options.executor.shuffle_method,
+                # Validated in StreamingExecutor.__post_init__ to not be None
+                config_options.executor.shuffle_method,  # type: ignore[arg-type]
                 child,
             )
             partition_info[child] = PartitionInfo(
