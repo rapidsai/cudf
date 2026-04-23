@@ -320,6 +320,12 @@ class PDSDSPolarsQueries(PDSDSQueries):
         return PDSDSDuckDBQueries
 
 
+class PDSDSPolarsNaiveQueries(PDSDSPolarsQueries):
+    """Naive Polars Queries."""
+
+    q_impl = "polars_impl_naive"
+
+
 class PDSDSDuckDBQueries(PDSDSQueries):
     """DuckDB Queries."""
 
@@ -330,7 +336,7 @@ if __name__ == "__main__":
     parser = build_parser(num_queries=99)
     parser.add_argument(
         "--engine",
-        choices=["polars", "duckdb"],
+        choices=["polars", "duckdb", "polars-naive"],
         default="polars",
         help="Which engine to use for executing the benchmarks or to validate results.",
     )
@@ -340,5 +346,7 @@ if __name__ == "__main__":
         run_polars(PDSDSPolarsQueries, args)
     elif args.engine == "duckdb":
         run_duckdb(PDSDSDuckDBQueries, args)
+    elif args.engine == "polars-naive":
+        run_polars(PDSDSPolarsNaiveQueries, args)
     else:
         raise ValueError(f"Invalid engine: {args.engine}")
