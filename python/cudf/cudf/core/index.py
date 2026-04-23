@@ -1570,6 +1570,18 @@ class Index(SingleColumnFrame):
     def is_unique(self) -> bool:
         return self._column.is_unique
 
+    def _maybe_check_unique(self) -> None:
+        """Raise :class:`~pandas.errors.DuplicateLabelError` if non-unique.
+
+        Mirrors ``pandas.Index._maybe_check_unique``. Used by
+        ``NDFrame.flags.allows_duplicate_labels`` (``pandas.Flags``)
+        when setting the flag to ``False``.
+        """
+        if not self.is_unique:
+            from pandas.errors import DuplicateLabelError
+
+            raise DuplicateLabelError(f"Index has duplicates.\n{self}")
+
     @_performance_tracking
     def equals(self, other) -> bool:
         if not isinstance(other, Index) or len(self) != len(other):
