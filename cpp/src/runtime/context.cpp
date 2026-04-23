@@ -117,7 +117,7 @@ void initialize(init_flags flags)
     bool use_jit           = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
     bool preload_jit_cache = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
     bool disable_jit_cache = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
-    bool clear_jit_cache   = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
+    bool clear_jit_cache   = get_bool_env_or("LIBCUDF_JIT_CLEAR_CACHE", false);
 
     auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
     auto kernel_cache_limit_disk    = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 131'072U);
