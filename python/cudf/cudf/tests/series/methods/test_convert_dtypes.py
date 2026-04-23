@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-from itertools import product
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -56,52 +54,34 @@ def test_convert_integer_false_convert_floating_true():
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize(
-    "numpy_dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint8",
-        "uint16",
-        "uint32",
-        "uint64",
-    ],
-)
-def test_convert_dtypes_integer_to_nullable(numpy_dtype):
-    _compare_to_pandas([1, 2, 3], numpy_dtype, {})
+def test_convert_dtypes_integer_to_nullable(integer_types_as_str):
+    _compare_to_pandas([1, 2, 3], integer_types_as_str, {})
 
 
-@pytest.mark.parametrize(
-    "numpy_dtype", ["int8", "int32", "int64", "uint16", "uint32"]
-)
-def test_convert_dtypes_integer_convert_integer_false(numpy_dtype):
-    _compare_to_pandas([1, 2, 3], numpy_dtype, {"convert_integer": False})
-
-
-@pytest.mark.parametrize("numpy_dtype", ["float32", "float64"])
-def test_convert_dtypes_float_noninteger(numpy_dtype):
-    _compare_to_pandas([1.5, 2.5, 3.5], numpy_dtype, {})
-
-
-@pytest.mark.parametrize("numpy_dtype", ["float32", "float64"])
-def test_convert_dtypes_float_integer_like_to_int64(numpy_dtype):
-    _compare_to_pandas([1.0, 2.0, 3.0], numpy_dtype, {})
-
-
-@pytest.mark.parametrize("numpy_dtype", ["float32", "float64"])
-def test_convert_dtypes_float_convert_integer_false(numpy_dtype):
+def test_convert_dtypes_integer_convert_integer_false(integer_types_as_str):
     _compare_to_pandas(
-        [1.0, 2.0, 3.0], numpy_dtype, {"convert_integer": False}
+        [1, 2, 3], integer_types_as_str, {"convert_integer": False}
     )
 
 
-@pytest.mark.parametrize("numpy_dtype", ["float32", "float64"])
-def test_convert_dtypes_float_both_false(numpy_dtype):
+def test_convert_dtypes_float_noninteger(float_types_as_str):
+    _compare_to_pandas([1.5, 2.5, 3.5], float_types_as_str, {})
+
+
+def test_convert_dtypes_float_integer_like_to_int64(float_types_as_str):
+    _compare_to_pandas([1.0, 2.0, 3.0], float_types_as_str, {})
+
+
+def test_convert_dtypes_float_convert_integer_false(float_types_as_str):
+    _compare_to_pandas(
+        [1.0, 2.0, 3.0], float_types_as_str, {"convert_integer": False}
+    )
+
+
+def test_convert_dtypes_float_both_false(float_types_as_str):
     _compare_to_pandas(
         [1.0, 2.0, 3.0],
-        numpy_dtype,
+        float_types_as_str,
         {"convert_integer": False, "convert_floating": False},
     )
 
@@ -146,21 +126,11 @@ def test_convert_dtypes_string_dtype(kwargs):
     _compare_to_pandas(["a", "b", "c"], "str", kwargs)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        pd.Int8Dtype(),
-        pd.Int32Dtype(),
-        pd.Int64Dtype(),
-        pd.UInt32Dtype(),
-        pd.Float32Dtype(),
-        pd.Float64Dtype(),
-        pd.BooleanDtype(),
-    ],
-)
-def test_convert_dtypes_already_nullable_unchanged(dtype):
-    data = [True, False, True] if dtype == pd.BooleanDtype() else [1, 2, 3]
-    _compare_to_pandas(data, dtype, {})
+def test_convert_dtypes_already_nullable_unchanged(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+    _compare_to_pandas([scalar, scalar, scalar], dtype, {})
 
 
 @pytest.mark.parametrize(
@@ -240,16 +210,6 @@ def test_convert_dtypes_pandas_compatible_mode():
         _compare_to_pandas([1, 2, 3], "int32", {})
 
 
-_PARAM_NAMES = (
-    "infer_objects",
-    "convert_string",
-    "convert_integer",
-    "convert_boolean",
-    "convert_floating",
-)
-
-
-@pytest.mark.parametrize("params", list(product(*[(True, False)] * 5)))
 @pytest.mark.parametrize(
     "data, dtype",
     [
@@ -263,7 +223,19 @@ _PARAM_NAMES = (
     ],
 )
 def test_convert_dtypes_matches_pandas_all_param_combinations(
-    data, dtype, params
+    data,
+    dtype,
+    infer_objects,
+    convert_string,
+    convert_integer,
+    convert_boolean,
+    convert_floating,
 ):
-    kwargs = dict(zip(_PARAM_NAMES, params, strict=True))
+    kwargs = {
+        "infer_objects": infer_objects,
+        "convert_string": convert_string,
+        "convert_integer": convert_integer,
+        "convert_boolean": convert_boolean,
+        "convert_floating": convert_floating,
+    }
     _compare_to_pandas(data, dtype, kwargs)

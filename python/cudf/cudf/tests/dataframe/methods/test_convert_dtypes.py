@@ -1,7 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-from itertools import product
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -99,18 +97,20 @@ def test_convert_dtypes_dataframe_backend(dtype_backend):
     _compare_to_pandas(column_specs, {"dtype_backend": dtype_backend})
 
 
-_PARAM_NAMES = (
-    "infer_objects",
-    "convert_string",
-    "convert_integer",
-    "convert_boolean",
-    "convert_floating",
-)
-
-
-@pytest.mark.parametrize("params", list(product(*[(True, False)] * 5)))
-def test_convert_dtypes_dataframe_param_combinations(params):
-    kwargs = dict(zip(_PARAM_NAMES, params, strict=True))
+def test_convert_dtypes_dataframe_param_combinations(
+    infer_objects,
+    convert_string,
+    convert_integer,
+    convert_boolean,
+    convert_floating,
+):
+    kwargs = {
+        "infer_objects": infer_objects,
+        "convert_string": convert_string,
+        "convert_integer": convert_integer,
+        "convert_boolean": convert_boolean,
+        "convert_floating": convert_floating,
+    }
     column_specs = {
         "i": ([1, 2, 3], "int32"),
         "f_int": ([1.0, 2.0, 3.0], "float64"),

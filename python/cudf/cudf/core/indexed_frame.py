@@ -6560,15 +6560,15 @@ class IndexedFrame(Frame):
             new_col = None
             if dtype == np.dtype("bool"):
                 if convert_boolean:
-                    new_col = col.astype(pd.BooleanDtype(), copy=True)
+                    new_col = col.astype(pd.BooleanDtype(), copy=False)
                 elif convert_integer:
-                    new_col = col.astype(pd.Int64Dtype(), copy=True)
+                    new_col = col.astype(pd.Int64Dtype(), copy=False)
                 elif convert_floating:
-                    new_col = col.astype(pd.Float64Dtype(), copy=True)
+                    new_col = col.astype(pd.Float64Dtype(), copy=False)
             elif dtype.kind in ("i", "u") and dtype.name in numpy_to_nullable:
                 if convert_integer:
                     new_col = col.astype(
-                        numpy_to_nullable[dtype.name], copy=True
+                        numpy_to_nullable[dtype.name], copy=False
                     )
             elif dtype.kind == "f" and dtype.name in numpy_to_nullable:
                 col_filled = col.fillna(0)
@@ -6583,28 +6583,28 @@ class IndexedFrame(Frame):
                     and bool(cp.allclose(col_filled, as_int))
                 ):
                     new_col = col.nans_to_nulls().astype(
-                        pd.Int64Dtype(), copy=True
+                        pd.Int64Dtype(), copy=False
                     )
                 elif convert_floating:
                     new_col = col.astype(
-                        numpy_to_nullable[dtype.name], copy=True
+                        numpy_to_nullable[dtype.name], copy=False
                     )
             elif isinstance(dtype, pd.StringDtype):
                 if convert_string and dtype.na_value is not pd.NA:
                     new_col = col.astype(
-                        pd.StringDtype(na_value=pd.NA), copy=True
+                        pd.StringDtype(na_value=pd.NA), copy=False
                     )
             elif dtype == np.dtype("O"):
                 if convert_string:
                     new_col = col.astype(
-                        pd.StringDtype(na_value=pd.NA), copy=True
+                        pd.StringDtype(na_value=pd.NA), copy=False
                     )
                 elif infer_objects:
                     new_col = col.astype(
-                        pd.StringDtype(na_value=np.nan), copy=True
+                        pd.StringDtype(na_value=np.nan), copy=False
                     )
             if new_col is None:
-                new_col = col.copy(deep=True)
+                new_col = col
             cols.append(new_col)
         return self._from_data_like_self(
             self._data._from_columns_like_self(cols, verify=False)
