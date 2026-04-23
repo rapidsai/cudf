@@ -152,8 +152,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             right_on=["sr_item_sk", "sr_ticket_number"],
             how="left",
         )
-        .join(reason, left_on="sr_reason_sk", right_on="r_reason_sk")
-        .filter(pl.col("r_reason_desc") == reason_desc)
+        .join(reason, how="cross")
+        .filter(
+            (pl.col("sr_reason_sk") == pl.col("r_reason_sk"))
+            & (pl.col("r_reason_desc") == reason_desc)
+        )
         .with_columns(
             pl.when(pl.col("sr_return_quantity").is_not_null())
             .then(

@@ -234,173 +234,124 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
 
-    b1 = (
-        store_sales.filter(
-            pl.col("ss_quantity").is_between(0, 5)
-            & (
-                pl.col("ss_list_price").is_between(lp[0], lp[0] + 10)
-                | pl.col("ss_coupon_amt").is_between(ca[0], ca[0] + 1000)
-                | pl.col("ss_wholesale_cost").is_between(wc[0], wc[0] + 20)
-            )
+    b1 = store_sales.filter(
+        pl.col("ss_quantity").is_between(0, 5)
+        & (
+            pl.col("ss_list_price").is_between(lp[0], lp[0] + 10)
+            | pl.col("ss_coupon_amt").is_between(ca[0], ca[0] + 1000)
+            | pl.col("ss_wholesale_cost").is_between(wc[0], wc[0] + 20)
         )
-        .select(
-            [
-                pl.col("ss_list_price").mean().alias("B1_LP"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .count()
-                .cast(pl.Int64)
-                .alias("B1_CNT"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("B1_CNTD"),
-            ]
-        )
-        .with_columns(pl.lit(1).alias("_join_key"))
+    ).select(
+        [
+            pl.col("ss_list_price").mean().alias("B1_LP"),
+            pl.col("ss_list_price").drop_nulls().count().cast(pl.Int64).alias("B1_CNT"),
+            pl.col("ss_list_price")
+            .drop_nulls()
+            .n_unique()
+            .cast(pl.Int64)
+            .alias("B1_CNTD"),
+        ]
     )
-    b2 = (
-        store_sales.filter(
-            pl.col("ss_quantity").is_between(6, 10)
-            & (
-                pl.col("ss_list_price").is_between(lp[1], lp[1] + 10)
-                | pl.col("ss_coupon_amt").is_between(ca[1], ca[1] + 1000)
-                | pl.col("ss_wholesale_cost").is_between(wc[1], wc[1] + 20)
-            )
+    b2 = store_sales.filter(
+        pl.col("ss_quantity").is_between(6, 10)
+        & (
+            pl.col("ss_list_price").is_between(lp[1], lp[1] + 10)
+            | pl.col("ss_coupon_amt").is_between(ca[1], ca[1] + 1000)
+            | pl.col("ss_wholesale_cost").is_between(wc[1], wc[1] + 20)
         )
-        .select(
-            [
-                pl.col("ss_list_price").mean().alias("B2_LP"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .count()
-                .cast(pl.Int64)
-                .alias("B2_CNT"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("B2_CNTD"),
-            ]
-        )
-        .with_columns(pl.lit(1).alias("_join_key"))
+    ).select(
+        [
+            pl.col("ss_list_price").mean().alias("B2_LP"),
+            pl.col("ss_list_price").drop_nulls().count().cast(pl.Int64).alias("B2_CNT"),
+            pl.col("ss_list_price")
+            .drop_nulls()
+            .n_unique()
+            .cast(pl.Int64)
+            .alias("B2_CNTD"),
+        ]
     )
-    b3 = (
-        store_sales.filter(
-            pl.col("ss_quantity").is_between(11, 15)
-            & (
-                pl.col("ss_list_price").is_between(lp[2], lp[2] + 10)
-                | pl.col("ss_coupon_amt").is_between(ca[2], ca[2] + 1000)
-                | pl.col("ss_wholesale_cost").is_between(wc[2], wc[2] + 20)
-            )
+    b3 = store_sales.filter(
+        pl.col("ss_quantity").is_between(11, 15)
+        & (
+            pl.col("ss_list_price").is_between(lp[2], lp[2] + 10)
+            | pl.col("ss_coupon_amt").is_between(ca[2], ca[2] + 1000)
+            | pl.col("ss_wholesale_cost").is_between(wc[2], wc[2] + 20)
         )
-        .select(
-            [
-                pl.col("ss_list_price").mean().alias("B3_LP"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .count()
-                .cast(pl.Int64)
-                .alias("B3_CNT"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("B3_CNTD"),
-            ]
-        )
-        .with_columns(pl.lit(1).alias("_join_key"))
+    ).select(
+        [
+            pl.col("ss_list_price").mean().alias("B3_LP"),
+            pl.col("ss_list_price").drop_nulls().count().cast(pl.Int64).alias("B3_CNT"),
+            pl.col("ss_list_price")
+            .drop_nulls()
+            .n_unique()
+            .cast(pl.Int64)
+            .alias("B3_CNTD"),
+        ]
     )
-    b4 = (
-        store_sales.filter(
-            pl.col("ss_quantity").is_between(16, 20)
-            & (
-                pl.col("ss_list_price").is_between(lp[3], lp[3] + 10)
-                | pl.col("ss_coupon_amt").is_between(ca[3], ca[3] + 1000)
-                | pl.col("ss_wholesale_cost").is_between(wc[3], wc[3] + 20)
-            )
+    b4 = store_sales.filter(
+        pl.col("ss_quantity").is_between(16, 20)
+        & (
+            pl.col("ss_list_price").is_between(lp[3], lp[3] + 10)
+            | pl.col("ss_coupon_amt").is_between(ca[3], ca[3] + 1000)
+            | pl.col("ss_wholesale_cost").is_between(wc[3], wc[3] + 20)
         )
-        .select(
-            [
-                pl.col("ss_list_price").mean().alias("B4_LP"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .count()
-                .cast(pl.Int64)
-                .alias("B4_CNT"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("B4_CNTD"),
-            ]
-        )
-        .with_columns(pl.lit(1).alias("_join_key"))
+    ).select(
+        [
+            pl.col("ss_list_price").mean().alias("B4_LP"),
+            pl.col("ss_list_price").drop_nulls().count().cast(pl.Int64).alias("B4_CNT"),
+            pl.col("ss_list_price")
+            .drop_nulls()
+            .n_unique()
+            .cast(pl.Int64)
+            .alias("B4_CNTD"),
+        ]
     )
-    b5 = (
-        store_sales.filter(
-            pl.col("ss_quantity").is_between(21, 25)
-            & (
-                pl.col("ss_list_price").is_between(lp[4], lp[4] + 10)
-                | pl.col("ss_coupon_amt").is_between(ca[4], ca[4] + 1000)
-                | pl.col("ss_wholesale_cost").is_between(wc[4], wc[4] + 20)
-            )
+    b5 = store_sales.filter(
+        pl.col("ss_quantity").is_between(21, 25)
+        & (
+            pl.col("ss_list_price").is_between(lp[4], lp[4] + 10)
+            | pl.col("ss_coupon_amt").is_between(ca[4], ca[4] + 1000)
+            | pl.col("ss_wholesale_cost").is_between(wc[4], wc[4] + 20)
         )
-        .select(
-            [
-                pl.col("ss_list_price").mean().alias("B5_LP"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .count()
-                .cast(pl.Int64)
-                .alias("B5_CNT"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("B5_CNTD"),
-            ]
-        )
-        .with_columns(pl.lit(1).alias("_join_key"))
+    ).select(
+        [
+            pl.col("ss_list_price").mean().alias("B5_LP"),
+            pl.col("ss_list_price").drop_nulls().count().cast(pl.Int64).alias("B5_CNT"),
+            pl.col("ss_list_price")
+            .drop_nulls()
+            .n_unique()
+            .cast(pl.Int64)
+            .alias("B5_CNTD"),
+        ]
     )
-    b6 = (
-        store_sales.filter(
-            pl.col("ss_quantity").is_between(26, 30)
-            & (
-                pl.col("ss_list_price").is_between(lp[5], lp[5] + 10)
-                | pl.col("ss_coupon_amt").is_between(ca[5], ca[5] + 1000)
-                | pl.col("ss_wholesale_cost").is_between(wc[5], wc[5] + 20)
-            )
+    b6 = store_sales.filter(
+        pl.col("ss_quantity").is_between(26, 30)
+        & (
+            pl.col("ss_list_price").is_between(lp[5], lp[5] + 10)
+            | pl.col("ss_coupon_amt").is_between(ca[5], ca[5] + 1000)
+            | pl.col("ss_wholesale_cost").is_between(wc[5], wc[5] + 20)
         )
-        .select(
-            [
-                pl.col("ss_list_price").mean().alias("B6_LP"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .count()
-                .cast(pl.Int64)
-                .alias("B6_CNT"),
-                pl.col("ss_list_price")
-                .drop_nulls()
-                .n_unique()
-                .cast(pl.Int64)
-                .alias("B6_CNTD"),
-            ]
-        )
-        .with_columns(pl.lit(1).alias("_join_key"))
+    ).select(
+        [
+            pl.col("ss_list_price").mean().alias("B6_LP"),
+            pl.col("ss_list_price").drop_nulls().count().cast(pl.Int64).alias("B6_CNT"),
+            pl.col("ss_list_price")
+            .drop_nulls()
+            .n_unique()
+            .cast(pl.Int64)
+            .alias("B6_CNTD"),
+        ]
     )
 
     limit = 100
 
     return QueryResult(
         frame=(
-            b1.join(b2, on="_join_key")
-            .join(b3, on="_join_key")
-            .join(b4, on="_join_key")
-            .join(b5, on="_join_key")
-            .join(b6, on="_join_key")
-            .drop("_join_key")
+            b1.join(b2, how="cross")
+            .join(b3, how="cross")
+            .join(b4, how="cross")
+            .join(b5, how="cross")
+            .join(b6, how="cross")
             .limit(limit)
         ),
         sort_by=[],

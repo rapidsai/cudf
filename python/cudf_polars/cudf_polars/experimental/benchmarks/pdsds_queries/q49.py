@@ -390,7 +390,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter(
-            (pl.col("wr_return_amt") > 10000)
+            (pl.col("wr_return_amt").fill_null(0) > 10000)
             & (pl.col("ws_net_profit") > 1)
             & (pl.col("ws_net_paid") > 0)
             & (pl.col("ws_quantity") > 0)
@@ -405,16 +405,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     / pl.col("ws_quantity").fill_null(0).sum().cast(pl.Float64)
                 ).alias("return_ratio"),
                 (
-                    pl.col("wr_return_amt").fill_null(0).sum().cast(pl.Float64)
-                    / pl.col("ws_net_paid").fill_null(0).sum().cast(pl.Float64)
+                    pl.col("wr_return_amt").fill_null(0).sum().round(4)
+                    / pl.col("ws_net_paid").fill_null(0).sum().round(4)
                 ).alias("currency_ratio"),
             ]
         )
         .with_columns(
             [
                 pl.col("ws_item_sk").alias("item"),
-                pl.col("return_ratio").rank(method="ordinal").alias("return_rank"),
-                pl.col("currency_ratio").rank(method="ordinal").alias("currency_rank"),
+                pl.col("return_ratio").rank(method="min").alias("return_rank"),
+                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
             ]
         )
         .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
@@ -430,7 +430,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter(
-            (pl.col("cr_return_amount") > 10000)
+            (pl.col("cr_return_amount").fill_null(0) > 10000)
             & (pl.col("cs_net_profit") > 1)
             & (pl.col("cs_net_paid") > 0)
             & (pl.col("cs_quantity") > 0)
@@ -445,16 +445,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     / pl.col("cs_quantity").fill_null(0).sum().cast(pl.Float64)
                 ).alias("return_ratio"),
                 (
-                    pl.col("cr_return_amount").fill_null(0).sum().cast(pl.Float64)
-                    / pl.col("cs_net_paid").fill_null(0).sum().cast(pl.Float64)
+                    pl.col("cr_return_amount").fill_null(0).sum().round(4)
+                    / pl.col("cs_net_paid").fill_null(0).sum().round(4)
                 ).alias("currency_ratio"),
             ]
         )
         .with_columns(
             [
                 pl.col("cs_item_sk").alias("item"),
-                pl.col("return_ratio").rank(method="ordinal").alias("return_rank"),
-                pl.col("currency_ratio").rank(method="ordinal").alias("currency_rank"),
+                pl.col("return_ratio").rank(method="min").alias("return_rank"),
+                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
             ]
         )
         .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
@@ -470,7 +470,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(
-            (pl.col("sr_return_amt") > 10000)
+            (pl.col("sr_return_amt").fill_null(0) > 10000)
             & (pl.col("ss_net_profit") > 1)
             & (pl.col("ss_net_paid") > 0)
             & (pl.col("ss_quantity") > 0)
@@ -485,16 +485,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     / pl.col("ss_quantity").fill_null(0).sum().cast(pl.Float64)
                 ).alias("return_ratio"),
                 (
-                    pl.col("sr_return_amt").fill_null(0).sum().cast(pl.Float64)
-                    / pl.col("ss_net_paid").fill_null(0).sum().cast(pl.Float64)
+                    pl.col("sr_return_amt").fill_null(0).sum().round(4)
+                    / pl.col("ss_net_paid").fill_null(0).sum().round(4)
                 ).alias("currency_ratio"),
             ]
         )
         .with_columns(
             [
                 pl.col("ss_item_sk").alias("item"),
-                pl.col("return_ratio").rank(method="ordinal").alias("return_rank"),
-                pl.col("currency_ratio").rank(method="ordinal").alias("currency_rank"),
+                pl.col("return_ratio").rank(method="min").alias("return_rank"),
+                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
             ]
         )
         .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))

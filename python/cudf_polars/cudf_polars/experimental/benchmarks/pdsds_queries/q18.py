@@ -269,121 +269,67 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         pl.col("cd_dep_count").mean().alias("agg7"),
     ]
 
-    level1 = (
+    select_cols = [
+        "i_item_id",
+        "ca_country",
+        "ca_state",
+        "ca_county",
+        "agg1",
+        "agg2",
+        "agg3",
+        "agg4",
+        "agg5",
+        "agg6",
+        "agg7",
+    ]
+    null_string = pl.lit(None).cast(pl.Utf8)
+
+    level0 = (
         base_query.group_by(["i_item_id", "ca_country", "ca_state", "ca_county"])
         .agg(agg_exprs)
-        .select(
-            [
-                "i_item_id",
-                "ca_country",
-                "ca_state",
-                "ca_county",
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-                "agg5",
-                "agg6",
-                "agg7",
-            ]
-        )
+        .select(select_cols)
     )
-    level2 = (
+    level1 = (
         base_query.group_by(["i_item_id", "ca_country", "ca_state"])
         .agg(agg_exprs)
-        .with_columns([pl.lit(None, dtype=pl.String).alias("ca_county")])
-        .select(
-            [
-                "i_item_id",
-                "ca_country",
-                "ca_state",
-                "ca_county",
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-                "agg5",
-                "agg6",
-                "agg7",
-            ]
-        )
+        .with_columns([null_string.alias("ca_county")])
+        .select(select_cols)
     )
-    level3 = (
+    level2 = (
         base_query.group_by(["i_item_id", "ca_country"])
         .agg(agg_exprs)
         .with_columns(
             [
-                pl.lit(None, dtype=pl.String).alias("ca_state"),
-                pl.lit(None, dtype=pl.String).alias("ca_county"),
+                null_string.alias("ca_state"),
+                null_string.alias("ca_county"),
             ]
         )
-        .select(
-            [
-                "i_item_id",
-                "ca_country",
-                "ca_state",
-                "ca_county",
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-                "agg5",
-                "agg6",
-                "agg7",
-            ]
-        )
+        .select(select_cols)
     )
-    level4 = (
+    level3 = (
         base_query.group_by(["i_item_id"])
         .agg(agg_exprs)
         .with_columns(
             [
-                pl.lit(None, dtype=pl.String).alias("ca_country"),
-                pl.lit(None, dtype=pl.String).alias("ca_state"),
-                pl.lit(None, dtype=pl.String).alias("ca_county"),
+                null_string.alias("ca_country"),
+                null_string.alias("ca_state"),
+                null_string.alias("ca_county"),
             ]
         )
-        .select(
-            [
-                "i_item_id",
-                "ca_country",
-                "ca_state",
-                "ca_county",
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-                "agg5",
-                "agg6",
-                "agg7",
-            ]
-        )
+        .select(select_cols)
     )
-    level5 = (
-        base_query.select(agg_exprs)
+    level4 = (
+        base_query.group_by([])
+        .agg(agg_exprs)
         .with_columns(
             [
-                pl.lit(None, dtype=pl.String).alias("i_item_id"),
-                pl.lit(None, dtype=pl.String).alias("ca_country"),
-                pl.lit(None, dtype=pl.String).alias("ca_state"),
-                pl.lit(None, dtype=pl.String).alias("ca_county"),
+                null_string.alias("i_item_id"),
+                null_string.alias("ca_country"),
+                null_string.alias("ca_state"),
+                null_string.alias("ca_county"),
             ]
         )
-        .select(
-            [
-                "i_item_id",
-                "ca_country",
-                "ca_state",
-                "ca_county",
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-                "agg5",
-                "agg6",
-                "agg7",
-            ]
-        )
+        .select(select_cols)
     )
 
     sort_by = {
@@ -396,7 +342,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            pl.concat([level1, level2, level3, level4, level5])
+            pl.concat([level0, level1, level2, level3, level4])
             .sort(sort_by.keys(), nulls_last=True)
             .limit(limit)
         ),

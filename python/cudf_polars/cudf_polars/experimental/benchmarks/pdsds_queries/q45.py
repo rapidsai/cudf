@@ -178,7 +178,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
 
     zip_match = joined.filter(pl.col("zip_prefix").is_in(zip_codes))
-    item_match = joined.join(item_ids, on="i_item_id", how="inner")
+    item_match = joined.join(item_ids, on="i_item_id", how="semi")
 
     sort_by = {"ca_zip": False, "ca_state": False}
     limit = 100

@@ -263,21 +263,20 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    customer_group_cols = [
+        "c_customer_id",
+        "c_first_name",
+        "c_last_name",
+        "c_preferred_cust_flag",
+        "c_birth_country",
+        "c_login",
+        "c_email_address",
+        "d_year",
+    ]
     store_total = (
         customer.join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .group_by(
-            [
-                "c_customer_id",
-                "c_first_name",
-                "c_last_name",
-                "c_preferred_cust_flag",
-                "c_birth_country",
-                "c_login",
-                "c_email_address",
-                "d_year",
-            ]
-        )
+        .group_by(customer_group_cols)
         .agg(
             (pl.col("ss_ext_list_price") - pl.col("ss_ext_discount_amt"))
             .sum()
@@ -294,7 +293,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 pl.col("c_email_address").alias("customer_email_address"),
                 pl.col("d_year").alias("dyear"),
                 pl.col("year_total"),
-                pl.lit("s").alias("sale_type"),
             ]
         )
     )
@@ -304,18 +302,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             web_sales, left_on="c_customer_sk", right_on="ws_bill_customer_sk"
         )
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .group_by(
-            [
-                "c_customer_id",
-                "c_first_name",
-                "c_last_name",
-                "c_preferred_cust_flag",
-                "c_birth_country",
-                "c_login",
-                "c_email_address",
-                "d_year",
-            ]
-        )
+        .group_by(customer_group_cols)
         .agg(
             (pl.col("ws_ext_list_price") - pl.col("ws_ext_discount_amt"))
             .sum()
@@ -332,14 +319,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 pl.col("c_email_address").alias("customer_email_address"),
                 pl.col("d_year").alias("dyear"),
                 pl.col("year_total"),
-                pl.lit("w").alias("sale_type"),
             ]
         )
     )
 
-    year_total = pl.concat([store_total, web_total])
-
-    t_s_firstyear = year_total.rename(
+    t_s_firstyear = store_total.filter(pl.col("dyear") == year_first).rename(
         {
             "customer_id": "s_fy_customer_id",
             "customer_first_name": "s_fy_customer_first_name",
@@ -350,10 +334,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "customer_email_address": "s_fy_customer_email_address",
             "dyear": "s_fy_dyear",
             "year_total": "s_fy_year_total",
-            "sale_type": "s_fy_sale_type",
         }
     )
-    t_s_secyear = year_total.rename(
+    t_s_secyear = store_total.filter(pl.col("dyear") == year_second).rename(
         {
             "customer_id": "s_sy_customer_id",
             "customer_first_name": "s_sy_customer_first_name",
@@ -364,10 +347,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "customer_email_address": "s_sy_customer_email_address",
             "dyear": "s_sy_dyear",
             "year_total": "s_sy_year_total",
-            "sale_type": "s_sy_sale_type",
         }
     )
-    t_w_firstyear = year_total.rename(
+    t_w_firstyear = web_total.filter(pl.col("dyear") == year_first).rename(
         {
             "customer_id": "w_fy_customer_id",
             "customer_first_name": "w_fy_customer_first_name",
@@ -378,10 +360,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "customer_email_address": "w_fy_customer_email_address",
             "dyear": "w_fy_dyear",
             "year_total": "w_fy_year_total",
-            "sale_type": "w_fy_sale_type",
         }
     )
-    t_w_secyear = year_total.rename(
+    t_w_secyear = web_total.filter(pl.col("dyear") == year_second).rename(
         {
             "customer_id": "w_sy_customer_id",
             "customer_first_name": "w_sy_customer_first_name",
@@ -392,7 +373,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "customer_email_address": "w_sy_customer_email_address",
             "dyear": "w_sy_dyear",
             "year_total": "w_sy_year_total",
-            "sale_type": "w_sy_sale_type",
         }
     )
 
@@ -416,15 +396,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             how="inner",
         )
         .filter(
-            (pl.col("s_fy_sale_type") == "s")
-            & (pl.col("w_fy_sale_type") == "w")
-            & (pl.col("s_sy_sale_type") == "s")
-            & (pl.col("w_sy_sale_type") == "w")
-            & (pl.col("s_fy_dyear") == year_first)
-            & (pl.col("s_sy_dyear") == year_second)
-            & (pl.col("w_fy_dyear") == year_first)
-            & (pl.col("w_sy_dyear") == year_second)
-            & (pl.col("s_fy_year_total") > 0)
+            (pl.col("s_fy_year_total") > 0)
             & (pl.col("w_fy_year_total") > 0)
             & (
                 pl.when(pl.col("w_fy_year_total") > 0)
