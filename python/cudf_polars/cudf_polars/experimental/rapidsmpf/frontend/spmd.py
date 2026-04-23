@@ -20,6 +20,7 @@ from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -501,6 +502,8 @@ class SPMDEngine(StreamingEngine):
         """
         Collect diagnostic information from every rank.
 
+        This is a collective operation, every rank must call it.
+
         Returns
         -------
         List of :class:`ClusterInfo`, one per rank.
@@ -509,6 +512,30 @@ class SPMDEngine(StreamingEngine):
         with reserve_op_id() as op_id:
             results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
         return [ClusterInfo(**json.loads(r)) for r in results]
+
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank via an all-gather.
+
+        This is a collective operation, every rank must call it.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
+        # Serialize before the optional clear so the returned stats still carry data.
+        data = self.context.statistics().serialize()
+        with reserve_op_id() as op_id:
+            results = all_gather_host_data(self.comm, self.context.br(), op_id, data)
+        if clear:
+            self.context.statistics().clear()
+        return [Statistics.deserialize(r) for r in results]
 
     def shutdown(self) -> None:
         """
