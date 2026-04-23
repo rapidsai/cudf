@@ -3359,14 +3359,31 @@ def as_column(
                 if isinstance(
                     arbitrary.dtype.categories.dtype, pd.DatetimeTZDtype
                 ):
+                    # pa.array(arbitrary, from_pandas=True) drops the tz from
+                    # the dictionary value type, so build the categorical
+                    # column manually so the categories' timezone is preserved.
                     new_tz = get_compatible_timezone(
                         arbitrary.dtype.categories.dtype
                     )
-                    new_cats = arbitrary.dtype.categories.astype(new_tz)
-                    new_dtype = pd.CategoricalDtype(
-                        categories=new_cats, ordered=arbitrary.dtype.ordered
+                    cats_col = as_column(
+                        arbitrary.dtype.categories.astype(new_tz)
                     )
-                    arbitrary = arbitrary.astype(new_dtype)
+                    cat_dtype = CategoricalDtype(
+                        categories=cats_col,
+                        ordered=bool(arbitrary.dtype.ordered),
+                    )
+                    pa_arr = pa.array(arbitrary, from_pandas=True)
+                    codes_plc = _normalize_types_column(
+                        plc.Column.from_arrow(pa_arr.indices)
+                    )
+                    expected_codes_dtype = dtype_to_pylibcudf_type(
+                        cat_dtype._codes_dtype
+                    )
+                    if codes_plc.type() != expected_codes_dtype:
+                        codes_plc = plc.unary.cast(
+                            codes_plc, expected_codes_dtype
+                        )
+                    return ColumnBase.create(codes_plc, cat_dtype)
                 elif dtype is None:
                     # Going through Arrow below erases pandas extension dtypes
                     # of the categories, if any, so always along pass the exact type
