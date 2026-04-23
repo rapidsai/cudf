@@ -12,7 +12,7 @@ import pytest
 
 import polars
 
-from cudf_polars.utils.config import Runtime, StreamingFallbackMode
+from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -36,6 +36,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("in-memory", "streaming"),
         help="Executor to use for GPUEngine.",
     )
+    # TODO: We never run with --blocksize-mode in ci/run_cudf_polars_polars_tests.sh. Remove?
     group.addoption(
         "--blocksize-mode",
         action="store",
@@ -46,13 +47,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
             "to run most tests with multiple partitions."
         ),
     )
-    group.addoption(
-        "--runtime",
-        action="store",
-        default="tasks",
-        choices=("tasks", "rapidsmpf"),
-        help="Runtime to use for the 'streaming' executor.",
-    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -60,7 +54,6 @@ def pytest_configure(config: pytest.Config) -> None:
     no_fallback = config.getoption("--cudf-polars-no-fallback")
     executor = config.getoption("--executor")
     blocksize_mode = config.getoption("--blocksize-mode")
-    runtime = config.getoption("--runtime")
     if no_fallback:
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(raise_on_fail=no_fallback)
@@ -76,7 +69,6 @@ def pytest_configure(config: pytest.Config) -> None:
         executor_options["target_partition_size"] = 10
         # We expect many tests to fall back, so silence the warnings
         executor_options["fallback_mode"] = StreamingFallbackMode.SILENT
-        executor_options["runtime"] = Runtime[runtime.upper()]
         collect = polars.LazyFrame.collect
         engine = polars.GPUEngine(executor=executor, executor_options=executor_options)
         polars.LazyFrame.collect = partialmethod(collect, engine=engine)  # type: ignore[method-assign, assignment]
@@ -93,6 +85,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
+# TODO: This is just Mapping[str, str]?
 EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
@@ -258,15 +251,9 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_in_mem_to_streaming_dispatch_deadlock_22641": "Flaky deadlock, may occur on rtxpro6000 only",
 }
 
-
-STREAMING_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
-    # Add tests that are expected to fail with the streaming executor
-}
-
 # Generally skip for:
 # 1) Tests that are too slow with --blocksize-mode small due to many small partitions for large data
-# 2) Tests that fail during cudf_polars execution and segfaults later due to https://github.com/rapidsai/cudf/issues/22138
-RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
+STREAMING_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --blocksize-mode small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --blocksize-mode small",
@@ -316,7 +303,7 @@ RAPIDSMPF_TESTS_TO_SKIP: Mapping[str, str] = {
 }
 
 # xfail for tests that produce different results than CPU Polars
-RAPIDSMPF_ONLY_EXPECTED_FAILURES: Mapping[str, str] = {
+STREAMING_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072",
@@ -412,27 +399,19 @@ def pytest_collection_modifyitems(
     if config.getoption("--cudf-polars-no-fallback"):
         # Don't xfail tests if running without fallback
         return
-    with_rapidsmpf = config.getoption("--runtime") == "rapidsmpf"
     with_streaming = config.getoption("--executor") == "streaming"
     for item in items:
         if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
-            with_rapidsmpf
-            and (reason := RAPIDSMPF_TESTS_TO_SKIP.get(item.nodeid, None)) is not None
+            with_streaming
+            and (reason := STREAMING_TESTS_TO_SKIP.get(item.nodeid, None)) is not None
         ):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (
-            with_rapidsmpf
-            and (r_reason := RAPIDSMPF_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
+            with_streaming
+            and (r_reason := STREAMING_EXPECTED_FAILURES.get(item.nodeid, None))
             is not None
         ):
             item.add_marker(pytest.mark.xfail(reason=r_reason))
-        elif (
-            with_streaming
-            and (s_reason := STREAMING_ONLY_EXPECTED_FAILURES.get(item.nodeid, None))
-            is not None
-        ):
-            # Also sets --runtime=rapidsmpf also sets --executor=streaming, so check last
-            item.add_marker(pytest.mark.xfail(reason=s_reason))
         elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
             if isinstance(entry, tuple):
                 # the second entry in the tuple is the condition to xfail on

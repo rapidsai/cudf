@@ -302,7 +302,9 @@ def _(
             left,
             right,
             config_options.executor.shuffle_method,
-            streaming_runtime=config_options.executor.runtime,
+            # error: Item "None" of "Runtime | None" has no attribute "value"
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            streaming_runtime=config_options.executor.runtime.value,  # type: ignore[union-attr]
         )
     else:
         # Create a hash join

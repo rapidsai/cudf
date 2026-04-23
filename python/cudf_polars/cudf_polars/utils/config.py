@@ -27,6 +27,7 @@ import functools
 import importlib.util
 import json
 import os
+import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
@@ -151,10 +152,12 @@ class Runtime(enum.StrEnum):
     """
     The runtime to use for the streaming executor.
 
+    .. deprecated::
+        The ``runtime`` option is deprecated. The rapidsmpf will be the only
+        streaming runtime. This enum will be removed in a future release.
+
     * ``Runtime.TASKS`` : Use the task-based runtime.
-      This is the default runtime.
     * ``Runtime.RAPIDSMPF`` : Use the coroutine-based streaming runtime (rapidsmpf).
-      This runtime is experimental.
     """
 
     TASKS = "tasks"
@@ -323,7 +326,7 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
 
 
-def default_target_partition_size(cluster: str, runtime: str) -> int:
+def default_target_partition_size(cluster: str, runtime: Runtime) -> int:
     """Return the default blocksize."""
     if (device_size := get_total_device_memory()) is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
@@ -345,7 +348,7 @@ def default_target_partition_size(cluster: str, runtime: str) -> int:
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
-def default_broadcast_join_limit(cluster: str, runtime: str) -> int:
+def default_broadcast_join_limit(cluster: str, runtime: Runtime) -> int:
     """Return the default broadcast join limit."""
     if (device_size := get_total_device_memory()) is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
@@ -611,7 +614,11 @@ class StreamingExecutor:
     ----------
     runtime
         The runtime to use for the streaming executor.
-        ``Runtime.TASKS`` by default.
+        ``Runtime.RAPIDSMPF`` by default.
+
+        .. deprecated::
+            The ``runtime`` option is deprecated. The rapidsmpf will be the only
+            streaming runtime. This argument will be removed in a future release.
     cluster
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
@@ -717,11 +724,11 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    runtime: Runtime = dataclasses.field(
+    runtime: Runtime | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__RUNTIME",
             Runtime.__call__,
-            default=Runtime.TASKS,
+            default=None,
         )
     )
     cluster: Cluster | None = dataclasses.field(
@@ -808,10 +815,21 @@ class StreamingExecutor:
     dask_context: DaskContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
+        if self.runtime is not None:
+            warnings.warn(
+                "Setting 'runtime' is deprecated and will be removed "
+                "in a future release. Do not pass a value to use the rapidsmpf runtime."
+                "The streaming executor will always use the rapidsmpf runtime "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            object.__setattr__(self, "runtime", Runtime.RAPIDSMPF)
+        assert self.runtime is not None, "Expected runtime to be set"
+
         # Check for rapidsmpf runtime
-        if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
-            if not rapidsmpf_single_available():
-                raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
+        if self.runtime == "rapidsmpf":
             object.__setattr__(self, "shuffle_method", "rapidsmpf")
 
         if self.cluster is None:
@@ -849,12 +867,14 @@ class StreamingExecutor:
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
         if self.target_partition_size == 0:
+            assert self.runtime is not None
             object.__setattr__(
                 self,
                 "target_partition_size",
                 default_target_partition_size(self.cluster, self.runtime),
             )
         if self.broadcast_join_limit == 0:
+            assert self.runtime is not None
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
