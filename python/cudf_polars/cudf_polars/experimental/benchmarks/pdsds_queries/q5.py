@@ -385,6 +385,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     ]
 
     # Store channel: UNION ALL of sales and returns, then date + entity join.
+    # SQL: store channel — UNION ALL(store_sales, store_returns) JOIN date_dim WHERE d_date BETWEEN {sdate} AND {sdate}+14 JOIN store; GROUP BY s_store_id; Sum(sales_price) sales, Sum(profit) profit, Sum(return_amt) returns, Sum(net_loss) profit_loss
     ssr_combined = pl.concat(
         [
             store_sales.select(
@@ -417,6 +418,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         group_by_cols=["s_store_id"],
     )
 
+    # SQL: catalog channel — UNION ALL(catalog_sales, catalog_returns) JOIN date_dim, catalog_page; GROUP BY cp_catalog_page_id
     # Catalog channel: UNION ALL of sales and returns.
     csr_combined = pl.concat(
         [
@@ -450,6 +452,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         group_by_cols=["cp_catalog_page_id"],
     )
 
+    # SQL: web channel — UNION ALL(web_sales, web_returns) JOIN date_dim, web_site (via web_returns LEFT JOIN web_sales for ws_web_site_sk); GROUP BY web_site_id
     # Web channel: web_returns needs ws_web_site_sk from web_sales via LEFT JOIN.
     web_returns_with_site = web_returns.join(
         web_sales.select(["ws_item_sk", "ws_order_number", "ws_web_site_sk"]),
@@ -489,6 +492,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         group_by_cols=["web_site_id"],
     )
 
+    # SQL: UNION ALL (store, catalog, web) channels
     all_channels = pl.concat(
         [
             ssr.select(
@@ -521,6 +525,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
+    # SQL: GROUP BY channel, id (rollup_channel); GROUP BY channel only (rollup_channel_only subtotals); grand total
     rollup_channel = (
         all_channels.group_by(["channel", "id"])
         .agg(
@@ -568,8 +573,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: UNION ALL (rollup_channel, rollup_channel_only, rollup_grand_total)
             pl.concat([rollup_channel, rollup_channel_only, rollup_grand_total])
+            # SQL: ORDER BY channel, id
             .sort(["channel", "id"], nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("channel", False), ("id", False)],

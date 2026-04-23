@@ -424,6 +424,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     start_date = (pl.date(year, month, day)).cast(pl.Datetime("us"))
     end_date = (start_date + pl.duration(days=30)).cast(pl.Datetime("us"))
 
+    # SQL: CTE ss — store_sales JOIN date_dim, store WHERE d_date BETWEEN {sdate} AND {sdate}+30; GROUP BY ss_store_sk; Sum(ss_ext_sales_price) sales, Sum(ss_net_profit) profit
     ss = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
@@ -437,6 +438,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["ss_store_sk", "sales", "profit"])
     )
+    # SQL: CTE sr — store_returns JOIN date_dim, store WHERE d_date BETWEEN; GROUP BY sr_store_sk; Sum(sr_return_amt) returns1, Sum(sr_net_loss) profit_loss
     sr = (
         store_returns.join(
             date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk"
@@ -452,6 +454,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["sr_store_sk", "returns1", "profit_loss"])
     )
+    # SQL: CTE cs — catalog_sales JOIN date_dim WHERE d_date BETWEEN; GROUP BY cs_call_center_sk; Sum(cs_ext_sales_price) sales, Sum(cs_net_profit) profit
     cs = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_date") >= start_date) & (pl.col("d_date") <= end_date))
@@ -464,6 +467,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["cs_call_center_sk", "sales", "profit"])
     )
+    # SQL: CTE cr — catalog_returns JOIN date_dim WHERE d_date BETWEEN; GROUP BY cr_call_center_sk; Sum(cr_return_amount) returns1, Sum(cr_net_loss) profit_loss
     cr = (
         catalog_returns.join(
             date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk"
@@ -478,6 +482,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["cr_call_center_sk", "returns1", "profit_loss"])
     )
+    # SQL: CTE ws — web_sales JOIN date_dim, web_page WHERE d_date BETWEEN; GROUP BY ws_web_page_sk; Sum(ws_ext_sales_price) sales, Sum(ws_net_profit) profit
     ws = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(
@@ -493,6 +498,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["ws_web_page_sk", "sales", "profit"])
     )
+    # SQL: CTE wr — web_returns JOIN date_dim, web_page WHERE d_date BETWEEN; GROUP BY wr_web_page_sk; Sum(wr_return_amt) returns1, Sum(wr_net_loss) profit_loss
     wr = (
         web_returns.join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
         .join(
@@ -509,6 +515,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(["wr_web_page_sk", "returns1", "profit_loss"])
     )
 
+    # SQL: store_channel — ss LEFT JOIN sr ON ss_store_sk=sr_store_sk; channel='store channel', id=ss_store_sk
     store_channel = ss.join(
         sr,
         left_on="ss_store_sk",
@@ -526,6 +533,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
+    # SQL: catalog_channel — cs CROSS JOIN cr (no join key for call centers); channel='catalog channel', id=cs_call_center_sk
     catalog_channel = cs.join(
         cr,
         on=pl.lit(1),
@@ -540,6 +548,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
+    # SQL: web_channel — ws LEFT JOIN wr ON ws_web_page_sk=wr_web_page_sk; channel='web channel', id=ws_web_page_sk
     web_channel = ws.join(
         wr,
         left_on="ws_web_page_sk",
@@ -559,6 +568,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     combined = pl.concat([store_channel, catalog_channel, web_channel])
 
+    # SQL: GROUP BY channel, id (level1); GROUP BY channel (level2=subtotals); grand total (level3)
     level1 = (
         combined.group_by(["channel", "id"])
         .agg(
@@ -603,8 +613,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: UNION ALL (level1, level2, level3)
             pl.concat([level1, level2, level3], how="diagonal")
+            # SQL: ORDER BY channel, id
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

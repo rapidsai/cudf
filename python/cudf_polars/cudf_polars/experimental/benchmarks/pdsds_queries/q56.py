@@ -232,6 +232,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: WHERE i_color IN ({colors}) — subquery for qualifying item IDs
     color_item_ids_lf = (
         item.filter(pl.col("i_color").is_in(colors)).select(["i_item_id"]).unique()
     )
@@ -239,6 +240,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_filter = (pl.col("d_year") == year) & (pl.col("d_moy") == month)
     gmt_filter = pl.col("ca_gmt_offset") == gmt_offset
 
+    # SQL: CTE ss — store_sales JOIN date_dim, item, color_item_ids, customer_address WHERE d_year={year} AND d_moy={month} AND ca_gmt_offset={gmt_offset}; GROUP BY i_item_id; Sum(ss_ext_sales_price)
     ss = (
         channel_agg(
             store_sales,
@@ -269,6 +271,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(["i_item_id", "total_sales"])
     )
 
+    # SQL: CTE cs — catalog_sales JOIN date_dim, item, color_item_ids, customer_address; GROUP BY i_item_id; Sum(cs_ext_sales_price)
     cs = (
         channel_agg(
             catalog_sales,
@@ -299,6 +302,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(["i_item_id", "total_sales"])
     )
 
+    # SQL: CTE ws — web_sales JOIN date_dim, item, color_item_ids, customer_address; GROUP BY i_item_id; Sum(ws_ext_sales_price)
     ws = (
         channel_agg(
             web_sales,
@@ -334,7 +338,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: UNION ALL (ss, cs, ws)
             pl.concat([ss, cs, ws])
+            # SQL: GROUP BY i_item_id; Sum(total_sales) total_sales
             .group_by("i_item_id")
             .agg(
                 [
@@ -349,8 +355,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .alias("total_sales")
             )
             .drop("_n")
+            # SQL: SELECT i_item_id, total_sales
             .select(["i_item_id", "total_sales"])
+            # SQL: ORDER BY total_sales
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

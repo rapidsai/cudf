@@ -223,6 +223,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: FROM store_sales JOIN date_dim, item, store WHERE d_year={year} AND s_state IN ({state})
     base_data = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
@@ -244,7 +245,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         "lochierarchy",
     ]
 
+    # SQL: GROUP BY ROLLUP(i_category, i_class) — level 0: (i_category, i_class)
     # Level 0: group by [i_category, i_class]
+    # SQL: Sum(ss_net_profit)/Sum(ss_ext_sales_price) AS gross_margin; lochierarchy=0
     level0 = (
         rollup_level(
             base_data,
@@ -263,6 +266,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
     )
+    # SQL: GROUP BY ROLLUP — level 1: (i_category); lochierarchy=1
     # Level 1: group by [i_category]
     level1 = (
         rollup_level(
@@ -282,6 +286,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
     )
+    # SQL: GROUP BY ROLLUP — level 2: grand total; lochierarchy=2
     # Level 2: total level
     level2 = (
         rollup_level(
@@ -302,12 +307,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
     )
 
+    # SQL: UNION ALL all rollup levels
     combined = pl.concat([level0, level1, level2])
 
     sort_by = {"lochierarchy": True, "rank_within_parent": False}
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: Rank() OVER (PARTITION BY Grouping(i_category)+Grouping(i_class), CASE WHEN Grouping(i_class)=0 THEN i_category END ORDER BY gross_margin) AS rank_within_parent
             combined.with_columns(
                 [
                     pl.when(pl.col("lochierarchy") == 0)
@@ -325,6 +332,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("rank_within_parent")
                 ]
             )
+            # SQL: SELECT gross_margin, i_category, i_class, lochierarchy, rank_within_parent
             .select(
                 [
                     "gross_margin",
@@ -334,6 +342,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "rank_within_parent",
                 ]
             )
+            # SQL: ORDER BY lochierarchy DESC, CASE WHEN lochierarchy=0 THEN i_category END, rank_within_parent
             .sort(
                 [
                     pl.col("lochierarchy"),
@@ -345,6 +354,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 descending=[True, False, False],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

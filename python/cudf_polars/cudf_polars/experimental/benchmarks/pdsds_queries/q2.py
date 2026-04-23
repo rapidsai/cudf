@@ -278,6 +278,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: CTE wscs — UNION ALL (web_sales ws_sold_date_sk/ws_ext_sales_price, catalog_sales cs_sold_date_sk/cs_ext_sales_price)
     wscs = pl.concat(
         [
             web_sales.select(
@@ -295,9 +296,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
+    # SQL: CTE wswscs — wscs JOIN date_dim ON sold_date_sk=d_date_sk
     wswscs = (
         wscs.join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
+        # SQL: GROUP BY d_week_seq
         .group_by("d_week_seq")
+        # SQL: Sum(CASE WHEN d_day_name='Sunday'/'Monday'/... THEN sales_price ELSE NULL END) sun_sales/mon_sales/...
         .agg(
             [
                 pl.when(pl.col("d_day_name") == "Sunday")
@@ -339,6 +343,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE y — wswscs JOIN date_dim WHERE d_year={year}
     y_year = (
         wswscs.join(date_dim, left_on="d_week_seq", right_on="d_week_seq")
         .filter(pl.col("d_year") == year)
@@ -356,6 +361,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE z — wswscs JOIN date_dim WHERE d_year={year+1}
     z_year_plus_1 = (
         wswscs.join(date_dim, left_on="d_week_seq", right_on="d_week_seq")
         .filter(pl.col("d_year") == year + 1)
@@ -371,16 +377,19 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 pl.col("sat_sales").alias("sat_sales2"),
             ]
         )
+        # SQL: d_week_seq2 - 53 (used for join condition d_week_seq1 = d_week_seq2 - 53)
         .with_columns((pl.col("d_week_seq2") - 53).alias("d_week_seq2_minus_53"))
     )
 
     return QueryResult(
         frame=(
+            # SQL: SELECT y JOIN z WHERE d_week_seq1 = d_week_seq2 - 53
             y_year.join(
                 z_year_plus_1,
                 left_on="d_week_seq1",
                 right_on="d_week_seq2_minus_53",
             )
+            # SQL: SELECT d_week_seq1, Round(sun_sales1/sun_sales2,2), ... Round(sat_sales1/sat_sales2,2)
             .select(
                 [
                     pl.col("d_week_seq1"),
@@ -407,6 +416,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("round((sat_sales1 / sat_sales2), 2)"),
                 ]
             )
+            # SQL: ORDER BY d_week_seq1
             .sort("d_week_seq1")
         ),
         sort_by=[("d_week_seq1", False)],

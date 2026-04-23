@@ -390,6 +390,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         (pl.col("net_profit") - pl.col("ret_loss").fill_null(0)).sum().alias("profit"),
     ]
 
+    # SQL: store channel — store_sales LEFT JOIN store_returns JOIN date_dim, store, item, promotion WHERE d_date BETWEEN {sdate} AND {sdate}+30 AND i_current_price>50 AND p_channel_tv='N'
     # Pre-join sales LEFT JOIN returns on item+ticket/order keys, then
     # let channel_agg handle date, entity, item, promotion joins and filters.
     ss_with_ret = store_sales.join(
@@ -403,6 +404,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         pl.col("sr_return_amt").alias("ret_amt"),
         pl.col("sr_net_loss").alias("ret_loss"),
     )
+    # SQL: store channel GROUP BY s_store_id; Sum(ss_ext_sales_price) sales, Sum(sr_return_amt) returns, Sum(ss_net_profit-sr_net_loss) profit
     ssr = channel_agg(
         ss_with_ret,
         date_dim,
@@ -423,6 +425,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         group_by_cols=["s_store_id"],
     ).select([pl.col("s_store_id").alias("store_id"), "sales", "returns1", "profit"])
 
+    # SQL: catalog channel — catalog_sales LEFT JOIN catalog_returns JOIN date_dim, catalog_page, item, promotion
     cs_with_ret = catalog_sales.join(
         catalog_returns,
         left_on=["cs_item_sk", "cs_order_number"],
@@ -461,6 +464,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
+    # SQL: web channel — web_sales LEFT JOIN web_returns JOIN date_dim, web_site, item, promotion
     ws_with_ret = web_sales.join(
         web_returns,
         left_on=["ws_item_sk", "ws_order_number"],
@@ -492,6 +496,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         group_by_cols=["web_site_id"],
     ).select(["web_site_id", "sales", "returns1", "profit"])
 
+    # SQL: UNION ALL channels; SELECT channel, id='store'+s_store_id | 'catalog_page'+cp_catalog_page_id | 'web_site'+web_site_id, sales, returns, profit
     combined = pl.concat(
         [
             ssr.select(
@@ -528,6 +533,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
+    # SQL: GROUP BY channel, id (level1); GROUP BY channel (level2=subtotals)
     level1 = combined.group_by(["channel", "id"]).agg(
         [
             pl.col("sales").sum().alias("sales"),
@@ -551,8 +557,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: UNION ALL (level1, level2)
             pl.concat([level1, level2], how="diagonal")
+            # SQL: ORDER BY channel, id
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

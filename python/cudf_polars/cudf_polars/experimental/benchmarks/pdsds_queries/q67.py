@@ -269,7 +269,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: base_data — FROM store_sales, date_dim, store, item WHERE d_month_seq BETWEEN {dms} AND {dms}+11; COALESCE(ss_sales_price*ss_quantity,0) AS sales_amount
     base_data = (
+        # SQL: JOIN date_dim ON ss_sold_date_sk=d_date_sk; JOIN store ON ss_store_sk=s_store_sk; JOIN item ON ss_item_sk=i_item_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
@@ -281,6 +283,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: ROLLUP(i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy, s_store_id) — 9 levels
     level0 = rollup_level(
         base_data,
         LEVEL0_COLS,
@@ -345,10 +348,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         OUTPUT_ORDER,
     )
 
+    # SQL: UNION ALL all rollup levels
     rollup_data = pl.concat(
         [level0, level1, level2, level3, level4, level5, level6, level7, level8]
     )
 
+    # SQL: Rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC) AS rk
     ranked = rollup_data.with_columns(
         pl.col("sumsales")
         .rank(method="min", descending=True)
@@ -358,7 +363,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: WHERE rk <= 100
             ranked.filter(pl.col("rk") <= 100)
+            # SQL: ORDER BY i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy, s_store_id, sumsales, rk
             .sort(
                 [
                     "i_category",
@@ -375,6 +382,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 nulls_last=True,
                 descending=[False] * 10,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

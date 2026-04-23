@@ -369,6 +369,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: catalog channel — catalog_sales JOIN item, date_dim LEFT JOIN catalog_returns WHERE i_category='{category}'; cs_quantity-COALESCE(cr_return_quantity,0) sales_cnt
     cat = (
         catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
@@ -402,6 +403,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: store channel — store_sales JOIN item, date_dim LEFT JOIN store_returns WHERE i_category='{category}'; ss_quantity-COALESCE(sr_return_quantity,0) sales_cnt
     sto = (
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -435,6 +437,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: web channel — web_sales JOIN item, date_dim LEFT JOIN web_returns WHERE i_category='{category}'; ws_quantity-COALESCE(wr_return_quantity,0) sales_cnt
     web = (
         web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
@@ -469,6 +472,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE all_sales — UNION (catalog, store, web); GROUP BY d_year, i_brand_id, i_class_id, i_category_id, i_manufact_id; Sum(sales_cnt), Sum(sales_amt)
     all_sales = (
         pl.concat([cat, sto, web])
         .unique()
@@ -483,6 +487,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: curr_yr: all_sales WHERE d_year={year}; prev_yr: all_sales WHERE d_year={year}-1
     curr_yr = all_sales.filter(pl.col("d_year") == year)
     prev_yr = all_sales.filter(pl.col("d_year") == year - 1)
 
@@ -490,11 +495,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: curr_yr JOIN prev_yr ON i_brand_id, i_class_id, i_category_id, i_manufact_id
             curr_yr.join(
                 prev_yr,
                 on=["i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"],
                 suffix="_prev",
             )
+            # SQL: WHERE curr_yr.d_year={year} AND prev_yr.d_year={year}-1 AND curr_yr.sales_cnt/prev_yr.sales_cnt < 0.9
             .filter(
                 (pl.col("d_year") == year)
                 & (pl.col("d_year_prev") == year - 1)
@@ -518,6 +525,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ),
                 ]
             )
+            # SQL: SELECT prev_year, year_, i_brand_id, i_class_id, i_category_id, i_manufact_id, prev_yr_cnt, curr_yr_cnt, sales_cnt_diff, sales_amt_diff
             .select(
                 [
                     "prev_year",
@@ -532,7 +540,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "sales_amt_diff",
                 ]
             )
+            # SQL: ORDER BY sales_cnt_diff, sales_amt_diff
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

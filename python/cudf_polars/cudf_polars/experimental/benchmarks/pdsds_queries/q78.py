@@ -312,6 +312,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: CTE ws — web_sales LEFT JOIN web_returns ON ws_order_number=wr_order_number AND ws_item_sk=wr_item_sk JOIN date_dim WHERE wr_has_return IS NULL
     ws = (
         web_sales.join(
             web_returns,
@@ -321,6 +322,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("wr_has_return").is_null())
+        # SQL: GROUP BY d_year, ws_item_sk, ws_bill_customer_sk; sum(ws_quantity) ws_qty, sum(ws_wholesale_cost) ws_wc, sum(ws_sales_price) ws_sp
         .group_by(["d_year", "ws_item_sk", "ws_bill_customer_sk"])
         .agg(
             [
@@ -346,6 +348,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE cs — catalog_sales LEFT JOIN catalog_returns JOIN date_dim WHERE cr_has_return IS NULL
     cs = (
         catalog_sales.join(
             catalog_returns,
@@ -355,6 +358,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("cr_has_return").is_null())
+        # SQL: GROUP BY d_year, cs_item_sk, cs_bill_customer_sk; sum(cs_qty), sum(cs_wc), sum(cs_sp)
         .group_by(["d_year", "cs_item_sk", "cs_bill_customer_sk"])
         .agg(
             [
@@ -380,6 +384,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE ss — store_sales LEFT JOIN store_returns JOIN date_dim WHERE sr_has_return IS NULL
     ss = (
         store_sales.join(
             store_returns,
@@ -389,6 +394,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("sr_has_return").is_null())
+        # SQL: GROUP BY d_year, ss_item_sk, ss_customer_sk; sum(ss_qty), sum(ss_wc), sum(ss_sp)
         .group_by(["d_year", "ss_item_sk", "ss_customer_sk"])
         .agg(
             [
@@ -409,6 +415,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .rename({"d_year": "ss_sold_year"})
     )
 
+    # SQL: SELECT ss JOIN ws ON sold_year/item_sk/customer_sk LEFT JOIN cs ON sold_year/item_sk/customer_sk WHERE (ws_qty>0 OR cs_qty>0) AND ss_sold_year={year}
     result = (
         ss.join(
             ws,
@@ -426,6 +433,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             (pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0)
         )
         .filter(pl.col("ss_sold_year") == year)
+        # SQL: SELECT ss_sold_year, ss_item_sk, ss_customer_sk, round(ss_qty/(ws_qty+cs_qty),2) ratio, ss_qty store_qty, ...
         .select(
             [
                 pl.col("ss_sold_year"),
@@ -468,10 +476,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: ORDER BY ss_sold_year, ss_item_sk, ss_customer_sk, ss_qty DESC, ss_wc DESC, ss_sp DESC, other_chan_qty, ...
             result.sort(
                 list(sort_by.keys()),
                 descending=list(sort_by.values()),
                 nulls_last=True,
+                # SQL: LIMIT 100
             ).limit(limit)
         ),
         sort_by=list(sort_by.items()),

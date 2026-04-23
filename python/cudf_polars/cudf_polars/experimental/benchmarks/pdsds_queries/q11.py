@@ -279,6 +279,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         "c_email_address",
         "d_year",
     ]
+    # SQL: CTE year_total (store) — customer JOIN store_sales ON c_customer_sk=ss_customer_sk JOIN date_dim GROUP BY customer_id+dims+d_year; Sum(ss_ext_list_price-ss_ext_discount_amt) year_total; sale_type='s'
     store_total = (
         customer.join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -303,6 +304,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE year_total (web) — customer JOIN web_sales ON c_customer_sk=ws_bill_customer_sk JOIN date_dim GROUP BY customer_id+dims+d_year; Sum(ws_ext_list_price-ws_ext_discount_amt) year_total; sale_type='w'
     web_total = (
         customer.join(
             web_sales, left_on="c_customer_sk", right_on="ws_bill_customer_sk"
@@ -329,6 +331,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: t_s_firstyear: year_total WHERE sale_type='s' AND dyear={year_first}
     t_s_firstyear = store_total.filter(pl.col("dyear") == year_first).rename(
         {
             "customer_id": "s_fy_customer_id",
@@ -342,6 +345,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "year_total": "s_fy_year_total",
         }
     )
+    # SQL: t_s_secyear: year_total WHERE sale_type='s' AND dyear={year_second}
     t_s_secyear = store_total.filter(pl.col("dyear") == year_second).rename(
         {
             "customer_id": "s_sy_customer_id",
@@ -355,6 +359,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "year_total": "s_sy_year_total",
         }
     )
+    # SQL: t_w_firstyear: year_total WHERE sale_type='w' AND dyear={year_first}
     t_w_firstyear = web_total.filter(pl.col("dyear") == year_first).rename(
         {
             "customer_id": "w_fy_customer_id",
@@ -368,6 +373,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "year_total": "w_fy_year_total",
         }
     )
+    # SQL: t_w_secyear: year_total WHERE sale_type='w' AND dyear={year_second}
     t_w_secyear = web_total.filter(pl.col("dyear") == year_second).rename(
         {
             "customer_id": "w_sy_customer_id",
@@ -382,6 +388,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         }
     )
 
+    # SQL: t_s_firstyear JOIN t_s_secyear ON customer_id JOIN t_w_firstyear ON customer_id JOIN t_w_secyear ON customer_id
     joined = (
         t_s_firstyear.join(
             t_s_secyear,
@@ -401,6 +408,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             right_on="w_sy_customer_id",
             how="inner",
         )
+        # SQL: WHERE t_s_firstyear.year_total>0 AND t_w_firstyear.year_total>0 AND (ws_secyear/ws_firstyear) > (ss_secyear/ss_firstyear)
         .filter(
             (pl.col("s_fy_year_total") > 0)
             & (pl.col("w_fy_year_total") > 0)
@@ -423,6 +431,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     ]
     return QueryResult(
         frame=(
+            # SQL: SELECT customer_id, customer_first_name, customer_last_name, customer_birth_country
             joined.select(
                 [
                     pl.col("s_fy_customer_id").alias("customer_id"),
@@ -433,7 +442,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ),
                 ]
             )
+            # SQL: ORDER BY customer_id, customer_first_name, customer_last_name, customer_birth_country
             .sort(sort_cols, nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

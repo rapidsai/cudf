@@ -271,10 +271,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         date_dim.join(selected_weeks, on="d_week_seq").select("d_date").unique()
     )
 
+    # SQL: CTE sr_items — FROM store_returns, item, date_dim WHERE sr_item_sk=i_item_sk AND d_date IN (SELECT d_date WHERE d_week_seq IN (...)) AND sr_returned_date_sk=d_date_sk GROUP BY i_item_id; Sum(sr_return_quantity)
     sr_items = (
+        # SQL: JOIN item ON sr_item_sk=i_item_sk; JOIN date_dim ON sr_returned_date_sk=d_date_sk; JOIN selected_dates ON d_date
         store_returns.join(item, left_on="sr_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk")
         .join(selected_dates, on="d_date")
+        # SQL: GROUP BY i_item_id; Sum(sr_return_quantity) AS sr_item_qty
         .group_by("i_item_id")
         .agg(
             [
@@ -290,6 +293,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .drop(["sr_item_qty_sum", "sr_item_qty_count"])
     )
+    # SQL: CTE cr_items — FROM catalog_returns, item, date_dim GROUP BY i_item_id; Sum(cr_return_quantity)
     cr_items = (
         catalog_returns.join(item, left_on="cr_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk")
@@ -309,6 +313,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .drop(["cr_item_qty_sum", "cr_item_qty_count"])
     )
+    # SQL: CTE wr_items — FROM web_returns, item, date_dim GROUP BY i_item_id; Sum(wr_return_quantity)
     wr_items = (
         web_returns.join(item, left_on="wr_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
@@ -333,8 +338,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM sr_items, cr_items, wr_items WHERE sr_items.item_id=cr_items.item_id AND sr_items.item_id=wr_items.item_id
             sr_items.join(cr_items, on="i_item_id")
             .join(wr_items, on="i_item_id")
+            # SQL: (sr+cr+wr) AS total_qty; total_qty/3 AS average; sr/total/3*100 AS sr_dev; cr/total/3*100 AS cr_dev; wr/total/3*100 AS wr_dev
             .with_columns(
                 (
                     pl.col("sr_item_qty")
@@ -356,6 +363,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("wr_dev"),
                 ]
             )
+            # SQL: SELECT item_id, sr_item_qty, sr_dev, cr_item_qty, cr_dev, wr_item_qty, wr_dev, average
             .select(
                 [
                     pl.col("i_item_id").alias("item_id"),
@@ -368,7 +376,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "average",
                 ]
             )
+            # SQL: ORDER BY sr_items.item_id, sr_item_qty
             .sort(["item_id", "sr_item_qty"], nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

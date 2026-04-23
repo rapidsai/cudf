@@ -234,23 +234,31 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: FROM catalog_sales, customer_demographics cd1, customer_demographics cd2, customer, customer_address, date_dim, item WHERE ...
     base_query = (
+        # SQL: JOIN customer_demographics cd1 ON cs_bill_cdemo_sk = cd_demo_sk
         catalog_sales.join(
             customer_demographics_1,
             left_on="cs_bill_cdemo_sk",
             right_on="cd_demo_sk",
             suffix="_cd1",
         )
+        # SQL: JOIN customer ON cs_bill_customer_sk = c_customer_sk
         .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
+        # SQL: JOIN customer_demographics cd2 ON c_current_cdemo_sk = cd_demo_sk
         .join(
             customer_demographics_2,
             left_on="c_current_cdemo_sk",
             right_on="cd_demo_sk",
             suffix="_cd2",
         )
+        # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN item ON cs_item_sk = i_item_sk
         .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        # SQL: WHERE cd1.cd_gender = '{gen}' AND cd1.cd_education_status = '{es}' AND c_birth_month IN (...) AND d_year = {year} AND ca_state IN (...)
         .filter(
             (pl.col("cd_gender") == gen)
             & (pl.col("cd_education_status") == es)
@@ -290,6 +298,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         "agg7",
     ]
 
+    # SQL: GROUP BY ROLLUP(i_item_id, ca_country, ca_state, ca_county) — level (i_item_id, ca_country, ca_state, ca_county)
     level0 = rollup_level(
         base_query,
         ["i_item_id", "ca_country", "ca_state", "ca_county"],
@@ -297,6 +306,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — level (i_item_id, ca_country, ca_state)
     level1 = rollup_level(
         base_query,
         ["i_item_id", "ca_country", "ca_state"],
@@ -304,6 +314,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — level (i_item_id, ca_country)
     level2 = rollup_level(
         base_query,
         ["i_item_id", "ca_country"],
@@ -311,6 +322,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — level (i_item_id)
     level3 = rollup_level(
         base_query,
         ["i_item_id"],
@@ -318,6 +330,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — level () grand total
     level4 = rollup_level(
         base_query,
         [],
@@ -336,8 +349,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: UNION ALL all rollup levels
             pl.concat([level0, level1, level2, level3, level4])
+            # SQL: ORDER BY ca_country, ca_state, ca_county, i_item_id
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

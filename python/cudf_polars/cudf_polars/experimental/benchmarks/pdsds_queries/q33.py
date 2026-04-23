@@ -263,14 +263,18 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
 
+    # SQL: CTE ss — store_sales channel; item filtered to i_category='{category}'
     category_manufacturers = (
+        # SQL: WHERE i_category IN ('{category}') — get qualifying manufacturer IDs
         item.filter(pl.col("i_category") == category).select("i_manufact_id").unique()
     )
 
     date_filter = (pl.col("d_year") == year) & (pl.col("d_moy") == month)
     gmt_filter = pl.col("ca_gmt_offset") == gmt
 
+    # SQL: CTE ss — store_sales JOIN date_dim, customer_address, item, category_manufacturers
     ss = (
+        # SQL: WHERE d_year={year} AND d_moy={month} AND ca_gmt_offset={gmt}
         channel_agg(
             store_sales,
             date_dim,
@@ -296,9 +300,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .otherwise(None)
             .alias("total_sales")
         )
+        # SQL: GROUP BY i_manufact_id; Sum(ss_ext_sales_price) total_sales
         .drop("_n")
     )
 
+    # SQL: CTE cs — catalog_sales JOIN date_dim, customer_address, item, category_manufacturers
     cs = (
         channel_agg(
             catalog_sales,
@@ -325,9 +331,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .otherwise(None)
             .alias("total_sales")
         )
+        # SQL: GROUP BY i_manufact_id; Sum(cs_ext_sales_price) total_sales
         .drop("_n")
     )
 
+    # SQL: CTE ws — web_sales JOIN date_dim, customer_address, item, category_manufacturers
     ws = (
         channel_agg(
             web_sales,
@@ -354,6 +362,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .otherwise(None)
             .alias("total_sales")
         )
+        # SQL: GROUP BY i_manufact_id; Sum(ws_ext_sales_price) total_sales
         .drop("_n")
     )
 
@@ -362,7 +371,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: UNION ALL (ss, cs, ws)
             pl.concat([ss, cs, ws])
+            # SQL: GROUP BY i_manufact_id; Sum(total_sales) total_sales
             .group_by("i_manufact_id")
             .agg(
                 [
@@ -377,8 +388,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .alias("total_sales")
             )
             .drop("_n")
+            # SQL: SELECT i_manufact_id, total_sales
             .select(["i_manufact_id", "total_sales"])
+            # SQL: ORDER BY total_sales
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

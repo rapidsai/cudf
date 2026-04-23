@@ -263,8 +263,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
+    # SQL: CTE wss — FROM store_sales, date_dim WHERE d_date_sk=ss_sold_date_sk GROUP BY d_week_seq, ss_store_sk; Sum(CASE WHEN d_day_name='Sunday' THEN ss_sales_price END) ... AS sun/mon/tue/.../sat_sales
     wss = (
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: GROUP BY d_week_seq, ss_store_sk; per-day-name CASE sum expressions
         .group_by(["d_week_seq", "ss_store_sk"])
         .agg(
             [
@@ -307,7 +310,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: y — FROM wss, store, date_dim WHERE d_month_seq BETWEEN {dms} AND {dms}+11 AND ss_store_sk=s_store_sk
     y = (
+        # SQL: JOIN store ON ss_store_sk=s_store_sk; JOIN date_dim ON d_week_seq; WHERE d_month_seq BETWEEN {dms} AND {dms}+11
         wss.join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(date_dim, left_on="d_week_seq", right_on="d_week_seq")
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
@@ -326,6 +331,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: x — FROM wss, store, date_dim WHERE d_month_seq BETWEEN {dms}+12 AND {dms}+23
     x = (
         wss.join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(date_dim, left_on="d_week_seq", right_on="d_week_seq")
@@ -350,8 +356,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM y, x WHERE s_store_id1=s_store_id2 AND d_week_seq1=d_week_seq2-52
             y.join(x, left_on="s_store_id1", right_on="s_store_id2")
             .filter(pl.col("d_week_seq1") == (pl.col("d_week_seq2") - 52))
+            # SQL: SELECT s_store_name1, s_store_id1, d_week_seq1, sun_sales1/sun_sales2, mon/tue/wed/thu/fri/sat ratios
             .select(
                 [
                     "s_store_name1",
@@ -380,7 +388,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ),
                 ]
             )
+            # SQL: ORDER BY s_store_name1, s_store_id1, d_week_seq1
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

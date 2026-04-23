@@ -220,7 +220,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: EXISTS (SELECT * FROM store_sales, date_dim WHERE c_customer_sk=ss_customer_sk AND d_year={year} AND d_moy BETWEEN {month} AND {month}+2)
     store_sales_dates = (
+        # SQL: JOIN date_dim WHERE d_year={year} AND d_moy BETWEEN {month} AND {month}+2
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(
             (pl.col("d_year") == year) & pl.col("d_moy").is_between(month, month + 2)
@@ -229,6 +231,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: NOT EXISTS (web_sales) in same date range
     web_sales_dates = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter(
@@ -238,6 +241,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: NOT EXISTS (catalog_sales) in same date range
     catalog_sales_dates = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter(
@@ -251,22 +255,28 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: FROM customer c, customer_address ca WHERE c.c_current_addr_sk=ca.ca_address_sk
             customer.join(
                 customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
             )
+            # SQL: JOIN customer_demographics WHERE cd_demo_sk=c.c_current_cdemo_sk
             .join(
                 customer_demographics,
                 left_on="c_current_cdemo_sk",
                 right_on="cd_demo_sk",
             )
+            # SQL: WHERE EXISTS (store_sales in date range) (semi-join)
             .join(store_sales_dates, left_on="c_customer_sk", right_on="ss_customer_sk")
+            # SQL: AND NOT EXISTS (web/catalog sales in date range) (anti-join)
             .join(
                 exclude_customers,
                 left_on="c_customer_sk",
                 right_on="customer_sk",
                 how="anti",
             )
+            # SQL: WHERE ca_state IN ({states})
             .filter(pl.col("ca_state").is_in(states))
+            # SQL: GROUP BY cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating
             .group_by(
                 [
                     "cd_gender",
@@ -276,6 +286,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "cd_credit_rating",
                 ]
             )
+            # SQL: Count(*) AS cnt1, Count(*) AS cnt2, Count(*) AS cnt3
             .agg(
                 [
                     pl.len().alias("cnt1"),
@@ -283,6 +294,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.len().alias("cnt3"),
                 ]
             )
+            # SQL: SELECT cd_gender, cd_marital_status, cd_education_status, cnt1, cd_purchase_estimate, cnt2, cd_credit_rating, cnt3
             .select(
                 [
                     "cd_gender",
@@ -295,6 +307,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "cnt3",
                 ]
             )
+            # SQL: ORDER BY cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating
             .sort(
                 [
                     "cd_gender",
@@ -305,6 +318,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

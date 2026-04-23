@@ -381,6 +381,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: web channel — web_sales LEFT JOIN web_returns ON ws_order_number=wr_order_number AND ws_item_sk=wr_item_sk JOIN date_dim WHERE d_year={year} AND d_moy={month} AND wr_return_amt>10000 AND ws_net_profit>1 AND ws_net_paid>0 AND ws_quantity>0
     web_data = (
         web_sales.join(
             web_returns,
@@ -397,6 +398,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             & (pl.col("d_year") == year)
             & (pl.col("d_moy") == month)
         )
+        # SQL: GROUP BY ws_item_sk; Sum(wr_return_quantity)/Sum(ws_quantity) return_ratio; Sum(wr_return_amt)/Sum(ws_net_paid) currency_ratio
         .group_by("ws_item_sk")
         .agg(
             [
@@ -410,6 +412,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ).alias("currency_ratio"),
             ]
         )
+        # SQL: Rank() OVER (ORDER BY return_ratio) return_rank; Rank() OVER (ORDER BY currency_ratio) currency_rank
         .with_columns(
             [
                 pl.col("ws_item_sk").alias("item"),
@@ -417,10 +420,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
             ]
         )
+        # SQL: WHERE return_rank <= 10 OR currency_rank <= 10; channel='web'
         .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
         .with_columns([pl.lit("web").alias("channel")])
         .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
     )
+    # SQL: catalog channel — catalog_sales LEFT JOIN catalog_returns ON cs_order_number=cr_order_number AND cs_item_sk=cr_item_sk JOIN date_dim
     catalog_data = (
         catalog_sales.join(
             catalog_returns,
@@ -461,6 +466,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .with_columns([pl.lit("catalog").alias("channel")])
         .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
     )
+    # SQL: store channel — store_sales LEFT JOIN store_returns ON ss_ticket_number=sr_ticket_number AND ss_item_sk=sr_item_sk JOIN date_dim
     store_data = (
         store_sales.join(
             store_returns,
@@ -506,9 +512,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: UNION (web, catalog, store); SELECT channel, item, return_ratio, return_rank, currency_rank
             pl.concat([web_data, catalog_data, store_data])
             .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
+            # SQL: ORDER BY channel, return_rank, currency_rank
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

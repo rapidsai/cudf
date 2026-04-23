@@ -281,31 +281,40 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM web_sales JOIN web_returns ON ws_item_sk=wr_item_sk AND ws_order_number=wr_order_number
             web_sales.join(
                 web_returns,
                 left_on=["ws_item_sk", "ws_order_number"],
                 right_on=["wr_item_sk", "wr_order_number"],
             )
+            # SQL: JOIN web_page ON ws_web_page_sk = wp_web_page_sk
             .join(web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk")
+            # SQL: JOIN customer_demographics cd1 ON wr_refunded_cdemo_sk = cd_demo_sk
             .join(
                 customer_demographics,
                 left_on="wr_refunded_cdemo_sk",
                 right_on="cd_demo_sk",
             )
+            # SQL: JOIN customer_demographics cd2 ON wr_returning_cdemo_sk = cd_demo_sk (suffix _cd2)
             .join(
                 customer_demographics,
                 left_on="wr_returning_cdemo_sk",
                 right_on="cd_demo_sk",
                 suffix="_cd2",
             )
+            # SQL: JOIN customer_address ON wr_refunded_addr_sk = ca_address_sk
             .join(
                 customer_address,
                 left_on="wr_refunded_addr_sk",
                 right_on="ca_address_sk",
             )
+            # SQL: JOIN date_dim ON ws_sold_date_sk = d_date_sk
             .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+            # SQL: JOIN reason ON wr_reason_sk = r_reason_sk
             .join(reason, left_on="wr_reason_sk", right_on="r_reason_sk")
+            # SQL: WHERE d_year = {year}
             .filter(pl.col("d_year") == year)
+            # SQL: AND ((cd1.cd_marital_status=ms[0] AND cd1_ms=cd2_ms AND es[0] AND price_range[0]) OR ... OR (...))
             .filter(
                 (
                     (pl.col("cd_marital_status") == ms[0])
@@ -350,6 +359,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     )
                 )
             )
+            # SQL: AND ((ca_country='United States' AND ca_state IN states[0:3] AND net_profit BETWEEN ...) OR (...))
             .filter(
                 (
                     (pl.col("ca_country") == "United States")
@@ -362,7 +372,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     & (pl.col("ws_net_profit").is_between(np_min, np_max))
                 )
             )
+            # SQL: GROUP BY r_reason_desc
             .group_by("r_reason_desc")
+            # SQL: Avg(ws_quantity), Avg(wr_refunded_cash), Avg(wr_fee)
             .agg(
                 [
                     pl.col("ws_quantity").mean().alias("avg(ws_quantity)"),
@@ -370,6 +382,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("wr_fee").mean().alias("avg(wr_fee)"),
                 ]
             )
+            # SQL: SELECT Substr(r_reason_desc, 1, 20), Avg(ws_quantity), Avg(wr_refunded_cash), Avg(wr_fee)
             .select(
                 [
                     pl.col("r_reason_desc")
@@ -380,7 +393,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "avg(wr_fee)",
                 ]
             )
+            # SQL: ORDER BY Substr(r_reason_desc, 1, 20), Avg(ws_quantity), Avg(wr_refunded_cash), Avg(wr_fee)
             .sort(list(sort_by.keys()), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

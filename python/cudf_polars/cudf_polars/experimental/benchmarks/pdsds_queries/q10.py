@@ -266,6 +266,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: EXISTS(SELECT * FROM store_sales, date_dim WHERE c_customer_sk=ss_customer_sk AND d_year=2002 AND d_moy BETWEEN 4 AND 7)
     store_customers = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(
@@ -276,6 +277,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: EXISTS(SELECT * FROM web_sales, date_dim WHERE c_customer_sk=ws_bill_customer_sk AND d_year=2002 AND d_moy BETWEEN 4 AND 7)
     web_customers = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter(
@@ -286,6 +288,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: EXISTS(SELECT * FROM catalog_sales, date_dim WHERE c_customer_sk=cs_ship_customer_sk AND d_year=2002 AND d_moy BETWEEN 4 AND 7)
     catalog_customers = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter(
@@ -296,31 +299,38 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: OR condition on web/catalog EXISTS subqueries
     web_or_catalog_customers = pl.concat([web_customers, catalog_customers]).unique()
 
     return QueryResult(
         frame=(
+            # SQL: FROM customer c JOIN customer_address ca ON c.c_current_addr_sk = ca.ca_address_sk
             customer.join(
                 customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
             )
+            # SQL: JOIN customer_demographics ON c.c_current_cdemo_sk = cd_demo_sk
             .join(
                 customer_demographics,
                 left_on="c_current_cdemo_sk",
                 right_on="cd_demo_sk",
             )
+            # SQL: AND EXISTS store_sales join (semi-join)
             .join(
                 store_customers,
                 left_on="c_customer_sk",
                 right_on="ss_customer_sk",
                 how="inner",
             )
+            # SQL: AND (EXISTS web_sales OR EXISTS catalog_sales) join (semi-join)
             .join(
                 web_or_catalog_customers,
                 left_on="c_customer_sk",
                 right_on="customer_sk",
                 how="inner",
             )
+            # SQL: WHERE ca_county IN (...)
             .filter(pl.col("ca_county").is_in(counties))
+            # SQL: GROUP BY cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count
             .group_by(
                 [
                     "cd_gender",
@@ -333,6 +343,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "cd_dep_college_count",
                 ]
             )
+            # SQL: Count(*) cnt1...cnt6
             .agg(
                 [
                     pl.len().alias("cnt1"),
@@ -343,6 +354,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.len().alias("cnt6"),
                 ]
             )
+            # SQL: ORDER BY cd_gender, cd_marital_status, ...
             .sort(
                 [
                     "cd_gender",
@@ -356,7 +368,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
+            # SQL: SELECT cd_gender, cd_marital_status, cd_education_status, cnt1, cd_purchase_estimate, cnt2, ...
             .select(
                 [
                     "cd_gender",

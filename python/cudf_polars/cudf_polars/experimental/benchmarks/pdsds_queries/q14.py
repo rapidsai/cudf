@@ -452,6 +452,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: cross_items — items sold in all 3 channels WHERE d_year BETWEEN {year} AND {year}+2 (cross-channel items)
     store_items = (
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -480,6 +481,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         common_items, on=["i_brand_id", "i_class_id", "i_category_id"]
     ).select(pl.col("i_item_sk").alias("ss_item_sk"))
 
+    # SQL: avg_sales — Avg(quantity*list_price) across all 3 channels WHERE d_year BETWEEN {year} AND {year}+2
     avg_store = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_year").is_between(year, year + 2))
@@ -516,6 +518,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(pl.col("sales_amount").mean().alias("average_sales"))
     )
 
+    # SQL: target_week — date_dim WHERE d_year={year}+1 AND d_moy=12 AND d_dom={day}
     target_week = (
         date_dim.filter(
             (pl.col("d_year") == year + 1)
@@ -526,6 +529,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: store channel — store_sales JOIN item, date_dim WHERE d_week_seq=target_week AND i_item_sk IN cross_items; GROUP BY i_brand_id, i_class_id, i_category_id WHERE sales > average_sales
     store_part = (
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -551,6 +555,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: catalog channel — catalog_sales JOIN item, date_dim WHERE d_week_seq=target_week AND i_item_sk IN cross_items
     catalog_part = (
         catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
@@ -576,6 +581,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: web channel — web_sales JOIN item, date_dim WHERE d_week_seq=target_week AND i_item_sk IN cross_items
     web_part = (
         web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
@@ -602,6 +608,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: y = UNION ALL (store, catalog, web)
     y = pl.concat([store_part, catalog_part, web_part])
 
     all_cols = {
@@ -623,6 +630,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         "sum_number_sales",
     ]
 
+    # SQL: GROUP BY ROLLUP(channel, i_brand_id, i_class_id, i_category_id) — 5 levels
     level1 = rollup_level(
         y,
         ["channel", "i_brand_id", "i_class_id", "i_category_id"],
@@ -641,11 +649,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: UNION ALL all rollup levels
             pl.concat([level1, level2, level3, level4, level5])
+            # SQL: ORDER BY channel, i_brand_id, i_class_id, i_category_id (NULLS FIRST)
             .sort(
                 ["channel", "i_brand_id", "i_class_id", "i_category_id"],
                 nulls_last=False,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[
