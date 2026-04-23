@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.udf.utils import precompiled
 from cudf.testing import assert_eq
 
@@ -139,7 +138,6 @@ def test_masked_udf_scalar_args_binops_multiple_series(
                 operator.gt,
                 operator.ge,
             ]
-            and PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and data.dtype.kind != "b",
             reason="https://github.com/pandas-dev/pandas/issues/57390",
         )
@@ -184,7 +182,6 @@ def test_series_apply_basic(data, name):
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="https://github.com/pandas-dev/pandas/issues/57390",
 )
 def test_series_apply_null_conditional():
@@ -208,7 +205,6 @@ def test_series_arith_masked_vs_masked(arithmetic_op):
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="https://github.com/pandas-dev/pandas/issues/57390",
 )
 def test_series_compare_masked_vs_masked(comparison_op):
@@ -269,7 +265,6 @@ def test_series_arith_masked_vs_constant_reflected(
 
 
 @pytest.mark.xfail(
-    PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
     reason="https://github.com/pandas-dev/pandas/issues/57390",
 )
 def test_series_masked_is_null_conditional():

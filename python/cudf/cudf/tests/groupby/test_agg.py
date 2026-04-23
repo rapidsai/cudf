@@ -8,10 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.testing import assert_eq, assert_groupby_results_equal
 
@@ -211,13 +207,6 @@ def test_groupby_agg_decimal(groupby_reduction_methods, request):
             groupby_reduction_methods in ["prod", "mean"],
             raises=pd.errors.DataError,
             reason=f"{groupby_reduction_methods} not supported with Decimals in pandas",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmax", "idxmin"]
-            and PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-            reason=f"{groupby_reduction_methods} not supported with Decimals in an older version of pandas",
         )
     )
     rng = np.random.default_rng(seed=0)

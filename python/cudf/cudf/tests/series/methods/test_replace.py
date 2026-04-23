@@ -8,10 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
@@ -178,7 +174,7 @@ def test_series_fillna_numerical(
         psr = psr.copy(deep=True)
     # TODO: These tests should use Pandas' nullable int type
     # when we support a recent enough version of Pandas
-    # https://pandas.pydata.org/pandas-docs/version/2.3.3/user_guide/integer_na.html
+    # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
     if np.dtype(numeric_types_as_str).kind != "f" and psr.dtype.kind == "i":
         psr = psr.astype(
             cudf.utils.dtypes.np_dtypes_to_pandas_dtypes[
@@ -284,7 +280,6 @@ def test_numeric_series_replace_dtype(
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                condition=PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
                 reason="https://github.com/pandas-dev/pandas/issues/43232"
                 "https://github.com/pandas-dev/pandas/issues/53358",
             ),

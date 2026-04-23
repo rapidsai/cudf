@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from packaging.version import parse
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import IntervalIndex, interval_range
 from cudf.testing import assert_eq
 
@@ -121,6 +121,14 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
     gindex = cudf.interval_range(
         start=start, end=end, periods=periods, closed="left"
     )
+    if (
+        parse(np.__version__) < parse("2")
+        and pindex.dtype.subtype != gindex.dtype.subtype
+    ):
+        # NEP 50 in numpy 2 changes pandas' subtype result to match cudf
+        pindex = pindex.astype(
+            pd.IntervalDtype(gindex.dtype.subtype, pindex.dtype.closed)
+        )
 
     assert_eq(pindex, gindex)
 
@@ -164,6 +172,16 @@ def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
     gindex = cudf.interval_range(
         end=end, freq=freq, periods=periods, closed="left"
     )
+    if (
+        parse(np.__version__) < parse("2")
+        and pindex.dtype.subtype != gindex.dtype.subtype
+    ):
+        # NEP 50 in numpy 2 changes pandas' subtype result to match cudf
+        pindex = pindex.astype(
+            pd.IntervalDtype(
+                subtype=gindex.dtype.subtype, closed=pindex.dtype.closed
+            )
+        )
     assert_eq(pindex, gindex)
 
 
@@ -193,6 +211,16 @@ def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
     gindex = cudf.interval_range(
         start=start, freq=freq, periods=periods, closed="left"
     )
+    if (
+        parse(np.__version__) < parse("2")
+        and pindex.dtype.subtype != gindex.dtype.subtype
+    ):
+        # NEP 50 in numpy 2 changes pandas' subtype result to match cudf
+        pindex = pindex.astype(
+            pd.IntervalDtype(
+                subtype=gindex.dtype.subtype, closed=pindex.dtype.closed
+            )
+        )
     assert_eq(pindex, gindex)
 
 
@@ -270,26 +298,18 @@ def test_interval_index_from_breaks(closed):
     [
         (0.0, None, 0.2, 5),
         (0.0, 1.0, None, 5),
-        pytest.param(
+        (
             0.0,
             1.0,
             0.2,
             None,
-            marks=pytest.mark.skipif(
-                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="https://github.com/pandas-dev/pandas/pull/54477",
-            ),
         ),
         (None, 1.0, 0.2, 5),
-        pytest.param(
+        (
             0.0,
             1.0,
             0.1,
             None,
-            marks=pytest.mark.xfail(
-                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-                reason="https://github.com/pandas-dev/pandas/pull/54477",
-            ),
         ),
         (0.0, 1.0, None, 10),
         (0.0, None, 0.25, 4),

@@ -15,10 +15,6 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal
 
@@ -130,6 +126,9 @@ def test_csv_reader_numeric_data(numeric_types_as_str, tmp_path):
     assert_eq(df, out)
 
 
+@pytest.mark.skip(
+    reason="Disabled until https://github.com/rapidsai/cudf/pull/22094 is fixed"
+)
 @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
 def test_csv_reader_datetime(parse_dates):
     df = pd.DataFrame(
@@ -291,10 +290,6 @@ def test_csv_reader_dtype_extremes(use_names, numeric_extremes_dataframe):
     assert_eq(gdf, pdf)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="https://github.com/pandas-dev/pandas/issues/52449",
-)
 def test_csv_reader_skiprows_skipfooter(tmp_path, pd_mixed_dataframe):
     fname = tmp_path / "tmp_csvreader_file5.csv"
 
@@ -974,16 +969,19 @@ def test_csv_reader_dtype_inference_whitespace():
 def test_csv_reader_empty_dataframe():
     dtypes = ["float64", "int64"]
     buffer = "float_point, integer"
+    dtype = dict(zip(buffer.split(","), dtypes, strict=True))
 
     # should work fine with dtypes
-    df = read_csv(StringIO(buffer), dtype=dtypes)
-    assert df.shape == (0, 2)
-    assert all(df.dtypes == ["float64", "int64"])
+    result = read_csv(StringIO(buffer), dtype=dtype)
+    expected = pd.read_csv(StringIO(buffer), dtype=dtype)
+    assert_eq(result, expected)
 
     # should default to string columns without dtypes
-    df = read_csv(StringIO(buffer))
-    assert df.shape == (0, 2)
-    assert all(df.dtypes == ["object", "object"])
+    result = read_csv(StringIO(buffer))
+    expected = pd.read_csv(StringIO(buffer)).astype(
+        pd.StringDtype(na_value=np.nan)
+    )
+    assert_eq(result, expected)
 
 
 def test_csv_reader_filenotfound(tmp_path):

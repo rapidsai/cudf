@@ -147,6 +147,13 @@ files:
       - develop
       - iwyu
       - py_version
+  stream_tests:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - cuda
+      - cuda_version
   docs:
     output: none
     includes:
@@ -563,10 +570,10 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - pyarrow>=19.0.0
+          - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
       - output_types: [requirements, pyproject]
         packages:
-          - pyarrow>=19.0.0
+          - pyarrow>=19.0.0,<24  # https://github.com/rapidsai/cudf/issues/22229
   # 'cuda_version' intentionally does not contain fallback entries... we want
   # a loud error if an unsupported 'cuda' value is passed
   cuda_version:
