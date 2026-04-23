@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import channel_agg
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -266,22 +267,28 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         item.filter(pl.col("i_category") == category).select("i_manufact_id").unique()
     )
 
+    date_filter = (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+    gmt_filter = pl.col("ca_gmt_offset") == gmt
+
     ss = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(category_manufacturers, on="i_manufact_id")
-        .filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == month)
-            & (pl.col("ca_gmt_offset") == gmt)
-        )
-        .group_by("i_manufact_id")
-        .agg(
-            [
+        channel_agg(
+            store_sales,
+            date_dim,
+            sales_date_key="ss_sold_date_sk",
+            date_filter=date_filter,
+            entity_table=customer_address,
+            entity_key_sales="ss_addr_sk",
+            entity_key_dim="ca_address_sk",
+            extra_joins=[
+                (item, "ss_item_sk", "i_item_sk"),
+                (category_manufacturers, "i_manufact_id", "i_manufact_id"),
+            ],
+            extra_filters=[gmt_filter],
+            agg_exprs=[
                 pl.col("ss_ext_sales_price").sum().alias("total_sales"),
                 pl.col("ss_ext_sales_price").count().alias("_n"),
-            ]
+            ],
+            group_by_cols=["i_manufact_id"],
         )
         .with_columns(
             pl.when(pl.col("_n") > 0)
@@ -291,22 +298,26 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .drop("_n")
     )
+
     cs = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="cs_bill_addr_sk", right_on="ca_address_sk")
-        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
-        .join(category_manufacturers, on="i_manufact_id")
-        .filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == month)
-            & (pl.col("ca_gmt_offset") == gmt)
-        )
-        .group_by("i_manufact_id")
-        .agg(
-            [
+        channel_agg(
+            catalog_sales,
+            date_dim,
+            sales_date_key="cs_sold_date_sk",
+            date_filter=date_filter,
+            entity_table=customer_address,
+            entity_key_sales="cs_bill_addr_sk",
+            entity_key_dim="ca_address_sk",
+            extra_joins=[
+                (item, "cs_item_sk", "i_item_sk"),
+                (category_manufacturers, "i_manufact_id", "i_manufact_id"),
+            ],
+            extra_filters=[gmt_filter],
+            agg_exprs=[
                 pl.col("cs_ext_sales_price").sum().alias("total_sales"),
                 pl.col("cs_ext_sales_price").count().alias("_n"),
-            ]
+            ],
+            group_by_cols=["i_manufact_id"],
         )
         .with_columns(
             pl.when(pl.col("_n") > 0)
@@ -316,22 +327,26 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .drop("_n")
     )
+
     ws = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="ws_bill_addr_sk", right_on="ca_address_sk")
-        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
-        .join(category_manufacturers, on="i_manufact_id")
-        .filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == month)
-            & (pl.col("ca_gmt_offset") == gmt)
-        )
-        .group_by("i_manufact_id")
-        .agg(
-            [
+        channel_agg(
+            web_sales,
+            date_dim,
+            sales_date_key="ws_sold_date_sk",
+            date_filter=date_filter,
+            entity_table=customer_address,
+            entity_key_sales="ws_bill_addr_sk",
+            entity_key_dim="ca_address_sk",
+            extra_joins=[
+                (item, "ws_item_sk", "i_item_sk"),
+                (category_manufacturers, "i_manufact_id", "i_manufact_id"),
+            ],
+            extra_filters=[gmt_filter],
+            agg_exprs=[
                 pl.col("ws_ext_sales_price").sum().alias("total_sales"),
                 pl.col("ws_ext_sales_price").count().alias("_n"),
-            ]
+            ],
+            group_by_cols=["i_manufact_id"],
         )
         .with_columns(
             pl.when(pl.col("_n") > 0)

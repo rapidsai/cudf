@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import channel_agg
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -381,114 +382,115 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     start_date = (pl.date(year, month, day)).cast(pl.Datetime("us"))
     end_date = (start_date + pl.duration(days=30)).cast(pl.Datetime("us"))
+    date_filter = (pl.col("d_date") >= start_date) & (pl.col("d_date") <= end_date)
 
-    ssr = (
-        store_sales.join(
-            store_returns,
-            left_on=["ss_item_sk", "ss_ticket_number"],
-            right_on=["sr_item_sk", "sr_ticket_number"],
-            how="left",
-        )
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
-        .filter(
-            (pl.col("d_date") >= start_date)
-            & (pl.col("d_date") <= end_date)
-            & (pl.col("i_current_price") > 50)
-            & (pl.col("p_channel_tv") == "N")
-        )
-        .group_by("s_store_id")
-        .agg(
-            [
-                pl.col("ss_ext_sales_price").sum().alias("sales"),
-                pl.coalesce(pl.col("sr_return_amt"), pl.lit(0)).sum().alias("returns1"),
-                (
-                    pl.col("ss_net_profit")
-                    - pl.coalesce(pl.col("sr_net_loss"), pl.lit(0))
-                )
-                .sum()
-                .alias("profit"),
-            ]
-        )
-        .select([pl.col("s_store_id").alias("store_id"), "sales", "returns1", "profit"])
+    agg_exprs = [
+        pl.col("ext_sales_price").sum().alias("sales"),
+        pl.col("ret_amt").fill_null(0).sum().alias("returns1"),
+        (pl.col("net_profit") - pl.col("ret_loss").fill_null(0)).sum().alias("profit"),
+    ]
+
+    # Pre-join sales LEFT JOIN returns on item+ticket/order keys, then
+    # let channel_agg handle date, entity, item, promotion joins and filters.
+    ss_with_ret = store_sales.join(
+        store_returns,
+        left_on=["ss_item_sk", "ss_ticket_number"],
+        right_on=["sr_item_sk", "sr_ticket_number"],
+        how="left",
+    ).with_columns(
+        pl.col("ss_ext_sales_price").alias("ext_sales_price"),
+        pl.col("ss_net_profit").alias("net_profit"),
+        pl.col("sr_return_amt").alias("ret_amt"),
+        pl.col("sr_net_loss").alias("ret_loss"),
+    )
+    ssr = channel_agg(
+        ss_with_ret,
+        date_dim,
+        sales_date_key="ss_sold_date_sk",
+        date_filter=date_filter,
+        entity_table=store,
+        entity_key_sales="ss_store_sk",
+        entity_key_dim="s_store_sk",
+        extra_joins=[
+            (item, "ss_item_sk", "i_item_sk"),
+            (promotion, "ss_promo_sk", "p_promo_sk"),
+        ],
+        extra_filters=[
+            pl.col("i_current_price") > 50,
+            pl.col("p_channel_tv") == "N",
+        ],
+        agg_exprs=agg_exprs,
+        group_by_cols=["s_store_id"],
+    ).select([pl.col("s_store_id").alias("store_id"), "sales", "returns1", "profit"])
+
+    cs_with_ret = catalog_sales.join(
+        catalog_returns,
+        left_on=["cs_item_sk", "cs_order_number"],
+        right_on=["cr_item_sk", "cr_order_number"],
+        how="left",
+    ).with_columns(
+        pl.col("cs_ext_sales_price").alias("ext_sales_price"),
+        pl.col("cs_net_profit").alias("net_profit"),
+        pl.col("cr_return_amount").alias("ret_amt"),
+        pl.col("cr_net_loss").alias("ret_loss"),
+    )
+    csr = channel_agg(
+        cs_with_ret,
+        date_dim,
+        sales_date_key="cs_sold_date_sk",
+        date_filter=date_filter,
+        entity_table=catalog_page,
+        entity_key_sales="cs_catalog_page_sk",
+        entity_key_dim="cp_catalog_page_sk",
+        extra_joins=[
+            (item, "cs_item_sk", "i_item_sk"),
+            (promotion, "cs_promo_sk", "p_promo_sk"),
+        ],
+        extra_filters=[
+            pl.col("i_current_price") > 50,
+            pl.col("p_channel_tv") == "N",
+        ],
+        agg_exprs=agg_exprs,
+        group_by_cols=["cp_catalog_page_id"],
+    ).select(
+        [
+            pl.col("cp_catalog_page_id").alias("catalog_page_id"),
+            "sales",
+            "returns1",
+            "profit",
+        ]
     )
 
-    csr = (
-        catalog_sales.join(
-            catalog_returns,
-            left_on=["cs_item_sk", "cs_order_number"],
-            right_on=["cr_item_sk", "cr_order_number"],
-            how="left",
-        )
-        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(catalog_page, left_on="cs_catalog_page_sk", right_on="cp_catalog_page_sk")
-        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
-        .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
-        .filter(
-            (pl.col("d_date") >= start_date)
-            & (pl.col("d_date") <= end_date)
-            & (pl.col("i_current_price") > 50)
-            & (pl.col("p_channel_tv") == "N")
-        )
-        .group_by("cp_catalog_page_id")
-        .agg(
-            [
-                pl.col("cs_ext_sales_price").sum().alias("sales"),
-                pl.coalesce(pl.col("cr_return_amount"), pl.lit(0))
-                .sum()
-                .alias("returns1"),
-                (
-                    pl.col("cs_net_profit")
-                    - pl.coalesce(pl.col("cr_net_loss"), pl.lit(0))
-                )
-                .sum()
-                .alias("profit"),
-            ]
-        )
-        .select(
-            [
-                pl.col("cp_catalog_page_id").alias("catalog_page_id"),
-                "sales",
-                "returns1",
-                "profit",
-            ]
-        )
+    ws_with_ret = web_sales.join(
+        web_returns,
+        left_on=["ws_item_sk", "ws_order_number"],
+        right_on=["wr_item_sk", "wr_order_number"],
+        how="left",
+    ).with_columns(
+        pl.col("ws_ext_sales_price").alias("ext_sales_price"),
+        pl.col("ws_net_profit").alias("net_profit"),
+        pl.col("wr_return_amt").alias("ret_amt"),
+        pl.col("wr_net_loss").alias("ret_loss"),
     )
-
-    wsr = (
-        web_sales.join(
-            web_returns,
-            left_on=["ws_item_sk", "ws_order_number"],
-            right_on=["wr_item_sk", "wr_order_number"],
-            how="left",
-        )
-        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
-        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
-        .join(promotion, left_on="ws_promo_sk", right_on="p_promo_sk")
-        .filter(
-            (pl.col("d_date") >= start_date)
-            & (pl.col("d_date") <= end_date)
-            & (pl.col("i_current_price") > 50)
-            & (pl.col("p_channel_tv") == "N")
-        )
-        .group_by("web_site_id")
-        .agg(
-            [
-                pl.col("ws_ext_sales_price").sum().alias("sales"),
-                pl.coalesce(pl.col("wr_return_amt"), pl.lit(0)).sum().alias("returns1"),
-                (
-                    pl.col("ws_net_profit")
-                    - pl.coalesce(pl.col("wr_net_loss"), pl.lit(0))
-                )
-                .sum()
-                .alias("profit"),
-            ]
-        )
-        .select(["web_site_id", "sales", "returns1", "profit"])
-    )
+    wsr = channel_agg(
+        ws_with_ret,
+        date_dim,
+        sales_date_key="ws_sold_date_sk",
+        date_filter=date_filter,
+        entity_table=web_site,
+        entity_key_sales="ws_web_site_sk",
+        entity_key_dim="web_site_sk",
+        extra_joins=[
+            (item, "ws_item_sk", "i_item_sk"),
+            (promotion, "ws_promo_sk", "p_promo_sk"),
+        ],
+        extra_filters=[
+            pl.col("i_current_price") > 50,
+            pl.col("p_channel_tv") == "N",
+        ],
+        agg_exprs=agg_exprs,
+        group_by_cols=["web_site_id"],
+    ).select(["web_site_id", "sales", "returns1", "profit"])
 
     combined = pl.concat(
         [

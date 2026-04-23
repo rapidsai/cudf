@@ -387,7 +387,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
 
 def polars_impl_naive(run_config: RunConfig) -> QueryResult:
-    """Query 77 (naive)."""
+    """
+    Query 77 (naive).
+
+    Not refactored to use channel_agg() because q77 aggregates sales and
+    returns *separately* (6 independent aggregations) then joins the results,
+    whereas channel_agg() LEFT-JOINs returns at row level before a single
+    group-by.  The catalog channel additionally uses a CROSS JOIN of the two
+    independent aggregates, which channel_agg() cannot express.
+    """
     params = load_parameters(
         int(run_config.scale_factor),
         query_id=77,

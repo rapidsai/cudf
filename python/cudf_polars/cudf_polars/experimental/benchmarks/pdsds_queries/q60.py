@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import channel_agg
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -213,48 +214,59 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         item.filter(pl.col("i_category") == category).select("i_item_id").unique()
     )
 
-    ss = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        .join(category_item_ids, on="i_item_id")
-        .filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == month)
-            & (pl.col("ca_gmt_offset") == gmt_offset)
-        )
-        .group_by("i_item_id")
-        .agg(pl.col("ss_ext_sales_price").sum().alias("total_sales"))
-        .select(["i_item_id", "total_sales"])
-    )
-    cs = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="cs_bill_addr_sk", right_on="ca_address_sk")
-        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
-        .join(category_item_ids, on="i_item_id")
-        .filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == month)
-            & (pl.col("ca_gmt_offset") == gmt_offset)
-        )
-        .group_by("i_item_id")
-        .agg(pl.col("cs_ext_sales_price").sum().alias("total_sales"))
-        .select(["i_item_id", "total_sales"])
-    )
-    ws = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="ws_bill_addr_sk", right_on="ca_address_sk")
-        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
-        .join(category_item_ids, on="i_item_id")
-        .filter(
-            (pl.col("d_year") == year)
-            & (pl.col("d_moy") == month)
-            & (pl.col("ca_gmt_offset") == gmt_offset)
-        )
-        .group_by("i_item_id")
-        .agg(pl.col("ws_ext_sales_price").sum().alias("total_sales"))
-        .select(["i_item_id", "total_sales"])
-    )
+    date_filter = (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+    gmt_filter = pl.col("ca_gmt_offset") == gmt_offset
+
+    ss = channel_agg(
+        store_sales,
+        date_dim,
+        sales_date_key="ss_sold_date_sk",
+        date_filter=date_filter,
+        entity_table=customer_address,
+        entity_key_sales="ss_addr_sk",
+        entity_key_dim="ca_address_sk",
+        extra_joins=[
+            (item, "ss_item_sk", "i_item_sk"),
+            (category_item_ids, "i_item_id", "i_item_id"),
+        ],
+        extra_filters=[gmt_filter],
+        agg_exprs=[pl.col("ss_ext_sales_price").sum().alias("total_sales")],
+        group_by_cols=["i_item_id"],
+    ).select(["i_item_id", "total_sales"])
+
+    cs = channel_agg(
+        catalog_sales,
+        date_dim,
+        sales_date_key="cs_sold_date_sk",
+        date_filter=date_filter,
+        entity_table=customer_address,
+        entity_key_sales="cs_bill_addr_sk",
+        entity_key_dim="ca_address_sk",
+        extra_joins=[
+            (item, "cs_item_sk", "i_item_sk"),
+            (category_item_ids, "i_item_id", "i_item_id"),
+        ],
+        extra_filters=[gmt_filter],
+        agg_exprs=[pl.col("cs_ext_sales_price").sum().alias("total_sales")],
+        group_by_cols=["i_item_id"],
+    ).select(["i_item_id", "total_sales"])
+
+    ws = channel_agg(
+        web_sales,
+        date_dim,
+        sales_date_key="ws_sold_date_sk",
+        date_filter=date_filter,
+        entity_table=customer_address,
+        entity_key_sales="ws_bill_addr_sk",
+        entity_key_dim="ca_address_sk",
+        extra_joins=[
+            (item, "ws_item_sk", "i_item_sk"),
+            (category_item_ids, "i_item_id", "i_item_id"),
+        ],
+        extra_filters=[gmt_filter],
+        agg_exprs=[pl.col("ws_ext_sales_price").sum().alias("total_sales")],
+        group_by_cols=["i_item_id"],
+    ).select(["i_item_id", "total_sales"])
 
     sort_by = {"i_item_id": False, "total_sales": False}
     limit = 100

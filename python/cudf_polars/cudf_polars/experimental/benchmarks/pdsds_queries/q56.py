@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import channel_agg
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -235,66 +236,105 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         item.filter(pl.col("i_color").is_in(colors)).select(["i_item_id"]).unique()
     )
 
-    channels: list[tuple[pl.LazyFrame, str, str, str, str]] = [
-        (
-            store_sales,
-            "ss_sold_date_sk",
-            "ss_item_sk",
-            "ss_addr_sk",
-            "ss_ext_sales_price",
-        ),
-        (
-            catalog_sales,
-            "cs_sold_date_sk",
-            "cs_item_sk",
-            "cs_bill_addr_sk",
-            "cs_ext_sales_price",
-        ),
-        (
-            web_sales,
-            "ws_sold_date_sk",
-            "ws_item_sk",
-            "ws_bill_addr_sk",
-            "ws_ext_sales_price",
-        ),
-    ]
+    date_filter = (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+    gmt_filter = pl.col("ca_gmt_offset") == gmt_offset
 
-    per_channel = [
-        (
-            lf.join(item, left_on=item_sk_col, right_on="i_item_sk")
-            .join(color_item_ids_lf, on="i_item_id")
-            .join(date_dim, left_on=sold_date_col, right_on="d_date_sk")
-            .join(customer_address, left_on=addr_sk_col, right_on="ca_address_sk")
-            .filter(
-                (pl.col("d_year") == year)
-                & (pl.col("d_moy") == month)
-                & (pl.col("ca_gmt_offset") == gmt_offset)
-            )
-            .group_by("i_item_id")
-            .agg(
-                [
-                    pl.col(ext_col).sum().alias("total_sales"),
-                    pl.col(ext_col).count().alias("_n"),
-                ]
-            )
-            .with_columns(
-                pl.when(pl.col("_n") > 0)
-                .then(pl.col("total_sales"))
-                .otherwise(None)
-                .alias("total_sales")
-            )
-            .drop("_n")
-            .select(["i_item_id", "total_sales"])
+    ss = (
+        channel_agg(
+            store_sales,
+            date_dim,
+            sales_date_key="ss_sold_date_sk",
+            date_filter=date_filter,
+            entity_table=item,
+            entity_key_sales="ss_item_sk",
+            entity_key_dim="i_item_sk",
+            extra_joins=[
+                (color_item_ids_lf, "i_item_id", "i_item_id"),
+                (customer_address, "ss_addr_sk", "ca_address_sk"),
+            ],
+            extra_filters=[gmt_filter],
+            agg_exprs=[
+                pl.col("ss_ext_sales_price").sum().alias("total_sales"),
+                pl.col("ss_ext_sales_price").count().alias("_n"),
+            ],
+            group_by_cols=["i_item_id"],
         )
-        for lf, sold_date_col, item_sk_col, addr_sk_col, ext_col in channels
-    ]
+        .with_columns(
+            pl.when(pl.col("_n") > 0)
+            .then(pl.col("total_sales"))
+            .otherwise(None)
+            .alias("total_sales")
+        )
+        .drop("_n")
+        .select(["i_item_id", "total_sales"])
+    )
+
+    cs = (
+        channel_agg(
+            catalog_sales,
+            date_dim,
+            sales_date_key="cs_sold_date_sk",
+            date_filter=date_filter,
+            entity_table=item,
+            entity_key_sales="cs_item_sk",
+            entity_key_dim="i_item_sk",
+            extra_joins=[
+                (color_item_ids_lf, "i_item_id", "i_item_id"),
+                (customer_address, "cs_bill_addr_sk", "ca_address_sk"),
+            ],
+            extra_filters=[gmt_filter],
+            agg_exprs=[
+                pl.col("cs_ext_sales_price").sum().alias("total_sales"),
+                pl.col("cs_ext_sales_price").count().alias("_n"),
+            ],
+            group_by_cols=["i_item_id"],
+        )
+        .with_columns(
+            pl.when(pl.col("_n") > 0)
+            .then(pl.col("total_sales"))
+            .otherwise(None)
+            .alias("total_sales")
+        )
+        .drop("_n")
+        .select(["i_item_id", "total_sales"])
+    )
+
+    ws = (
+        channel_agg(
+            web_sales,
+            date_dim,
+            sales_date_key="ws_sold_date_sk",
+            date_filter=date_filter,
+            entity_table=item,
+            entity_key_sales="ws_item_sk",
+            entity_key_dim="i_item_sk",
+            extra_joins=[
+                (color_item_ids_lf, "i_item_id", "i_item_id"),
+                (customer_address, "ws_bill_addr_sk", "ca_address_sk"),
+            ],
+            extra_filters=[gmt_filter],
+            agg_exprs=[
+                pl.col("ws_ext_sales_price").sum().alias("total_sales"),
+                pl.col("ws_ext_sales_price").count().alias("_n"),
+            ],
+            group_by_cols=["i_item_id"],
+        )
+        .with_columns(
+            pl.when(pl.col("_n") > 0)
+            .then(pl.col("total_sales"))
+            .otherwise(None)
+            .alias("total_sales")
+        )
+        .drop("_n")
+        .select(["i_item_id", "total_sales"])
+    )
 
     sort_by = {"total_sales": False}
     limit = 100
 
     return QueryResult(
         frame=(
-            pl.concat(per_channel)
+            pl.concat([ss, cs, ws])
             .group_by("i_item_id")
             .agg(
                 [
