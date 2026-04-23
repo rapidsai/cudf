@@ -365,6 +365,13 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
   if (block.thread_rank() == 0) { db->init_binary_block(s->data_start, s->data_end); }
   block.sync();
 
+  // Exit if the DELTA_BINARY_PACKED header is malformed
+  if (db->error) {
+    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+              error_code);
+    return;
+  }
+
   auto const batch_size = db->values_per_mb;
   if (batch_size > max_delta_mini_block_size) {
     set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
@@ -378,6 +385,9 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
 
   while (s->error == 0 &&
          (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
+    int const prev_input_value_count = s->input_value_count;
+    uint32_t const prev_src_pos      = s->src_pos;
+
     uint32_t target_pos;
     uint32_t const src_pos = s->src_pos;
 
@@ -432,6 +442,13 @@ CUDF_KERNEL void __launch_bounds__(decode_delta_binary_block_size)
     }
 
     block.sync();
+
+    // Ensure we advanced position and input value count in this iteration.
+    if (s->input_value_count == prev_input_value_count and s->src_pos == prev_src_pos) {
+      cg::invoke_one(block, [&] { s->set_error_code(decode_error::DELTA_PARAMS_UNSUPPORTED); });
+      block.sync();
+      break;
+    }
   }
 
   if (has_repetition) {
@@ -545,6 +562,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     dba->init(s->data_start, s->data_end, s->page.start_val, s->page.temp_string_buf);
   }
   block.sync();
+
+  // Propagate malformed-header errors from either underlying DELTA_BINARY_PACKED decoder.
+  if (prefix_db->error || suffix_db->error) {
+    set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
+              error_code);
+    return;
+  }
 
   // assert that prefix and suffix have same mini-block size
   if (prefix_db->values_per_mb != suffix_db->values_per_mb or
@@ -758,6 +782,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     page_string_data = db->find_end_of_block(s->data_start, s->data_end);
   }
   block.sync();
+
+  // Propagate malformed-header errors from the underlying DELTA_BINARY_PACKED decoder
+  if (db->error) {
+    set_error(static_cast<int32_t>(decode_error::DELTA_PARAMS_UNSUPPORTED), error_code);
+    return;
+  }
 
   int const leaf_level_index = s->col.max_nesting_depth - 1;
 
