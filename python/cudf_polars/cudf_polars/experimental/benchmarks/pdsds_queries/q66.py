@@ -567,16 +567,19 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     ship_carriers = f"{smc[0]},{smc[1]}"
 
+    # SQL: (web_sales subquery) FROM web_sales, warehouse, date_dim, time_dim, ship_mode WHERE ws_warehouse_sk=w_warehouse_sk AND ws_sold_date_sk=d_date_sk AND ws_sold_time_sk=t_time_sk AND ws_ship_mode_sk=sm_ship_mode_sk
     web_part = (
         web_sales.join(warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk")
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk")
         .join(ship_mode, left_on="ws_ship_mode_sk", right_on="sm_ship_mode_sk")
+        # SQL: AND d_year={year} AND t_time BETWEEN {time_one} AND {time_one}+28800 AND sm_carrier IN (...)
         .filter(
             (pl.col("d_year") == year)
             & pl.col("t_time").is_between(time_one, time_one + 28800)
             & pl.col("sm_carrier").is_in(smc)
         )
+        # SQL: GROUP BY w_warehouse_name, w_warehouse_sq_ft, w_city, w_county, w_state, w_country, d_year
         .group_by(
             [
                 "w_warehouse_name",
@@ -588,6 +591,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 "d_year",
             ]
         )
+        # SQL: Sum(CASE WHEN d_moy=1 THEN sales_one*ws_quantity ELSE 0 END) AS jan_sales, ..., Sum(CASE WHEN d_moy=12 THEN net_one*ws_quantity ELSE 0 END) AS dec_net
         .agg(
             [
                 pl.when(pl.col("d_moy") == 1)
@@ -712,6 +716,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .alias("dec_net"),
             ]
         )
+        # SQL: '{smc[0]}' || ',' || '{smc[1]}' AS ship_carriers, d_year AS year1
         .with_columns(
             [
                 pl.lit(ship_carriers).alias("ship_carriers"),
@@ -720,6 +725,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: (catalog_sales subquery) FROM catalog_sales, warehouse, date_dim, time_dim, ship_mode WHERE cs_warehouse_sk=w_warehouse_sk AND ...
     catalog_part = (
         catalog_sales.join(
             warehouse, left_on="cs_warehouse_sk", right_on="w_warehouse_sk"
@@ -727,11 +733,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(time_dim, left_on="cs_sold_time_sk", right_on="t_time_sk")
         .join(ship_mode, left_on="cs_ship_mode_sk", right_on="sm_ship_mode_sk")
+        # SQL: AND d_year={year} AND t_time BETWEEN {time_one} AND {time_one}+28800 AND sm_carrier IN (...)
         .filter(
             (pl.col("d_year") == year)
             & pl.col("t_time").is_between(time_one, time_one + 28800)
             & pl.col("sm_carrier").is_in(smc)
         )
+        # SQL: GROUP BY w_warehouse_name, w_warehouse_sq_ft, w_city, w_county, w_state, w_country, d_year
         .group_by(
             [
                 "w_warehouse_name",
@@ -743,6 +751,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 "d_year",
             ]
         )
+        # SQL: Sum(CASE WHEN d_moy=1 THEN sales_two*cs_quantity ELSE 0 END) AS jan_sales, ..., Sum(CASE WHEN d_moy=12 THEN net_two*cs_quantity ELSE 0 END) AS dec_net
         .agg(
             [
                 pl.when(pl.col("d_moy") == 1)
@@ -867,6 +876,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .alias("dec_net"),
             ]
         )
+        # SQL: '{smc[0]}' || ',' || '{smc[1]}' AS ship_carriers, d_year AS year1
         .with_columns(
             [
                 pl.lit(ship_carriers).alias("ship_carriers"),
@@ -875,6 +885,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: Sum(jan_sales/w_warehouse_sq_ft) AS jan_sales_per_sq_foot, ... (12 per-sq-foot derived columns)
     per_sqft_exprs = [
         (pl.col("jan_sales") / pl.col("w_warehouse_sq_ft")).alias(
             "jan_sales_per_sq_foot"
@@ -914,6 +925,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ),
     ]
 
+    # SQL: (outer) FROM (web_union UNION ALL catalog_union) x GROUP BY w_warehouse_name, w_warehouse_sq_ft, w_city, w_county, w_state, w_country, ship_carriers, year1
     return QueryResult(
         frame=(
             pl.concat([web_part, catalog_part])
@@ -929,6 +941,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "year1",
                 ]
             )
+            # SQL: Sum(jan_sales) AS jan_sales, ..., Sum(dec_net) AS dec_net
             .agg(
                 [
                     pl.col("jan_sales").sum().alias("jan_sales"),
@@ -957,7 +970,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("dec_net").sum().alias("dec_net"),
                 ]
             )
+            # SQL: Sum(jan_sales/w_warehouse_sq_ft) AS jan_sales_per_sq_foot, ... (computed after group by)
             .with_columns(per_sqft_exprs)
+            # SQL: SELECT w_warehouse_name, w_warehouse_sq_ft, w_city, ..., ship_carriers, year1, jan_sales..dec_sales, jan_sales_per_sq_foot..dec_sales_per_sq_foot, jan_net..dec_net
             .select(
                 [
                     "w_warehouse_name",
@@ -1006,7 +1021,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "dec_net",
                 ]
             )
+            # SQL: ORDER BY w_warehouse_name
             .sort(["w_warehouse_name"], nulls_last=True, descending=[False])
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("w_warehouse_name", False)],

@@ -495,12 +495,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: CTE cs_ui: FROM catalog_sales, catalog_returns WHERE cs_item_sk=cr_item_sk AND cs_order_number=cr_order_number
     cs_ui = (
         catalog_sales.join(
             catalog_returns,
             left_on=["cs_item_sk", "cs_order_number"],
             right_on=["cr_item_sk", "cr_order_number"],
         )
+        # SQL: GROUP BY cs_item_sk HAVING Sum(cs_ext_list_price) > 2 * Sum(cr_refunded_cash + cr_reversed_charge + cr_store_credit)
         .group_by("cs_item_sk")
         .agg(
             [
@@ -518,6 +520,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select("cs_item_sk")
     )
 
+    # SQL: alias date_dim d1, d2, d3 (for ss_sold_date_sk, c_first_sales_date_sk, c_first_shipto_date_sk)
     d1 = date_dim.select(["d_date_sk", "d_year"]).rename(
         {"d_date_sk": "d1_date_sk", "d_year": "syear"}
     )
@@ -527,6 +530,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     d3 = date_dim.select(["d_date_sk", "d_year"]).rename(
         {"d_date_sk": "d3_date_sk", "d_year": "s2year"}
     )
+    # SQL: alias customer_demographics cd1 (ss_cdemo_sk), cd2 (c_current_cdemo_sk); household_demographics hd1/hd2; income_band ib1/ib2; customer_address ad1/ad2
     cd1 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
         {"cd_demo_sk": "cd1_demo_sk", "cd_marital_status": "cd1_status"}
     )
@@ -569,6 +573,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
 
     item_renamed = item.rename({"i_item_sk": "ss_item_sk"})
+    # SQL: CTE cross_sales: FROM store_sales, store_returns, cs_ui, date_dim d1/d2/d3, store, customer, cd1/cd2, promotion, hd1/hd2, ad1/ad2, ib1/ib2, item
     cross_sales = (
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
@@ -591,10 +596,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
         .join(ib1, left_on="hd1_income_sk", right_on="ib1_income_band_sk")
         .join(ib2, left_on="hd2_income_sk", right_on="ib2_income_band_sk")
+        # SQL: WHERE ss_store_sk=s_store_sk AND ss_sold_date_sk=d1 AND ss_customer_sk=c_customer_sk AND ... AND i_color IN (...) AND i_current_price BETWEEN {price} AND {price}+10/+15 AND cd1.marital_status <> cd2.marital_status
         .filter(pl.col("i_color").is_in(colors))
         .filter(pl.col("i_current_price").is_between(price, price + 10))
         .filter(pl.col("i_current_price").is_between(price + 1, price + 15))
         .filter(pl.col("cd1_status") != pl.col("cd2_status"))
+        # SQL: GROUP BY i_product_name, i_item_sk, s_store_name, s_zip, ad1/ad2 address cols, d1/d2/d3 year
         .group_by(
             [
                 "i_product_name",
@@ -614,6 +621,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 "s2year",
             ]
         )
+        # SQL: Count(*) cnt, Sum(ss_wholesale_cost) s1, Sum(ss_list_price) s2, Sum(ss_coupon_amt) s3
         .agg(
             [
                 pl.len().alias("cnt"),
@@ -631,6 +639,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .alias("s3"),
             ]
         )
+        # SQL: SELECT i_product_name AS product_name, i_item_sk AS item_sk, s_store_name, s_zip, addr cols, syear, fsyear, s2year, cnt, s1, s2, s3
         .select(
             [
                 pl.col("i_product_name").alias("product_name"),
@@ -656,6 +665,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: FROM cross_sales cs1, cross_sales cs2 WHERE cs1.item_sk=cs2.item_sk AND cs1.syear={year} AND cs2.syear={year}+1 AND cs2.cnt<=cs1.cnt AND cs1.store_name=cs2.store_name AND cs1.store_zip=cs2.store_zip
     cs1 = cross_sales
     cs2 = cross_sales
 
@@ -697,6 +707,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("cnt_1"),
                 ]
             )
+            # SQL: ORDER BY cs1.product_name, cs1.store_name, cs2.cnt, cs1.s1, cs2.s1
             .sort(
                 ["product_name", "store_name", "cnt_1", "s1", "s1_1"],
                 nulls_last=True,

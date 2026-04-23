@@ -301,18 +301,21 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
 
     max_qoy = 4
+    # SQL: EXISTS (SELECT * FROM store_sales, date_dim WHERE c_customer_sk = ss_customer_sk AND ss_sold_date_sk = d_date_sk AND d_year={year} AND d_qoy < 4)
     store_exists = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
         .select(pl.col("ss_customer_sk").alias("c_customer_sk"))
         .unique()
     )
+    # SQL: EXISTS (SELECT * FROM web_sales, date_dim WHERE c_customer_sk = ws_bill_customer_sk AND ws_sold_date_sk = d_date_sk AND d_year={year} AND d_qoy < 4)
     web_exists = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
         .select(pl.col("ws_bill_customer_sk").alias("c_customer_sk"))
         .unique()
     )
+    # SQL: OR EXISTS (SELECT * FROM catalog_sales, date_dim WHERE c_customer_sk = cs_ship_customer_sk AND cs_sold_date_sk = d_date_sk AND d_year={year} AND d_qoy < 4)
     catalog_exists = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
@@ -321,6 +324,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     web_or_catalog = pl.concat([web_exists, catalog_exists]).unique()
 
+    # SQL: FROM customer c, customer_address ca, customer_demographics WHERE c_current_addr_sk = ca_address_sk AND cd_demo_sk = c_current_cdemo_sk
     filtered = (
         customer.join(
             customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
@@ -328,7 +332,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .join(
             customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
         )
+        # SQL: AND EXISTS (store_exists semi-join)
         .join(store_exists, on="c_customer_sk", how="semi")
+        # SQL: AND (EXISTS (web_exists) OR EXISTS (catalog_exists)) semi-join
         .join(web_or_catalog, on="c_customer_sk", how="semi")
     )
 
@@ -543,6 +549,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         msg = f"Unknown aggregation function: {aggthree}"
         raise ValueError(msg)
 
+    # SQL: GROUP BY ca_state, cd_gender, cd_marital_status, cd_dep_count, cd_dep_employed_count, cd_dep_college_count
     result = (
         filtered.group_by(
             [
@@ -554,6 +561,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 "cd_dep_college_count",
             ]
         )
+        # SQL: Count(*) cnt1, {aggone/aggtwo/aggthree}(cd_dep_count/cd_dep_employed_count/cd_dep_college_count) ...
         .agg(
             [
                 pl.len().alias("cnt1"),
@@ -570,6 +578,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 dep_college_agg3,
             ]
         )
+        # SQL: SELECT ca_state, cd_gender, ..., cnt1, agg(cd_dep_count), ..., cnt3, agg(cd_dep_college_count)
         .select(
             [
                 "ca_state",
@@ -592,7 +601,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 f"{aggthree}(cd_dep_college_count)_1",
             ]
         )
+        # SQL: ORDER BY ca_state, cd_gender, cd_marital_status, cd_dep_count, cd_dep_employed_count, cd_dep_college_count
         .sort(sort_by.keys(), nulls_last=True)
+        # SQL: LIMIT 100
         .limit(limit)
     )
     return QueryResult(
