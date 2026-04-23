@@ -236,3 +236,141 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 83 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=83,
+        qualification=run_config.qualification,
+    )
+
+    dates_list = params["dates"]
+    anchor_dates = []
+    for date_str in dates_list:
+        year, month, day = map(int, date_str.split("-"))
+        anchor_dates.append(_date(year, month, day))
+
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    selected_weeks = (
+        date_dim.filter(pl.col("d_date").is_in(anchor_dates))
+        .select("d_week_seq")
+        .unique()
+    )
+    selected_dates = (
+        date_dim.join(selected_weeks, on="d_week_seq").select("d_date").unique()
+    )
+
+    sr_items = (
+        store_returns.join(item, left_on="sr_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk")
+        .join(selected_dates, on="d_date")
+        .group_by("i_item_id")
+        .agg(
+            [
+                pl.col("sr_return_quantity").sum().alias("sr_item_qty_sum"),
+                pl.col("sr_return_quantity").count().alias("sr_item_qty_count"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("sr_item_qty_count") > 0)
+            .then(pl.col("sr_item_qty_sum"))
+            .otherwise(None)
+            .alias("sr_item_qty")
+        )
+        .drop(["sr_item_qty_sum", "sr_item_qty_count"])
+    )
+    cr_items = (
+        catalog_returns.join(item, left_on="cr_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk")
+        .join(selected_dates, on="d_date")
+        .group_by("i_item_id")
+        .agg(
+            [
+                pl.col("cr_return_quantity").sum().alias("cr_item_qty_sum"),
+                pl.col("cr_return_quantity").count().alias("cr_item_qty_count"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("cr_item_qty_count") > 0)
+            .then(pl.col("cr_item_qty_sum"))
+            .otherwise(None)
+            .alias("cr_item_qty")
+        )
+        .drop(["cr_item_qty_sum", "cr_item_qty_count"])
+    )
+    wr_items = (
+        web_returns.join(item, left_on="wr_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
+        .join(selected_dates, on="d_date")
+        .group_by("i_item_id")
+        .agg(
+            [
+                pl.col("wr_return_quantity").sum().alias("wr_item_qty_sum"),
+                pl.col("wr_return_quantity").count().alias("wr_item_qty_count"),
+            ]
+        )
+        .with_columns(
+            pl.when(pl.col("wr_item_qty_count") > 0)
+            .then(pl.col("wr_item_qty_sum"))
+            .otherwise(None)
+            .alias("wr_item_qty")
+        )
+        .drop(["wr_item_qty_sum", "wr_item_qty_count"])
+    )
+
+    sort_by = {"item_id": False, "sr_item_qty": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            sr_items.join(cr_items, on="i_item_id")
+            .join(wr_items, on="i_item_id")
+            .with_columns(
+                (
+                    pl.col("sr_item_qty")
+                    + pl.col("cr_item_qty")
+                    + pl.col("wr_item_qty")
+                ).alias("total_qty")
+            )
+            .with_columns(
+                [
+                    (pl.col("total_qty") / 3.0).cast(pl.Float64).alias("average"),
+                    (pl.col("sr_item_qty") / pl.col("total_qty") / 3.0 * 100)
+                    .cast(pl.Float64)
+                    .alias("sr_dev"),
+                    (pl.col("cr_item_qty") / pl.col("total_qty") / 3.0 * 100)
+                    .cast(pl.Float64)
+                    .alias("cr_dev"),
+                    (pl.col("wr_item_qty") / pl.col("total_qty") / 3.0 * 100)
+                    .cast(pl.Float64)
+                    .alias("wr_dev"),
+                ]
+            )
+            .select(
+                [
+                    pl.col("i_item_id").alias("item_id"),
+                    "sr_item_qty",
+                    "sr_dev",
+                    "cr_item_qty",
+                    "cr_dev",
+                    "wr_item_qty",
+                    "wr_dev",
+                    "average",
+                ]
+            )
+            .sort(["item_id", "sr_item_qty"], nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

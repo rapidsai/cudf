@@ -191,3 +191,105 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 81 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=81,
+        qualification=run_config.qualification,
+    )
+
+    state = params["state"]
+
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+
+    customer_total_return = (
+        catalog_returns.join(
+            date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk"
+        )
+        .join(
+            customer_address, left_on="cr_returning_addr_sk", right_on="ca_address_sk"
+        )
+        .filter(pl.col("d_year") == 1999)
+        .group_by(["cr_returning_customer_sk", "ca_state"])
+        .agg(pl.col("cr_return_amt_inc_tax").sum().alias("ctr_total_return"))
+        .with_columns(
+            [
+                pl.col("cr_returning_customer_sk").alias("ctr_customer_sk"),
+                pl.col("ca_state").alias("ctr_state"),
+            ]
+        )
+        .select(["ctr_customer_sk", "ctr_state", "ctr_total_return"])
+    )
+
+    state_averages = customer_total_return.group_by("ctr_state").agg(
+        (pl.col("ctr_total_return").mean() * 1.2).alias("threshold")
+    )
+
+    sort_by = {
+        "c_customer_id": False,
+        "c_salutation": False,
+        "c_first_name": False,
+        "c_last_name": False,
+        "ca_street_number": False,
+        "ca_street_name": False,
+        "ca_street_type": False,
+        "ca_suite_number": False,
+        "ca_city": False,
+        "ca_county": False,
+        "ca_state": False,
+        "ca_zip": False,
+        "ca_country": False,
+        "ca_gmt_offset": False,
+        "ca_location_type": False,
+        "ctr_total_return": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            customer_total_return.join(
+                customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
+            )
+            .join(
+                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            )
+            .join(state_averages, on="ctr_state")
+            .filter(
+                (pl.col("ctr_total_return") > pl.col("threshold"))
+                & (pl.col("ca_state") == state)
+            )
+            .select(
+                [
+                    "c_customer_id",
+                    "c_salutation",
+                    "c_first_name",
+                    "c_last_name",
+                    "ca_street_number",
+                    "ca_street_name",
+                    "ca_street_type",
+                    "ca_suite_number",
+                    "ca_city",
+                    "ca_county",
+                    "ca_state",
+                    "ca_zip",
+                    "ca_country",
+                    "ca_gmt_offset",
+                    "ca_location_type",
+                    "ctr_total_return",
+                ]
+            )
+            .sort(list(sort_by.keys()), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
