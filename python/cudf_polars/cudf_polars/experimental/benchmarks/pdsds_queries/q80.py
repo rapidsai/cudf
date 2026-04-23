@@ -347,3 +347,212 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 80 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=80,
+        qualification=run_config.qualification,
+    )
+
+    sdate = params["sdate"]
+    year, month, day = map(int, sdate.split("-"))
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    catalog_page = get_data(run_config.dataset_path, "catalog_page", run_config.suffix)
+    web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+
+    start_date = (pl.date(year, month, day)).cast(pl.Datetime("us"))
+    end_date = (start_date + pl.duration(days=30)).cast(pl.Datetime("us"))
+
+    ssr = (
+        store_sales.join(
+            store_returns,
+            left_on=["ss_item_sk", "ss_ticket_number"],
+            right_on=["sr_item_sk", "sr_ticket_number"],
+            how="left",
+        )
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
+        .filter(
+            (pl.col("d_date") >= start_date)
+            & (pl.col("d_date") <= end_date)
+            & (pl.col("i_current_price") > 50)
+            & (pl.col("p_channel_tv") == "N")
+        )
+        .group_by("s_store_id")
+        .agg(
+            [
+                pl.col("ss_ext_sales_price").sum().alias("sales"),
+                pl.coalesce(pl.col("sr_return_amt"), pl.lit(0)).sum().alias("returns1"),
+                (
+                    pl.col("ss_net_profit")
+                    - pl.coalesce(pl.col("sr_net_loss"), pl.lit(0))
+                )
+                .sum()
+                .alias("profit"),
+            ]
+        )
+        .select([pl.col("s_store_id").alias("store_id"), "sales", "returns1", "profit"])
+    )
+
+    csr = (
+        catalog_sales.join(
+            catalog_returns,
+            left_on=["cs_item_sk", "cs_order_number"],
+            right_on=["cr_item_sk", "cr_order_number"],
+            how="left",
+        )
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(catalog_page, left_on="cs_catalog_page_sk", right_on="cp_catalog_page_sk")
+        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
+        .filter(
+            (pl.col("d_date") >= start_date)
+            & (pl.col("d_date") <= end_date)
+            & (pl.col("i_current_price") > 50)
+            & (pl.col("p_channel_tv") == "N")
+        )
+        .group_by("cp_catalog_page_id")
+        .agg(
+            [
+                pl.col("cs_ext_sales_price").sum().alias("sales"),
+                pl.coalesce(pl.col("cr_return_amount"), pl.lit(0))
+                .sum()
+                .alias("returns1"),
+                (
+                    pl.col("cs_net_profit")
+                    - pl.coalesce(pl.col("cr_net_loss"), pl.lit(0))
+                )
+                .sum()
+                .alias("profit"),
+            ]
+        )
+        .select(
+            [
+                pl.col("cp_catalog_page_id").alias("catalog_page_id"),
+                "sales",
+                "returns1",
+                "profit",
+            ]
+        )
+    )
+
+    wsr = (
+        web_sales.join(
+            web_returns,
+            left_on=["ws_item_sk", "ws_order_number"],
+            right_on=["wr_item_sk", "wr_order_number"],
+            how="left",
+        )
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
+        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .join(promotion, left_on="ws_promo_sk", right_on="p_promo_sk")
+        .filter(
+            (pl.col("d_date") >= start_date)
+            & (pl.col("d_date") <= end_date)
+            & (pl.col("i_current_price") > 50)
+            & (pl.col("p_channel_tv") == "N")
+        )
+        .group_by("web_site_id")
+        .agg(
+            [
+                pl.col("ws_ext_sales_price").sum().alias("sales"),
+                pl.coalesce(pl.col("wr_return_amt"), pl.lit(0)).sum().alias("returns1"),
+                (
+                    pl.col("ws_net_profit")
+                    - pl.coalesce(pl.col("wr_net_loss"), pl.lit(0))
+                )
+                .sum()
+                .alias("profit"),
+            ]
+        )
+        .select(["web_site_id", "sales", "returns1", "profit"])
+    )
+
+    combined = pl.concat(
+        [
+            ssr.select(
+                [
+                    pl.lit("store channel").alias("channel"),
+                    (pl.lit("store") + pl.col("store_id").cast(pl.Utf8)).alias("id"),
+                    "sales",
+                    "returns1",
+                    "profit",
+                ]
+            ),
+            csr.select(
+                [
+                    pl.lit("catalog channel").alias("channel"),
+                    (
+                        pl.lit("catalog_page") + pl.col("catalog_page_id").cast(pl.Utf8)
+                    ).alias("id"),
+                    "sales",
+                    "returns1",
+                    "profit",
+                ]
+            ),
+            wsr.select(
+                [
+                    pl.lit("web channel").alias("channel"),
+                    (pl.lit("web_site") + pl.col("web_site_id").cast(pl.Utf8)).alias(
+                        "id"
+                    ),
+                    "sales",
+                    "returns1",
+                    "profit",
+                ]
+            ),
+        ]
+    )
+
+    level1 = combined.group_by(["channel", "id"]).agg(
+        [
+            pl.col("sales").sum().alias("sales"),
+            pl.col("returns1").sum().alias("returns1"),
+            pl.col("profit").sum().alias("profit"),
+        ]
+    )
+    level2 = (
+        combined.group_by("channel")
+        .agg(
+            [
+                pl.col("sales").sum().alias("sales"),
+                pl.col("returns1").sum().alias("returns1"),
+                pl.col("profit").sum().alias("profit"),
+            ]
+        )
+        .with_columns(pl.lit(None).cast(pl.Utf8).alias("id"))
+    )
+
+    sort_by = {"channel": False, "id": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2], how="diagonal")
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
