@@ -595,10 +595,11 @@ jobs:
       node_type: "gpu-l4-latest-1"
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/test_narwhals.sh
-  spark-rapids-jni:
-    needs: changed-files
-    uses: ./.github/workflows/spark-rapids-jni.yaml
-    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
+  # TODO: Re-enable. Temporarily disabling as it seems to be missing RMM->CCCL changes.
+  # spark-rapids-jni:
+  #   needs: changed-files
+  #   uses: ./.github/workflows/spark-rapids-jni.yaml
+  #   if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
   streams-build:
     needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
