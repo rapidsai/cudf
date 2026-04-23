@@ -107,3 +107,58 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("cnt", False), ("state", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 6 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    target_month_seq_table = (
+        date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        .select("d_month_seq")
+        .unique()
+    )
+
+    avg_price_per_category = item.group_by("i_category").agg(
+        pl.col("i_current_price").mean().alias("avg_price")
+    )
+
+    return QueryResult(
+        frame=(
+            customer_address.join(
+                customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
+            )
+            .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
+            .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(avg_price_per_category, on="i_category")
+            .join(target_month_seq_table, on="d_month_seq", how="inner")
+            .filter(pl.col("i_current_price") > 1.2 * pl.col("avg_price"))
+            .group_by("ca_state")
+            .agg(pl.len().alias("cnt"))
+            .filter(pl.col("cnt") >= 10)
+            .sort(["cnt", "ca_state"], nulls_last=True)
+            .limit(100)
+            .select(
+                [
+                    pl.col("ca_state").alias("state"),
+                    pl.col("cnt"),
+                ]
+            )
+        ),
+        sort_by=[("cnt", False), ("state", False)],
+        limit=100,
+    )

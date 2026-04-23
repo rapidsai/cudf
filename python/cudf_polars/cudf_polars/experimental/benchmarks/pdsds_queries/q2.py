@@ -262,3 +262,153 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("d_week_seq1", False)],
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 2 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=2, qualification=run_config.qualification
+    )
+
+    year = params["year"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    wscs = pl.concat(
+        [
+            web_sales.select(
+                [
+                    pl.col("ws_sold_date_sk").alias("sold_date_sk"),
+                    pl.col("ws_ext_sales_price").alias("sales_price"),
+                ]
+            ),
+            catalog_sales.select(
+                [
+                    pl.col("cs_sold_date_sk").alias("sold_date_sk"),
+                    pl.col("cs_ext_sales_price").alias("sales_price"),
+                ]
+            ),
+        ]
+    )
+
+    wswscs = (
+        wscs.join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
+        .group_by("d_week_seq")
+        .agg(
+            [
+                pl.when(pl.col("d_day_name") == "Sunday")
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .sum()
+                .alias("sun_sales"),
+                pl.when(pl.col("d_day_name") == "Monday")
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .sum()
+                .alias("mon_sales"),
+                pl.when(pl.col("d_day_name") == "Tuesday")
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .sum()
+                .alias("tue_sales"),
+                pl.when(pl.col("d_day_name") == "Wednesday")
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .sum()
+                .alias("wed_sales"),
+                pl.when(pl.col("d_day_name") == "Thursday")
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .sum()
+                .alias("thu_sales"),
+                pl.when(pl.col("d_day_name") == "Friday")
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .sum()
+                .alias("fri_sales"),
+                pl.when(pl.col("d_day_name") == "Saturday")
+                .then(pl.col("sales_price"))
+                .otherwise(None)
+                .sum()
+                .alias("sat_sales"),
+            ]
+        )
+    )
+
+    y_year = (
+        wswscs.join(date_dim, left_on="d_week_seq", right_on="d_week_seq")
+        .filter(pl.col("d_year") == year)
+        .select(
+            [
+                pl.col("d_week_seq").alias("d_week_seq1"),
+                pl.col("sun_sales").alias("sun_sales1"),
+                pl.col("mon_sales").alias("mon_sales1"),
+                pl.col("tue_sales").alias("tue_sales1"),
+                pl.col("wed_sales").alias("wed_sales1"),
+                pl.col("thu_sales").alias("thu_sales1"),
+                pl.col("fri_sales").alias("fri_sales1"),
+                pl.col("sat_sales").alias("sat_sales1"),
+            ]
+        )
+    )
+
+    z_year_plus_1 = (
+        wswscs.join(date_dim, left_on="d_week_seq", right_on="d_week_seq")
+        .filter(pl.col("d_year") == year + 1)
+        .select(
+            [
+                pl.col("d_week_seq").alias("d_week_seq2"),
+                pl.col("sun_sales").alias("sun_sales2"),
+                pl.col("mon_sales").alias("mon_sales2"),
+                pl.col("tue_sales").alias("tue_sales2"),
+                pl.col("wed_sales").alias("wed_sales2"),
+                pl.col("thu_sales").alias("thu_sales2"),
+                pl.col("fri_sales").alias("fri_sales2"),
+                pl.col("sat_sales").alias("sat_sales2"),
+            ]
+        )
+        .with_columns((pl.col("d_week_seq2") - 53).alias("d_week_seq2_minus_53"))
+    )
+
+    return QueryResult(
+        frame=(
+            y_year.join(
+                z_year_plus_1,
+                left_on="d_week_seq1",
+                right_on="d_week_seq2_minus_53",
+            )
+            .select(
+                [
+                    pl.col("d_week_seq1"),
+                    (pl.col("sun_sales1") / pl.col("sun_sales2"))
+                    .round(2)
+                    .alias("round((sun_sales1 / sun_sales2), 2)"),
+                    (pl.col("mon_sales1") / pl.col("mon_sales2"))
+                    .round(2)
+                    .alias("round((mon_sales1 / mon_sales2), 2)"),
+                    (pl.col("tue_sales1") / pl.col("tue_sales2"))
+                    .round(2)
+                    .alias("round((tue_sales1 / tue_sales2), 2)"),
+                    (pl.col("wed_sales1") / pl.col("wed_sales2"))
+                    .round(2)
+                    .alias("round((wed_sales1 / wed_sales2), 2)"),
+                    (pl.col("thu_sales1") / pl.col("thu_sales2"))
+                    .round(2)
+                    .alias("round((thu_sales1 / thu_sales2), 2)"),
+                    (pl.col("fri_sales1") / pl.col("fri_sales2"))
+                    .round(2)
+                    .alias("round((fri_sales1 / fri_sales2), 2)"),
+                    (pl.col("sat_sales1") / pl.col("sat_sales2"))
+                    .round(2)
+                    .alias("round((sat_sales1 / sat_sales2), 2)"),
+                ]
+            )
+            .sort("d_week_seq1")
+        ),
+        sort_by=[("d_week_seq1", False)],
+        limit=None,
+    )

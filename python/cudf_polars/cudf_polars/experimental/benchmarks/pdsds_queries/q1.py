@@ -105,3 +105,58 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("c_customer_id", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 1 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=1, qualification=run_config.qualification
+    )
+
+    year = params["year"]
+    state = params["state"]
+
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+
+    customer_total_return = (
+        store_returns.join(
+            date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk"
+        )
+        .filter(pl.col("d_year") == year)
+        .group_by(["sr_customer_sk", "sr_store_sk"])
+        .agg(pl.col("sr_return_amt").sum().alias("ctr_total_return"))
+        .rename(
+            {
+                "sr_customer_sk": "ctr_customer_sk",
+                "sr_store_sk": "ctr_store_sk",
+            }
+        )
+    )
+
+    store_avg_returns = customer_total_return.group_by("ctr_store_sk").agg(
+        (pl.col("ctr_total_return").mean() * 1.2).alias("avg_return_threshold")
+    )
+
+    return QueryResult(
+        frame=(
+            customer_total_return.join(
+                store, left_on="ctr_store_sk", right_on="s_store_sk"
+            )
+            .join(customer, left_on="ctr_customer_sk", right_on="c_customer_sk")
+            .join(store_avg_returns, on="ctr_store_sk")
+            .filter(
+                (pl.col("s_state") == state)
+                & (pl.col("ctr_total_return") > pl.col("avg_return_threshold"))
+            )
+            .select(["c_customer_id"])
+            .sort("c_customer_id")
+            .limit(100)
+        ),
+        sort_by=[("c_customer_id", False)],
+        limit=100,
+    )
