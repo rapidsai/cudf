@@ -208,86 +208,6 @@ class RollingExpandedChunk:
     do_evaluate_zlice: tuple[int, int]
 
 
-def _compose_expanded_rolling_chunk(
-    *,
-    left_ctx_df: DataFrame | None,
-    center_meta: RollingInputChunk,
-    center_df: DataFrame,
-    next_dfs: Sequence[DataFrame] | None,
-    is_last_chunk: bool,
-    ir_context: IRExecutionContext,
-    index_col_idx: int,
-    index_dtype: plc.DataType,
-    lookback: int,
-    lookahead: int,
-    frame_ir: IR,
-    br: Any,
-) -> tuple[TableChunk, tuple[int, int], DataFrame | None] | None:
-    """
-    Concatenate left halo, center, and right halo then pack a ``TableChunk``.
-
-    Parameters
-    ----------
-    left_ctx_df
-        Rows retained from earlier partitions for the left halo.
-    center_meta
-        Wrapper for the current center partition.
-    center_df
-        Decoded center table.
-    next_dfs
-        Decoded partitions strictly after the center used for the right halo,
-        or ``None`` when this rank has no trailing partitions.
-    is_last_chunk
-        True when no further partitions will arrive on this rank.
-    ir_context
-        Execution context for CUDA stream ordering between frames.
-    index_col_idx
-        Rolling index column index inside each frame.
-    index_dtype
-        Physical dtype of the rolling index column.
-    lookback
-        Left halo width in host window units.
-    lookahead
-        Right halo width in host window units.
-    frame_ir
-        Child IR node whose schema matches every staged frame.
-    br
-        Buffer resource used when materializing the packed chunk.
-
-    Returns
-    -------
-    tuple[TableChunk, tuple[int, int], DataFrame | None] | None
-        ``(packed_chunk, do_evaluate_zlice, new_left_ctx)`` when the center has
-        rows, otherwise ``None`` if the center is empty and must be skipped.
-    """
-    base_col_names = list(frame_ir.schema.keys())
-    base_dtypes = list(frame_ir.schema.values())
-    prep = _prepare_expanded_rolling_frame(
-        left_ctx_df,
-        cur_df=center_df,
-        next_dfs=next_dfs,
-        is_last_chunk=is_last_chunk,
-        ir_context=ir_context,
-        index_col_idx=index_col_idx,
-        index_dtype=index_dtype,
-        lookback=lookback,
-        lookahead=lookahead,
-        base_col_names=base_col_names,
-        base_dtypes=base_dtypes,
-        is_ghost_chunk=center_meta.is_ghost_chunk,
-    )
-    if prep is None:
-        return None
-    combined_df, n_left, n_chunk_rows, left_ctx_next = prep
-    out_chunk = TableChunk.from_pylibcudf_table(
-        combined_df.table,
-        combined_df.stream,
-        exclusive_view=True,
-        br=br,
-    )
-    return (out_chunk, (n_left, n_chunk_rows), left_ctx_next)
-
-
 def _merge_pending_left_ghosts_into_left_ctx(
     pending_left_dfs: list[DataFrame],
     left_ctx_df: DataFrame | None,
@@ -708,7 +628,7 @@ class RollingChunkExpander:
         self.staged_inputs.pop(owned, None)
         self.staged_bounds.pop(owned, None)
 
-    def _make_expanded_chunk(
+    def _compose_expanded_chunk(
         self, chunk_id: ChunkID
     ) -> tuple[TableChunk, tuple[int, int], DataFrame | None] | None:
         frame_ir = self.ir.children[0]
@@ -740,17 +660,17 @@ class RollingChunkExpander:
             key=lambda k: k.sequence_number,
         )
         is_last_chunk = self.stream_done and not right_keys
-        if self.lookahead > 0 and not is_last_chunk:
-            next_dfs = tuple(
-                chunk_to_frame(self.staged_inputs[k], frame_ir) for k in right_keys
-            )
-        else:
-            next_dfs = None
+        next_dfs = (
+            tuple(chunk_to_frame(self.staged_inputs[k], frame_ir) for k in right_keys)
+            if self.lookahead > 0 and not is_last_chunk
+            else None
+        )
 
-        built = _compose_expanded_rolling_chunk(
-            left_ctx_df=left_for_prepare,
-            center_meta=center_meta,
-            center_df=center_df,
+        base_col_names = list(frame_ir.schema.keys())
+        base_dtypes = list(frame_ir.schema.values())
+        prep = _prepare_expanded_rolling_frame(
+            left_for_prepare,
+            cur_df=center_df,
             next_dfs=next_dfs,
             is_last_chunk=is_last_chunk,
             ir_context=self.ir_context,
@@ -758,12 +678,21 @@ class RollingChunkExpander:
             index_dtype=self.index_dtype,
             lookback=self.lookback,
             lookahead=self.lookahead,
-            frame_ir=frame_ir,
+            base_col_names=base_col_names,
+            base_dtypes=base_dtypes,
+            is_ghost_chunk=center_meta.is_ghost_chunk,
+        )
+        if prep is None:
+            return None
+
+        combined_df, n_left, n_chunk_rows, left_next = prep
+        out_chunk = TableChunk.from_pylibcudf_table(
+            combined_df.table,
+            combined_df.stream,
+            exclusive_view=True,
             br=br,
         )
-        if built is None:
-            return None
-        out_chunk, zlice, left_next = built
+        zlice = (n_left, n_chunk_rows)
         self.prev_max = _check_ungrouped_int_chunk_order(
             self.prev_max,
             center_df,
@@ -795,7 +724,7 @@ class RollingChunkExpander:
             # Need more lookahead chunks to progress.
             return None, None, None
 
-        built = self._make_expanded_chunk(chunk_id)
+        built = self._compose_expanded_chunk(chunk_id)
         if built is None:
             return None, None, None
         out_chunk, zlice, _ = built
