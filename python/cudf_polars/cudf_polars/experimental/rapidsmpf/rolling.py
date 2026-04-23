@@ -260,8 +260,7 @@ def _prepare_expanded_rolling_frame(
     index_dtype: plc.DataType,
     lookback: int,
     lookahead: int,
-    base_col_names: list[str],
-    base_dtypes: list[Any],
+    frame_ir: IR,
     is_ghost_chunk: bool,
 ) -> tuple[DataFrame, int, int, DataFrame | None] | None:
     """Build the left, center, and right rolling frame. Updates ``left_ctx`` from ``cur_df``."""
@@ -301,6 +300,8 @@ def _prepare_expanded_rolling_frame(
         left_idx = _get_idx_col(
             left_ctx_df.table, index_col_idx, index_dtype, left_ctx_df.stream
         )
+        base_col_names = list(frame_ir.schema.keys())
+        base_dtypes = list(frame_ir.schema.values())
         if is_int_index:
             lower_s = plc.Scalar.from_py(
                 chunk_mn - lookback, left_idx.type(), stream=left_ctx_df.stream
@@ -630,7 +631,7 @@ class RollingChunkExpander:
 
     def _compose_expanded_chunk(
         self, chunk_id: ChunkID
-    ) -> tuple[TableChunk, tuple[int, int], DataFrame | None] | None:
+    ) -> tuple[TableChunk, tuple[int, int]] | None:
         frame_ir = self.ir.children[0]
         br = self.context.br()
         left_keys = sorted(
@@ -666,8 +667,6 @@ class RollingChunkExpander:
             else None
         )
 
-        base_col_names = list(frame_ir.schema.keys())
-        base_dtypes = list(frame_ir.schema.values())
         prep = _prepare_expanded_rolling_frame(
             left_for_prepare,
             cur_df=center_df,
@@ -678,8 +677,7 @@ class RollingChunkExpander:
             index_dtype=self.index_dtype,
             lookback=self.lookback,
             lookahead=self.lookahead,
-            base_col_names=base_col_names,
-            base_dtypes=base_dtypes,
+            frame_ir=frame_ir,
             is_ghost_chunk=center_meta.is_ghost_chunk,
         )
         if prep is None:
@@ -702,7 +700,7 @@ class RollingChunkExpander:
         )
         self.left_ctx_df = left_next
         self._purge_staging_after_emit_for(chunk_id)
-        return (out_chunk, zlice, left_next)
+        return out_chunk, zlice
 
     async def prepare_output(
         self,
@@ -714,21 +712,13 @@ class RollingChunkExpander:
             # No "owned" chunks available yet.
             return None, None, None
 
-        # We have an "owned" chunk available.
-        # Check if we also have enough lookahead chunks.
-        if (
-            receiving
-            and self.lookahead > 0
-            and not await self._has_lookahead_halo(chunk_id)
-        ):
-            # Need more lookahead chunks to progress.
-            return None, None, None
+        # Check if we have enough lookahead chunks.
+        if receiving and not await self._has_lookahead_halo(chunk_id):
+            return None, None, None  # Need more lookahead
 
-        built = self._compose_expanded_chunk(chunk_id)
-        if built is None:
-            return None, None, None
-        out_chunk, zlice, _ = built
-        return out_chunk, zlice, chunk_id.sequence_number
+        # Compose the expanded chunk and return it.
+        chunk, zlice = self._compose_expanded_chunk(chunk_id)
+        return chunk, zlice, chunk_id.sequence_number
 
 
 async def expand_chunks(
