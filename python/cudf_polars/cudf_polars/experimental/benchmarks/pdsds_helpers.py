@@ -104,22 +104,3 @@ def channel_agg(
         lf = lf.select(agg_exprs)
 
     return lf
-
-
-def year_sales_agg(
-    sales: pl.LazyFrame,
-    date_dim: pl.LazyFrame,
-    customer: pl.LazyFrame,
-    *,
-    sold_date_key: str,
-    customer_key: str,
-    customer_cols: list[str],
-    agg_expr: pl.Expr,
-    year_filter: pl.Expr | None = None,
-) -> pl.LazyFrame:
-    """Join sales to customer and date_dim, optionally filter by year, and aggregate."""
-    lf = sales.join(customer, left_on=customer_key, right_on=customer_key)
-    lf = lf.join(date_dim, left_on=sold_date_key, right_on="d_date_sk")
-    if year_filter is not None:
-        lf = lf.filter(year_filter)
-    return lf.group_by([*customer_cols, "d_year"]).agg(agg_expr)
