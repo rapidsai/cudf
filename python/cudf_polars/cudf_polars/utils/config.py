@@ -887,14 +887,12 @@ class StreamingExecutor:
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
         if self.target_partition_size == 0:
-            assert self.runtime is not None
             object.__setattr__(
                 self,
                 "target_partition_size",
                 default_target_partition_size(self.cluster, self.runtime),
             )
         if self.broadcast_join_limit == 0:
-            assert self.runtime is not None
             object.__setattr__(
                 self,
                 "broadcast_join_limit",
