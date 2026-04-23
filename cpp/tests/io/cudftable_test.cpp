@@ -1009,9 +1009,9 @@ TEST_F(CudftableTest, CorruptedBlockIndex)
   file.seekg(16);
   file.read(reinterpret_cast<char*>(&metadata_length), sizeof(uint64_t));
 
-  constexpr size_t header_size           = 48;
-  auto const block_index_offset          = header_size + metadata_length;
-  uint64_t const bad_compressed_size     = 1;  // too small to match the header
+  constexpr size_t header_size       = 48;
+  auto const block_index_offset      = header_size + metadata_length;
+  uint64_t const bad_compressed_size = 1;  // too small to match the header
   file.seekp(static_cast<std::streamoff>(block_index_offset));
   file.write(reinterpret_cast<char const*>(&bad_compressed_size), sizeof(uint64_t));
   file.close();
@@ -1059,16 +1059,16 @@ TEST_F(CudftableTest, HostOnlySinkCompressedRoundtrip)
   auto const expected = cudf::table_view{{col}};
 
   host_only_sink sink;
-  cudf::io::experimental::write_cudftable(cudf::io::experimental::cudftable_writer_options::builder(
-                                            cudf::io::sink_info{&sink}, expected)
-                                            .compression(cudf::io::compression_type::SNAPPY)
-                                            .block_size(4 * 1024)
-                                            .build());
+  cudf::io::experimental::write_cudftable(
+    cudf::io::experimental::cudftable_writer_options::builder(cudf::io::sink_info{&sink}, expected)
+      .compression(cudf::io::compression_type::SNAPPY)
+      .block_size(4 * 1024)
+      .build());
 
   ASSERT_FALSE(sink.buffer().empty());
   auto const& data = sink.buffer();
-  auto host_buffer = cudf::host_span<std::byte const>(
-    reinterpret_cast<std::byte const*>(data.data()), data.size());
+  auto host_buffer =
+    cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(data.data()), data.size());
   auto result = cudf::io::experimental::read_cudftable(
     cudf::io::experimental::cudftable_reader_options::builder(cudf::io::source_info{host_buffer})
       .build());
@@ -1086,8 +1086,8 @@ TEST_F(CudftableTest, HostOnlySinkUncompressedRoundtrip)
 
   ASSERT_FALSE(sink.buffer().empty());
   auto const& data = sink.buffer();
-  auto host_buffer = cudf::host_span<std::byte const>(
-    reinterpret_cast<std::byte const*>(data.data()), data.size());
+  auto host_buffer =
+    cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(data.data()), data.size());
   auto result = cudf::io::experimental::read_cudftable(
     cudf::io::experimental::cudftable_reader_options::builder(cudf::io::source_info{host_buffer})
       .build());

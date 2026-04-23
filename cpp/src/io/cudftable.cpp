@@ -28,8 +28,8 @@ namespace detail {
 
 namespace {
 
-constexpr uint32_t magic_number       = 0x4C425443;  ///< "CTBL" in little-endian
-constexpr uint32_t format_version_v1  = 1;
+constexpr uint32_t magic_number      = 0x4C425443;  ///< "CTBL" in little-endian
+constexpr uint32_t format_version_v1 = 1;
 
 /**
  * @brief Binary file format header for CudfTable (48 bytes)
@@ -91,11 +91,8 @@ struct block_index_entry {
  * the stream executes the copy, the stream is synchronized before the staging
  * buffer goes out of scope.
  */
-void upload_to_device(datasource* source,
-                      size_t offset,
-                      size_t size,
-                      void* dst,
-                      rmm::cuda_stream_view stream)
+void upload_to_device(
+  datasource* source, size_t offset, size_t size, void* dst, rmm::cuda_stream_view stream)
 {
   if (size == 0) { return; }
   if (source->is_device_read_preferred(size)) {
@@ -113,10 +110,7 @@ void upload_to_device(datasource* source,
  * Uses `device_write` when the sink supports it; otherwise stages the bytes
  * through a host bounce buffer and writes via `host_write`.
  */
-void write_from_device(data_sink* sink,
-                       void const* src,
-                       size_t size,
-                       rmm::cuda_stream_view stream)
+void write_from_device(data_sink* sink, void const* src, size_t size, rmm::cuda_stream_view stream)
 {
   if (size == 0) { return; }
   if (sink->is_device_write_preferred(size)) {
@@ -252,12 +246,9 @@ void write_cudftable(data_sink* sink,
   // Compact the padded per-block outputs into a contiguous device buffer.
   rmm::device_buffer d_compacted(total_compressed, stream, mr);
   {
-    auto h_dsts =
-      cudf::detail::make_pinned_vector_async<void*>(num_blocks, stream);
-    auto h_srcs =
-      cudf::detail::make_pinned_vector_async<void const*>(num_blocks, stream);
-    auto h_sizes =
-      cudf::detail::make_pinned_vector_async<std::size_t>(num_blocks, stream);
+    auto h_dsts       = cudf::detail::make_pinned_vector_async<void*>(num_blocks, stream);
+    auto h_srcs       = cudf::detail::make_pinned_vector_async<void const*>(num_blocks, stream);
+    auto h_sizes      = cudf::detail::make_pinned_vector_async<std::size_t>(num_blocks, stream);
     uint64_t d_offset = 0;
     for (uint64_t i = 0; i < num_blocks; ++i) {
       h_srcs[i]  = static_cast<uint8_t const*>(d_compressed.data()) + i * max_comp_block_size;
@@ -365,8 +356,8 @@ packed_table read_cudftable(datasource* source,
     source, blocks_offset, header.compressed_data_length, d_compressed.data(), stream);
 
   auto [h_inputs, h_outputs] = make_io_span_tables(header.num_blocks, stream);
-  uint64_t comp_offset   = 0;
-  uint64_t uncomp_offset = 0;
+  uint64_t comp_offset       = 0;
+  uint64_t uncomp_offset     = 0;
   for (uint64_t i = 0; i < header.num_blocks; ++i) {
     h_inputs[i] = cudf::device_span<uint8_t const>(
       static_cast<uint8_t const*>(d_compressed.data()) + comp_offset,
