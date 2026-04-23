@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -183,12 +184,13 @@ class RollingInputChunk:
     is_ghost_chunk: bool
 
 
-@dataclass(frozen=True)
-class ChunkID:
-    """Identifier for rolling input chunk."""
+@dataclass(slots=True)
+class StagedItem:
+    """One staged rolling row (sequence id, table, index bounds)."""
 
-    sequence_number: int
-    is_ghost_chunk: bool
+    seq: int
+    chunk: TableChunk
+    bounds: tuple[int, int] | tuple[plc.Scalar, plc.Scalar] | None
 
 
 @dataclass(frozen=True)
@@ -238,193 +240,6 @@ def _chunk_index_ts_bounds_from_df(
         return None
     idx = _get_idx_col(df.table, index_col_idx, index_dtype, df.stream)
     return _sorted_minmax_scalars(idx, df.stream)
-
-
-def _prepare_expanded_rolling_frame(
-    left_ctx_df: DataFrame | None,
-    *,
-    cur_df: DataFrame,
-    next_dfs: Sequence[DataFrame] | None,
-    is_last_chunk: bool,
-    ir_context: IRExecutionContext,
-    index_col_idx: int,
-    index_dtype: plc.DataType,
-    lookback: int,
-    lookahead: int,
-    frame_ir: IR,
-    is_ghost_chunk: bool,
-) -> tuple[DataFrame, int, int, DataFrame | None] | None:
-    """Build the left, center, and right rolling frame. Updates ``left_ctx`` from ``cur_df``."""
-    if is_ghost_chunk:
-        raise NotImplementedError(
-            "Non-local rank boundary chunks are not supported for rolling yet."
-        )
-
-    n_chunk_rows = cur_df.num_rows
-    if n_chunk_rows == 0:
-        return None
-
-    chunk_table = cur_df.table
-    chunk_stream = cur_df.stream
-    is_int_index = index_dtype.id() == plc.TypeId.INT64
-
-    # Trim halos using index bounds from ``rolling_stream_halo_extents`` (lookback /
-    # lookahead). Last chunk has no right neighbors on this rank.
-    need_chunk_minmax_for_left = (
-        left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0
-    )
-    need_chunk_minmax_for_right = lookahead > 0 and not is_last_chunk
-    need_chunk_minmax = need_chunk_minmax_for_left or need_chunk_minmax_for_right
-    chunk_mn, chunk_mx = 0, 0
-    chunk_mn_s: plc.Scalar | None = None
-    chunk_mx_s: plc.Scalar | None = None
-    dur_dt: plc.DataType | None = None
-    base_col_names = list(frame_ir.schema.keys())
-    base_dtypes = list(frame_ir.schema.values())
-    if need_chunk_minmax:
-        chunk_idx = _get_idx_col(chunk_table, index_col_idx, index_dtype, chunk_stream)
-        if is_int_index:
-            chunk_mn, chunk_mx = _sorted_minmax_py(chunk_idx, chunk_stream)
-        else:
-            dur_dt = plc.DataType(_TIMESTAMP_TO_DURATION[index_dtype.id()])
-            chunk_mn_s, chunk_mx_s = _sorted_minmax_scalars(chunk_idx, chunk_stream)
-
-    if left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0:
-        left_idx = _get_idx_col(
-            left_ctx_df.table, index_col_idx, index_dtype, left_ctx_df.stream
-        )
-        if is_int_index:
-            lower_s = plc.Scalar.from_py(
-                chunk_mn - lookback, left_idx.type(), stream=left_ctx_df.stream
-            )
-            left_ctx_df = DataFrame.from_table(
-                _sorted_table_slice_ge(
-                    left_ctx_df.table,
-                    left_idx,
-                    lower_s,
-                    stream=left_ctx_df.stream,
-                ),
-                base_col_names,
-                base_dtypes,
-                stream=left_ctx_df.stream,
-            )
-        else:
-            assert chunk_mn_s is not None
-            assert dur_dt is not None
-            lookback_s = plc.Scalar.from_py(lookback, dur_dt, stream=chunk_stream)
-            lower_s = _scalar_binop_scalar(
-                chunk_mn_s,
-                lookback_s,
-                plc.binaryop.BinaryOperator.SUB,
-                index_dtype,
-                chunk_stream,
-            )
-            with ir_context.stream_ordered_after(left_ctx_df, cur_df) as s:
-                left_ctx_df = DataFrame.from_table(
-                    _sorted_table_slice_ge(
-                        left_ctx_df.table,
-                        left_idx,
-                        lower_s,
-                        stream=s,
-                    ),
-                    base_col_names,
-                    base_dtypes,
-                    stream=s,
-                )
-
-    if lookahead > 0:
-        if is_last_chunk:
-            right_ctx_df = None
-        else:
-            assert next_dfs is not None
-            right_tables_filtered: list[DataFrame] = []
-            right_upper_int: int | None = None
-            right_upper_s: plc.Scalar | None = None
-            if is_int_index:
-                right_upper_int = chunk_mx + lookahead
-            else:
-                assert chunk_mx_s is not None
-                assert dur_dt is not None
-                right_upper_s = _scalar_binop_scalar(
-                    chunk_mx_s,
-                    plc.Scalar.from_py(lookahead, dur_dt, stream=chunk_stream),
-                    plc.binaryop.BinaryOperator.ADD,
-                    index_dtype,
-                    chunk_stream,
-                )
-            for next_df in next_dfs:
-                next_table = next_df.table
-                next_stream = next_df.stream
-                next_idx = _get_idx_col(
-                    next_table, index_col_idx, index_dtype, next_stream
-                )
-                if is_int_index:
-                    assert right_upper_int is not None
-                    upper_s = plc.Scalar.from_py(
-                        right_upper_int, next_idx.type(), stream=next_stream
-                    )
-                    right_ctx_table = _sorted_table_slice_le(
-                        next_table,
-                        next_idx,
-                        upper_s,
-                        stream=next_stream,
-                    )
-                    if right_ctx_table.num_rows() > 0:
-                        right_tables_filtered.append(
-                            DataFrame.from_table(
-                                right_ctx_table,
-                                base_col_names,
-                                base_dtypes,
-                                stream=next_stream,
-                            )
-                        )
-                else:
-                    assert right_upper_s is not None
-                    with ir_context.stream_ordered_after(next_df, cur_df) as s:
-                        right_ctx_table = _sorted_table_slice_le(
-                            next_table,
-                            next_idx,
-                            right_upper_s,
-                            stream=s,
-                        )
-                        if right_ctx_table.num_rows() > 0:
-                            right_tables_filtered.append(
-                                DataFrame.from_table(
-                                    right_ctx_table,
-                                    base_col_names,
-                                    base_dtypes,
-                                    stream=s,
-                                )
-                            )
-            if not right_tables_filtered:
-                right_ctx_df = None
-            elif len(right_tables_filtered) == 1:
-                right_ctx_df = right_tables_filtered[0]
-            else:
-                with ir_context.stream_ordered_after(
-                    cur_df, *right_tables_filtered
-                ) as s:
-                    right_ctx_df = DataFrame.from_table(
-                        plc.concatenate.concatenate(
-                            [df.table for df in right_tables_filtered], stream=s
-                        ),
-                        base_col_names,
-                        base_dtypes,
-                        stream=s,
-                    )
-    else:
-        right_ctx_df = None
-    n_left = left_ctx_df.num_rows if left_ctx_df is not None else 0
-    dfs = [df for df in (left_ctx_df, cur_df, right_ctx_df) if df is not None]
-    combined_df = dfs[0] if len(dfs) == 1 else _concat(*dfs, context=ir_context)
-
-    left_ctx_next = _append_left_context_row(
-        left_ctx_df,
-        cur_df,
-        lookback=lookback,
-        ir_context=ir_context,
-    )
-    return combined_df, n_left, n_chunk_rows, left_ctx_next
 
 
 def _append_left_context_row(
@@ -532,12 +347,10 @@ class RollingChunkExpander:
         self.lookahead = lookahead
         self.index_col_idx = index_col_idx
         self.index_dtype = index_dtype
-        self.staged_inputs: dict[ChunkID, TableChunk] = {}
-        self.staged_bounds: dict[
-            ChunkID, tuple[int, int] | tuple[plc.Scalar, plc.Scalar] | None
-        ] = {}
+        self.lower_halo_inputs: deque[StagedItem] = deque()
+        self.upper_halo_inputs: deque[StagedItem] = deque()
+        self.owned_inputs: deque[StagedItem] = deque()
         self.left_ctx_df: DataFrame | None = None
-        self.stream_done: bool = False
         self.prev_max: int | None = None
 
     def _index_bounds_for_staged_chunk(
@@ -559,43 +372,34 @@ class RollingChunkExpander:
     async def add_input_chunk(
         self, input_chunk: RollingInputChunk, sequence_number: int
     ) -> None:
-        """Stage a rolling input chunk (owned or ghost) keyed by ``sequence_number``."""
-        key = ChunkID(sequence_number, is_ghost_chunk=input_chunk.is_ghost_chunk)
+        """Stage a rolling input chunk in arrival order."""
         chunk = input_chunk.chunk.make_available_and_spill(
             self.context.br(), allow_overbooking=True
         )
-        self.staged_inputs[key] = chunk
-        self.staged_bounds[key] = self._index_bounds_for_staged_chunk(chunk)
+        bounds = self._index_bounds_for_staged_chunk(chunk)
+        item = StagedItem(seq=sequence_number, chunk=chunk, bounds=bounds)
+        is_ghost = input_chunk.is_ghost_chunk
+        if is_ghost and not self.owned_inputs:
+            self.lower_halo_inputs.append(item)
+        elif is_ghost:
+            self.upper_halo_inputs.append(item)
+        else:
+            self.owned_inputs.append(item)
 
-    def _get_staged_keys(self) -> list[ChunkID]:
-        """Return all staged keys in ascending order."""
-        return sorted(
-            (k for k in self.staged_inputs),
-            key=lambda k: k.sequence_number,
-        )
-
-    def _get_next_chunk_id(self) -> ChunkID | None:
-        """Get the next owned chunk ID."""
-        for k in self._get_staged_keys():
-            if not k.is_ghost_chunk:
-                return k
-        return None
-
-    async def _has_lookahead_halo(self, chunk_id: ChunkID) -> bool:
+    async def _has_lookahead_halo(self) -> bool:
         """Return whether staged right-hand chunks satisfy the lookahead halo."""
         if self.lookahead <= 0:
             return True
-        right_keys = [
-            k
-            for k in self._get_staged_keys()
-            if k.sequence_number > chunk_id.sequence_number
-        ]
-        center_bounds = self.staged_bounds.get(chunk_id)
-        if not right_keys or center_bounds is None:
+        if not self.owned_inputs:
             return False
-        first_b = self.staged_bounds[right_keys[0]]
-        last_b = self.staged_bounds[right_keys[-1]]
-        stream = self.staged_inputs[chunk_id].stream
+        center = self.owned_inputs[0]
+        center_bounds = center.bounds
+        right_items = [*list(self.owned_inputs)[1:], *self.upper_halo_inputs]
+        if not right_items or center_bounds is None:
+            return False
+        first_b = right_items[0].bounds
+        last_b = right_items[-1].bounds
+        stream = center.chunk.stream
         if self.index_dtype.id() == plc.TypeId.INT64:
             ib = cast(tuple[int, int], center_bounds)
             return _int_right_halo_lookahead_satisfied(
@@ -614,82 +418,261 @@ class RollingChunkExpander:
             cast(tuple[plc.Scalar, plc.Scalar] | None, last_b),
         )
 
-    def _purge_staging_after_emit_for(self, chunk_id: ChunkID) -> None:
-        for k in list(self.staged_inputs):
-            if k.is_ghost_chunk and k.sequence_number < chunk_id.sequence_number:
-                del self.staged_inputs[k]
-                del self.staged_bounds[k]
-        owned = ChunkID(chunk_id.sequence_number, is_ghost_chunk=False)
-        self.staged_inputs.pop(owned, None)
-        self.staged_bounds.pop(owned, None)
+    def _make_expanded_frame(
+        self,
+        left_ctx_df: DataFrame | None,
+        cur_df: DataFrame,
+        next_dfs: Sequence[DataFrame] | None,
+        *,
+        is_last_chunk: bool,
+    ) -> tuple[DataFrame, int]:
+        """Build an expanded input frame."""
+        frame_ir = self.ir.children[0]
+        chunk_table = cur_df.table
+        chunk_stream = cur_df.stream
+        is_int_index = self.index_dtype.id() == plc.TypeId.INT64
+        assert cur_df.num_rows > 0, "Empty center chunk not supported."
 
-    def _compose_expanded_chunk(
-        self, chunk_id: ChunkID
+        # Trim halos using index bounds from ``rolling_stream_halo_extents`` (lookback /
+        # lookahead). Last chunk has no right neighbors on this rank.
+        need_chunk_minmax_for_left = (
+            left_ctx_df is not None and left_ctx_df.num_rows > 0 and self.lookback > 0
+        )
+        need_chunk_minmax_for_right = self.lookahead > 0 and not is_last_chunk
+        need_chunk_minmax = need_chunk_minmax_for_left or need_chunk_minmax_for_right
+        chunk_mn, chunk_mx = 0, 0
+        chunk_mn_s: plc.Scalar | None = None
+        chunk_mx_s: plc.Scalar | None = None
+        dur_dt: plc.DataType | None = None
+        base_col_names = list(frame_ir.schema.keys())
+        base_dtypes = list(frame_ir.schema.values())
+        if need_chunk_minmax:
+            chunk_idx = _get_idx_col(
+                chunk_table,
+                self.index_col_idx,
+                self.index_dtype,
+                chunk_stream,
+            )
+            if is_int_index:
+                chunk_mn, chunk_mx = _sorted_minmax_py(chunk_idx, chunk_stream)
+            else:
+                dur_dt = plc.DataType(_TIMESTAMP_TO_DURATION[self.index_dtype.id()])
+                chunk_mn_s, chunk_mx_s = _sorted_minmax_scalars(chunk_idx, chunk_stream)
+
+        if left_ctx_df is not None and left_ctx_df.num_rows > 0 and self.lookback > 0:
+            left_idx = _get_idx_col(
+                left_ctx_df.table,
+                self.index_col_idx,
+                self.index_dtype,
+                left_ctx_df.stream,
+            )
+            if is_int_index:
+                lower_s = plc.Scalar.from_py(
+                    chunk_mn - self.lookback,
+                    left_idx.type(),
+                    stream=left_ctx_df.stream,
+                )
+                left_ctx_df = DataFrame.from_table(
+                    _sorted_table_slice_ge(
+                        left_ctx_df.table,
+                        left_idx,
+                        lower_s,
+                        stream=left_ctx_df.stream,
+                    ),
+                    base_col_names,
+                    base_dtypes,
+                    stream=left_ctx_df.stream,
+                )
+            else:
+                assert chunk_mn_s is not None
+                assert dur_dt is not None
+                lookback_s = plc.Scalar.from_py(
+                    self.lookback, dur_dt, stream=chunk_stream
+                )
+                lower_s = _scalar_binop_scalar(
+                    chunk_mn_s,
+                    lookback_s,
+                    plc.binaryop.BinaryOperator.SUB,
+                    self.index_dtype,
+                    chunk_stream,
+                )
+                with self.ir_context.stream_ordered_after(left_ctx_df, cur_df) as s:
+                    left_ctx_df = DataFrame.from_table(
+                        _sorted_table_slice_ge(
+                            left_ctx_df.table,
+                            left_idx,
+                            lower_s,
+                            stream=s,
+                        ),
+                        base_col_names,
+                        base_dtypes,
+                        stream=s,
+                    )
+
+        if self.lookahead > 0:
+            if is_last_chunk:
+                right_ctx_df = None
+            else:
+                assert next_dfs is not None
+                right_tables_filtered: list[DataFrame] = []
+                right_upper_int: int | None = None
+                right_upper_s: plc.Scalar | None = None
+                if is_int_index:
+                    right_upper_int = chunk_mx + self.lookahead
+                else:
+                    assert chunk_mx_s is not None
+                    assert dur_dt is not None
+                    right_upper_s = _scalar_binop_scalar(
+                        chunk_mx_s,
+                        plc.Scalar.from_py(self.lookahead, dur_dt, stream=chunk_stream),
+                        plc.binaryop.BinaryOperator.ADD,
+                        self.index_dtype,
+                        chunk_stream,
+                    )
+                for next_df in next_dfs:
+                    next_table = next_df.table
+                    next_stream = next_df.stream
+                    next_idx = _get_idx_col(
+                        next_table,
+                        self.index_col_idx,
+                        self.index_dtype,
+                        next_stream,
+                    )
+                    if is_int_index:
+                        assert right_upper_int is not None
+                        upper_s = plc.Scalar.from_py(
+                            right_upper_int, next_idx.type(), stream=next_stream
+                        )
+                        right_ctx_table = _sorted_table_slice_le(
+                            next_table,
+                            next_idx,
+                            upper_s,
+                            stream=next_stream,
+                        )
+                        if right_ctx_table.num_rows() > 0:
+                            right_tables_filtered.append(
+                                DataFrame.from_table(
+                                    right_ctx_table,
+                                    base_col_names,
+                                    base_dtypes,
+                                    stream=next_stream,
+                                )
+                            )
+                    else:
+                        assert right_upper_s is not None
+                        with self.ir_context.stream_ordered_after(next_df, cur_df) as s:
+                            right_ctx_table = _sorted_table_slice_le(
+                                next_table,
+                                next_idx,
+                                right_upper_s,
+                                stream=s,
+                            )
+                            if right_ctx_table.num_rows() > 0:
+                                right_tables_filtered.append(
+                                    DataFrame.from_table(
+                                        right_ctx_table,
+                                        base_col_names,
+                                        base_dtypes,
+                                        stream=s,
+                                    )
+                                )
+                if not right_tables_filtered:
+                    right_ctx_df = None
+                elif len(right_tables_filtered) == 1:
+                    right_ctx_df = right_tables_filtered[0]
+                else:
+                    with self.ir_context.stream_ordered_after(
+                        cur_df, *right_tables_filtered
+                    ) as s:
+                        right_ctx_df = DataFrame.from_table(
+                            plc.concatenate.concatenate(
+                                [df.table for df in right_tables_filtered], stream=s
+                            ),
+                            base_col_names,
+                            base_dtypes,
+                            stream=s,
+                        )
+        else:
+            right_ctx_df = None
+        center_offset = left_ctx_df.num_rows if left_ctx_df is not None else 0
+        dfs = [df for df in (left_ctx_df, cur_df, right_ctx_df) if df is not None]
+        combined_df = (
+            dfs[0] if len(dfs) == 1 else _concat(*dfs, context=self.ir_context)
+        )
+
+        self.left_ctx_df = _append_left_context_row(
+            left_ctx_df,
+            cur_df,
+            lookback=self.lookback,
+            ir_context=self.ir_context,
+        )
+        return combined_df, center_offset
+
+    def _evict_staging_after_emit_for(
+        self, *, evict_lower: bool = True, evict_upper: bool = False
+    ) -> None:
+        """Evict staged chunks that are no longer needed."""
+        if evict_lower:
+            self.lower_halo_inputs.clear()
+        assert self.owned_inputs
+        self.owned_inputs.popleft()
+        if evict_upper:
+            self.upper_halo_inputs.clear()
+
+    def _compose_expanded_input(
+        self, *, receiving: bool
     ) -> tuple[TableChunk | None, tuple[int, int] | None]:
+        """Compose an expanded input chunk and slice specification."""
         frame_ir = self.ir.children[0]
         br = self.context.br()
-        left_keys = [
-            k
-            for k in self._get_staged_keys()
-            if k.is_ghost_chunk and k.sequence_number < chunk_id.sequence_number
-        ]
-        left_dfs = [chunk_to_frame(self.staged_inputs[k], frame_ir) for k in left_keys]
+        assert self.owned_inputs
+        center = self.owned_inputs[0]
+        s_curr = center.seq
+        left_entries = list(self.lower_halo_inputs)
+        left_dfs = [chunk_to_frame(e.chunk, frame_ir) for e in left_entries]
         left_for_prepare = _merge_pending_left_ghosts_into_left_ctx(
             left_dfs,
             self.left_ctx_df,
             ir_context=self.ir_context,
         )
-        center_tbl = self.staged_inputs[chunk_id]
+        center_tbl = center.chunk
         center_df = chunk_to_frame(center_tbl, frame_ir)
-        center_meta = RollingInputChunk(chunk=center_tbl, is_ghost_chunk=False)
+        right_entries = [*list(self.owned_inputs)[1:], *self.upper_halo_inputs]
 
-        right_keys = [
-            k
-            for k in self._get_staged_keys()
-            if k.sequence_number > chunk_id.sequence_number
-        ]
-
-        is_last_chunk = self.stream_done and not right_keys
+        is_last_chunk = not receiving and not right_entries
         next_dfs = (
-            tuple(chunk_to_frame(self.staged_inputs[k], frame_ir) for k in right_keys)
+            tuple(chunk_to_frame(e.chunk, frame_ir) for e in right_entries)
             if self.lookahead > 0 and not is_last_chunk
             else None
         )
 
-        prep = _prepare_expanded_rolling_frame(
-            left_for_prepare,
-            cur_df=center_df,
-            next_dfs=next_dfs,
-            is_last_chunk=is_last_chunk,
-            ir_context=self.ir_context,
-            index_col_idx=self.index_col_idx,
-            index_dtype=self.index_dtype,
-            lookback=self.lookback,
-            lookahead=self.lookahead,
-            frame_ir=frame_ir,
-            is_ghost_chunk=center_meta.is_ghost_chunk,
-        )
-        if prep is None:
+        if (n_chunk_rows := center_df.num_rows) == 0:
+            # Skip over this empty center chunk.
+            self._evict_staging_after_emit_for(evict_lower=False)
             return None, None
 
-        combined_df, n_left, n_chunk_rows, left_next = prep
+        combined_df, center_offset = self._make_expanded_frame(
+            left_for_prepare,
+            center_df,
+            next_dfs,
+            is_last_chunk=is_last_chunk,
+        )
+
         out_chunk = TableChunk.from_pylibcudf_table(
             combined_df.table,
             combined_df.stream,
             exclusive_view=True,
             br=br,
         )
-        zlice = (n_left, n_chunk_rows)
         self.prev_max = _check_ungrouped_int_chunk_order(
             self.prev_max,
             center_df,
             self.ir,
             index_col_idx=self.index_col_idx,
-            seq=chunk_id.sequence_number,
+            seq=s_curr,
         )
-        self.left_ctx_df = left_next
-        self._purge_staging_after_emit_for(chunk_id)
-        return out_chunk, zlice
+        self._evict_staging_after_emit_for(evict_upper=not receiving)
+        return out_chunk, (center_offset, n_chunk_rows)
 
     async def prepare_output(
         self,
@@ -697,17 +680,15 @@ class RollingChunkExpander:
         receiving: bool,
     ) -> tuple[TableChunk | None, tuple[int, int] | None, int | None]:
         """Prepare an expanded output chunk and slice specification."""
-        if (chunk_id := self._get_next_chunk_id()) is None:
-            # No "owned" chunks available yet.
+        if not self.owned_inputs:
             return None, None, None
 
-        # Check if we have enough lookahead chunks.
-        if receiving and not await self._has_lookahead_halo(chunk_id):
+        if receiving and not await self._has_lookahead_halo():
             return None, None, None  # Need more lookahead
 
-        # Compose the expanded chunk and return it.
-        chunk, zlice = self._compose_expanded_chunk(chunk_id)
-        return chunk, zlice, chunk_id.sequence_number
+        seq = self.owned_inputs[0].seq
+        chunk, zlice = self._compose_expanded_input(receiving=receiving)
+        return chunk, zlice, seq
 
 
 async def expand_chunks(
@@ -741,7 +722,6 @@ async def expand_chunks(
             await expander.add_input_chunk(input_chunk, msg.sequence_number)
         else:
             receiving = False
-            expander.stream_done = True
 
         chunk, zlice, seq = await expander.prepare_output(receiving=receiving)
         if chunk is not None:
