@@ -109,11 +109,17 @@ def test_bind_falls_back_to_gpu_0() -> None:
                 bind_to_gpu,
             )
 
-            bind_to_gpu(HardwareBindingPolicy())
+            policy = HardwareBindingPolicy()
+            bind_to_gpu(policy)
+            bind_kw = {
+                "cpu": policy.cpu,
+                "memory": policy.memory,
+                "network": policy.network,
+            }
             assert mock_bind.call_count == 2
             assert mock_bind.call_args_list == [
-                call(),
-                call(gpu_id=0),
+                call(**bind_kw),
+                call(gpu_id=0, **bind_kw),
             ]
 
     _run_in_subprocess(body)
