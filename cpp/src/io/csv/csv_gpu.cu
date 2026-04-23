@@ -671,13 +671,13 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   // offset into the local `data` window (which begins at `start_offset`), clamped to the buffer
   size_t const end_off      = end_in_file > start_offset ? end_in_file - start_offset : 0;
   size_t const data_end_off = data_size > start_offset ? data_size - start_offset : 0;
-  auto const end           = start + cuda::std::min(end_off, data.size());
-  auto const data_end      = start + cuda::std::min(data_end_off, data.size());
+  auto const end            = start + cuda::std::min(end_off, data.size());
+  auto const data_end       = start + cuda::std::min(data_end_off, data.size());
   // Offset of `parse_pos` inside the local `data` window, clamped to avoid underflow
   auto const parse_off = parse_pos > start_offset ? parse_pos - start_offset : 0;
   uint32_t const t     = threadIdx.x;
-  size_t block_pos = parse_off + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
-  auto cur         = start + block_pos;
+  size_t block_pos     = parse_off + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
+  auto cur             = start + block_pos;
 
   // Initial state is neutral context (no state transitions), zero rows
   uint4 ctx_map = {
@@ -743,7 +743,7 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   if (start_offset + block_pos < byte_range_start) {
     uint32_t dist_minus1 =
       cuda::std::min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
-    uint32_t mask        = 0xffff'fffe << dist_minus1;
+    uint32_t mask = 0xffff'fffe << dist_minus1;
     ctx_map.x &= mask;
     ctx_map.y &= mask;
     ctx_map.z &= mask;
