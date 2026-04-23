@@ -141,3 +141,68 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 73 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=73,
+        qualification=run_config.qualification,
+    )
+    dom = params["dom"]
+    bp = params["bp"]
+    year = params["year"]
+    counties = params["counties"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    inner_query = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        .filter(
+            (pl.col("d_dom").is_between(dom[0], dom[1]))
+            & (
+                (pl.col("hd_buy_potential") == bp[0])
+                | (pl.col("hd_buy_potential") == bp[1])
+            )
+            & (pl.col("hd_vehicle_count") > 0)
+            & (
+                pl.when(pl.col("hd_vehicle_count") > 0)
+                .then(pl.col("hd_dep_count") / pl.col("hd_vehicle_count"))
+                .otherwise(None)
+                > 1
+            )
+            & (pl.col("d_year").is_in([year, year + 1, year + 2]))
+            & (pl.col("s_county").is_in(counties))
+        )
+        .group_by(["ss_ticket_number", "ss_customer_sk"])
+        .agg([pl.len().alias("cnt")])
+    )
+    return QueryResult(
+        frame=(
+            inner_query.join(
+                customer, left_on="ss_customer_sk", right_on="c_customer_sk"
+            )
+            .filter(pl.col("cnt").is_between(1, 5))
+            .select(
+                [
+                    "c_last_name",
+                    "c_first_name",
+                    "c_salutation",
+                    "c_preferred_cust_flag",
+                    "ss_ticket_number",
+                    "cnt",
+                ]
+            )
+            .sort(["cnt", "c_last_name"], descending=[True, False])
+        ),
+        sort_by=[("cnt", True), ("c_last_name", False)],
+        limit=None,
+    )

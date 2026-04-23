@@ -142,3 +142,71 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("am_pm_ratio", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 90 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=90,
+        qualification=run_config.qualification,
+    )
+
+    am_hour = params["am_hour"]
+    pm_hour = params["pm_hour"]
+    hd_dep_count = params["hd_dep_count"]
+    wp_char_count_min = params["wp_char_count_min"]
+    wp_char_count_max = params["wp_char_count_max"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+    time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
+    web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
+    am_query = (
+        web_sales.join(
+            household_demographics,
+            left_on="ws_ship_hdemo_sk",
+            right_on="hd_demo_sk",
+        )
+        .join(time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk")
+        .join(web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk")
+        .filter(
+            (pl.col("t_hour").is_between(am_hour, am_hour + 1))
+            & (pl.col("hd_dep_count") == hd_dep_count)
+            & (pl.col("wp_char_count").is_between(wp_char_count_min, wp_char_count_max))
+        )
+        .select([pl.len().alias("amc")])
+    )
+    pm_query = (
+        web_sales.join(
+            household_demographics,
+            left_on="ws_ship_hdemo_sk",
+            right_on="hd_demo_sk",
+        )
+        .join(time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk")
+        .join(web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk")
+        .filter(
+            (pl.col("t_hour").is_between(pm_hour, pm_hour + 1))
+            & (pl.col("hd_dep_count") == hd_dep_count)
+            & (pl.col("wp_char_count").is_between(wp_char_count_min, wp_char_count_max))
+        )
+        .select([pl.len().alias("pmc")])
+    )
+    return QueryResult(
+        frame=(
+            am_query.join(pm_query, how="cross")
+            .select(
+                [
+                    (
+                        pl.col("amc").cast(pl.Float64) / pl.col("pmc").cast(pl.Float64)
+                    ).alias("am_pm_ratio")
+                ]
+            )
+            .sort("am_pm_ratio")
+            .limit(100)
+        ),
+        sort_by=[("am_pm_ratio", False)],
+        limit=100,
+    )

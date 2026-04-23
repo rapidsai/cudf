@@ -124,3 +124,70 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("customer_id", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 84 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=84,
+        qualification=run_config.qualification,
+    )
+
+    city = params["city"]
+    income = params["income"]
+
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+    income_band = get_data(run_config.dataset_path, "income_band", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    return QueryResult(
+        frame=(
+            customer.join(
+                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            )
+            .join(
+                customer_demographics,
+                left_on="c_current_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
+            .join(
+                household_demographics,
+                left_on="c_current_hdemo_sk",
+                right_on="hd_demo_sk",
+            )
+            .join(
+                income_band,
+                left_on="hd_income_band_sk",
+                right_on="ib_income_band_sk",
+            )
+            .join(store_returns, left_on="c_current_cdemo_sk", right_on="sr_cdemo_sk")
+            .filter(
+                (pl.col("ca_city") == city)
+                & (pl.col("ib_lower_bound") >= income)
+                & (pl.col("ib_upper_bound") <= income + 50000)
+            )
+            .select(
+                [
+                    pl.col("c_customer_id").alias("customer_id"),
+                    (
+                        pl.col("c_last_name") + pl.lit(", ") + pl.col("c_first_name")
+                    ).alias("customername"),
+                ]
+            )
+            .sort("customer_id")
+            .limit(100)
+        ),
+        sort_by=[("customer_id", False)],
+        limit=100,
+    )

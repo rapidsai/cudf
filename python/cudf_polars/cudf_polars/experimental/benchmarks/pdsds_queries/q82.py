@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -73,9 +74,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     year, month, day = map(int, sdate.split("-"))
     start_date = pl.date(year, month, day)
-    # Add 60 days to start_date
-    from datetime import date, timedelta
-
     end_date_obj = date(year, month, day) + timedelta(days=60)
     end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
 
@@ -107,4 +105,51 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 82 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=82,
+        qualification=run_config.qualification,
+    )
+    price = params["price"]
+    sdate = params["sdate"]
+    manufact = params["manufact"]
+    inv_min = params["inv_min"]
+    inv_max = params["inv_max"]
+
+    year, month, day = map(int, sdate.split("-"))
+    start_date = pl.date(year, month, day)
+    end_date_obj = date(year, month, day) + timedelta(days=60)
+    end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
+
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    return QueryResult(
+        frame=(
+            item.join(inventory, left_on="i_item_sk", right_on="inv_item_sk")
+            .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+            .join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+            .filter(
+                (pl.col("i_current_price") >= price)
+                & (pl.col("i_current_price") <= price + 30)
+                & (pl.col("d_date") >= start_date)
+                & (pl.col("d_date") <= end_date)
+                & pl.col("i_manufact_id").is_in(manufact)
+                & (pl.col("inv_quantity_on_hand") >= inv_min)
+                & (pl.col("inv_quantity_on_hand") <= inv_max)
+            )
+            .group_by(["i_item_id", "i_item_desc", "i_current_price"])
+            .agg([])
+            .select(["i_item_id", "i_item_desc", "i_current_price"])
+            .sort("i_item_id")
+            .limit(100)
+        ),
+        sort_by=[("i_item_id", False)],
+        limit=100,
     )
