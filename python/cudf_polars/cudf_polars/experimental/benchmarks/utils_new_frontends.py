@@ -77,8 +77,6 @@ except ImportError:
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from rapidsmpf.statistics import Statistics
-
     from cudf_polars.experimental.explain import SerializablePlan
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
@@ -204,7 +202,7 @@ class SuccessRecord:
     query: int
     iteration: int
     duration: float
-    statistics: Statistics | None = None
+    statistics: dict[str, Any] | None = None
     traces: list[dict[str, Any]] | None = None
     validation_result: ValidationResult | None = None
     status: Literal["success"] = "success"
@@ -215,7 +213,7 @@ class SuccessRecord:
         query: int,
         iteration: int,
         duration: float,
-        statistics: Statistics | None = None,
+        statistics: dict[str, Any] | None = None,
         traces: list[dict[str, Any]] | None = None,
     ) -> SuccessRecord:
         """Create a Record from plain data."""
@@ -236,16 +234,6 @@ class QueryRunResult:
     plan: SerializablePlan | None
     iteration_failures: list[tuple[int, int]]
     validation_failed: bool
-
-
-def _json_default(obj: Any) -> Any:
-    """JSON fallback for non-native types (e.g. rapidsmpf ``Statistics``)."""
-    # Local import to avoid a hard dependency at module load.
-    from rapidsmpf.statistics import Statistics
-
-    if isinstance(obj, Statistics):
-        return json.loads(obj.write_json_string())["statistics"]
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 @dataclasses.dataclass
@@ -820,9 +808,9 @@ class QueryResult:
     sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
-def _collect_statistics(engine: StreamingEngine | None) -> Statistics | None:
-    """Gather + clear per-rank rapidsmpf statistics into a single merged Statistics."""
-    return None if engine is None else engine.global_statistics(clear=True)
+def _collect_statistics(engine: StreamingEngine | None) -> dict[str, Any] | None:
+    """Gather + clear per-rank rapidsmpf statistics into a merged dict."""
+    return None if engine is None else engine.global_statistics(clear=True).to_dict()
 
 
 def run_polars_query_iteration(
@@ -1079,9 +1067,7 @@ def _finalize_benchmark_run(
             )
         else:
             print("✅ All validated queries passed.")
-    args.output.write(
-        json.dumps(run_config.serialize(engine=None), default=_json_default)
-    )
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
 
@@ -1536,9 +1522,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     if args.summarize:
         run_config.summarize()
 
-    args.output.write(
-        json.dumps(run_config.serialize(engine=None), default=_json_default)
-    )
+    args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
 
 
