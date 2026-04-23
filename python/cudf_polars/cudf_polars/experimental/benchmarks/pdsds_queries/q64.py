@@ -455,3 +455,259 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ],
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 64 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=64,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    price = params["price"]
+    colors = params["colors"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+    income_band = get_data(run_config.dataset_path, "income_band", run_config.suffix)
+    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    cs_ui = (
+        catalog_sales.join(
+            catalog_returns,
+            left_on=["cs_item_sk", "cs_order_number"],
+            right_on=["cr_item_sk", "cr_order_number"],
+        )
+        .group_by("cs_item_sk")
+        .agg(
+            [
+                pl.col("cs_ext_list_price").sum().alias("sale"),
+                (
+                    pl.col("cr_refunded_cash")
+                    + pl.col("cr_reversed_charge")
+                    + pl.col("cr_store_credit")
+                )
+                .sum()
+                .alias("refund"),
+            ]
+        )
+        .filter(pl.col("sale") > 2 * pl.col("refund"))
+        .select("cs_item_sk")
+    )
+
+    d1 = date_dim.select(["d_date_sk", "d_year"]).rename(
+        {"d_date_sk": "d1_date_sk", "d_year": "syear"}
+    )
+    d2 = date_dim.select(["d_date_sk", "d_year"]).rename(
+        {"d_date_sk": "d2_date_sk", "d_year": "fsyear"}
+    )
+    d3 = date_dim.select(["d_date_sk", "d_year"]).rename(
+        {"d_date_sk": "d3_date_sk", "d_year": "s2year"}
+    )
+    cd1 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
+        {"cd_demo_sk": "cd1_demo_sk", "cd_marital_status": "cd1_status"}
+    )
+    cd2 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
+        {"cd_demo_sk": "cd2_demo_sk", "cd_marital_status": "cd2_status"}
+    )
+    hd1 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
+        {"hd_demo_sk": "hd1_demo_sk", "hd_income_band_sk": "hd1_income_sk"}
+    )
+    hd2 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
+        {"hd_demo_sk": "hd2_demo_sk", "hd_income_band_sk": "hd2_income_sk"}
+    )
+    ib1 = income_band.select(["ib_income_band_sk"]).rename(
+        {"ib_income_band_sk": "ib1_income_band_sk"}
+    )
+    ib2 = income_band.select(["ib_income_band_sk"]).rename(
+        {"ib_income_band_sk": "ib2_income_band_sk"}
+    )
+    ad1 = customer_address.select(
+        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
+    ).rename(
+        {
+            "ca_address_sk": "ad1_address_sk",
+            "ca_street_number": "b_street_number",
+            "ca_street_name": "b_streen_name",
+            "ca_city": "b_city",
+            "ca_zip": "b_zip",
+        }
+    )
+    ad2 = customer_address.select(
+        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
+    ).rename(
+        {
+            "ca_address_sk": "ad2_address_sk",
+            "ca_street_number": "c_street_number",
+            "ca_street_name": "c_street_name",
+            "ca_city": "c_city",
+            "ca_zip": "c_zip",
+        }
+    )
+
+    item_renamed = item.rename({"i_item_sk": "ss_item_sk"})
+    cross_sales = (
+        store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
+        .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
+        .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
+        .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
+        .join(item_renamed, on="ss_item_sk")
+        .join(
+            store_returns,
+            left_on=["ss_item_sk", "ss_ticket_number"],
+            right_on=["sr_item_sk", "sr_ticket_number"],
+        )
+        .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
+        .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
+        .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
+        .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
+        .join(d2, left_on="c_first_sales_date_sk", right_on="d2_date_sk")
+        .join(d3, left_on="c_first_shipto_date_sk", right_on="d3_date_sk")
+        .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
+        .join(ib1, left_on="hd1_income_sk", right_on="ib1_income_band_sk")
+        .join(ib2, left_on="hd2_income_sk", right_on="ib2_income_band_sk")
+        .filter(pl.col("i_color").is_in(colors))
+        .filter(pl.col("i_current_price").is_between(price, price + 10))
+        .filter(pl.col("i_current_price").is_between(price + 1, price + 15))
+        .filter(pl.col("cd1_status") != pl.col("cd2_status"))
+        .group_by(
+            [
+                "i_product_name",
+                "ss_item_sk",
+                "s_store_name",
+                "s_zip",
+                "b_street_number",
+                "b_streen_name",
+                "b_city",
+                "b_zip",
+                "c_street_number",
+                "c_street_name",
+                "c_city",
+                "c_zip",
+                "syear",
+                "fsyear",
+                "s2year",
+            ]
+        )
+        .agg(
+            [
+                pl.len().alias("cnt"),
+                pl.when(pl.col("ss_wholesale_cost").count() > 0)
+                .then(pl.col("ss_wholesale_cost").sum())
+                .otherwise(None)
+                .alias("s1"),
+                pl.when(pl.col("ss_list_price").count() > 0)
+                .then(pl.col("ss_list_price").sum())
+                .otherwise(None)
+                .alias("s2"),
+                pl.when(pl.col("ss_coupon_amt").count() > 0)
+                .then(pl.col("ss_coupon_amt").sum())
+                .otherwise(None)
+                .alias("s3"),
+            ]
+        )
+        .select(
+            [
+                pl.col("i_product_name").alias("product_name"),
+                pl.col("ss_item_sk").alias("item_sk"),
+                pl.col("s_store_name").alias("store_name"),
+                pl.col("s_zip").alias("store_zip"),
+                "b_street_number",
+                "b_streen_name",
+                "b_city",
+                "b_zip",
+                "c_street_number",
+                "c_street_name",
+                "c_city",
+                "c_zip",
+                "syear",
+                "fsyear",
+                "s2year",
+                "cnt",
+                "s1",
+                "s2",
+                "s3",
+            ]
+        )
+    )
+
+    cs1 = cross_sales
+    cs2 = cross_sales
+
+    return QueryResult(
+        frame=(
+            cs1.join(
+                cs2,
+                left_on=["item_sk", "store_name", "store_zip"],
+                right_on=["item_sk", "store_name", "store_zip"],
+                suffix="_1",
+            )
+            .filter(
+                (pl.col("syear") == year)
+                & (pl.col("syear_1") == year + 1)
+                & (pl.col("cnt_1") <= pl.col("cnt"))
+            )
+            .select(
+                [
+                    "product_name",
+                    "store_name",
+                    "store_zip",
+                    "b_street_number",
+                    "b_streen_name",
+                    "b_city",
+                    "b_zip",
+                    "c_street_number",
+                    "c_street_name",
+                    "c_city",
+                    "c_zip",
+                    "syear",
+                    "cnt",
+                    "s1",
+                    "s2",
+                    "s3",
+                    pl.col("s1_1"),
+                    pl.col("s2_1"),
+                    pl.col("s3_1"),
+                    pl.col("syear_1"),
+                    pl.col("cnt_1"),
+                ]
+            )
+            .sort(
+                ["product_name", "store_name", "cnt_1", "s1", "s1_1"],
+                nulls_last=True,
+            )
+        ),
+        sort_by=[
+            ("product_name", False),
+            ("store_name", False),
+            ("cnt_1", False),
+            ("s1", False),
+            ("s1_1", False),
+        ],
+        limit=None,
+    )

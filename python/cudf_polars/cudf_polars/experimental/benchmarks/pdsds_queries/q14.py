@@ -439,3 +439,311 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         limit=100,
         nulls_last=False,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 14 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=14,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    day = params["day"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    store_items = (
+        store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_between(year, year + 2))
+        .select(["i_brand_id", "i_class_id", "i_category_id"])
+        .unique()
+    )
+    catalog_items = (
+        catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_between(year, year + 2))
+        .select(["i_brand_id", "i_class_id", "i_category_id"])
+        .unique()
+    )
+    web_items = (
+        web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_between(year, year + 2))
+        .select(["i_brand_id", "i_class_id", "i_category_id"])
+        .unique()
+    )
+    common_items = store_items.join(
+        catalog_items, on=["i_brand_id", "i_class_id", "i_category_id"]
+    ).join(web_items, on=["i_brand_id", "i_class_id", "i_category_id"])
+    cross_items = item.join(
+        common_items, on=["i_brand_id", "i_class_id", "i_category_id"]
+    ).select(pl.col("i_item_sk").alias("ss_item_sk"))
+
+    avg_store = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_between(year, year + 2))
+        .select(
+            [
+                pl.col("ss_quantity").alias("quantity"),
+                pl.col("ss_list_price").alias("list_price"),
+            ]
+        )
+    )
+    avg_catalog = (
+        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_between(year, year + 2))
+        .select(
+            [
+                pl.col("cs_quantity").alias("quantity"),
+                pl.col("cs_list_price").alias("list_price"),
+            ]
+        )
+    )
+    avg_web = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_between(year, year + 2))
+        .select(
+            [
+                pl.col("ws_quantity").alias("quantity"),
+                pl.col("ws_list_price").alias("list_price"),
+            ]
+        )
+    )
+    avg_sales = (
+        pl.concat([avg_store, avg_catalog, avg_web])
+        .with_columns((pl.col("quantity") * pl.col("list_price")).alias("sales_amount"))
+        .select(pl.col("sales_amount").mean().alias("average_sales"))
+    )
+
+    target_week = (
+        date_dim.filter(
+            (pl.col("d_year") == year + 1)
+            & (pl.col("d_moy") == 12)
+            & (pl.col("d_dom") == day)
+        )
+        .select("d_week_seq")
+        .unique()
+    )
+
+    store_part = (
+        store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(target_week, on="d_week_seq")
+        .join(cross_items, left_on="ss_item_sk", right_on="ss_item_sk")
+        .group_by(["i_brand_id", "i_class_id", "i_category_id"])
+        .agg(
+            [
+                (pl.col("ss_quantity") * pl.col("ss_list_price")).sum().alias("sales"),
+                pl.len().alias("number_sales"),
+            ]
+        )
+        .join(avg_sales, how="cross")
+        .filter(pl.col("sales") > pl.col("average_sales"))
+        .select(
+            [
+                pl.lit("store").alias("channel"),
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sales",
+                "number_sales",
+            ]
+        )
+    )
+    catalog_part = (
+        catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(target_week, on="d_week_seq")
+        .join(cross_items, left_on="cs_item_sk", right_on="ss_item_sk")
+        .group_by(["i_brand_id", "i_class_id", "i_category_id"])
+        .agg(
+            [
+                (pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales"),
+                pl.len().alias("number_sales"),
+            ]
+        )
+        .join(avg_sales, how="cross")
+        .filter(pl.col("sales") > pl.col("average_sales"))
+        .select(
+            [
+                pl.lit("catalog").alias("channel"),
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sales",
+                "number_sales",
+            ]
+        )
+    )
+    web_part = (
+        web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(target_week, on="d_week_seq")
+        .join(cross_items, left_on="ws_item_sk", right_on="ss_item_sk")
+        .group_by(["i_brand_id", "i_class_id", "i_category_id"])
+        .agg(
+            [
+                (pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"),
+                pl.len().alias("number_sales"),
+            ]
+        )
+        .join(avg_sales, how="cross")
+        .filter(pl.col("sales") > pl.col("average_sales"))
+        .select(
+            [
+                pl.lit("web").alias("channel"),
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sales",
+                "number_sales",
+            ]
+        )
+    )
+
+    y = pl.concat([store_part, catalog_part, web_part])
+
+    level1 = (
+        y.group_by(["channel", "i_brand_id", "i_class_id", "i_category_id"])
+        .agg(
+            [
+                pl.col("sales").sum().alias("sum_sales"),
+                pl.col("number_sales").sum().alias("sum_number_sales"),
+            ]
+        )
+        .select(
+            [
+                "channel",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sum_sales",
+                "sum_number_sales",
+            ]
+        )
+    )
+    level2 = (
+        y.group_by(["channel", "i_brand_id", "i_class_id"])
+        .agg(
+            [
+                pl.col("sales").sum().alias("sum_sales"),
+                pl.col("number_sales").sum().alias("sum_number_sales"),
+            ]
+        )
+        .with_columns(pl.lit(None, dtype=pl.Int64).alias("i_category_id"))
+        .select(
+            [
+                "channel",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sum_sales",
+                "sum_number_sales",
+            ]
+        )
+    )
+    level3 = (
+        y.group_by(["channel", "i_brand_id"])
+        .agg(
+            [
+                pl.col("sales").sum().alias("sum_sales"),
+                pl.col("number_sales").sum().alias("sum_number_sales"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Int64).alias("i_class_id"),
+                pl.lit(None, dtype=pl.Int64).alias("i_category_id"),
+            ]
+        )
+        .select(
+            [
+                "channel",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sum_sales",
+                "sum_number_sales",
+            ]
+        )
+    )
+    level4 = (
+        y.group_by(["channel"])
+        .agg(
+            [
+                pl.col("sales").sum().alias("sum_sales"),
+                pl.col("number_sales").sum().alias("sum_number_sales"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Int64).alias("i_brand_id"),
+                pl.lit(None, dtype=pl.Int64).alias("i_class_id"),
+                pl.lit(None, dtype=pl.Int64).alias("i_category_id"),
+            ]
+        )
+        .select(
+            [
+                "channel",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sum_sales",
+                "sum_number_sales",
+            ]
+        )
+    )
+    level5 = (
+        y.select(
+            [
+                pl.col("sales").sum().alias("sum_sales"),
+                pl.col("number_sales").sum().alias("sum_number_sales"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("channel"),
+                pl.lit(None, dtype=pl.Int64).alias("i_brand_id"),
+                pl.lit(None, dtype=pl.Int64).alias("i_class_id"),
+                pl.lit(None, dtype=pl.Int64).alias("i_category_id"),
+            ]
+        )
+        .select(
+            [
+                "channel",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "sum_sales",
+                "sum_number_sales",
+            ]
+        )
+    )
+
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2, level3, level4, level5])
+            .sort(
+                ["channel", "i_brand_id", "i_class_id", "i_category_id"],
+                nulls_last=False,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("channel", False),
+            ("i_brand_id", False),
+            ("i_class_id", False),
+            ("i_category_id", False),
+        ],
+        limit=100,
+        nulls_last=False,
+    )

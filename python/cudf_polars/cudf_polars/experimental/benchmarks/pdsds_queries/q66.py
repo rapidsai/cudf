@@ -29,10 +29,10 @@ def duckdb_impl(run_config: RunConfig) -> str:
     smc = params["smc"]
     # Column names vary by scale factor (extracted from dsqgen)
     # Used in f-string below - ruff doesn't detect f-string variable usage
-    sales_one = params["sales_one"]  # ruff: noqa: F841
-    sales_two = params["sales_two"]  # ruff: noqa: F841
-    net_one = params["net_one"]  # ruff: noqa: F841
-    net_two = params["net_two"]  # ruff: noqa: F841
+    sales_one = params["sales_one"]
+    sales_two = params["sales_two"]
+    net_one = params["net_one"]
+    net_two = params["net_two"]
     smc_str = "(" + ", ".join(f"'{c}'" for c in smc) + ")"
 
     return f"""
@@ -525,6 +525,480 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 + [f"{m}_sales" for m in month_names]
                 + [f"{m}_sales_per_sq_foot" for m in month_names]
                 + [f"{m}_net" for m in month_names]
+            )
+            .sort(["w_warehouse_name"], nulls_last=True, descending=[False])
+            .limit(100)
+        ),
+        sort_by=[("w_warehouse_name", False)],
+        limit=100,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 66 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=66,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    time_one = params["time_one"]
+    smc = params["smc"]
+    sales_one = params["sales_one"]
+    sales_two = params["sales_two"]
+    net_one = params["net_one"]
+    net_two = params["net_two"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
+    ship_mode = get_data(run_config.dataset_path, "ship_mode", run_config.suffix)
+
+    ship_carriers = f"{smc[0]},{smc[1]}"
+
+    web_part = (
+        web_sales.join(warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk")
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk")
+        .join(ship_mode, left_on="ws_ship_mode_sk", right_on="sm_ship_mode_sk")
+        .filter(
+            (pl.col("d_year") == year)
+            & pl.col("t_time").is_between(time_one, time_one + 28800)
+            & pl.col("sm_carrier").is_in(smc)
+        )
+        .group_by(
+            [
+                "w_warehouse_name",
+                "w_warehouse_sq_ft",
+                "w_city",
+                "w_county",
+                "w_state",
+                "w_country",
+                "d_year",
+            ]
+        )
+        .agg(
+            [
+                pl.when(pl.col("d_moy") == 1)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jan_sales"),
+                pl.when(pl.col("d_moy") == 2)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("feb_sales"),
+                pl.when(pl.col("d_moy") == 3)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("mar_sales"),
+                pl.when(pl.col("d_moy") == 4)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("apr_sales"),
+                pl.when(pl.col("d_moy") == 5)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("may_sales"),
+                pl.when(pl.col("d_moy") == 6)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jun_sales"),
+                pl.when(pl.col("d_moy") == 7)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jul_sales"),
+                pl.when(pl.col("d_moy") == 8)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("aug_sales"),
+                pl.when(pl.col("d_moy") == 9)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("sep_sales"),
+                pl.when(pl.col("d_moy") == 10)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("oct_sales"),
+                pl.when(pl.col("d_moy") == 11)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("nov_sales"),
+                pl.when(pl.col("d_moy") == 12)
+                .then(pl.col(sales_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("dec_sales"),
+                pl.when(pl.col("d_moy") == 1)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jan_net"),
+                pl.when(pl.col("d_moy") == 2)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("feb_net"),
+                pl.when(pl.col("d_moy") == 3)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("mar_net"),
+                pl.when(pl.col("d_moy") == 4)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("apr_net"),
+                pl.when(pl.col("d_moy") == 5)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("may_net"),
+                pl.when(pl.col("d_moy") == 6)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jun_net"),
+                pl.when(pl.col("d_moy") == 7)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jul_net"),
+                pl.when(pl.col("d_moy") == 8)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("aug_net"),
+                pl.when(pl.col("d_moy") == 9)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("sep_net"),
+                pl.when(pl.col("d_moy") == 10)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("oct_net"),
+                pl.when(pl.col("d_moy") == 11)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("nov_net"),
+                pl.when(pl.col("d_moy") == 12)
+                .then(pl.col(net_one) * pl.col("ws_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("dec_net"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.lit(ship_carriers).alias("ship_carriers"),
+                pl.col("d_year").alias("year1"),
+            ]
+        )
+    )
+
+    catalog_part = (
+        catalog_sales.join(
+            warehouse, left_on="cs_warehouse_sk", right_on="w_warehouse_sk"
+        )
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(time_dim, left_on="cs_sold_time_sk", right_on="t_time_sk")
+        .join(ship_mode, left_on="cs_ship_mode_sk", right_on="sm_ship_mode_sk")
+        .filter(
+            (pl.col("d_year") == year)
+            & pl.col("t_time").is_between(time_one, time_one + 28800)
+            & pl.col("sm_carrier").is_in(smc)
+        )
+        .group_by(
+            [
+                "w_warehouse_name",
+                "w_warehouse_sq_ft",
+                "w_city",
+                "w_county",
+                "w_state",
+                "w_country",
+                "d_year",
+            ]
+        )
+        .agg(
+            [
+                pl.when(pl.col("d_moy") == 1)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jan_sales"),
+                pl.when(pl.col("d_moy") == 2)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("feb_sales"),
+                pl.when(pl.col("d_moy") == 3)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("mar_sales"),
+                pl.when(pl.col("d_moy") == 4)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("apr_sales"),
+                pl.when(pl.col("d_moy") == 5)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("may_sales"),
+                pl.when(pl.col("d_moy") == 6)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jun_sales"),
+                pl.when(pl.col("d_moy") == 7)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jul_sales"),
+                pl.when(pl.col("d_moy") == 8)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("aug_sales"),
+                pl.when(pl.col("d_moy") == 9)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("sep_sales"),
+                pl.when(pl.col("d_moy") == 10)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("oct_sales"),
+                pl.when(pl.col("d_moy") == 11)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("nov_sales"),
+                pl.when(pl.col("d_moy") == 12)
+                .then(pl.col(sales_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("dec_sales"),
+                pl.when(pl.col("d_moy") == 1)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jan_net"),
+                pl.when(pl.col("d_moy") == 2)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("feb_net"),
+                pl.when(pl.col("d_moy") == 3)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("mar_net"),
+                pl.when(pl.col("d_moy") == 4)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("apr_net"),
+                pl.when(pl.col("d_moy") == 5)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("may_net"),
+                pl.when(pl.col("d_moy") == 6)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jun_net"),
+                pl.when(pl.col("d_moy") == 7)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("jul_net"),
+                pl.when(pl.col("d_moy") == 8)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("aug_net"),
+                pl.when(pl.col("d_moy") == 9)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("sep_net"),
+                pl.when(pl.col("d_moy") == 10)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("oct_net"),
+                pl.when(pl.col("d_moy") == 11)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("nov_net"),
+                pl.when(pl.col("d_moy") == 12)
+                .then(pl.col(net_two) * pl.col("cs_quantity"))
+                .otherwise(0)
+                .sum()
+                .alias("dec_net"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.lit(ship_carriers).alias("ship_carriers"),
+                pl.col("d_year").alias("year1"),
+            ]
+        )
+    )
+
+    per_sqft_exprs = [
+        (pl.col("jan_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "jan_sales_per_sq_foot"
+        ),
+        (pl.col("feb_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "feb_sales_per_sq_foot"
+        ),
+        (pl.col("mar_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "mar_sales_per_sq_foot"
+        ),
+        (pl.col("apr_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "apr_sales_per_sq_foot"
+        ),
+        (pl.col("may_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "may_sales_per_sq_foot"
+        ),
+        (pl.col("jun_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "jun_sales_per_sq_foot"
+        ),
+        (pl.col("jul_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "jul_sales_per_sq_foot"
+        ),
+        (pl.col("aug_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "aug_sales_per_sq_foot"
+        ),
+        (pl.col("sep_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "sep_sales_per_sq_foot"
+        ),
+        (pl.col("oct_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "oct_sales_per_sq_foot"
+        ),
+        (pl.col("nov_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "nov_sales_per_sq_foot"
+        ),
+        (pl.col("dec_sales") / pl.col("w_warehouse_sq_ft")).alias(
+            "dec_sales_per_sq_foot"
+        ),
+    ]
+
+    return QueryResult(
+        frame=(
+            pl.concat([web_part, catalog_part])
+            .group_by(
+                [
+                    "w_warehouse_name",
+                    "w_warehouse_sq_ft",
+                    "w_city",
+                    "w_county",
+                    "w_state",
+                    "w_country",
+                    "ship_carriers",
+                    "year1",
+                ]
+            )
+            .agg(
+                [
+                    pl.col("jan_sales").sum().alias("jan_sales"),
+                    pl.col("feb_sales").sum().alias("feb_sales"),
+                    pl.col("mar_sales").sum().alias("mar_sales"),
+                    pl.col("apr_sales").sum().alias("apr_sales"),
+                    pl.col("may_sales").sum().alias("may_sales"),
+                    pl.col("jun_sales").sum().alias("jun_sales"),
+                    pl.col("jul_sales").sum().alias("jul_sales"),
+                    pl.col("aug_sales").sum().alias("aug_sales"),
+                    pl.col("sep_sales").sum().alias("sep_sales"),
+                    pl.col("oct_sales").sum().alias("oct_sales"),
+                    pl.col("nov_sales").sum().alias("nov_sales"),
+                    pl.col("dec_sales").sum().alias("dec_sales"),
+                    pl.col("jan_net").sum().alias("jan_net"),
+                    pl.col("feb_net").sum().alias("feb_net"),
+                    pl.col("mar_net").sum().alias("mar_net"),
+                    pl.col("apr_net").sum().alias("apr_net"),
+                    pl.col("may_net").sum().alias("may_net"),
+                    pl.col("jun_net").sum().alias("jun_net"),
+                    pl.col("jul_net").sum().alias("jul_net"),
+                    pl.col("aug_net").sum().alias("aug_net"),
+                    pl.col("sep_net").sum().alias("sep_net"),
+                    pl.col("oct_net").sum().alias("oct_net"),
+                    pl.col("nov_net").sum().alias("nov_net"),
+                    pl.col("dec_net").sum().alias("dec_net"),
+                ]
+            )
+            .with_columns(per_sqft_exprs)
+            .select(
+                [
+                    "w_warehouse_name",
+                    "w_warehouse_sq_ft",
+                    "w_city",
+                    "w_county",
+                    "w_state",
+                    "w_country",
+                    "ship_carriers",
+                    "year1",
+                    "jan_sales",
+                    "feb_sales",
+                    "mar_sales",
+                    "apr_sales",
+                    "may_sales",
+                    "jun_sales",
+                    "jul_sales",
+                    "aug_sales",
+                    "sep_sales",
+                    "oct_sales",
+                    "nov_sales",
+                    "dec_sales",
+                    "jan_sales_per_sq_foot",
+                    "feb_sales_per_sq_foot",
+                    "mar_sales_per_sq_foot",
+                    "apr_sales_per_sq_foot",
+                    "may_sales_per_sq_foot",
+                    "jun_sales_per_sq_foot",
+                    "jul_sales_per_sq_foot",
+                    "aug_sales_per_sq_foot",
+                    "sep_sales_per_sq_foot",
+                    "oct_sales_per_sq_foot",
+                    "nov_sales_per_sq_foot",
+                    "dec_sales_per_sq_foot",
+                    "jan_net",
+                    "feb_net",
+                    "mar_net",
+                    "apr_net",
+                    "may_net",
+                    "jun_net",
+                    "jul_net",
+                    "aug_net",
+                    "sep_net",
+                    "oct_net",
+                    "nov_net",
+                    "dec_net",
+                ]
             )
             .sort(["w_warehouse_name"], nulls_last=True, descending=[False])
             .limit(100)

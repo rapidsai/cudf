@@ -195,3 +195,111 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         limit=limit,
         nulls_last=False,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 23 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=23,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+
+    frequent_ss_items = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(
+            item.with_columns(pl.col("i_item_desc").str.slice(0, 30).alias("itemdesc")),
+            left_on="ss_item_sk",
+            right_on="i_item_sk",
+        )
+        .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
+        .group_by(["itemdesc", "ss_item_sk", "d_date"])
+        .agg(pl.len().alias("cnt"))
+        .filter(pl.col("cnt") > 4)
+        .select(
+            [
+                pl.col("itemdesc"),
+                pl.col("ss_item_sk").alias("item_sk"),
+                pl.col("d_date").alias("solddate"),
+                pl.col("cnt"),
+            ]
+        )
+    )
+
+    max_store_sales = (
+        store_sales.join(
+            customer, left_on="ss_customer_sk", right_on="c_customer_sk", suffix="_c"
+        )
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
+        .group_by("ss_customer_sk")
+        .agg((pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("csales"))
+        .select(pl.col("csales").max().alias("tpcds_cmax"))
+    )
+
+    best_ss_customer = (
+        store_sales.join(
+            customer, left_on="ss_customer_sk", right_on="c_customer_sk", suffix="_c"
+        )
+        .join(max_store_sales, how="cross")
+        .group_by("ss_customer_sk")
+        .agg(
+            [
+                (pl.col("ss_quantity") * pl.col("ss_sales_price"))
+                .sum()
+                .alias("ssales"),
+                pl.col("tpcds_cmax").max().alias("tpcds_cmax"),
+            ]
+        )
+        .filter(pl.col("ssales") > (pl.col("tpcds_cmax") * 0.95))
+        .select(pl.col("ss_customer_sk").alias("c_customer_sk"))
+    )
+
+    catalog_part = (
+        catalog_sales.join(
+            customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
+        )
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(frequent_ss_items, left_on="cs_item_sk", right_on="item_sk")
+        .join(best_ss_customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
+        .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        .group_by(["c_last_name", "c_first_name"])
+        .agg((pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales"))
+    )
+
+    web_part = (
+        web_sales.join(
+            customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
+        )
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(frequent_ss_items, left_on="ws_item_sk", right_on="item_sk")
+        .join(best_ss_customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk")
+        .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        .group_by(["c_last_name", "c_first_name"])
+        .agg((pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"))
+    )
+
+    sort_by = {"c_last_name": False, "c_first_name": False, "sales": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            pl.concat([catalog_part, web_part])
+            .sort(list(sort_by.keys()), nulls_last=False)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+        nulls_last=False,
+    )

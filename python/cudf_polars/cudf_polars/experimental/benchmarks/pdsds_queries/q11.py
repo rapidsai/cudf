@@ -245,3 +245,224 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 11 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=11,
+        qualification=run_config.qualification,
+    )
+
+    year_first = params["year"]
+    year_second = year_first + 1
+
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    store_total = (
+        customer.join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .group_by(
+            [
+                "c_customer_id",
+                "c_first_name",
+                "c_last_name",
+                "c_preferred_cust_flag",
+                "c_birth_country",
+                "c_login",
+                "c_email_address",
+                "d_year",
+            ]
+        )
+        .agg(
+            (pl.col("ss_ext_list_price") - pl.col("ss_ext_discount_amt"))
+            .sum()
+            .alias("year_total")
+        )
+        .select(
+            [
+                pl.col("c_customer_id").alias("customer_id"),
+                pl.col("c_first_name").alias("customer_first_name"),
+                pl.col("c_last_name").alias("customer_last_name"),
+                pl.col("c_preferred_cust_flag").alias("customer_preferred_cust_flag"),
+                pl.col("c_birth_country").alias("customer_birth_country"),
+                pl.col("c_login").alias("customer_login"),
+                pl.col("c_email_address").alias("customer_email_address"),
+                pl.col("d_year").alias("dyear"),
+                pl.col("year_total"),
+                pl.lit("s").alias("sale_type"),
+            ]
+        )
+    )
+
+    web_total = (
+        customer.join(
+            web_sales, left_on="c_customer_sk", right_on="ws_bill_customer_sk"
+        )
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .group_by(
+            [
+                "c_customer_id",
+                "c_first_name",
+                "c_last_name",
+                "c_preferred_cust_flag",
+                "c_birth_country",
+                "c_login",
+                "c_email_address",
+                "d_year",
+            ]
+        )
+        .agg(
+            (pl.col("ws_ext_list_price") - pl.col("ws_ext_discount_amt"))
+            .sum()
+            .alias("year_total")
+        )
+        .select(
+            [
+                pl.col("c_customer_id").alias("customer_id"),
+                pl.col("c_first_name").alias("customer_first_name"),
+                pl.col("c_last_name").alias("customer_last_name"),
+                pl.col("c_preferred_cust_flag").alias("customer_preferred_cust_flag"),
+                pl.col("c_birth_country").alias("customer_birth_country"),
+                pl.col("c_login").alias("customer_login"),
+                pl.col("c_email_address").alias("customer_email_address"),
+                pl.col("d_year").alias("dyear"),
+                pl.col("year_total"),
+                pl.lit("w").alias("sale_type"),
+            ]
+        )
+    )
+
+    year_total = pl.concat([store_total, web_total])
+
+    t_s_firstyear = year_total.rename(
+        {
+            "customer_id": "s_fy_customer_id",
+            "customer_first_name": "s_fy_customer_first_name",
+            "customer_last_name": "s_fy_customer_last_name",
+            "customer_preferred_cust_flag": "s_fy_customer_preferred_cust_flag",
+            "customer_birth_country": "s_fy_customer_birth_country",
+            "customer_login": "s_fy_customer_login",
+            "customer_email_address": "s_fy_customer_email_address",
+            "dyear": "s_fy_dyear",
+            "year_total": "s_fy_year_total",
+            "sale_type": "s_fy_sale_type",
+        }
+    )
+    t_s_secyear = year_total.rename(
+        {
+            "customer_id": "s_sy_customer_id",
+            "customer_first_name": "s_sy_customer_first_name",
+            "customer_last_name": "s_sy_customer_last_name",
+            "customer_preferred_cust_flag": "s_sy_customer_preferred_cust_flag",
+            "customer_birth_country": "s_sy_customer_birth_country",
+            "customer_login": "s_sy_customer_login",
+            "customer_email_address": "s_sy_customer_email_address",
+            "dyear": "s_sy_dyear",
+            "year_total": "s_sy_year_total",
+            "sale_type": "s_sy_sale_type",
+        }
+    )
+    t_w_firstyear = year_total.rename(
+        {
+            "customer_id": "w_fy_customer_id",
+            "customer_first_name": "w_fy_customer_first_name",
+            "customer_last_name": "w_fy_customer_last_name",
+            "customer_preferred_cust_flag": "w_fy_customer_preferred_cust_flag",
+            "customer_birth_country": "w_fy_customer_birth_country",
+            "customer_login": "w_fy_customer_login",
+            "customer_email_address": "w_fy_customer_email_address",
+            "dyear": "w_fy_dyear",
+            "year_total": "w_fy_year_total",
+            "sale_type": "w_fy_sale_type",
+        }
+    )
+    t_w_secyear = year_total.rename(
+        {
+            "customer_id": "w_sy_customer_id",
+            "customer_first_name": "w_sy_customer_first_name",
+            "customer_last_name": "w_sy_customer_last_name",
+            "customer_preferred_cust_flag": "w_sy_customer_preferred_cust_flag",
+            "customer_birth_country": "w_sy_customer_birth_country",
+            "customer_login": "w_sy_customer_login",
+            "customer_email_address": "w_sy_customer_email_address",
+            "dyear": "w_sy_dyear",
+            "year_total": "w_sy_year_total",
+            "sale_type": "w_sy_sale_type",
+        }
+    )
+
+    joined = (
+        t_s_firstyear.join(
+            t_s_secyear,
+            left_on="s_fy_customer_id",
+            right_on="s_sy_customer_id",
+            how="inner",
+        )
+        .join(
+            t_w_firstyear,
+            left_on="s_fy_customer_id",
+            right_on="w_fy_customer_id",
+            how="inner",
+        )
+        .join(
+            t_w_secyear,
+            left_on="s_fy_customer_id",
+            right_on="w_sy_customer_id",
+            how="inner",
+        )
+        .filter(
+            (pl.col("s_fy_sale_type") == "s")
+            & (pl.col("w_fy_sale_type") == "w")
+            & (pl.col("s_sy_sale_type") == "s")
+            & (pl.col("w_sy_sale_type") == "w")
+            & (pl.col("s_fy_dyear") == year_first)
+            & (pl.col("s_sy_dyear") == year_second)
+            & (pl.col("w_fy_dyear") == year_first)
+            & (pl.col("w_sy_dyear") == year_second)
+            & (pl.col("s_fy_year_total") > 0)
+            & (pl.col("w_fy_year_total") > 0)
+            & (
+                pl.when(pl.col("w_fy_year_total") > 0)
+                .then(pl.col("w_sy_year_total") / pl.col("w_fy_year_total"))
+                .otherwise(0.0)
+                > pl.when(pl.col("s_fy_year_total") > 0)
+                .then(pl.col("s_sy_year_total") / pl.col("s_fy_year_total"))
+                .otherwise(0.0)
+            )
+        )
+    )
+
+    sort_cols = [
+        "customer_id",
+        "customer_first_name",
+        "customer_last_name",
+        "customer_birth_country",
+    ]
+    return QueryResult(
+        frame=(
+            joined.select(
+                [
+                    pl.col("s_fy_customer_id").alias("customer_id"),
+                    pl.col("s_sy_customer_first_name").alias("customer_first_name"),
+                    pl.col("s_sy_customer_last_name").alias("customer_last_name"),
+                    pl.col("s_sy_customer_birth_country").alias(
+                        "customer_birth_country"
+                    ),
+                ]
+            )
+            .sort(sort_cols, nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[
+            ("customer_id", False),
+            ("customer_first_name", False),
+            ("customer_last_name", False),
+            ("customer_birth_country", False),
+        ],
+        limit=100,
+    )
