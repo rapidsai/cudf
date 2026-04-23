@@ -176,7 +176,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
-    not_returned = web_returns.select("wr_order_number")
+    not_returned = web_returns.select("wr_order_number").with_columns(
+        pl.lit(1).alias("_dummy")
+    )
 
     return QueryResult(
         frame=(
@@ -198,8 +200,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 not_returned,
                 left_on="ws_order_number",
                 right_on="wr_order_number",
-                how="anti",
+                how="left",
+                coalesce=False,
             )
+            .filter(pl.col("wr_order_number").is_null())
+            .drop("wr_order_number", "_dummy")
             .select(
                 [
                     pl.col("ws_order_number").n_unique().alias("order count"),
