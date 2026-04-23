@@ -193,3 +193,116 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         limit=limit,
         nulls_last=False,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 51 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=51,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    web_v1 = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .filter(
+            pl.col("d_month_seq").is_between(dms, dms + 11)
+            & pl.col("ws_item_sk").is_not_null()
+        )
+        .group_by(["ws_item_sk", "d_date"])
+        .agg(pl.col("ws_sales_price").sum().alias("daily_sum"))
+        .with_columns(
+            pl.col("daily_sum")
+            .cum_sum()
+            .over(partition_by="ws_item_sk", order_by="d_date")
+            .alias("cume_sales")
+        )
+        .select(
+            [
+                pl.col("ws_item_sk").alias("item_sk"),
+                pl.col("d_date"),
+                pl.col("cume_sales").alias("web_sales"),
+            ]
+        )
+    )
+
+    store_v1 = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(
+            pl.col("d_month_seq").is_between(dms, dms + 11)
+            & pl.col("ss_item_sk").is_not_null()
+        )
+        .group_by(["ss_item_sk", "d_date"])
+        .agg(pl.col("ss_sales_price").sum().alias("daily_sum"))
+        .with_columns(
+            pl.col("daily_sum")
+            .cum_sum()
+            .over(partition_by="ss_item_sk", order_by="d_date")
+            .alias("cume_sales")
+        )
+        .select(
+            [
+                pl.col("ss_item_sk").alias("item_sk"),
+                pl.col("d_date"),
+                pl.col("cume_sales").alias("store_sales"),
+            ]
+        )
+    )
+
+    combined = (
+        web_v1.join(store_v1, on=["item_sk", "d_date"], how="full", suffix="_store")
+        .with_columns(
+            [
+                pl.when(pl.col("item_sk").is_not_null())
+                .then(pl.col("item_sk"))
+                .otherwise(pl.col("item_sk_store"))
+                .alias("item_sk"),
+                pl.when(pl.col("d_date").is_not_null())
+                .then(pl.col("d_date"))
+                .otherwise(pl.col("d_date_store"))
+                .alias("d_date"),
+            ]
+        )
+        .select(["item_sk", "d_date", "web_sales", "store_sales"])
+    )
+
+    collapsed = combined.group_by(["item_sk", "d_date"], maintain_order=True).agg(
+        [
+            pl.col("web_sales").max().alias("web_sales"),
+            pl.col("store_sales").max().alias("store_sales"),
+        ]
+    )
+
+    ordered = collapsed.sort(["item_sk", "d_date"])
+
+    with_running = ordered.with_columns(
+        [
+            pl.col("web_sales")
+            .forward_fill()
+            .over(partition_by="item_sk", order_by="d_date")
+            .alias("web_cumulative"),
+            pl.col("store_sales")
+            .forward_fill()
+            .over(partition_by="item_sk", order_by="d_date")
+            .alias("store_cumulative"),
+        ]
+    )
+
+    sort_by = {"item_sk": False, "d_date": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            with_running.filter(pl.col("web_cumulative") > pl.col("store_cumulative"))
+            .sort(list(sort_by.keys()), nulls_last=False)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+        nulls_last=False,
+    )

@@ -219,3 +219,104 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             (pl.col("avg_monthly_sales"), False),
         ],
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 57 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=57,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
+
+    v1 = (
+        item.join(catalog_sales, left_on="i_item_sk", right_on="cs_item_sk")
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
+        .filter(
+            (pl.col("d_year") == year)
+            | ((pl.col("d_year") == year - 1) & (pl.col("d_moy") == 12))
+            | ((pl.col("d_year") == year + 1) & (pl.col("d_moy") == 1))
+        )
+        .group_by(["i_category", "i_brand", "cc_name", "d_year", "d_moy"])
+        .agg(pl.col("cs_sales_price").sum().alias("sum_sales"))
+        .with_columns(
+            [
+                pl.col("sum_sales")
+                .mean()
+                .over(["i_category", "i_brand", "cc_name", "d_year"])
+                .alias("avg_monthly_sales"),
+                pl.col("d_year")
+                .rank(method="ordinal")
+                .over(
+                    ["i_category", "i_brand", "cc_name"], order_by=["d_year", "d_moy"]
+                )
+                .alias("rn"),
+            ]
+        )
+    )
+
+    v2 = (
+        v1.with_columns(
+            [
+                pl.col("sum_sales")
+                .shift(1)
+                .over(
+                    ["i_category", "i_brand", "cc_name"], order_by=["d_year", "d_moy"]
+                )
+                .alias("psum"),
+                pl.col("sum_sales")
+                .shift(-1)
+                .over(
+                    ["i_category", "i_brand", "cc_name"], order_by=["d_year", "d_moy"]
+                )
+                .alias("nsum"),
+            ]
+        )
+        .filter(pl.col("psum").is_not_null() & pl.col("nsum").is_not_null())
+        .select(["i_brand", "d_year", "avg_monthly_sales", "sum_sales", "psum", "nsum"])
+    )
+
+    sort_by = {"avg_monthly_sales": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            v2.filter(
+                (pl.col("d_year") == year)
+                & (pl.col("avg_monthly_sales") > 0)
+                & (
+                    pl.when(pl.col("avg_monthly_sales") > 0)
+                    .then(
+                        (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                        / pl.col("avg_monthly_sales")
+                    )
+                    .otherwise(None)
+                    > 0.1
+                )
+            )
+            .sort(
+                by=[
+                    pl.col("sum_sales") - pl.col("avg_monthly_sales"),
+                    pl.col("avg_monthly_sales"),
+                ],
+                descending=[False, False],
+                nulls_last=True,
+            )
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+        sort_keys=[
+            (pl.col("sum_sales") - pl.col("avg_monthly_sales"), False),
+            (pl.col("avg_monthly_sales"), False),
+        ],
+    )

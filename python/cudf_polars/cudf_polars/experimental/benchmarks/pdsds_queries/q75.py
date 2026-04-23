@@ -341,3 +341,200 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 75 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=75,
+        qualification=run_config.qualification,
+    )
+
+    category = params["category"]
+    year = params["year"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    cat = (
+        catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(
+            catalog_returns,
+            left_on=["cs_order_number", "cs_item_sk"],
+            right_on=["cr_order_number", "cr_item_sk"],
+            how="left",
+        )
+        .filter(pl.col("i_category") == category)
+        .with_columns(
+            [
+                (
+                    pl.col("cs_quantity") - pl.col("cr_return_quantity").fill_null(0)
+                ).alias("sales_cnt"),
+                (
+                    pl.col("cs_ext_sales_price")
+                    - pl.col("cr_return_amount").fill_null(0.0)
+                ).alias("sales_amt"),
+            ]
+        )
+        .select(
+            [
+                "d_year",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "i_manufact_id",
+                "sales_cnt",
+                "sales_amt",
+            ]
+        )
+    )
+    sto = (
+        store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(
+            store_returns,
+            left_on=["ss_ticket_number", "ss_item_sk"],
+            right_on=["sr_ticket_number", "sr_item_sk"],
+            how="left",
+        )
+        .filter(pl.col("i_category") == category)
+        .with_columns(
+            [
+                (
+                    pl.col("ss_quantity") - pl.col("sr_return_quantity").fill_null(0)
+                ).alias("sales_cnt"),
+                (
+                    pl.col("ss_ext_sales_price")
+                    - pl.col("sr_return_amt").fill_null(0.0)
+                ).alias("sales_amt"),
+            ]
+        )
+        .select(
+            [
+                "d_year",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "i_manufact_id",
+                "sales_cnt",
+                "sales_amt",
+            ]
+        )
+    )
+    web = (
+        web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(
+            web_returns,
+            left_on=["ws_order_number", "ws_item_sk"],
+            right_on=["wr_order_number", "wr_item_sk"],
+            how="left",
+        )
+        .filter(pl.col("i_category") == category)
+        .with_columns(
+            [
+                (
+                    pl.col("ws_quantity") - pl.col("wr_return_quantity").fill_null(0)
+                ).alias("sales_cnt"),
+                (
+                    pl.col("ws_ext_sales_price")
+                    - pl.col("wr_return_amt").fill_null(0.0)
+                ).alias("sales_amt"),
+            ]
+        )
+        .select(
+            [
+                "d_year",
+                "i_brand_id",
+                "i_class_id",
+                "i_category_id",
+                "i_manufact_id",
+                "sales_cnt",
+                "sales_amt",
+            ]
+        )
+    )
+
+    all_sales = (
+        pl.concat([cat, sto, web])
+        .unique()
+        .group_by(
+            ["d_year", "i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"]
+        )
+        .agg(
+            [
+                pl.col("sales_cnt").sum().alias("sales_cnt"),
+                pl.col("sales_amt").sum().alias("sales_amt"),
+            ]
+        )
+    )
+
+    curr_yr = all_sales.filter(pl.col("d_year") == year)
+    prev_yr = all_sales.filter(pl.col("d_year") == year - 1)
+
+    sort_by = {"sales_cnt_diff": False, "sales_amt_diff": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            curr_yr.join(
+                prev_yr,
+                on=["i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"],
+                suffix="_prev",
+            )
+            .filter(
+                (pl.col("d_year") == year)
+                & (pl.col("d_year_prev") == year - 1)
+                & (
+                    pl.col("sales_cnt").cast(pl.Float64)
+                    / pl.col("sales_cnt_prev").cast(pl.Float64)
+                    < 0.9
+                )
+            )
+            .with_columns(
+                [
+                    pl.col("d_year_prev").alias("prev_year"),
+                    pl.col("d_year").alias("year_"),
+                    pl.col("sales_cnt_prev").alias("prev_yr_cnt"),
+                    pl.col("sales_cnt").alias("curr_yr_cnt"),
+                    (pl.col("sales_cnt") - pl.col("sales_cnt_prev")).alias(
+                        "sales_cnt_diff"
+                    ),
+                    (pl.col("sales_amt") - pl.col("sales_amt_prev")).alias(
+                        "sales_amt_diff"
+                    ),
+                ]
+            )
+            .select(
+                [
+                    "prev_year",
+                    "year_",
+                    "i_brand_id",
+                    "i_class_id",
+                    "i_category_id",
+                    "i_manufact_id",
+                    "prev_yr_cnt",
+                    "curr_yr_cnt",
+                    "sales_cnt_diff",
+                    "sales_amt_diff",
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

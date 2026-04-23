@@ -204,3 +204,146 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             (pl.col("rank_within_parent"), False),
         ],
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 36 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=36,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    state = params["state"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    base_data = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .filter((pl.col("d_year") == year) & (pl.col("s_state").is_in(state)))
+    )
+
+    level0 = (
+        base_data.group_by(["i_category", "i_class"])
+        .agg(
+            [
+                pl.col("ss_net_profit").sum().alias("total_net_profit"),
+                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
+            ]
+        )
+        .with_columns(
+            [
+                (
+                    pl.col("total_net_profit").cast(pl.Float64)
+                    / pl.col("total_ext_sales_price").cast(pl.Float64)
+                ).alias("gross_margin"),
+                pl.lit(0, dtype=pl.Int64).alias("lochierarchy"),
+            ]
+        )
+        .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
+    )
+    level1 = (
+        base_data.group_by(["i_category"])
+        .agg(
+            [
+                pl.col("ss_net_profit").sum().alias("total_net_profit"),
+                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
+            ]
+        )
+        .with_columns(
+            [
+                (
+                    pl.col("total_net_profit").cast(pl.Float64)
+                    / pl.col("total_ext_sales_price").cast(pl.Float64)
+                ).alias("gross_margin"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
+                pl.lit(1, dtype=pl.Int64).alias("lochierarchy"),
+            ]
+        )
+        .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
+    )
+    level2 = (
+        base_data.select(
+            [
+                pl.col("ss_net_profit").sum().alias("total_net_profit"),
+                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
+            ]
+        )
+        .with_columns(
+            [
+                (
+                    pl.col("total_net_profit").cast(pl.Float64)
+                    / pl.col("total_ext_sales_price").cast(pl.Float64)
+                ).alias("gross_margin"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_category"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
+                pl.lit(2, dtype=pl.Int64).alias("lochierarchy"),
+            ]
+        )
+        .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
+    )
+
+    combined = pl.concat([level0, level1, level2])
+
+    sort_by = {"lochierarchy": True, "rank_within_parent": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            combined.with_columns(
+                [
+                    pl.when(pl.col("lochierarchy") == 0)
+                    .then(pl.col("i_category"))
+                    .otherwise(None)
+                    .alias("category_partition")
+                ]
+            )
+            .with_columns(
+                [
+                    pl.col("gross_margin")
+                    .rank("ordinal")
+                    .over(["lochierarchy", "category_partition"])
+                    .cast(pl.Int64)
+                    .alias("rank_within_parent")
+                ]
+            )
+            .select(
+                [
+                    "gross_margin",
+                    "i_category",
+                    "i_class",
+                    "lochierarchy",
+                    "rank_within_parent",
+                ]
+            )
+            .sort(
+                [
+                    pl.col("lochierarchy"),
+                    pl.when(pl.col("lochierarchy") == 0)
+                    .then(pl.col("i_category"))
+                    .otherwise(None),
+                    pl.col("rank_within_parent"),
+                ],
+                descending=[True, False, False],
+                nulls_last=True,
+            )
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+        sort_keys=[
+            (pl.col("lochierarchy"), True),
+            (
+                pl.when(pl.col("lochierarchy") == 0)
+                .then(pl.col("i_category"))
+                .otherwise(None),
+                False,
+            ),
+            (pl.col("rank_within_parent"), False),
+        ],
+    )
