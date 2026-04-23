@@ -169,10 +169,21 @@ TEST_P(ParquetSizedTest, DictionaryTest)
                 });
   EXPECT_TRUE(used_dict);
 
-  // and check that the correct number of bits was used
-  auto const oi    = read_offset_index(source, fmd.row_groups.front().columns.front());
-  auto const nbits = read_dict_bits(source, oi.page_locations.front());
-  EXPECT_EQ(nbits, GetParam());
+  // and check that the correct number of bits was used. Phase 2 variable-bit-width
+  // encoding lets each page emit `ceil(log2(page_max_dict_index + 1))` bits rather
+  // than the chunk-wide maximum, so individual pages may use *fewer* bits than
+  // `GetParam()`. The chunk-wide maximum must still be reached by at least one page
+  // (the one that references the last-assigned dict_id), so we verify:
+  //   - every page's bit width is <= GetParam() (upper bound is respected), and
+  //   - max page bit width == GetParam() (the chunk-wide bound is tight).
+  auto const oi = read_offset_index(source, fmd.row_groups.front().columns.front());
+  int max_nbits = 0;
+  for (auto const& pl : oi.page_locations) {
+    auto const nbits = read_dict_bits(source, pl);
+    EXPECT_LE(nbits, GetParam());
+    max_nbits = std::max(max_nbits, nbits);
+  }
+  EXPECT_EQ(max_nbits, GetParam());
 }
 
 ///////////////////////

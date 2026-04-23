@@ -9,18 +9,26 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/experimental/hybrid_scan.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_io_utils.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <src/io/parquet/compact_protocol_reader.hpp>
+
 #include <nvbench/nvbench.cuh>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <numeric>
 #include <random>
 #include <utility>
 #include <vector>
@@ -110,6 +118,51 @@ std::vector<T> build_numeric_column(cudf::size_type num_rows, cudf::size_type pa
   return std::make_unique<cudf::table>(std::move(cols));
 }
 
+// Walk the written file's offset indexes and return the per-data-page RLE
+// bit-width byte for dict-encoded pages. Assumes a flat column with no
+// rep/def levels (the benchmark builds INT64 no-nulls columns); under that
+// layout the first byte of a V1 data page payload is the RLE dict_bits
+// (PROBLEM.md §2). For V2 data pages we'd need to skip past the declared
+// def/rep byte lengths before reading the bit-width, but this benchmark
+// emits V1 headers so the simpler path is sufficient.
+//
+// The caller is expected to have already populated `chunk.offset_index` on
+// the `FileMetaData` (e.g. via `hybrid_scan_reader::setup_page_index`).
+// `read_parquet_footers` alone is insufficient: it only materializes the
+// OffsetIndex when the file has BYTE_ARRAY columns (see `metadata::metadata`
+// in reader_impl_helpers.cpp), which is not the case for this INT64 bench.
+[[nodiscard]] std::vector<int> extract_page_dict_bits(
+  cudf::io::datasource& source, cudf::io::parquet::FileMetaData const& footer)
+{
+  using namespace cudf::io::parquet;
+  std::vector<int> bits;
+  for (auto const& rg : footer.row_groups) {
+    for (auto const& chunk : rg.columns) {
+      if (not chunk.offset_index.has_value()) { continue; }
+      for (auto const& pl : chunk.offset_index->page_locations) {
+        if (pl.offset <= 0 || pl.compressed_page_size <= 0) { continue; }
+        auto const buf = source.host_read(pl.offset, pl.compressed_page_size);
+        detail::CompactProtocolReader cp(buf->data(), buf->size());
+        PageHeader hdr;
+        cp.read(&hdr);
+        auto const is_dict_encoded =
+          (hdr.type == PageType::DATA_PAGE &&
+           (hdr.data_page_header.encoding == Encoding::PLAIN_DICTIONARY ||
+            hdr.data_page_header.encoding == Encoding::RLE_DICTIONARY)) ||
+          (hdr.type == PageType::DATA_PAGE_V2 &&
+           (hdr.data_page_header_v2.encoding == Encoding::PLAIN_DICTIONARY ||
+            hdr.data_page_header_v2.encoding == Encoding::RLE_DICTIONARY));
+        if (not is_dict_encoded) { continue; }
+        // `cp` is positioned at the first byte of the page payload after the
+        // header thrift; that byte is the RLE bit width for dict-indexed
+        // pages (valid only with no rep/def levels, which holds here).
+        bits.push_back(cp.getb());
+      }
+    }
+  }
+  return bits;
+}
+
 }  // namespace
 
 void BM_parq_write_dict_encoding(nvbench::state& state)
@@ -155,16 +208,53 @@ void BM_parq_write_dict_encoding(nvbench::state& state)
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
 
-  // TODO(phase 2): once per-page `dict_rle_bits` is plumbed into the writer
-  // path and exposed at the reader, replace this whole-file proxy with an
-  // exact min/max/mean across emitted pages. Until then we report aggregate
-  // bits-per-value, which tracks overall compression ratio but not the
-  // per-page distribution we ultimately want to shrink.
-  auto const total_values = static_cast<std::size_t>(view.num_rows()) * num_cols;
-  if (total_values > 0) {
-    auto const bits_per_value_avg =
-      static_cast<double>(encoded_file_size * 8) / static_cast<double>(total_values);
-    state.add_element_count(bits_per_value_avg, "bits_per_value_avg");
+  // Emit the per-page dictionary RLE bit-width distribution. We do an extra
+  // untimed write with `STATISTICS_COLUMN` so that the OffsetIndex (which
+  // gives us each page's byte range) is actually written; the timed write
+  // above intentionally uses the default stats granularity to keep the
+  // benchmark's encoding path unperturbed. For this benchmark workload
+  // (flat INT64, no nulls, V1 headers) the first byte of each data page's
+  // payload is the RLE bit-width used to encode dict indices.
+  cuio_source_sink_pair inspect_sink(io_type::FILEPATH);
+  {
+    auto const inspect_opts =
+      cudf::io::parquet_writer_options::builder(inspect_sink.make_sink_info(), view)
+        .compression(cudf::io::compression_type::NONE)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+        .row_group_size_rows(num_rows)
+        .max_page_size_rows(page_size_rows)
+        .max_page_size_bytes(std::size_t{64} << 20)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+        .build();
+    cudf::io::write_parquet(inspect_opts);
+  }
+
+  // Use the hybrid scan reader to build a `FileMetaData` with a fully
+  // materialized OffsetIndex for all column chunks (works regardless of
+  // column type, unlike `read_parquet_footers` which skips the page index
+  // when no string columns are present).
+  auto inspect_sources = cudf::io::make_datasources(inspect_sink.make_source_info());
+  auto& inspect_ds     = *inspect_sources.front();
+  auto const footer_buf = cudf::io::parquet::fetch_footer_to_host(inspect_ds);
+  cudf::io::parquet::experimental::hybrid_scan_reader reader(*footer_buf,
+                                                             cudf::io::parquet_reader_options{});
+  auto const page_index_range = reader.page_index_byte_range();
+  if (not page_index_range.is_empty()) {
+    auto const pi_buf =
+      cudf::io::parquet::fetch_page_index_to_host(inspect_ds, page_index_range);
+    reader.setup_page_index(*pi_buf);
+  }
+  auto const footer    = reader.parquet_metadata();
+  auto const page_bits = extract_page_dict_bits(inspect_ds, footer);
+
+  if (not page_bits.empty()) {
+    auto const [min_it, max_it] = std::minmax_element(page_bits.begin(), page_bits.end());
+    auto const sum =
+      std::accumulate(page_bits.begin(), page_bits.end(), std::uint64_t{0});
+    auto const mean = static_cast<double>(sum) / static_cast<double>(page_bits.size());
+    state.add_element_count(static_cast<double>(*min_it), "dict_rle_bits_min");
+    state.add_element_count(static_cast<double>(*max_it), "dict_rle_bits_max");
+    state.add_element_count(mean, "dict_rle_bits_mean");
   }
 }
 

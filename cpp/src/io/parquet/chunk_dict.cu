@@ -8,13 +8,17 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cub/block/block_scan.cuh>
+#include <cub/warp/warp_reduce.cuh>
 #include <cuco/static_map_ref.cuh>
 #include <cuda/atomic>
+#include <cuda/functional>
+#include <cuda/std/bit>
 
 namespace cudf::io::parquet::detail {
 
@@ -128,8 +132,8 @@ struct map_insert_fn {
           // `cuco::op::min`, switch to that for exact first-fragment semantics
           // (PROBLEM.md §5.2 Option II).
           auto const fragment_hint = static_cast<mapped_type>(blockIdx.x);
-          is_unique      = map_insert_ref.insert(
-            slot_type{static_cast<key_type>(val_idx), fragment_hint});
+          is_unique =
+            map_insert_ref.insert(slot_type{static_cast<key_type>(val_idx), fragment_hint});
           uniq_elem_size = [&]() -> size_type {
             if (not is_unique) { return 0; }
             switch (col->physical_type) {
@@ -306,8 +310,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __shared__ size_type f_start;
   __shared__ size_type n_frags;
   if (t == 0) {
-    f_start = static_cast<size_type>(chunk.fragments - col_frag.data());
-    size_type n = 0;
+    f_start                    = static_cast<size_type>(chunk.fragments - col_frag.data());
+    size_type n                = 0;
     auto const total_col_frags = static_cast<size_type>(col_frag.size());
     while (f_start + n < total_col_frags && col_frag[f_start + n].chunk == &chunk) {
       ++n;
@@ -373,8 +377,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       auto const frag_local = chunk_slots[slot_idx].second - f_start;
       auto const loc        = atomicAdd(&fragment_cursor[frag_local], 1);
       cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
-      chunk.dict_data[loc]          = slot_key;
-      chunk_slots[slot_idx].second  = loc;
+      chunk.dict_data[loc]         = slot_key;
+      chunk_slots[slot_idx].second = loc;
     }
   }
 }
@@ -437,5 +441,98 @@ void get_dictionary_indices(device_span<slot_type> const map_storage,
   dim3 const dim_grid(frags.size().second, frags.size().first);
   get_dictionary_indices_kernel<DEFAULT_BLOCK_SIZE>
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_storage, frags);
+}
+
+namespace {
+
+// Warps per block for `compute_page_dict_rle_bits_kernel`. Sized so that each
+// block pulls several pages through the reduce, which amortizes the block-level
+// overhead over 4 independent warp-level reductions without oversubscribing
+// shared memory or hurting occupancy.
+constexpr int kDictRleBitsWarpsPerBlock = 4;
+constexpr int kDictRleBitsBlockSize     = kDictRleBitsWarpsPerBlock * cudf::detail::warp_size;
+
+// One warp per data page. Each warp strides through its page's slice of
+// `chunk->dict_index`, computes the max over *valid* rows only, and stores
+// `max(NumRequiredBits(page_max), 1)` into `page.dict_rle_bits`.
+//
+// Why warp-per-page instead of a `cub::DeviceSegmentedReduce::Max` call per
+// chunk (PHASE_2_VARIABLE_BITS.md §2.2.3): segments are small (typically 1k-
+// 100k elements per page), so one CUB call per chunk would be launch-overhead
+// bound across workloads with many chunks. A single kernel with one warp per
+// page keeps the reduction entirely in registers + shuffle and issues exactly
+// one launch for the whole writer.
+//
+// Pages that are skipped (dictionary page itself, non-dict chunks, BOOLEAN
+// columns whose dict_bits is always 1) retain the `chunk->dict_rle_bits`
+// value that `gpuInitPages` wrote, so the encoder falls back to chunk-wide
+// behavior for them.
+CUDF_KERNEL void __launch_bounds__(kDictRleBitsBlockSize)
+  compute_page_dict_rle_bits_kernel(device_span<EncPage> pages)
+{
+  constexpr auto warp_size = cudf::detail::warp_size;
+  auto const warp_lane     = static_cast<size_type>(threadIdx.x % warp_size);
+  auto const warp_id       = static_cast<size_type>(threadIdx.x / warp_size);
+  auto const page_idx = static_cast<size_type>(blockIdx.x) * kDictRleBitsWarpsPerBlock + warp_id;
+
+  __shared__
+    typename cub::WarpReduce<size_type>::TempStorage reduce_storage[kDictRleBitsWarpsPerBlock];
+
+  if (page_idx >= static_cast<size_type>(pages.size())) { return; }
+
+  auto& page        = pages[page_idx];
+  auto const* chunk = page.chunk;
+  // Non-dict chunk: `dict_rle_bits` is unused by the encoder; skip.
+  if (not chunk->use_dictionary) { return; }
+  // Dictionary page itself does not encode dict_indices; skip.
+  if (page.page_type == PageType::DICTIONARY_PAGE) { return; }
+
+  auto const* col = chunk->col_desc;
+  // BOOLEAN columns emit dict_bits=1 through a separate code path in
+  // `gpuEncodeDictPages`, independent of `dict_rle_bits`. Leave the field at
+  // its chunk-wide init value (it is ignored for booleans).
+  if (col->physical_type == Type::BOOLEAN) { return; }
+
+  auto const chunk_start_val      = row_to_value_idx(chunk->start_row, *col);
+  auto const page_start_val       = row_to_value_idx(page.start_row, *col);
+  auto const page_num_leaf_values = static_cast<size_type>(page.num_leaf_values);
+  auto const begin                = page_start_val - chunk_start_val;
+  auto const end                  = begin + page_num_leaf_values;
+
+  auto const* dict_index             = chunk->dict_index;
+  column_device_view const& leaf_col = *col->leaf_column;
+  auto const leaf_size               = leaf_col.size();
+
+  // Accumulate per-lane max. Null rows leave `dict_index` undefined; gate
+  // the read with the column's validity bitmap to avoid pulling garbage
+  // bits into the max.
+  size_type lane_max = 0;
+  for (size_type i = begin + warp_lane; i < end; i += warp_size) {
+    auto const val_idx = chunk_start_val + i;
+    if (val_idx < leaf_size && leaf_col.is_valid(val_idx)) {
+      lane_max = max(lane_max, dict_index[i]);
+    }
+  }
+
+  auto const page_max =
+    cub::WarpReduce<size_type>(reduce_storage[warp_id]).Reduce(lane_max, cuda::maximum{});
+
+  if (warp_lane == 0) {
+    // Floor at 1 to match the chunk-wide convention (all-null pages still
+    // emit a 1-bit RLE preamble; see `writer_impl.cu`'s `std::max(..., 1)`).
+    auto const nbits   = max(cuda::std::bit_width(static_cast<uint32_t>(page_max)), 1);
+    page.dict_rle_bits = static_cast<uint8_t>(nbits);
+  }
+}
+
+}  // namespace
+
+void compute_per_page_dict_rle_bits(device_span<EncPage> pages, rmm::cuda_stream_view stream)
+{
+  if (pages.empty()) { return; }
+  auto const num_blocks = cudf::util::div_rounding_up_safe(static_cast<size_type>(pages.size()),
+                                                           kDictRleBitsWarpsPerBlock);
+  compute_page_dict_rle_bits_kernel<<<num_blocks, kDictRleBitsBlockSize, 0, stream.value()>>>(
+    pages);
 }
 }  // namespace cudf::io::parquet::detail

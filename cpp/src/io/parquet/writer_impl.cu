@@ -2118,6 +2118,14 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                        max_page_size_rows,
                        write_v2_headers,
                        stream);
+
+    // Now that page boundaries are finalized and `chunk->dict_index` has been
+    // materialized by `build_chunk_dictionaries`, tighten each data page's
+    // `dict_rle_bits` from the chunk-wide conservative bound to the page-local
+    // minimum required width. Page-size estimation intentionally keeps the
+    // chunk-wide value (see PROBLEM.md §6): estimation is upstream of this
+    // pass and must remain conservative so page buffers never overflow.
+    compute_per_page_dict_rle_bits({pages.data(), pages.size()}, stream);
   }
 
   // Check device write support for all chunks and initialize bounce_buffer.

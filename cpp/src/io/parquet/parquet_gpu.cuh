@@ -133,4 +133,21 @@ void get_dictionary_indices(device_span<slot_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
+/**
+ * @brief Tighten each data page's `dict_rle_bits` to the minimum width required
+ *        by the max `dict_index` observed in that page's rows.
+ *
+ * Must be invoked after `InitEncoderPages` has finalized page boundaries *and*
+ * `get_dictionary_indices` has materialized per-chunk `dict_index` arrays, but
+ * before `EncodePages` reads `page.dict_rle_bits`. Pages that do not use
+ * dictionary encoding (non-dict chunks, the dictionary page itself, BOOLEAN
+ * columns) are skipped and keep the `chunk->dict_rle_bits` fallback that
+ * `gpuInitPages` wrote during page initialization.
+ *
+ * @param pages  Device span of encoder pages. Field `dict_rle_bits` is written.
+ * @param stream CUDA stream to use
+ */
+void compute_per_page_dict_rle_bits(device_span<EncPage> pages,
+                                    rmm::cuda_stream_view stream);
+
 }  // namespace cudf::io::parquet::detail
