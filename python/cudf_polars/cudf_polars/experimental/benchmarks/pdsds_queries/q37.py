@@ -70,7 +70,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     invdate = params["invdate"]
 
     # Calculate end date (invdate + 60 days)
-    from datetime import datetime, timedelta
 
     start_date_obj = datetime.strptime(invdate, "%Y-%m-%d")
     end_date_obj = start_date_obj + timedelta(days=60)
