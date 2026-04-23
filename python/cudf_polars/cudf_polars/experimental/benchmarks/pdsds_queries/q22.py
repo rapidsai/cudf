@@ -90,10 +90,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
     base_data = (
-        inventory.join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
-        .join(item, left_on="inv_item_sk", right_on="i_item_sk")
-        .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
-        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        inventory.join(date_dim, how="cross")
+        .join(item, how="cross")
+        .join(warehouse, how="cross")
+        .filter(
+            (pl.col("inv_date_sk") == pl.col("d_date_sk"))
+            & (pl.col("inv_item_sk") == pl.col("i_item_sk"))
+            & (pl.col("inv_warehouse_sk") == pl.col("w_warehouse_sk"))
+            & pl.col("d_month_seq").is_between(dms, dms + 11)
+        )
     )
     agg_exprs = [pl.col("inv_quantity_on_hand").mean().alias("qoh")]
 
@@ -122,4 +127,100 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 22 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=22,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+
+    base_data = (
+        inventory.join(date_dim, how="cross")
+        .join(item, how="cross")
+        .join(warehouse, how="cross")
+        .filter(
+            (pl.col("inv_date_sk") == pl.col("d_date_sk"))
+            & (pl.col("inv_item_sk") == pl.col("i_item_sk"))
+            & (pl.col("inv_warehouse_sk") == pl.col("w_warehouse_sk"))
+            & pl.col("d_month_seq").is_between(dms, dms + 11)
+        )
+    )
+
+    agg_exprs = [pl.col("inv_quantity_on_hand").mean().alias("qoh")]
+
+    level1 = (
+        base_data.group_by(["i_product_name", "i_brand", "i_class", "i_category"])
+        .agg(agg_exprs)
+        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    )
+    level2 = (
+        base_data.group_by(["i_product_name", "i_brand", "i_class"])
+        .agg(agg_exprs)
+        .with_columns([pl.lit(None, dtype=pl.String).alias("i_category")])
+        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    )
+    level3 = (
+        base_data.group_by(["i_product_name", "i_brand"])
+        .agg(agg_exprs)
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.String).alias("i_class"),
+                pl.lit(None, dtype=pl.String).alias("i_category"),
+            ]
+        )
+        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    )
+    level4 = (
+        base_data.group_by(["i_product_name"])
+        .agg(agg_exprs)
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.String).alias("i_brand"),
+                pl.lit(None, dtype=pl.String).alias("i_class"),
+                pl.lit(None, dtype=pl.String).alias("i_category"),
+            ]
+        )
+        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    )
+    level5 = (
+        base_data.select(agg_exprs)
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.String).alias("i_product_name"),
+                pl.lit(None, dtype=pl.String).alias("i_brand"),
+                pl.lit(None, dtype=pl.String).alias("i_class"),
+                pl.lit(None, dtype=pl.String).alias("i_category"),
+            ]
+        )
+        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    )
+
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2, level3, level4, level5])
+            .sort(
+                ["qoh", "i_product_name", "i_brand", "i_class", "i_category"],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("qoh", False),
+            ("i_product_name", False),
+            ("i_brand", False),
+            ("i_class", False),
+            ("i_category", False),
+        ],
+        limit=100,
     )

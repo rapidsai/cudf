@@ -121,3 +121,65 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("s_store_name", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 8 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=8, qualification=run_config.qualification
+    )
+
+    year = params["year"]
+    qoy = params["qoy"]
+    zip_codes = params["zip_codes"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+
+    target_zips_5char = (
+        customer_address.with_columns(pl.col("ca_zip").str.slice(0, 5).alias("ca_zip"))
+        .filter(pl.col("ca_zip").is_in(zip_codes))
+        .select("ca_zip")
+        .unique()
+    )
+
+    preferred_customer_zips = (
+        customer_address.join(
+            customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
+        )
+        .filter(pl.col("c_preferred_cust_flag") == "Y")
+        .group_by(pl.col("ca_zip").str.slice(0, 5).alias("ca_zip"))
+        .agg([pl.len().alias("cnt")])
+        .filter(pl.col("cnt") > 10)
+        .select("ca_zip")
+    )
+
+    intersect_zips = target_zips_5char.join(
+        preferred_customer_zips, on="ca_zip"
+    ).unique()
+
+    return QueryResult(
+        frame=(
+            store_sales.join(date_dim, how="cross")
+            .join(store, how="cross")
+            .join(intersect_zips, how="cross")
+            .filter(
+                (pl.col("ss_store_sk") == pl.col("s_store_sk"))
+                & (pl.col("ss_sold_date_sk") == pl.col("d_date_sk"))
+                & (pl.col("d_qoy") == qoy)
+                & (pl.col("d_year") == year)
+                & (pl.col("s_zip").str.slice(0, 2) == pl.col("ca_zip").str.slice(0, 2))
+            )
+            .group_by("s_store_name")
+            .agg([pl.col("ss_net_profit").sum().alias("sum(ss_net_profit)")])
+            .sort("s_store_name", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("s_store_name", False)],
+        limit=100,
+    )

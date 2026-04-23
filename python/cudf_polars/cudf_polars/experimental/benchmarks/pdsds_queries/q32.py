@@ -102,3 +102,58 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[],
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 32 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=32,
+        qualification=run_config.qualification,
+    )
+
+    imid = params["imid"]
+    csdate = params["csdate"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    start_date_obj = datetime.strptime(csdate, "%Y-%m-%d")
+    end_date_obj = start_date_obj + timedelta(days=90)
+
+    start_date = pl.date(start_date_obj.year, start_date_obj.month, start_date_obj.day)
+    end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
+
+    item_avg_discounts = (
+        catalog_sales.join(date_dim, how="cross")
+        .filter(
+            (pl.col("d_date_sk") == pl.col("cs_sold_date_sk"))
+            & pl.col("d_date").is_between(start_date, end_date)
+        )
+        .group_by("cs_item_sk")
+        .agg([(pl.col("cs_ext_discount_amt").mean() * 1.3).alias("threshold_discount")])
+    )
+
+    return QueryResult(
+        frame=(
+            catalog_sales.join(item, how="cross")
+            .join(date_dim, how="cross")
+            .join(item_avg_discounts, on="cs_item_sk")
+            .filter(
+                (pl.col("i_manufact_id") == imid)
+                & (pl.col("i_item_sk") == pl.col("cs_item_sk"))
+                & (pl.col("d_date").is_between(start_date, end_date))
+                & (pl.col("d_date_sk") == pl.col("cs_sold_date_sk"))
+                & (pl.col("cs_ext_discount_amt") > pl.col("threshold_discount"))
+            )
+            .select(
+                [pl.col("cs_ext_discount_amt").sum().alias("excess discount amount")]
+            )
+            .limit(100)
+        ),
+        sort_by=[],
+        limit=None,
+    )

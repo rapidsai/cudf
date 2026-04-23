@@ -99,11 +99,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # CTE: customer_total_return
     customer_total_return = (
-        web_returns.join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
-        .join(
-            customer_address, left_on="wr_returning_addr_sk", right_on="ca_address_sk"
+        web_returns.join(date_dim, how="cross")
+        .join(customer_address, how="cross")
+        .filter(
+            (pl.col("wr_returned_date_sk") == pl.col("d_date_sk"))
+            & (pl.col("d_year") == year)
+            & (pl.col("wr_returning_addr_sk") == pl.col("ca_address_sk"))
         )
-        .filter(pl.col("d_year") == year)
         .group_by(
             [
                 pl.col("wr_returning_customer_sk").alias("ctr_customer_sk"),
@@ -171,4 +173,113 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 30 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=30,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    state = params["state"]
+
+    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+
+    customer_total_return = (
+        web_returns.join(date_dim, how="cross")
+        .join(customer_address, how="cross")
+        .filter(
+            (pl.col("wr_returned_date_sk") == pl.col("d_date_sk"))
+            & (pl.col("d_year") == year)
+            & (pl.col("wr_returning_addr_sk") == pl.col("ca_address_sk"))
+        )
+        .group_by(
+            [
+                pl.col("wr_returning_customer_sk").alias("ctr_customer_sk"),
+                pl.col("ca_state").alias("ctr_state"),
+            ]
+        )
+        .agg([pl.col("wr_return_amt").sum().alias("ctr_total_return")])
+    )
+
+    # Pre-computed correlated subquery — structurally required for Polars
+    state_averages = customer_total_return.group_by("ctr_state").agg(
+        [(pl.col("ctr_total_return").mean() * 1.2).alias("avg_return")]
+    )
+
+    qualified_customers = customer_total_return.join(
+        state_averages, on="ctr_state"
+    ).filter(pl.col("ctr_total_return") > pl.col("avg_return"))
+
+    return QueryResult(
+        frame=(
+            qualified_customers.join(customer_address, how="cross")
+            .join(customer, how="cross")
+            .filter(
+                (pl.col("ca_address_sk") == pl.col("c_current_addr_sk"))
+                & (pl.col("ca_state") == state)
+                & (pl.col("ctr_customer_sk") == pl.col("c_customer_sk"))
+            )
+            .select(
+                [
+                    "c_customer_id",
+                    "c_salutation",
+                    "c_first_name",
+                    "c_last_name",
+                    "c_preferred_cust_flag",
+                    "c_birth_day",
+                    "c_birth_month",
+                    "c_birth_year",
+                    "c_birth_country",
+                    "c_login",
+                    "c_email_address",
+                    "c_last_review_date_sk",
+                    "ctr_total_return",
+                ]
+            )
+            .sort(
+                [
+                    "c_customer_id",
+                    "c_salutation",
+                    "c_first_name",
+                    "c_last_name",
+                    "c_preferred_cust_flag",
+                    "c_birth_day",
+                    "c_birth_month",
+                    "c_birth_year",
+                    "c_birth_country",
+                    "c_login",
+                    "c_email_address",
+                    "c_last_review_date_sk",
+                    "ctr_total_return",
+                ],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("c_customer_id", False),
+            ("c_salutation", False),
+            ("c_first_name", False),
+            ("c_last_name", False),
+            ("c_preferred_cust_flag", False),
+            ("c_birth_day", False),
+            ("c_birth_month", False),
+            ("c_birth_year", False),
+            ("c_birth_country", False),
+            ("c_login", False),
+            ("c_email_address", False),
+            ("c_last_review_date_sk", False),
+            ("ctr_total_return", False),
+        ],
+        limit=100,
     )

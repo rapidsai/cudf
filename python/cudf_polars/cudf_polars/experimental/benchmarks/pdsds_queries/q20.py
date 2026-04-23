@@ -92,10 +92,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
-            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            catalog_sales.join(item, how="cross")
+            .join(date_dim, how="cross")
             .filter(
-                pl.col("i_category").is_in(categories)
+                (pl.col("cs_item_sk") == pl.col("i_item_sk"))
+                & (pl.col("cs_sold_date_sk") == pl.col("d_date_sk"))
+                & pl.col("i_category").is_in(categories)
                 & pl.col("d_date").is_between(pl.lit(start_date), pl.lit(end_date))
             )
             .group_by(
@@ -120,4 +122,68 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ),
         sort_by=list(sort_by.items()),
         limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 20 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=20,
+        qualification=run_config.qualification,
+    )
+
+    sdate = params["sdate"]
+    categories = params["category"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    start_date = date.fromisoformat(sdate)
+    end_date = start_date + timedelta(days=30)
+
+    return QueryResult(
+        frame=(
+            catalog_sales.join(item, how="cross")
+            .join(date_dim, how="cross")
+            .filter(
+                (pl.col("cs_item_sk") == pl.col("i_item_sk"))
+                & (pl.col("cs_sold_date_sk") == pl.col("d_date_sk"))
+                & pl.col("i_category").is_in(categories)
+                & pl.col("d_date").is_between(pl.lit(start_date), pl.lit(end_date))
+            )
+            .group_by(
+                ["i_item_id", "i_item_desc", "i_category", "i_class", "i_current_price"]
+            )
+            .agg([pl.col("cs_ext_sales_price").sum().alias("itemrevenue")])
+            .with_columns(
+                (
+                    pl.col("itemrevenue")
+                    * 100
+                    / pl.col("itemrevenue").sum().over("i_class")
+                ).alias("revenueratio")
+            )
+            .sort(
+                [
+                    "i_category",
+                    "i_class",
+                    "i_item_id",
+                    "i_item_desc",
+                    "revenueratio",
+                ],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("i_category", False),
+            ("i_class", False),
+            ("i_item_id", False),
+            ("i_item_desc", False),
+            ("revenueratio", False),
+        ],
+        limit=100,
     )
