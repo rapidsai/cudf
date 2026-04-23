@@ -230,4 +230,4 @@ jobs:
       sha: ${{ inputs.sha }}
       node_type: gpu-l4-latest-1
       container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}"
-      script: ci/test_streams.sh stream_tests_${{ matrix.CUDA_VER }}
+      script: RAPIDS_BUILD_WORKFLOW_NAME=test.yaml ci/test_streams.sh stream_tests_${{ matrix.CUDA_VER }}
