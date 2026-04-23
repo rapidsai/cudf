@@ -179,3 +179,106 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("Returns_Loss", True)],
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 91 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=91,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    marital_status1 = params["marital_status1"]
+    education_status1 = params["education_status1"]
+    marital_status2 = params["marital_status2"]
+    education_status2 = params["education_status2"]
+    hd_buy_potential = params["hd_buy_potential"]
+    ca_gmt_offset = params["ca_gmt_offset"]
+
+    call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+
+    demo_filter = (
+        (pl.col("cd_marital_status") == marital_status1)
+        & (pl.col("cd_education_status") == education_status1)
+    ) | (
+        (pl.col("cd_marital_status") == marital_status2)
+        & (pl.col("cd_education_status") == education_status2)
+    )
+
+    return QueryResult(
+        frame=(
+            call_center.join(
+                catalog_returns,
+                left_on="cc_call_center_sk",
+                right_on="cr_call_center_sk",
+            )
+            .join(date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk")
+            .join(
+                customer, left_on="cr_returning_customer_sk", right_on="c_customer_sk"
+            )
+            .join(
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
+            )
+            .join(
+                customer_demographics,
+                left_on="c_current_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
+            .join(
+                household_demographics,
+                left_on="c_current_hdemo_sk",
+                right_on="hd_demo_sk",
+            )
+            .filter(
+                (pl.col("d_year") == year)
+                & (pl.col("d_moy") == month)
+                & demo_filter
+                & (
+                    pl.col("hd_buy_potential").str.starts_with(
+                        hd_buy_potential.rstrip("%")
+                    )
+                )
+                & (pl.col("ca_gmt_offset") == ca_gmt_offset)
+            )
+            .group_by(
+                [
+                    "cc_call_center_id",
+                    "cc_name",
+                    "cc_manager",
+                    "cd_marital_status",
+                    "cd_education_status",
+                ]
+            )
+            .agg([pl.col("cr_net_loss").sum().alias("Returns_Loss")])
+            .select(
+                [
+                    pl.col("cc_call_center_id").alias("Call_Center"),
+                    pl.col("cc_name").alias("Call_Center_Name"),
+                    pl.col("cc_manager").alias("Manager"),
+                    "Returns_Loss",
+                ]
+            )
+            .sort("Returns_Loss", descending=True, nulls_last=True)
+        ),
+        sort_by=[("Returns_Loss", True)],
+        limit=None,
+    )

@@ -197,3 +197,85 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         limit=None,
         nulls_last=False,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 39 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=39,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    base_agg = (
+        inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
+        .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+        .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year") == year)
+        .group_by(["w_warehouse_name", "inv_warehouse_sk", "inv_item_sk", "d_moy"])
+        .agg(
+            [
+                (pl.col("inv_quantity_on_hand").std() * 1.0).alias("stdev"),
+                pl.col("inv_quantity_on_hand").mean().alias("mean"),
+            ]
+        )
+    )
+
+    inv = base_agg.with_columns(
+        pl.when(pl.col("mean") == 0)
+        .then(None)
+        .otherwise(pl.col("stdev") / pl.col("mean"))
+        .alias("cov")
+    ).filter(
+        pl.when(pl.col("mean") == 0).then(0).otherwise(pl.col("stdev") / pl.col("mean"))
+        > 1
+    )
+
+    sort_by = {
+        "wsk1": False,
+        "isk1": False,
+        "dmoy1": False,
+        "mean1": False,
+        "cov1": False,
+        "d_moy": False,
+        "mean": False,
+        "cov": False,
+    }
+    return QueryResult(
+        frame=(
+            inv.join(
+                inv,
+                left_on=["inv_item_sk", "inv_warehouse_sk"],
+                right_on=["inv_item_sk", "inv_warehouse_sk"],
+                how="inner",
+                suffix="_inv2",
+            )
+            .filter((pl.col("d_moy") == month) & (pl.col("d_moy_inv2") == month + 1))
+            .select(
+                [
+                    pl.col("inv_warehouse_sk").alias("wsk1"),
+                    pl.col("inv_item_sk").alias("isk1"),
+                    pl.col("d_moy").alias("dmoy1"),
+                    pl.col("mean").alias("mean1"),
+                    pl.col("cov").alias("cov1"),
+                    pl.col("inv_warehouse_sk").alias("w_warehouse_sk"),
+                    pl.col("inv_item_sk").alias("i_item_sk"),
+                    pl.col("d_moy_inv2").alias("d_moy"),
+                    pl.col("mean_inv2").alias("mean"),
+                    pl.col("cov_inv2").alias("cov"),
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=False)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=None,
+        nulls_last=False,
+    )

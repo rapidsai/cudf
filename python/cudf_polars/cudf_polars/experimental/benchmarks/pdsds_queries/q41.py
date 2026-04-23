@@ -106,3 +106,59 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 41 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=41,
+        qualification=run_config.qualification,
+    )
+
+    manufact = params["manufact"]
+    rules = params["rules"]
+
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    rule_exprs = [
+        (
+            (pl.col("i_category") == rule["category"])
+            & (
+                (pl.col("i_color") == rule["colors"][0])
+                | (pl.col("i_color") == rule["colors"][1])
+            )
+            & (
+                (pl.col("i_units") == rule["units"][0])
+                | (pl.col("i_units") == rule["units"][1])
+            )
+            & (
+                (pl.col("i_size") == rule["sizes"][0])
+                | (pl.col("i_size") == rule["sizes"][1])
+            )
+        )
+        for rule in rules
+    ]
+    subquery_conditions = reduce(op.or_, rule_exprs)
+
+    item_counts = (
+        item.filter(subquery_conditions)
+        .group_by("i_manufact")
+        .agg([pl.len().alias("item_cnt")])
+    )
+
+    sort_by = {"i_product_name": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            item.filter(pl.col("i_manufact_id").is_between(manufact, manufact + 40))
+            .join(item_counts, on="i_manufact", how="inner")
+            .filter(pl.col("item_cnt") > 0)
+            .select("i_product_name")
+            .unique()
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

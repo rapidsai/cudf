@@ -129,3 +129,67 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[],
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 38 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=38,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+
+    store_customers = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+
+    catalog_customers = (
+        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+
+    web_customers = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+
+    intersect_first = store_customers.join(
+        catalog_customers,
+        on=["c_last_name", "c_first_name", "d_date"],
+        nulls_equal=True,
+    ).unique()
+    intersect_final = intersect_first.join(
+        web_customers,
+        on=["c_last_name", "c_first_name", "d_date"],
+        nulls_equal=True,
+    ).unique()
+
+    return QueryResult(
+        frame=(
+            intersect_final.select(
+                [pl.len().cast(pl.Int64).alias("count_star()")]
+            ).limit(100)
+        ),
+        sort_by=[],
+        limit=100,
+    )

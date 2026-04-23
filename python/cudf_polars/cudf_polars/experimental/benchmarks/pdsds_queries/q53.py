@@ -171,3 +171,92 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 53 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=53,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+    categories1 = params["categories1"]
+    classes1 = params["classes1"]
+    brands1 = params["brands1"]
+    categories2 = params["categories2"]
+    classes2 = params["classes2"]
+    brands2 = params["brands2"]
+
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+
+    month_seq_list = [
+        dms,
+        dms + 1,
+        dms + 2,
+        dms + 3,
+        dms + 4,
+        dms + 5,
+        dms + 6,
+        dms + 7,
+        dms + 8,
+        dms + 9,
+        dms + 10,
+        dms + 11,
+    ]
+
+    inner_query = (
+        item.join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .filter(pl.col("d_month_seq").is_in(month_seq_list))
+        .filter(
+            (
+                pl.col("i_category").is_in(categories1)
+                & pl.col("i_class").is_in(classes1)
+                & pl.col("i_brand").is_in(brands1)
+            )
+            | (
+                pl.col("i_category").is_in(categories2)
+                & pl.col("i_class").is_in(classes2)
+                & pl.col("i_brand").is_in(brands2)
+            )
+        )
+        .group_by(["i_manufact_id", "d_qoy"])
+        .agg([pl.col("ss_sales_price").sum().alias("sum_sales")])
+        .with_columns(
+            pl.col("sum_sales")
+            .mean()
+            .over("i_manufact_id")
+            .alias("avg_quarterly_sales")
+        )
+    )
+
+    sort_by = {
+        "avg_quarterly_sales": False,
+        "sum_sales": False,
+        "i_manufact_id": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            inner_query.filter(
+                pl.when(pl.col("avg_quarterly_sales") > 0)
+                .then(
+                    (pl.col("sum_sales") - pl.col("avg_quarterly_sales")).abs()
+                    / pl.col("avg_quarterly_sales")
+                )
+                .otherwise(None)
+                > 0.1
+            )
+            .select(["i_manufact_id", "sum_sales", "avg_quarterly_sales"])
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

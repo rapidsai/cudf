@@ -131,8 +131,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     cs_or_ws_sales = pl.concat([cs_sales, ws_sales])
     my_customers = (
-        cs_or_ws_sales.join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
-        .join(item, left_on="item_sk", right_on="i_item_sk")
+        cs_or_ws_sales.join(item, left_on="item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
         .join(customer, left_on="customer_sk", right_on="c_customer_sk")
         .filter(
             (pl.col("i_category") == category)
@@ -144,29 +144,28 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
-    # Work around GPU cross-join limitation: collect target month_seq as scalar
-    target_seq = (
-        date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
-        .select(pl.col("d_month_seq").first())
-        .collect()
-        .item()
+    month_seq = date_dim.filter(
+        (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+    ).select(
+        (pl.col("d_month_seq") + 1).alias("seq_start"),
+        (pl.col("d_month_seq") + 3).alias("seq_end"),
     )
-    seq_start = target_seq + 1
-    seq_end = target_seq + 3
-
-    # Filter date_dim to only dates in the valid range
-    valid_dates = date_dim.filter(
-        pl.col("d_month_seq").is_between(seq_start, seq_end)
-    ).select("d_date_sk")
+    valid_dates = (
+        date_dim.join(month_seq, how="cross")
+        .filter(
+            pl.col("d_month_seq").is_between(pl.col("seq_start"), pl.col("seq_end"))
+        )
+        .select("d_date_sk")
+    )
 
     my_revenue = (
         my_customers.join(
-            customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            store_sales, left_on="c_customer_sk", right_on="ss_customer_sk"
         )
+        .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
         .join(
             store, left_on=["ca_county", "ca_state"], right_on=["s_county", "s_state"]
         )
-        .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
         .join(valid_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .group_by("c_customer_sk")
         .agg([pl.col("ss_ext_sales_price").sum().alias("revenue")])
@@ -188,6 +187,107 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "segment_base",
                 ]
             )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 54 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=54,
+        qualification=run_config.qualification,
+    )
+
+    category = params["category"]
+    class_name = params["class"]
+    month = params["month"]
+    year = params["year"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+
+    cs_sales = catalog_sales.select(
+        [
+            pl.col("cs_sold_date_sk").alias("sold_date_sk"),
+            pl.col("cs_bill_customer_sk").alias("customer_sk"),
+            pl.col("cs_item_sk").alias("item_sk"),
+        ]
+    )
+    ws_sales = web_sales.select(
+        [
+            pl.col("ws_sold_date_sk").alias("sold_date_sk"),
+            pl.col("ws_bill_customer_sk").alias("customer_sk"),
+            pl.col("ws_item_sk").alias("item_sk"),
+        ]
+    )
+    cs_or_ws_sales = pl.concat([cs_sales, ws_sales])
+
+    my_customers = (
+        cs_or_ws_sales.join(item, left_on="item_sk", right_on="i_item_sk")
+        .join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
+        .join(customer, left_on="customer_sk", right_on="c_customer_sk")
+        .filter(
+            (pl.col("i_category") == category)
+            & (pl.col("i_class") == class_name)
+            & (pl.col("d_moy") == month)
+            & (pl.col("d_year") == year)
+        )
+        .select([pl.col("customer_sk"), "c_current_addr_sk"])
+        .unique()
+    )
+
+    month_seq = date_dim.filter(
+        (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+    ).select(
+        (pl.col("d_month_seq") + 1).alias("seq_start"),
+        (pl.col("d_month_seq") + 3).alias("seq_end"),
+    )
+    valid_dates = (
+        date_dim.join(month_seq, how="cross")
+        .filter(
+            pl.col("d_month_seq").is_between(pl.col("seq_start"), pl.col("seq_end"))
+        )
+        .select("d_date_sk")
+    )
+
+    my_revenue = (
+        my_customers.join(store_sales, left_on="customer_sk", right_on="ss_customer_sk")
+        .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        .join(
+            store, left_on=["ca_county", "ca_state"], right_on=["s_county", "s_state"]
+        )
+        .join(valid_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .group_by("customer_sk")
+        .agg([pl.col("ss_ext_sales_price").sum().alias("revenue")])
+    )
+
+    segments = my_revenue.select(
+        (pl.col("revenue") / 50).cast(pl.Int64()).alias("segment")
+    )
+
+    sort_by = {"segment": False, "num_customers": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            segments.group_by("segment")
+            .agg([pl.len().alias("num_customers")])
+            .with_columns((pl.col("segment") * 50).alias("segment_base"))
+            .select(["segment", "num_customers", "segment_base"])
             .sort(sort_by.keys(), nulls_last=True)
             .limit(limit)
         ),

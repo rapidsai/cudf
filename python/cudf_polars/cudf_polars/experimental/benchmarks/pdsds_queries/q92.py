@@ -108,3 +108,49 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("Excess Discount Amount", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 92 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=92,
+        qualification=run_config.qualification,
+    )
+
+    manufact_id = params["manufact_id"]
+    date = params["date"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    start_date = pl.lit(date).str.strptime(pl.Date, "%Y-%m-%d")
+    end_date = start_date + pl.duration(days=90)
+
+    avg_discounts = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_date").is_between(start_date, end_date))
+        .group_by("ws_item_sk")
+        .agg([(pl.col("ws_ext_discount_amt").mean() * 1.3).alias("threshold_discount")])
+    )
+
+    return QueryResult(
+        frame=(
+            web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+            .join(avg_discounts, left_on="ws_item_sk", right_on="ws_item_sk")
+            .filter(
+                (pl.col("i_manufact_id") == manufact_id)
+                & pl.col("d_date").is_between(start_date, end_date)
+                & (pl.col("ws_ext_discount_amt") > pl.col("threshold_discount"))
+            )
+            .select(
+                [pl.col("ws_ext_discount_amt").sum().alias("Excess Discount Amount")]
+            )
+            .sort("Excess Discount Amount", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("Excess Discount Amount", False)],
+        limit=100,
+    )

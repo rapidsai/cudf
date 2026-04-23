@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -74,9 +75,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     sales_date = params["sales_date"]
 
-    # Parse and calculate dates
-    from datetime import datetime, timedelta
-
     sales_date_obj = datetime.strptime(sales_date, "%Y-%m-%d")
     start_date_obj = sales_date_obj - timedelta(days=30)
     end_date_obj = sales_date_obj + timedelta(days=30)
@@ -136,6 +134,76 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 [
                     pl.col("sales_before_amount").sum().alias("sales_before"),
                     pl.col("sales_after_amount").sum().alias("sales_after"),
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 40 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=40,
+        qualification=run_config.qualification,
+    )
+
+    sales_date = params["sales_date"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    catalog_returns = get_data(
+        run_config.dataset_path, "catalog_returns", run_config.suffix
+    )
+    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    target_date = pl.lit(sales_date).str.strptime(pl.Date, "%Y-%m-%d")
+    start_date = target_date - pl.duration(days=30)
+    end_date = target_date + pl.duration(days=30)
+
+    sort_by = {"w_state": False, "i_item_id": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            catalog_sales.join(
+                catalog_returns,
+                left_on=["cs_order_number", "cs_item_sk"],
+                right_on=["cr_order_number", "cr_item_sk"],
+                how="left",
+            )
+            .join(warehouse, left_on="cs_warehouse_sk", right_on="w_warehouse_sk")
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            .filter(
+                pl.col("i_current_price").is_between(0.99, 1.49)
+                & pl.col("d_date").is_between(start_date, end_date)
+            )
+            .group_by(["w_state", "i_item_id"])
+            .agg(
+                [
+                    pl.when(pl.col("d_date") < target_date)
+                    .then(
+                        pl.col("cs_sales_price")
+                        - pl.coalesce([pl.col("cr_refunded_cash"), pl.lit(0)])
+                    )
+                    .otherwise(0)
+                    .sum()
+                    .alias("sales_before"),
+                    pl.when(pl.col("d_date") >= target_date)
+                    .then(
+                        pl.col("cs_sales_price")
+                        - pl.coalesce([pl.col("cr_refunded_cash"), pl.lit(0)])
+                    )
+                    .otherwise(0)
+                    .sum()
+                    .alias("sales_after"),
                 ]
             )
             .sort(sort_by.keys(), nulls_last=True)
