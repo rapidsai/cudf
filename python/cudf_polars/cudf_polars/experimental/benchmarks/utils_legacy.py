@@ -243,12 +243,14 @@ class PackageVersions:
     polars: str
     python: str
     rapidsmpf: str | VersionInfo | None
+    duckdb: str | None
 
     @classmethod
     def collect(cls) -> PackageVersions:
         """Collect the versions of the software used to run the query."""
         packages = [
             "cudf_polars",
+            "duckdb",
             "polars",
             "rapidsmpf",
         ]
