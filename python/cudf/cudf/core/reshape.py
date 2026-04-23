@@ -142,9 +142,10 @@ def _finalize_concat_metadata(result, inputs):
 
     Mirrors pandas' ``__finalize__`` with ``input_objs``: ``attrs`` are
     propagated only when all inputs carry identical non-empty ``attrs``,
-    and ``allows_duplicate_labels`` is the AND across inputs. Raises
-    :class:`~pandas.errors.DuplicateLabelError` when the resulting flag
-    is ``False`` and ``result`` has duplicate labels on any axis.
+    and ``allows_duplicate_labels`` is the AND across inputs. The
+    :class:`~pandas.errors.DuplicateLabelError` check is performed by
+    :class:`pandas.Flags` when setting ``allows_duplicate_labels`` to
+    ``False``.
     """
     inputs = [
         obj for obj in inputs if isinstance(obj, (cudf.Series, cudf.DataFrame))
@@ -156,13 +157,7 @@ def _finalize_concat_metadata(result, inputs):
         if all(obj.attrs == first_attrs for obj in inputs[1:]):
             result._attrs = copy.deepcopy(first_attrs)
     allows = all(obj.flags.allows_duplicate_labels for obj in inputs)
-    if not allows:
-        for ax in result.axes:
-            if not ax.is_unique:
-                from pandas.errors import DuplicateLabelError
-
-                raise DuplicateLabelError(f"Index has duplicates.\n{ax}")
-    result.flags["allows_duplicate_labels"] = allows
+    result.flags.allows_duplicate_labels = allows
     return result
 
 

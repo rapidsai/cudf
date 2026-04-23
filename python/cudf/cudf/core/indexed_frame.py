@@ -474,22 +474,16 @@ class IndexedFrame(Frame):
         """Copy ``attrs`` and ``flags`` from ``self`` onto ``result``.
 
         Mirrors pandas' ``__finalize__``: ``attrs`` are deep-copied and
-        ``allows_duplicate_labels`` is propagated unchanged. Also performs
-        an :class:`~pandas.errors.DuplicateLabelError` check when
-        ``allows_duplicate_labels`` is ``False`` and ``result`` has duplicate
-        labels on any axis.
+        ``allows_duplicate_labels`` is propagated unchanged. The
+        :class:`~pandas.errors.DuplicateLabelError` check is performed by
+        :class:`pandas.Flags` when setting ``allows_duplicate_labels`` to
+        ``False``.
         """
         result._attrs = copy.deepcopy(self._attrs)
-        result._flags = pd.Flags(
-            result,
-            allows_duplicate_labels=self._flags.allows_duplicate_labels,
+        result._flags = pd.Flags(result, allows_duplicate_labels=True)
+        result.flags.allows_duplicate_labels = (
+            self._flags.allows_duplicate_labels
         )
-        if not self._flags.allows_duplicate_labels:
-            for ax in result.axes:
-                if not ax.is_unique:
-                    from pandas.errors import DuplicateLabelError
-
-                    raise DuplicateLabelError(f"Index has duplicates.\n{ax}")
         return result
 
     @_performance_tracking

@@ -46,11 +46,3 @@ Top-level dealing with Interval data
    :toctree: api/
 
    interval_range
-
-Metadata
---------
-
-.. autosummary::
-   :toctree: api/
-
-   Flags
