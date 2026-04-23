@@ -28,6 +28,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/algorithm>
 #include <thrust/count.h>
 #include <thrust/detail/copy.h>
 #include <thrust/remove.h>
@@ -667,14 +668,16 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   size_t const end_in_file = (parse_pos >= data_size || chunk_size > data_size - parse_pos)
                                ? data_size
                                : parse_pos + chunk_size;
-  // offset into the local `data` window (which begins at `start_offset`)
-  size_t const end_off = end_in_file > start_offset ? end_in_file - start_offset : 0;
-  // offset clamped to the actual buffer length
-  char const* end = start + min(end_off, data.size());
-  uint32_t t      = threadIdx.x;
-  size_t block_pos =
-    (parse_pos - start_offset) + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
-  char const* cur = start + block_pos;
+  // offset into the local `data` window (which begins at `start_offset`), clamped to the buffer
+  size_t const end_off      = end_in_file > start_offset ? end_in_file - start_offset : 0;
+  size_t const data_end_off = data_size > start_offset ? data_size - start_offset : 0;
+  auto const end           = start + cuda::std::min(end_off, data.size());
+  auto const data_end      = start + cuda::std::min(data_end_off, data.size());
+  // Offset of `parse_pos` inside the local `data` window, clamped to avoid underflow
+  auto const parse_off = parse_pos > start_offset ? parse_pos - start_offset : 0;
+  uint32_t const t     = threadIdx.x;
+  size_t block_pos = parse_off + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
+  auto cur         = start + block_pos;
 
   // Initial state is neutral context (no state transitions), zero rows
   uint4 ctx_map = {
@@ -724,8 +727,6 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
         ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
-      size_t const data_end_off = data_size > start_offset ? data_size - start_offset : 0;
-      char const* data_end      = start + min(data_end_off, data.size());
       if (cur <= end && cur == data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
         ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, 1, 1, 1);
@@ -740,7 +741,8 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
 
   // Eliminate rows that start before byte_range_start
   if (start_offset + block_pos < byte_range_start) {
-    uint32_t dist_minus1 = min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
+    uint32_t dist_minus1 =
+      cuda::std::min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
     uint32_t mask        = 0xffff'fffe << dist_minus1;
     ctx_map.x &= mask;
     ctx_map.y &= mask;
