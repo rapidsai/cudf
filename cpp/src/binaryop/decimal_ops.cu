@@ -252,9 +252,7 @@ std::unique_ptr<column> divide_decimal(column_view const& lhs,
   CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL32 || lhs.type().id() == type_id::DECIMAL64 ||
                  lhs.type().id() == type_id::DECIMAL128,
                "Column must be decimal type");
-  std::string scalar_type_name = rhs.type().to_string();
-  std::string expected_type_name = lhs.type().to_string();
-  CUDF_EXPECTS(rhs.type() == lhs.type(), "Scalar type (" + scalar_type_name + ") must match column type (" + expected_type_name + ")");
+  CUDF_EXPECTS(rhs.type() == lhs.type(), "Scalar type (" + std::to_string(rhs.type().id()) + ") must match column type (" + std::to_string(lhs.type().id()) + ")");
 
   if (lhs.is_empty()) { return make_empty_column(lhs.type()); }
 
