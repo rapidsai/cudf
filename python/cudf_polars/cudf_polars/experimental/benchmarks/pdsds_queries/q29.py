@@ -222,21 +222,21 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
 
     result = (
-        store_sales.join(
+        store_sales.join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(
             store_returns,
             left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
             right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
         )
+        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
         .join(
             catalog_sales,
             left_on=["ss_customer_sk", "ss_item_sk"],
             right_on=["cs_bill_customer_sk", "cs_item_sk"],
         )
-        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
-        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
         .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .filter(
             (pl.col("d1_moy") == month)
             & (pl.col("d1_year") == year)

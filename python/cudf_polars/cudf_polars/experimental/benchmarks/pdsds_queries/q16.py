@@ -207,21 +207,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         exists_order, on="cs_order_number", how="inner"
     )
 
-    returned_orders = catalog_returns.select(
-        [
-            pl.col("cr_order_number"),
-            pl.lit(1).alias("has_return"),
-        ]
-    ).unique()
-    filtered_without_returns = (
-        filtered_with_exists.join(
-            returned_orders,
-            left_on="cs_order_number",
-            right_on="cr_order_number",
-            how="left",
-        )
-        .with_columns(pl.col("has_return").is_null().alias("no_return"))
-        .filter(pl.col("no_return"))
+    returned_orders = catalog_returns.select("cr_order_number").unique()
+    filtered_without_returns = filtered_with_exists.join(
+        returned_orders,
+        left_on="cs_order_number",
+        right_on="cr_order_number",
+        how="anti",
     )
 
     return QueryResult(

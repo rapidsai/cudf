@@ -217,13 +217,26 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             catalog_sales.join(
-                warehouse, left_on="cs_warehouse_sk", right_on="w_warehouse_sk"
+                warehouse,
+                left_on="cs_warehouse_sk",
+                right_on="w_warehouse_sk",
+                how="inner",
             )
-            .join(ship_mode, left_on="cs_ship_mode_sk", right_on="sm_ship_mode_sk")
             .join(
-                call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk"
+                ship_mode,
+                left_on="cs_ship_mode_sk",
+                right_on="sm_ship_mode_sk",
+                how="inner",
             )
-            .join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
+            .join(
+                call_center,
+                left_on="cs_call_center_sk",
+                right_on="cc_call_center_sk",
+                how="inner",
+            )
+            .join(
+                date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk", how="inner"
+            )
             .filter(
                 pl.col("d_month_seq").is_between(
                     d_month_seq, d_month_seq + 11, closed="both"

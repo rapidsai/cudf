@@ -114,10 +114,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             store_sales.join(
-                household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk"
+                household_demographics,
+                left_on="ss_hdemo_sk",
+                right_on="hd_demo_sk",
+                how="inner",
             )
-            .join(time_dim, left_on="ss_sold_time_sk", right_on="t_time_sk")
-            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(
+                time_dim, left_on="ss_sold_time_sk", right_on="t_time_sk", how="inner"
+            )
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk", how="inner")
             .filter(
                 (pl.col("t_hour") == t_hour)
                 & (pl.col("t_minute") >= t_minute)
