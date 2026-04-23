@@ -182,6 +182,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
 
+def _apply_sentinels(lf: pl.LazyFrame, sentinel_map: dict[str, str]) -> pl.LazyFrame:
+    """Apply fill_null sentinels to columns in sentinel_map."""
+    return lf.with_columns([pl.col(c).fill_null(v) for c, v in sentinel_map.items()])
+
+
 def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     """Query 87 (naive)."""
     params = load_parameters(
@@ -222,24 +227,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
-    store_customers = store_customers.with_columns(
-        [
-            pl.col("c_last_name").fill_null("NULL_SENTINEL_LAST"),
-            pl.col("c_first_name").fill_null("NULL_SENTINEL_FIRST"),
-        ]
-    )
-    catalog_customers = catalog_customers.with_columns(
-        [
-            pl.col("c_last_name").fill_null("NULL_SENTINEL_LAST"),
-            pl.col("c_first_name").fill_null("NULL_SENTINEL_FIRST"),
-        ]
-    )
-    web_customers = web_customers.with_columns(
-        [
-            pl.col("c_last_name").fill_null("NULL_SENTINEL_LAST"),
-            pl.col("c_first_name").fill_null("NULL_SENTINEL_FIRST"),
-        ]
-    )
+    sentinel_map = {
+        "c_last_name": "NULL_SENTINEL_LAST",
+        "c_first_name": "NULL_SENTINEL_FIRST",
+    }
+
+    store_customers = _apply_sentinels(store_customers, sentinel_map)
+    catalog_customers = _apply_sentinels(catalog_customers, sentinel_map)
+    web_customers = _apply_sentinels(web_customers, sentinel_map)
 
     after_first_except = store_customers.join(
         catalog_customers,

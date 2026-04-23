@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import rollup_level
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -214,33 +215,36 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .join(tmp1, on="s_state", how="semi")
     )
 
-    detail = (
-        base.group_by(["s_state", "s_county"])
-        .agg(pl.col("ss_net_profit").sum().alias("total_sum"))
-        .with_columns(pl.lit(0, dtype=pl.Int64).alias("lochierarchy"))
-        .select(["total_sum", "s_state", "s_county", "lochierarchy"])
+    all_cols = {"s_state": pl.Utf8, "s_county": pl.Utf8}
+    agg_exprs = [pl.col("ss_net_profit").sum().alias("total_sum")]
+    output_order = ["total_sum", "s_state", "s_county", "lochierarchy"]
+
+    detail = rollup_level(
+        base,
+        ["s_state", "s_county"],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="lochierarchy",
+        grouping_value=0,
     )
-    by_state = (
-        base.group_by(["s_state"])
-        .agg(pl.col("ss_net_profit").sum().alias("total_sum"))
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.Utf8).alias("s_county"),
-                pl.lit(1, dtype=pl.Int64).alias("lochierarchy"),
-            ]
-        )
-        .select(["total_sum", "s_state", "s_county", "lochierarchy"])
+    by_state = rollup_level(
+        base,
+        ["s_state"],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="lochierarchy",
+        grouping_value=1,
     )
-    total = (
-        base.select(pl.col("ss_net_profit").sum().alias("total_sum"))
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.Utf8).alias("s_state"),
-                pl.lit(None, dtype=pl.Utf8).alias("s_county"),
-                pl.lit(2, dtype=pl.Int64).alias("lochierarchy"),
-            ]
-        )
-        .select(["total_sum", "s_state", "s_county", "lochierarchy"])
+    total = rollup_level(
+        base,
+        [],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="lochierarchy",
+        grouping_value=2,
     )
 
     combined = pl.concat([detail, by_state, total])

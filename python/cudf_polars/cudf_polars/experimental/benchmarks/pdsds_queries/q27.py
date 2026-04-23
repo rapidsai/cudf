@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import rollup_level
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -189,49 +190,32 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
-    level1 = (
-        base_data.group_by(["i_item_id", "s_state"])
-        .agg(
-            [
-                pl.col("ss_quantity").mean().alias("agg1"),
-                pl.col("ss_list_price").mean().alias("agg2"),
-                pl.col("ss_coupon_amt").mean().alias("agg3"),
-                pl.col("ss_sales_price").mean().alias("agg4"),
-            ]
-        )
-        .select(
-            [
-                "i_item_id",
-                "s_state",
-                pl.lit(0, dtype=pl.Int64).alias("g_state"),
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-            ]
-        )
+    all_cols = {"i_item_id": pl.String(), "s_state": pl.String()}
+    agg_exprs = [
+        pl.col("ss_quantity").mean().alias("agg1"),
+        pl.col("ss_list_price").mean().alias("agg2"),
+        pl.col("ss_coupon_amt").mean().alias("agg3"),
+        pl.col("ss_sales_price").mean().alias("agg4"),
+    ]
+    output_order = ["i_item_id", "s_state", "g_state", "agg1", "agg2", "agg3", "agg4"]
+
+    level1 = rollup_level(
+        base_data,
+        ["i_item_id", "s_state"],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="g_state",
+        grouping_value=0,
     )
-    level2 = (
-        base_data.group_by(["i_item_id"])
-        .agg(
-            [
-                pl.col("ss_quantity").mean().alias("agg1"),
-                pl.col("ss_list_price").mean().alias("agg2"),
-                pl.col("ss_coupon_amt").mean().alias("agg3"),
-                pl.col("ss_sales_price").mean().alias("agg4"),
-            ]
-        )
-        .select(
-            [
-                "i_item_id",
-                pl.lit(None, dtype=pl.String).alias("s_state"),
-                pl.lit(1, dtype=pl.Int64).alias("g_state"),
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-            ]
-        )
+    level2 = rollup_level(
+        base_data,
+        ["i_item_id"],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="g_state",
+        grouping_value=1,
     )
 
     return QueryResult(

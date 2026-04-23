@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import rollup_level
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -278,44 +279,6 @@ def build_average_sales(  # noqa: D103
     )
 
 
-def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:  # noqa: D103
-    if group_cols:
-        lf = y.group_by(group_cols).agg(
-            [
-                pl.col("sales").sum().alias("sum_sales"),
-                pl.col("number_sales").sum().alias("sum_number_sales"),
-            ]
-        )
-    else:
-        lf = y.select(
-            [
-                pl.col("sales").sum().alias("sum_sales"),
-                pl.col("number_sales").sum().alias("sum_number_sales"),
-            ]
-        )
-
-    cols = {
-        "channel": pl.Utf8,
-        "i_brand_id": pl.Int64,
-        "i_class_id": pl.Int64,
-        "i_category_id": pl.Int64,
-    }
-    missing = [c for c in cols if c not in group_cols]
-    if missing:
-        lf = lf.with_columns([pl.lit(None, dtype=cols[c]).alias(c) for c in missing])
-
-    return lf.select(
-        [
-            "channel",
-            "i_brand_id",
-            "i_class_id",
-            "i_category_id",
-            "sum_sales",
-            "sum_number_sales",
-        ]
-    )
-
-
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 14."""
     params = load_parameters(
@@ -415,11 +378,40 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
     )
 
-    level1 = rollup_level(y, ["channel", "i_brand_id", "i_class_id", "i_category_id"])
-    level2 = rollup_level(y, ["channel", "i_brand_id", "i_class_id"])
-    level3 = rollup_level(y, ["channel", "i_brand_id"])
-    level4 = rollup_level(y, ["channel"])
-    level5 = rollup_level(y, [])
+    all_cols = {
+        "channel": pl.Utf8,
+        "i_brand_id": pl.Int64,
+        "i_class_id": pl.Int64,
+        "i_category_id": pl.Int64,
+    }
+    agg_exprs = [
+        pl.col("sales").sum().alias("sum_sales"),
+        pl.col("number_sales").sum().alias("sum_number_sales"),
+    ]
+    output_order = [
+        "channel",
+        "i_brand_id",
+        "i_class_id",
+        "i_category_id",
+        "sum_sales",
+        "sum_number_sales",
+    ]
+
+    level1 = rollup_level(
+        y,
+        ["channel", "i_brand_id", "i_class_id", "i_category_id"],
+        all_cols,
+        agg_exprs,
+        output_order,
+    )
+    level2 = rollup_level(
+        y, ["channel", "i_brand_id", "i_class_id"], all_cols, agg_exprs, output_order
+    )
+    level3 = rollup_level(
+        y, ["channel", "i_brand_id"], all_cols, agg_exprs, output_order
+    )
+    level4 = rollup_level(y, ["channel"], all_cols, agg_exprs, output_order)
+    level5 = rollup_level(y, [], all_cols, agg_exprs, output_order)
 
     return QueryResult(
         frame=(
@@ -612,122 +604,40 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     y = pl.concat([store_part, catalog_part, web_part])
 
-    level1 = (
-        y.group_by(["channel", "i_brand_id", "i_class_id", "i_category_id"])
-        .agg(
-            [
-                pl.col("sales").sum().alias("sum_sales"),
-                pl.col("number_sales").sum().alias("sum_number_sales"),
-            ]
-        )
-        .select(
-            [
-                "channel",
-                "i_brand_id",
-                "i_class_id",
-                "i_category_id",
-                "sum_sales",
-                "sum_number_sales",
-            ]
-        )
+    all_cols = {
+        "channel": pl.Utf8,
+        "i_brand_id": pl.Int64,
+        "i_class_id": pl.Int64,
+        "i_category_id": pl.Int64,
+    }
+    agg_exprs = [
+        pl.col("sales").sum().alias("sum_sales"),
+        pl.col("number_sales").sum().alias("sum_number_sales"),
+    ]
+    output_order = [
+        "channel",
+        "i_brand_id",
+        "i_class_id",
+        "i_category_id",
+        "sum_sales",
+        "sum_number_sales",
+    ]
+
+    level1 = rollup_level(
+        y,
+        ["channel", "i_brand_id", "i_class_id", "i_category_id"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level2 = (
-        y.group_by(["channel", "i_brand_id", "i_class_id"])
-        .agg(
-            [
-                pl.col("sales").sum().alias("sum_sales"),
-                pl.col("number_sales").sum().alias("sum_number_sales"),
-            ]
-        )
-        .with_columns(pl.lit(None, dtype=pl.Int64).alias("i_category_id"))
-        .select(
-            [
-                "channel",
-                "i_brand_id",
-                "i_class_id",
-                "i_category_id",
-                "sum_sales",
-                "sum_number_sales",
-            ]
-        )
+    level2 = rollup_level(
+        y, ["channel", "i_brand_id", "i_class_id"], all_cols, agg_exprs, output_order
     )
-    level3 = (
-        y.group_by(["channel", "i_brand_id"])
-        .agg(
-            [
-                pl.col("sales").sum().alias("sum_sales"),
-                pl.col("number_sales").sum().alias("sum_number_sales"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.Int64).alias("i_class_id"),
-                pl.lit(None, dtype=pl.Int64).alias("i_category_id"),
-            ]
-        )
-        .select(
-            [
-                "channel",
-                "i_brand_id",
-                "i_class_id",
-                "i_category_id",
-                "sum_sales",
-                "sum_number_sales",
-            ]
-        )
+    level3 = rollup_level(
+        y, ["channel", "i_brand_id"], all_cols, agg_exprs, output_order
     )
-    level4 = (
-        y.group_by(["channel"])
-        .agg(
-            [
-                pl.col("sales").sum().alias("sum_sales"),
-                pl.col("number_sales").sum().alias("sum_number_sales"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.Int64).alias("i_brand_id"),
-                pl.lit(None, dtype=pl.Int64).alias("i_class_id"),
-                pl.lit(None, dtype=pl.Int64).alias("i_category_id"),
-            ]
-        )
-        .select(
-            [
-                "channel",
-                "i_brand_id",
-                "i_class_id",
-                "i_category_id",
-                "sum_sales",
-                "sum_number_sales",
-            ]
-        )
-    )
-    level5 = (
-        y.select(
-            [
-                pl.col("sales").sum().alias("sum_sales"),
-                pl.col("number_sales").sum().alias("sum_number_sales"),
-            ]
-        )
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.Utf8).alias("channel"),
-                pl.lit(None, dtype=pl.Int64).alias("i_brand_id"),
-                pl.lit(None, dtype=pl.Int64).alias("i_class_id"),
-                pl.lit(None, dtype=pl.Int64).alias("i_category_id"),
-            ]
-        )
-        .select(
-            [
-                "channel",
-                "i_brand_id",
-                "i_class_id",
-                "i_category_id",
-                "sum_sales",
-                "sum_number_sales",
-            ]
-        )
-    )
+    level4 = rollup_level(y, ["channel"], all_cols, agg_exprs, output_order)
+    level5 = rollup_level(y, [], all_cols, agg_exprs, output_order)
 
     return QueryResult(
         frame=(

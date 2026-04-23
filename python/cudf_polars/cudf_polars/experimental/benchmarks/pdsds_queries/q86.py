@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import rollup_level
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -202,33 +203,36 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
     )
 
-    level0 = (
-        base.group_by(["i_category", "i_class"])
-        .agg(pl.col("ws_net_paid").sum().alias("total_sum"))
-        .with_columns(pl.lit(0, dtype=pl.Int64).alias("lochierarchy"))
-        .select(["total_sum", "i_category", "i_class", "lochierarchy"])
+    all_cols = {"i_category": pl.String(), "i_class": pl.String()}
+    agg_exprs = [pl.col("ws_net_paid").sum().alias("total_sum")]
+    output_order = ["total_sum", "i_category", "i_class", "lochierarchy"]
+
+    level0 = rollup_level(
+        base,
+        ["i_category", "i_class"],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="lochierarchy",
+        grouping_value=0,
     )
-    level1 = (
-        base.group_by(["i_category"])
-        .agg(pl.col("ws_net_paid").sum().alias("total_sum"))
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
-                pl.lit(1, dtype=pl.Int64).alias("lochierarchy"),
-            ]
-        )
-        .select(["total_sum", "i_category", "i_class", "lochierarchy"])
+    level1 = rollup_level(
+        base,
+        ["i_category"],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="lochierarchy",
+        grouping_value=1,
     )
-    level2 = (
-        base.select(pl.col("ws_net_paid").sum().alias("total_sum"))
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.Utf8).alias("i_category"),
-                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
-                pl.lit(2, dtype=pl.Int64).alias("lochierarchy"),
-            ]
-        )
-        .select(["total_sum", "i_category", "i_class", "lochierarchy"])
+    level2 = rollup_level(
+        base,
+        [],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="lochierarchy",
+        grouping_value=2,
     )
 
     combined = pl.concat([level0, level1, level2])

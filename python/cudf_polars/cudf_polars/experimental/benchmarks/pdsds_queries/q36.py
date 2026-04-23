@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import rollup_level
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -229,62 +230,74 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .filter((pl.col("d_year") == year) & (pl.col("s_state").is_in(state)))
     )
 
+    # Aggregation expressions for rollup levels
+    agg_exprs = [
+        pl.col("ss_net_profit").sum().alias("total_net_profit"),
+        pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
+    ]
+    all_cols = {"i_category": pl.String(), "i_class": pl.String()}
+    output_order = [
+        "total_net_profit",
+        "total_ext_sales_price",
+        "i_category",
+        "i_class",
+        "lochierarchy",
+    ]
+
+    # Level 0: group by [i_category, i_class]
     level0 = (
-        base_data.group_by(["i_category", "i_class"])
-        .agg(
-            [
-                pl.col("ss_net_profit").sum().alias("total_net_profit"),
-                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
-            ]
+        rollup_level(
+            base_data,
+            ["i_category", "i_class"],
+            all_cols,
+            agg_exprs,
+            output_order,
+            grouping_col="lochierarchy",
+            grouping_value=0,
         )
         .with_columns(
-            [
-                (
-                    pl.col("total_net_profit").cast(pl.Float64)
-                    / pl.col("total_ext_sales_price").cast(pl.Float64)
-                ).alias("gross_margin"),
-                pl.lit(0, dtype=pl.Int64).alias("lochierarchy"),
-            ]
+            (
+                pl.col("total_net_profit").cast(pl.Float64)
+                / pl.col("total_ext_sales_price").cast(pl.Float64)
+            ).alias("gross_margin")
         )
         .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
     )
+    # Level 1: group by [i_category]
     level1 = (
-        base_data.group_by(["i_category"])
-        .agg(
-            [
-                pl.col("ss_net_profit").sum().alias("total_net_profit"),
-                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
-            ]
+        rollup_level(
+            base_data,
+            ["i_category"],
+            all_cols,
+            agg_exprs,
+            output_order,
+            grouping_col="lochierarchy",
+            grouping_value=1,
         )
         .with_columns(
-            [
-                (
-                    pl.col("total_net_profit").cast(pl.Float64)
-                    / pl.col("total_ext_sales_price").cast(pl.Float64)
-                ).alias("gross_margin"),
-                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
-                pl.lit(1, dtype=pl.Int64).alias("lochierarchy"),
-            ]
+            (
+                pl.col("total_net_profit").cast(pl.Float64)
+                / pl.col("total_ext_sales_price").cast(pl.Float64)
+            ).alias("gross_margin")
         )
         .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
     )
+    # Level 2: total level
     level2 = (
-        base_data.select(
-            [
-                pl.col("ss_net_profit").sum().alias("total_net_profit"),
-                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
-            ]
+        rollup_level(
+            base_data,
+            [],
+            all_cols,
+            agg_exprs,
+            output_order,
+            grouping_col="lochierarchy",
+            grouping_value=2,
         )
         .with_columns(
-            [
-                (
-                    pl.col("total_net_profit").cast(pl.Float64)
-                    / pl.col("total_ext_sales_price").cast(pl.Float64)
-                ).alias("gross_margin"),
-                pl.lit(None, dtype=pl.Utf8).alias("i_category"),
-                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
-                pl.lit(2, dtype=pl.Int64).alias("lochierarchy"),
-            ]
+            (
+                pl.col("total_net_profit").cast(pl.Float64)
+                / pl.col("total_ext_sales_price").cast(pl.Float64)
+            ).alias("gross_margin")
         )
         .select(["gross_margin", "i_category", "i_class", "lochierarchy"])
     )

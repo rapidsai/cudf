@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import rollup_level
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -269,7 +270,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         pl.col("cd_dep_count").mean().alias("agg7"),
     ]
 
-    select_cols = [
+    all_cols = {
+        "i_item_id": pl.Utf8,
+        "ca_country": pl.Utf8,
+        "ca_state": pl.Utf8,
+        "ca_county": pl.Utf8,
+    }
+    output_order = [
         "i_item_id",
         "ca_country",
         "ca_state",
@@ -282,54 +289,41 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         "agg6",
         "agg7",
     ]
-    null_string = pl.lit(None).cast(pl.Utf8)
 
-    level0 = (
-        base_query.group_by(["i_item_id", "ca_country", "ca_state", "ca_county"])
-        .agg(agg_exprs)
-        .select(select_cols)
+    level0 = rollup_level(
+        base_query,
+        ["i_item_id", "ca_country", "ca_state", "ca_county"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level1 = (
-        base_query.group_by(["i_item_id", "ca_country", "ca_state"])
-        .agg(agg_exprs)
-        .with_columns([null_string.alias("ca_county")])
-        .select(select_cols)
+    level1 = rollup_level(
+        base_query,
+        ["i_item_id", "ca_country", "ca_state"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level2 = (
-        base_query.group_by(["i_item_id", "ca_country"])
-        .agg(agg_exprs)
-        .with_columns(
-            [
-                null_string.alias("ca_state"),
-                null_string.alias("ca_county"),
-            ]
-        )
-        .select(select_cols)
+    level2 = rollup_level(
+        base_query,
+        ["i_item_id", "ca_country"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level3 = (
-        base_query.group_by(["i_item_id"])
-        .agg(agg_exprs)
-        .with_columns(
-            [
-                null_string.alias("ca_country"),
-                null_string.alias("ca_state"),
-                null_string.alias("ca_county"),
-            ]
-        )
-        .select(select_cols)
+    level3 = rollup_level(
+        base_query,
+        ["i_item_id"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level4 = (
-        base_query.group_by([])
-        .agg(agg_exprs)
-        .with_columns(
-            [
-                null_string.alias("i_item_id"),
-                null_string.alias("ca_country"),
-                null_string.alias("ca_state"),
-                null_string.alias("ca_county"),
-            ]
-        )
-        .select(select_cols)
+    level4 = rollup_level(
+        base_query,
+        [],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
 
     sort_by = {

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
+from cudf_polars.experimental.benchmarks.pdsds_helpers import rollup_level
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
@@ -159,51 +160,48 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     agg_exprs = [pl.col("inv_quantity_on_hand").mean().alias("qoh")]
 
-    level1 = (
-        base_data.group_by(["i_product_name", "i_brand", "i_class", "i_category"])
-        .agg(agg_exprs)
-        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    all_cols = {
+        "i_product_name": pl.String(),
+        "i_brand": pl.String(),
+        "i_class": pl.String(),
+        "i_category": pl.String(),
+    }
+    output_order = ["i_product_name", "i_brand", "i_class", "i_category", "qoh"]
+
+    level1 = rollup_level(
+        base_data,
+        ["i_product_name", "i_brand", "i_class", "i_category"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level2 = (
-        base_data.group_by(["i_product_name", "i_brand", "i_class"])
-        .agg(agg_exprs)
-        .with_columns([pl.lit(None, dtype=pl.String).alias("i_category")])
-        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    level2 = rollup_level(
+        base_data,
+        ["i_product_name", "i_brand", "i_class"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level3 = (
-        base_data.group_by(["i_product_name", "i_brand"])
-        .agg(agg_exprs)
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.String).alias("i_class"),
-                pl.lit(None, dtype=pl.String).alias("i_category"),
-            ]
-        )
-        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    level3 = rollup_level(
+        base_data,
+        ["i_product_name", "i_brand"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level4 = (
-        base_data.group_by(["i_product_name"])
-        .agg(agg_exprs)
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.String).alias("i_brand"),
-                pl.lit(None, dtype=pl.String).alias("i_class"),
-                pl.lit(None, dtype=pl.String).alias("i_category"),
-            ]
-        )
-        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    level4 = rollup_level(
+        base_data,
+        ["i_product_name"],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
-    level5 = (
-        base_data.select(agg_exprs)
-        .with_columns(
-            [
-                pl.lit(None, dtype=pl.String).alias("i_product_name"),
-                pl.lit(None, dtype=pl.String).alias("i_brand"),
-                pl.lit(None, dtype=pl.String).alias("i_class"),
-                pl.lit(None, dtype=pl.String).alias("i_category"),
-            ]
-        )
-        .select(["i_product_name", "i_brand", "i_class", "i_category", "qoh"])
+    level5 = rollup_level(
+        base_data,
+        [],
+        all_cols,
+        agg_exprs,
+        output_order,
     )
 
     return QueryResult(
