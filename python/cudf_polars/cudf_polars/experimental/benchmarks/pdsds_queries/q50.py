@@ -218,3 +218,101 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 50 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=50,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    d1 = date_dim.select("d_date_sk")
+    d2 = date_dim.select(
+        [
+            pl.col("d_date_sk").alias("d2_date_sk"),
+            pl.col("d_year").alias("d2_year"),
+            pl.col("d_moy").alias("d2_moy"),
+        ]
+    )
+
+    group_cols = [
+        "s_store_name",
+        "s_company_id",
+        "s_street_number",
+        "s_street_name",
+        "s_street_type",
+        "s_suite_number",
+        "s_city",
+        "s_county",
+        "s_state",
+        "s_zip",
+    ]
+    sort_by = {col: False for col in group_cols}
+    limit = 100
+
+    diff = pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk")
+
+    joined = (
+        store_sales.join(
+            store_returns,
+            left_on=["ss_ticket_number", "ss_item_sk", "ss_customer_sk"],
+            right_on=["sr_ticket_number", "sr_item_sk", "sr_customer_sk"],
+        )
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(d1, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
+        .filter((pl.col("d2_year") == year) & (pl.col("d2_moy") == month))
+    )
+
+    result = (
+        joined.group_by(group_cols)
+        .agg(
+            [
+                pl.when(diff <= 30).then(1).otherwise(0).sum().alias("30 days"),
+                pl.when((diff > 30) & (diff <= 60))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .alias("31-60 days"),
+                pl.when((diff > 60) & (diff <= 90))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .alias("61-90 days"),
+                pl.when((diff > 90) & (diff <= 120))
+                .then(1)
+                .otherwise(0)
+                .sum()
+                .alias("91-120 days"),
+                pl.when(diff > 120).then(1).otherwise(0).sum().alias(">120 days"),
+            ]
+        )
+        .select(
+            *group_cols,
+            "30 days",
+            "31-60 days",
+            "61-90 days",
+            "91-120 days",
+            ">120 days",
+        )
+        .sort(group_cols, nulls_last=True)
+        .limit(limit)
+    )
+
+    return QueryResult(
+        frame=result,
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

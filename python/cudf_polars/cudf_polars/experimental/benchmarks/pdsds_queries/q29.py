@@ -165,3 +165,105 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 29 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=29,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    agg = params["agg"]
+
+    polars_agg = "mean" if agg == "avg" else "std" if agg == "stddev_samp" else agg
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    d1 = date_dim.select(
+        [
+            pl.col("d_date_sk").alias("d1_date_sk"),
+            pl.col("d_moy").alias("d1_moy"),
+            pl.col("d_year").alias("d1_year"),
+        ]
+    )
+    d2 = date_dim.select(
+        [
+            pl.col("d_date_sk").alias("d2_date_sk"),
+            pl.col("d_moy").alias("d2_moy"),
+            pl.col("d_year").alias("d2_year"),
+        ]
+    )
+    d3 = date_dim.select(
+        [
+            pl.col("d_date_sk").alias("d3_date_sk"),
+            pl.col("d_year").alias("d3_year"),
+        ]
+    )
+
+    sort_by = {
+        "i_item_id": False,
+        "i_item_desc": False,
+        "s_store_id": False,
+        "s_store_name": False,
+    }
+    limit = 100
+
+    result = (
+        store_sales.join(
+            store_returns,
+            left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
+            right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
+        )
+        .join(
+            catalog_sales,
+            left_on=["ss_customer_sk", "ss_item_sk"],
+            right_on=["cs_bill_customer_sk", "cs_item_sk"],
+        )
+        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
+        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
+        .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .filter(
+            (pl.col("d1_moy") == month)
+            & (pl.col("d1_year") == year)
+            & pl.col("d2_moy").is_between(month, month + 3)
+            & (pl.col("d2_year") == year)
+            & pl.col("d3_year").is_in([year, year + 1, year + 2])
+        )
+        .group_by(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
+        .agg(
+            [
+                getattr(pl.col("ss_quantity"), polars_agg)().alias(
+                    "store_sales_quantity"
+                ),
+                getattr(pl.col("sr_return_quantity"), polars_agg)().alias(
+                    "store_returns_quantity"
+                ),
+                getattr(pl.col("cs_quantity"), polars_agg)().alias(
+                    "catalog_sales_quantity"
+                ),
+            ]
+        )
+        .sort(sort_by.keys(), nulls_last=True)
+        .limit(limit)
+    )
+
+    return QueryResult(
+        frame=result,
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

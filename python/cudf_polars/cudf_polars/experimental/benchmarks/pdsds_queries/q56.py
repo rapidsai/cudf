@@ -130,37 +130,36 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         item.filter(pl.col("i_color").is_in(colors)).select(["i_item_id"]).unique()
     )
 
-    channels = [
-        {
-            "lf": store_sales,
-            "sold_date_col": "ss_sold_date_sk",
-            "item_sk_col": "ss_item_sk",
-            "addr_sk_col": "ss_addr_sk",
-            "ext_col": "ss_ext_sales_price",
-        },
-        {
-            "lf": catalog_sales,
-            "sold_date_col": "cs_sold_date_sk",
-            "item_sk_col": "cs_item_sk",
-            "addr_sk_col": "cs_bill_addr_sk",
-            "ext_col": "cs_ext_sales_price",
-        },
-        {
-            "lf": web_sales,
-            "sold_date_col": "ws_sold_date_sk",
-            "item_sk_col": "ws_item_sk",
-            "addr_sk_col": "ws_bill_addr_sk",
-            "ext_col": "ws_ext_sales_price",
-        },
+    channels: list[tuple[pl.LazyFrame, str, str, str, str]] = [
+        (
+            store_sales,
+            "ss_sold_date_sk",
+            "ss_item_sk",
+            "ss_addr_sk",
+            "ss_ext_sales_price",
+        ),
+        (
+            catalog_sales,
+            "cs_sold_date_sk",
+            "cs_item_sk",
+            "cs_bill_addr_sk",
+            "cs_ext_sales_price",
+        ),
+        (
+            web_sales,
+            "ws_sold_date_sk",
+            "ws_item_sk",
+            "ws_bill_addr_sk",
+            "ws_ext_sales_price",
+        ),
     ]
 
     per_channel = [
         (
-            ch["lf"]  # type: ignore[attr-defined]
-            .join(item, left_on=ch["item_sk_col"], right_on="i_item_sk")
+            lf.join(item, left_on=item_sk_col, right_on="i_item_sk")
             .join(color_item_ids_lf, on="i_item_id")
-            .join(date_dim, left_on=ch["sold_date_col"], right_on="d_date_sk")
-            .join(customer_address, left_on=ch["addr_sk_col"], right_on="ca_address_sk")
+            .join(date_dim, left_on=sold_date_col, right_on="d_date_sk")
+            .join(customer_address, left_on=addr_sk_col, right_on="ca_address_sk")
             .filter(
                 (pl.col("d_year") == year)
                 & (pl.col("d_moy") == month)
@@ -168,16 +167,21 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .group_by("i_item_id")
             .agg(
-                # Polars sum() returns 0 for all-null groups; SQL returns NULL.
-                # See https://github.com/rapidsai/cudf/issues/19560.
-                pl.when(pl.col(str(ch["ext_col"])).count() > 0)
-                .then(pl.col(str(ch["ext_col"])).sum())
+                [
+                    pl.col(ext_col).sum().alias("total_sales"),
+                    pl.col(ext_col).count().alias("_n"),
+                ]
+            )
+            .with_columns(
+                pl.when(pl.col("_n") > 0)
+                .then(pl.col("total_sales"))
                 .otherwise(None)
                 .alias("total_sales")
             )
+            .drop("_n")
             .select(["i_item_id", "total_sales"])
         )
-        for ch in channels
+        for lf, sold_date_col, item_sk_col, addr_sk_col, ext_col in channels
     ]
 
     sort_by = {"total_sales": False}
@@ -194,6 +198,117 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .otherwise(None)
                 .alias("total_sales")
             )
+            .select(["i_item_id", "total_sales"])
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 56 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=56,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    colors = params["colors"]
+    gmt_offset = params["gmt_offset"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    color_item_ids_lf = (
+        item.filter(pl.col("i_color").is_in(colors)).select(["i_item_id"]).unique()
+    )
+
+    channels: list[tuple[pl.LazyFrame, str, str, str, str]] = [
+        (
+            store_sales,
+            "ss_sold_date_sk",
+            "ss_item_sk",
+            "ss_addr_sk",
+            "ss_ext_sales_price",
+        ),
+        (
+            catalog_sales,
+            "cs_sold_date_sk",
+            "cs_item_sk",
+            "cs_bill_addr_sk",
+            "cs_ext_sales_price",
+        ),
+        (
+            web_sales,
+            "ws_sold_date_sk",
+            "ws_item_sk",
+            "ws_bill_addr_sk",
+            "ws_ext_sales_price",
+        ),
+    ]
+
+    per_channel = [
+        (
+            lf.join(item, left_on=item_sk_col, right_on="i_item_sk")
+            .join(color_item_ids_lf, on="i_item_id")
+            .join(date_dim, left_on=sold_date_col, right_on="d_date_sk")
+            .join(customer_address, left_on=addr_sk_col, right_on="ca_address_sk")
+            .filter(
+                (pl.col("d_year") == year)
+                & (pl.col("d_moy") == month)
+                & (pl.col("ca_gmt_offset") == gmt_offset)
+            )
+            .group_by("i_item_id")
+            .agg(
+                [
+                    pl.col(ext_col).sum().alias("total_sales"),
+                    pl.col(ext_col).count().alias("_n"),
+                ]
+            )
+            .with_columns(
+                pl.when(pl.col("_n") > 0)
+                .then(pl.col("total_sales"))
+                .otherwise(None)
+                .alias("total_sales")
+            )
+            .drop("_n")
+            .select(["i_item_id", "total_sales"])
+        )
+        for lf, sold_date_col, item_sk_col, addr_sk_col, ext_col in channels
+    ]
+
+    sort_by = {"total_sales": False}
+    limit = 100
+
+    return QueryResult(
+        frame=(
+            pl.concat(per_channel)
+            .group_by("i_item_id")
+            .agg(
+                [
+                    pl.col("total_sales").sum().alias("total_sales"),
+                    pl.col("total_sales").count().alias("_n"),
+                ]
+            )
+            .with_columns(
+                pl.when(pl.col("_n") > 0)
+                .then(pl.col("total_sales"))
+                .otherwise(None)
+                .alias("total_sales")
+            )
+            .drop("_n")
             .select(["i_item_id", "total_sales"])
             .sort(sort_by.keys(), nulls_last=True)
             .limit(limit)

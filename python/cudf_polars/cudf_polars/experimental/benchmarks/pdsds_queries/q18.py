@@ -201,3 +201,205 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 18 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=18,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    state = params["state"]
+    es = params["es"]
+    gen = params["gen"]
+
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    customer_demographics_1 = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    customer_demographics_2 = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    base_query = (
+        catalog_sales.join(
+            customer_demographics_1,
+            left_on="cs_bill_cdemo_sk",
+            right_on="cd_demo_sk",
+            suffix="_cd1",
+        )
+        .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
+        .join(
+            customer_demographics_2,
+            left_on="c_current_cdemo_sk",
+            right_on="cd_demo_sk",
+            suffix="_cd2",
+        )
+        .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .filter(
+            (pl.col("cd_gender") == gen)
+            & (pl.col("cd_education_status") == es)
+            & pl.col("c_birth_month").is_in(month)
+            & (pl.col("d_year") == year)
+            & pl.col("ca_state").is_in(state)
+        )
+    )
+
+    agg_exprs = [
+        pl.col("cs_quantity").mean().alias("agg1"),
+        pl.col("cs_list_price").mean().alias("agg2"),
+        pl.col("cs_coupon_amt").mean().alias("agg3"),
+        pl.col("cs_sales_price").mean().alias("agg4"),
+        pl.col("cs_net_profit").mean().alias("agg5"),
+        pl.col("c_birth_year").mean().alias("agg6"),
+        pl.col("cd_dep_count").mean().alias("agg7"),
+    ]
+
+    level1 = (
+        base_query.group_by(["i_item_id", "ca_country", "ca_state", "ca_county"])
+        .agg(agg_exprs)
+        .select(
+            [
+                "i_item_id",
+                "ca_country",
+                "ca_state",
+                "ca_county",
+                "agg1",
+                "agg2",
+                "agg3",
+                "agg4",
+                "agg5",
+                "agg6",
+                "agg7",
+            ]
+        )
+    )
+    level2 = (
+        base_query.group_by(["i_item_id", "ca_country", "ca_state"])
+        .agg(agg_exprs)
+        .with_columns([pl.lit(None, dtype=pl.String).alias("ca_county")])
+        .select(
+            [
+                "i_item_id",
+                "ca_country",
+                "ca_state",
+                "ca_county",
+                "agg1",
+                "agg2",
+                "agg3",
+                "agg4",
+                "agg5",
+                "agg6",
+                "agg7",
+            ]
+        )
+    )
+    level3 = (
+        base_query.group_by(["i_item_id", "ca_country"])
+        .agg(agg_exprs)
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.String).alias("ca_state"),
+                pl.lit(None, dtype=pl.String).alias("ca_county"),
+            ]
+        )
+        .select(
+            [
+                "i_item_id",
+                "ca_country",
+                "ca_state",
+                "ca_county",
+                "agg1",
+                "agg2",
+                "agg3",
+                "agg4",
+                "agg5",
+                "agg6",
+                "agg7",
+            ]
+        )
+    )
+    level4 = (
+        base_query.group_by(["i_item_id"])
+        .agg(agg_exprs)
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.String).alias("ca_country"),
+                pl.lit(None, dtype=pl.String).alias("ca_state"),
+                pl.lit(None, dtype=pl.String).alias("ca_county"),
+            ]
+        )
+        .select(
+            [
+                "i_item_id",
+                "ca_country",
+                "ca_state",
+                "ca_county",
+                "agg1",
+                "agg2",
+                "agg3",
+                "agg4",
+                "agg5",
+                "agg6",
+                "agg7",
+            ]
+        )
+    )
+    level5 = (
+        base_query.select(agg_exprs)
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.String).alias("i_item_id"),
+                pl.lit(None, dtype=pl.String).alias("ca_country"),
+                pl.lit(None, dtype=pl.String).alias("ca_state"),
+                pl.lit(None, dtype=pl.String).alias("ca_county"),
+            ]
+        )
+        .select(
+            [
+                "i_item_id",
+                "ca_country",
+                "ca_state",
+                "ca_county",
+                "agg1",
+                "agg2",
+                "agg3",
+                "agg4",
+                "agg5",
+                "agg6",
+                "agg7",
+            ]
+        )
+    )
+
+    sort_by = {
+        "ca_country": False,
+        "ca_state": False,
+        "ca_county": False,
+        "i_item_id": False,
+    }
+    limit = 100
+
+    return QueryResult(
+        frame=(
+            pl.concat([level1, level2, level3, level4, level5])
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
