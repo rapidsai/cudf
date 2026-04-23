@@ -155,3 +155,82 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 97 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=97,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    ssci = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+        .group_by(["ss_customer_sk", "ss_item_sk"])
+        .agg([])
+        .select(
+            [
+                pl.col("ss_customer_sk").alias("customer_sk"),
+                pl.col("ss_item_sk").alias("item_sk"),
+            ]
+        )
+    )
+    csci = (
+        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+        .group_by(["cs_bill_customer_sk", "cs_item_sk"])
+        .agg([])
+        .select(
+            [
+                pl.col("cs_bill_customer_sk").alias("customer_sk"),
+                pl.col("cs_item_sk").alias("item_sk"),
+            ]
+        )
+    )
+
+    return QueryResult(
+        frame=(
+            ssci.join(csci, on=["customer_sk", "item_sk"], how="full", suffix="_cs")
+            .select(
+                [
+                    pl.when(
+                        pl.col("customer_sk").is_not_null()
+                        & pl.col("customer_sk_cs").is_null()
+                    )
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("store_only"),
+                    pl.when(
+                        pl.col("customer_sk").is_null()
+                        & pl.col("customer_sk_cs").is_not_null()
+                    )
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("catalog_only"),
+                    pl.when(
+                        pl.col("customer_sk").is_not_null()
+                        & pl.col("customer_sk_cs").is_not_null()
+                    )
+                    .then(1)
+                    .otherwise(0)
+                    .sum()
+                    .alias("store_and_catalog"),
+                ]
+            )
+            .limit(100)
+        ),
+        sort_by=[],
+        limit=100,
+    )

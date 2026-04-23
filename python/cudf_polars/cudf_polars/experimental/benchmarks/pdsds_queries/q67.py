@@ -281,3 +281,337 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 67 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=67,
+        qualification=run_config.qualification,
+    )
+
+    dms = params["dms"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    base_data = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        .with_columns(
+            (pl.col("ss_sales_price") * pl.col("ss_quantity"))
+            .fill_null(0)
+            .alias("sales_amount")
+        )
+    )
+
+    level0 = (
+        base_data.group_by(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+            ]
+        )
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level1 = (
+        base_data.group_by(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+            ]
+        )
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(pl.lit(None, dtype=pl.Utf8).alias("s_store_id"))
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level2 = (
+        base_data.group_by(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+            ]
+        )
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Int64).alias("d_moy"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_store_id"),
+            ]
+        )
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level3 = (
+        base_data.group_by(
+            ["i_category", "i_class", "i_brand", "i_product_name", "d_year"]
+        )
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Int64).alias("d_qoy"),
+                pl.lit(None, dtype=pl.Int64).alias("d_moy"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_store_id"),
+            ]
+        )
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level4 = (
+        base_data.group_by(["i_category", "i_class", "i_brand", "i_product_name"])
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Int64).alias("d_year"),
+                pl.lit(None, dtype=pl.Int64).alias("d_qoy"),
+                pl.lit(None, dtype=pl.Int64).alias("d_moy"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_store_id"),
+            ]
+        )
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level5 = (
+        base_data.group_by(["i_category", "i_class", "i_brand"])
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("i_product_name"),
+                pl.lit(None, dtype=pl.Int64).alias("d_year"),
+                pl.lit(None, dtype=pl.Int64).alias("d_qoy"),
+                pl.lit(None, dtype=pl.Int64).alias("d_moy"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_store_id"),
+            ]
+        )
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level6 = (
+        base_data.group_by(["i_category", "i_class"])
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("i_brand"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_product_name"),
+                pl.lit(None, dtype=pl.Int64).alias("d_year"),
+                pl.lit(None, dtype=pl.Int64).alias("d_qoy"),
+                pl.lit(None, dtype=pl.Int64).alias("d_moy"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_store_id"),
+            ]
+        )
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level7 = (
+        base_data.group_by(["i_category"])
+        .agg(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_brand"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_product_name"),
+                pl.lit(None, dtype=pl.Int64).alias("d_year"),
+                pl.lit(None, dtype=pl.Int64).alias("d_qoy"),
+                pl.lit(None, dtype=pl.Int64).alias("d_moy"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_store_id"),
+            ]
+        )
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+    level8 = (
+        base_data.select(pl.col("sales_amount").sum().alias("sumsales"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("i_category"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_brand"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_product_name"),
+                pl.lit(None, dtype=pl.Int64).alias("d_year"),
+                pl.lit(None, dtype=pl.Int64).alias("d_qoy"),
+                pl.lit(None, dtype=pl.Int64).alias("d_moy"),
+                pl.lit(None, dtype=pl.Utf8).alias("s_store_id"),
+            ]
+        )
+        .select(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "i_product_name",
+                "d_year",
+                "d_qoy",
+                "d_moy",
+                "s_store_id",
+                "sumsales",
+            ]
+        )
+    )
+
+    rollup_data = pl.concat(
+        [
+            level0,
+            level1,
+            level2,
+            level3,
+            level4,
+            level5,
+            level6,
+            level7,
+            level8,
+        ]
+    )
+
+    ranked = rollup_data.with_columns(
+        pl.col("sumsales")
+        .rank(method="min", descending=True)
+        .over("i_category")
+        .alias("rk")
+    )
+
+    return QueryResult(
+        frame=(
+            ranked.filter(pl.col("rk") <= 100)
+            .sort(
+                [
+                    "i_category",
+                    "i_class",
+                    "i_brand",
+                    "i_product_name",
+                    "d_year",
+                    "d_qoy",
+                    "d_moy",
+                    "s_store_id",
+                    "sumsales",
+                    "rk",
+                ],
+                nulls_last=True,
+                descending=[False] * 10,
+            )
+            .limit(100)
+        ),
+        sort_by=[
+            ("i_category", False),
+            ("i_class", False),
+            ("i_brand", False),
+            ("i_product_name", False),
+            ("d_year", False),
+            ("d_qoy", False),
+            ("d_moy", False),
+            ("s_store_id", False),
+            ("sumsales", False),
+            ("rk", False),
+        ],
+        limit=100,
+    )

@@ -209,3 +209,125 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 74 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=74,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    year_total_store = (
+        customer.join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_in([year, year + 1]))
+        .group_by(
+            [
+                "c_customer_id",
+                "c_first_name",
+                "c_last_name",
+                "d_year",
+            ]
+        )
+        .agg(pl.col("ss_net_paid").std().alias("year_total"))
+        .with_columns(pl.lit("s").alias("sale_type"))
+        .select(
+            [
+                pl.col("c_customer_id").alias("customer_id"),
+                pl.col("c_first_name").alias("customer_first_name"),
+                pl.col("c_last_name").alias("customer_last_name"),
+                pl.col("d_year").alias("year1"),
+                "year_total",
+                "sale_type",
+            ]
+        )
+    )
+    year_total_web = (
+        customer.join(
+            web_sales, left_on="c_customer_sk", right_on="ws_bill_customer_sk"
+        )
+        .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_year").is_in([year, year + 1]))
+        .group_by(
+            [
+                "c_customer_id",
+                "c_first_name",
+                "c_last_name",
+                "d_year",
+            ]
+        )
+        .agg(pl.col("ws_net_paid").std().alias("year_total"))
+        .with_columns(pl.lit("w").alias("sale_type"))
+        .select(
+            [
+                pl.col("c_customer_id").alias("customer_id"),
+                pl.col("c_first_name").alias("customer_first_name"),
+                pl.col("c_last_name").alias("customer_last_name"),
+                pl.col("d_year").alias("year1"),
+                "year_total",
+                "sale_type",
+            ]
+        )
+    )
+
+    year_total = pl.concat([year_total_store, year_total_web])
+
+    t_s_firstyear = year_total
+    t_s_secyear = year_total
+    t_w_firstyear = year_total
+    t_w_secyear = year_total
+
+    joined = (
+        t_s_firstyear.join(t_s_secyear, on="customer_id", how="inner", suffix="_s_sec")
+        .join(t_w_firstyear, on="customer_id", how="inner", suffix="_w_first")
+        .join(t_w_secyear, on="customer_id", how="inner", suffix="_w_sec")
+    )
+
+    ratio_w = pl.when(pl.col("year_total_w_first") > 0).then(
+        pl.col("year_total_w_sec") / pl.col("year_total_w_first")
+    )
+    ratio_s = pl.when(pl.col("year_total") > 0).then(
+        pl.col("year_total_s_sec") / pl.col("year_total")
+    )
+
+    return QueryResult(
+        frame=(
+            joined.filter(
+                (pl.col("sale_type") == "s")
+                & (pl.col("sale_type_s_sec") == "s")
+                & (pl.col("sale_type_w_first") == "w")
+                & (pl.col("sale_type_w_sec") == "w")
+                & (pl.col("year1") == year)
+                & (pl.col("year1_s_sec") == year + 1)
+                & (pl.col("year1_w_first") == year)
+                & (pl.col("year1_w_sec") == year + 1)
+                & (pl.col("year_total") > 0)
+                & (pl.col("year_total_w_first") > 0)
+                & (ratio_w > ratio_s)
+            )
+            .select(
+                [
+                    pl.col("customer_id").alias("customer_id"),
+                    pl.col("customer_first_name_s_sec").alias("customer_first_name"),
+                    pl.col("customer_last_name_s_sec").alias("customer_last_name"),
+                ]
+            )
+            .sort(["customer_id", "customer_first_name", "customer_last_name"])
+            .limit(100)
+        ),
+        sort_by=[
+            ("customer_id", False),
+            ("customer_first_name", False),
+            ("customer_last_name", False),
+        ],
+        limit=100,
+    )

@@ -127,3 +127,51 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("sumsales", False), ("ss_customer_sk", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 93 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=93,
+        qualification=run_config.qualification,
+    )
+
+    reason_desc = params["reason_desc"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    )
+    reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
+
+    base = (
+        store_sales.join(
+            store_returns,
+            left_on=["ss_item_sk", "ss_ticket_number"],
+            right_on=["sr_item_sk", "sr_ticket_number"],
+            how="left",
+        )
+        .join(reason, left_on="sr_reason_sk", right_on="r_reason_sk")
+        .filter(pl.col("r_reason_desc") == reason_desc)
+        .with_columns(
+            pl.when(pl.col("sr_return_quantity").is_not_null())
+            .then(
+                (pl.col("ss_quantity") - pl.col("sr_return_quantity"))
+                * pl.col("ss_sales_price")
+            )
+            .otherwise(pl.col("ss_quantity") * pl.col("ss_sales_price"))
+            .alias("act_sales")
+        )
+    )
+
+    return QueryResult(
+        frame=(
+            base.group_by("ss_customer_sk")
+            .agg(pl.col("act_sales").sum().alias("sumsales"))
+            .sort(["sumsales", "ss_customer_sk"], nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("sumsales", False), ("ss_customer_sk", False)],
+        limit=100,
+    )

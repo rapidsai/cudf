@@ -180,3 +180,102 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[],
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 87 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=87,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+
+    store_customers = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+    catalog_customers = (
+        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
+        .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+    web_customers = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk")
+        .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+
+    store_customers = store_customers.with_columns(
+        [
+            pl.col("c_last_name").fill_null("NULL_SENTINEL_LAST"),
+            pl.col("c_first_name").fill_null("NULL_SENTINEL_FIRST"),
+        ]
+    )
+    catalog_customers = catalog_customers.with_columns(
+        [
+            pl.col("c_last_name").fill_null("NULL_SENTINEL_LAST"),
+            pl.col("c_first_name").fill_null("NULL_SENTINEL_FIRST"),
+        ]
+    )
+    web_customers = web_customers.with_columns(
+        [
+            pl.col("c_last_name").fill_null("NULL_SENTINEL_LAST"),
+            pl.col("c_first_name").fill_null("NULL_SENTINEL_FIRST"),
+        ]
+    )
+
+    after_first_except = (
+        store_customers.join(
+            catalog_customers,
+            on=["c_last_name", "c_first_name", "d_date"],
+            how="anti",
+        )
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+    after_second_except = (
+        after_first_except.join(
+            web_customers,
+            on=["c_last_name", "c_first_name", "d_date"],
+            how="anti",
+        )
+        .with_columns(
+            [
+                pl.when(pl.col("c_last_name") == "NULL_SENTINEL_LAST")
+                .then(None)
+                .otherwise(pl.col("c_last_name"))
+                .alias("c_last_name"),
+                pl.when(pl.col("c_first_name") == "NULL_SENTINEL_FIRST")
+                .then(None)
+                .otherwise(pl.col("c_first_name"))
+                .alias("c_first_name"),
+            ]
+        )
+        .select(["c_last_name", "c_first_name", "d_date"])
+        .unique()
+    )
+
+    return QueryResult(
+        frame=after_second_except.select(
+            [pl.len().cast(pl.Int64).alias("count_star()")]
+        ),
+        sort_by=[],
+        limit=None,
+    )

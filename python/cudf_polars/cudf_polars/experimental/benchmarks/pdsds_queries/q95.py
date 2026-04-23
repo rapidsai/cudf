@@ -153,3 +153,76 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[("order count", False)],
         limit=100,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 95 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=95,
+        qualification=run_config.qualification,
+    )
+
+    date = params["date"]
+    state = params["state"]
+    web_company_name = params["web_company_name"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
+    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+
+    start_date_py = datetime.strptime(date, "%Y-%m-%d")
+    start_date = pl.lit(start_date_py, dtype=pl.Datetime("us"))
+    end_date = start_date + pl.duration(days=60)
+
+    ws_wh = (
+        web_sales.join(
+            web_sales,
+            left_on="ws_order_number",
+            right_on="ws_order_number",
+            how="inner",
+            suffix="_ws2",
+        )
+        .filter(pl.col("ws_warehouse_sk") != pl.col("ws_warehouse_sk_ws2"))
+        .select("ws_order_number")
+        .unique()
+    )
+
+    wr_ws_wh = web_returns.join(
+        ws_wh, left_on="wr_order_number", right_on="ws_order_number", how="inner"
+    ).select(pl.col("wr_order_number").alias("ws_order_number"))
+
+    return QueryResult(
+        frame=(
+            web_sales.join(date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk")
+            .join(
+                customer_address,
+                left_on="ws_ship_addr_sk",
+                right_on="ca_address_sk",
+            )
+            .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
+            .filter(
+                (pl.col("d_date") >= start_date)
+                & (pl.col("d_date") <= end_date)
+                & (pl.col("ca_state") == state)
+                & (pl.col("web_company_name") == web_company_name)
+            )
+            .join(ws_wh, on="ws_order_number", how="inner")
+            .join(wr_ws_wh, on="ws_order_number", how="inner")
+            .select(
+                [
+                    pl.col("ws_order_number").n_unique().alias("order count"),
+                    pl.col("ws_ext_ship_cost").sum().alias("total shipping cost"),
+                    pl.col("ws_net_profit").sum().alias("total net profit"),
+                ]
+            )
+            .sort("order count", nulls_last=True)
+            .limit(100)
+        ),
+        sort_by=[("order count", False)],
+        limit=100,
+    )

@@ -145,3 +145,85 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ],
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 98 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=98,
+        qualification=run_config.qualification,
+    )
+
+    date = params["date"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    start_date_py = datetime.strptime(date, "%Y-%m-%d").date()
+    end_date_py = start_date_py + timedelta(days=30)
+    start_date = pl.date(start_date_py.year, start_date_py.month, start_date_py.day)
+    end_date = pl.date(end_date_py.year, end_date_py.month, end_date_py.day)
+
+    return QueryResult(
+        frame=(
+            store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .filter(
+                pl.col("i_category").is_in(params["categories"])
+                & pl.col("d_date").is_between(start_date, end_date, closed="both")
+            )
+            .group_by(
+                [
+                    "i_item_id",
+                    "i_item_desc",
+                    "i_category",
+                    "i_class",
+                    "i_current_price",
+                ]
+            )
+            .agg(
+                [
+                    pl.col("ss_ext_sales_price").count().alias("itemrevenue_count"),
+                    pl.col("ss_ext_sales_price").sum().alias("itemrevenue_sum"),
+                ]
+            )
+            .with_columns(
+                pl.when(pl.col("itemrevenue_count") == 0)
+                .then(None)
+                .otherwise(pl.col("itemrevenue_sum"))
+                .alias("itemrevenue")
+            )
+            .with_columns(
+                (
+                    pl.col("itemrevenue")
+                    * 100.0
+                    / pl.col("itemrevenue").sum().over("i_class")
+                ).alias("revenueratio")
+            )
+            .select(
+                [
+                    "i_item_id",
+                    "i_item_desc",
+                    "i_category",
+                    "i_class",
+                    "i_current_price",
+                    "itemrevenue",
+                    "revenueratio",
+                ]
+            )
+            .sort(
+                ["i_category", "i_class", "i_item_id", "i_item_desc", "revenueratio"],
+                nulls_last=True,
+            )
+        ),
+        sort_by=[
+            ("i_category", False),
+            ("i_class", False),
+            ("i_item_id", False),
+            ("i_item_desc", False),
+            ("revenueratio", False),
+        ],
+        limit=None,
+    )

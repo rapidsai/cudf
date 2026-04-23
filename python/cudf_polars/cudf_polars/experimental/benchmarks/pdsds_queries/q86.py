@@ -180,3 +180,106 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             (pl.col("rank_within_parent"), False),
         ],
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 86 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=86,
+        qualification=run_config.qualification,
+    )
+
+    d_month_seq = params["d_month_seq"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    base = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+    )
+
+    level0 = (
+        base.group_by(["i_category", "i_class"])
+        .agg(pl.col("ws_net_paid").sum().alias("total_sum"))
+        .with_columns(pl.lit(0, dtype=pl.Int64).alias("lochierarchy"))
+        .select(["total_sum", "i_category", "i_class", "lochierarchy"])
+    )
+    level1 = (
+        base.group_by(["i_category"])
+        .agg(pl.col("ws_net_paid").sum().alias("total_sum"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
+                pl.lit(1, dtype=pl.Int64).alias("lochierarchy"),
+            ]
+        )
+        .select(["total_sum", "i_category", "i_class", "lochierarchy"])
+    )
+    level2 = (
+        base.select(pl.col("ws_net_paid").sum().alias("total_sum"))
+        .with_columns(
+            [
+                pl.lit(None, dtype=pl.Utf8).alias("i_category"),
+                pl.lit(None, dtype=pl.Utf8).alias("i_class"),
+                pl.lit(2, dtype=pl.Int64).alias("lochierarchy"),
+            ]
+        )
+        .select(["total_sum", "i_category", "i_class", "lochierarchy"])
+    )
+
+    combined = pl.concat([level0, level1, level2])
+
+    return QueryResult(
+        frame=(
+            combined.with_columns(
+                pl.when(pl.col("lochierarchy") == 0)
+                .then(pl.col("i_category"))
+                .otherwise(None)
+                .alias("partition_category")
+            )
+            .with_columns(
+                pl.col("total_sum")
+                .rank(method="min", descending=True)
+                .over([pl.col("lochierarchy"), pl.col("partition_category")])
+                .cast(pl.Int64)
+                .alias("rank_within_parent")
+            )
+            .select(
+                [
+                    "total_sum",
+                    "i_category",
+                    "i_class",
+                    "lochierarchy",
+                    "rank_within_parent",
+                ]
+            )
+            .sort(
+                [
+                    "lochierarchy",
+                    pl.when(pl.col("lochierarchy") == 0)
+                    .then(pl.col("i_category"))
+                    .otherwise(None),
+                    "rank_within_parent",
+                ],
+                descending=[True, False, False],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[("lochierarchy", True), ("rank_within_parent", False)],
+        limit=100,
+        sort_keys=[
+            (pl.col("lochierarchy"), True),
+            (
+                pl.when(pl.col("lochierarchy") == 0)
+                .then(pl.col("i_category"))
+                .otherwise(None),
+                False,
+            ),
+            (pl.col("rank_within_parent"), False),
+        ],
+    )
