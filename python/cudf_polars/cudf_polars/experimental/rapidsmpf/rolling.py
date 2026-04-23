@@ -53,15 +53,6 @@ _TIMESTAMP_TO_DURATION: dict[plc.TypeId, plc.TypeId] = {
 }
 
 
-def _duration_dtype_for_timestamp(index_dtype: plc.DataType) -> plc.DataType:
-    try:
-        return plc.DataType(_TIMESTAMP_TO_DURATION[index_dtype.id()])
-    except KeyError as e:  # pragma: no cover
-        raise NotImplementedError(
-            f"Unsupported timestamp index type {index_dtype!r} for rolling halo"
-        ) from e
-
-
 _INT64 = plc.DataType(plc.TypeId.INT64)
 _BOOL8 = plc.DataType(plc.TypeId.BOOL8)
 
@@ -295,7 +286,7 @@ def _prepare_expanded_rolling_frame(
         if is_int_index:
             chunk_mn, chunk_mx = _sorted_minmax_py(chunk_idx, chunk_stream)
         else:
-            dur_dt = _duration_dtype_for_timestamp(index_dtype)
+            dur_dt = plc.DataType(_TIMESTAMP_TO_DURATION[index_dtype.id()])
             chunk_mn_s, chunk_mx_s = _sorted_minmax_scalars(chunk_idx, chunk_stream)
 
     if left_ctx_df is not None and left_ctx_df.num_rows > 0 and lookback > 0:
@@ -498,7 +489,7 @@ def _ts_right_halo_lookahead_satisfied(
     last_right_bounds: tuple[plc.Scalar, plc.Scalar] | None,
 ) -> bool:
     """True when staged right chunks cover the timestamp lookahead edge (or first is past it)."""
-    dur_dt = _duration_dtype_for_timestamp(index_dtype)
+    dur_dt = plc.DataType(_TIMESTAMP_TO_DURATION[index_dtype.id()])
     edge = _scalar_binop_scalar(
         center_max,
         plc.Scalar.from_py(lookahead, dur_dt, stream=stream),
@@ -576,26 +567,29 @@ class RollingChunkExpander:
         self.staged_inputs[key] = chunk
         self.staged_bounds[key] = self._index_bounds_for_staged_chunk(chunk)
 
+    def _get_staged_keys(self) -> list[ChunkID]:
+        """Return all staged keys in ascending order."""
+        return sorted(
+            (k for k in self.staged_inputs),
+            key=lambda k: k.sequence_number,
+        )
+
     def _get_next_chunk_id(self) -> ChunkID | None:
         """Get the next owned chunk ID."""
-        owned = [k for k in self.staged_inputs if not k.is_ghost_chunk]
-        if not owned:
-            return None
-        seq = min(k.sequence_number for k in owned)
-        return ChunkID(seq, is_ghost_chunk=False)
+        for k in self._get_staged_keys():
+            if not k.is_ghost_chunk:
+                return k
+        return None
 
     async def _has_lookahead_halo(self, chunk_id: ChunkID) -> bool:
         """Return whether staged right-hand chunks satisfy the lookahead halo."""
         if self.lookahead <= 0:
             return True
-        right_keys = sorted(
-            (
-                k
-                for k in self.staged_inputs
-                if k.sequence_number > chunk_id.sequence_number
-            ),
-            key=lambda k: k.sequence_number,
-        )
+        right_keys = [
+            k
+            for k in self._get_staged_keys()
+            if k.sequence_number > chunk_id.sequence_number
+        ]
         center_bounds = self.staged_bounds.get(chunk_id)
         if not right_keys or center_bounds is None:
             return False
@@ -631,17 +625,14 @@ class RollingChunkExpander:
 
     def _compose_expanded_chunk(
         self, chunk_id: ChunkID
-    ) -> tuple[TableChunk, tuple[int, int]] | None:
+    ) -> tuple[TableChunk | None, tuple[int, int] | None]:
         frame_ir = self.ir.children[0]
         br = self.context.br()
-        left_keys = sorted(
-            (
-                k
-                for k in self.staged_inputs
-                if k.is_ghost_chunk and k.sequence_number < chunk_id.sequence_number
-            ),
-            key=lambda k: k.sequence_number,
-        )
+        left_keys = [
+            k
+            for k in self._get_staged_keys()
+            if k.is_ghost_chunk and k.sequence_number < chunk_id.sequence_number
+        ]
         left_dfs = [chunk_to_frame(self.staged_inputs[k], frame_ir) for k in left_keys]
         left_for_prepare = _merge_pending_left_ghosts_into_left_ctx(
             left_dfs,
@@ -652,14 +643,12 @@ class RollingChunkExpander:
         center_df = chunk_to_frame(center_tbl, frame_ir)
         center_meta = RollingInputChunk(chunk=center_tbl, is_ghost_chunk=False)
 
-        right_keys = sorted(
-            (
-                k
-                for k in self.staged_inputs
-                if k.sequence_number > chunk_id.sequence_number
-            ),
-            key=lambda k: k.sequence_number,
-        )
+        right_keys = [
+            k
+            for k in self._get_staged_keys()
+            if k.sequence_number > chunk_id.sequence_number
+        ]
+
         is_last_chunk = self.stream_done and not right_keys
         next_dfs = (
             tuple(chunk_to_frame(self.staged_inputs[k], frame_ir) for k in right_keys)
@@ -681,7 +670,7 @@ class RollingChunkExpander:
             is_ghost_chunk=center_meta.is_ghost_chunk,
         )
         if prep is None:
-            return None
+            return None, None
 
         combined_df, n_left, n_chunk_rows, left_next = prep
         out_chunk = TableChunk.from_pylibcudf_table(
