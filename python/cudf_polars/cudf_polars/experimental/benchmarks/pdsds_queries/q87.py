@@ -241,23 +241,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
-    after_first_except = (
-        store_customers.join(
-            catalog_customers.with_columns(pl.lit(1).alias("_matched_cat")),
-            on=["c_last_name", "c_first_name", "d_date"],
-            how="left",
-        )
-        .filter(pl.col("_matched_cat").is_null())
-        .select(["c_last_name", "c_first_name", "d_date"])
-        .unique()
-    )
+    after_first_except = store_customers.join(
+        catalog_customers,
+        on=["c_last_name", "c_first_name", "d_date"],
+        how="anti",
+    ).unique()
     after_second_except = (
         after_first_except.join(
-            web_customers.with_columns(pl.lit(1).alias("_matched_web")),
+            web_customers,
             on=["c_last_name", "c_first_name", "d_date"],
-            how="left",
+            how="anti",
         )
-        .filter(pl.col("_matched_web").is_null())
         .with_columns(
             [
                 pl.when(pl.col("c_last_name") == "NULL_SENTINEL_LAST")

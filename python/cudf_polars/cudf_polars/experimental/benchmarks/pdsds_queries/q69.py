@@ -247,11 +247,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
-    exclude_customers = (
-        pl.concat([web_sales_dates, catalog_sales_dates])
-        .unique()
-        .with_columns(pl.col("customer_sk").alias("exclude_customer_sk"))
-    )
+    exclude_customers = pl.concat([web_sales_dates, catalog_sales_dates]).unique()
 
     return QueryResult(
         frame=(
@@ -267,11 +263,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .join(
                 exclude_customers,
                 left_on="c_customer_sk",
-                right_on="exclude_customer_sk",
-                how="left",
-                suffix="_exclude",
+                right_on="customer_sk",
+                how="anti",
             )
-            .filter(pl.col("customer_sk").is_null())
             .filter(pl.col("ca_state").is_in(states))
             .group_by(
                 [

@@ -328,8 +328,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .join(
             customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
         )
-        .join(store_exists, on="c_customer_sk")
-        .join(web_or_catalog, on="c_customer_sk")
+        .join(store_exists, on="c_customer_sk", how="semi")
+        .join(web_or_catalog, on="c_customer_sk", how="semi")
     )
 
     sort_by = {

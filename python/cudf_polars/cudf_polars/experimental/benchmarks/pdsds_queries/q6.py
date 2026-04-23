@@ -145,7 +145,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
             .join(avg_price_per_category, on="i_category")
-            .join(target_month_seq_table, on="d_month_seq", how="inner")
+            .join(target_month_seq_table, on="d_month_seq", how="semi")
             .filter(pl.col("i_current_price") > 1.2 * pl.col("avg_price"))
             .group_by("ca_state")
             .agg(pl.len().alias("cnt"))
