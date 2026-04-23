@@ -41,7 +41,7 @@ useful when you want to scope statistics to a single query.
 
 Use `global_statistics(*, clear=False)` when you only need the cluster-wide picture. It gathers
 and merges the per-rank statistics into a single `Statistics` (counts and values summed, maxima
-reduced with `max`, formatters taken from rank 0):
+reduced with `max`):
 
 ```python
 total = engine.global_statistics(clear=True)

@@ -35,13 +35,14 @@ categories of fields:
 
 | Category    | Scope                                                                                  | Env var prefix             |
 | ----------- | -------------------------------------------------------------------------------------- | -------------------------- |
-| `rapidsmpf` | RapidsMPF runtime, e.g. threads, CUDA streams, spilling, pinned memory, log level      | `RAPIDSMPF_*`              |
-| `executor`  | Query execution and partitioning, e.g. `max_rows_per_partition`, `fallback_mode`, ...  | `CUDF_POLARS__EXECUTOR__*` |
-| `engine`    | `pl.GPUEngine` kwargs, e.g. Parquet, memory resource, CUDA streams, hardware binding   | `CUDF_POLARS__*`           |
+| `rapidsmpf` | RapidsMPF runtime, e.g. threads, CUDA streams, spilling, pinned memory, log level      | `RAPIDSMPF_`              |
+| `executor`  | Query execution and partitioning, e.g. `max_rows_per_partition`, `fallback_mode`, ...  | `CUDF_POLARS__EXECUTOR__` |
+| `engine`    | `pl.GPUEngine` kwargs, e.g. Parquet, memory resource, CUDA streams, hardware binding   | `CUDF_POLARS__`           |
 
 The `engine` category surfaces the same knobs as plain `pl.GPUEngine(...)` — for example,
-`parquet_options` and `memory_resource_config`. You do not need to set them separately when using
-{class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`.
+`parquet_options` and `memory_resource_config`. Configure these settings through
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` rather than
+passing them to `pl.GPUEngine(...)` directly.
 
 The `rapidsmpf` category adds knobs for the streaming runtime that have no equivalent on the plain
 `pl.GPUEngine`. See the [RapidsMPF configuration reference][rapidsmpf-config] for the underlying
@@ -52,11 +53,6 @@ value is read from the environment variable if present; otherwise the underlying
 its built-in default. Boolean environment variables accept `{"1", "true", "yes", "y"}` as true
 and `{"0", "false", "no", "n"}` as false.
 
-All fields default to an `UNSPECIFIED` sentinel with the same precedence as the low-level
-options: explicit value → environment variable → built-in default. Calling
-`Engine.from_options(opts)` splits the fields into three dictionaries
-(`to_rapidsmpf_options()`, `to_executor_options()`, `to_engine_options()`) and routes each to the
-right destination.
 
 ## Building from a dictionary
 
@@ -73,17 +69,20 @@ opts = StreamingOptions.from_dict({
 
 This is convenient when options come from a config file or CLI.
 
-## When to use StreamingOptions vs. raw keyword arguments
+## Engine keyword arguments
 
-* Use {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` with
-  `Engine.from_options(opts)` for typical streaming workflows — it is typed, centralized, and
-  handles routing automatically.
-* Use the raw `Engine(rapidsmpf_options=..., executor_options=..., engine_options=...)`
-  constructor only when you need fine-grained control that doesn't fit the
-  {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` schema.
-* For the in-memory engine,
-  {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` does not apply —
-  pass keyword arguments to `pl.GPUEngine(...)` directly (see below).
+Each engine ({class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`,
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`, or
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine`) accepts
+`rapidsmpf_options`, `executor_options`, and `engine_options` as raw keyword arguments.
+We recommend using this only when you need fine-grained control that doesn't fit the
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` schema.
+Otherwise, prefer the engine's `from_options` constructor with
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`.
+
+For the in-memory engine,
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` does not apply —
+pass keyword arguments to `pl.GPUEngine(...)` directly (see below).
 
 ## In-memory Engine Options
 
@@ -103,24 +102,13 @@ See the [Polars GPU support guide][polars-gpu] for the full in-memory usage stor
 
 Environment variables follow these patterns:
 
-* `rapidsmpf`: `RAPIDSMPF_<OPTION_NAME>`
-* `executor`: `CUDF_POLARS__EXECUTOR__<OPTION_NAME>`
-* `engine`: `CUDF_POLARS__<OPTION_NAME>` (or nested prefixes for structured options)
+* `rapidsmpf`: `RAPIDSMPF_<OPTION_NAME>` (e.g. `RAPIDSMPF_NUM_STREAMING_THREADS`)
+* `executor`: `CUDF_POLARS__EXECUTOR__<OPTION_NAME>` (e.g. `CUDF_POLARS__EXECUTOR__FALLBACK_MODE`)
+* `engine`: `CUDF_POLARS__<OPTION_NAME>` (e.g. `CUDF_POLARS__RAISE_ON_FAIL`; nested prefixes for structured options)
 
 ### Category: `rapidsmpf`
 
-| Field                          | Description                                                                | Default   |
-| ------------------------------ | -------------------------------------------------------------------------- | --------- |
-| `num_streaming_threads`        | Number of threads used to execute coroutines.                              | `1`       |
-| `num_streams`                  | Number of CUDA streams for concurrent GPU execution.                       | `16`      |
-| `log`                          | Log level (`"NONE"`, `"PRINT"`, `"WARN"`, `"INFO"`, `"DEBUG"`, `"TRACE"`). | `"WARN"`  |
-| `statistics`                   | Enable performance metrics (see {doc}`profiling`).                         | `False`   |
-| `memory_reserve_timeout`       | Timeout for memory reservations (e.g. `"100ms"`).                          | `"100ms"` |
-| `allow_overbooking_by_default` | Allow overallocation in reservation APIs.                                  | `True`    |
-| `pinned_memory`                | Enable pinned host memory.                                                 | `False`   |
-| `pinned_initial_pool_size`     | Initial pinned memory pool size in bytes.                                  | `0`       |
-| `spill_device_limit`           | Device memory soft limit before spilling (e.g. `"80%"` or bytes).          | `"80%"`   |
-| `periodic_spill_check`         | Interval between spill checks (e.g. `"1ms"`).                              | `"1ms"`   |
+See the [RapidsMPF configuration reference][rapidsmpf-config] for the full list of fields and defaults.
 
 ### Category: `executor`
 
