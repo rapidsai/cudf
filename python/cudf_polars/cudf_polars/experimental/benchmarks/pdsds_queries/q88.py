@@ -222,3 +222,95 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=[],
         limit=None,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 88 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=88,
+        qualification=run_config.qualification,
+    )
+
+    s_store_name = params["s_store_name"]
+    hd1 = params["hd_dep_count1"]
+    hd2 = params["hd_dep_count2"]
+    hd3 = params["hd_dep_count3"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    household_demographics = get_data(
+        run_config.dataset_path, "household_demographics", run_config.suffix
+    )
+    time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+
+    dep_filter = (
+        ((pl.col("hd_dep_count") == hd1) & (pl.col("hd_vehicle_count") <= hd1 + 2))
+        | ((pl.col("hd_dep_count") == hd2) & (pl.col("hd_vehicle_count") <= hd2 + 2))
+        | ((pl.col("hd_dep_count") == hd3) & (pl.col("hd_vehicle_count") <= hd3 + 2))
+    )
+
+    base = (
+        store_sales.join(time_dim, left_on="ss_sold_time_sk", right_on="t_time_sk")
+        .join(
+            household_demographics,
+            left_on="ss_hdemo_sk",
+            right_on="hd_demo_sk",
+        )
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .filter(dep_filter & (pl.col("s_store_name") == s_store_name))
+    )
+
+    h8_30_to_9 = (
+        base.filter((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
+        .select(pl.count().cast(pl.Int64).alias("h8_30_to_9"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+    h9_to_9_30 = (
+        base.filter((pl.col("t_hour") == 9) & (pl.col("t_minute") < 30))
+        .select(pl.count().cast(pl.Int64).alias("h9_to_9_30"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+    h9_30_to_10 = (
+        base.filter((pl.col("t_hour") == 9) & (pl.col("t_minute") >= 30))
+        .select(pl.count().cast(pl.Int64).alias("h9_30_to_10"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+    h10_to_10_30 = (
+        base.filter((pl.col("t_hour") == 10) & (pl.col("t_minute") < 30))
+        .select(pl.count().cast(pl.Int64).alias("h10_to_10_30"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+    h10_30_to_11 = (
+        base.filter((pl.col("t_hour") == 10) & (pl.col("t_minute") >= 30))
+        .select(pl.count().cast(pl.Int64).alias("h10_30_to_11"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+    h11_to_11_30 = (
+        base.filter((pl.col("t_hour") == 11) & (pl.col("t_minute") < 30))
+        .select(pl.count().cast(pl.Int64).alias("h11_to_11_30"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+    h11_30_to_12 = (
+        base.filter((pl.col("t_hour") == 11) & (pl.col("t_minute") >= 30))
+        .select(pl.count().cast(pl.Int64).alias("h11_30_to_12"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+    h12_to_12_30 = (
+        base.filter((pl.col("t_hour") == 12) & (pl.col("t_minute") < 30))
+        .select(pl.count().cast(pl.Int64).alias("h12_to_12_30"))
+        .with_columns(pl.lit(1).alias("key"))
+    )
+
+    frame = (
+        h8_30_to_9.join(h9_to_9_30, on="key")
+        .join(h9_30_to_10, on="key")
+        .join(h10_to_10_30, on="key")
+        .join(h10_30_to_11, on="key")
+        .join(h11_to_11_30, on="key")
+        .join(h11_30_to_12, on="key")
+        .join(h12_to_12_30, on="key")
+        .drop("key")
+    )
+
+    return QueryResult(frame=frame, sort_by=[], limit=None)

@@ -242,3 +242,147 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 85 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=85,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    ms = params["ms"]
+    es = params["es"]
+    price_ranges = params["price_ranges"]
+    states = params["states"]
+    np_min = params["np_min"]
+    np_max = params["np_max"]
+
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
+    customer_demographics = get_data(
+        run_config.dataset_path, "customer_demographics", run_config.suffix
+    )
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
+
+    sort_by = {
+        "substr(r_reason_desc, 1, 20)": False,
+        "avg(ws_quantity)": False,
+        "avg(wr_refunded_cash)": False,
+        "avg(wr_fee)": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            web_sales.join(
+                web_returns,
+                left_on=["ws_item_sk", "ws_order_number"],
+                right_on=["wr_item_sk", "wr_order_number"],
+            )
+            .join(web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk")
+            .join(
+                customer_demographics,
+                left_on="wr_refunded_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
+            .join(
+                customer_demographics,
+                left_on="wr_returning_cdemo_sk",
+                right_on="cd_demo_sk",
+                suffix="_cd2",
+            )
+            .join(
+                customer_address,
+                left_on="wr_refunded_addr_sk",
+                right_on="ca_address_sk",
+            )
+            .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+            .join(reason, left_on="wr_reason_sk", right_on="r_reason_sk")
+            .filter(pl.col("d_year") == year)
+            .filter(
+                (
+                    (pl.col("cd_marital_status") == ms[0])
+                    & (pl.col("cd_marital_status") == pl.col("cd_marital_status_cd2"))
+                    & (pl.col("cd_education_status") == es[0])
+                    & (
+                        pl.col("cd_education_status")
+                        == pl.col("cd_education_status_cd2")
+                    )
+                    & (
+                        pl.col("ws_sales_price").is_between(
+                            price_ranges[0][0], price_ranges[0][1]
+                        )
+                    )
+                )
+                | (
+                    (pl.col("cd_marital_status") == ms[1])
+                    & (pl.col("cd_marital_status") == pl.col("cd_marital_status_cd2"))
+                    & (pl.col("cd_education_status") == es[1])
+                    & (
+                        pl.col("cd_education_status")
+                        == pl.col("cd_education_status_cd2")
+                    )
+                    & (
+                        pl.col("ws_sales_price").is_between(
+                            price_ranges[1][0], price_ranges[1][1]
+                        )
+                    )
+                )
+                | (
+                    (pl.col("cd_marital_status") == ms[2])
+                    & (pl.col("cd_marital_status") == pl.col("cd_marital_status_cd2"))
+                    & (pl.col("cd_education_status") == es[2])
+                    & (
+                        pl.col("cd_education_status")
+                        == pl.col("cd_education_status_cd2")
+                    )
+                    & (
+                        pl.col("ws_sales_price").is_between(
+                            price_ranges[2][0], price_ranges[2][1]
+                        )
+                    )
+                )
+            )
+            .filter(
+                (
+                    (pl.col("ca_country") == "United States")
+                    & (pl.col("ca_state").is_in(states[0:3]))
+                    & (pl.col("ws_net_profit").is_between(np_min, np_max))
+                )
+                | (
+                    (pl.col("ca_country") == "United States")
+                    & (pl.col("ca_state").is_in(states[3:6]))
+                    & (pl.col("ws_net_profit").is_between(np_min, np_max))
+                )
+            )
+            .group_by("r_reason_desc")
+            .agg(
+                [
+                    pl.col("ws_quantity").mean().alias("avg(ws_quantity)"),
+                    pl.col("wr_refunded_cash").mean().alias("avg(wr_refunded_cash)"),
+                    pl.col("wr_fee").mean().alias("avg(wr_fee)"),
+                ]
+            )
+            .select(
+                [
+                    pl.col("r_reason_desc")
+                    .str.slice(0, 20)
+                    .alias("substr(r_reason_desc, 1, 20)"),
+                    "avg(ws_quantity)",
+                    "avg(wr_refunded_cash)",
+                    "avg(wr_fee)",
+                ]
+            )
+            .sort(list(sort_by.keys()), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
