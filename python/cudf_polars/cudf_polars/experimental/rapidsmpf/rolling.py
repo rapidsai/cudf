@@ -288,6 +288,8 @@ def _prepare_expanded_rolling_frame(
     chunk_mn_s: plc.Scalar | None = None
     chunk_mx_s: plc.Scalar | None = None
     dur_dt: plc.DataType | None = None
+    base_col_names = list(frame_ir.schema.keys())
+    base_dtypes = list(frame_ir.schema.values())
     if need_chunk_minmax:
         chunk_idx = _get_idx_col(chunk_table, index_col_idx, index_dtype, chunk_stream)
         if is_int_index:
@@ -300,8 +302,6 @@ def _prepare_expanded_rolling_frame(
         left_idx = _get_idx_col(
             left_ctx_df.table, index_col_idx, index_dtype, left_ctx_df.stream
         )
-        base_col_names = list(frame_ir.schema.keys())
-        base_dtypes = list(frame_ir.schema.values())
         if is_int_index:
             lower_s = plc.Scalar.from_py(
                 chunk_mn - lookback, left_idx.type(), stream=left_ctx_df.stream
