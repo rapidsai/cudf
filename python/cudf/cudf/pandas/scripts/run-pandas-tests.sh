@@ -98,106 +98,11 @@ cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftes
 cd pandas-tests/
 
 
-# TODO: Needs motoserver/moto container running on http://localhost:5000
-TEST_THAT_NEED_MOTO_SERVER="not test_styler_to_s3 \
-and not test_with_s3_url[None] \
-and not test_with_s3_url[gzip] \
-and not test_with_s3_url[bz2] \
-and not test_with_s3_url[zip] \
-and not test_with_s3_url[xz] \
-and not test_with_s3_url[tar] \
-and not test_s3_permission_output[etree] \
-and not test_read_s3_jsonl \
-and not test_s3_parser_consistency \
-and not test_to_s3 \
-and not test_parse_public_s3a_bucket \
-and not test_parse_public_s3_bucket_nrows \
-and not test_parse_public_s3_bucket_chunked \
-and not test_parse_public_s3_bucket_chunked_python \
-and not test_parse_public_s3_bucket_python \
-and not test_infer_s3_compression \
-and not test_parse_public_s3_bucket_nrows_python \
-and not test_read_s3_fails_private \
-and not test_read_csv_handles_boto_s3_object \
-and not test_read_csv_chunked_download \
-and not test_read_s3_with_hash_in_key \
-and not test_read_feather_s3_file_path \
-and not test_parse_public_s3_bucket \
-and not test_parse_private_s3_bucket \
-and not test_parse_public_s3n_bucket \
-and not test_read_with_creds_from_pub_bucket \
-and not test_read_without_creds_from_pub_bucket \
-and not test_from_s3_csv \
-and not test_s3_protocols[s3] \
-and not test_s3_protocols[s3a] \
-and not test_s3_protocols[s3n] \
-and not test_s3_parquet \
-and not test_s3_roundtrip_explicit_fs \
-and not test_s3_roundtrip \
-and not test_s3_roundtrip_for_dir[partition_col0] \
-and not test_s3_roundtrip_for_dir[partition_col1] \
-and not test_s3_roundtrip"
-
-TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
-and not test_large_string_pyarrow \
-and not test_interchange_from_corrected_buffer_dtypes \
-and not test_eof_states \
-and not test_array_tz \
-and not test_resample_empty_dataframe"
-
-# these weakref tests are flaky, since they rely on the timing of the cyclic GC
-# We skip them always
-TEST_THAT_USE_WEAKREFS="not test_no_reference_cycle"
-TEST_THAT_USE_STRING_DTYPE_GROUPBY="not test_string_dtype_all_na"
-
-# TODO: Add reason to skip these tests
-TEST_THAT_NEED_REASON_TO_SKIP="not test_groupby_raises_category_on_category \
-and not test_constructor_no_pandas_array \
-and not test_is_monotonic_na \
-and not test_index_contains \
-and not test_frame_op_subclass_nonclass_constructor \
-and not test_round_trip_current \
-and not test_pickle_frame_v124_unpickle_130"
-
-IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION=("--ignore=tests/io/parser/common/test_read_errors.py"
-                                           "--ignore=tests/io/test_clipboard.py"
-)
-
-IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY=("--ignore=tests/test_nanops.py"
-                                             "--ignore=tests/test_optional_dependency.py"
-                                             "--ignore=tests/util/test_assert_produces_warning.py"
-                                             "--ignore=tests/util/test_shares_memory.py"
-                                             "--ignore=tests/util/test_validate_args.py"
-                                             "--ignore=tests/util/test_validate_args_and_kwargs.py"
-                                             "--ignore=tests/util/test_validate_inclusive.py"
-                                             "--ignore=tests/util/test_validate_kwargs.py"
-                                             "--ignore=tests/util/test_util.py"
-                                             "--ignore=tests/util/test_rewrite_warning.py"
-                                             "--ignore=tests/util/test_deprecate_nonkeyword_arguments.py"
-                                             "--ignore=tests/util/test_deprecate_kwarg.py"
-                                             "--ignore=tests/util/test_deprecate.py"
-                                             "--ignore=tests/util/test_doc.py"
-                                             "--ignore=tests/frame/methods/test_to_dict_of_blocks.py"
-                                             "--ignore=tests/tslibs/"
-                                             "--ignore=tests/libs/"
-                                             "--ignore=tests/internals/"
-                                             "--ignore=tests/groupby/test_libgroupby.py"
-                                             "--ignore=tests/frame/test_block_internals.py"
-                                             "--ignore=tests/arrays/sparse/test_libsparse.py"
-                                             "--ignore=tests/copy_view/test_internals.py"
-                                             "--ignore=tests/indexing/test_chaining_and_caching.py"
-                                             "--ignore=tests/indexing/multiindex/test_chaining_and_caching.py"
-)
-
-
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     --import-mode=importlib \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and $TEST_THAT_NEED_REASON_TO_SKIP and $TEST_THAT_USE_STRING_DTYPE_GROUPBY and $TEST_THAT_USE_WEAKREFS" \
-    "${IGNORE_TESTS_THAT_CRASH_PYTEST_COLLECTION[@]}" \
-    "${IGNORE_TESTS_THAT_TEST_PRIVATE_FUNTIONALITY[@]}" \
     "$@"
 
 mv ./*.json ..
 cd ..
-rapids-logger "Test script exiting with value: $EXITCODE"
+echo "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

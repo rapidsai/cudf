@@ -3660,7 +3660,21 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 if dtype.kind == "O" and isinstance(value, str):
                     dtype = DEFAULT_STRING_DTYPE
             if is_na_like(value):
-                dtype = DEFAULT_STRING_DTYPE
+                if isinstance(value, (np.timedelta64, np.datetime64)):
+                    # Fall back to "ns" for unsupported units
+                    # (e.g. ``np.timedelta64("NaT")``), matching pandas.
+                    unit, _ = np.datetime_data(value.dtype)
+                    if unit not in {"s", "ms", "us", "ns"}:
+                        kind = (
+                            "timedelta64"
+                            if isinstance(value, np.timedelta64)
+                            else "datetime64"
+                        )
+                        dtype = np.dtype(f"{kind}[ns]")
+                    else:
+                        dtype = value.dtype
+                else:
+                    dtype = DEFAULT_STRING_DTYPE
             value = as_column(
                 value,
                 length=len(self),
