@@ -377,6 +377,7 @@ def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float
 class RunConfig:
     """Benchmark run configuration for SPMD / Ray / DuckDB frontends."""
 
+    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
     # Query selection & dataset
     queries: list[int]
     query_set: str
@@ -502,7 +503,19 @@ class RunConfig:
         else:
             validation_method = None
 
+        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
+        if args.engine == "duckdb":
+            engine_name = "duckdb"
+        elif args.engine == "polars":
+            if args.executor == "cpu":
+                engine_name = "polars-cpu"
+            else:
+                engine_name = "cudf-polars"
+        else:
+            raise ValueError(f"Invalid engine: {args.engine}")
+
         return cls(
+            engine_name=engine_name,
             queries=args.query,
             query_set=name,
             dataset_path=path,
@@ -527,6 +540,7 @@ class RunConfig:
         """Serialize the run config to a dictionary."""
         opts = self.streaming_options
         result: dict[str, Any] = {
+            "engine_name": self.engine_name,
             "queries": self.queries,
             "query_set": self.query_set,
             "dataset_path": str(self.dataset_path),

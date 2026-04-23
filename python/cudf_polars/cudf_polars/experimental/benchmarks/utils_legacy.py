@@ -349,6 +349,7 @@ def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float
 class RunConfig:
     """Results for a PDS-H or PDS-DS query run."""
 
+    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
     queries: list[int]
     suffix: str
     executor: ExecutorType
@@ -484,7 +485,19 @@ class RunConfig:
         else:
             validation_method = None
 
+        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
+        if args.engine == "duckdb":
+            engine_name = "duckdb"
+        elif args.engine == "polars":
+            if executor == "cpu":
+                engine_name = "polars-cpu"
+            else:
+                engine_name = "cudf-polars"
+        else:
+            raise ValueError(f"Invalid engine: {args.engine}")
+
         return cls(
+            engine_name=engine_name,
             queries=args.query,
             executor=executor,
             cluster=cluster,
