@@ -242,6 +242,28 @@ def test_join_and_slice(zlice, engine):
         assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("how", ["inner", "semi", "left", "right"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {
+                "max_rows_per_partition": 2,
+                "broadcast_join_limit": 1,
+                "target_partition_size": 10,
+            }
+        }
+    ],
+    indirect=True,
+)
+def test_bloom_filter_join(how, engine):
+    dim = pl.LazyFrame({"key": range(10), "val": range(10)})
+    fact = pl.LazyFrame({"key": range(200), "data": range(200)})
+    left, right = (dim, fact) if how == "right" else (fact, dim)
+    q = left.join(right, on="key", how=how)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )

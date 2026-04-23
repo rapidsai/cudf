@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
 import distributed
+import distributed.system
 import pynvml
 import ucxx._lib.libucxx as ucx_api
 from rapidsmpf import bootstrap
@@ -44,7 +45,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
 from cudf_polars.utils.config import DaskContext
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
@@ -573,6 +575,7 @@ class DaskEngine(StreamingEngine):
         owned_client: distributed.Client | None = None
         if dask_client is None:
             gpu_ids = _get_visible_gpu_ids()
+
             worker_spec: dict[str, Any] = {}
             for i, gpu_id in enumerate(gpu_ids):
                 worker_spec[str(gpu_id)] = {
@@ -582,6 +585,11 @@ class DaskEngine(StreamingEngine):
                         # Set worker subprocess log level to WARNING
                         # (is INFO by default).
                         "silence_logs": logging.WARNING,
+                        # We oversubscribe the system memory limit on multi-gpu systems.
+                        # In general, Dask won't be aware of what we're doing with we're
+                        # doing with host memory, so just giving each worker access to
+                        # all of it seems like the option with the fewest downsides.
+                        "memory_limit": distributed.system.MEMORY_LIMIT,
                         "env": {
                             "CUDA_VISIBLE_DEVICES": gpu_ids[i],
                         },
@@ -663,6 +671,9 @@ class DaskEngine(StreamingEngine):
         List of :class:`ClusterInfo`, one per rank.
         """
         return list(self._dask_ctx.client.run(ClusterInfo.local).values())
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return list(self._dask_ctx.client.run(func, *args, **kwargs).values())
 
     def shutdown(self) -> None:
         """

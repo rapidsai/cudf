@@ -9,6 +9,7 @@ import argparse
 import dataclasses
 import importlib
 import io
+import itertools
 import json
 import logging
 import os
@@ -59,6 +60,7 @@ except ImportError:
 
 try:
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.experimental.benchmarks.asserts import (
         ValidationError,
@@ -76,6 +78,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from cudf_polars.experimental.explain import SerializablePlan
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
 
@@ -824,7 +827,6 @@ def run_polars_query_iteration(
     engine: pl.GPUEngine | None,
     expected: pl.DataFrame | None,
     query_result: Any,
-    client: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
     result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
@@ -882,8 +884,7 @@ def run_polars_query(
     benchmark: Any,
     run_config: RunConfig,
     args: argparse.Namespace,
-    engine: pl.GPUEngine | None,
-    client: Any,
+    engine: StreamingEngine | None,
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
@@ -944,8 +945,8 @@ def run_polars_query(
     for i in range(args.iterations):
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
-            if client is not None:
-                client.run(setup_logging, q_id, i)
+            if engine is not None:
+                engine._run(setup_logging, q_id, i)
 
         try:
             record = run_polars_query_iteration(
@@ -957,7 +958,6 @@ def run_polars_query(
                 engine=engine,
                 expected=expected,
                 query_result=query_result,
-                client=client,
                 prepare_validation_result=prepare_validation_result,
                 result_casts=casts if casts else None,
             )
@@ -1001,8 +1001,7 @@ def _run_query_loop(
     benchmark: Any,
     args: argparse.Namespace,
     run_config: RunConfig,
-    engine: pl.GPUEngine | None,
-    client: Any,
+    engine: StreamingEngine | None,
     numeric_type: str,
     date_type: str,
     validation_files: dict[int, Path] | None,
@@ -1027,7 +1026,6 @@ def _run_query_loop(
                 run_config=run_config,
                 args=args,
                 engine=engine,
-                client=client,
                 numeric_type=numeric_type,
                 date_type=date_type,
                 validation_files=validation_files,
@@ -1095,10 +1093,6 @@ def run_polars_spmd(
     """Run benchmark queries using SPMD execution via the ``rrun`` launcher."""
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
-    if run_config.collect_traces:
-        raise NotImplementedError(
-            "--collect-traces is not yet supported with --frontend spmd"
-        )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime" and "cluster" are reserved — SPMDEngine sets them
     executor_options.pop("runtime", None)
@@ -1131,7 +1125,6 @@ def run_polars_spmd(
             args,
             run_config,
             engine,
-            None,
             numeric_type,
             date_type,
             validation_files,
@@ -1140,6 +1133,9 @@ def run_polars_spmd(
         if engine.rank > 0:
             sys.exit(1 if (query_failures or validation_failures) else 0)
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = _consolidate_logs(
+            run_config, engine=engine, gather_client_logs=False
+        )
         _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
@@ -1155,10 +1151,6 @@ def run_polars_ray(
     """Run benchmark queries using Ray actor-based distributed execution."""
     from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
-    if run_config.collect_traces:
-        raise NotImplementedError(
-            "--collect-traces is not yet supported with --frontend ray."
-        )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — RayEngine sets them
     executor_options.pop("runtime", None)
@@ -1185,12 +1177,13 @@ def run_polars_ray(
             args,
             run_config,
             engine,
-            None,
             numeric_type,
             date_type,
             validation_files,
         )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = _consolidate_logs(run_config, engine=engine)
+
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
@@ -1208,10 +1201,6 @@ def run_polars_dask(
 
     from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
 
-    if run_config.collect_traces:
-        raise NotImplementedError(
-            "--collect-traces is not yet supported with --frontend dask."
-        )
     executor_options = get_executor_options(run_config, benchmark=benchmark)
     # "runtime", "cluster" are reserved — DaskEngine sets them
     executor_options.pop("runtime", None)
@@ -1245,15 +1234,17 @@ def run_polars_dask(
                 args,
                 run_config,
                 engine,
-                None,
                 numeric_type,
                 date_type,
                 validation_files,
             )
+            run_config = dataclasses.replace(
+                run_config, records=dict(records), plans=plans
+            )
+            run_config = _consolidate_logs(run_config, engine)
     finally:
         if dask_client is not None:
             dask_client.close()
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
@@ -1330,6 +1321,60 @@ def setup_logging(query_id: int, iteration: int) -> None:
             wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
             cache_logger_on_first_use=True,
         )
+
+
+def _consolidate_logs(
+    run_config: RunConfig, engine: StreamingEngine, *, gather_client_logs: bool = True
+) -> RunConfig:
+    """Merge structlog traces from the local process and Dask workers into run_config."""
+    if not (_HAS_STRUCTLOG and run_config.collect_traces):
+        return run_config
+
+    def gather_logs() -> str:
+        logger = logging.getLogger()
+        return logger.handlers[0].stream.getvalue()  # type: ignore[attr-defined]
+
+    all_logs = "\n".join(engine._run(gather_logs))
+    if gather_client_logs:
+        all_logs += "\n" + gather_logs()
+
+    parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
+    # Some other log records can end up in here. Filter those out.
+    scope_values = {s.value for s in Scope}
+    parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
+    # Now we want to augment the existing Records with the trace data.
+
+    def group_key(x: dict) -> int:
+        return x["query_id"]
+
+    def sort_key(x: dict) -> tuple[int, int]:
+        return x["query_id"], x["iteration"]
+
+    grouped = itertools.groupby(
+        sorted(parsed_logs, key=sort_key),
+        key=group_key,
+    )
+
+    for query_id, run_logs_group in grouped:
+        run_logs = list(run_logs_group)
+        by_iteration = [
+            list(x)
+            for _, x in itertools.groupby(run_logs, key=lambda x: x["iteration"])
+        ]
+        run_records = run_config.records[query_id]
+        assert len(by_iteration) == len(run_records)  # same number of iterations
+        all_traces = [list(iteration) for iteration in by_iteration]
+
+        new_records: list[SuccessRecord | FailedRecord] = []
+        for rec, traces in zip(run_records, all_traces, strict=True):
+            if rec.status == "success":
+                new_records.append(dataclasses.replace(rec, traces=traces))
+            else:
+                new_records.append(rec)
+
+        run_config.records[query_id] = new_records
+
+    return run_config
 
 
 PDSDS_TABLE_NAMES: list[str] = [
