@@ -4,12 +4,14 @@
  */
 #pragma once
 
+#include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -35,9 +37,75 @@
 #include <thrust/logical.h>
 
 #include <algorithm>
+#include <numeric>
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Fork streams for a multi-column table operation when beneficial.
+ *
+ * Computes the maximum element byte width across all columns, then decides
+ * whether stream-pool parallelism is worthwhile based on per-column data
+ * volume. Returns an empty vector when forking is not beneficial (single
+ * column, or insufficient data per column to amortize fork/join overhead).
+ *
+ * @param table The table whose column types determine element widths.
+ *              Only the column data types are inspected — the table's own
+ *              row count is not used. Pass the table that drives the
+ *              per-column work (source table for gather, target table for
+ *              scatter).
+ * @param num_output_rows Number of rows in the operation's output. This is
+ *                        the gather-map size for gather, or the target row
+ *                        count for scatter. Multiplied by the maximum
+ *                        element width to estimate per-column data volume.
+ * @param stream The caller's stream; forked streams will be synchronized
+ *               to it.
+ * @return Forked streams, or an empty vector if forking is not worthwhile.
+ */
+[[nodiscard]] inline std::vector<rmm::cuda_stream_view> maybe_fork_streams(
+  table_view const& table, size_type num_output_rows, rmm::cuda_stream_view stream)
+{
+  if (num_output_rows <= 0) { return {}; }
+
+  // Stream-pool tuning constants.
+  // Minimum bytes per column before fork/join overhead is worthwhile.
+  // 512KB = 65536 × 8, so for int64 the effective threshold is 65K rows.
+  // For narrow types like int8, this correctly raises the threshold to
+  // 512K rows.
+  constexpr std::size_t min_bytes_for_stream_fork = 512 * 1'024;
+  // Maximum number of forked streams. GPU memory bandwidth saturates
+  // well before this many concurrent gather/scatter kernels.
+  constexpr std::size_t max_forked_streams = 8;
+  // Bytes per column at which the full stream cap is used. Below this,
+  // use half the cap to reduce fork/join API overhead at moderate sizes.
+  constexpr std::size_t bytes_for_full_streams = 8 * 1'024 * 1'024;
+
+  auto const num_columns = table.num_columns();
+  // Identity 0 is correct for max-reduction: an empty table yields
+  // bytes_per_col == 0, which is below min_bytes_for_stream_fork and
+  // therefore correctly skips forking.
+  auto const max_elem_bytes = std::transform_reduce(
+    table.begin(),
+    table.end(),
+    std::size_t{0},
+    [](auto a, auto b) { return std::max(a, b); },
+    [](column_view const& col) -> std::size_t {
+      // Non-fixed-width columns (strings, lists, structs) involve
+      // offset arrays and child data; treat as at least int64-width.
+      return cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : std::size_t{8};
+    });
+
+  auto const bytes_per_col   = static_cast<std::size_t>(num_output_rows) * max_elem_bytes;
+  auto const use_stream_pool = num_columns > 1 && bytes_per_col >= min_bytes_for_stream_fork;
+  auto const effective_cap =
+    bytes_per_col >= bytes_for_full_streams ? max_forked_streams : max_forked_streams / 2;
+  auto const num_streams = use_stream_pool
+                             ? std::min(static_cast<std::size_t>(num_columns), effective_cap)
+                             : std::size_t{0};
+  return num_streams > 0 ? cudf::detail::fork_streams(stream, num_streams)
+                         : std::vector<rmm::cuda_stream_view>{};
+}
 
 /**
  * @brief Function object to check if an index is within the bounds [begin, end).
@@ -604,7 +672,7 @@ void gather_bitmask(table_view const& source,
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * tparam MapIterator Iterator type for the gather map
+ * @tparam MapIterator Iterator type for the gather map
  * @param[in] source_table View into the table containing the input columns whose rows will be
  * gathered
  * @param[in] gather_map_begin Beginning of iterator range of integer indices that map the rows in
@@ -629,22 +697,32 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  std::vector<std::unique_ptr<column>> destination_columns;
+  auto const num_columns = source_table.num_columns();
+  auto result            = std::vector<std::unique_ptr<column>>(num_columns);
 
-  // TODO: Could be beneficial to use streams internally here
+  auto const num_rows = cudf::distance(gather_map_begin, gather_map_end);
+  auto const streams  = maybe_fork_streams(source_table, num_rows, stream);
 
-  for (auto const& source_column : source_table) {
-    // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(
-      cudf::type_dispatcher<dispatch_storage_type>(source_column.type(),
-                                                   column_gatherer{},
-                                                   source_column,
-                                                   gather_map_begin,
-                                                   gather_map_end,
-                                                   bounds_policy == out_of_bounds_policy::NULLIFY,
-                                                   stream,
-                                                   mr));
-  }
+  auto const stream_for = [&](size_type i) -> rmm::cuda_stream_view {
+    return !streams.empty() ? streams[i % streams.size()] : stream;
+  };
+
+  std::transform(cuda::counting_iterator{0},
+                 cuda::counting_iterator{num_columns},
+                 result.begin(),
+                 [&](size_type i) {
+                   auto const& source_column = source_table.column(i);
+                   auto const col_stream     = stream_for(i);
+                   return cudf::type_dispatcher<dispatch_storage_type>(
+                     source_column.type(),
+                     column_gatherer{},
+                     source_column,
+                     gather_map_begin,
+                     gather_map_end,
+                     bounds_policy == out_of_bounds_policy::NULLIFY,
+                     col_stream,
+                     mr);
+                 });
 
   auto const needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
                                  cudf::has_nested_nullable_columns(source_table);
@@ -655,15 +733,41 @@ std::unique_ptr<table> gather(table_view const& source_table,
       auto const op = bounds_policy == out_of_bounds_policy::NULLIFY
                         ? gather_bitmask_op::NULLIFY
                         : gather_bitmask_op::DONT_CHECK;
-      gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+      // Safe to run on `stream` concurrently with forked streams because:
+      // 1. column_gatherer uses mask_allocation_policy::NEVER for top-level result
+      //    columns, so they have no null masks yet — gather_bitmask allocates fresh
+      //    masks on `stream`. (Struct children may already have masks on forked
+      //    streams, but the outer gather_bitmask never reads result-column null
+      //    masks, so there is no race with those child masks.)
+      // 2. gather_bitmask_functor reads only from the source table (via
+      //    table_device_view `input`), not from result column data buffers that
+      //    are being written on forked streams.
+      // Only NULLIFY and DONT_CHECK ops are used here (never PASSTHROUGH), and
+      // neither reads result column data — so there is no read-after-write hazard
+      // between `stream` and the forked streams at this point.
+      gather_bitmask(source_table, gather_map_begin, result, op, stream, mr);
     } else {
-      for (size_type i = 0; i < source_table.num_columns(); ++i) {
-        set_all_valid_null_masks(source_table.column(i), *destination_columns[i], stream, mr);
-      }
+      std::for_each_n(cuda::counting_iterator{0}, num_columns, [&](size_type i) {
+        auto const col_stream = stream_for(i);
+        set_all_valid_null_masks(source_table.column(i), *result[i], col_stream, mr);
+      });
     }
   }
 
-  return std::make_unique<table>(std::move(destination_columns));
+  // Join streams as late as possible so that null mask computations can run on
+  // the passed in stream while other streams are gathering. Skip joining when
+  // `streams` is empty — either a single column was processed, or data volume
+  // was below the fork threshold — since the passed-in stream was used directly.
+  if (!streams.empty()) {
+    cudf::detail::join_streams(streams, stream);
+    // Rebind result columns' device buffers to the user stream so that
+    // deallocation is properly ordered with downstream work on `stream`.
+    for (auto& col : result) {
+      col = cudf::rebind_stream(std::move(*col), stream);
+    }
+  }
+
+  return std::make_unique<table>(std::move(result));
 }
 
 }  // namespace detail

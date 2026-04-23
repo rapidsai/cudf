@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -99,7 +99,7 @@ cuda_stream_pool& global_cuda_stream_pool();
  * auto const num_streams = 2;
  * // do work on stream
  * // allocate streams and wait for an event on stream before executing on any of streams
- * auto streams = cudf::detail::fork_stream(stream, num_streams);
+ * auto streams = cudf::detail::fork_streams(stream, num_streams);
  * // do work on streams[0] and streams[1]
  * // wait for event on streams before continuing to do work on stream
  * cudf::detail::join_streams(streams, stream);

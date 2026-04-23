@@ -6,10 +6,12 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -32,6 +34,8 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/uninitialized_fill.h>
+
+#include <algorithm>
 
 namespace cudf {
 namespace detail {
@@ -375,26 +379,49 @@ std::unique_ptr<table> scatter(table_view const& source,
                "scatter map size should be <= to number of rows in source");
 
   // Transform negative indices to index + target size.
+  // NOTE: `thrust::make_transform_iterator` preserves the underlying iterator's random_access
+  // `iterator_category` when the functor returns by value. `cuda::transform_iterator` would
+  // downgrade `iterator_category` to `input_iterator_tag` here (because
+  // `index_converter::operator()` returns `map_type` by value), which causes `thrust::scatter`'s
+  // CUB bulk-copy fast path to fall back to a serialized kernel and introduces device-side
+  // materialization overhead. See https://github.com/NVIDIA/cccl/issues/8640.
   auto updated_scatter_map_begin =
     thrust::make_transform_iterator(scatter_map_begin, index_converter<MapType>{target.num_rows()});
   auto updated_scatter_map_end =
     thrust::make_transform_iterator(scatter_map_end, index_converter<MapType>{target.num_rows()});
-  auto result = std::vector<std::unique_ptr<column>>(target.num_columns());
 
-  std::transform(source.begin(),
-                 source.end(),
-                 target.begin(),
+  auto const num_columns = target.num_columns();
+  auto result            = std::vector<std::unique_ptr<column>>(num_columns);
+
+  // Fork streams for multi-column tables when there is enough data per column
+  // to amortize the fork/join overhead. Use target.num_rows() as the size proxy
+  // since the dominant cost per column is copying the full target before
+  // overwriting the scattered rows.
+  auto const streams = maybe_fork_streams(target, target.num_rows(), stream);
+
+  auto const stream_for = [&](size_type i) -> rmm::cuda_stream_view {
+    return !streams.empty() ? streams[i % streams.size()] : stream;
+  };
+
+  std::transform(cuda::counting_iterator{0},
+                 cuda::counting_iterator{num_columns},
                  result.begin(),
-                 [=](auto const& source_col, auto const& target_col) {
+                 [&](size_type i) {
+                   auto const& source_col = source.column(i);
+                   auto const col_stream  = stream_for(i);
                    return type_dispatcher<dispatch_storage_type>(source_col.type(),
                                                                  column_scatterer{},
                                                                  source_col,
                                                                  updated_scatter_map_begin,
                                                                  updated_scatter_map_end,
-                                                                 target_col,
-                                                                 stream,
+                                                                 target.column(i),
+                                                                 col_stream,
                                                                  mr);
                  });
+
+  // Join forked streams before gather_bitmask, which reads result columns'
+  // null masks written on forked streams via the PASSTHROUGH op.
+  if (!streams.empty()) { cudf::detail::join_streams(streams, stream); }
 
   // We still need to call `gather_bitmask` even when the source columns are not nullable,
   // as if the target has null_mask, that null_mask needs to be updated after scattering.
@@ -408,14 +435,16 @@ std::unique_ptr<table> scatter(table_view const& source,
 
     // For struct columns, we need to superimpose the null_mask of the parent over the null_mask of
     // the children.
-    std::for_each(result.begin(), result.end(), [=](auto& col) {
+    std::for_each_n(cuda::counting_iterator{0}, num_columns, [&](size_type i) {
+      auto& col           = result[i];
       auto const col_view = col->view();
       if (col_view.type().id() == type_id::STRUCT and col_view.nullable()) {
         auto const num_rows   = col_view.size();
         auto const null_count = col_view.null_count();
         auto contents         = col->release();
 
-        // Children null_mask will be superimposed during structs column construction.
+        // Children null_mask will be superimposed during structs
+        // column construction.
         col = cudf::make_structs_column(num_rows,
                                         std::move(contents.children),
                                         null_count,
@@ -425,6 +454,15 @@ std::unique_ptr<table> scatter(table_view const& source,
       }
     });
   }
+
+  // Rebind result columns' device buffers to the user stream so that
+  // deallocation is properly ordered with downstream work on `stream`.
+  if (!streams.empty()) {
+    for (auto& col : result) {
+      col = cudf::rebind_stream(std::move(*col), stream);
+    }
+  }
+
   return std::make_unique<table>(std::move(result));
 }
 }  // namespace detail

@@ -843,3 +843,234 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointScatter)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table, result->view());
 }
+
+// ---------------------------------------------------------------------------
+// Stream-pool fork/join path tests for scatter.
+// The fork threshold is min_bytes_for_stream_fork = 512 * 1024 bytes.
+// For int64 (8 bytes), the threshold row count is 65536 (based on target.num_rows()).
+// ---------------------------------------------------------------------------
+
+class ScatterStreamPoolTest : public cudf::test::BaseFixture {};
+
+// Below threshold: 2 int64 columns × 32768 rows = 256 KB < 512 KB → single-stream path
+TEST_F(ScatterStreamPoolTest, BelowThreshold_SingleStreamPath)
+{
+  constexpr cudf::size_type num_rows    = 32'768;
+  constexpr cudf::size_type num_scatter = 100;
+  constexpr int n_cols                  = 2;
+
+  auto tgt_data = cuda::counting_iterator<int64_t>{0};
+  auto src_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<int64_t>(i + 1000); });
+  auto map_data = cuda::counting_iterator{0};
+
+  std::vector<cudf::test::fixed_width_column_wrapper<int64_t>> src_cols, tgt_cols;
+  std::vector<cudf::column_view> src_views, tgt_views;
+  for (int c = 0; c < n_cols; ++c) {
+    src_cols.emplace_back(src_data, src_data + num_scatter);
+    tgt_cols.emplace_back(tgt_data, tgt_data + num_rows);
+    src_views.push_back(src_cols.back());
+    tgt_views.push_back(tgt_cols.back());
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map(map_data, map_data + num_scatter);
+  cudf::table_view source{src_views};
+  cudf::table_view target{tgt_views};
+
+  auto result = cudf::scatter(source, scatter_map, target);
+
+  // Positions 0..99 get source values (i + 1000); positions 100..num_rows-1 unchanged.
+  auto expected_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) -> int64_t { return i < 100 ? i + 1000 : i; });
+  cudf::test::fixed_width_column_wrapper<int64_t> expected_col(expected_data,
+                                                               expected_data + num_rows);
+  for (int c = 0; c < n_cols; ++c) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view().column(c));
+  }
+}
+
+// Single column does NOT fork regardless of size
+TEST_F(ScatterStreamPoolTest, SingleColumnNoFork)
+{
+  constexpr cudf::size_type num_rows    = 70'000;
+  constexpr cudf::size_type num_scatter = 100;
+
+  auto tgt_data = cuda::counting_iterator<int64_t>{0};
+  auto src_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<int64_t>(i + 5000); });
+  auto map_data = cuda::counting_iterator{0};
+
+  cudf::test::fixed_width_column_wrapper<int64_t> source_col(src_data, src_data + num_scatter);
+  cudf::test::fixed_width_column_wrapper<int64_t> target_col(tgt_data, tgt_data + num_rows);
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map(map_data, map_data + num_scatter);
+
+  cudf::table_view source{{source_col}};
+  cudf::table_view target{{target_col}};
+
+  auto result = cudf::scatter(source, scatter_map, target);
+
+  // Positions 0..99 get source values (i + 5000); positions 100..num_rows-1 unchanged.
+  auto expected_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) -> int64_t { return i < 100 ? i + 5000 : i; });
+  cudf::test::fixed_width_column_wrapper<int64_t> expected_col(expected_data,
+                                                               expected_data + num_rows);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view().column(0));
+}
+
+// Above threshold: 4 int64 columns, target with 70000 rows = 560 KB > 512 KB → fork path
+TEST_F(ScatterStreamPoolTest, MultiColumnAboveThreshold)
+{
+  constexpr cudf::size_type num_rows    = 70'000;
+  constexpr cudf::size_type num_scatter = 100;
+  constexpr int n_cols                  = 4;
+
+  auto src_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<int64_t>(i + 1000); });
+  auto tgt_data = cuda::counting_iterator<int64_t>{0};
+  auto map_data = cuda::counting_iterator{0};
+
+  std::vector<cudf::test::fixed_width_column_wrapper<int64_t>> src_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<int64_t>> tgt_cols;
+  std::vector<cudf::column_view> src_views, tgt_views;
+  for (int c = 0; c < n_cols; ++c) {
+    src_cols.emplace_back(src_data, src_data + num_scatter);
+    tgt_cols.emplace_back(tgt_data, tgt_data + num_rows);
+    src_views.push_back(src_cols.back());
+    tgt_views.push_back(tgt_cols.back());
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map(map_data, map_data + num_scatter);
+
+  cudf::table_view source{src_views};
+  cudf::table_view target{tgt_views};
+
+  auto result = cudf::scatter(source, scatter_map, target);
+
+  // Positions 0..99 should be 1000..1099; positions 100..num_rows-1 unchanged
+  auto expected_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) -> int64_t { return i < 100 ? i + 1000 : i; });
+  cudf::test::fixed_width_column_wrapper<int64_t> expected_col(expected_data,
+                                                               expected_data + num_rows);
+  for (int c = 0; c < n_cols; ++c) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view().column(c));
+  }
+}
+
+// Nullable scatter on fork path — exercises join_streams before gather_bitmask PASSTHROUGH
+TEST_F(ScatterStreamPoolTest, NullableMultiCol_ForkPath)
+{
+  constexpr cudf::size_type target_size  = 70'000;
+  constexpr cudf::size_type scatter_size = 1'000;
+  constexpr int n_cols                   = 2;
+
+  auto tgt_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<int64_t>(i * 10); });
+  auto tgt_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto src_data  = cuda::counting_iterator<int64_t>{0};
+  auto map_data  = cuda::counting_iterator{0};
+
+  std::vector<cudf::test::fixed_width_column_wrapper<int64_t>> src_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<int64_t>> tgt_cols;
+  std::vector<cudf::column_view> src_views, tgt_views;
+  for (int c = 0; c < n_cols; ++c) {
+    src_cols.emplace_back(src_data, src_data + scatter_size);
+    tgt_cols.emplace_back(tgt_data, tgt_data + target_size, tgt_valid);
+    src_views.push_back(src_cols.back());
+    tgt_views.push_back(tgt_cols.back());
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map(map_data, map_data + scatter_size);
+
+  cudf::table_view source{src_views};
+  cudf::table_view target{tgt_views};
+
+  auto result = cudf::scatter(source, scatter_map, target);
+  EXPECT_EQ(result->num_columns(), n_cols);
+  EXPECT_EQ(result->num_rows(), target_size);
+
+  // Positions 0..scatter_size-1 get source values (non-nullable, all valid).
+  // Positions scatter_size..target_size-1 keep target values with target validity.
+  auto expected_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) -> int64_t { return i < scatter_size ? i : i * 10; });
+  auto expected_valid = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < scatter_size ? 1 : (i % 2); });
+  cudf::test::fixed_width_column_wrapper<int64_t> expected_col(
+    expected_data, expected_data + target_size, expected_valid);
+  for (int c = 0; c < n_cols; ++c) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view().column(c));
+  }
+}
+
+// Full-cap tier: target with 1100000 int64 rows = 8.8 MB, 9 columns
+TEST_F(ScatterStreamPoolTest, FullCapTier_RoundRobin)
+{
+  constexpr cudf::size_type num_rows    = 1'100'000;
+  constexpr cudf::size_type num_scatter = 500;
+  constexpr int n_cols                  = 9;
+
+  auto src_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<int64_t>(i + num_rows); });
+  auto tgt_data = cuda::counting_iterator<int64_t>{0};
+  auto map_data = cuda::counting_iterator{0};
+
+  std::vector<cudf::test::fixed_width_column_wrapper<int64_t>> src_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<int64_t>> tgt_cols;
+  std::vector<cudf::column_view> src_views, tgt_views;
+  for (int c = 0; c < n_cols; ++c) {
+    src_cols.emplace_back(src_data, src_data + num_scatter);
+    tgt_cols.emplace_back(tgt_data, tgt_data + num_rows);
+    src_views.push_back(src_cols.back());
+    tgt_views.push_back(tgt_cols.back());
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map(map_data, map_data + num_scatter);
+
+  cudf::table_view source{src_views};
+  cudf::table_view target{tgt_views};
+
+  auto result = cudf::scatter(source, scatter_map, target);
+  EXPECT_EQ(result->num_columns(), n_cols);
+  // Verify each column independently against a serial single-column scatter
+  for (int c = 0; c < n_cols; ++c) {
+    cudf::table_view single_src{{src_views[c]}};
+    cudf::table_view single_tgt{{tgt_views[c]}};
+    auto result_serial = cudf::scatter(single_src, scatter_map, single_tgt);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(c), result_serial->view().column(0));
+  }
+}
+
+// Narrow type (int8): 1 byte x 524288 rows = 512 KB = threshold.
+// Exercises max_elem_bytes=1 path in maybe_fork_streams.
+TEST_F(ScatterStreamPoolTest, NarrowType_AtThreshold)
+{
+  constexpr cudf::size_type num_rows    = 524'288;
+  constexpr cudf::size_type num_scatter = 100;
+  constexpr int n_cols                  = 2;
+
+  auto src_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<int8_t>((i % 100) + 10); });
+  auto tgt_data = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return static_cast<int8_t>(i % 127); });
+  auto map_data = cuda::counting_iterator{0};
+
+  std::vector<cudf::test::fixed_width_column_wrapper<int8_t>> src_cols;
+  std::vector<cudf::test::fixed_width_column_wrapper<int8_t>> tgt_cols;
+  std::vector<cudf::column_view> src_views, tgt_views;
+  for (int c = 0; c < n_cols; ++c) {
+    src_cols.emplace_back(src_data, src_data + num_scatter);
+    tgt_cols.emplace_back(tgt_data, tgt_data + num_rows);
+    src_views.push_back(src_cols.back());
+    tgt_views.push_back(tgt_cols.back());
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> scatter_map(map_data, map_data + num_scatter);
+  cudf::table_view source{src_views};
+  cudf::table_view target{tgt_views};
+
+  auto result = cudf::scatter(source, scatter_map, target);
+
+  auto expected_data =
+    cudf::detail::make_counting_transform_iterator(0, [num_scatter](auto i) -> int8_t {
+      return i < num_scatter ? static_cast<int8_t>((i % 100) + 10) : static_cast<int8_t>(i % 127);
+    });
+  cudf::test::fixed_width_column_wrapper<int8_t> expected_col(expected_data,
+                                                              expected_data + num_rows);
+  for (int c = 0; c < n_cols; ++c) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view().column(c));
+  }
+}
