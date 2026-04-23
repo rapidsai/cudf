@@ -1175,6 +1175,20 @@ parse_dates : list of int or names, default None
     speed, explicitly specify `dtype='date'` for the desired columns.
 dayfirst : bool, default False
     DD/MM format dates, international and European format.
+date_format : str or dict, default None
+    Controls how dates are parsed when ``parse_dates`` is set.
+    Accepted values:
+
+    * ``None`` / ``"mixed"`` – use cudf's built-in datetime auto-detection
+      (handles ISO 8601, named months, and common numeric separators).
+    * ``"ISO8601"`` – same as ``"mixed"`` in cudf (strict rejection of
+      non-ISO strings is not enforced; use ``dayfirst`` for ambiguous dates).
+    * A strftime format string (e.g. ``"%Y-%m-%d"``, ``"%d/%m/%Y"``) –
+      the CSV reader reads those columns as strings and converts them on the
+      GPU via ``cudf.strings.to_timestamps`` (exact match with pandas).
+    * A dict mapping column names or indices to any of the above values.
+
+    Note: unlike pandas, ``"ISO8601"`` does not reject non-conforming dates.
 compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
     For on-the-fly decompression of on-disk data. If 'infer', then detect
     compression from the following extensions: '.gz','.zip' (otherwise no

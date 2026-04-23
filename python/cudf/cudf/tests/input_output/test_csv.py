@@ -126,9 +126,6 @@ def test_csv_reader_numeric_data(numeric_types_as_str, tmp_path):
     assert_eq(df, out)
 
 
-@pytest.mark.skip(
-    reason="Disabled until https://github.com/rapidsai/cudf/pull/22094 is fixed"
-)
 @pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
 def test_csv_reader_datetime(parse_dates):
     df = pd.DataFrame(
@@ -177,6 +174,207 @@ def test_csv_reader_datetime(parse_dates):
         names=["date1", "date2", "bad"],
         parse_dates=parse_dates,
         dayfirst=True,
+        date_format="mixed",
+    )
+
+    assert_eq(gdf, pdf)
+
+
+@pytest.mark.parametrize(
+    "date_format",
+    [
+        "mixed",
+        "ISO8601",
+        pytest.param(
+            None,
+            id="none",
+        ),
+    ],
+)
+def test_csv_reader_date_format_auto(date_format):
+    """date_format='mixed'/'ISO8601'/None all use cudf's auto-detection."""
+    df = pd.DataFrame(
+        {
+            "date1": [
+                "2023-01-15",
+                "2022-12-31",
+                "2021-06-01",
+            ],
+            "date2": [
+                "2023-01-15T10:30:00",
+                "2022-12-31T23:59:59",
+                "2021-06-01T00:00:00",
+            ],
+        }
+    )
+    buffer = df.to_csv(index=False, header=False)
+
+    kwargs = {} if date_format is None else {"date_format": date_format}
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["date1", "date2"],
+        parse_dates=["date1", "date2"],
+        **kwargs,
+    )
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["date1", "date2"],
+        parse_dates=["date1", "date2"],
+        date_format="mixed",
+    )
+
+    assert_eq(gdf, pdf)
+
+
+@pytest.mark.parametrize(
+    "fmt,data,col_name",
+    [
+        ("%Y-%m-%d", ["2023-01-15", "2022-12-31", "2021-06-01"], "date1"),
+        ("%d/%m/%Y", ["15/01/2023", "31/12/2022", "01/06/2021"], "date1"),
+        (
+            "%Y-%m-%dT%H:%M:%S",
+            [
+                "2023-01-15T10:30:00",
+                "2022-12-31T23:59:59",
+                "2021-06-01T00:00:00",
+            ],
+            "ts1",
+        ),
+    ],
+)
+def test_csv_reader_date_format_explicit(fmt, data, col_name):
+    """Specific strftime format strings use GPU to_timestamps post-processing."""
+    other = [1, 2, 3]
+    df = pd.DataFrame({"other": other, col_name: data})
+    buffer = df.to_csv(index=False, header=False)
+
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["other", col_name],
+        parse_dates=[col_name],
+        date_format=fmt,
+    )
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["other", col_name],
+        parse_dates=[col_name],
+        date_format=fmt,
+    )
+
+    assert_eq(gdf, pdf)
+
+
+def test_csv_reader_date_format_dict_all_auto():
+    """Dict date_format with only 'mixed'/'ISO8601' values uses auto-detection."""
+    df = pd.DataFrame(
+        {
+            "date1": ["2023-01-15", "2022-12-31", "2021-06-01"],
+            "date2": [
+                "2023-01-15T10:30:00",
+                "2022-12-31T23:59:59",
+                "2021-06-01T00:00:00",
+            ],
+        }
+    )
+    buffer = df.to_csv(index=False, header=False)
+
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["date1", "date2"],
+        parse_dates=["date1", "date2"],
+        date_format={"date1": "ISO8601", "date2": "mixed"},
+    )
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["date1", "date2"],
+        parse_dates=["date1", "date2"],
+        date_format="mixed",
+    )
+
+    assert_eq(gdf, pdf)
+
+
+def test_csv_reader_date_format_dict_mixed():
+    """Dict date_format mixing explicit and auto formats."""
+    df = pd.DataFrame(
+        {
+            "date1": ["2023-01-15", "2022-12-31", "2021-06-01"],
+            "date2": ["15/01/2023", "31/12/2022", "01/06/2021"],
+        }
+    )
+    buffer = df.to_csv(index=False, header=False)
+
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["date1", "date2"],
+        parse_dates=["date1", "date2"],
+        date_format={"date1": "ISO8601", "date2": "%d/%m/%Y"},
+    )
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["date1", "date2"],
+        parse_dates=["date1", "date2"],
+        date_format={"date1": "ISO8601", "date2": "%d/%m/%Y"},
+    )
+
+    assert_eq(gdf, pdf)
+
+
+def test_csv_reader_date_format_by_index():
+    """date_format with integer column index in parse_dates."""
+    df = pd.DataFrame(
+        {
+            "other": [1, 2, 3],
+            "date1": ["2023-01-15", "2022-12-31", "2021-06-01"],
+        }
+    )
+    buffer = df.to_csv(index=False, header=False)
+
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["other", "date1"],
+        parse_dates=[1],
+        date_format="%Y-%m-%d",
+    )
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["other", "date1"],
+        parse_dates=[1],
+        date_format="%Y-%m-%d",
+    )
+
+    assert_eq(gdf, pdf)
+
+
+def test_csv_reader_date_format_bad_type():
+    """Non-string non-dict date_format raises TypeError."""
+    buffer = "2023-01-15\n"
+    with pytest.raises(TypeError, match="date_format"):
+        read_csv(
+            StringIO(buffer),
+            names=["d"],
+            parse_dates=["d"],
+            date_format=42,
+        )
+
+
+def test_csv_reader_date_format_dict_nonexistent_column():
+    """date_format dict with a non-existent column name is silently ignored."""
+    df = pd.DataFrame({"date1": ["2023-01-15", "2022-12-31", "2021-06-01"]})
+    buffer = df.to_csv(index=False, header=False)
+
+    # "nonexistent" is not a real column; the `continue` guard in the cudf
+    # date_format dict handler should skip it without raising.
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["date1"],
+        parse_dates=["date1"],
+        date_format={"date1": "ISO8601", "nonexistent": "%Y-%m-%d"},
+    )
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["date1"],
+        parse_dates=["date1"],
         date_format="mixed",
     )
 
@@ -1066,10 +1264,10 @@ def test_csv_reader_tabs():
     floats = [1.2, 3.4, 5.6, 7.8]
     ints = [12, 34, 56, 78]
     dates = [
-        "1995-11-22T00:00:00.000000000",
-        "2001-01-01T00:00:00.000000000",
-        "1970-12-12T00:00:00.000000000",
-        "2018-06-15T00:00:00.000000000",
+        "1995-11-22T00:00:00.000000",
+        "2001-01-01T00:00:00.000000",
+        "1970-12-12T00:00:00.000000",
+        "2018-06-15T00:00:00.000000",
     ]
     np.testing.assert_allclose(floats, df["float_point"].to_numpy())
     np.testing.assert_allclose(ints, df["integer"].to_numpy())

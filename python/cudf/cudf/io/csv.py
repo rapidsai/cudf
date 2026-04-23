@@ -13,7 +13,7 @@ import pandas as pd
 import pylibcudf as plc
 
 from cudf.api.types import is_scalar
-from cudf.core.column import access_columns
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.dataframe import DataFrame
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -67,6 +67,7 @@ def read_csv(
     skip_blank_lines: bool = True,
     parse_dates=None,
     dayfirst: bool = False,
+    date_format=None,
     compression="infer",
     thousands: str | None = None,
     decimal: str = ".",
@@ -251,8 +252,55 @@ def read_csv(
     if comment is not None:
         options.set_comment(comment)
 
+    # Process date_format parameter.
+    #
+    # pandas 3 date_format semantics:
+    #   None / "mixed"   - infer per element (cudf auto-detection covers this)
+    #   "ISO8601"        - accept any ISO 8601 string; pandas rejects non-ISO
+    #                      dates but cudf cannot enforce strict rejection via the
+    #                      C++ CSV parser, so we use auto-detection for this too
+    #   strftime string  - exact format; cudf CSV parser has no format-string
+    #                      capability, so we read those columns as strings and
+    #                      apply cudf.strings.to_timestamps() post-read (GPU path)
+    #   dict             - per-column mix of the above
+    #
+    # Note: "ISO8601" is not strictly enforced - non-ISO dates are silently
+    # parsed by the auto-detector rather than returned as strings like pandas.
+    _AUTO_FORMATS = frozenset({"mixed", "ISO8601"})
+
+    if date_format is not None and not isinstance(date_format, (str, dict)):
+        raise TypeError(
+            f"`date_format` must be a string, dict, or None, "
+            f"got {type(date_format).__name__!r}"
+        )
+
+    # Split parse_dates columns: auto-detect vs explicit strftime format
+    auto_parse_dates: list = []  # handled by the C++ CSV reader
+    explicit_date_formats: dict = {}  # col_id -> format string, post-processed
+
     if parse_dates is not None:
-        options.set_parse_dates(list(parse_dates))
+        if date_format is None or (
+            isinstance(date_format, str) and date_format in _AUTO_FORMATS
+        ):
+            auto_parse_dates = list(parse_dates)
+        elif isinstance(date_format, str):
+            # Same format for every parse_dates column
+            for col in parse_dates:
+                explicit_date_formats[col] = date_format
+        else:  # dict
+            for col in parse_dates:
+                fmt = date_format.get(col)
+                if fmt is None or fmt in _AUTO_FORMATS:
+                    auto_parse_dates.append(col)
+                else:
+                    explicit_date_formats[col] = fmt
+
+    if auto_parse_dates:
+        options.set_parse_dates(list(auto_parse_dates))
+        # Match pandas 3's default datetime resolution of microseconds
+        options.set_timestamp_type(
+            plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+        )
 
     if hex_cols is not None:
         options.set_parse_hex(list(hex_cols))
@@ -270,6 +318,38 @@ def read_csv(
 
     table_w_meta = plc.io.csv.read_csv(options)
     df = DataFrame.from_pylibcudf(table_w_meta)
+
+    # Apply explicit strftime format strings via GPU strings.to_timestamps().
+    # Columns with explicit formats were NOT put in parse_dates, so the CSV
+    # reader left them as strings; we convert them here.
+    if explicit_date_formats:
+        ts_dtype = np.dtype("datetime64[us]")
+        ts_type = plc.DataType(plc.TypeId.TIMESTAMP_MICROSECONDS)
+        for col_id, fmt in explicit_date_formats.items():
+            if isinstance(col_id, int):
+                if 0 <= col_id < len(df._column_names):
+                    col_name = df._column_names[col_id]
+                else:
+                    continue
+            else:
+                col_name = str(col_id)
+
+            if col_name not in df._data:
+                continue  # non-existent column (e.g. "bad"), skip gracefully
+
+            str_col = df._data[col_name]
+            if str_col.dtype.kind != "O":
+                continue  # already parsed as something else, skip
+
+            with access_columns(str_col, mode="read", scope="internal") as (
+                col,
+            ):
+                new_col_plc = (
+                    plc.strings.convert.convert_datetime.to_timestamps(
+                        col.plc_column, ts_type, fmt
+                    )
+                )
+            df._data[col_name] = ColumnBase.create(new_col_plc, ts_dtype)
 
     if get_option("mode.pandas_compatible") and df.empty:
         raise pd.errors.EmptyDataError("No columns to parse from file")

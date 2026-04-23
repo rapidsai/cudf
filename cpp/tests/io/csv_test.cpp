@@ -772,6 +772,188 @@ TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds)
     view.column(0));
 }
 
+// Tests for named-month date formats added in datetime.cuh (month_from_name +
+// extract_date extensions) and the microsecond-precision extract_time_of_day.
+
+TEST_F(CsvReaderTest, DatesNamedMonthSpaceSeparated)
+{
+  // Exercises the new space-separated named-month paths in extract_date():
+  //   "D MonthName YYYY"  →  day first, full or abbreviated month name
+  //   "MonthName YYYY"    →  month name first, day defaults to 1
+  auto filepath = temp_env->get_temp_dir() + "DatesNamedMonthSpace.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "2 January 1994\n";  // "D MonthName YYYY" – full name
+    outfile << "15 May 2009\n";     // "D Mon YYYY" – abbreviated name
+    outfile << "1 March 2000\n";    // "D MonthName YYYY"
+    outfile << "Feb 2002\n";        // "MonthName YYYY" – day defaults to 1
+    outfile << "January 2000\n";    // "MonthName YYYY" – full name
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names({"A"})
+      .dtypes({data_type{type_id::TIMESTAMP_MILLISECONDS}})
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  expect_column_data_equal(
+    std::vector<cudf::timestamp_ms>{
+      cudf::timestamp_ms{757468800000ms},   // 1994-01-02
+      cudf::timestamp_ms{1242345600000ms},  // 2009-05-15
+      cudf::timestamp_ms{951868800000ms},   // 2000-03-01
+      cudf::timestamp_ms{1012521600000ms},  // 2002-02-01 (day defaults to 1)
+      cudf::timestamp_ms{946684800000ms},   // 2000-01-01 (day defaults to 1)
+    },
+    view.column(0));
+}
+
+TEST_F(CsvReaderTest, DatesNamedMonthDashSeparated)
+{
+  // Exercises the named-month extension in the dayfirst dash-separated path:
+  //   "DD-Mon-YYYY"  with dayfirst=true
+  auto filepath = temp_env->get_temp_dir() + "DatesNamedMonthDash.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "21-Dec-2009\n";  // full month name, abbreviated
+    outfile << "15-May-2009\n";  // abbreviated month name
+    outfile << "01-Jan-2000\n";  // abbreviated month name, leading zero
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names({"A"})
+      .dtypes({data_type{type_id::TIMESTAMP_MILLISECONDS}})
+      .dayfirst(true)
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  expect_column_data_equal(
+    std::vector<cudf::timestamp_ms>{
+      cudf::timestamp_ms{1261353600000ms},  // 2009-12-21
+      cudf::timestamp_ms{1242345600000ms},  // 2009-05-15
+      cudf::timestamp_ms{946684800000ms},   // 2000-01-01
+    },
+    view.column(0));
+}
+
+TEST_F(CsvReaderTest, DatesNamedMonthDashSeparatedDayLast)
+{
+  // Exercises the named-month extension for dayfirst=false (default) dash-separated path:
+  //   "Mon-DD-YYYY"  (e.g. "Dec-21-2009")
+  auto filepath = temp_env->get_temp_dir() + "DatesNamedMonthDashDayLast.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "Dec-21-2009\n";  // abbreviated month name, dayfirst=false
+    outfile << "May-15-2009\n";  // abbreviated month name
+    outfile << "Jan-01-2000\n";  // abbreviated month name, leading zero
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names({"A"})
+      .dtypes({data_type{type_id::TIMESTAMP_MILLISECONDS}})
+      .dayfirst(false)
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  expect_column_data_equal(
+    std::vector<cudf::timestamp_ms>{
+      cudf::timestamp_ms{1261353600000ms},  // 2009-12-21
+      cudf::timestamp_ms{1242345600000ms},  // 2009-05-15
+      cudf::timestamp_ms{946684800000ms},   // 2000-01-01
+    },
+    view.column(0));
+}
+
+TEST_F(CsvReaderTest, DatesFractionalSecondsMicroseconds)
+{
+  // Exercises extract_time_of_day() returning hh_mm_ss<duration_us>.
+  // Fractional digits are scaled to 6 digits (microseconds) so different
+  // representations of the same sub-second value must all yield the same result.
+  auto filepath = temp_env->get_temp_dir() + "DatesFractionalUs.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "1970-01-01T00:00:00.4\n";       // 1 digit  → 400000 µs
+    outfile << "1970-01-01T00:00:00.400\n";     // 3 digits → 400000 µs
+    outfile << "1970-01-01T00:00:00.400000\n";  // 6 digits → 400000 µs
+    outfile << "1970-01-01T00:00:00.123456\n";  // 6 digits → 123456 µs
+    outfile << "1970-01-01T00:00:00.040\n";     // 3 digits → 040 × 1000 = 40000 µs
+    outfile << "1970-01-01T00:00:00.004\n";     // 3 digits → 004 × 1000 = 4000 µs
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names({"A"})
+      .dtypes({data_type{type_id::TIMESTAMP_MICROSECONDS}})
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(type_id::TIMESTAMP_MICROSECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  expect_column_data_equal(
+    std::vector<cudf::timestamp_us>{
+      cudf::timestamp_us{400000us},
+      cudf::timestamp_us{400000us},
+      cudf::timestamp_us{400000us},
+      cudf::timestamp_us{123456us},
+      cudf::timestamp_us{40000us},
+      cudf::timestamp_us{4000us},
+    },
+    view.column(0));
+}
+
+TEST_F(CsvReaderTest, DatesFractionalSecondsWithTimezoneZ)
+{
+  // Regression test for the 'Z' timezone-suffix bug: previously frac_digits was
+  // computed as (end - frac_begin) which included the trailing 'Z', causing the
+  // fractional scaling to be off by one order of magnitude.
+  // E.g. "001Z" was treated as a 4-digit fraction (scale=100) instead of a
+  // 3-digit fraction (scale=1000), yielding 100 µs instead of 1000 µs (1 ms).
+  auto filepath = temp_env->get_temp_dir() + "DatesFractionalZ.csv";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "1970-01-01T00:00:00.001Z\n";  // 1 ms  (bug: was 0 ms)
+    outfile << "1970-01-01T00:00:00.010Z\n";  // 10 ms (bug: was 1 ms)
+    outfile << "1970-01-01T00:00:00.100Z\n";  // 100 ms
+    outfile << "1970-01-01T00:00:01.000Z\n";  // 1000 ms (1 second, no fractional)
+  }
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{filepath})
+      .names({"A"})
+      .dtypes({data_type{type_id::TIMESTAMP_MILLISECONDS}})
+      .header(-1);
+  auto result = cudf::io::read_csv(in_opts);
+
+  auto const view = result.tbl->view();
+  ASSERT_EQ(type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  expect_column_data_equal(
+    std::vector<cudf::timestamp_ms>{
+      cudf::timestamp_ms{1ms},
+      cudf::timestamp_ms{10ms},
+      cudf::timestamp_ms{100ms},
+      cudf::timestamp_ms{1000ms},
+    },
+    view.column(0));
+}
+
 TEST_F(CsvReaderTest, IntegersCastToTimestampSeconds)
 {
   auto filepath = temp_env->get_temp_dir() + "IntegersCastToTimestampS.csv";

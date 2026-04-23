@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -349,6 +349,21 @@ cdef class CsvReaderOptions:
         """
         self.c_obj.set_source(src.c_obj)
 
+    cpdef void set_timestamp_type(self, DataType type):
+        """
+        Sets the type to which timestamp columns are cast.
+
+        Parameters
+        ----------
+        type : DataType
+            The timestamp type to cast to (e.g. TIMESTAMP_MICROSECONDS).
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_timestamp_type(type.c_obj)
+
 
 cdef class CsvReaderOptionsBuilder:
     """
@@ -658,6 +673,22 @@ cdef class CsvReaderOptionsBuilder:
         CsvReaderOptionsBuilder
         """
         self.c_obj.delimiter(ord(delimiter))
+        return self
+
+    cpdef CsvReaderOptionsBuilder timestamp_type(self, DataType type):
+        """
+        Sets the type to which timestamp columns are cast.
+
+        Parameters
+        ----------
+        type : DataType
+            The timestamp type to cast to (e.g. TIMESTAMP_MICROSECONDS).
+
+        Returns
+        -------
+        CsvReaderOptionsBuilder
+        """
+        self.c_obj.timestamp_type(type.c_obj)
         return self
 
     cpdef CsvReaderOptions build(self):

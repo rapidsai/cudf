@@ -1,20 +1,24 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include "io/utilities/trie.hpp"
 
+#include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
+
+#include <optional>
 
 namespace cudf::io {
 /**
@@ -49,6 +53,11 @@ struct parse_options_view {
   cudf::detail::trie_view trie_false;
   cudf::detail::trie_view trie_na;
   bool multi_delimiter;
+  /// Device pointer to 24 locale-aware month name string_views:
+  /// indices  0-11 = abbreviated names (ABMON_1 .. ABMON_12, e.g. "Jan")
+  /// indices 12-23 = full names        (MON_1   .. MON_12,   e.g. "January")
+  /// nullptr means named-month parsing is disabled (numeric-only dates still parse).
+  cudf::string_view const* month_names{nullptr};
 };
 
 struct parse_options {
@@ -69,6 +78,12 @@ struct parse_options {
   cudf::detail::optional_trie trie_false;
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
+  /// Owning flat device buffer for locale month-name characters.
+  std::optional<rmm::device_uvector<char>> month_names_data;
+  /// Owning device array of 24 string_views into month_names_data:
+  ///   indices  0-11 = abbreviated (ABMON_1 .. ABMON_12)
+  ///   indices 12-23 = full        (MON_1   .. MON_12)
+  std::optional<rmm::device_uvector<cudf::string_view>> month_names_sv;
 
   [[nodiscard]] json_inference_options_view json_view() const
   {
@@ -96,7 +111,8 @@ struct parse_options {
             cudf::detail::make_trie_view(trie_true),
             cudf::detail::make_trie_view(trie_false),
             cudf::detail::make_trie_view(trie_na),
-            multi_delimiter};
+            multi_delimiter,
+            (month_names_sv && !month_names_sv->is_empty()) ? month_names_sv->data() : nullptr};
   }
 };
 

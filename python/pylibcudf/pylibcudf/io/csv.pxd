@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -47,6 +47,7 @@ cdef class CsvReaderOptions:
     cpdef void set_false_values(self, list false_values)
     cpdef void set_na_values(self, list na_values)
     cpdef void set_source(self, SourceInfo src)
+    cpdef void set_timestamp_type(self, DataType type)
 
 
 cdef class CsvReaderOptionsBuilder:
@@ -71,6 +72,7 @@ cdef class CsvReaderOptionsBuilder:
     cpdef CsvReaderOptionsBuilder na_filter(self, bool na_filter)
     cpdef CsvReaderOptionsBuilder dayfirst(self, bool dayfirst)
     cpdef CsvReaderOptionsBuilder delimiter(self, str delimiter)
+    cpdef CsvReaderOptionsBuilder timestamp_type(self, DataType type)
     cpdef CsvReaderOptions build(self)
 
 cpdef TableWithMetadata read_csv(
