@@ -535,7 +535,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
 
 def polars_impl_naive(run_config: RunConfig) -> QueryResult:
-    """Query 66 (naive)."""
+    """
+    Query 66 (naive).
+
+    Not refactored to use channel_agg(): q66 has only 2 channels (web + catalog),
+    joins time_dim and ship_mode (not supported by channel_agg), and uses 24
+    conditional monthly aggregations (WHEN d_moy==1..12) rather than simple sums.
+    """
     params = load_parameters(
         int(run_config.scale_factor),
         query_id=66,

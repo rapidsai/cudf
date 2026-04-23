@@ -212,7 +212,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
 
 def polars_impl_naive(run_config: RunConfig) -> QueryResult:
-    """Query 74 (naive)."""
+    """
+    Query 74 (naive).
+
+    Not refactored to use year_sales_agg(): the helper joins with the same
+    customer_key on both sides, but q74 uses different key names
+    (c_customer_sk vs ss_customer_sk / ws_bill_customer_sk).
+    """
     params = load_parameters(
         int(run_config.scale_factor),
         query_id=74,
