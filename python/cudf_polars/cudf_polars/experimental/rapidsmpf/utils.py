@@ -677,26 +677,29 @@ class NormalizedPartitioning:
     def is_aligned_with(self, other: NormalizedPartitioning) -> bool:
         """True when both sides share a compatible hash layout for a chunkwise operation."""
         if not bool(self) or not bool(other):
-            return False
+            return False  # Neither side is "properly" partitioned
+
+        # Check inter-rank alignment
         lhs_inter = self.inter_rank_scheme
         rhs_inter = other.inter_rank_scheme
         if not isinstance(lhs_inter, HashScheme) or not isinstance(
             rhs_inter, HashScheme
         ):
-            return False
+            # TODO: Support OrderScheme when implemented
+            return False  # Not hash partitioned
         if lhs_inter.modulus != rhs_inter.modulus:
-            return False
+            return False  # Different moduli
         if len(lhs_inter.column_indices) != len(rhs_inter.column_indices):
-            return False
+            return False  # Different key-column counts
+
+        # Check local alignment
         lhs_loc = self.local_scheme
         rhs_loc = other.local_scheme
-        if type(lhs_loc) is not type(rhs_loc):
-            return False
         if isinstance(lhs_loc, HashScheme) and isinstance(rhs_loc, HashScheme):
             return lhs_loc.modulus == rhs_loc.modulus and len(
                 lhs_loc.column_indices
             ) == len(rhs_loc.column_indices)
-        return True
+        return lhs_loc == rhs_loc == "inherit"
 
     @classmethod
     def from_keys(
@@ -720,6 +723,11 @@ class NormalizedPartitioning:
             Key column indices for the operation.
         allow_subset
             If True, the metadata keys may be a prefix of indices.
+
+        Returns
+        -------
+        NormalizedPartitioning
+            The resolved inter-rank and local partitioning schemes.
         """
         inter_rank_scheme, local_scheme = NormalizedPartitioning._normalize_schemes(
             partitioning_metadata, indices, nranks, allow_subset=allow_subset
