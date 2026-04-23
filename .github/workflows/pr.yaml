@@ -638,7 +638,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.streams-build-matrix.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.streams-test-matrix.outputs.matrix) }}
     with:
       build_type: pull-request
       branch: ${{ inputs.branch }}
