@@ -197,9 +197,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: CTE base — FROM web_sales JOIN date_dim WHERE d_month_seq BETWEEN ... JOIN item
     base = (
+        # SQL: FROM web_sales, date_dim d1 WHERE d1.d_date_sk = ws_sold_date_sk
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN item ON ws_item_sk = i_item_sk
         .join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        # SQL: WHERE d1.d_month_seq BETWEEN {d_month_seq} AND {d_month_seq}+11
         .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
     )
 
@@ -207,6 +211,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     agg_exprs = [pl.col("ws_net_paid").sum().alias("total_sum")]
     output_order = ["total_sum", "i_category", "i_class", "lochierarchy"]
 
+    # SQL: ROLLUP(i_category, i_class) — level0=both, level1=category-only, level2=grand total
     level0 = rollup_level(
         base,
         ["i_category", "i_class"],
@@ -235,16 +240,19 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         grouping_value=2,
     )
 
+    # SQL: UNION ALL of rollup levels
     combined = pl.concat([level0, level1, level2])
 
     return QueryResult(
         frame=(
+            # SQL: CASE WHEN lochierarchy=0 THEN i_category END AS partition_category (for window partition)
             combined.with_columns(
                 pl.when(pl.col("lochierarchy") == 0)
                 .then(pl.col("i_category"))
                 .otherwise(None)
                 .alias("partition_category")
             )
+            # SQL: Rank() OVER (PARTITION BY lochierarchy+partition_category ORDER BY Sum(ws_net_paid) DESC) AS rank_within_parent
             .with_columns(
                 pl.col("total_sum")
                 .rank(method="min", descending=True)
@@ -252,6 +260,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .cast(pl.Int64)
                 .alias("rank_within_parent")
             )
+            # SQL: SELECT total_sum, i_category, i_class, lochierarchy, rank_within_parent
             .select(
                 [
                     "total_sum",
@@ -261,6 +270,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "rank_within_parent",
                 ]
             )
+            # SQL: ORDER BY lochierarchy DESC, CASE WHEN lochierarchy=0 THEN i_category END, rank_within_parent
             .sort(
                 [
                     "lochierarchy",
@@ -272,6 +282,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 descending=[True, False, False],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("lochierarchy", True), ("rank_within_parent", False)],

@@ -212,15 +212,23 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
+    # SQL: CTE customer_total_return — FROM catalog_returns, date_dim, customer_address
+    # SQL:   WHERE cr_returned_date_sk = d_date_sk AND d_year = 1999
+    # SQL:   GROUP BY cr_returning_customer_sk, ca_state, Sum(cr_return_amt_inc_tax) AS ctr_total_return
     customer_total_return = (
+        # SQL: JOIN date_dim ON cr_returned_date_sk = d_date_sk
         catalog_returns.join(
             date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk"
         )
+        # SQL: JOIN customer_address ON cr_returning_addr_sk = ca_address_sk
         .join(
             customer_address, left_on="cr_returning_addr_sk", right_on="ca_address_sk"
         )
+        # SQL: WHERE d_year = 1999
         .filter(pl.col("d_year") == 1999)
+        # SQL: GROUP BY cr_returning_customer_sk, ca_state
         .group_by(["cr_returning_customer_sk", "ca_state"])
+        # SQL: Sum(cr_return_amt_inc_tax) AS ctr_total_return
         .agg(pl.col("cr_return_amt_inc_tax").sum().alias("ctr_total_return"))
         .with_columns(
             [
@@ -231,6 +239,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(["ctr_customer_sk", "ctr_state", "ctr_total_return"])
     )
 
+    # SQL: state_averages — 1.2 * Avg(ctr_total_return) per ctr_state (threshold)
     state_averages = customer_total_return.group_by("ctr_state").agg(
         (pl.col("ctr_total_return").mean() * 1.2).alias("threshold")
     )
@@ -256,17 +265,22 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: JOIN customer ON ctr_customer_sk = c_customer_sk
             customer_total_return.join(
                 customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
             )
+            # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
             .join(
                 customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
             )
+            # SQL: JOIN state_averages ON ctr_state (threshold join)
             .join(state_averages, on="ctr_state")
+            # SQL: WHERE ctr_total_return > 1.2 * avg(ctr_total_return) AND ca_state = '{state}'
             .filter(
                 (pl.col("ctr_total_return") > pl.col("threshold"))
                 & (pl.col("ca_state") == state)
             )
+            # SQL: SELECT c_customer_id, c_salutation, c_first_name, c_last_name, ca_* fields, ctr_total_return
             .select(
                 [
                     "c_customer_id",
@@ -287,7 +301,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "ctr_total_return",
                 ]
             )
+            # SQL: ORDER BY c_customer_id, c_salutation, ...
             .sort(list(sort_by.keys()), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

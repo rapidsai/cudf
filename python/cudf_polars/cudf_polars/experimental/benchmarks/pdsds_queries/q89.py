@@ -188,11 +188,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         pl.col("i_class").is_in(class2)
     )
 
+    # SQL: FROM item, store_sales, date_dim, store WHERE ss_item_sk = i_item_sk
     tmp1 = (
+        # SQL: JOIN store_sales ON i_item_sk = ss_item_sk
         item.join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: WHERE d_year = {year} AND (i_category IN category1 AND i_class IN class1 OR ...)
         .filter((pl.col("d_year") == year) & (filter1 | filter2))
+        # SQL: GROUP BY i_category, i_class, i_brand, s_store_name, s_company_name, d_moy
         .group_by(
             [
                 "i_category",
@@ -203,7 +209,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 "d_moy",
             ]
         )
+        # SQL: Sum(ss_sales_price) AS sum_sales
         .agg(pl.col("ss_sales_price").sum().alias("sum_sales"))
+        # SQL: Avg(sum_sales) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name) AS avg_monthly_sales
         .with_columns(
             pl.col("sum_sales")
             .mean()
@@ -228,7 +236,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .otherwise(None)
                 .alias("deviation_ratio")
             )
+            # SQL: WHERE |sum_sales - avg_monthly_sales| / avg_monthly_sales > 0.1
             .filter(pl.col("deviation_ratio") > 0.1)
+            # SQL: SELECT i_category, i_class, i_brand, s_store_name, s_company_name, d_moy, sum_sales, avg_monthly_sales
             .select(
                 [
                     "i_category",
@@ -241,10 +251,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "avg_monthly_sales",
                 ]
             )
+            # SQL: ORDER BY sum_sales - avg_monthly_sales, s_store_name
             .sort(
                 [pl.col("sum_sales") - pl.col("avg_monthly_sales"), "s_store_name"],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("s_store_name", False)],

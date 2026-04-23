@@ -173,7 +173,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
 
+    # SQL: bucket1-5 — SELECT CASE WHEN (SELECT Count(*) FROM store_sales WHERE ss_quantity BETWEEN N AND M) > rc[i] THEN Avg(aggcthen) ELSE Avg(aggcelse) END AS bucket{i}
     bucket1_stats = (
+        # SQL: WHERE ss_quantity BETWEEN 1 AND 20 — Count/Avg(aggcthen)/Avg(aggcelse)
         store_sales.filter(pl.col("ss_quantity").is_between(1, 20, closed="both"))
         .select(
             [
@@ -184,6 +186,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .with_columns(pl.lit(1).alias("join_key"))
     )
+    # SQL: WHERE ss_quantity BETWEEN 21 AND 40
     bucket2_stats = (
         store_sales.filter(pl.col("ss_quantity").is_between(21, 40, closed="both"))
         .select(
@@ -195,6 +198,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .with_columns(pl.lit(1).alias("join_key"))
     )
+    # SQL: WHERE ss_quantity BETWEEN 41 AND 60
     bucket3_stats = (
         store_sales.filter(pl.col("ss_quantity").is_between(41, 60, closed="both"))
         .select(
@@ -206,6 +210,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .with_columns(pl.lit(1).alias("join_key"))
     )
+    # SQL: WHERE ss_quantity BETWEEN 61 AND 80
     bucket4_stats = (
         store_sales.filter(pl.col("ss_quantity").is_between(61, 80, closed="both"))
         .select(
@@ -217,6 +222,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .with_columns(pl.lit(1).alias("join_key"))
     )
+    # SQL: WHERE ss_quantity BETWEEN 81 AND 100
     bucket5_stats = (
         store_sales.filter(pl.col("ss_quantity").is_between(81, 100, closed="both"))
         .select(
@@ -231,6 +237,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: FROM reason WHERE r_reason_sk = 1 (cross-join with bucket stats)
             reason.filter(pl.col("r_reason_sk") == 1)
             .with_columns(pl.lit(1).alias("join_key"))
             .join(bucket1_stats, on="join_key")
@@ -238,6 +245,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .join(bucket3_stats, on="join_key")
             .join(bucket4_stats, on="join_key")
             .join(bucket5_stats, on="join_key")
+            # SQL: SELECT CASE WHEN count_N > rc[i] THEN avg_then_N ELSE avg_else_N END AS bucket{i} ...
             .select(
                 [
                     pl.when(pl.col("count_1") > rc[0])
@@ -262,6 +270,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("bucket5"),
                 ]
             )
+            # SQL: LIMIT 1 (single-row result)
             .limit(1)
         ),
         sort_by=[],

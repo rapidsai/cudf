@@ -163,7 +163,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     start_date = pl.lit(start_date_py, dtype=pl.Datetime("us"))
     end_date = start_date + pl.duration(days=60)
 
+    # SQL: CTE ws_wh — web_sales orders shipped from multiple warehouses (EXISTS subquery)
     ws_wh = (
+        # SQL: self-join web_sales WHERE ws_order_number = ws_order_number AND ws_warehouse_sk <> ws_warehouse_sk2
         web_sales.join(
             web_sales,
             left_on="ws_order_number",
@@ -171,35 +173,45 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             how="inner",
             suffix="_ws2",
         )
+        # SQL: AND ws_warehouse_sk <> ws_warehouse_sk2
         .filter(pl.col("ws_warehouse_sk") != pl.col("ws_warehouse_sk_ws2"))
         .select("ws_order_number")
         .unique()
     )
 
+    # SQL: NOT EXISTS (SELECT * FROM web_returns WHERE ws_order_number = wr_order_number)
     returned_orders = web_returns.select("wr_order_number").unique()
 
     return QueryResult(
         frame=(
+            # SQL: FROM web_sales ws1, date_dim WHERE ws_ship_date_sk = d_date_sk
             web_sales.join(date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk")
+            # SQL: JOIN customer_address ON ws_ship_addr_sk = ca_address_sk
             .join(
                 customer_address,
                 left_on="ws_ship_addr_sk",
                 right_on="ca_address_sk",
             )
+            # SQL: JOIN web_site ON ws_web_site_sk = web_site_sk
             .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
+            # SQL: WHERE d_date BETWEEN '{date}' AND date+60days AND ca_state = '{state}'
+            # SQL:   AND web_company_name = '{web_company_name}'
             .filter(
                 (pl.col("d_date") >= start_date)
                 & (pl.col("d_date") <= end_date)
                 & (pl.col("ca_state") == state)
                 & (pl.col("web_company_name") == web_company_name)
             )
+            # SQL: AND EXISTS ws_wh (orders shipped from multiple warehouses)
             .join(ws_wh, on="ws_order_number", how="inner")
+            # SQL: AND NOT EXISTS web_returns (anti-join to exclude returned orders)
             .join(
                 returned_orders,
                 left_on="ws_order_number",
                 right_on="wr_order_number",
                 how="anti",
             )
+            # SQL: SELECT Count(DISTINCT ws_order_number), Sum(ws_ext_ship_cost), Sum(ws_net_profit)
             .select(
                 [
                     pl.col("ws_order_number").n_unique().alias("order count"),
@@ -207,7 +219,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("ws_net_profit").sum().alias("total net profit"),
                 ]
             )
+            # SQL: ORDER BY count(DISTINCT ws_order_number)
             .sort("order count", nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("order count", False)],

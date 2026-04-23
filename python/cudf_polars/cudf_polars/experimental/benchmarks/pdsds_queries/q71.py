@@ -198,6 +198,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
 
+    # SQL: web_component — FROM web_sales, date_dim WHERE d_date_sk=ws_sold_date_sk AND d_moy={month} AND d_year={year}
     web_component = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_moy") == month) & (pl.col("d_year") == year))
@@ -210,6 +211,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: catalog_component — FROM catalog_sales, date_dim WHERE d_date_sk=cs_sold_date_sk AND d_moy={month} AND d_year={year}
     catalog_component = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_moy") == month) & (pl.col("d_year") == year))
@@ -222,6 +224,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: store_component — FROM store_sales, date_dim WHERE d_date_sk=ss_sold_date_sk AND d_moy={month} AND d_year={year}
     store_component = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_moy") == month) & (pl.col("d_year") == year))
@@ -235,8 +238,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: UNION ALL (web, catalog, store components)
     combined_sales = pl.concat([web_component, catalog_component, store_component])
 
+    # SQL: JOIN item WHERE i_manager_id={manager}; JOIN time_dim WHERE t_meal_time IN ('breakfast','dinner')
     tmp = (
         combined_sales.join(item, left_on="sold_item_sk", right_on="i_item_sk")
         .join(time_dim, left_on="time_sk", right_on="t_time_sk")
@@ -251,7 +256,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: GROUP BY i_brand, i_brand_id, t_hour, t_minute
             tmp.group_by(["i_brand", "i_brand_id", "t_hour", "t_minute"])
+            # SQL: Sum(ext_price) AS ext_price
             .agg(
                 [
                     pl.col("ext_price").sum().alias("ext_price"),
@@ -265,6 +272,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .alias("ext_price")
             )
             .drop("ext_price_count")
+            # SQL: SELECT i_brand_id AS brand_id, i_brand AS brand, t_hour, t_minute, ext_price
             .select(
                 [
                     pl.col("i_brand_id").alias("brand_id"),
@@ -274,6 +282,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "ext_price",
                 ]
             )
+            # SQL: ORDER BY ext_price DESC, i_brand_id, t_hour (nulls first)
             .sort(
                 ["ext_price", "brand_id", "t_hour"],
                 descending=[True, False, False],

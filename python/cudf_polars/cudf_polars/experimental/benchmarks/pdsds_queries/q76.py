@@ -210,9 +210,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    # SQL: store_component — SELECT 'store' channel, {nullcol_ss} col_name, d_year, d_qoy, i_category, ss_ext_sales_price
+    # SQL:   FROM store_sales, item, date_dim WHERE ss_item_sk = i_item_sk AND {nullcol_ss} IS NULL
     store_component = (
+        # SQL: JOIN item ON ss_item_sk = i_item_sk
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE {nullcol_ss} IS NULL
         .filter(pl.col(nullcol_ss).is_null())
         .select(
             [
@@ -225,6 +230,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: web_component — same with web_sales, {nullcol_ws} IS NULL
     web_component = (
         web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
@@ -240,6 +246,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: catalog_component — same with catalog_sales, {nullcol_cs} IS NULL
     catalog_component = (
         catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
@@ -257,18 +264,23 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     return QueryResult(
         frame=(
+            # SQL: UNION ALL store/web/catalog components
             pl.concat([store_component, web_component, catalog_component])
+            # SQL: GROUP BY channel, col_name, d_year, d_qoy, i_category
             .group_by(["channel", "col_name", "d_year", "d_qoy", "i_category"])
+            # SQL: Count(*) AS sales_cnt, Sum(ext_sales_price) AS sales_amt
             .agg(
                 [
                     pl.len().cast(pl.Int64).alias("sales_cnt"),
                     pl.col("ext_sales_price").sum().alias("sales_amt"),
                 ]
             )
+            # SQL: ORDER BY channel, col_name, d_year, d_qoy, i_category
             .sort(
                 ["channel", "col_name", "d_year", "d_qoy", "i_category"],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

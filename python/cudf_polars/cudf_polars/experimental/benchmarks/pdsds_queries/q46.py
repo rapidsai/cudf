@@ -222,11 +222,18 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
+    # SQL: subquery dn — FROM store_sales, date_dim, store, household_demographics, customer_address
     subquery_dn = (
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: JOIN household_demographics ON ss_hdemo_sk = hd_demo_sk
         .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        # SQL: JOIN customer_address ON ss_addr_sk = ca_address_sk
         .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+        # SQL: WHERE (hd_dep_count={hd_dep_count} OR hd_vehicle_count={hd_vehicle_count})
+        # SQL:   AND d_dow IN (0,6) AND d_year IN (year,year+1,year+2) AND s_city IN (cities)
         .filter(
             (
                 (pl.col("hd_dep_count") == hd_dep_count)
@@ -236,7 +243,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             & (pl.col("d_year").is_in([year, year + 1, year + 2]))
             & (pl.col("s_city").is_in(cities))
         )
+        # SQL: GROUP BY ss_ticket_number, ss_customer_sk, ss_addr_sk, ca_city
         .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"])
+        # SQL: Sum(ss_coupon_amt) AS amt, Sum(ss_net_profit) AS profit
         .agg(
             [
                 pl.col("ss_coupon_amt").sum().alias("amt"),
@@ -257,16 +266,20 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: JOIN customer ON ss_customer_sk = c_customer_sk
             subquery_dn.join(
                 customer, left_on="ss_customer_sk", right_on="c_customer_sk"
             )
+            # SQL: JOIN customer_address (current addr) ON c_current_addr_sk = ca_address_sk
             .join(
                 customer_address,
                 left_on="c_current_addr_sk",
                 right_on="ca_address_sk",
                 suffix="_current",
             )
+            # SQL: WHERE current ca_city <> bought_city
             .filter(pl.col("ca_city") != pl.col("bought_city"))
+            # SQL: SELECT c_last_name, c_first_name, ca_city, bought_city, ss_ticket_number, amt, profit
             .select(
                 [
                     "c_last_name",
@@ -278,7 +291,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "profit",
                 ]
             )
+            # SQL: ORDER BY c_last_name, c_first_name, ca_city, bought_city, ss_ticket_number
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

@@ -289,13 +289,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     week_dates = date_dim.join(target_week, on="d_week_seq", how="inner")
 
+    # SQL: CTE ss_items — FROM store_sales, item, date_dim WHERE ss_item_sk=i_item_sk AND ss_sold_date_sk=d_date_sk AND d_date IN (SELECT d_date WHERE d_week_seq = (SELECT d_week_seq WHERE d_date='{sales_date}'))
     ss_items = (
+        # SQL: JOIN item ON ss_item_sk = i_item_sk; JOIN week_dates ON ss_sold_date_sk = d_date_sk
         store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(week_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: GROUP BY i_item_id; Sum(ss_ext_sales_price) AS ss_item_rev
         .group_by("i_item_id")
         .agg(pl.col("ss_ext_sales_price").sum().alias("ss_item_rev"))
         .select([pl.col("i_item_id").alias("item_id"), pl.col("ss_item_rev")])
     )
+    # SQL: CTE cs_items — FROM catalog_sales, item, date_dim GROUP BY i_item_id; Sum(cs_ext_sales_price) AS cs_item_rev
     cs_items = (
         catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .join(week_dates, left_on="cs_sold_date_sk", right_on="d_date_sk")
@@ -303,6 +307,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .agg(pl.col("cs_ext_sales_price").sum().alias("cs_item_rev"))
         .select([pl.col("i_item_id").alias("item_id"), pl.col("cs_item_rev")])
     )
+    # SQL: CTE ws_items — FROM web_sales, item, date_dim GROUP BY i_item_id; Sum(ws_ext_sales_price) AS ws_item_rev
     ws_items = (
         web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .join(week_dates, left_on="ws_sold_date_sk", right_on="d_date_sk")
@@ -315,8 +320,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM ss_items, cs_items, ws_items WHERE ss_items.item_id=cs_items.item_id AND cs_items.item_id=ws_items.item_id
             ss_items.join(cs_items, on="item_id", how="inner")
             .join(ws_items, on="item_id", how="inner")
+            # SQL: AND ss_item_rev BETWEEN 0.9*cs_item_rev AND 1.1*cs_item_rev (and symmetric constraints for cs/ws)
             .filter(
                 (pl.col("ss_item_rev") >= 0.9 * pl.col("cs_item_rev"))
                 & (pl.col("ss_item_rev") <= 1.1 * pl.col("cs_item_rev"))
@@ -331,6 +338,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 & (pl.col("ws_item_rev") >= 0.9 * pl.col("cs_item_rev"))
                 & (pl.col("ws_item_rev") <= 1.1 * pl.col("cs_item_rev"))
             )
+            # SQL: (ss+cs+ws)/3 AS average; ss/total/3*100 AS ss_dev; cs/total/3*100 AS cs_dev; ws/total/3*100 AS ws_dev
             .with_columns(
                 [
                     (
@@ -361,6 +369,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ),
                 ]
             )
+            # SQL: SELECT item_id, ss_item_rev, ss_dev, cs_item_rev, cs_dev, ws_item_rev, ws_dev, average
             .select(
                 [
                     "item_id",
@@ -373,7 +382,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "average",
                 ]
             )
+            # SQL: ORDER BY item_id, ss_item_rev
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

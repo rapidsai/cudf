@@ -177,10 +177,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     start_date_obj = date(year, month, 1)
     end_date_obj = start_date_obj + timedelta(days=60)
 
+    # SQL: filtered_sales — FROM catalog_sales, date_dim WHERE cs_ship_date_sk = d_date_sk
     filtered_sales = (
+        # SQL: JOIN date_dim ON cs_ship_date_sk = d_date_sk
         catalog_sales.join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
+        # SQL: JOIN customer_address ON cs_ship_addr_sk = ca_address_sk
         .join(customer_address, left_on="cs_ship_addr_sk", right_on="ca_address_sk")
+        # SQL: JOIN call_center ON cs_call_center_sk = cc_call_center_sk
         .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
+        # SQL: WHERE d_date BETWEEN '{start_date}' AND date+60days AND ca_state = '{state}'
+        # SQL:   AND cc_county IN (county)
         .filter(
             pl.col("d_date").is_between(
                 pl.lit(start_date_obj), pl.lit(end_date_obj), closed="both"
@@ -190,6 +196,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: EXISTS (SELECT * FROM catalog_sales cs2 WHERE cs1.cs_order_number = cs2.cs_order_number
+    # SQL:   AND cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk)
     exists_order = (
         filtered_sales.select(["cs_order_number", "cs_warehouse_sk"])
         .join(
@@ -207,6 +215,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         exists_order, on="cs_order_number", how="inner"
     )
 
+    # SQL: NOT EXISTS (SELECT * FROM catalog_returns WHERE cs_order_number = cr_order_number)
     returned_orders = catalog_returns.select("cr_order_number").unique()
     filtered_without_returns = filtered_with_exists.join(
         returned_orders,
@@ -217,6 +226,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: SELECT Count(DISTINCT cs_order_number), Sum(cs_ext_ship_cost), Sum(cs_net_profit)
             filtered_without_returns.select(
                 [
                     pl.col("cs_order_number").n_unique().alias("order count"),
@@ -224,7 +234,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("cs_net_profit").sum().alias("total net profit"),
                 ]
             )
+            # SQL: ORDER BY count(DISTINCT cs_order_number)
             .sort(["order count"])
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("order count", False)],

@@ -206,13 +206,23 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: promotions — Sum(ss_ext_sales_price) FROM store_sales, store, promotion, date_dim, customer, customer_address, item
     promotional_sales = (
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: JOIN promotion ON ss_promo_sk = p_promo_sk
         .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN customer ON ss_customer_sk = c_customer_sk
         .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        # SQL: JOIN item ON ss_item_sk = i_item_sk
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        # SQL: WHERE ca_gmt_offset = {gmt_offset} AND i_category = '{category}'
+        # SQL:   AND (p_channel_dmail='Y' OR p_channel_email='Y' OR p_channel_tv='Y')
+        # SQL:   AND s_gmt_offset = {gmt_offset} AND d_year = {year} AND d_moy = {month}
         .filter(
             (pl.col("ca_gmt_offset") == gmt_offset)
             & (pl.col("i_category") == category)
@@ -233,6 +243,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: total — same FROM/WHERE without promotion filter
     all_sales = (
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -258,10 +269,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: cross-join promotions x total, compute promotions/total*100
             promotional_sales.join(
                 all_sales,
                 how="cross",
             )
+            # SQL: promotions/total*100 AS ratio
             .with_columns(
                 (
                     pl.col("promotions").cast(pl.Float64)
@@ -271,7 +284,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "((CAST(promotions AS DECIMAL(15, 4)) / CAST(total AS DECIMAL(15, 4))) * 100)"
                 )
             )
+            # SQL: ORDER BY promotions, total
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

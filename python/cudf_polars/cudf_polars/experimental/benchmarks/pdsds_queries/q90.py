@@ -164,21 +164,28 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
     web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
+    # SQL: subquery at1 — Count(*) AS amc FROM web_sales, household_demographics, time_dim, web_page WHERE ... AND t_hour BETWEEN {am_hour} AND {am_hour}+1
     am_query = (
+        # SQL: FROM web_sales, household_demographics WHERE ws_ship_hdemo_sk = hd_demo_sk
         web_sales.join(
             household_demographics,
             left_on="ws_ship_hdemo_sk",
             right_on="hd_demo_sk",
         )
+        # SQL: JOIN time_dim ON ws_sold_time_sk = t_time_sk
         .join(time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk")
+        # SQL: JOIN web_page ON ws_web_page_sk = wp_web_page_sk
         .join(web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk")
+        # SQL: WHERE t_hour BETWEEN {am_hour} AND {am_hour}+1 AND hd_dep_count={hd_dep_count} AND wp_char_count BETWEEN {wp_char_count_min} AND {wp_char_count_max}
         .filter(
             (pl.col("t_hour").is_between(am_hour, am_hour + 1))
             & (pl.col("hd_dep_count") == hd_dep_count)
             & (pl.col("wp_char_count").is_between(wp_char_count_min, wp_char_count_max))
         )
+        # SQL: Count(*) AS amc
         .select([pl.len().alias("amc")])
     )
+    # SQL: subquery pt — Count(*) AS pmc — same but with t_hour BETWEEN {pm_hour} AND {pm_hour}+1
     pm_query = (
         web_sales.join(
             household_demographics,
@@ -196,6 +203,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     return QueryResult(
         frame=(
+            # SQL: (at1 CROSS JOIN pt) SELECT amc/pmc AS am_pm_ratio
             am_query.join(pm_query, how="cross")
             .select(
                 [
@@ -204,7 +212,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ).alias("am_pm_ratio")
                 ]
             )
+            # SQL: ORDER BY am_pm_ratio
             .sort("am_pm_ratio")
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("am_pm_ratio", False)],

@@ -177,10 +177,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
+    # SQL: FROM item, store_sales, date_dim, store WHERE ss_item_sk = i_item_sk
     inner_query = (
+        # SQL: JOIN store_sales ON i_item_sk = ss_item_sk
         item.join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: WHERE d_month_seq IN ({dms}..{dms}+11) AND ((i_category/i_class/i_brand conditions))
         .filter(
             pl.col("d_month_seq").is_in([dms + i for i in range(12)])
             & (
@@ -214,8 +219,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 )
             )
         )
+        # SQL: GROUP BY i_manager_id, d_moy
         .group_by(["i_manager_id", "d_moy"])
+        # SQL: Sum(ss_sales_price) AS sum_sales
         .agg(pl.col("ss_sales_price").sum().alias("sum_sales"))
+        # SQL: Avg(sum_sales) OVER (PARTITION BY i_manager_id) AS avg_monthly_sales
         .with_columns(
             pl.col("sum_sales").mean().over("i_manager_id").alias("avg_monthly_sales")
         )
@@ -232,13 +240,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .otherwise(None)
                 .alias("deviation")
             )
+            # SQL: WHERE |sum_sales - avg_monthly_sales| / avg_monthly_sales > 0.1
             .filter(pl.col("deviation") > 0.1)
+            # SQL: SELECT i_manager_id, sum_sales, avg_monthly_sales
             .select(["i_manager_id", "sum_sales", "avg_monthly_sales"])
+            # SQL: ORDER BY i_manager_id, avg_monthly_sales, sum_sales
             .sort(
                 ["i_manager_id", "avg_monthly_sales", "sum_sales"],
                 nulls_last=True,
                 descending=[False, False, False],
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

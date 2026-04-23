@@ -200,13 +200,19 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM web_sales, warehouse WHERE ws_warehouse_sk = w_warehouse_sk
             web_sales.join(
                 warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk"
             )
+            # SQL: JOIN ship_mode ON ws_ship_mode_sk = sm_ship_mode_sk
             .join(ship_mode, left_on="ws_ship_mode_sk", right_on="sm_ship_mode_sk")
+            # SQL: JOIN web_site ON ws_web_site_sk = web_site_sk
             .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
+            # SQL: JOIN date_dim ON ws_ship_date_sk = d_date_sk
             .join(date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk")
+            # SQL: WHERE d_month_seq BETWEEN {dms} AND {dms}+11
             .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+            # SQL: ws_ship_date_sk - ws_sold_date_sk AS shipping_delay, SUBSTR(w_warehouse_name,1,20) AS warehouse_substr
             .with_columns(
                 [
                     (pl.col("ws_ship_date_sk") - pl.col("ws_sold_date_sk")).alias(
@@ -217,6 +223,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("warehouse_substr"),
                 ]
             )
+            # SQL: CASE WHEN delay<=30 THEN 1 ELSE 0 END ... (bucket expressions)
             .with_columns(
                 [
                     pl.when(pl.col("shipping_delay") <= 30)
@@ -250,7 +257,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("bucket_over_120"),
                 ]
             )
+            # SQL: GROUP BY SUBSTR(w_warehouse_name,1,20), sm_type, web_name
             .group_by(["warehouse_substr", "sm_type", "web_name"])
+            # SQL: Sum(bucket_*) AS '30 days', '31-60 days', ...
             .agg(
                 [
                     pl.col("bucket_30").sum().alias("30 days"),
@@ -260,6 +269,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("bucket_over_120").sum().alias(">120 days"),
                 ]
             )
+            # SQL: SELECT SUBSTR(w_warehouse_name,1,20) AS ..., sm_type, web_name, bucket sums
             .select(
                 [
                     pl.col("warehouse_substr").alias("substr(w_warehouse_name, 1, 20)"),
@@ -272,7 +282,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ">120 days",
                 ]
             )
+            # SQL: ORDER BY SUBSTR(w_warehouse_name,1,20), sm_type, web_name
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

@@ -216,32 +216,38 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM catalog_sales, warehouse WHERE cs_warehouse_sk = w_warehouse_sk
             catalog_sales.join(
                 warehouse,
                 left_on="cs_warehouse_sk",
                 right_on="w_warehouse_sk",
                 how="inner",
             )
+            # SQL: JOIN ship_mode ON cs_ship_mode_sk = sm_ship_mode_sk
             .join(
                 ship_mode,
                 left_on="cs_ship_mode_sk",
                 right_on="sm_ship_mode_sk",
                 how="inner",
             )
+            # SQL: JOIN call_center ON cs_call_center_sk = cc_call_center_sk
             .join(
                 call_center,
                 left_on="cs_call_center_sk",
                 right_on="cc_call_center_sk",
                 how="inner",
             )
+            # SQL: JOIN date_dim ON cs_ship_date_sk = d_date_sk
             .join(
                 date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk", how="inner"
             )
+            # SQL: WHERE d_month_seq BETWEEN {d_month_seq} AND {d_month_seq}+11
             .filter(
                 pl.col("d_month_seq").is_between(
                     d_month_seq, d_month_seq + 11, closed="both"
                 )
             )
+            # SQL: cs_ship_date_sk - cs_sold_date_sk AS ship_days, SUBSTR(w_warehouse_name,1,20)
             .with_columns(
                 [
                     (pl.col("cs_ship_date_sk") - pl.col("cs_sold_date_sk")).alias(
@@ -252,6 +258,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("substr(w_warehouse_name, 1, 20)"),
                 ]
             )
+            # SQL: CASE WHEN ship_days<=30 THEN 1 ELSE 0 END ... (bucket expressions)
             .with_columns(
                 [
                     pl.when(pl.col("ship_days") <= 30)
@@ -276,7 +283,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("days_120_plus"),
                 ]
             )
+            # SQL: GROUP BY SUBSTR(w_warehouse_name,1,20), sm_type, cc_name
             .group_by(["substr(w_warehouse_name, 1, 20)", "sm_type", "cc_name"])
+            # SQL: Sum(CASE WHEN ...) AS '30 days', '31-60 days', ...
             .agg(
                 [
                     pl.col("days_30").sum().alias("30 days"),
@@ -286,6 +295,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("days_120_plus").sum().alias(">120 days"),
                 ]
             )
+            # SQL: SELECT SUBSTR(w_warehouse_name,1,20), sm_type, cc_name, '30 days', ...
             .select(
                 [
                     "substr(w_warehouse_name, 1, 20)",
@@ -298,7 +308,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ">120 days",
                 ]
             )
+            # SQL: ORDER BY SUBSTR(w_warehouse_name,1,20), sm_type, cc_name
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

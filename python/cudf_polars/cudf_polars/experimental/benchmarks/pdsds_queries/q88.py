@@ -250,58 +250,72 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         | ((pl.col("hd_dep_count") == hd3) & (pl.col("hd_vehicle_count") <= hd3 + 2))
     )
 
+    # SQL: base — FROM store_sales, time_dim, household_demographics, store WHERE ss_sold_time_sk = t_time_sk
     base = (
+        # SQL: JOIN time_dim ON ss_sold_time_sk = t_time_sk
         store_sales.join(time_dim, left_on="ss_sold_time_sk", right_on="t_time_sk")
+        # SQL: JOIN household_demographics ON ss_hdemo_sk = hd_demo_sk
         .join(
             household_demographics,
             left_on="ss_hdemo_sk",
             right_on="hd_demo_sk",
         )
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: WHERE dep_filter AND s_store_name = '{s_store_name}'
         .filter(dep_filter & (pl.col("s_store_name") == s_store_name))
     )
 
+    # SQL: count(*) h8_30_to_9 WHERE t_hour=8 AND t_minute>=30
     h8_30_to_9 = (
         base.filter((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
         .select(pl.count().cast(pl.Int64).alias("h8_30_to_9"))
         .with_columns(pl.lit(1).alias("key"))
     )
+    # SQL: count(*) h9_to_9_30 WHERE t_hour=9 AND t_minute<30
     h9_to_9_30 = (
         base.filter((pl.col("t_hour") == 9) & (pl.col("t_minute") < 30))
         .select(pl.count().cast(pl.Int64).alias("h9_to_9_30"))
         .with_columns(pl.lit(1).alias("key"))
     )
+    # SQL: count(*) h9_30_to_10 WHERE t_hour=9 AND t_minute>=30
     h9_30_to_10 = (
         base.filter((pl.col("t_hour") == 9) & (pl.col("t_minute") >= 30))
         .select(pl.count().cast(pl.Int64).alias("h9_30_to_10"))
         .with_columns(pl.lit(1).alias("key"))
     )
+    # SQL: count(*) h10_to_10_30 WHERE t_hour=10 AND t_minute<30
     h10_to_10_30 = (
         base.filter((pl.col("t_hour") == 10) & (pl.col("t_minute") < 30))
         .select(pl.count().cast(pl.Int64).alias("h10_to_10_30"))
         .with_columns(pl.lit(1).alias("key"))
     )
+    # SQL: count(*) h10_30_to_11 WHERE t_hour=10 AND t_minute>=30
     h10_30_to_11 = (
         base.filter((pl.col("t_hour") == 10) & (pl.col("t_minute") >= 30))
         .select(pl.count().cast(pl.Int64).alias("h10_30_to_11"))
         .with_columns(pl.lit(1).alias("key"))
     )
+    # SQL: count(*) h11_to_11_30 WHERE t_hour=11 AND t_minute<30
     h11_to_11_30 = (
         base.filter((pl.col("t_hour") == 11) & (pl.col("t_minute") < 30))
         .select(pl.count().cast(pl.Int64).alias("h11_to_11_30"))
         .with_columns(pl.lit(1).alias("key"))
     )
+    # SQL: count(*) h11_30_to_12 WHERE t_hour=11 AND t_minute>=30
     h11_30_to_12 = (
         base.filter((pl.col("t_hour") == 11) & (pl.col("t_minute") >= 30))
         .select(pl.count().cast(pl.Int64).alias("h11_30_to_12"))
         .with_columns(pl.lit(1).alias("key"))
     )
+    # SQL: count(*) h12_to_12_30 WHERE t_hour=12 AND t_minute<30
     h12_to_12_30 = (
         base.filter((pl.col("t_hour") == 12) & (pl.col("t_minute") < 30))
         .select(pl.count().cast(pl.Int64).alias("h12_to_12_30"))
         .with_columns(pl.lit(1).alias("key"))
     )
 
+    # SQL: cross-join all hour buckets into single row
     frame = (
         h8_30_to_9.join(h9_to_9_30, on="key")
         .join(h9_30_to_10, on="key")

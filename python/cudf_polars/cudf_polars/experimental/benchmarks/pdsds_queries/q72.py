@@ -265,9 +265,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM catalog_sales JOIN inventory ON cs_item_sk = inv_item_sk
             catalog_sales.join(inventory, left_on="cs_item_sk", right_on="inv_item_sk")
+            # SQL: JOIN warehouse ON inv_warehouse_sk = w_warehouse_sk; JOIN item ON cs_item_sk = i_item_sk
             .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
             .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            # SQL: JOIN customer_demographics ON cs_bill_cdemo_sk = cd_demo_sk; JOIN household_demographics ON cs_bill_hdemo_sk = hd_demo_sk
             .join(
                 customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk"
             )
@@ -276,7 +279,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 left_on="cs_bill_hdemo_sk",
                 right_on="hd_demo_sk",
             )
+            # SQL: JOIN date_dim d1 ON cs_sold_date_sk = d1.d_date_sk; JOIN date_dim d2 ON inv_date_sk = d2.d_date_sk
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            # SQL: JOIN date_dim d3 ON cs_ship_date_sk = d3.d_date_sk
             .join(
                 date_dim.select(["d_date_sk", "d_week_seq"]).rename(
                     {"d_date_sk": "d2_date_sk", "d_week_seq": "d2_week_seq"}
@@ -291,6 +296,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 left_on="cs_ship_date_sk",
                 right_on="d3_date_sk",
             )
+            # SQL: LEFT JOIN promotion ON cs_promo_sk = p_promo_sk; LEFT JOIN catalog_returns ON cr_item_sk=cs_item_sk AND cr_order_number=cs_order_number
             .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk", how="left")
             .join(
                 catalog_returns,
@@ -298,6 +304,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 right_on=["cr_item_sk", "cr_order_number"],
                 how="left",
             )
+            # SQL: WHERE d1.d_week_seq=d2.d_week_seq AND inv_quantity_on_hand<cs_quantity AND d3.d_date>d1.d_date+5days AND hd_buy_potential='{bp}' AND d1.d_year={year} AND cd_marital_status='{ms}'
             .filter(
                 (pl.col("d_week_seq") == pl.col("d2_week_seq"))
                 & (pl.col("inv_quantity_on_hand") < pl.col("cs_quantity"))
@@ -310,6 +317,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 & (pl.col("d_year") == year)
                 & (pl.col("cd_marital_status") == ms)
             )
+            # SQL: CASE WHEN p_promo_sk IS NULL THEN 1 ELSE 0 END AS no_promo_flag; CASE WHEN p_promo_sk IS NOT NULL THEN 1 ELSE 0 END AS promo_flag
             .with_columns(
                 [
                     pl.when(pl.col("cs_promo_sk").is_null())
@@ -322,7 +330,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("promo_flag"),
                 ]
             )
+            # SQL: GROUP BY i_item_desc, w_warehouse_name, d1.d_week_seq
             .group_by(["i_item_desc", "w_warehouse_name", "d_week_seq"])
+            # SQL: Sum(no_promo_flag) AS no_promo, Sum(promo_flag) AS promo, Count(*) AS total_cnt
             .agg(
                 [
                     pl.col("no_promo_flag").sum().alias("no_promo"),
@@ -330,6 +340,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.len().alias("total_cnt"),
                 ]
             )
+            # SQL: SELECT i_item_desc, w_warehouse_name, d1.d_week_seq AS d_week_seq, no_promo, promo, total_cnt
             .select(
                 [
                     "i_item_desc",
@@ -340,7 +351,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "total_cnt",
                 ]
             )
+            # SQL: ORDER BY total_cnt DESC, i_item_desc, w_warehouse_name, d_week_seq
             .sort(sort_by.keys(), descending=list(sort_by.values()), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

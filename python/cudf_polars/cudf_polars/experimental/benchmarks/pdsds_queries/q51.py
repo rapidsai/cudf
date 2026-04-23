@@ -209,14 +209,19 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: CTE web_v1 — FROM web_sales, date_dim WHERE ws_sold_date_sk=d_date_sk AND d_month_seq BETWEEN ... AND ws_item_sk IS NOT NULL
     web_v1 = (
+        # SQL: JOIN date_dim ON ws_sold_date_sk = d_date_sk
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE d_month_seq BETWEEN {dms} AND {dms}+11 AND ws_item_sk IS NOT NULL
         .filter(
             pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ws_item_sk").is_not_null()
         )
+        # SQL: GROUP BY ws_item_sk, d_date
         .group_by(["ws_item_sk", "d_date"])
         .agg(pl.col("ws_sales_price").sum().alias("daily_sum"))
+        # SQL: Sum(Sum(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ROWS UNBOUNDED PRECEDING) AS cume_sales
         .with_columns(
             pl.col("daily_sum")
             .cum_sum()
@@ -232,12 +237,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE store_v1 — FROM store_sales, date_dim WHERE ss_sold_date_sk=d_date_sk AND d_month_seq BETWEEN ... AND ss_item_sk IS NOT NULL
     store_v1 = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(
             pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ss_item_sk").is_not_null()
         )
+        # SQL: GROUP BY ss_item_sk, d_date; Sum(Sum(ss_sales_price)) OVER (...) AS cume_sales
         .group_by(["ss_item_sk", "d_date"])
         .agg(pl.col("ss_sales_price").sum().alias("daily_sum"))
         .with_columns(
@@ -255,6 +262,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: web_v1 FULL OUTER JOIN store_v1 ON (item_sk, d_date) — CASE WHEN web.item_sk IS NOT NULL THEN web.item_sk ELSE store.item_sk END
     combined = (
         web_v1.join(store_v1, on=["item_sk", "d_date"], how="full", suffix="_store")
         .with_columns(
@@ -272,6 +280,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(["item_sk", "d_date", "web_sales", "store_sales"])
     )
 
+    # SQL: collapse duplicate (item_sk, d_date) by taking max of each cumulative side
     collapsed = combined.group_by(["item_sk", "d_date"], maintain_order=True).agg(
         [
             pl.col("web_sales").max().alias("web_sales"),
@@ -281,6 +290,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     ordered = collapsed.sort(["item_sk", "d_date"])
 
+    # SQL: max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ROWS UNBOUNDED PRECEDING) AS web_cumulative
     with_running = ordered.with_columns(
         [
             pl.col("web_sales")
@@ -298,8 +308,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: WHERE web_cumulative > store_cumulative
             with_running.filter(pl.col("web_cumulative") > pl.col("store_cumulative"))
+            # SQL: ORDER BY item_sk, d_date (nulls first)
             .sort(list(sort_by.keys()), nulls_last=False)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

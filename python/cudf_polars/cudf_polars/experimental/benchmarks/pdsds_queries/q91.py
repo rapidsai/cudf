@@ -224,30 +224,37 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: FROM call_center, catalog_returns WHERE cr_call_center_sk = cc_call_center_sk
             call_center.join(
                 catalog_returns,
                 left_on="cc_call_center_sk",
                 right_on="cr_call_center_sk",
             )
+            # SQL: JOIN date_dim ON cr_returned_date_sk = d_date_sk
             .join(date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk")
+            # SQL: JOIN customer ON cr_returning_customer_sk = c_customer_sk
             .join(
                 customer, left_on="cr_returning_customer_sk", right_on="c_customer_sk"
             )
+            # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
             .join(
                 customer_address,
                 left_on="c_current_addr_sk",
                 right_on="ca_address_sk",
             )
+            # SQL: JOIN customer_demographics ON c_current_cdemo_sk = cd_demo_sk
             .join(
                 customer_demographics,
                 left_on="c_current_cdemo_sk",
                 right_on="cd_demo_sk",
             )
+            # SQL: JOIN household_demographics ON c_current_hdemo_sk = hd_demo_sk
             .join(
                 household_demographics,
                 left_on="c_current_hdemo_sk",
                 right_on="hd_demo_sk",
             )
+            # SQL: WHERE d_year = {year} AND d_moy = {month} AND (cd_marital_status/education filter) AND hd_buy_potential LIKE ... AND ca_gmt_offset = ...
             .filter(
                 (pl.col("d_year") == year)
                 & (pl.col("d_moy") == month)
@@ -259,6 +266,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 )
                 & (pl.col("ca_gmt_offset") == ca_gmt_offset)
             )
+            # SQL: GROUP BY cc_call_center_id, cc_name, cc_manager, cd_marital_status, cd_education_status
             .group_by(
                 [
                     "cc_call_center_id",
@@ -268,7 +276,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "cd_education_status",
                 ]
             )
+            # SQL: Sum(cr_net_loss) AS Returns_Loss
             .agg([pl.col("cr_net_loss").sum().alias("Returns_Loss")])
+            # SQL: SELECT cc_call_center_id AS Call_Center, cc_name AS Call_Center_Name, cc_manager AS Manager, Returns_Loss
             .select(
                 [
                     pl.col("cc_call_center_id").alias("Call_Center"),
@@ -277,6 +287,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "Returns_Loss",
                 ]
             )
+            # SQL: ORDER BY Sum(cr_net_loss) DESC
             .sort("Returns_Loss", descending=True, nulls_last=True)
         ),
         sort_by=[("Returns_Loss", True)],

@@ -195,7 +195,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
+    # SQL: correlated subquery — top-5 states by Sum(ss_net_profit) with Rank() OVER (PARTITION BY s_state)
     tmp1 = (
+        # SQL: FROM store_sales, store, date_dim WHERE d_month_seq BETWEEN ... GROUP BY s_state HAVING Rank()<=5
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
@@ -208,6 +210,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select("s_state")
     )
 
+    # SQL: CTE base — FROM store_sales, date_dim, store WHERE d_month_seq BETWEEN {dms} AND {dms}+11 AND s_state IN (top_states)
     base = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
@@ -219,6 +222,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     agg_exprs = [pl.col("ss_net_profit").sum().alias("total_sum")]
     output_order = ["total_sum", "s_state", "s_county", "lochierarchy"]
 
+    # SQL: ROLLUP(s_state, s_county) — detail (lochierarchy=0), by_state (=1), total (=2)
     detail = rollup_level(
         base,
         ["s_state", "s_county"],
@@ -247,22 +251,26 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         grouping_value=2,
     )
 
+    # SQL: UNION ALL of rollup levels
     combined = pl.concat([detail, by_state, total])
 
     return QueryResult(
         frame=(
+            # SQL: CASE WHEN lochierarchy=0 THEN s_state END AS partition_key (for window partition)
             combined.with_columns(
                 pl.when(pl.col("lochierarchy") == 0)
                 .then(pl.col("s_state"))
                 .otherwise(None)
                 .alias("partition_key")
             )
+            # SQL: Rank() OVER (PARTITION BY lochierarchy+partition_key ORDER BY Sum(ss_net_profit) DESC) AS rank_within_parent
             .with_columns(
                 pl.col("total_sum")
                 .rank(method="min", descending=True)
                 .over(["lochierarchy", "partition_key"])
                 .alias("rank_within_parent")
             )
+            # SQL: SELECT total_sum, s_state, s_county, lochierarchy, rank_within_parent
             .select(
                 [
                     "total_sum",
@@ -272,6 +280,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "rank_within_parent",
                 ]
             )
+            # SQL: ORDER BY lochierarchy DESC, CASE WHEN lochierarchy=0 THEN s_state END, rank_within_parent
             .sort(
                 [
                     pl.col("lochierarchy"),
@@ -283,6 +292,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 descending=[True, False, False],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("lochierarchy", True), ("rank_within_parent", False)],

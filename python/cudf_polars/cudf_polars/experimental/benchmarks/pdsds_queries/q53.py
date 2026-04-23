@@ -209,11 +209,18 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         dms + 11,
     ]
 
+    # SQL: FROM item, store_sales, date_dim, store WHERE ss_item_sk = i_item_sk
     inner_query = (
+        # SQL: JOIN store_sales ON i_item_sk = ss_item_sk
         item.join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: WHERE d_month_seq IN ({dms}..{dms}+11)
         .filter(pl.col("d_month_seq").is_in(month_seq_list))
+        # SQL: AND (i_category IN categories1 AND i_class IN classes1 AND i_brand IN brands1)
+        # SQL:   OR (i_category IN categories2 AND i_class IN classes2 AND i_brand IN brands2)
         .filter(
             (
                 pl.col("i_category").is_in(categories1)
@@ -226,8 +233,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 & pl.col("i_brand").is_in(brands2)
             )
         )
+        # SQL: GROUP BY i_manufact_id, d_qoy
         .group_by(["i_manufact_id", "d_qoy"])
+        # SQL: Sum(ss_sales_price) AS sum_sales
         .agg([pl.col("ss_sales_price").sum().alias("sum_sales")])
+        # SQL: Avg(sum_sales) OVER (PARTITION BY i_manufact_id) AS avg_quarterly_sales
         .with_columns(
             pl.col("sum_sales")
             .mean()
@@ -244,6 +254,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: WHERE |sum_sales - avg_quarterly_sales| / avg_quarterly_sales > 0.1
             inner_query.filter(
                 pl.when(pl.col("avg_quarterly_sales") > 0)
                 .then(
@@ -253,8 +264,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .otherwise(None)
                 > 0.1
             )
+            # SQL: SELECT i_manufact_id, sum_sales, avg_quarterly_sales
             .select(["i_manufact_id", "sum_sales", "avg_quarterly_sales"])
+            # SQL: ORDER BY avg_quarterly_sales, sum_sales, i_manufact_id
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

@@ -234,6 +234,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
 
+    # SQL: b1..b6 = 6 independent subqueries, each from store_sales WHERE ss_quantity BETWEEN N AND M
+    # SQL:   AND (ss_list_price BETWEEN lp AND lp+10 OR ss_coupon_amt BETWEEN ca AND ca+1000 OR ss_wholesale_cost BETWEEN wc AND wc+20)
+    # SQL:   SELECT Avg(ss_list_price) AS B?_LP, Count(ss_list_price) AS B?_CNT, Count(DISTINCT ss_list_price) AS B?_CNTD
     b1 = make_block(
         store_sales,
         lp[0],
@@ -311,11 +314,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: cross-join all 6 subquery results (B1..B6) into single row
             b1.join(b2, how="cross")
             .join(b3, how="cross")
             .join(b4, how="cross")
             .join(b5, how="cross")
             .join(b6, how="cross")
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=[],

@@ -173,9 +173,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: CTE ssci — store_sales JOIN date_dim WHERE d_month_seq BETWEEN {d_month_seq} AND {d_month_seq}+11
+    # SQL:   GROUP BY ss_customer_sk, ss_item_sk AS (customer_sk, item_sk)
     ssci = (
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE d_month_seq BETWEEN {d_month_seq} AND {d_month_seq}+11
         .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+        # SQL: GROUP BY ss_customer_sk, ss_item_sk
         .group_by(["ss_customer_sk", "ss_item_sk"])
         .agg([])
         .select(
@@ -185,9 +190,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
+    # SQL: CTE csci — catalog_sales JOIN date_dim WHERE d_month_seq BETWEEN ...
+    # SQL:   GROUP BY cs_bill_customer_sk, cs_item_sk AS (customer_sk, item_sk)
     csci = (
+        # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE d_month_seq BETWEEN {d_month_seq} AND {d_month_seq}+11
         .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
+        # SQL: GROUP BY cs_bill_customer_sk, cs_item_sk
         .group_by(["cs_bill_customer_sk", "cs_item_sk"])
         .agg([])
         .select(
@@ -200,7 +210,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: FULL OUTER JOIN ssci, csci ON customer_sk, item_sk
             ssci.join(csci, on=["customer_sk", "item_sk"], how="full", suffix="_cs")
+            # SQL: SELECT Sum(CASE WHEN store_only) AS store_only,
+            # SQL:   Sum(CASE WHEN catalog_only) AS catalog_only,
+            # SQL:   Sum(CASE WHEN both) AS store_and_catalog
             .select(
                 [
                     pl.when(
@@ -229,6 +243,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("store_and_catalog"),
                 ]
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[],

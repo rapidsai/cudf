@@ -195,10 +195,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     return QueryResult(
         frame=(
+            # SQL: FROM date_dim, store_sales WHERE d_date_sk = ss_sold_date_sk
             date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
+            # SQL: JOIN store ON ss_store_sk = s_store_sk
             .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            # SQL: WHERE s_gmt_offset = {gmt} AND d_year = {year}
             .filter((pl.col("s_gmt_offset") == gmt) & (pl.col("d_year") == year))
+            # SQL: GROUP BY s_store_name, s_store_id
             .group_by(["s_store_name", "s_store_id"])
+            # SQL: Sum(CASE WHEN d_day_name = 'Sunday' THEN ss_sales_price ELSE NULL END) AS sun_sales, ...
             .agg(
                 [
                     pl.when(pl.col("d_day_name") == "Sunday")
@@ -238,6 +243,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("sat_sales"),
                 ]
             )
+            # SQL: ORDER BY s_store_name, s_store_id, sun_sales, ...
+            # SQL: SELECT s_store_name, s_store_id, sun_sales, mon_sales, tue_sales, wed_sales, ...
             .sort(
                 [
                     "s_store_name",
@@ -252,6 +259,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

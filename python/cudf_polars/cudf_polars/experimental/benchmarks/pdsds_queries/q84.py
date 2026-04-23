@@ -153,30 +153,37 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     return QueryResult(
         frame=(
+            # SQL: FROM customer, customer_address WHERE c_current_addr_sk = ca_address_sk
             customer.join(
                 customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
             )
+            # SQL: JOIN customer_demographics ON c_current_cdemo_sk = cd_demo_sk
             .join(
                 customer_demographics,
                 left_on="c_current_cdemo_sk",
                 right_on="cd_demo_sk",
             )
+            # SQL: JOIN household_demographics ON c_current_hdemo_sk = hd_demo_sk
             .join(
                 household_demographics,
                 left_on="c_current_hdemo_sk",
                 right_on="hd_demo_sk",
             )
+            # SQL: JOIN income_band ON hd_income_band_sk = ib_income_band_sk
             .join(
                 income_band,
                 left_on="hd_income_band_sk",
                 right_on="ib_income_band_sk",
             )
+            # SQL: JOIN store_returns ON sr_cdemo_sk = cd_demo_sk
             .join(store_returns, left_on="c_current_cdemo_sk", right_on="sr_cdemo_sk")
+            # SQL: WHERE ca_city='{city}' AND ib_lower_bound>={income} AND ib_upper_bound<={income}+50000
             .filter(
                 (pl.col("ca_city") == city)
                 & (pl.col("ib_lower_bound") >= income)
                 & (pl.col("ib_upper_bound") <= income + 50000)
             )
+            # SQL: SELECT c_customer_id AS customer_id, c_last_name || ', ' || c_first_name AS customername
             .select(
                 [
                     pl.col("c_customer_id").alias("customer_id"),
@@ -185,7 +192,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ).alias("customername"),
                 ]
             )
+            # SQL: ORDER BY c_customer_id
             .sort("customer_id")
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("customer_id", False)],

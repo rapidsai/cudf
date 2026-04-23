@@ -224,6 +224,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: FROM store_sales, date_dim d1 WHERE d1.d_quarter_name = '{year}Q1' AND d1.d_date_sk = ss_sold_date_sk
             store_sales.join(
                 date_dim.select(["d_date_sk", "d_quarter_name"])
                 .with_columns(pl.col("d_quarter_name").alias("d_quarter_name_d1"))
@@ -232,26 +233,33 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 right_on="d_date_sk",
                 suffix="_d1",
             )
+            # SQL: JOIN item ON ss_item_sk = i_item_sk
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            # SQL: JOIN store ON ss_store_sk = s_store_sk
             .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            # SQL: JOIN store_returns ON ss_customer_sk=sr_customer_sk AND ss_item_sk=sr_item_sk AND ss_ticket_number=sr_ticket_number
             .join(
                 store_returns_base,
                 left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
                 right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
                 how="inner",
             )
+            # SQL: JOIN catalog_sales ON sr_customer_sk=cs_bill_customer_sk AND sr_item_sk=cs_item_sk
             .join(
                 catalog_sales_base,
                 left_on=["ss_customer_sk", "ss_item_sk"],
                 right_on=["cs_bill_customer_sk", "cs_item_sk"],
                 how="inner",
             )
+            # SQL: WHERE d1.d_quarter_name='{year}Q1' AND d2.d_quarter_name IN (Q1,Q2,Q3) AND d3.d_quarter_name IN (Q1,Q2,Q3)
             .filter(
                 (pl.col("d_quarter_name_d1") == quarter_q1)
                 & pl.col("d_quarter_name_d2").is_in(quarter_q1_q3)
                 & pl.col("d_quarter_name_d3").is_in(quarter_q1_q3)
             )
+            # SQL: GROUP BY i_item_id, i_item_desc, s_state
             .group_by(["i_item_id", "i_item_desc", "s_state"])
+            # SQL: Count/Avg/Stddev_samp(ss_quantity/sr_return_quantity/cs_quantity) AS store_sales/store_returns/catalog_sales_quantity*
             .agg(
                 [
                     pl.col("ss_quantity").count().alias("store_sales_quantitycount"),
@@ -281,7 +289,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     ),
                 ]
             )
+            # SQL: ORDER BY i_item_id, i_item_desc, s_state
             .sort(["i_item_id", "i_item_desc", "s_state"], nulls_last=True)
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[("i_item_id", False), ("i_item_desc", False), ("s_state", False)],

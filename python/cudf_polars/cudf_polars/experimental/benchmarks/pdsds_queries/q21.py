@@ -168,14 +168,22 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     sort_by = {"w_warehouse_name": False, "i_item_id": False}
     limit = 100
 
+    # SQL: FROM inventory, warehouse, item, date_dim WHERE i_current_price BETWEEN 0.99 AND 1.49
     joined = (
+        # SQL: JOIN warehouse ON inv_warehouse_sk = w_warehouse_sk
         inventory.join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+        # SQL: JOIN item ON inv_item_sk = i_item_sk
         .join(item, left_on="inv_item_sk", right_on="i_item_sk")
+        # SQL: JOIN date_dim ON inv_date_sk = d_date_sk
         .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+        # SQL: WHERE i_current_price BETWEEN 0.99 AND 1.49
+        # SQL:   AND d_date BETWEEN date-30days AND date+30days
         .filter(
             (pl.col("i_current_price").is_between(0.99, 1.49))
             & d_date.is_between(start_date_lit, end_date_lit, closed="both")
         )
+        # SQL: CASE WHEN d_date < sales_date THEN inv_qty ELSE 0 AS inv_before
+        # SQL: CASE WHEN d_date >= sales_date THEN inv_qty ELSE 0 AS inv_after
         .with_columns(
             [
                 pl.when(d_date < sales_date_lit)
@@ -190,14 +198,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: GROUP BY w_warehouse_name, i_item_id
     result = (
         joined.group_by(["w_warehouse_name", "i_item_id"])
+        # SQL: Sum(inv_before) AS inv_before, Sum(inv_after) AS inv_after
         .agg(
             [
                 pl.col("inv_before").sum().alias("inv_before"),
                 pl.col("inv_after").sum().alias("inv_after"),
             ]
         )
+        # SQL: HAVING CASE WHEN inv_before > 0 THEN inv_after/inv_before ELSE NULL END BETWEEN 2/3 AND 3/2
         .filter(
             (pl.col("inv_before") > 0)
             & (pl.col("inv_after") / pl.col("inv_before")).is_between(
@@ -205,7 +216,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             )
         )
         .filter(pl.col("w_warehouse_name").is_not_null())
+        # SQL: ORDER BY w_warehouse_name, i_item_id
         .sort(sort_by.keys())
+        # SQL: LIMIT 100
         .limit(limit)
     )
 

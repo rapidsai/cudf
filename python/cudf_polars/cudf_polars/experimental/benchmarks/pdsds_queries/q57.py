@@ -238,17 +238,24 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
 
+    # SQL: CTE v1 — FROM item, catalog_sales, date_dim, call_center WHERE cs_item_sk=i_item_sk AND cs_sold_date_sk=d_date_sk AND cc_call_center_sk=cs_call_center_sk AND (d_year=... OR ...)
     v1 = (
+        # SQL: FROM item JOIN catalog_sales ON cs_item_sk = i_item_sk
         item.join(catalog_sales, left_on="i_item_sk", right_on="cs_item_sk")
+        # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk; JOIN call_center ON cs_call_center_sk = cc_call_center_sk
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
+        # SQL: WHERE d_year = {year} OR (d_year={year}-1 AND d_moy=12) OR (d_year={year}+1 AND d_moy=1)
         .filter(
             (pl.col("d_year") == year)
             | ((pl.col("d_year") == year - 1) & (pl.col("d_moy") == 12))
             | ((pl.col("d_year") == year + 1) & (pl.col("d_moy") == 1))
         )
+        # SQL: GROUP BY i_category, i_brand, cc_name, d_year, d_moy
         .group_by(["i_category", "i_brand", "cc_name", "d_year", "d_moy"])
+        # SQL: Sum(cs_sales_price) AS sum_sales
         .agg(pl.col("cs_sales_price").sum().alias("sum_sales"))
+        # SQL: Avg(Sum(cs_sales_price)) OVER (PARTITION BY i_category,i_brand,cc_name,d_year) AS avg_monthly_sales; Rank() OVER (PARTITION BY i_category,i_brand,cc_name ORDER BY d_year,d_moy) AS rn
         .with_columns(
             [
                 pl.col("sum_sales")
@@ -265,7 +272,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE v2 — FROM v1, v1 v1_lag, v1 v1_lead WHERE v1.rn = v1_lag.rn+1 AND v1.rn = v1_lead.rn-1 (self-join for lag/lead)
     v2 = (
+        # SQL: JOIN v1 (lag) ON i_category/i_brand/cc_name match AND rn = rn_lag+1
         v1.join(
             v1.select(
                 [
@@ -281,6 +290,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             how="inner",
         )
         .filter(pl.col("rn") == pl.col("rn_lag") + 1)
+        # SQL: JOIN v1 (lead) ON i_category/i_brand/cc_name match AND rn = rn_lead-1
         .join(
             v1.select(
                 [
@@ -303,6 +313,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: WHERE d_year={year} AND avg_monthly_sales>0 AND ABS(sum_sales-avg_monthly_sales)/avg_monthly_sales > 0.1
             v2.filter(
                 (pl.col("d_year") == year)
                 & (pl.col("avg_monthly_sales") > 0)
@@ -316,6 +327,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     > 0.1
                 )
             )
+            # SQL: ORDER BY sum_sales - avg_monthly_sales, avg_monthly_sales
             .sort(
                 by=[
                     pl.col("sum_sales") - pl.col("avg_monthly_sales"),
@@ -324,6 +336,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 descending=[False, False],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

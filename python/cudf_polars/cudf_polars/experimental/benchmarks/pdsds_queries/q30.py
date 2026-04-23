@@ -194,41 +194,52 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
+    # SQL: CTE customer_total_return — FROM web_returns, date_dim, customer_address WHERE wr_returned_date_sk=d_date_sk AND d_year={year} AND wr_returning_addr_sk=ca_address_sk GROUP BY wr_returning_customer_sk, ca_state
     customer_total_return = (
+        # SQL: CROSS JOIN date_dim, customer_address (filter applied below)
         web_returns.join(date_dim, how="cross")
         .join(customer_address, how="cross")
+        # SQL: WHERE wr_returned_date_sk=d_date_sk AND d_year={year} AND wr_returning_addr_sk=ca_address_sk
         .filter(
             (pl.col("wr_returned_date_sk") == pl.col("d_date_sk"))
             & (pl.col("d_year") == year)
             & (pl.col("wr_returning_addr_sk") == pl.col("ca_address_sk"))
         )
+        # SQL: GROUP BY wr_returning_customer_sk AS ctr_customer_sk, ca_state AS ctr_state
         .group_by(
             [
                 pl.col("wr_returning_customer_sk").alias("ctr_customer_sk"),
                 pl.col("ca_state").alias("ctr_state"),
             ]
         )
+        # SQL: Sum(wr_return_amt) AS ctr_total_return
         .agg([pl.col("wr_return_amt").sum().alias("ctr_total_return")])
     )
 
     # Pre-computed correlated subquery — structurally required for Polars
+    # SQL: correlated subquery — Avg(ctr_total_return)*1.2 per state
     state_averages = customer_total_return.group_by("ctr_state").agg(
         [(pl.col("ctr_total_return").mean() * 1.2).alias("avg_return")]
     )
 
+    # SQL: WHERE ctr1.ctr_total_return > Avg(ctr2.ctr_total_return)*1.2 WHERE ctr1.ctr_state=ctr2.ctr_state
     qualified_customers = customer_total_return.join(
         state_averages, on="ctr_state"
     ).filter(pl.col("ctr_total_return") > pl.col("avg_return"))
 
     return QueryResult(
         frame=(
+            # SQL: FROM customer_total_return ctr1, customer_address, customer
             qualified_customers.join(customer_address, how="cross")
+            # SQL: CROSS JOIN customer, customer_address (filter applied below)
             .join(customer, how="cross")
+            # SQL: WHERE ca_address_sk=c_current_addr_sk AND ca_state='{state}' AND ctr_customer_sk=c_customer_sk AND ctr_total_return>avg*1.2
             .filter(
                 (pl.col("ca_address_sk") == pl.col("c_current_addr_sk"))
                 & (pl.col("ca_state") == state)
                 & (pl.col("ctr_customer_sk") == pl.col("c_customer_sk"))
             )
+            # SQL: SELECT c_customer_id ... ctr_total_return
             .select(
                 [
                     "c_customer_id",
@@ -246,6 +257,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "ctr_total_return",
                 ]
             )
+            # SQL: ORDER BY c_customer_id, c_salutation, c_first_name, ... ctr_total_return
             .sort(
                 [
                     "c_customer_id",
@@ -264,6 +276,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

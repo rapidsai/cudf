@@ -370,6 +370,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .replace("ws3.", "")
     )
     return QueryResult(
+        # SQL: ORDER BY {agg}
         frame=joined.sort([sort_key], nulls_last=True),
         sort_by=[(sort_key, False)],
         limit=None,

@@ -210,6 +210,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: category_item_ids — items WHERE i_category = '{category}'
     category_item_ids = (
         item.filter(pl.col("i_category") == category).select("i_item_id").unique()
     )
@@ -217,6 +218,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_filter = (pl.col("d_year") == year) & (pl.col("d_moy") == month)
     gmt_filter = pl.col("ca_gmt_offset") == gmt_offset
 
+    # SQL: CTE ss — store_sales JOIN item, date_dim, customer_address WHERE category items AND d_year/d_moy/gmt_offset
+    # SQL:   GROUP BY i_item_id, Sum(ss_ext_sales_price) AS total_sales
     ss = channel_agg(
         store_sales,
         date_dim,
@@ -234,6 +237,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         group_by_cols=["i_item_id"],
     ).select(["i_item_id", "total_sales"])
 
+    # SQL: CTE cs — catalog_sales JOIN item, date_dim, customer_address (same structure as ss)
     cs = channel_agg(
         catalog_sales,
         date_dim,
@@ -251,6 +255,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         group_by_cols=["i_item_id"],
     ).select(["i_item_id", "total_sales"])
 
+    # SQL: CTE ws — web_sales JOIN item, date_dim, customer_address (same structure as ss)
     ws = channel_agg(
         web_sales,
         date_dim,
@@ -272,10 +277,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: UNION ALL ss, cs, ws
             pl.concat([ss, cs, ws])
+            # SQL: GROUP BY i_item_id
             .group_by("i_item_id")
+            # SQL: Sum(total_sales) AS total_sales
             .agg(pl.col("total_sales").sum().alias("total_sales"))
+            # SQL: ORDER BY i_item_id, total_sales
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

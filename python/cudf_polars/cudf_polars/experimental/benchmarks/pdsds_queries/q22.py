@@ -146,10 +146,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
 
+    # SQL: FROM inventory, date_dim, item, warehouse (cross-join with filter = implicit join)
     base_data = (
         inventory.join(date_dim, how="cross")
         .join(item, how="cross")
         .join(warehouse, how="cross")
+        # SQL: WHERE inv_date_sk = d_date_sk AND inv_item_sk = i_item_sk AND inv_warehouse_sk = w_warehouse_sk
+        # SQL:   AND d_month_seq BETWEEN {dms} AND {dms}+11
         .filter(
             (pl.col("inv_date_sk") == pl.col("d_date_sk"))
             & (pl.col("inv_item_sk") == pl.col("i_item_sk"))
@@ -168,6 +171,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     }
     output_order = ["i_product_name", "i_brand", "i_class", "i_category", "qoh"]
 
+    # SQL: GROUP BY ROLLUP(i_product_name, i_brand, i_class, i_category) — Level 1: all 4 cols
     level1 = rollup_level(
         base_data,
         ["i_product_name", "i_brand", "i_class", "i_category"],
@@ -175,6 +179,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — Level 2: i_product_name, i_brand, i_class
     level2 = rollup_level(
         base_data,
         ["i_product_name", "i_brand", "i_class"],
@@ -182,6 +187,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — Level 3: i_product_name, i_brand
     level3 = rollup_level(
         base_data,
         ["i_product_name", "i_brand"],
@@ -189,6 +195,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — Level 4: i_product_name only
     level4 = rollup_level(
         base_data,
         ["i_product_name"],
@@ -196,6 +203,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         agg_exprs,
         output_order,
     )
+    # SQL: GROUP BY ROLLUP — Level 5: grand total (no grouping)
     level5 = rollup_level(
         base_data,
         [],
@@ -206,11 +214,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: UNION ALL all rollup levels
             pl.concat([level1, level2, level3, level4, level5])
+            # SQL: ORDER BY qoh, i_product_name, i_brand, i_class, i_category
             .sort(
                 ["qoh", "i_product_name", "i_brand", "i_class", "i_category"],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

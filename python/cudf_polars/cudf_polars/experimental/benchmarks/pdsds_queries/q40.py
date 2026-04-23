@@ -172,20 +172,27 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: FROM catalog_sales LEFT OUTER JOIN catalog_returns ON (cs_order_number=cr_order_number AND cs_item_sk=cr_item_sk)
             catalog_sales.join(
                 catalog_returns,
                 left_on=["cs_order_number", "cs_item_sk"],
                 right_on=["cr_order_number", "cr_item_sk"],
                 how="left",
             )
+            # SQL: JOIN warehouse ON cs_warehouse_sk = w_warehouse_sk
             .join(warehouse, left_on="cs_warehouse_sk", right_on="w_warehouse_sk")
+            # SQL: JOIN item ON i_item_sk = cs_item_sk
             .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            # SQL: WHERE i_current_price BETWEEN 0.99 AND 1.49 AND d_date BETWEEN '{sales_date}'-30d AND '{sales_date}'+30d
             .filter(
                 pl.col("i_current_price").is_between(0.99, 1.49)
                 & pl.col("d_date").is_between(start_date, end_date)
             )
+            # SQL: GROUP BY w_state, i_item_id
             .group_by(["w_state", "i_item_id"])
+            # SQL: Sum(CASE WHEN d_date < '{sales_date}' THEN cs_sales_price - COALESCE(cr_refunded_cash,0) ELSE 0 END) AS sales_before, Sum(CASE WHEN d_date >= ... THEN ... END) AS sales_after
             .agg(
                 [
                     pl.when(pl.col("d_date") < target_date)
@@ -206,7 +213,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     .alias("sales_after"),
                 ]
             )
+            # SQL: ORDER BY w_state, i_item_id
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

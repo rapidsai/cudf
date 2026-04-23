@@ -264,20 +264,28 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     diff = pl.col("sr_returned_date_sk") - pl.col("ss_sold_date_sk")
 
+    # SQL: FROM store_sales, store_returns, store, date_dim d1, date_dim d2
     joined = (
+        # SQL: JOIN store_returns ON ss_ticket_number=sr_ticket_number AND ss_item_sk=sr_item_sk AND ss_customer_sk=sr_customer_sk
         store_sales.join(
             store_returns,
             left_on=["ss_ticket_number", "ss_item_sk", "ss_customer_sk"],
             right_on=["sr_ticket_number", "sr_item_sk", "sr_customer_sk"],
         )
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: JOIN d1 (date_dim) ON ss_sold_date_sk = d_date_sk
         .join(d1, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN d2 (date_dim) ON sr_returned_date_sk = d2_date_sk
         .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
+        # SQL: WHERE d2_year = {year} AND d2_moy = {month}
         .filter((pl.col("d2_year") == year) & (pl.col("d2_moy") == month))
     )
 
     result = (
+        # SQL: GROUP BY store fields
         joined.group_by(group_cols)
+        # SQL: Sum(CASE WHEN diff <= 30 THEN 1 ELSE 0 END) AS '30 days', ..., LIMIT 100
         .agg(
             [
                 pl.when(diff <= 30).then(1).otherwise(0).sum().alias("30 days"),
@@ -307,7 +315,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             "91-120 days",
             ">120 days",
         )
+        # SQL: ORDER BY s_store_name, ...
         .sort(group_cols, nulls_last=True)
+        # SQL: LIMIT 100
         .limit(limit)
     )
 

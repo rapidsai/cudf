@@ -162,10 +162,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    # SQL: subquery dj — ss_ticket_number, ss_customer_sk, Count(*) cnt FROM store_sales, date_dim, store, household_demographics WHERE ...
     inner_query = (
+        # SQL: FROM store_sales, date_dim WHERE ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: JOIN household_demographics ON ss_hdemo_sk = hd_demo_sk
         .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        # SQL: WHERE d_dom BETWEEN {dom[0]} AND {dom[1]} AND hd_buy_potential IN ('{bp[0]}','{bp[1]}') AND hd_vehicle_count>0 AND hd_dep_count/hd_vehicle_count>1 AND d_year IN ({year},{year+1},{year+2}) AND s_county IN ({counties})
         .filter(
             (pl.col("d_dom").is_between(dom[0], dom[1]))
             & (
@@ -182,15 +187,20 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             & (pl.col("d_year").is_in([year, year + 1, year + 2]))
             & (pl.col("s_county").is_in(counties))
         )
+        # SQL: GROUP BY ss_ticket_number, ss_customer_sk
         .group_by(["ss_ticket_number", "ss_customer_sk"])
+        # SQL: Count(*) AS cnt
         .agg([pl.len().alias("cnt")])
     )
     return QueryResult(
         frame=(
+            # SQL: FROM dj (subquery), customer WHERE ss_customer_sk = c_customer_sk
             inner_query.join(
                 customer, left_on="ss_customer_sk", right_on="c_customer_sk"
             )
+            # SQL: AND cnt BETWEEN 1 AND 5
             .filter(pl.col("cnt").is_between(1, 5))
+            # SQL: SELECT c_last_name, c_first_name, c_salutation, c_preferred_cust_flag, ss_ticket_number, cnt
             .select(
                 [
                     "c_last_name",
@@ -201,6 +211,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "cnt",
                 ]
             )
+            # SQL: ORDER BY cnt DESC, c_last_name ASC
             .sort(["cnt", "c_last_name"], descending=[True, False])
         ),
         sort_by=[("cnt", True), ("c_last_name", False)],

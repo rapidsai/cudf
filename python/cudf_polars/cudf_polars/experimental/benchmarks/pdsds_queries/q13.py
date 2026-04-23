@@ -196,23 +196,31 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
+            # SQL: JOIN store ON ss_store_sk = s_store_sk
+            # SQL: FROM store_sales, store, customer_demographics, household_demographics, customer_address, date_dim
             store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            # SQL: JOIN customer_demographics ON ss_cdemo_sk = cd_demo_sk
             .join(
                 customer_demographics,
                 left_on="ss_cdemo_sk",
                 right_on="cd_demo_sk",
             )
+            # SQL: JOIN household_demographics ON ss_hdemo_sk = hd_demo_sk
             .join(
                 household_demographics,
                 left_on="ss_hdemo_sk",
                 right_on="hd_demo_sk",
             )
+            # SQL: JOIN customer_address ON ss_addr_sk = ca_address_sk
             .join(
                 customer_address,
                 left_on="ss_addr_sk",
                 right_on="ca_address_sk",
             )
+            # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
             .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            # SQL: WHERE d_year=2001 AND ((cd_marital_status/cd_education_status/ss_sales_price/hd_dep_count conditions))
+            # SQL:   AND (ca_country='United States' AND ca_state IN (...) AND ss_net_profit BETWEEN ...)
             .filter(
                 (pl.col("d_year") == 2001)
                 & (
@@ -253,6 +261,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     )
                 )
             )
+            # SQL: SELECT Avg(ss_quantity), Avg(ss_ext_sales_price), Avg(ss_ext_wholesale_cost), Sum(ss_ext_wholesale_cost)
             .select(
                 [
                     pl.col("ss_quantity").mean().alias("avg(ss_quantity)"),

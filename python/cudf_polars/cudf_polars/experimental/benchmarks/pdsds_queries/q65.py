@@ -164,10 +164,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: CTE sc — FROM store_sales, date_dim WHERE ss_sold_date_sk = d_date_sk
+    # SQL:   AND d_month_seq BETWEEN {dms} AND {dms}+11 GROUP BY ss_store_sk, ss_item_sk
     sc = (
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE d_month_seq BETWEEN {dms} AND {dms}+11
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        # SQL: GROUP BY ss_store_sk, ss_item_sk
         .group_by(["ss_store_sk", "ss_item_sk"])
+        # SQL: Sum(ss_sales_price) AS revenue (null-safe: if count=0 then null)
         .agg(
             [
                 pl.col("ss_sales_price").sum().alias("revenue"),
@@ -182,14 +188,20 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["ss_store_sk", "ss_item_sk", "revenue"])
     )
+    # SQL: CTE sb — SELECT ss_store_sk, Avg(revenue) AS ave FROM sc GROUP BY ss_store_sk
     sb = sc.group_by("ss_store_sk").agg(pl.col("revenue").mean().alias("ave"))
 
     return QueryResult(
         frame=(
+            # SQL: sc JOIN sb ON sb.ss_store_sk = sc.ss_store_sk WHERE sc.revenue <= 0.1 * sb.ave
             sc.join(sb, on="ss_store_sk")
+            # SQL: JOIN store ON s_store_sk = sc.ss_store_sk
             .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            # SQL: JOIN item ON i_item_sk = sc.ss_item_sk
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            # SQL: WHERE sc.revenue <= 0.1 * sb.ave
             .filter(pl.col("revenue") <= 0.1 * pl.col("ave"))
+            # SQL: SELECT s_store_name, i_item_desc, revenue, i_current_price, i_wholesale_cost, i_brand
             .select(
                 [
                     "s_store_name",
@@ -200,6 +212,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "i_brand",
                 ]
             )
+            # SQL: ORDER BY s_store_name, i_item_desc, revenue, i_current_price, i_brand
             .sort(
                 [
                     "s_store_name",
@@ -212,6 +225,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 nulls_last=True,
                 descending=[False, False, False, False, False, False],
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

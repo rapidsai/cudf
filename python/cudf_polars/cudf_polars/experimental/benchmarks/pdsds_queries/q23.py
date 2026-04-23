@@ -217,14 +217,19 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
 
+    # SQL: CTE frequent_ss_items — store_sales items with count > 4 within year range
     frequent_ss_items = (
+        # SQL: FROM store_sales, date_dim WHERE ss_sold_date_sk = d_date_sk AND d_year IN (...)
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN item ON ss_item_sk = i_item_sk (with SUBSTR(i_item_desc,1,30))
         .join(
             item.with_columns(pl.col("i_item_desc").str.slice(0, 30).alias("itemdesc")),
             left_on="ss_item_sk",
             right_on="i_item_sk",
         )
+        # SQL: WHERE d_year IN ({year}, ..., {year}+3)
         .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
+        # SQL: GROUP BY itemdesc, i_item_sk, d_date HAVING count(*) > 4
         .group_by(["itemdesc", "ss_item_sk", "d_date"])
         .agg(pl.len().alias("cnt"))
         .filter(pl.col("cnt") > 4)
@@ -238,10 +243,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE max_store_sales — max(csales) from customer store sales in year range
     max_store_sales = (
+        # SQL: FROM store_sales, customer WHERE ss_customer_sk = c_customer_sk
         store_sales.join(
             customer, left_on="ss_customer_sk", right_on="c_customer_sk", suffix="_c"
         )
+        # SQL: JOIN date_dim WHERE d_year IN (...) GROUP BY ss_customer_sk
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_year").is_in([year, year + 1, year + 2, year + 3]))
         .group_by("ss_customer_sk")
@@ -249,7 +257,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(pl.col("csales").max().alias("tpcds_cmax"))
     )
 
+    # SQL: CTE best_ss_customer — customers with ssales > 95% of max
     best_ss_customer = (
+        # SQL: FROM store_sales, customer, max_store_sales GROUP BY c_customer_sk HAVING ssales > 0.95 * max(tpcds_cmax)
         store_sales.join(
             customer, left_on="ss_customer_sk", right_on="c_customer_sk", suffix="_c"
         )
@@ -267,26 +277,40 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(pl.col("ss_customer_sk").alias("c_customer_sk"))
     )
 
+    # SQL: catalog_sales part — FROM catalog_sales, customer, date_dim, frequent_ss_items, best_ss_customer WHERE d_year={year} AND d_moy={month}
     catalog_part = (
+        # SQL: JOIN customer ON cs_bill_customer_sk = c_customer_sk
         catalog_sales.join(
             customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
         )
+        # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN frequent_ss_items ON cs_item_sk = item_sk
         .join(frequent_ss_items, left_on="cs_item_sk", right_on="item_sk")
+        # SQL: JOIN best_ss_customer ON cs_bill_customer_sk = c_customer_sk
         .join(best_ss_customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
+        # SQL: WHERE d_year = {year} AND d_moy = {month}
         .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        # SQL: GROUP BY c_last_name, c_first_name; Sum(cs_quantity*cs_list_price) AS sales
         .group_by(["c_last_name", "c_first_name"])
         .agg((pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales"))
     )
 
+    # SQL: web_sales part — FROM web_sales, customer, date_dim, frequent_ss_items, best_ss_customer WHERE d_year={year} AND d_moy={month}
     web_part = (
+        # SQL: JOIN customer ON ws_bill_customer_sk = c_customer_sk
         web_sales.join(
             customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
         )
+        # SQL: JOIN date_dim ON ws_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN frequent_ss_items ON ws_item_sk = item_sk
         .join(frequent_ss_items, left_on="ws_item_sk", right_on="item_sk")
+        # SQL: JOIN best_ss_customer ON ws_bill_customer_sk = c_customer_sk
         .join(best_ss_customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk")
+        # SQL: WHERE d_year = {year} AND d_moy = {month}
         .filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        # SQL: GROUP BY c_last_name, c_first_name; Sum(ws_quantity*ws_list_price) AS sales
         .group_by(["c_last_name", "c_first_name"])
         .agg((pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"))
     )
@@ -295,8 +319,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: UNION ALL (catalog_part, web_part)
             pl.concat([catalog_part, web_part])
+            # SQL: ORDER BY c_last_name, c_first_name, sales
             .sort(list(sort_by.keys()), nulls_last=False)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

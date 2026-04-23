@@ -215,12 +215,19 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
+    # SQL: CTE base_agg — FROM inventory, item, warehouse, date_dim WHERE d_year = {year}
     base_agg = (
+        # SQL: JOIN item ON inv_item_sk = i_item_sk
         inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
+        # SQL: JOIN warehouse ON inv_warehouse_sk = w_warehouse_sk
         .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+        # SQL: JOIN date_dim ON inv_date_sk = d_date_sk
         .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+        # SQL: WHERE d_year = {year}
         .filter(pl.col("d_year") == year)
+        # SQL: GROUP BY w_warehouse_name, inv_warehouse_sk, inv_item_sk, d_moy
         .group_by(["w_warehouse_name", "inv_warehouse_sk", "inv_item_sk", "d_moy"])
+        # SQL: stddev_samp(inv_quantity_on_hand)*1.0 AS stdev, avg AS mean
         .agg(
             [
                 (pl.col("inv_quantity_on_hand").std() * 1.0).alias("stdev"),
@@ -229,6 +236,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE inv — add cov = stdev/mean (NULL if mean=0), filter cov > 1
     inv = base_agg.with_columns(
         pl.when(pl.col("mean") == 0)
         .then(None)
@@ -251,6 +259,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     }
     return QueryResult(
         frame=(
+            # SQL: self-join inv ON inv_item_sk, inv_warehouse_sk WHERE d_moy = {month} AND d_moy2 = {month}+1
             inv.join(
                 inv,
                 left_on=["inv_item_sk", "inv_warehouse_sk"],
@@ -258,7 +267,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 how="inner",
                 suffix="_inv2",
             )
+            # SQL: WHERE inv1.d_moy = {month} AND inv2.d_moy = {month}+1
             .filter((pl.col("d_moy") == month) & (pl.col("d_moy_inv2") == month + 1))
+            # SQL: SELECT wsk1, isk1, dmoy1, mean1, cov1, w_warehouse_sk, i_item_sk, d_moy, mean, cov
             .select(
                 [
                     pl.col("inv_warehouse_sk").alias("wsk1"),
@@ -273,6 +284,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("cov_inv2").alias("cov"),
                 ]
             )
+            # SQL: ORDER BY wsk1, isk1, dmoy1, mean1, cov1, d_moy, mean, cov
             .sort(sort_by.keys(), nulls_last=False)
         ),
         sort_by=list(sort_by.items()),

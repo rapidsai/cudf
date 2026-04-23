@@ -221,6 +221,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
+    # SQL: cs_sales + ws_sales UNION ALL (catalog_sales and web_sales with sold_date_sk, customer_sk, item_sk)
     cs_sales = catalog_sales.select(
         [
             pl.col("cs_sold_date_sk").alias("sold_date_sk"),
@@ -228,6 +229,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             pl.col("cs_item_sk").alias("item_sk"),
         ]
     )
+    # SQL: UNION ALL catalog_sales and web_sales
     ws_sales = web_sales.select(
         [
             pl.col("ws_sold_date_sk").alias("sold_date_sk"),
@@ -237,10 +239,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     cs_or_ws_sales = pl.concat([cs_sales, ws_sales])
 
+    # SQL: CTE my_customers — DISTINCT c_customer_sk, c_current_addr_sk
+    # SQL:   FROM cs_or_ws_sales JOIN item JOIN date_dim JOIN customer
+    # SQL:   WHERE i_category='{category}' AND i_class='{class}' AND d_moy={month} AND d_year={year}
     my_customers = (
+        # SQL: JOIN item ON item_sk = i_item_sk
         cs_or_ws_sales.join(item, left_on="item_sk", right_on="i_item_sk")
+        # SQL: JOIN date_dim ON sold_date_sk = d_date_sk
         .join(date_dim, left_on="sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN customer ON customer_sk = c_customer_sk
         .join(customer, left_on="customer_sk", right_on="c_customer_sk")
+        # SQL: WHERE i_category = '{category}' AND i_class = '{class}' AND d_moy = {month} AND d_year = {year}
         .filter(
             (pl.col("i_category") == category)
             & (pl.col("i_class") == class_name)
@@ -251,6 +260,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
+    # SQL: valid_dates — date_dim WHERE d_month_seq BETWEEN month_seq+1 AND month_seq+3
     month_seq = date_dim.filter(
         (pl.col("d_year") == year) & (pl.col("d_moy") == month)
     ).select(
@@ -265,6 +275,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select("d_date_sk")
     )
 
+    # SQL: my_revenue — my_customers JOIN store_sales, customer_address, store, valid_dates
+    # SQL:   GROUP BY customer_sk, Sum(ss_ext_sales_price) AS revenue
     my_revenue = (
         my_customers.join(store_sales, left_on="customer_sk", right_on="ss_customer_sk")
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
@@ -276,6 +288,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .agg([pl.col("ss_ext_sales_price").sum().alias("revenue")])
     )
 
+    # SQL: segments = revenue / 50 (integer buckets)
     segments = my_revenue.select(
         (pl.col("revenue") / 50).cast(pl.Int64()).alias("segment")
     )
@@ -284,11 +297,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: GROUP BY segment
             segments.group_by("segment")
+            # SQL: Count(*) AS num_customers, segment*50 AS segment_base
             .agg([pl.len().alias("num_customers")])
             .with_columns((pl.col("segment") * 50).alias("segment_base"))
             .select(["segment", "num_customers", "segment_base"])
+            # SQL: ORDER BY segment, num_customers
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),

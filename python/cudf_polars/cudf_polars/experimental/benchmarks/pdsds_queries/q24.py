@@ -198,21 +198,29 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
 
+    # SQL: CTE ssales — FROM store_sales, store_returns, store, item, customer, customer_address
     ssales = (
+        # SQL: JOIN store_returns ON ss_ticket_number = sr_ticket_number AND ss_item_sk = sr_item_sk
         store_sales.join(
             store_returns,
             left_on=["ss_ticket_number", "ss_item_sk"],
             right_on=["sr_ticket_number", "sr_item_sk"],
         )
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: JOIN item ON ss_item_sk = i_item_sk
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        # SQL: JOIN customer ON ss_customer_sk = c_customer_sk
         .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        # SQL: WHERE c_birth_country <> UPPER(ca_country) AND s_zip = ca_zip AND s_market_id = {market}
         .filter(
             (pl.col("c_birth_country") != pl.col("ca_country").str.to_uppercase())
             & (pl.col("s_zip") == pl.col("ca_zip"))
             & (pl.col("s_market_id") == market)
         )
+        # SQL: GROUP BY c_last_name, c_first_name, s_store_name, ca_state, s_state, i_color, i_current_price, ...
         .group_by(
             [
                 "c_last_name",
@@ -227,6 +235,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 "i_size",
             ]
         )
+        # SQL: Sum({amountone}) AS netpaid
         .agg(
             pl.when(pl.col(amountone).count() > 0)
             .then(pl.col(amountone).sum())
@@ -235,6 +244,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: threshold = 0.05 * Avg(netpaid)
     threshold_table = ssales.select(
         (pl.col("netpaid").mean() * 0.05).alias("threshold")
     )
@@ -243,8 +253,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = None
     return QueryResult(
         frame=(
+            # SQL: WHERE i_color = '{color}'
             ssales.filter(pl.col("i_color") == color)
+            # SQL: GROUP BY c_last_name, c_first_name, s_store_name
             .group_by(["c_last_name", "c_first_name", "s_store_name"])
+            # SQL: Sum(netpaid) AS paid
             .agg(
                 pl.when(pl.col("netpaid").count() > 0)
                 .then(pl.col("netpaid").sum())
@@ -252,8 +265,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 .alias("paid")
             )
             .join(threshold_table, how="cross")
+            # SQL: WHERE paid > threshold (0.05 * avg(netpaid))
             .filter(pl.col("paid") > pl.col("threshold"))
+            # SQL: SELECT c_last_name, c_first_name, s_store_name, paid
             .select(["c_last_name", "c_first_name", "s_store_name", "paid"])
+            # SQL: ORDER BY c_last_name, c_first_name, s_store_name
             .sort(list(sort_by.keys()), nulls_last=True)
         ),
         sort_by=list(sort_by.items()),

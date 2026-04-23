@@ -156,13 +156,20 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     return QueryResult(
         frame=(
+            # SQL: FROM date_dim, store_sales WHERE d_date_sk = ss_sold_date_sk
             date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
+            # SQL: JOIN item ON ss_item_sk = i_item_sk
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            # SQL: JOIN customer ON ss_customer_sk = c_customer_sk
             .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
             .join(
                 customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
             )
+            # SQL: JOIN store ON ss_store_sk = s_store_sk
             .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            # SQL: WHERE i_manager_id = {manager} AND d_moy = {month} AND d_year = {year}
+            # SQL:   AND Substr(ca_zip,1,5) <> Substr(s_zip,1,5)
             .filter(
                 (pl.col("i_manager_id") == manager)
                 & (pl.col("d_moy") == month)
@@ -172,8 +179,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     != pl.col("s_zip").cast(pl.Utf8).str.slice(0, 5)
                 )
             )
+            # SQL: GROUP BY i_brand, i_brand_id, i_manufact_id, i_manufact
             .group_by(["i_brand", "i_brand_id", "i_manufact_id", "i_manufact"])
+            # SQL: Sum(ss_ext_sales_price) AS ext_price
             .agg([pl.col("ss_ext_sales_price").sum().alias("ext_price")])
+            # SQL: SELECT i_brand_id AS brand_id, i_brand AS brand, i_manufact_id, i_manufact, ext_price
             .select(
                 [
                     pl.col("i_brand_id").alias("brand_id"),
@@ -183,6 +193,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     "ext_price",
                 ]
             )
+            # SQL: ORDER BY ext_price DESC, i_brand, i_brand_id, i_manufact_id, i_manufact
             .sort(
                 [
                     "ext_price",
@@ -194,6 +205,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 descending=[True, False, False, False, False],
                 nulls_last=True,
             )
+            # SQL: LIMIT 100
             .limit(100)
         ),
         sort_by=[

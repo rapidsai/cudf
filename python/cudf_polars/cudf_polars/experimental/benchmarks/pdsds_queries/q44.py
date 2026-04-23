@@ -204,19 +204,26 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
+    # SQL: benchmark — Avg(ss_net_profit) WHERE ss_store_sk = {store_sk} AND ss_cdemo_sk IS NULL
     benchmark = (
+        # SQL: WHERE ss_store_sk = {store_sk} AND ss_cdemo_sk IS NULL
         store_sales.filter(
             (pl.col("ss_store_sk") == store_sk) & (pl.col("ss_cdemo_sk").is_null())
         )
+        # SQL: GROUP BY ss_store_sk
         .group_by("ss_store_sk")
         .agg(pl.col("ss_net_profit").mean().alias("benchmark_profit"))
         .select("benchmark_profit")
         .with_columns(pl.lit(1).alias("join_key"))
     )
 
+    # SQL: ascending subquery — Rank() OVER (ORDER BY avg_profit ASC) WHERE avg > 0.9 * benchmark
     item_profits = (
+        # SQL: WHERE ss_store_sk = {store_sk}
         store_sales.filter(pl.col("ss_store_sk") == store_sk)
+        # SQL: GROUP BY ss_item_sk
         .group_by("ss_item_sk")
+        # SQL: Avg(ss_net_profit) AS avg(ss_net_profit)
         .agg(pl.col("ss_net_profit").mean().alias("avg(ss_net_profit)"))
         .with_columns(pl.lit(1).alias("join_key"))
         .join(benchmark, on="join_key")
@@ -225,6 +232,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
 
     rank_limit = 11
+    # SQL: ascending rank — Rank() OVER (ORDER BY rank_col ASC) WHERE rnk < 11
     ascending_rank = (
         item_profits.with_columns(
             [pl.col("avg(ss_net_profit)").rank(method="ordinal").alias("rnk")]
@@ -232,6 +240,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .filter(pl.col("rnk") < rank_limit)
         .select(["ss_item_sk", "rnk"])
     )
+    # SQL: descending rank — Rank() OVER (ORDER BY rank_col DESC) WHERE rnk < 11
     descending_rank = (
         item_profits.with_columns(
             [
@@ -248,8 +257,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
+            # SQL: JOIN ascending ON rnk = rnk
             ascending_rank.join(descending_rank, on="rnk", how="inner", suffix="_desc")
+            # SQL: JOIN item i1 ON ss_item_sk = i_item_sk (best_performing)
             .join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
+            # SQL: JOIN item i2 ON ss_item_sk_desc = i_item_sk (worst_performing)
             .join(
                 item,
                 left_on="ss_item_sk_desc",
@@ -257,6 +269,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 how="inner",
                 suffix="_worst",
             )
+            # SQL: SELECT rnk, i1.i_product_name AS best_performing, i2.i_product_name AS worst_performing
             .select(
                 [
                     pl.col("rnk"),
@@ -264,7 +277,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("i_product_name_worst").alias("worst_performing"),
                 ]
             )
+            # SQL: ORDER BY rnk
             .sort(sort_by.keys(), nulls_last=True)
+            # SQL: LIMIT 100
             .limit(limit)
         ),
         sort_by=list(sort_by.items()),
