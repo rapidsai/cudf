@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
@@ -1764,17 +1764,20 @@ def test_concat_decimal_non_numeric(
 def test_concat_struct_column():
     s1 = cudf.Series([{"a": 5}, {"c": "hello"}, {"b": 7}])
     s2 = cudf.Series([{"a": 5, "c": "hello", "b": 7}])
-    expected = cudf.Series(
-        [
-            {"a": 5, "b": None, "c": None},
-            {"a": None, "b": None, "c": "hello"},
-            {"a": None, "b": 7, "c": None},
-            {"a": 5, "b": 7, "c": "hello"},
-        ],
-        index=[0, 1, 2, 0],
-    )
-    s = cudf.concat([s1, s2])
-    assert_eq(s, expected, check_index_type=True)
+    result = cudf.concat([s1, s2])
+    # Field order depends on pyarrow's type inference (alphabetical
+    # before pyarrow 23, insertion-order after), so derive the
+    # expected output from s1's inferred dtype rather than hardcoding.
+    # See https://github.com/apache/arrow/pull/48813
+    fields = list(s1.dtype.fields)
+    expected_data = [
+        {f: (5 if f == "a" else None) for f in fields},
+        {f: ("hello" if f == "c" else None) for f in fields},
+        {f: (7 if f == "b" else None) for f in fields},
+        {f: (5 if f == "a" else "hello" if f == "c" else 7) for f in fields},
+    ]
+    expected = cudf.Series(expected_data, index=[0, 1, 2, 0])
+    assert_eq(result, expected, check_index_type=True)
 
 
 @pytest.mark.parametrize(
