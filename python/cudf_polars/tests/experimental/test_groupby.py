@@ -119,12 +119,19 @@ def test_groupby_single_partitions(df, engine, op, keys):
 
 
 @pytest.mark.parametrize(
-    "op", ["sum", "mean", "len", "count", "min", "max", "n_unique"]
+    "op", ["sum", "mean", "len", "count", "min", "max", "n_unique", "std", "var"]
 )
 @pytest.mark.parametrize("keys", [("y",), ("y", "z")])
 def test_groupby_agg(df, engine, op, keys):
     agg = getattr(pl.col("x"), op)()
     q = df.group_by(*keys).agg(agg)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize("ddof", [0, 2, 50])
+@pytest.mark.parametrize("agg", ["std", "var"])
+def test_groupby_std_var_ddof(df, engine, agg, ddof):
+    q = df.group_by("y").agg(getattr(pl.col("x"), agg)(ddof=ddof))
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
