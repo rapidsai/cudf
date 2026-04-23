@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <future>
 #include <memory>
 #include <optional>
@@ -107,7 +108,8 @@ struct [[nodiscard]] sha256_hasher {
   constexpr std::uint64_t operator()(sha256 const& obj) const
   {
     struct u64x4 {
-      alignas(16) std::uint64_t v[4];  // NOLINT(modernize-avoid-c-arrays)
+      alignas(alignof(sha256)) std::uint64_t  // NOLINT(modernize-avoid-c-arrays)
+        v[sizeof(sha256) / sizeof(std::uint64_t)];
     };
 
     auto value = std::bit_cast<u64x4>(obj);
@@ -567,7 +569,6 @@ struct [[nodiscard]] cache_stats {
 struct [[nodiscard]] cache_limits {
   std::uint32_t num_mem_blobs     = 16'384;
   std::uint32_t num_mem_libraries = 16'384;
-  std::uint32_t num_disk_entries  = 131'072;
 };
 
 using blob_compile_func    = func<blob()>;
@@ -778,14 +779,6 @@ struct cache_t {  // NOLINT
 [[nodiscard]] byte_buffer link_library(link_params const& params);
 
 /**
- * @brief Demangle a CUDA symbol name into a human-readable form
- * @param mangled_name The mangled CUDA symbol name to be demangled
- * @return A string containing the demangled, human-readable symbol name corresponding to the input
- * mangled name
- */
-[[nodiscard]] std::string demangle_cuda_symbol(char const* mangled_name);
-
-/**
  * @brief Initialize the RTCX library, setting up necessary resources and state for subsequent
  * operations
  * @details This function must be called before using any other functions in the RTCX library. It
@@ -815,7 +808,7 @@ void teardown();
  * @param value The boolean value to be reflected
  * @return A string containing the CUDA representation of the boolean value ("true" or "false")
  */
-std::string reflect_bool(bool value);
+inline std::string reflect_bool(bool value) { return std::format("(bool){}", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -823,7 +816,10 @@ std::string reflect_bool(bool value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::uint8_t value);
+inline std::string reflect_int(std::uint8_t value)
+{
+  return std::format("(unsigned char){}U", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -831,7 +827,10 @@ std::string reflect_int(std::uint8_t value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::uint16_t value);
+inline std::string reflect_int(std::uint16_t value)
+{
+  return std::format("(unsigned short){}U", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -839,7 +838,10 @@ std::string reflect_int(std::uint16_t value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::uint32_t value);
+inline std::string reflect_int(std::uint32_t value)
+{
+  return std::format("(unsigned int){}U", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -847,7 +849,10 @@ std::string reflect_int(std::uint32_t value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::uint64_t value);
+inline std::string reflect_int(std::uint64_t value)
+{
+  return std::format("(unsigned long long int){}ULL", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -855,7 +860,7 @@ std::string reflect_int(std::uint64_t value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::int8_t value);
+inline std::string reflect_int(std::int8_t value) { return std::format("(signed char){}", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -863,7 +868,10 @@ std::string reflect_int(std::int8_t value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::int16_t value);
+inline std::string reflect_int(std::int16_t value)
+{
+  return std::format("(signed short){}", value);
+}
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -871,7 +879,7 @@ std::string reflect_int(std::int16_t value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::int32_t value);
+inline std::string reflect_int(std::int32_t value) { return std::format("(signed int){}", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -879,7 +887,10 @@ std::string reflect_int(std::int32_t value);
  * @param value The integer value to be reflected
  * @return A string containing the CUDA representation of the integer value
  */
-std::string reflect_int(std::int64_t value);
+inline std::string reflect_int(std::int64_t value)
+{
+  return std::format("(signed long long int){}LL", value);
+}
 
 /**
  * @brief Reflect a floating-point value into its CUDA string representation
@@ -887,7 +898,7 @@ std::string reflect_int(std::int64_t value);
  * @param value The floating-point value to be reflected
  * @return A string containing the CUDA representation of the floating-point value
  */
-std::string reflect_float(float value);
+inline std::string reflect_float(float value) { return std::format("(float){}F", value); }
 
 /**
  * @brief Reflect a floating-point value into its CUDA string representation
@@ -895,7 +906,7 @@ std::string reflect_float(float value);
  * @param value The floating-point value to be reflected
  * @return A string containing the CUDA representation of the floating-point value
  */
-std::string reflect_float(double value);
+inline std::string reflect_float(double value) { return std::format("(double){}", value); }
 
 /**
  * @brief Reflect a value of any type into its CUDA string representation, given the type name as a
@@ -905,7 +916,10 @@ std::string reflect_float(double value);
  * resulting CUDA code
  * @return A string containing the CUDA representation of the value with the specified type
  */
-std::string reflect_cast(std::string_view type, std::string_view value);
+inline std::string reflect_cast(std::string_view type, std::string_view value)
+{
+  return std::format("(({})({}))", type, value);
+}
 
 /**
  * @brief Reflect an enumeration value into its CUDA string representation, given the type name as a
@@ -965,5 +979,20 @@ std::string reflect_template(std::string_view template_name, TemplateArgs&&... t
     {std::string_view{template_args}...};
   return reflect_template(template_name, tparams);
 }
+
+/**
+ * @brief Decompress a compressed binary blob using the specified compression algorithm
+ * @param compressed_binary A span of bytes containing the compressed binary data to be decompressed
+ * @param uncompressed_size The expected size of the uncompressed binary data in bytes
+ * @param compression A string view specifying the compression algorithm used to compress the binary
+ * data
+ * @return A byte buffer containing the decompressed binary data
+ * @throws std::runtime_error if decompression fails due to an unsupported compression algorithm,
+ * invalid compressed data, or if the decompressed data size does not match the expected
+ * uncompressed size
+ */
+rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
+                                  size_t uncompressed_size,
+                                  std::string_view compression);
 
 }  // namespace rtcx

@@ -38,8 +38,7 @@ void context::ensure_jit_cache_initialized()
     rtcx::initialize();
 
     auto limits = rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
-                                     .num_mem_libraries = _config.kernel_cache_limit_process,
-                                     .num_disk_entries  = _config.kernel_cache_limit_disk};
+                                     .num_mem_libraries = _config.kernel_cache_limit_process};
 
     _rtcx_cache = std::make_unique<rtcx::cache_t>(_config.rtcx_cache_dir,
                                                   _config.jit_tmp_dir,
@@ -120,7 +119,6 @@ void initialize(init_flags flags)
     bool clear_jit_cache   = get_bool_env_or("LIBCUDF_JIT_CLEAR_CACHE", false);
 
     auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
-    auto kernel_cache_limit_disk    = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_DISK", 131'072U);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
@@ -138,8 +136,7 @@ void initialize(init_flags flags)
                        .jit_bundle_dir             = jit_bundle_dir,
                        .jit_pch_dir                = jit_pch_dir,
                        .jit_tmp_dir                = jit_tmp_dir,
-                       .kernel_cache_limit_process = kernel_cache_limit_process,
-                       .kernel_cache_limit_disk    = kernel_cache_limit_disk};
+                       .kernel_cache_limit_process = kernel_cache_limit_process};
 
     _context.emplace(cfg, flags);
   });

@@ -9,18 +9,13 @@
 #include <cuda_runtime.h>
 
 #include <cudf_jit_embed.hpp>
-#include <fcntl.h>
 #include <jit/jit.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <zstd.h>
 
-#include <cerrno>
-#include <cstring>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <future>
 
 namespace CUDF_EXPORT cudf {
@@ -43,103 +38,6 @@ rtcx::sha256 hash_strings(std::span<char const* const> inputs)
   return ctx.finalize();
 }
 
-[[noreturn]] void throw_posix(std::string_view message, std::string_view syscall_name)
-{
-  auto error_code = errno;
-  auto error_str  = std::format(
-    "{}. `{}` failed with {} ({})", message, syscall_name, error_code, std::strerror(error_code));
-  CUDF_FAIL(error_str, std::runtime_error);
-}
-
-void install_file(char const* dst_path, std::span<std::uint8_t const> contents)
-{
-  int dst_file = open(dst_path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  if (dst_file == -1) {
-    if (errno == EEXIST) {
-      // file already exists, so just return
-      return;
-    }
-    throw_posix(std::format("Failed to create file ({})", dst_path), "open");
-  }
-
-  RTCX_DEFER([&] {
-    if (close(dst_file) != 0) {
-      throw_posix(std::format("Failed to close file ({})", dst_path), "close");
-    }
-  });
-
-  if (write(dst_file, contents.data(), contents.size()) == -1) {
-    throw_posix(std::format("Failed to write file ({})", dst_path), "write");
-  }
-}
-
-/**
- * @brief Reads the contents of a file into a byte buffer and null-terminates it to allow for safe
- * usage as a C-string.
- */
-rtcx::byte_buffer read_blob_cstring(char const* path)
-{
-  int32_t fd = open(path, O_RDONLY);
-  if (fd == -1) { throw_posix(std::format("Failed to open file ({})", path), "open"); }
-
-  RTCX_DEFER([&] {
-    if (close(fd) == -1) { throw_posix(std::format("Failed to close file ({})", path), "close"); }
-  });
-
-  auto file_size = lseek(fd, 0, SEEK_END);
-  if (file_size == -1) {
-    throw_posix(std::format("Failed to determine size of file ({})", path), "lseek");
-  }
-  // TODO: make all read/write syscalls call read/write in a loop
-
-  if (lseek(fd, 0, SEEK_SET) == -1) {
-    throw_posix(std::format("Failed to reset file offset for file ({})", path), "lseek");
-  }
-
-  CUDF_EXPECTS(file_size < std::numeric_limits<decltype(file_size)>::max() - 1,
-               std::format("File ({}) size is too large to read into memory", path),
-               std::runtime_error);
-
-  auto contents = rtcx::byte_buffer::make(file_size + 1U);  // +1 for null terminator
-
-  if (read(fd, contents.data(), file_size) == -1) {
-    throw_posix(std::format("Failed to read file ({})", path), "read");
-  }
-
-  contents.data()[file_size] = '\0';  // null-terminate the buffer
-
-  return contents;
-}
-
-rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
-                                  size_t uncompressed_size,
-                                  std::string_view compression)
-{
-  CUDF_EXPECTS(compression == "none" || compression == "zstd",
-               std::format("Unsupported compression type specified: {}", compression),
-               std::runtime_error);
-  auto decompressed = rtcx::byte_buffer::make(uncompressed_size);
-
-  if (compression == "zstd") {
-    size_t errc = ZSTD_decompress(
-      decompressed.data(), uncompressed_size, compressed_binary.data(), compressed_binary.size());
-
-    CUDF_EXPECTS(
-      !ZSTD_isError(errc) && errc == uncompressed_size,
-      std::format("Failed to decompress embedded RTC source files with ZSTD, error code {} : ",
-                  errc,
-                  ZSTD_getErrorName(errc)),
-      std::runtime_error);
-  } else {
-    // compression is "none", so just copy the data
-    std::copy(compressed_binary.data(),
-              compressed_binary.data() + compressed_binary.size(),
-              decompressed.data());
-  }
-
-  return decompressed;
-}
-
 void install_file_set(std::string_view target_dir,
                       std::span<uint8_t const> compressed_binary,
                       size_t uncompressed_size,
@@ -147,33 +45,57 @@ void install_file_set(std::string_view target_dir,
                       std::span<char const* const> destinations,
                       std::string_view compression)
 {
-  auto decompressed = decompress_blob(compressed_binary, uncompressed_size, compression);
-  auto files_data   = decompressed.data();
-
+  auto decompressed = rtcx::decompress_blob(compressed_binary, uncompressed_size, compression);
   for (size_t i = 0; i < file_ranges.size(); ++i) {
     auto file_data_range = file_ranges[i];
-    auto file_data       = std::span{files_data + file_data_range.offset, file_data_range.size};
-    auto dst_path        = destinations[i];
-    auto target_path     = std::format("{}/{}", target_dir, dst_path);
+    auto file_data = std::span{decompressed.data() + file_data_range.offset, file_data_range.size};
+    auto dst_path  = destinations[i];
+    auto target_path = std::format("{}/{}", target_dir, dst_path);
 
     std::filesystem::create_directories(std::filesystem::path{target_path}.parent_path());
-    install_file(target_path.c_str(), file_data);
+
+    std::ofstream file(target_path, std::ios::binary);
+    if (!file) {
+      throw std::runtime_error(
+        std::format("Failed to open file for writing at path: {}", target_path));
+    }
+
+    file.write(reinterpret_cast<char const*>(file_data.data()), file_data.size());
+    if (!file) {
+      throw std::runtime_error(std::format("Failed to write file at path: {}", target_path));
+    }
   }
+}
+
+std::string read_file_string(char const* path)
+{
+  std::ifstream file(std::string{path}, std::ios::binary | std::ios::ate);
+  if (!file) { throw std::runtime_error(std::format("Failed to open file at path: {}", path)); }
+
+  auto size = file.tellg();
+  file.seekg(0, std::ios::beg);
+
+  std::string contents(size, '\0');
+  if (!file.read(contents.data(), size)) {
+    throw std::runtime_error(std::format("Failed to read file at path: {}", path));
+  }
+
+  return contents;
 }
 
 void install_cudf_jit_files(std::string const& target_dir, std::string const& tmp_dir)
 {
   // directory does not exist, so create it
-  auto tmp_path_str = std::format("{}/cudf-jit-tmpdir_XXXXXX", tmp_dir);
-  (void)tmp_path_str.c_str();  // ensure null-terminated string for mkdtemp
-  char* tmp_path = mkdtemp(tmp_path_str.data());
-  if (tmp_path == nullptr) {
-    throw_posix(
-      std::format("Failed to create temporary JIT install directory for ({})", target_dir),
-      "mkdtemp");
-  }
+  auto tmp_dir_path_str = std::format("{}/cudf-jit-tmpdir_XXXXXX", tmp_dir);
+  (void)tmp_dir_path_str.c_str();  // ensure null-terminated string for mkdtemp
+  char* tmp_dir_path = ::mkdtemp(tmp_dir_path_str.data());
+  CUDF_EXPECTS(
+    tmp_dir_path != nullptr,
+    std::format("Failed to create temporary directory for JIT file installation in tmp dir: {}",
+                tmp_dir),
+    std::runtime_error);
 
-  install_file_set(tmp_path,
+  install_file_set(tmp_dir_path,
                    rtcx_embed::cudf_jit_embed_files,
                    rtcx_embed::cudf_jit_embed_files_uncompressed_size,
                    rtcx_embed::cudf_jit_embed_file_ranges,
@@ -181,15 +103,18 @@ void install_cudf_jit_files(std::string const& target_dir, std::string const& tm
                    rtcx_embed::cudf_jit_embed_files_compression);
 
   // rename the temporary directory to the target install directory
-  if (rename(tmp_path, target_dir.c_str()) == -1) {
+  if (::rename(tmp_dir_path, target_dir.c_str()) == -1) {
     auto errc = errno;
     // another process created it
     if (errc == ENOTEMPTY || errc == EEXIST) {
-      std::filesystem::remove_all(tmp_path);
+      std::filesystem::remove_all(tmp_dir_path);
     } else {
-      throw_posix(
-        std::format("Failed to rename temporary JIT install directory to ({})", target_dir),
-        "rename");
+      CUDF_FAIL(
+        std::format("Failed to install JIT files to target directory: {} with error ({}): {}",
+                    target_dir,
+                    errc,
+                    std::strerror(errc)),
+        std::runtime_error);
     }
   }
 }
@@ -209,19 +134,13 @@ void jit_bundle_t::ensure_installed() const
   auto expected_hash = get_hash();
   auto expected_path = std::format("{}/{}", install_dir_, expected_hash);
 
-  struct stat path_info;
-
-  if (lstat(expected_path.c_str(), &path_info) == -1) {
-    if (errno != ENOENT) {
-      throw_posix(std::format("Failed to get stat for directory ({})", expected_path), "lstat");
-    } else {
-      // ensure base install directory exists
-      std::filesystem::create_directories(install_dir_);
-      install_cudf_jit_files(expected_path.c_str(), cache_->get_tmp_dir());
-    }
+  if (!std::filesystem::exists(expected_path)) {
+    // ensure base install directory exists
+    std::filesystem::create_directories(install_dir_);
+    install_cudf_jit_files(expected_path.c_str(), cache_->get_tmp_dir());
   } else {
     // directory exists, perform minor sanity check
-    CUDF_EXPECTS(S_ISDIR(path_info.st_mode),
+    CUDF_EXPECTS(std::filesystem::is_directory(expected_path),  // throws if path does not exist
                  std::format("JIT install path ({}) exists but is not a directory", expected_path),
                  std::runtime_error);
   }
@@ -400,14 +319,14 @@ kernel_instance={}
 
   auto compile = [&] {
     auto bundle_dir = cudf::get_context().jit_bundle().get_directory();
-    auto source     = read_blob_cstring(source_file.c_str());
+    auto source     = read_file_string(source_file.c_str());
     std::vector<char const*> extra_options_cstr;
     for (auto const& option : extra_options) {
       extra_options_cstr.emplace_back(option.c_str());
     }
 
     return compile_library_uncached(name.c_str(),
-                                    reinterpret_cast<char const*>(source.data()),
+                                    source.c_str(),
                                     header_include_names,
                                     headers,
                                     extra_options_cstr,

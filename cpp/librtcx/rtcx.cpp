@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/logger.hpp>
+
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
-#include <cxxabi.h>
-#include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <nvJitLink.h>
@@ -16,12 +16,10 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <syscall.h>
-#include <unistd.h>
+#include <zstd.h>
 
 #include <atomic>
 #include <cerrno>
-#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -96,13 +94,12 @@
       auto __errstr = ::std::format("(nvJitLink) expression `{}` failed, with error ({}): {}", \
                                     #__VA_ARGS__,                                              \
                                     static_cast<::std::int64_t>(__result),                     \
-                                    ::rtcx::get_nvJitLinkResultString(__result));              \
+                                    ::rtcx::nvJitLinkResult_string(__result));                 \
       RTCX_FAIL(__errstr, ::std::runtime_error);                                               \
     }                                                                                          \
   } while (0)
 
 namespace rtcx {
-
 namespace {
 
 template <typename StringType>
@@ -134,22 +131,14 @@ std::string join_strings(std::span<StringType> strings, std::string_view separat
 
 }  // namespace
 
-void log_warning(std::string_view message)
+void log_warning(std::string_view msg)
 {
-  ::fprintf(
-    stdout, "[RTCX WARNING] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
+  CUDF_LOG_WARN("%.*s", static_cast<std::int32_t>(msg.size()), msg.data());
 }
 
-void log_error(std::string_view message)
+void log_error(std::string_view msg)
 {
-  ::fprintf(
-    stderr, "[RTCX ERROR] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
-}
-
-void log_trace(std::string_view message)
-{
-  ::fprintf(
-    stdout, "[RTCX TRACE] %.*s\n", static_cast<std::int32_t>(message.size()), message.data());
+  CUDF_LOG_ERROR("%.*s", static_cast<std::int32_t>(msg.size()), msg.data());
 }
 
 #define FOR_EACH_CUDA_FUNC(DO_IT)       \
@@ -199,7 +188,7 @@ void log_trace(std::string_view message)
 
 namespace {
 
-char const* get_nvJitLinkResultString(nvJitLinkResult result)
+std::string_view nvJitLinkResult_string(nvJitLinkResult result)
 {
   switch (result) {
     case NVJITLINK_SUCCESS: return "NVJITLINK_SUCCESS";
@@ -230,7 +219,7 @@ char const* get_nvJitLinkResultString(nvJitLinkResult result)
   }
 }
 
-char const* binary_type_string(binary_type type)
+std::string_view binary_type_string(binary_type type)
 {
   switch (type) {
     case binary_type::LTO_IR: return "LTO_IR";
@@ -510,7 +499,7 @@ void log_nvJitLink_result(link_params const& params,
   if (auto errc = nvjitlink->GetInfoLogSize(handle, &info_log_size); errc != NVJITLINK_SUCCESS) {
     RTCX_FAIL(std::format("Failed to get nvJitLink info log size with error ({}): {}",
                           static_cast<std::int64_t>(errc),
-                          get_nvJitLinkResultString(errc)),
+                          nvJitLinkResult_string(errc)),
               std::runtime_error);
   }
 
@@ -520,7 +509,7 @@ void log_nvJitLink_result(link_params const& params,
     if (auto errc = nvjitlink->GetInfoLog(handle, info_log.data()); errc != NVJITLINK_SUCCESS) {
       RTCX_FAIL(std::format("Failed to get nvJitLink info log with error ({}): {}",
                             static_cast<std::int64_t>(errc),
-                            get_nvJitLinkResultString(errc)),
+                            nvJitLinkResult_string(errc)),
                 std::runtime_error);
     }
   }
@@ -530,7 +519,7 @@ void log_nvJitLink_result(link_params const& params,
   if (auto errc = nvjitlink->GetErrorLogSize(handle, &error_log_size); errc != NVJITLINK_SUCCESS) {
     RTCX_FAIL(std::format("Failed to get nvJitLink error log size with error ({}): {}",
                           static_cast<std::int64_t>(errc),
-                          get_nvJitLinkResultString(errc)),
+                          nvJitLinkResult_string(errc)),
               std::runtime_error);
   }
 
@@ -541,7 +530,7 @@ void log_nvJitLink_result(link_params const& params,
     if (auto errc = nvjitlink->GetErrorLog(handle, error_log.data()); errc != NVJITLINK_SUCCESS) {
       RTCX_FAIL(std::format("Failed to get nvJitLink error log with error ({}): {}",
                             static_cast<std::int64_t>(errc),
-                            get_nvJitLinkResultString(errc)),
+                            nvJitLinkResult_string(errc)),
                 std::runtime_error);
     }
   }
@@ -563,18 +552,16 @@ void log_nvJitLink_result(link_params const& params,
     link_options_str = std::format("{}\t{}\n", link_options_str, option);
   }
 
-  char const* binary_type_str = binary_type_string(params.output_type);
-
   auto status_str = error_log.empty() ? "completed with warnings" : "failed with errors";
 
   auto msg = std::format(
     "(nvJitLink) Linking for `{}` ({}) {}, error code ({}): {}.\nFragments: \n{}\n"
     "Link Options: \n{}\n\nInfo Log:\n\t{}\n\nError Log:\n\t{}\n\n",
     params.name == nullptr ? "<unnamed>" : params.name,
-    binary_type_str,
+    binary_type_string(params.output_type),
     status_str,
     static_cast<std::int64_t>(link_result),
-    get_nvJitLinkResultString(link_result),
+    nvJitLinkResult_string(link_result),
     fragments_str,
     link_options_str,
     std::string_view{info_log.data(), info_log.size()},
@@ -822,18 +809,6 @@ kernel_ref library_t::get_kernel(char const* name) const
   return kernel_ref{kernel};
 }
 
-std::string demangle_cuda_symbol(char const* mangled_name)
-{
-  std::int32_t status;
-  std::size_t length;
-  char* demangled_name = abi::__cxa_demangle(mangled_name, nullptr, &length, &status);
-
-  RTCX_EXPECTS(status == 0, "Demangling CUDA symbol name failed", std::runtime_error);
-  RTCX_EXPECTS(demangled_name != nullptr, "Demangling CUDA symbol name failed", std::runtime_error);
-
-  return std::string{demangled_name};
-}
-
 namespace {
 
 [[noreturn]] void throw_posix(std::string_view message, std::string_view syscall_name)
@@ -937,83 +912,15 @@ std::optional<library> get_disk_library(std::string const& cache_dir, sha256 con
   return std::make_shared<library_t>(handle);
 }
 
-std::pair<std::vector<std::string>, std::vector<std::chrono::nanoseconds>> get_disk_entries(
-  std::string const& cache_dir)
+std::vector<std::string> get_disk_entries(std::string const& cache_dir)
 {
-  std::int32_t dir = ::open(cache_dir.c_str(), O_RDONLY | O_DIRECTORY);
-
-  if (dir == -1) { throw_posix("Failed to open RTCX cache directory for evicting", "open"); }
-
-  RTCX_DEFER([&] { ::close(dir); });
-
-  std::vector<char> buffer;
-  buffer.resize(8192);
-
-  std::vector<std::string> paths;
-  std::vector<std::chrono::nanoseconds> access_times;
-
-  std::ptrdiff_t num_read = 0;
-
-  while ((num_read = ::syscall(SYS_getdents64, dir, buffer.data(), buffer.size())) > 0) {
-    std::ptrdiff_t byte_pos = 0;
-
-    while (byte_pos < num_read) {
-      auto* ent = reinterpret_cast<struct dirent64 const*>(buffer.data() + byte_pos);
-
-      if (::memcmp(ent->d_name, ".", 2) != 0 && ::memcmp(ent->d_name, "..", 3) != 0) {
-        RTCX_EXPECTS(ent->d_type != DT_UNKNOWN,
-                     "Found unknown directory entry type in RTCX cache dir",
-                     std::runtime_error);
-
-        if (ent->d_type == DT_REG) {
-          auto path = std::format("{}/{}", cache_dir, ent->d_name);
-          struct stat st;
-          if (::stat(path.c_str(), &st) == -1) {
-            throw_posix("Failed to get RTCX cache file stats", "stat");
-          }
-
-          auto access_time =
-            std::chrono::seconds{st.st_atim.tv_sec} + std::chrono::nanoseconds{st.st_atim.tv_nsec};
-
-          paths.emplace_back(std::move(path));
-          access_times.emplace_back(access_time);
-        }
-      }
-
-      byte_pos += ent->d_reclen;
-    }
+  std::vector<std::string> entries;
+  for (auto& entry : std::filesystem::directory_iterator(cache_dir)) {
+    if (!entry.is_regular_file()) { continue; }
+    entries.push_back(entry.path().string());
   }
 
-  if (num_read == -1) {
-    throw_posix("Failed to read RTCX cache directory for clearing", "getdents64");
-  }
-
-  return {std::move(paths), std::move(access_times)};
-}
-
-void evict_disk_entries(std::string const& cache_dir, std::uint32_t limit)
-{
-  auto [paths, access_times] = get_disk_entries(cache_dir);
-
-  if (paths.size() < limit) { return; }
-
-  std::vector<std::size_t> ranking_indices;
-  ranking_indices.resize(paths.size());
-
-  std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
-
-  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](auto a, auto b) {
-    return access_times[a] < access_times[b];  // NOLINT(clang-analyzer-core.CallAndMessage)
-  });
-
-  // evict half of the least recently accessed
-  auto num_evict = (limit == 0) ? paths.size() : ((limit + 1) / 2);
-
-  for (auto index : std::span{ranking_indices}.subspan(0, num_evict)) {
-    if (::unlink(paths[index].c_str()) == -1 && errno != ENOENT) {
-      throw_posix("Failed to evict RTCX cache file", "unlink");
-    }
-  }
+  return entries;
 }
 
 /// @brief atomically writes a blob to disk by first writing to a temporary file and then renaming
@@ -1022,51 +929,43 @@ void cache_blob_to_disk(std::string const& cache_dir,
                         std::string const& tmp_dir,
                         std::string const& object_type,
                         sha256 const& sha,
-                        std::span<std::uint8_t const> binary,
-                        std::uint32_t limit)
+                        std::span<std::uint8_t const> binary)
 {
-  // TODO: add cuda driver and runtime version to log
-  if (limit > 0) {
-    auto tmp_path = std::format("{}/rtcx-bin-XXXXXX", tmp_dir);
-    (void)tmp_path.c_str();  // to ensure null-termination for mkstemp
+  auto tmp_path = std::format("{}/rtcx-bin-XXXXXX", tmp_dir);
+  (void)tmp_path.c_str();  // to ensure null-termination for mkstemp
 
-    {
-      std::int32_t fd = ::mkstemp(tmp_path.data());
-      if (fd == -1) { throw_posix("Failed to create temporary file for RTCX cache", "mkstemp"); }
+  {
+    std::int32_t fd = ::mkstemp(tmp_path.data());
+    if (fd == -1) { throw_posix("Failed to create temporary file for RTCX cache", "mkstemp"); }
 
-      RTCX_DEFER([&] {
-        if (::close(fd) == -1) {
-          throw_posix("Failed to close temporary RTCX cache file", "close");
-        }
-      });
+    RTCX_DEFER([&] {
+      if (::close(fd) == -1) { throw_posix("Failed to close temporary RTCX cache file", "close"); }
+    });
 
-      if (::write(fd, binary.data(), binary.size()) == -1) {
-        throw_posix("Failed to write RTCX cache to temporary file", "write");
-      }
-    }
-
-    auto hex        = sha.to_hex_string();
-    auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
-
-    std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
-
-    // rename is atomic, even if another process is performing the same operation
-    if (::rename(tmp_path.c_str(), final_path.c_str()) == -1) {
-      if (errno == EEXIST) {
-        // another process has already created the file, so just remove our temp file
-        if (::remove(tmp_path.c_str()) == -1) {
-          throw_posix("Failed to remove temporary RTCX cache file", "remove");
-        }
-        return;
-      } else {
-        throw_posix(std::format("Failed to move temporary RTCX cache file to final location ({})",
-                                final_path),
-                    "rename");
-      }
+    if (::write(fd, binary.data(), binary.size()) == -1) {
+      throw_posix("Failed to write RTCX cache to temporary file", "write");
     }
   }
 
-  evict_disk_entries(cache_dir, limit);
+  auto hex        = sha.to_hex_string();
+  auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
+
+  std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
+
+  // rename is atomic, even if another process is performing the same operation
+  if (::rename(tmp_path.c_str(), final_path.c_str()) == -1) {
+    if (errno == EEXIST) {
+      // another process has already created the file, so just remove our temp file
+      if (::remove(tmp_path.c_str()) == -1) {
+        throw_posix("Failed to remove temporary RTCX cache file", "remove");
+      }
+      return;
+    } else {
+      throw_posix(
+        std::format("Failed to move temporary RTCX cache file to final location ({})", final_path),
+        "rename");
+    }
+  }
 }
 
 }  // namespace
@@ -1123,8 +1022,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
       promise.set_value(result);
 
       // store result to disk
-      cache_blob_to_disk(
-        cache_dir_, tmp_dir_, "blob", sha, result->view(), limits_.num_disk_entries);
+      cache_blob_to_disk(cache_dir_, tmp_dir_, "blob", sha, result->view());
 
       return ret_fut;
     }
@@ -1187,8 +1085,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       promise.set_value(library);
 
       // store result to disk
-      cache_blob_to_disk(
-        cache_dir_, tmp_dir_, "cuLibrary", sha, blob->view(), limits_.num_disk_entries);
+      cache_blob_to_disk(cache_dir_, tmp_dir_, "cuLibrary", sha, blob->view());
 
       return ret_fut;
     }
@@ -1241,30 +1138,33 @@ void cache_t::clear_memory_store()
   libraries_cache_.entries_.clear();
 }
 
-void cache_t::clear_disk_store() { evict_disk_entries(cache_dir_, 0); }
+void cache_t::clear_disk_store()
+{
+  auto entries = get_disk_entries(cache_dir_);
+
+  for (auto const& path : entries) {
+    try {
+      std::filesystem::remove(path);
+    } catch (...) {
+      log_error(std::format("Unknown error occurred while removing RTCX cache file `{}`", path));
+    }
+  }
+}
 
 void cache_t::preload_from_disk()
 {
-  auto [paths, access_times] = get_disk_entries(cache_dir_);
+  auto entries = get_disk_entries(cache_dir_);
 
-  std::vector<std::size_t> ranking_indices;
-  ranking_indices.resize(paths.size());
-  std::iota(ranking_indices.begin(), ranking_indices.end(), 0);
-  std::sort(ranking_indices.begin(), ranking_indices.end(), [&](auto a, auto b) {
-    return access_times[a] > access_times[b];  // NOLINT(clang-analyzer-core.CallAndMessage)
-  });
+  auto load_count =
+    std::min<std::size_t>(entries.size(), limits_.num_mem_blobs + limits_.num_mem_libraries);
 
-  auto load_count = std::min<std::size_t>(ranking_indices.size(),
-                                          limits_.num_mem_blobs + limits_.num_mem_libraries);
-
-  ranking_indices.resize(load_count);
+  entries.resize(load_count);
 
   {
     std::lock_guard guard{lock_};
     tick_++;
 
-    for (auto index : ranking_indices) {
-      auto path = paths[index];
+    for (auto const& path : entries) {
       try {
         auto file_name = std::filesystem::path{path}.filename().string();
         auto sha_str   = file_name.substr(0, file_name.find('.'));
@@ -1308,39 +1208,6 @@ bool cache_t::is_enabled()
   return enabled_;
 }
 
-std::string reflect_bool(bool value) { return std::format("(bool){}", value); }
-
-std::string reflect_int(std::uint8_t value) { return std::format("(unsigned char){}U", value); }
-
-std::string reflect_int(std::uint16_t value) { return std::format("(unsigned short){}U", value); }
-
-std::string reflect_int(std::uint32_t value) { return std::format("(unsigned int){}U", value); }
-
-std::string reflect_int(std::uint64_t value)
-{
-  return std::format("(unsigned long long int){}ULL", value);
-}
-
-std::string reflect_int(std::int8_t value) { return std::format("(signed char){}", value); }
-
-std::string reflect_int(std::int16_t value) { return std::format("(signed short){}", value); }
-
-std::string reflect_int(std::int32_t value) { return std::format("(signed int){}", value); }
-
-std::string reflect_int(std::int64_t value)
-{
-  return std::format("(signed long long int){}LL", value);
-}
-
-std::string reflect_float(float value) { return std::format("(float){}F", value); }
-
-std::string reflect_float(double value) { return std::format("(double){}", value); }
-
-std::string reflect_cast(std::string_view type, std::string_view value)
-{
-  return std::format("(({})({}))", type, value);
-}
-
 std::string reflect_template(std::string_view template_name,
                              std::span<std::string_view const> template_args)
 {
@@ -1351,6 +1218,35 @@ std::string reflect_template(std::string_view template_name,
                              std::span<std::string const> template_args)
 {
   return std::format("{}<{}>", template_name, join_strings(template_args, ", "));
+}
+
+rtcx::byte_buffer decompress_blob(std::span<uint8_t const> compressed_binary,
+                                  size_t uncompressed_size,
+                                  std::string_view compression)
+{
+  RTCX_EXPECTS(compression == "none" || compression == "zstd",
+               std::format("Unsupported compression type specified: {}", compression),
+               std::runtime_error);
+  auto decompressed = rtcx::byte_buffer::make(uncompressed_size);
+
+  if (compression == "zstd") {
+    size_t errc = ZSTD_decompress(
+      decompressed.data(), uncompressed_size, compressed_binary.data(), compressed_binary.size());
+
+    RTCX_EXPECTS(
+      !ZSTD_isError(errc) && errc == uncompressed_size,
+      std::format("Failed to decompress embedded RTC source files with ZSTD, error code {} : ",
+                  errc,
+                  ZSTD_getErrorName(errc)),
+      std::runtime_error);
+  } else {
+    // compression is "none", so just copy the data
+    std::copy(compressed_binary.data(),
+              compressed_binary.data() + compressed_binary.size(),
+              decompressed.data());
+  }
+
+  return decompressed;
 }
 
 }  // namespace rtcx
