@@ -10,6 +10,7 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.experimental.base import SerializedDataSourceInfo
 from cudf_polars.experimental.io import (
     DataFrameSourceInfo,
     ParquetSourceInfo,
@@ -191,3 +192,34 @@ def test_stats_planning(tmp_path, kind, engine):
         ]
     )
     assert_gpu_result_equal(q_gb.sort("customer_id"), engine=engine)
+
+
+def test_parquet_deserialize_wrong_type() -> None:
+    data = DataFrameSourceInfo(100).serialize()
+    with pytest.raises(ValueError, match="Expected ParquetSourceInfo"):
+        ParquetSourceInfo.deserialize(data)
+
+
+def test_dataframe_deserialize_wrong_type() -> None:
+    data = ParquetSourceInfo(1000, {"x": 200}).serialize()
+    with pytest.raises(ValueError, match="Expected DataFrameSourceInfo"):
+        DataFrameSourceInfo.deserialize(data)
+
+
+def test_dataframe_deserialize_missing_row_count() -> None:
+    data = SerializedDataSourceInfo(
+        type="dataframe", row_count=None, per_file_means=None
+    )
+    with pytest.raises(
+        ValueError, match="Row count is required for DataFrameSourceInfo"
+    ):
+        DataFrameSourceInfo.deserialize(data)
+
+
+def test_parquet_empty_per_file_means() -> None:
+    per_file_means: dict[str, int] = {}
+    info = ParquetSourceInfo(1000, per_file_means)
+    assert info.per_file_means is per_file_means
+
+    info = ParquetSourceInfo(1000, None)
+    assert info.per_file_means == {}

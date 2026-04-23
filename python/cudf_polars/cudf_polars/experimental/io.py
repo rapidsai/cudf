@@ -30,6 +30,7 @@ from cudf_polars.experimental.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
     PartitionInfo,
+    SerializedDataSourceInfo,
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
@@ -42,7 +43,11 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.experimental.base import DataSourceInfo, StatsCollector
+    from cudf_polars.experimental.base import (
+        DataSourceInfo,
+        SerializedDataSourceInfo,
+        StatsCollector,
+    )
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import (
@@ -681,6 +686,7 @@ class ParquetMetadata:
 
         if not self.sample_paths:
             # No paths to sample from
+            # TODO: This requires row_count to be nullable. Why do we allow empty paths?
             return
 
         total_file_count = len(self.paths)
@@ -768,7 +774,12 @@ class ParquetSourceInfo:
 
     type: Literal["parquet"] = "parquet"
 
-    def __init__(self, row_count: int | None, per_file_means: dict[str, int]):
+    def __init__(
+        self, row_count: int | None, per_file_means: dict[str, int] | None = None
+    ):
+        if per_file_means is None:
+            per_file_means = {}
+
         self.row_count = row_count
         self.per_file_means = per_file_means
 
@@ -828,7 +839,7 @@ class ParquetSourceInfo:
         """Return the average storage size for a single column in one file."""
         return self.per_file_means.get(column)
 
-    def serialize(self) -> dict[str, Any]:
+    def serialize(self) -> SerializedDataSourceInfo:
         """Return JSON-serializable representation of the data source info."""
         return {
             "type": self.type,
@@ -837,8 +848,10 @@ class ParquetSourceInfo:
         }
 
     @classmethod
-    def deserialize(cls, data: dict[str, Any]) -> ParquetSourceInfo:
+    def deserialize(cls, data: SerializedDataSourceInfo) -> ParquetSourceInfo:
         """Deserialize a ParquetSourceInfo from a dictionary."""
+        if data["type"] != "parquet":
+            raise ValueError(f"Expected ParquetSourceInfo, got {data['type']}")
         return cls(data["row_count"], data["per_file_means"])
 
 
@@ -866,16 +879,21 @@ class DataFrameSourceInfo:
         """Return the average storage size for a single column in one file."""
         return None
 
-    def serialize(self) -> dict[str, Any]:
+    def serialize(self) -> SerializedDataSourceInfo:
         """Return JSON-serializable representation of the data source info."""
         return {
             "type": self.type,
             "row_count": self.row_count,
+            "per_file_means": None,
         }
 
     @classmethod
-    def deserialize(cls, data: dict[str, Any]) -> DataFrameSourceInfo:
+    def deserialize(cls, data: SerializedDataSourceInfo) -> DataFrameSourceInfo:
         """Deserialize a DataFrameSourceInfo from a dictionary."""
+        if data["type"] != "dataframe":
+            raise ValueError(f"Expected DataFrameSourceInfo, got {data['type']}")
+        if data["row_count"] is None:
+            raise ValueError("Row count is required for DataFrameSourceInfo")
         return cls(data["row_count"])
 
 

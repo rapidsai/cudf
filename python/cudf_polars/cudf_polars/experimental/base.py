@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import enum
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -54,6 +54,14 @@ def get_key_name(node: Node) -> str:
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
+class SerializedDataSourceInfo(TypedDict):
+    """The serialized form of DataSourceInfo."""
+
+    type: Literal["parquet", "dataframe"]
+    row_count: int | None
+    per_file_means: dict[str, int] | None
+
+
 class DataSourceInfo(Protocol):
     """
     Table data source information.
@@ -74,11 +82,11 @@ class DataSourceInfo(Protocol):
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
 
-    def serialize(self) -> dict[str, Any]:
+    def serialize(self) -> SerializedDataSourceInfo:
         """Return JSON-serializable representation of the data source info."""
 
     @classmethod
-    def deserialize(cls, data: dict[str, Any]) -> DataSourceInfo:
+    def deserialize(cls, data: SerializedDataSourceInfo) -> DataSourceInfo:
         """Deserialize a DataSourceInfo from a dictionary."""
 
 
