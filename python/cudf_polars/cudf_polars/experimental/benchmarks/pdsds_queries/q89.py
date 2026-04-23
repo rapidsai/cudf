@@ -160,3 +160,94 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             (pl.col("s_store_name"), False),
         ],
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 89 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=89,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    category1 = params["category1"]
+    class1 = params["class1"]
+    category2 = params["category2"]
+    class2 = params["class2"]
+
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+
+    filter1 = (pl.col("i_category").is_in(category1)) & (
+        pl.col("i_class").is_in(class1)
+    )
+    filter2 = (pl.col("i_category").is_in(category2)) & (
+        pl.col("i_class").is_in(class2)
+    )
+
+    tmp1 = (
+        item.join(store_sales, left_on="i_item_sk", right_on="ss_item_sk")
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .filter((pl.col("d_year") == year) & (filter1 | filter2))
+        .group_by(
+            [
+                "i_category",
+                "i_class",
+                "i_brand",
+                "s_store_name",
+                "s_company_name",
+                "d_moy",
+            ]
+        )
+        .agg(pl.col("ss_sales_price").sum().alias("sum_sales"))
+        .with_columns(
+            pl.col("sum_sales")
+            .mean()
+            .over(["i_category", "i_brand", "s_store_name", "s_company_name"])
+            .alias("avg_monthly_sales")
+        )
+    )
+
+    sort_keys = [
+        (pl.col("sum_sales") - pl.col("avg_monthly_sales"), False),
+        (pl.col("s_store_name"), False),
+    ]
+
+    return QueryResult(
+        frame=(
+            tmp1.with_columns(
+                pl.when(pl.col("avg_monthly_sales") != 0)
+                .then(
+                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                    / pl.col("avg_monthly_sales")
+                )
+                .otherwise(None)
+                .alias("deviation_ratio")
+            )
+            .filter(pl.col("deviation_ratio") > 0.1)
+            .select(
+                [
+                    "i_category",
+                    "i_class",
+                    "i_brand",
+                    "s_store_name",
+                    "s_company_name",
+                    "d_moy",
+                    "sum_sales",
+                    "avg_monthly_sales",
+                ]
+            )
+            .sort(
+                [pl.col("sum_sales") - pl.col("avg_monthly_sales"), "s_store_name"],
+                nulls_last=True,
+            )
+            .limit(100)
+        ),
+        sort_by=[("s_store_name", False)],
+        limit=100,
+        sort_keys=sort_keys,
+    )
