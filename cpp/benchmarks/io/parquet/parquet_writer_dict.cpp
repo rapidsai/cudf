@@ -57,7 +57,7 @@ std::vector<T> build_numeric_column(cudf::size_type num_rows,
                "frequent_set_ratio must be between 0.0 and 1.0");
   CUDF_EXPECTS(num_rows % page_size_rows == 0, "num_rows must be a multiple of page_size_rows");
   static_assert(frequent_pages_ratio > 0.0 and frequent_pages_ratio < 1.0,
-                "hot_pages_ratio must be between 0.0 and 1.0");
+                "frequent_pages_ratio must be between 0.0 and 1.0");
 
   auto const total_pages = num_rows / page_size_rows;
   auto const frequent_set_threshold =
@@ -159,7 +159,7 @@ void BM_parq_write_dict_encoding(nvbench::state& state)
   auto const num_rows           = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const reverse_order      = static_cast<bool>(state.get_int64("reverse_order"));
   auto const cardinality        = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const frequent_set_ratio = static_cast<double>(state.get_float64("frequent_set_ratio"));
+  auto const frequent_set_ratio = static_cast<double>(state.get_float64("freq_set_ratio"));
   auto const page_size_rows     = static_cast<cudf::size_type>(state.get_int64("page_size_rows"));
 
   CUDF_EXPECTS(page_size_rows <= num_rows and num_rows % page_size_rows == 0,

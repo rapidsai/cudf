@@ -24,14 +24,6 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
-
-// Upper bound on the number of fragments per column chunk that the
-// shared-memory histogram in `collect_map_entries_kernel` can accommodate.
-// A typical workload is 1M row groups / ~5000-row fragments ≈ 200 fragments
-// per chunk, so 1024 is a comfortable ceiling. If a future workload exceeds
-// this, `collect_map_entries_kernel` will trip its `cudf_assert` below and
-// we should add a global-memory fallback rather than silently truncating.
-constexpr size_type MAX_FRAGMENTS_PER_BLOCK = 1024;
 }  // namespace
 
 template <typename T>

@@ -1885,6 +1885,10 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       auto& row_group = agg_meta->file(p).row_groups[global_r];
       auto const fragments_in_chunk =
         util::div_rounding_up_safe<uint32_t>(row_group.num_rows, max_page_fragment_size);
+      CUDF_EXPECTS(fragments_in_chunk <= static_cast<uint32_t>(MAX_FRAGMENTS_PER_BLOCK),
+                   "Number of fragments per column chunk exceeds the maximum supported by the "
+                   "parquet writer's dictionary collection kernel. Consider increasing the "
+                   "fragment size or reducing the row group size.");
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {
