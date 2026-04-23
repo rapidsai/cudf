@@ -75,7 +75,7 @@ jobs:
   #         repo: ${{ github.repository }}
   #         target-branch: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
   #         # TODO: Fix nightly CI and remove this line
-  #         max-days-without-success: 30
+  #         max-days-without-success: 40
   changed-files:
     secrets: inherit
     needs: telemetry-setup

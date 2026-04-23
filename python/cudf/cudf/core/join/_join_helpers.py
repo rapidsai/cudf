@@ -120,11 +120,16 @@ def _match_join_keys(
         and is_dtype_obj_numeric(rtype)
         and not (ltype.kind == "m" or rtype.kind == "m")
     ):
-        common_type = (
-            max(ltype, rtype)
-            if ltype.kind == rtype.kind
-            else find_common_type((ltype, rtype))
-        )
+        if ltype.kind == rtype.kind:
+            try:
+                common_type = max(ltype, rtype)
+            except TypeError:
+                # e.g. numpy bool and pandas BooleanDtype both have kind "b"
+                # but are not orderable via ``>``; fall back to the
+                # type-promotion helper that understands extension dtypes.
+                common_type = find_common_type((ltype, rtype))
+        else:
+            common_type = find_common_type((ltype, rtype))
     elif (ltype.kind == "M" and rtype.kind == "M") or (
         ltype.kind == "m" and rtype.kind == "m"
     ):
