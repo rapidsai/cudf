@@ -187,13 +187,13 @@ jobs:
       container_image: "rapidsai/ci-conda:26.06-latest"
       script: ci/test_narwhals.sh
   streams-build-matrix:
-    needs: checks
     uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
       matrix_name: conda-cpp-build
       matrix_filter: map(select(.ARCH == "amd64"))
   streams-build:
+    needs: streams-build-matrix
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     strategy:
       fail-fast: false
