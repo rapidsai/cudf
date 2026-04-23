@@ -36,8 +36,8 @@ rapids-pip-retry install \
 
 rapids-logger "Run cudf_polars tests"
 
-available_polars_versions=$(python -m pip index versions polars --json | jq '.versions')
-POLARS_VERSIONS=$(python ci/utils/filter_package_versions.py dependencies.yaml run_cudf_polars polars "$available_polars_versions")
+read -r -a VERSIONS <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_polars_compat polars_compat_version)"
+LATEST_VERSION="${VERSIONS[-1]}"
 
 # shellcheck disable=SC2317
 function set_exitcode()
@@ -51,14 +51,26 @@ set +e
 PASSED=()
 FAILED=()
 
-read -r -a VERSIONS <<< "${POLARS_VERSIONS}"
-LATEST_VERSION="${VERSIONS[-1]}"
-
 for version in "${VERSIONS[@]}"; do
-    rapids-logger "Installing polars==${version}"
-    rapids-pip-retry install -U "polars==${version}"
+    rapids-logger "Testing cudf_polars with polars ${version}.*"
 
-    rapids-logger "Running tests for polars==${version}"
+    # Generate requirements for this polars compat version.
+    rapids-dependency-file-generator \
+        --config dependencies.yaml \
+        --file-key test_cudf_polars_compat \
+        --output requirements \
+        --matrix "polars_compat_version=${version}" \
+        > "polars-compat-${version}-requirements.txt"
+
+    # Create an isolated virtual environment inheriting the already-installed cudf_polars
+    # wheels so we only need to override the polars version.
+    python -m venv --system-site-packages "venv_polars_${version}"
+    # shellcheck disable=SC1090
+    source "venv_polars_${version}/bin/activate"
+
+    rapids-pip-retry install -r "polars-compat-${version}-requirements.txt"
+
+    rapids-logger "Running tests for polars ${version}.*"
 
     if [ "${version}" == "${LATEST_VERSION}" ]; then
         COVERAGE_ARGS=(
@@ -77,13 +89,17 @@ for version in "${VERSIONS[@]}"; do
         --dist=worksteal \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
-    if [ $? -ne 0 ]; then
+    test_exitcode=$?
+    deactivate
+    rm -rf "venv_polars_${version}" "polars-compat-${version}-requirements.txt"
+
+    if [ ${test_exitcode} -ne 0 ]; then
         EXITCODE=1
         FAILED+=("${version}")
-        rapids-logger "Tests failed for polars==${version}"
+        rapids-logger "Tests failed for polars ${version}.*"
     else
         PASSED+=("${version}")
-        rapids-logger "Tests passed for polars==${version}"
+        rapids-logger "Tests passed for polars ${version}.*"
     fi
 done
 
