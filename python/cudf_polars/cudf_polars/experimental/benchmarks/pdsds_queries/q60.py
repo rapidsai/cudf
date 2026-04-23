@@ -183,3 +183,89 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         sort_by=list(sort_by.items()),
         limit=limit,
     )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 60 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=60,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    month = params["month"]
+    category = params["category"]
+    gmt_offset = params["gmt_offset"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path, "customer_address", run_config.suffix
+    )
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    category_item_ids = (
+        item.filter(pl.col("i_category") == category).select("i_item_id").unique()
+    )
+
+    ss = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(category_item_ids, on="i_item_id")
+        .filter(
+            (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
+            & (pl.col("ca_gmt_offset") == gmt_offset)
+        )
+        .group_by("i_item_id")
+        .agg(pl.col("ss_ext_sales_price").sum().alias("total_sales"))
+        .select(["i_item_id", "total_sales"])
+    )
+    cs = (
+        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .join(customer_address, left_on="cs_bill_addr_sk", right_on="ca_address_sk")
+        .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .join(category_item_ids, on="i_item_id")
+        .filter(
+            (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
+            & (pl.col("ca_gmt_offset") == gmt_offset)
+        )
+        .group_by("i_item_id")
+        .agg(pl.col("cs_ext_sales_price").sum().alias("total_sales"))
+        .select(["i_item_id", "total_sales"])
+    )
+    ws = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(customer_address, left_on="ws_bill_addr_sk", right_on="ca_address_sk")
+        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .join(category_item_ids, on="i_item_id")
+        .filter(
+            (pl.col("d_year") == year)
+            & (pl.col("d_moy") == month)
+            & (pl.col("ca_gmt_offset") == gmt_offset)
+        )
+        .group_by("i_item_id")
+        .agg(pl.col("ws_ext_sales_price").sum().alias("total_sales"))
+        .select(["i_item_id", "total_sales"])
+    )
+
+    sort_by = {"i_item_id": False, "total_sales": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            pl.concat([ss, cs, ws])
+            .group_by("i_item_id")
+            .agg(pl.col("total_sales").sum().alias("total_sales"))
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )

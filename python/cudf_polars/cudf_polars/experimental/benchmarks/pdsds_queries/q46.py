@@ -1,3 +1,4 @@
+# ruff: noqa: COM812, S608, E501
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -94,10 +95,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     household_demographics = get_data(
-        run_config.dataset_path, "household_demographics", run_config.suffix
+        run_config.dataset_path,
+        "household_demographics",
+        run_config.suffix,
     )
     customer_address = get_data(
-        run_config.dataset_path, "customer_address", run_config.suffix
+        run_config.dataset_path,
+        "customer_address",
+        run_config.suffix,
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # Step 1: Create the subquery (dn) equivalent
@@ -171,6 +176,98 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 # Current city != bought city (people who traveled to shop)
                 pl.col("ca_city") != pl.col("bought_city")
             )
+            .select(
+                [
+                    "c_last_name",
+                    "c_first_name",
+                    "ca_city",
+                    "bought_city",
+                    "ss_ticket_number",
+                    "amt",
+                    "profit",
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 46 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=46,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    hd_dep_count = params["hd_dep_count"]
+    hd_vehicle_count = params["hd_vehicle_count"]
+    cities = params["cities"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store = get_data(run_config.dataset_path, "store", run_config.suffix)
+    household_demographics = get_data(
+        run_config.dataset_path,
+        "household_demographics",
+        run_config.suffix,
+    )
+    customer_address = get_data(
+        run_config.dataset_path,
+        "customer_address",
+        run_config.suffix,
+    )
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+
+    subquery_dn = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+        .filter(
+            (
+                (pl.col("hd_dep_count") == hd_dep_count)
+                | (pl.col("hd_vehicle_count") == hd_vehicle_count)
+            )
+            & (pl.col("d_dow").is_in([6, 0]))
+            & (pl.col("d_year").is_in([year, year + 1, year + 2]))
+            & (pl.col("s_city").is_in(cities))
+        )
+        .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"])
+        .agg(
+            [
+                pl.col("ss_coupon_amt").sum().alias("amt"),
+                pl.col("ss_net_profit").sum().alias("profit"),
+            ]
+        )
+        .with_columns([pl.col("ca_city").alias("bought_city")])
+        .select(["ss_ticket_number", "ss_customer_sk", "bought_city", "amt", "profit"])
+    )
+
+    sort_by = {
+        "c_last_name": False,
+        "c_first_name": False,
+        "ca_city": False,
+        "bought_city": False,
+        "ss_ticket_number": False,
+    }
+    limit = 100
+    return QueryResult(
+        frame=(
+            subquery_dn.join(
+                customer, left_on="ss_customer_sk", right_on="c_customer_sk"
+            )
+            .join(
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
+                suffix="_current",
+            )
+            .filter(pl.col("ca_city") != pl.col("bought_city"))
             .select(
                 [
                     "c_last_name",

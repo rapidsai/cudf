@@ -1,3 +1,4 @@
+# ruff: noqa: COM812, S608, E501, PLR0913
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -211,6 +212,125 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                         0.9 * pl.col("cs_item_rev"), 1.1 * pl.col("cs_item_rev")
                     )
                 )
+            )
+            .with_columns(
+                [
+                    (
+                        pl.col("ss_item_rev")
+                        + pl.col("cs_item_rev")
+                        + pl.col("ws_item_rev")
+                    ).alias("total_rev"),
+                    (
+                        (
+                            pl.col("ss_item_rev")
+                            + pl.col("cs_item_rev")
+                            + pl.col("ws_item_rev")
+                        )
+                        / 3
+                    ).alias("average"),
+                ]
+            )
+            .with_columns(
+                [
+                    (pl.col("ss_item_rev") / pl.col("total_rev") / 3 * 100).alias(
+                        "ss_dev"
+                    ),
+                    (pl.col("cs_item_rev") / pl.col("total_rev") / 3 * 100).alias(
+                        "cs_dev"
+                    ),
+                    (pl.col("ws_item_rev") / pl.col("total_rev") / 3 * 100).alias(
+                        "ws_dev"
+                    ),
+                ]
+            )
+            .select(
+                [
+                    "item_id",
+                    "ss_item_rev",
+                    "ss_dev",
+                    "cs_item_rev",
+                    "cs_dev",
+                    "ws_item_rev",
+                    "ws_dev",
+                    "average",
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 58 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=58,
+        qualification=run_config.qualification,
+    )
+
+    sales_date = params["sales_date"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path, "catalog_sales", run_config.suffix
+    )
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+
+    target_week = (
+        date_dim.filter(
+            pl.col("d_date") == pl.lit(sales_date).str.strptime(pl.Date, "%Y-%m-%d")
+        )
+        .select("d_week_seq")
+        .unique()
+    )
+    week_dates = date_dim.join(target_week, on="d_week_seq", how="inner")
+
+    ss_items = (
+        store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        .join(week_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .group_by("i_item_id")
+        .agg(pl.col("ss_ext_sales_price").sum().alias("ss_item_rev"))
+        .select([pl.col("i_item_id").alias("item_id"), pl.col("ss_item_rev")])
+    )
+    cs_items = (
+        catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        .join(week_dates, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .group_by("i_item_id")
+        .agg(pl.col("cs_ext_sales_price").sum().alias("cs_item_rev"))
+        .select([pl.col("i_item_id").alias("item_id"), pl.col("cs_item_rev")])
+    )
+    ws_items = (
+        web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        .join(week_dates, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .group_by("i_item_id")
+        .agg(pl.col("ws_ext_sales_price").sum().alias("ws_item_rev"))
+        .select([pl.col("i_item_id").alias("item_id"), pl.col("ws_item_rev")])
+    )
+
+    sort_by = {"item_id": False, "ss_item_rev": False}
+    limit = 100
+    return QueryResult(
+        frame=(
+            ss_items.join(cs_items, on="item_id", how="inner")
+            .join(ws_items, on="item_id", how="inner")
+            .filter(
+                (pl.col("ss_item_rev") >= 0.9 * pl.col("cs_item_rev"))
+                & (pl.col("ss_item_rev") <= 1.1 * pl.col("cs_item_rev"))
+                & (pl.col("ss_item_rev") >= 0.9 * pl.col("ws_item_rev"))
+                & (pl.col("ss_item_rev") <= 1.1 * pl.col("ws_item_rev"))
+                & (pl.col("cs_item_rev") >= 0.9 * pl.col("ss_item_rev"))
+                & (pl.col("cs_item_rev") <= 1.1 * pl.col("ss_item_rev"))
+                & (pl.col("cs_item_rev") >= 0.9 * pl.col("ws_item_rev"))
+                & (pl.col("cs_item_rev") <= 1.1 * pl.col("ws_item_rev"))
+                & (pl.col("ws_item_rev") >= 0.9 * pl.col("ss_item_rev"))
+                & (pl.col("ws_item_rev") <= 1.1 * pl.col("ss_item_rev"))
+                & (pl.col("ws_item_rev") >= 0.9 * pl.col("cs_item_rev"))
+                & (pl.col("ws_item_rev") <= 1.1 * pl.col("cs_item_rev"))
             )
             .with_columns(
                 [

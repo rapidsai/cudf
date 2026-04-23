@@ -1,3 +1,4 @@
+# ruff: noqa: COM812, S608, PLR2004
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -165,6 +166,87 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     sort_by = {"rnk": False}
     limit = 100
     # Step 5: Join rankings and get product names
+    return QueryResult(
+        frame=(
+            ascending_rank.join(descending_rank, on="rnk", how="inner", suffix="_desc")
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
+            .join(
+                item,
+                left_on="ss_item_sk_desc",
+                right_on="i_item_sk",
+                how="inner",
+                suffix="_worst",
+            )
+            .select(
+                [
+                    pl.col("rnk"),
+                    pl.col("i_product_name").alias("best_performing"),
+                    pl.col("i_product_name_worst").alias("worst_performing"),
+                ]
+            )
+            .sort(sort_by.keys(), nulls_last=True)
+            .limit(limit)
+        ),
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 44 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=44,
+        qualification=run_config.qualification,
+    )
+
+    store_sk = params["store_sk"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    item = get_data(run_config.dataset_path, "item", run_config.suffix)
+
+    benchmark = (
+        store_sales.filter(
+            (pl.col("ss_store_sk") == store_sk) & (pl.col("ss_cdemo_sk").is_null())
+        )
+        .group_by("ss_store_sk")
+        .agg(pl.col("ss_net_profit").mean().alias("benchmark_profit"))
+        .select("benchmark_profit")
+        .with_columns(pl.lit(1).alias("join_key"))
+    )
+
+    item_profits = (
+        store_sales.filter(pl.col("ss_store_sk") == store_sk)
+        .group_by("ss_item_sk")
+        .agg(pl.col("ss_net_profit").mean().alias("avg(ss_net_profit)"))
+        .with_columns(pl.lit(1).alias("join_key"))
+        .join(benchmark, on="join_key")
+        .filter(pl.col("avg(ss_net_profit)") > (0.9 * pl.col("benchmark_profit")))
+        .select(["ss_item_sk", "avg(ss_net_profit)"])
+    )
+
+    rank_limit = 11
+    ascending_rank = (
+        item_profits.with_columns(
+            [pl.col("avg(ss_net_profit)").rank(method="ordinal").alias("rnk")]
+        )
+        .filter(pl.col("rnk") < rank_limit)
+        .select(["ss_item_sk", "rnk"])
+    )
+    descending_rank = (
+        item_profits.with_columns(
+            [
+                pl.col("avg(ss_net_profit)")
+                .rank(method="ordinal", descending=True)
+                .alias("rnk")
+            ]
+        )
+        .filter(pl.col("rnk") < rank_limit)
+        .select(["ss_item_sk", "rnk"])
+    )
+
+    sort_by = {"rnk": False}
+    limit = 100
     return QueryResult(
         frame=(
             ascending_rank.join(descending_rank, on="rnk", how="inner", suffix="_desc")

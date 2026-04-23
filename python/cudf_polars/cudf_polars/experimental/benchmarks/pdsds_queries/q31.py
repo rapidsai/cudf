@@ -1,3 +1,4 @@
+# ruff: noqa: COM812, S608, PLR0913
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -122,7 +123,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer_address = get_data(
-        run_config.dataset_path, "customer_address", run_config.suffix
+        run_config.dataset_path,
+        "customer_address",
+        run_config.suffix,
     )
 
     # Pre-filter date_dim to target year to avoid aggregating across all years.
@@ -257,3 +260,118 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .sort(sort_by.keys(), nulls_last=True)
     )
     return QueryResult(frame=result, sort_by=list(sort_by.items()), limit=None)
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 31 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=31,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    agg = params["agg"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path,
+        "customer_address",
+        run_config.suffix,
+    )
+
+    ss = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+        .group_by(["ca_county", "d_qoy", "d_year"])
+        .agg(pl.col("ss_ext_sales_price").sum().alias("store_sales"))
+    )
+    ws = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .join(customer_address, left_on="ws_bill_addr_sk", right_on="ca_address_sk")
+        .group_by(["ca_county", "d_qoy", "d_year"])
+        .agg(pl.col("ws_ext_sales_price").sum().alias("web_sales"))
+    )
+
+    qoy1 = 1
+    qoy2 = 2
+    qoy3 = 3
+    joined = (
+        ss.join(ss, on="ca_county", suffix="_ss2")
+        .join(ss, on="ca_county", suffix="_ss3")
+        .join(ws, on="ca_county", suffix="_ws1")
+        .join(ws, on="ca_county", suffix="_ws2")
+        .join(ws, on="ca_county", suffix="_ws3")
+        .filter(
+            (pl.col("d_qoy") == qoy1)
+            & (pl.col("d_year") == year)
+            & (pl.col("d_qoy_ss2") == qoy2)
+            & (pl.col("d_year_ss2") == year)
+            & (pl.col("d_qoy_ss3") == qoy3)
+            & (pl.col("d_year_ss3") == year)
+            & (pl.col("d_qoy_ws1") == qoy1)
+            & (pl.col("d_year_ws1") == year)
+            & (pl.col("d_qoy_ws2") == qoy2)
+            & (pl.col("d_year_ws2") == year)
+            & (pl.col("d_qoy_ws3") == qoy3)
+            & (pl.col("d_year_ws3") == year)
+            & (
+                pl.when(pl.col("web_sales") > 0)
+                .then(pl.col("web_sales_ws2") / pl.col("web_sales"))
+                .otherwise(None)
+                > pl.when(pl.col("store_sales") > 0)
+                .then(pl.col("store_sales_ss2") / pl.col("store_sales"))
+                .otherwise(None)
+            )
+            & (
+                pl.when(pl.col("web_sales_ws2") > 0)
+                .then(pl.col("web_sales_ws3") / pl.col("web_sales_ws2"))
+                .otherwise(None)
+                > pl.when(pl.col("store_sales_ss2") > 0)
+                .then(pl.col("store_sales_ss3") / pl.col("store_sales_ss2"))
+                .otherwise(None)
+            )
+        )
+        .select(
+            [
+                pl.col("ca_county"),
+                pl.col("d_year"),
+                (
+                    pl.when(pl.col("web_sales") > 0)
+                    .then(pl.col("web_sales_ws2") / pl.col("web_sales"))
+                    .otherwise(None)
+                ).alias("web_q1_q2_increase"),
+                (
+                    pl.when(pl.col("store_sales") > 0)
+                    .then(pl.col("store_sales_ss2") / pl.col("store_sales"))
+                    .otherwise(None)
+                ).alias("store_q1_q2_increase"),
+                (
+                    pl.when(pl.col("web_sales_ws2") > 0)
+                    .then(pl.col("web_sales_ws3") / pl.col("web_sales_ws2"))
+                    .otherwise(None)
+                ).alias("web_q2_q3_increase"),
+                (
+                    pl.when(pl.col("store_sales_ss2") > 0)
+                    .then(pl.col("store_sales_ss3") / pl.col("store_sales_ss2"))
+                    .otherwise(None)
+                ).alias("store_q2_q3_increase"),
+            ]
+        )
+    )
+
+    sort_key = (
+        agg.replace("ss1.", "")
+        .replace("ws1.", "")
+        .replace("ss2.", "")
+        .replace("ws2.", "")
+        .replace("ss3.", "")
+        .replace("ws3.", "")
+    )
+    return QueryResult(
+        frame=joined.sort([sort_key], nulls_last=True),
+        sort_by=[(sort_key, False)],
+        limit=None,
+    )

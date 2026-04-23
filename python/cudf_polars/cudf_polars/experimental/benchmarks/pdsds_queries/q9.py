@@ -1,3 +1,4 @@
+# ruff: noqa: COM812, S608
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -153,6 +154,115 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             reason.filter(pl.col("r_reason_sk") == 1)
             .join(combined_stats, how="cross")
             .select(bucket_values)
+            .limit(1)
+        ),
+        sort_by=[],
+        limit=1,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 9 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor), query_id=9, qualification=run_config.qualification
+    )
+
+    aggcthen = params["aggcthen"]
+    aggcelse = params["aggcelse"]
+    rc = params["rc"]
+
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
+
+    bucket1_stats = (
+        store_sales.filter(pl.col("ss_quantity").is_between(1, 20, closed="both"))
+        .select(
+            [
+                pl.len().alias("count_1"),
+                pl.col(aggcthen).mean().alias("avg_then_1"),
+                pl.col(aggcelse).mean().alias("avg_else_1"),
+            ]
+        )
+        .with_columns(pl.lit(1).alias("join_key"))
+    )
+    bucket2_stats = (
+        store_sales.filter(pl.col("ss_quantity").is_between(21, 40, closed="both"))
+        .select(
+            [
+                pl.len().alias("count_2"),
+                pl.col(aggcthen).mean().alias("avg_then_2"),
+                pl.col(aggcelse).mean().alias("avg_else_2"),
+            ]
+        )
+        .with_columns(pl.lit(1).alias("join_key"))
+    )
+    bucket3_stats = (
+        store_sales.filter(pl.col("ss_quantity").is_between(41, 60, closed="both"))
+        .select(
+            [
+                pl.len().alias("count_3"),
+                pl.col(aggcthen).mean().alias("avg_then_3"),
+                pl.col(aggcelse).mean().alias("avg_else_3"),
+            ]
+        )
+        .with_columns(pl.lit(1).alias("join_key"))
+    )
+    bucket4_stats = (
+        store_sales.filter(pl.col("ss_quantity").is_between(61, 80, closed="both"))
+        .select(
+            [
+                pl.len().alias("count_4"),
+                pl.col(aggcthen).mean().alias("avg_then_4"),
+                pl.col(aggcelse).mean().alias("avg_else_4"),
+            ]
+        )
+        .with_columns(pl.lit(1).alias("join_key"))
+    )
+    bucket5_stats = (
+        store_sales.filter(pl.col("ss_quantity").is_between(81, 100, closed="both"))
+        .select(
+            [
+                pl.len().alias("count_5"),
+                pl.col(aggcthen).mean().alias("avg_then_5"),
+                pl.col(aggcelse).mean().alias("avg_else_5"),
+            ]
+        )
+        .with_columns(pl.lit(1).alias("join_key"))
+    )
+
+    return QueryResult(
+        frame=(
+            reason.filter(pl.col("r_reason_sk") == 1)
+            .with_columns(pl.lit(1).alias("join_key"))
+            .join(bucket1_stats, on="join_key")
+            .join(bucket2_stats, on="join_key")
+            .join(bucket3_stats, on="join_key")
+            .join(bucket4_stats, on="join_key")
+            .join(bucket5_stats, on="join_key")
+            .select(
+                [
+                    pl.when(pl.col("count_1") > rc[0])
+                    .then(pl.col("avg_then_1"))
+                    .otherwise(pl.col("avg_else_1"))
+                    .alias("bucket1"),
+                    pl.when(pl.col("count_2") > rc[1])
+                    .then(pl.col("avg_then_2"))
+                    .otherwise(pl.col("avg_else_2"))
+                    .alias("bucket2"),
+                    pl.when(pl.col("count_3") > rc[2])
+                    .then(pl.col("avg_then_3"))
+                    .otherwise(pl.col("avg_else_3"))
+                    .alias("bucket3"),
+                    pl.when(pl.col("count_4") > rc[3])
+                    .then(pl.col("avg_then_4"))
+                    .otherwise(pl.col("avg_else_4"))
+                    .alias("bucket4"),
+                    pl.when(pl.col("count_5") > rc[4])
+                    .then(pl.col("avg_then_5"))
+                    .otherwise(pl.col("avg_else_5"))
+                    .alias("bucket5"),
+                ]
+            )
             .limit(1)
         ),
         sort_by=[],

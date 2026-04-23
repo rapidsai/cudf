@@ -1,3 +1,4 @@
+# ruff: noqa: COM812, S608, C901, PLR0912, PLR0915, FIX002, TD002, TD003
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -94,17 +95,16 @@ def _get_agg_expr(col_name: str, agg_func: str, alias: str) -> pl.Expr:
     col = pl.col(col_name)
     if agg_func == "sum":
         return col.sum().alias(alias)
-    elif agg_func == "min":
+    if agg_func == "min":
         return col.min().alias(alias)
-    elif agg_func == "max":
+    if agg_func == "max":
         return col.max().alias(alias)
-    elif agg_func == "avg":
+    if agg_func == "avg":
         return col.mean().alias(alias)
-    elif agg_func == "stddev_samp":
+    if agg_func == "stddev_samp":
         return col.std().alias(alias)
-    else:
-        msg = f"Unknown aggregation function: {agg_func}"
-        raise ValueError(msg)
+    msg = f"Unknown aggregation function: {agg_func}"
+    raise ValueError(msg)
 
 
 def polars_impl(run_config: RunConfig) -> QueryResult:
@@ -122,31 +122,38 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     customer_address = get_data(
-        run_config.dataset_path, "customer_address", run_config.suffix
+        run_config.dataset_path,
+        "customer_address",
+        run_config.suffix,
     )
     customer_demographics = get_data(
-        run_config.dataset_path, "customer_demographics", run_config.suffix
+        run_config.dataset_path,
+        "customer_demographics",
+        run_config.suffix,
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
     catalog_sales = get_data(
-        run_config.dataset_path, "catalog_sales", run_config.suffix
+        run_config.dataset_path,
+        "catalog_sales",
+        run_config.suffix,
     )
 
+    max_qoy = 4
     store_exists = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
         .select("ss_customer_sk")
     )
     web_exists = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
         .select(pl.col("ws_bill_customer_sk").alias("customer_sk"))
     )
     catalog_exists = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
         .select(pl.col("cs_ship_customer_sk").alias("customer_sk"))
     )
     web_or_catalog = pl.concat([web_exists, catalog_exists]).unique()
@@ -197,10 +204,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 _get_agg_expr("cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)_1"),
                 pl.len().alias("cnt2"),
                 _get_agg_expr(
-                    "cd_dep_employed_count", aggone, f"{aggone}(cd_dep_employed_count)"
+                    "cd_dep_employed_count",
+                    aggone,
+                    f"{aggone}(cd_dep_employed_count)",
                 ),
                 _get_agg_expr(
-                    "cd_dep_employed_count", aggtwo, f"{aggtwo}(cd_dep_employed_count)"
+                    "cd_dep_employed_count",
+                    aggtwo,
+                    f"{aggtwo}(cd_dep_employed_count)",
                 ),
                 _get_agg_expr(
                     "cd_dep_employed_count",
@@ -209,16 +220,355 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ),
                 pl.len().alias("cnt3"),
                 _get_agg_expr(
-                    "cd_dep_college_count", aggone, f"{aggone}(cd_dep_college_count)"
+                    "cd_dep_college_count",
+                    aggone,
+                    f"{aggone}(cd_dep_college_count)",
                 ),
                 _get_agg_expr(
-                    "cd_dep_college_count", aggtwo, f"{aggtwo}(cd_dep_college_count)"
+                    "cd_dep_college_count",
+                    aggtwo,
+                    f"{aggtwo}(cd_dep_college_count)",
                 ),
                 _get_agg_expr(
                     "cd_dep_college_count",
                     aggthree,
                     f"{aggthree}(cd_dep_college_count)_1",
                 ),
+            ]
+        )
+        .select(
+            [
+                "ca_state",
+                "cd_gender",
+                "cd_marital_status",
+                "cd_dep_count",
+                "cnt1",
+                f"{aggone}(cd_dep_count)",
+                f"{aggtwo}(cd_dep_count)",
+                f"{aggthree}(cd_dep_count)_1",
+                "cd_dep_employed_count",
+                "cnt2",
+                f"{aggone}(cd_dep_employed_count)",
+                f"{aggtwo}(cd_dep_employed_count)",
+                f"{aggthree}(cd_dep_employed_count)_1",
+                "cd_dep_college_count",
+                "cnt3",
+                f"{aggone}(cd_dep_college_count)",
+                f"{aggtwo}(cd_dep_college_count)",
+                f"{aggthree}(cd_dep_college_count)_1",
+            ]
+        )
+        .sort(sort_by.keys(), nulls_last=True)
+        .limit(limit)
+    )
+    return QueryResult(
+        frame=result,
+        sort_by=list(sort_by.items()),
+        limit=limit,
+    )
+
+
+def polars_impl_naive(run_config: RunConfig) -> QueryResult:
+    """Query 35 (naive)."""
+    params = load_parameters(
+        int(run_config.scale_factor),
+        query_id=35,
+        qualification=run_config.qualification,
+    )
+
+    year = params["year"]
+    aggone = params["aggone"]
+    aggtwo = params["aggtwo"]
+    aggthree = params["aggthree"]
+
+    customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+    customer_address = get_data(
+        run_config.dataset_path,
+        "customer_address",
+        run_config.suffix,
+    )
+    customer_demographics = get_data(
+        run_config.dataset_path,
+        "customer_demographics",
+        run_config.suffix,
+    )
+    date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
+    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    catalog_sales = get_data(
+        run_config.dataset_path,
+        "catalog_sales",
+        run_config.suffix,
+    )
+
+    max_qoy = 4
+    store_exists = (
+        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
+        .select(pl.col("ss_customer_sk").alias("c_customer_sk"))
+        .unique()
+    )
+    web_exists = (
+        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
+        .select(pl.col("ws_bill_customer_sk").alias("c_customer_sk"))
+        .unique()
+    )
+    catalog_exists = (
+        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < max_qoy))
+        .select(pl.col("cs_ship_customer_sk").alias("c_customer_sk"))
+        .unique()
+    )
+    web_or_catalog = pl.concat([web_exists, catalog_exists]).unique()
+
+    filtered = (
+        customer.join(
+            customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+        )
+        .join(
+            customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
+        )
+        .join(store_exists, on="c_customer_sk")
+        .join(web_or_catalog, on="c_customer_sk")
+    )
+
+    sort_by = {
+        "ca_state": False,
+        "cd_gender": False,
+        "cd_marital_status": False,
+        "cd_dep_count": False,
+        "cd_dep_employed_count": False,
+        "cd_dep_college_count": False,
+    }
+    limit = 100
+    if aggone == "sum":
+        dep_count_agg1 = pl.col("cd_dep_count").sum().alias(f"{aggone}(cd_dep_count)")
+        dep_employed_agg1 = (
+            pl.col("cd_dep_employed_count")
+            .sum()
+            .alias(f"{aggone}(cd_dep_employed_count)")
+        )
+        dep_college_agg1 = (
+            pl.col("cd_dep_college_count")
+            .sum()
+            .alias(f"{aggone}(cd_dep_college_count)")
+        )
+    elif aggone == "min":
+        dep_count_agg1 = pl.col("cd_dep_count").min().alias(f"{aggone}(cd_dep_count)")
+        dep_employed_agg1 = (
+            pl.col("cd_dep_employed_count")
+            .min()
+            .alias(f"{aggone}(cd_dep_employed_count)")
+        )
+        dep_college_agg1 = (
+            pl.col("cd_dep_college_count")
+            .min()
+            .alias(f"{aggone}(cd_dep_college_count)")
+        )
+    elif aggone == "max":
+        dep_count_agg1 = pl.col("cd_dep_count").max().alias(f"{aggone}(cd_dep_count)")
+        dep_employed_agg1 = (
+            pl.col("cd_dep_employed_count")
+            .max()
+            .alias(f"{aggone}(cd_dep_employed_count)")
+        )
+        dep_college_agg1 = (
+            pl.col("cd_dep_college_count")
+            .max()
+            .alias(f"{aggone}(cd_dep_college_count)")
+        )
+    elif aggone == "avg":
+        dep_count_agg1 = pl.col("cd_dep_count").mean().alias(f"{aggone}(cd_dep_count)")
+        dep_employed_agg1 = (
+            pl.col("cd_dep_employed_count")
+            .mean()
+            .alias(f"{aggone}(cd_dep_employed_count)")
+        )
+        dep_college_agg1 = (
+            pl.col("cd_dep_college_count")
+            .mean()
+            .alias(f"{aggone}(cd_dep_college_count)")
+        )
+    elif aggone == "stddev_samp":
+        dep_count_agg1 = pl.col("cd_dep_count").std().alias(f"{aggone}(cd_dep_count)")
+        dep_employed_agg1 = (
+            pl.col("cd_dep_employed_count")
+            .std()
+            .alias(f"{aggone}(cd_dep_employed_count)")
+        )
+        dep_college_agg1 = (
+            pl.col("cd_dep_college_count")
+            .std()
+            .alias(f"{aggone}(cd_dep_college_count)")
+        )
+    else:
+        msg = f"Unknown aggregation function: {aggone}"
+        raise ValueError(msg)
+
+    if aggtwo == "sum":
+        dep_count_agg2 = pl.col("cd_dep_count").sum().alias(f"{aggtwo}(cd_dep_count)")
+        dep_employed_agg2 = (
+            pl.col("cd_dep_employed_count")
+            .sum()
+            .alias(f"{aggtwo}(cd_dep_employed_count)")
+        )
+        dep_college_agg2 = (
+            pl.col("cd_dep_college_count")
+            .sum()
+            .alias(f"{aggtwo}(cd_dep_college_count)")
+        )
+    elif aggtwo == "min":
+        dep_count_agg2 = pl.col("cd_dep_count").min().alias(f"{aggtwo}(cd_dep_count)")
+        dep_employed_agg2 = (
+            pl.col("cd_dep_employed_count")
+            .min()
+            .alias(f"{aggtwo}(cd_dep_employed_count)")
+        )
+        dep_college_agg2 = (
+            pl.col("cd_dep_college_count")
+            .min()
+            .alias(f"{aggtwo}(cd_dep_college_count)")
+        )
+    elif aggtwo == "max":
+        dep_count_agg2 = pl.col("cd_dep_count").max().alias(f"{aggtwo}(cd_dep_count)")
+        dep_employed_agg2 = (
+            pl.col("cd_dep_employed_count")
+            .max()
+            .alias(f"{aggtwo}(cd_dep_employed_count)")
+        )
+        dep_college_agg2 = (
+            pl.col("cd_dep_college_count")
+            .max()
+            .alias(f"{aggtwo}(cd_dep_college_count)")
+        )
+    elif aggtwo == "avg":
+        dep_count_agg2 = pl.col("cd_dep_count").mean().alias(f"{aggtwo}(cd_dep_count)")
+        dep_employed_agg2 = (
+            pl.col("cd_dep_employed_count")
+            .mean()
+            .alias(f"{aggtwo}(cd_dep_employed_count)")
+        )
+        dep_college_agg2 = (
+            pl.col("cd_dep_college_count")
+            .mean()
+            .alias(f"{aggtwo}(cd_dep_college_count)")
+        )
+    elif aggtwo == "stddev_samp":
+        dep_count_agg2 = pl.col("cd_dep_count").std().alias(f"{aggtwo}(cd_dep_count)")
+        dep_employed_agg2 = (
+            pl.col("cd_dep_employed_count")
+            .std()
+            .alias(f"{aggtwo}(cd_dep_employed_count)")
+        )
+        dep_college_agg2 = (
+            pl.col("cd_dep_college_count")
+            .std()
+            .alias(f"{aggtwo}(cd_dep_college_count)")
+        )
+    else:
+        msg = f"Unknown aggregation function: {aggtwo}"
+        raise ValueError(msg)
+
+    if aggthree == "sum":
+        dep_count_agg3 = (
+            pl.col("cd_dep_count").sum().alias(f"{aggthree}(cd_dep_count)_1")
+        )
+        dep_employed_agg3 = (
+            pl.col("cd_dep_employed_count")
+            .sum()
+            .alias(f"{aggthree}(cd_dep_employed_count)_1")
+        )
+        dep_college_agg3 = (
+            pl.col("cd_dep_college_count")
+            .sum()
+            .alias(f"{aggthree}(cd_dep_college_count)_1")
+        )
+    elif aggthree == "min":
+        dep_count_agg3 = (
+            pl.col("cd_dep_count").min().alias(f"{aggthree}(cd_dep_count)_1")
+        )
+        dep_employed_agg3 = (
+            pl.col("cd_dep_employed_count")
+            .min()
+            .alias(f"{aggthree}(cd_dep_employed_count)_1")
+        )
+        dep_college_agg3 = (
+            pl.col("cd_dep_college_count")
+            .min()
+            .alias(f"{aggthree}(cd_dep_college_count)_1")
+        )
+    elif aggthree == "max":
+        dep_count_agg3 = (
+            pl.col("cd_dep_count").max().alias(f"{aggthree}(cd_dep_count)_1")
+        )
+        dep_employed_agg3 = (
+            pl.col("cd_dep_employed_count")
+            .max()
+            .alias(f"{aggthree}(cd_dep_employed_count)_1")
+        )
+        dep_college_agg3 = (
+            pl.col("cd_dep_college_count")
+            .max()
+            .alias(f"{aggthree}(cd_dep_college_count)_1")
+        )
+    elif aggthree == "avg":
+        dep_count_agg3 = (
+            pl.col("cd_dep_count").mean().alias(f"{aggthree}(cd_dep_count)_1")
+        )
+        dep_employed_agg3 = (
+            pl.col("cd_dep_employed_count")
+            .mean()
+            .alias(f"{aggthree}(cd_dep_employed_count)_1")
+        )
+        dep_college_agg3 = (
+            pl.col("cd_dep_college_count")
+            .mean()
+            .alias(f"{aggthree}(cd_dep_college_count)_1")
+        )
+    elif aggthree == "stddev_samp":
+        dep_count_agg3 = (
+            pl.col("cd_dep_count").std().alias(f"{aggthree}(cd_dep_count)_1")
+        )
+        dep_employed_agg3 = (
+            pl.col("cd_dep_employed_count")
+            .std()
+            .alias(f"{aggthree}(cd_dep_employed_count)_1")
+        )
+        dep_college_agg3 = (
+            pl.col("cd_dep_college_count")
+            .std()
+            .alias(f"{aggthree}(cd_dep_college_count)_1")
+        )
+    else:
+        msg = f"Unknown aggregation function: {aggthree}"
+        raise ValueError(msg)
+
+    result = (
+        filtered.group_by(
+            [
+                "ca_state",
+                "cd_gender",
+                "cd_marital_status",
+                "cd_dep_count",
+                "cd_dep_employed_count",
+                "cd_dep_college_count",
+            ]
+        )
+        .agg(
+            [
+                pl.len().alias("cnt1"),
+                dep_count_agg1,
+                dep_count_agg2,
+                dep_count_agg3,
+                pl.len().alias("cnt2"),
+                dep_employed_agg1,
+                dep_employed_agg2,
+                dep_employed_agg3,
+                pl.len().alias("cnt3"),
+                dep_college_agg1,
+                dep_college_agg2,
+                dep_college_agg3,
             ]
         )
         .select(
