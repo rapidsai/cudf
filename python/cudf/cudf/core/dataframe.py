@@ -1010,8 +1010,10 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         second_index = None
         second_columns = None
         attrs = None
+        allows_duplicate_labels = True
         if isinstance(data, (DataFrame, pd.DataFrame)):
             attrs = deepcopy(data.attrs)
+            allows_duplicate_labels = data.flags.allows_duplicate_labels
             if isinstance(data, pd.DataFrame):
                 cols = {
                     i: as_column(col_value.array, nan_as_null=nan_as_null)
@@ -1207,7 +1209,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 label_dtype=second_columns.dtype,
             )
 
-        super().__init__(col_accessor, index=index, attrs=attrs)
+        super().__init__(
+            col_accessor,
+            index=index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if second_index is not None:
             reindexed = self.reindex(index=second_index, copy=False)
             self._data = reindexed._data
@@ -1223,8 +1230,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         index: Index | None = None,
         columns: Any = None,
         attrs: dict | None = None,
+        allows_duplicate_labels: bool = True,
     ) -> Self:
-        out = super()._from_data(data=data, index=index, attrs=attrs)
+        out = super()._from_data(
+            data=data,
+            index=index,
+            attrs=attrs,
+            allows_duplicate_labels=allows_duplicate_labels,
+        )
         if columns is not None:
             out.columns = columns
         return out
@@ -1381,10 +1394,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         inputs.
         """
         if col_is_scalar:
-            series = Series._from_data(ca, index=self.index, attrs=self.attrs)
+            series = Series._from_data(ca, index=self.index)
+            self._propagate_metadata(series)
             return series._getitem_preprocessed(spec)
         if ca.names != self._column_names:
-            frame = self._from_data(ca, index=self.index, attrs=self.attrs)
+            frame = self._from_data(ca, index=self.index)
+            self._propagate_metadata(frame)
         else:
             frame = self
         if isinstance(spec, indexing_utils.MapIndexer):
@@ -1416,7 +1431,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 result.index = result_index
                 result.name = new_name
-                result._attrs = frame.attrs
+                frame._propagate_metadata(result)
                 return result
             except TypeError:
                 if get_option("mode.pandas_compatible"):
@@ -1513,12 +1528,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     and all(n == "" for n in out._column_names[0])
                 )
             ):
-                out = self._constructor_sliced._from_data(
-                    out._data, attrs=self.attrs
-                )
+                out = self._constructor_sliced._from_data(out._data)
                 out._data.multiindex = False
                 out.index = self.index
                 out.name = arg
+                self._propagate_metadata(out)
             return out
 
         elif isinstance(arg, slice):
@@ -3256,6 +3270,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             raise TypeError("append must be a boolean")
         if not isinstance(inplace, bool):
             raise TypeError("inplace must be a boolean")
+        if inplace and not self._flags.allows_duplicate_labels:
+            raise ValueError(
+                "Cannot specify 'inplace=True' when "
+                "'self.flags.allows_duplicate_labels' is False."
+            )
 
         if append:
             keys = [self.index, *keys]
@@ -3540,6 +3559,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         allow_duplicates: bool = False,
         names: Hashable | Sequence[Hashable] | None = None,
     ):
+        if inplace and not self._flags.allows_duplicate_labels:
+            raise ValueError(
+                "Cannot specify 'inplace=True' when "
+                "'self.flags.allows_duplicate_labels' is False."
+            )
         data, index = self._reset_index(
             level=level,
             drop=drop,
@@ -3548,10 +3572,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             allow_duplicates=allow_duplicates,
             names=names,
         )
-        return self._mimic_inplace(
-            DataFrame._from_data(data=data, index=index, attrs=self.attrs),
-            inplace=inplace,
-        )
+        out = DataFrame._from_data(data=data, index=index)
+        self._propagate_metadata(out)
+        return self._mimic_inplace(out, inplace=inplace)
 
     @_external_only_api(
         "Use ._insert with ignore_index=True to avoid expensive index "
@@ -5755,6 +5778,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index
         out_df.attrs = deepcopy(self.attrs)
+        out_df.flags.allows_duplicate_labels = (
+            self._flags.allows_duplicate_labels
+        )
 
         return out_df
 

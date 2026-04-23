@@ -239,6 +239,8 @@ Metadata
    :toctree: api/
 
    Series.attrs
+   Series.flags
+   Series.set_flags
 
 Accessors
 ---------
