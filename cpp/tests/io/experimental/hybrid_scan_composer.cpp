@@ -104,8 +104,8 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (bloom_filter_byte_ranges.size()) {
     // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor<rmm::device_async_resource_ref>(
-      cudf::get_current_device_resource_ref(), bloom_filter_alignment);
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
+                                                        bloom_filter_alignment);
 
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
       cudf::io::parquet::fetch_byte_ranges_to_device_async(
@@ -169,7 +169,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
   bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
-  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
+  rmm::mr::aligned_resource_adaptor& aligned_mr)
 {
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
@@ -238,7 +238,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> chunked_h
   bool case_sensitive_names,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr,
-  rmm::mr::aligned_resource_adaptor<rmm::mr::device_memory_resource>& aligned_mr)
+  rmm::mr::aligned_resource_adaptor& aligned_mr)
 {
   // Create reader options with empty source info
   cudf::io::parquet_reader_options options = cudf::io::parquet_reader_options::builder()
