@@ -654,6 +654,87 @@ class Scan(IR):
             num_rows = min(num_rows, n_rows)
         return max(num_rows, 0)
 
+    @staticmethod
+    def _reconcile_schema(
+        df: DataFrame,
+        parquet_col_names: list[str],
+        schema: Schema,
+        stream: Stream,
+    ) -> DataFrame:
+        """
+        Reconcile a DataFrame built from parquet files with the expected schema.
+
+        This handles Iceberg schema evolution when using the native reader path
+        (``POLARS_ICEBERG_READER_OVERRIDE=native`` or Polars default on V1/V2 tables).
+        Polars passes ``missing_columns="insert"`` and ``extra_columns="ignore"`` via
+        the Iceberg scan options, but cudf-polars reads via ``plc.io.parquet`` which
+        returns only the columns physically present in the parquet files.  This method
+        bridges the gap:
+
+        - **extra columns**: parquet columns not in *schema* are dropped.
+        - **missing columns**: schema columns absent from the parquet result are
+          inserted as all-null columns.
+        - **column order**: the result is reordered to match *schema*.
+
+        This is a no-op when the parquet column names exactly match the schema, so
+        there is no overhead for ordinary (non-Iceberg) parquet scans.
+
+        Parameters
+        ----------
+        df:
+            DataFrame produced by ``plc.io.parquet.read_parquet`` (or the chunked
+            reader).  May contain extra columns or be missing columns relative to
+            *schema*.
+        parquet_col_names:
+            Column names as returned by the parquet reader, in file order.
+        schema:
+            The expected output schema (ordered dict of name → DataType).
+        stream:
+            CUDA stream used for device memory operations and kernel launches.
+        """
+        schema_names = list(schema.keys())
+        parquet_name_set = set(parquet_col_names)
+        schema_name_set = set(schema_names)
+
+        if parquet_name_set == schema_name_set:
+            # Fast path: same set of columns, just ensure ordering matches schema.
+            if parquet_col_names == schema_names:
+                return df
+            return df.select(schema_names)
+
+        # Drop parquet columns that are not part of the expected schema
+        # (corresponds to extra_columns="ignore" in Iceberg scan options).
+        extra = parquet_name_set - schema_name_set
+        if extra:
+            df = df.discard_columns(extra)
+
+        # Insert all-null columns for schema fields absent from the parquet files
+        # (corresponds to missing_columns="insert" in Iceberg scan options).
+        # This occurs during schema evolution when new columns are added to an
+        # Iceberg table but old data files pre-date the addition.
+        missing = [n for n in schema_names if n not in parquet_name_set]
+        if missing:
+            null_cols = []
+            for name in missing:
+                dtype = schema[name]
+                null_cols.append(
+                    Column(
+                        plc.Column.from_arrow(
+                            pl.Series(
+                                "",
+                                [None] * df.num_rows,
+                                dtype=dtype.polars_type,
+                            ),
+                            stream=stream,
+                        ),
+                        name=name,
+                        dtype=dtype,
+                    )
+                )
+            df = df.with_columns(null_cols, stream=stream)
+
+        return df.select(schema_names)
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
@@ -827,6 +908,16 @@ class Scan(IR):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
+                # Filter concatenated_columns to only those present in schema.
+                # Parquet files from Iceberg tables may contain columns that fall
+                # outside the current schema projection (extra_columns="ignore").
+                name_to_idx = {n: i for i, n in enumerate(names)}
+                names_in_schema = [n for n in names if n in schema]
+                if len(names_in_schema) < len(names):
+                    concatenated_columns = [
+                        concatenated_columns[name_to_idx[n]] for n in names_in_schema
+                    ]
+                    names = names_in_schema
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
                     if not names
@@ -843,19 +934,50 @@ class Scan(IR):
                     df = Scan.add_file_paths(
                         include_file_paths, paths, chunk.num_rows_per_source, df
                     )
+                # Exclude synthetic columns (row_index, include_file_paths) from
+                # reconciliation — they are not real parquet columns.
+                synthetic = set()
+                if row_index is not None:
+                    synthetic.add(row_index[0])
+                reconcile_names = (
+                    [*names, include_file_paths]
+                    if include_file_paths is not None
+                    else names
+                )
+                reconcile_schema = {
+                    k: v for k, v in schema.items() if k not in synthetic
+                }
+                df = Scan._reconcile_schema(
+                    df, reconcile_names, reconcile_schema, stream
+                )
             else:
                 tbl_w_meta = plc.io.parquet.read_parquet(
                     parquet_reader_options, stream=stream
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
+                # Filter to only columns present in schema.  Parquet files from
+                # Iceberg tables may contain columns outside the current schema
+                # projection (extra_columns="ignore").
+                col_names_in_schema = [n for n in col_names if n in schema]
+                if len(col_names_in_schema) < len(col_names):
+                    name_to_idx = {n: i for i, n in enumerate(col_names)}
+                    plc_tbl = plc.Table(
+                        [
+                            tbl_w_meta.tbl.columns()[name_to_idx[n]]
+                            for n in col_names_in_schema
+                        ]
+                    )
+                    col_names = col_names_in_schema
+                else:
+                    plc_tbl = tbl_w_meta.tbl
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
                     if not col_names
                     else None
                 )
                 df = DataFrame.from_table(
-                    tbl_w_meta.tbl,
+                    plc_tbl,
                     col_names,
                     [schema[name] for name in col_names],
                     stream=stream,
@@ -865,6 +987,20 @@ class Scan(IR):
                     df = Scan.add_file_paths(
                         include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
                     )
+                synthetic = set()
+                if row_index is not None:
+                    synthetic.add(row_index[0])
+                reconcile_names = (
+                    [*col_names, include_file_paths]
+                    if include_file_paths is not None
+                    else col_names
+                )
+                reconcile_schema = {
+                    k: v for k, v in schema.items() if k not in synthetic
+                }
+                df = Scan._reconcile_schema(
+                    df, reconcile_names, reconcile_schema, stream
+                )
             if filters is not None:
                 # Mask must have been applied.
                 return df
