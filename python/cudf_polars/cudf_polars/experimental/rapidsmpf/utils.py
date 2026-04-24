@@ -331,6 +331,54 @@ async def recv_metadata(ch: Channel[TableChunk], ctx: Context) -> ChannelMetadat
     return ChannelMetadata.from_message(msg)
 
 
+def _make_hash_shuffle_metadata(
+    comm: Communicator,
+    key_indices: tuple[int, ...],
+    modulus: int,
+    metadata_in: ChannelMetadata,
+) -> ChannelMetadata:
+    """
+    Build output ChannelMetadata for a hash shuffle by key_indices.
+
+    Parameters
+    ----------
+    comm
+        The communicator.
+    key_indices
+        Column indices to hash-partition on.
+    modulus
+        Number of output partitions (must be >= comm.nranks).
+    metadata_in
+        Input channel metadata (used for duplicated flag and, on a
+        single-rank run, to preserve the existing inter-rank scheme).
+
+    Returns
+    -------
+    ChannelMetadata
+        Ready to pass to send_metadata.
+    """
+    nranks = comm.nranks
+    if nranks == 1:
+        inter_rank_scheme = (
+            None
+            if metadata_in.partitioning is None
+            else metadata_in.partitioning.inter_rank
+        )
+        local_scheme: HashScheme | str = HashScheme(
+            column_indices=key_indices, modulus=modulus
+        )
+        local_output_count = modulus
+    else:
+        inter_rank_scheme = HashScheme(column_indices=key_indices, modulus=modulus)
+        local_scheme = "inherit"
+        local_output_count = (modulus - comm.rank + nranks - 1) // nranks
+    return ChannelMetadata(
+        local_count=local_output_count,
+        partitioning=Partitioning(inter_rank_scheme, local_scheme),
+        duplicated=metadata_in.duplicated,
+    )
+
+
 def _evaluate_chunk_sync(
     chunk: TableChunk,
     ir: IR,

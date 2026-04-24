@@ -104,6 +104,12 @@ class ReserveOpIDs:
         self.collective_nodes: list[IR] = [
             node for node in traversal([ir]) if isinstance(node, collective_types)
         ]
+        if self.dynamic_planning_enabled:
+            from cudf_polars.experimental.over import Over
+
+            for node in traversal([ir]):
+                if isinstance(node, Over):
+                    self.collective_nodes.append(node)
         self.collective_id_map: dict[IR, list[int]] = {}
 
     def __enter__(self) -> dict[IR, list[int]]:

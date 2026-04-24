@@ -292,3 +292,104 @@ def test_run(spmd_comm):
         result = engine._run(os.getpid)
 
     assert result == [os.getpid()]
+
+
+# Group keys probed with num_partitions=2, nranks=2, ROUND_ROBIN:
+#   _SAME_RANK_KEYS[r] hashes to partition r: data stays on its origin rank.
+#   _CROSS_RANK_KEYS[r] hashes to partition 1-r: data is fully shuffled away.
+# num_partitions=2 = max(nranks=2, local_count=1).  local_count=1 requires
+# max_rows_per_partition >= the number of rows per rank (3 here), so we use 4.
+_SAME_RANK_KEYS = [
+    0,
+    3,
+]  # g=0 hashes to partition 0 (rank 0); g=3 hashes to partition 1 (rank 1)
+_CROSS_RANK_KEYS = [
+    3,
+    0,
+]  # g=3 hashes to partition 1 (rank 1); g=0 hashes to partition 0 (rank 0)
+
+
+@pytest.mark.parametrize(
+    "expr,is_scalar",
+    [
+        (pl.col("x").sum().over("g").alias("result"), True),
+        (pl.col("x").rank(method="dense").over("g").alias("result"), False),
+    ],
+    ids=["scalar_sum", "nonscalar_rank"],
+)
+@pytest.mark.parametrize(
+    "cross_rank",
+    [False, True],
+    ids=["same_rank", "cross_rank"],
+)
+def test_over_multirank(
+    request: pytest.FixtureRequest,
+    spmd_comm: Communicator,
+    expr: pl.Expr,
+    is_scalar: bool,  # noqa: FBT001
+    cross_rank: bool,  # noqa: FBT001
+) -> None:
+    """over() correctness in multi-rank SPMD mode, same-rank and cross-rank cases.
+
+    same_rank: group keys hash to the origin rank's own partition (happy path).
+    cross_rank: group keys hash to the other rank's partition, exercising the
+    bug where row_idx spaces are rank-local so Phase 2 fills the wrong
+    accumulated slots and each rank receives the other rank's data.
+
+    max_rows_per_partition=4 keeps all 3 rows in one chunk (local_count=1),
+    so num_partitions=max(nranks=2, 1)=2, matching the probed key assignments.
+    """
+    with SPMDEngine(
+        comm=spmd_comm,
+        executor_options={"max_rows_per_partition": 4, "dynamic_planning": {}},
+    ) as engine:
+        rank = engine.rank
+        nranks = engine.nranks
+        if nranks < 2:
+            request.applymarker(
+                pytest.mark.skip(reason="multirank test requires at least 2 ranks")
+            )
+        if nranks > 2:
+            request.applymarker(
+                pytest.mark.skip(
+                    reason="key assignments only probed for exactly 2 ranks"
+                )
+            )
+        if cross_rank and not is_scalar and nranks == 2:
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason=(
+                        "non-scalar over() swaps data across ranks when all input rows are "
+                        "shuffled to another rank's partition (row_idx spaces are rank-local "
+                        "so Phase 2 fills the wrong accumulated slots)"
+                    )
+                )
+            )
+        keys = _CROSS_RANK_KEYS if cross_rank else _SAME_RANK_KEYS
+        g = keys[rank]
+        xs = [rank * 3 + 1, rank * 3 + 2, rank * 3 + 3]
+        lf = pl.LazyFrame({"g": [g, g, g], "x": xs})
+        local_result = lf.select(pl.col("g"), pl.col("x"), expr).collect(engine=engine)
+
+        # Each rank must get back its OWN rows (not another rank's).
+        assert local_result["g"].unique().to_list() == [g], (
+            f"rank {rank}: expected only group {g} in output, "
+            f"got {local_result['g'].unique().to_list()}"
+        )
+
+        with reserve_op_id() as op_id:
+            global_result = allgather_polars_dataframe(
+                engine=engine, local_df=local_result, op_id=op_id
+            )
+
+        assert global_result.shape == (3 * nranks, 3)
+        for r in range(nranks):
+            grp_g = keys[r]
+            grp = global_result.filter(pl.col("g") == grp_g).sort("x")
+            assert grp.shape == (3, 3), f"rank {r} group has wrong row count"
+            expected_xs = [r * 3 + 1, r * 3 + 2, r * 3 + 3]
+            assert grp["x"].to_list() == expected_xs
+            if is_scalar:
+                assert grp["result"].to_list() == [sum(expected_xs)] * 3
+            else:
+                assert grp["result"].to_list() == [1, 2, 3]

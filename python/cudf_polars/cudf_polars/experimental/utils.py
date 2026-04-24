@@ -10,7 +10,7 @@ from functools import reduce
 from itertools import chain
 from typing import TYPE_CHECKING
 
-from cudf_polars.dsl.expr import Col, Expr, GroupedWindow, UnaryFunction
+from cudf_polars.dsl.expr import Agg, Col, Expr, GroupedWindow, Len, UnaryFunction
 from cudf_polars.dsl.ir import Union
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.base import PartitionInfo
@@ -22,7 +22,14 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.experimental.dispatch import LowerIRTransformer
+    from cudf_polars.typing import Schema
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
+
+
+# Aggregation names that can be decomposed across partitions (see groupby.decompose)
+_DECOMPOSABLE_AGG_NAMES: frozenset[str] = frozenset(
+    ("sum", "count", "mean", "min", "max", "n_unique")
+)
 
 
 def _concat(*dfs: DataFrame, context: IRExecutionContext) -> DataFrame:
@@ -143,6 +150,83 @@ def _get_unique_fractions(
 def _contains_over(exprs: Sequence[Expr]) -> bool:
     """Return True if any expression contains a window expression."""
     return any(isinstance(e, GroupedWindow) for e in traversal(exprs))
+
+
+def _extract_over_shuffle_indices(
+    exprs: Sequence[Expr], child_schema: Schema
+) -> tuple[int, ...] | None:
+    """
+    Return column indices for hash-shuffling a window over() operation.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Empty: no GroupedWindow found; plain chunkwise is correct.
+        Non-empty: all GroupedWindow share the same partition-by keys;
+        values are indices of those keys in ``child_schema``.
+    None
+        Multiple distinct partition-by key sets, or any partition-by
+        expression is not a plain column reference; not supported for
+        multi-partition streaming (caller should fall back to
+        single-partition).
+    """
+    seen_key_sets: set[frozenset[str]] = set()
+    for node in traversal(exprs):
+        if isinstance(node, GroupedWindow):
+            by_children = node.children[: node.by_count]
+            # TODO: support non-Col partition-by expressions using
+            # ShuffleManager.insert_hash_with_keys (rapidsai/cudf#21692).
+            if not all(isinstance(c, Col) for c in by_children):
+                return None
+            seen_key_sets.add(frozenset(c.name for c in by_children))  # type: ignore[attr-defined]
+    if not seen_key_sets:
+        return ()
+    if len(seen_key_sets) > 1:
+        return None
+    schema_keys = list(child_schema.keys())
+    try:
+        return tuple(schema_keys.index(n) for n in next(iter(seen_key_sets)))
+    except ValueError:
+        return None
+
+
+def _all_over_scalar_and_top_level(exprs: Sequence[Expr]) -> bool:
+    """
+    Return True if every GroupedWindow in exprs is top-level and purely scalar.
+
+    Top-level means the GroupedWindow is the direct value of a NamedExpr (not
+    nested inside another expression).  Scalar means all named_aggs are Agg/Len
+    reductions with Col partition-by keys and decomposable aggregation types.
+
+    Parameters
+    ----------
+    exprs
+        The values of the NamedExprs in a Select.exprs or HStack.columns.
+
+    Returns
+    -------
+    bool
+        True only when it is safe to use the scalar broadcast path.
+    """
+    for e in exprs:
+        if isinstance(e, GroupedWindow):
+            reductions, unary_ops = e._split_named_expr()
+            if any(ops for ops in unary_ops.values()):
+                return False
+            if not all(isinstance(c, Col) for c in e.children[: e.by_count]):
+                return False
+            if not all(
+                isinstance(ne.value, Len)
+                or (
+                    isinstance(ne.value, Agg)
+                    and ne.value.name in _DECOMPOSABLE_AGG_NAMES
+                )
+                for ne in reductions
+            ):
+                return False
+        elif any(isinstance(node, GroupedWindow) for node in traversal(e.children)):
+            return False
+    return True
 
 
 def _contains_unsupported_fill_strategy(exprs: Sequence[Expr]) -> bool:

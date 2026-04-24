@@ -42,6 +42,7 @@ from cudf_polars.experimental.utils import (
     _concat,
     _contains_over,
     _dynamic_planning_on,
+    _extract_over_shuffle_indices,
     _lower_ir_fallback,
 )
 
@@ -476,6 +477,18 @@ def _(
             )
         # All output columns are aggregations: no N-row passthrough to anchor
         # broadcast. Fall back so HStack.do_evaluate uses target_length=child.num_rows.
+        config_options = rec.state["config_options"]
+        if _dynamic_planning_on(config_options):
+            indices = _extract_over_shuffle_indices(
+                [ne.value for ne in ir.columns], ir.children[0].schema
+            )
+            if indices:
+                child, partition_info = rec(ir.children[0])
+                from cudf_polars.experimental.over import make_over_node
+
+                new_node = make_over_node(ir, child, indices)
+                partition_info[new_node] = partition_info[child]
+                return new_node, partition_info
         return _lower_ir_fallback(ir, rec)
 
     child, partition_info = rec(ir.children[0])

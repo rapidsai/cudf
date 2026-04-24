@@ -62,6 +62,188 @@ def test_rolling_datetime(request, engine):
 
 
 @pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.len().over("g"),
+        pl.col("x").sum().over("g", "g2"),
+        pl.col("x").sum().over("g_null"),
+        pl.col("x").sum().over("g", order_by="s"),
+        pl.col("x").rank(method="dense", descending=True).over("g"),
+        pl.col("x").rank(method="min").over("g", "g2"),
+        pl.col("x").cum_sum().over("g", order_by="s"),
+        pl.when((pl.col("x") % 2) == 0)
+        .then(None)
+        .otherwise(pl.col("x"))
+        .fill_null(strategy="forward")
+        .over("g", order_by="s"),
+    ],
+    ids=[
+        "single_key_sum",
+        "len_over",
+        "multi_key",
+        "null_keys",
+        "order_by",
+        "rank_dense",
+        "rank_min_multi_key",
+        "cum_sum_order_by",
+        "fill_null_forward",
+    ],
+)
+def test_over_select(engine, expr):
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+            "g2": ["a", "b", "a", "b", "a", "b"],
+            "g_null": [1, None, 1, None, 2, 1],
+            "s": [6, 5, 4, 3, 2, 1],
+        }
+    )
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
+
+
+def test_over_with_columns(engine):
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    assert_gpu_result_equal(
+        df.with_columns(pl.col("x").sum().over("g")),
+        engine=engine,
+        check_row_order=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over(pl.col("g") % 2),
+        pl.col("x").sum().over("g", pl.col("x") % 2),
+    ],
+    ids=["noncol_key", "mixed_col_and_expr_key"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 2}}],
+    indirect=True,
+)
+def test_over_noncol_key_fallback(engine, expr) -> None:
+    # Non-Col and mixed Col/expr partition-by keys are not yet supported for
+    # multi-partition streaming and should fall back to single-partition.
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    with pytest.warns(UserWarning, match=r"not supported for multiple partitions"):
+        assert_gpu_result_equal(df.select(expr), engine=engine)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 2}}],
+    indirect=True,
+)
+def test_over_mixed_keys(engine) -> None:
+    # Multiple over expressions with different partition-by keys are decomposed
+    # into separate Over nodes (one per key group) and combined with HConcat.
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "g2": ["a", "b", "a", "b", "a", "b"],
+            "x": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    q = df.select(
+        pl.col("x").sum().over("g").alias("s_g"),
+        pl.col("x").sum().over("g2").alias("s_g2"),
+    )
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.len().over("g"),
+        pl.col("x").rank(method="dense").over("g"),
+        pl.col("x").cum_sum().over("g", order_by="s"),
+    ],
+    ids=["scalar_sum", "scalar_len", "nonscalar_rank", "nonscalar_cum_sum"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 1}}],
+    indirect=True,
+)
+def test_over_many_partitions(engine, expr) -> None:
+    # max_rows_per_partition=1 forces one chunk per row, exercising the AllGather
+    # (scalar broadcast) and sort-and-split (non-scalar) paths across many partitions.
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 2, 2, 2, 1],
+            "x": [1, 2, 3, 4, 5, 6],
+            "s": [6, 5, 4, 3, 2, 1],
+        }
+    )
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.col("x").rank(method="dense").over("g"),
+    ],
+    ids=["scalar_sum", "nonscalar_rank"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 2}}],
+    indirect=True,
+)
+def test_over_empty_input(engine, expr) -> None:
+    df = pl.LazyFrame(
+        {
+            "g": pl.Series([], dtype=pl.Int64),
+            "x": pl.Series([], dtype=pl.Int64),
+        }
+    )
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("x").sum().over("g"),
+        pl.col("x").rank(method="dense").over("g"),
+    ],
+    ids=["scalar_sum", "nonscalar_rank"],
+)
+@pytest.mark.parametrize(
+    "engine",
+    [{"executor_options": {"max_rows_per_partition": 3, "broadcast_join_limit": -1}}],
+    indirect=True,
+)
+def test_over_already_partitioned(engine, expr) -> None:
+    # broadcast_join_limit=-1 makes the broadcast threshold negative, disabling
+    # broadcast joins entirely. Therefore, we should already be shuffled on "g"
+    # after then join. The over("g") actor should detect this and evaluate chunkwise
+    # without a second shuffle.
+    left = pl.LazyFrame({"g": [1, 1, 2, 2, 2, 1], "x": [1, 2, 3, 4, 5, 6]})
+    right = pl.LazyFrame({"g": [1, 2], "y": [10, 20]})
+    assert_gpu_result_equal(
+        left.join(right, on="g").with_columns(expr),
+        engine=engine,
+        check_row_order=False,
+    )
+
+
+@pytest.mark.parametrize(
     "engine",
     [{"executor_options": {"max_rows_per_partition": 1}}],
     indirect=True,
