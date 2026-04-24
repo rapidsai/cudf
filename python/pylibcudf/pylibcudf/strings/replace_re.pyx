@@ -19,6 +19,7 @@ from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["replace_re", "replace_with_backrefs"]
 
@@ -65,12 +66,13 @@ cpdef Column replace_re(
     cdef unique_ptr[column] c_result
     cdef vector[string] c_patterns
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if Patterns is RegexProgram and Replacement is Scalar:
         if replacement is None:
             replacement = Scalar.from_libcudf(
-                cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+                cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
             )
         with nogil:
             c_result = move(
@@ -79,7 +81,7 @@ cpdef Column replace_re(
                     patterns.c_obj.get()[0],
                     dereference(<string_scalar*>(replacement.get())),
                     max_replace_count,
-                    _stream.view(),
+                    _cs,
                     mr.get_mr()
                 )
             )
@@ -97,7 +99,7 @@ cpdef Column replace_re(
                     c_patterns,
                     replacement.view(),
                     flags,
-                    _stream.view(),
+                    _cs,
                     mr.get_mr()
                 )
             )
@@ -138,6 +140,7 @@ cpdef Column replace_with_backrefs(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     cdef string c_replacement = replacement.encode()
 
@@ -146,7 +149,7 @@ cpdef Column replace_with_backrefs(
             input.view(),
             prog.c_obj.get()[0],
             c_replacement,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

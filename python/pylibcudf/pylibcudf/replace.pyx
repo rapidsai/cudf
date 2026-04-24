@@ -18,6 +18,7 @@ from pylibcudf.libcudf.replace import \
 from .column cimport Column
 from .scalar cimport Scalar
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ReplacePolicy",
@@ -71,6 +72,7 @@ cpdef Column replace_nulls(
     cdef replace_policy policy
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     # Due to https://github.com/cython/cython/issues/5984, if this function is
@@ -84,7 +86,7 @@ cpdef Column replace_nulls(
                 c_result = cpp_replace.replace_nulls(
                     source_column.view(),
                     policy,
-                    _stream.view(),
+                    _cs,
                     mr.get_mr()
                 )
             return Column.from_libcudf(move(c_result), _stream, mr)
@@ -96,21 +98,21 @@ cpdef Column replace_nulls(
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         elif ReplacementType is Scalar:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 dereference(replacement.c_obj),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         elif ReplacementType is replace_policy:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         else:
@@ -151,6 +153,7 @@ cpdef Column find_and_replace_all(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -158,7 +161,7 @@ cpdef Column find_and_replace_all(
             source_column.view(),
             values_to_replace.view(),
             replacement_values.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -207,6 +210,7 @@ cpdef Column clamp(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -215,7 +219,7 @@ cpdef Column clamp(
                 source_column.view(),
                 dereference(lo.c_obj),
                 dereference(hi.c_obj),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         else:
@@ -225,7 +229,7 @@ cpdef Column clamp(
                 dereference(lo_replace.c_obj),
                 dereference(hi.c_obj),
                 dereference(hi_replace.c_obj),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -261,19 +265,20 @@ cpdef Column normalize_nans_and_zeros(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         if inplace:
             cpp_replace.normalize_nans_and_zeros(
                 source_column.mutable_view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         else:
             c_result = cpp_replace.normalize_nans_and_zeros(
                 source_column.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
 

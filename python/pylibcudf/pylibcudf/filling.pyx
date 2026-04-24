@@ -22,6 +22,7 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -69,6 +70,7 @@ cpdef Column fill(
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -77,7 +79,7 @@ cpdef Column fill(
             begin,
             end,
             dereference((<Scalar> value).c_obj),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(result), _stream, mr)
@@ -113,6 +115,7 @@ cpdef void fill_in_place(
     """
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
 
     cdef mutable_column_view c_destination = destination.mutable_view()
     with nogil:
@@ -121,7 +124,7 @@ cpdef void fill_in_place(
             begin,
             end,
             dereference(value.c_obj),
-            _stream.view()
+            _cs
         )
     destination.set_null_count(c_destination.null_count())
 
@@ -158,6 +161,7 @@ cpdef Column sequence(
     cdef size_type c_size = size
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -165,7 +169,7 @@ cpdef Column sequence(
             c_size,
             dereference(init.c_obj),
             dereference(step.c_obj),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(result), _stream, mr)
@@ -204,6 +208,7 @@ cpdef Table repeat(
     cdef unique_ptr[table] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if ColumnOrSize is Column:
@@ -211,7 +216,7 @@ cpdef Table repeat(
             result = cpp_repeat(
                 input_table.view(),
                 count.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     if ColumnOrSize is size_type:
@@ -219,7 +224,7 @@ cpdef Table repeat(
             result = cpp_repeat(
                 input_table.view(),
                 count,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     return Table.from_libcudf(move(result), _stream, mr)
@@ -257,6 +262,7 @@ cpdef Column calendrical_month_sequence(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -264,7 +270,7 @@ cpdef Column calendrical_month_sequence(
             n,
             dereference(init.c_obj),
             months,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)

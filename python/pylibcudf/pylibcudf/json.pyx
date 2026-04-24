@@ -15,6 +15,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["GetJsonObjectOptions", "get_json_object"]
 
@@ -156,6 +157,7 @@ cpdef Column get_json_object(
 
     cdef cpp_json.get_json_object_options c_options = options.options
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -163,7 +165,7 @@ cpdef Column get_json_object(
             col.view(),
             dereference(c_json_path),
             c_options,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

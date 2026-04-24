@@ -12,6 +12,7 @@ from pylibcudf.types cimport DataType
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "from_integers",
@@ -49,6 +50,7 @@ cpdef Column to_integers(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -56,7 +58,7 @@ cpdef Column to_integers(
             cpp_convert_integers.to_integers(
                 input.view(),
                 output_type.c_obj,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
@@ -88,13 +90,14 @@ cpdef Column from_integers(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = move(
             cpp_convert_integers.from_integers(
                 integers.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
@@ -134,6 +137,7 @@ cpdef Column is_integer(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if int_type is None:
@@ -141,7 +145,7 @@ cpdef Column is_integer(
             c_result = move(
                 cpp_convert_integers.is_integer(
                     input.view(),
-                    _stream.view(),
+                    _cs,
                     mr.get_mr()
                 )
             )
@@ -151,7 +155,7 @@ cpdef Column is_integer(
                 cpp_convert_integers.is_integer(
                     input.view(),
                     int_type.c_obj,
-                    _stream.view(),
+                    _cs,
                     mr.get_mr()
                 )
             )
@@ -186,6 +190,7 @@ cpdef Column hex_to_integers(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -193,7 +198,7 @@ cpdef Column hex_to_integers(
             cpp_convert_integers.hex_to_integers(
                 input.view(),
                 output_type.c_obj,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
@@ -223,13 +228,14 @@ cpdef Column is_hex(Column input, object stream=None, DeviceMemoryResource mr=No
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = move(
             cpp_convert_integers.is_hex(
                 input.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
@@ -261,13 +267,14 @@ cpdef Column integers_to_hex(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = move(
             cpp_convert_integers.integers_to_hex(
                 input.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )

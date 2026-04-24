@@ -12,6 +12,7 @@ from pylibcudf.types cimport DataType, type_id
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_fixed_point", "is_fixed_point", "to_fixed_point"]
 
@@ -43,13 +44,14 @@ cpdef Column to_fixed_point(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_fixed_point.to_fixed_point(
             input.view(),
             output_type.c_obj,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -79,11 +81,12 @@ cpdef Column from_fixed_point(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_fixed_point.from_fixed_point(
-            input.view(), _stream.view(), mr.get_mr()
+            input.view(), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -119,6 +122,7 @@ cpdef Column is_fixed_point(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if decimal_type is None:
@@ -128,7 +132,7 @@ cpdef Column is_fixed_point(
         c_result = cpp_fixed_point.is_fixed_point(
             input.view(),
             decimal_type.c_obj,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

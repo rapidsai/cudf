@@ -24,6 +24,7 @@ from .column cimport Column
 from .expressions cimport Expression
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "DuplicateKeepOption",
@@ -66,11 +67,12 @@ cpdef Table drop_nulls(
     cdef vector[size_type] c_keys = keys
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nulls(
-            source_table.view(), c_keys, keep_threshold, _stream.view(), mr.get_mr()
+            source_table.view(), c_keys, keep_threshold, _cs, mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
 
@@ -104,11 +106,12 @@ cpdef Table drop_nans(
     cdef vector[size_type] c_keys = keys
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.drop_nans(
-            source_table.view(), c_keys, keep_threshold, _stream.view(), mr.get_mr()
+            source_table.view(), c_keys, keep_threshold, _cs, mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
 
@@ -138,11 +141,12 @@ cpdef Table apply_boolean_mask(
     cdef unique_ptr[table] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.apply_boolean_mask(
-            source_table.view(), boolean_mask.view(), _stream.view(), mr.get_mr()
+            source_table.view(), boolean_mask.view(), _cs, mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
 
@@ -185,11 +189,12 @@ cpdef Table unique(
     cdef vector[size_type] c_keys = keys
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.unique(
-            input.view(), c_keys, keep, nulls_equal, _stream.view(), mr.get_mr()
+            input.view(), c_keys, keep, nulls_equal, _cs, mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
 
@@ -230,11 +235,12 @@ cpdef Table distinct(
     cdef vector[size_type] c_keys = keys
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, _stream.view(),
+            input.view(), c_keys, keep, nulls_equal, nans_equal, _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -271,11 +277,12 @@ cpdef Column distinct_indices(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.distinct_indices(
-            input.view(), keep, nulls_equal, nans_equal, _stream.view(), mr.get_mr()
+            input.view(), keep, nulls_equal, nans_equal, _cs, mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
 
@@ -316,11 +323,12 @@ cpdef Table stable_distinct(
     cdef vector[size_type] c_keys = keys
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_stream_compaction.stable_distinct(
-            input.view(), c_keys, keep, nulls_equal, nans_equal, _stream.view(),
+            input.view(), c_keys, keep, nulls_equal, nans_equal, _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -354,6 +362,7 @@ cpdef Table filter(
     cdef unique_ptr[table] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -361,7 +370,7 @@ cpdef Table filter(
             predicate_table.view(),
             dereference(predicate_expr.c_obj.get()),
             filter_table.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)

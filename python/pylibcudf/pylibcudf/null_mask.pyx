@@ -19,6 +19,7 @@ from .span import is_span as py_is_span
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "bitmask_allocation_size_bytes",
@@ -64,10 +65,11 @@ cpdef DeviceBuffer copy_bitmask(
     """
     cdef device_buffer db
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        db = cpp_null_mask.copy_bitmask(col.view(), _stream.view(), mr.get_mr())
+        db = cpp_null_mask.copy_bitmask(col.view(), _cs, mr.get_mr())
 
     return buffer_to_python(move(db), _stream, mr)
 
@@ -109,6 +111,7 @@ cpdef DeviceBuffer copy_bitmask_from_bitmask(
         )
     cdef device_buffer db
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     cdef uintptr_t ptr = bitmask.ptr
 
@@ -117,7 +120,7 @@ cpdef DeviceBuffer copy_bitmask_from_bitmask(
             <bitmask_type*>ptr,
             begin_bit,
             end_bit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -177,10 +180,11 @@ cpdef DeviceBuffer create_null_mask(
     """
     cdef device_buffer db
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        db = cpp_null_mask.create_null_mask(size, state, _stream.view(), mr.get_mr())
+        db = cpp_null_mask.create_null_mask(size, state, _cs, mr.get_mr())
 
     return buffer_to_python(move(db), _stream, mr)
 
@@ -207,11 +211,12 @@ cpdef tuple bitmask_and(list columns, object stream=None, DeviceMemoryResource m
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_null_mask.bitmask_and(
-            c_table.view(), _stream.view(), mr.get_mr()
+            c_table.view(), _cs, mr.get_mr()
         )
 
     return buffer_to_python(move(c_result.first), _stream, mr), c_result.second
@@ -239,10 +244,11 @@ cpdef tuple bitmask_or(list columns, object stream=None, DeviceMemoryResource mr
     cdef Table c_table = Table(columns)
     cdef pair[device_buffer, size_type] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_null_mask.bitmask_or(c_table.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_null_mask.bitmask_or(c_table.view(), _cs, mr.get_mr())
 
     return buffer_to_python(move(c_result.first), _stream, mr), c_result.second
 
@@ -280,12 +286,13 @@ cpdef size_type null_count(
         )
     cdef uintptr_t ptr = bitmask.ptr
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     with nogil:
         return cpp_null_mask.null_count(
             <bitmask_type*>ptr,
             start,
             stop,
-            _stream.view()
+            _cs
         )
 
 cpdef size_type index_of_first_set_bit(
@@ -322,10 +329,11 @@ cpdef size_type index_of_first_set_bit(
         )
     cdef uintptr_t ptr = bitmask.ptr
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     with nogil:
         return cpp_null_mask.index_of_first_set_bit(
             <bitmask_type*>ptr,
             start,
             stop,
-            _stream.view()
+            _cs
         )

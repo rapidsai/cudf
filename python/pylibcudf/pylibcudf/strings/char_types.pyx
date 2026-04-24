@@ -14,6 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
+from cuda.bindings.cyruntime cimport cudaStream_t
 from pylibcudf.libcudf.strings.char_types import \
     string_character_types as StringCharacterTypes  # no-cython-lint
 
@@ -51,6 +52,7 @@ cpdef Column all_characters_of_type(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -58,7 +60,7 @@ cpdef Column all_characters_of_type(
             source_strings.view(),
             types,
             verify_types,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -100,6 +102,7 @@ cpdef Column filter_characters_of_type(
     )
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -108,7 +111,7 @@ cpdef Column filter_characters_of_type(
             types_to_remove,
             dereference(c_replacement),
             types_to_keep,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

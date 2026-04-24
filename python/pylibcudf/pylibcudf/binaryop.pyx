@@ -20,6 +20,7 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["BinaryOperator", "binary_operation", "is_supported_operation"]
 
@@ -62,6 +63,7 @@ cpdef Column binary_operation(
     """
     cdef unique_ptr[column] result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if LeftBinaryOperand is Column and RightBinaryOperand is Column:
@@ -71,7 +73,7 @@ cpdef Column binary_operation(
                 rhs.view(),
                 op,
                 output_type.c_obj,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     elif LeftBinaryOperand is Column and RightBinaryOperand is Scalar:
@@ -81,7 +83,7 @@ cpdef Column binary_operation(
                 dereference(rhs.c_obj),
                 op,
                 output_type.c_obj,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     elif LeftBinaryOperand is Scalar and RightBinaryOperand is Column:
@@ -91,7 +93,7 @@ cpdef Column binary_operation(
                 rhs.view(),
                 op,
                 output_type.c_obj,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     else:

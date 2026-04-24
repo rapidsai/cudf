@@ -20,6 +20,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["format_list_column"]
 
@@ -59,11 +60,12 @@ cpdef Column format_list_column(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if na_rep is None:
         na_rep = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     cdef const string_scalar* c_na_rep = <const string_scalar*>(
@@ -78,7 +80,7 @@ cpdef Column format_list_column(
             input.view(),
             dereference(c_na_rep),
             separators.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

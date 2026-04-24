@@ -18,6 +18,7 @@ from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from pylibcudf.libcudf.nvtext.stemmer import letter_type as LetterType # no-cython-lint
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["is_letter", "porter_stemmer_measure", "LetterType"]
 
@@ -56,6 +57,7 @@ cpdef Column is_letter(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -63,7 +65,7 @@ cpdef Column is_letter(
             input.view(),
             letter_type.VOWEL if check_vowels else letter_type.CONSONANT,
             indices if ColumnOrSize is size_type else indices.view(),
-            _stream.view()
+            _cs
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -93,10 +95,11 @@ cpdef Column porter_stemmer_measure(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_porter_stemmer_measure(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_porter_stemmer_measure(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(c_result), _stream, mr)
 

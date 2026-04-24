@@ -9,6 +9,7 @@ from pylibcudf.libcudf.strings.convert cimport convert_ipv4 as cpp_convert_ipv4
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["integers_to_ipv4", "ipv4_to_integers", "is_ipv4"]
 
@@ -35,11 +36,12 @@ cpdef Column ipv4_to_integers(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_ipv4.ipv4_to_integers(
-            input.view(), _stream.view(), mr.get_mr()
+            input.view(), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -68,11 +70,12 @@ cpdef Column integers_to_ipv4(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_ipv4.integers_to_ipv4(
-            integers.view(), _stream.view(), mr.get_mr()
+            integers.view(), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -100,9 +103,10 @@ cpdef Column is_ipv4(Column input, object stream=None, DeviceMemoryResource mr=N
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_convert_ipv4.is_ipv4(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_convert_ipv4.is_ipv4(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(c_result), _stream, mr)

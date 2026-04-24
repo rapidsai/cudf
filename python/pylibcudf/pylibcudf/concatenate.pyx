@@ -16,6 +16,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["concatenate"]
 
@@ -42,6 +43,7 @@ cpdef concatenate(list objects, object stream=None, DeviceMemoryResource mr=None
     cdef vector[column_view] c_columns
     cdef vector[table_view] c_tables
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[column] c_col_result
@@ -53,7 +55,7 @@ cpdef concatenate(list objects, object stream=None, DeviceMemoryResource mr=None
 
         with nogil:
             c_tbl_result = cpp_concatenate.concatenate(
-                c_tables, _stream.view(), mr.get_mr()
+                c_tables, _cs, mr.get_mr()
             )
         return Table.from_libcudf(move(c_tbl_result), _stream, mr)
     elif isinstance(objects[0], Column):
@@ -62,7 +64,7 @@ cpdef concatenate(list objects, object stream=None, DeviceMemoryResource mr=None
 
         with nogil:
             c_col_result = cpp_concatenate.concatenate(
-                c_columns, _stream.view(), mr.get_mr()
+                c_columns, _cs, mr.get_mr()
             )
         return Column.from_libcudf(move(c_col_result), _stream, mr)
     else:

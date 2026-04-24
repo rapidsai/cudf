@@ -18,6 +18,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "generate_ngrams",
@@ -57,6 +58,7 @@ cpdef Column generate_ngrams(
     cdef const string_scalar* c_separator = <const string_scalar*>separator.c_obj.get()
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -64,7 +66,7 @@ cpdef Column generate_ngrams(
             c_strings,
             ngrams,
             c_separator[0],
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -98,13 +100,14 @@ cpdef Column generate_character_ngrams(
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_generate_character_ngrams(
             c_strings,
             ngrams,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -141,6 +144,7 @@ cpdef Column hash_character_ngrams(
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -148,7 +152,7 @@ cpdef Column hash_character_ngrams(
             c_strings,
             ngrams,
             seed,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)

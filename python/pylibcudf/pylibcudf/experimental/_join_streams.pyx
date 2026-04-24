@@ -6,10 +6,10 @@ from libcpp.vector cimport vector
 from pylibcudf.libcudf.detail.utilities cimport stream_pool as cpp_stream_pool
 from pylibcudf.libcudf.utilities.span cimport host_span
 
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.pylibrmm.stream cimport Stream
 
 from ..utils cimport _get_stream
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 
 ctypedef const cuda_stream_view const_cuda_stream_view
 
@@ -45,6 +45,7 @@ cpdef void join_streams(list streams, object stream):
     >>> # ... continue work on join_stream ...
     """
     cdef Stream _stream = _get_stream(stream)
+    cdef cuda_stream_view _cs = _stream.view()
     cdef vector[cuda_stream_view] c_streams
 
     c_streams.reserve(len(streams))
@@ -54,5 +55,5 @@ cpdef void join_streams(list streams, object stream):
     with nogil:
         cpp_stream_pool.join_streams(
             host_span[const_cuda_stream_view](c_streams.data(), c_streams.size()),
-            _stream.view()
+            _cs
         )

@@ -11,6 +11,7 @@ from pylibcudf.strings.regex_program cimport RegexProgram
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["contains_re", "count_re", "like", "matches_re"]
 
@@ -40,6 +41,7 @@ cpdef Column contains_re(
 
     cdef unique_ptr[column] result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     if _stream is None:
         _stream = _get_stream(None)
     mr = _get_memory_resource(mr)
@@ -48,7 +50,7 @@ cpdef Column contains_re(
         result = cpp_contains.contains_re(
             input.view(),
             prog.c_obj.get()[0],
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -81,13 +83,14 @@ cpdef Column count_re(
 
     cdef unique_ptr[column] result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_contains.count_re(
             input.view(),
             prog.c_obj.get()[0],
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -121,13 +124,14 @@ cpdef Column matches_re(
 
     cdef unique_ptr[column] result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_contains.matches_re(
             input.view(),
             prog.c_obj.get()[0],
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -164,6 +168,7 @@ cpdef Column like(
     """
     cdef unique_ptr[column] result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if escape_character is None:
@@ -177,7 +182,7 @@ cpdef Column like(
             input.view(),
             c_pattern,
             c_escape_character,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     _stream.synchronize()

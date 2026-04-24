@@ -14,6 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.types import DataType
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_durations", "to_durations"]
 
@@ -52,6 +53,7 @@ cpdef Column to_durations(
     cdef unique_ptr[column] c_result
     cdef string c_format = format.encode()
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -59,7 +61,7 @@ cpdef Column to_durations(
             input.view(),
             duration_type.c_obj,
             c_format,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -96,6 +98,7 @@ cpdef Column from_durations(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if format is None:
@@ -106,7 +109,7 @@ cpdef Column from_durations(
         c_result = cpp_convert_durations.from_durations(
             durations.view(),
             c_format,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

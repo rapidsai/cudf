@@ -4,7 +4,6 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from pylibcudf.column cimport Column
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.io.text cimport parse_options, data_chunk_source, byte_range_info
 

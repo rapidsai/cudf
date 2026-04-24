@@ -23,6 +23,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
 from ._interop_helpers import ColumnMetadata
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -66,6 +67,7 @@ cpdef Table from_dlpack(
         raise ValueError("PyCapsule object contained a NULL pointer")
     PyCapsule_SetName(managed_tensor, "used_dltensor")
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     # Note: A copy is always performed when converting the dlpack
@@ -74,7 +76,7 @@ cpdef Table from_dlpack(
     # TODO: https://github.com/rapidsai/cudf/issues/10874
     # TODO: https://github.com/rapidsai/cudf/issues/10849
     with nogil:
-        c_result = cpp_from_dlpack(dlpack_tensor, _stream.view(), mr.get_mr())
+        c_result = cpp_from_dlpack(dlpack_tensor, _cs, mr.get_mr())
 
     cdef Table result = Table.from_libcudf(move(c_result), _stream, mr)
     dlpack_tensor.deleter(dlpack_tensor)
@@ -110,10 +112,11 @@ cpdef object to_dlpack(Table input, object stream=None, DeviceMemoryResource mr=
             )
     cdef DLManagedTensor *dlpack_tensor
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        dlpack_tensor = cpp_to_dlpack(input.view(), _stream.view(), mr.get_mr())
+        dlpack_tensor = cpp_to_dlpack(input.view(), _cs, mr.get_mr())
 
     return PyCapsule_New(
         dlpack_tensor,

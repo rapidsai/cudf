@@ -15,6 +15,7 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "WordPieceVocabulary",
@@ -34,10 +35,11 @@ cdef class WordPieceVocabulary:
     ):
         cdef column_view c_vocab = vocab.view()
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             self.c_obj = move(cpp_load_wordpiece_vocabulary(
-                c_vocab, _stream.view(), mr.get_mr()
+                c_vocab, _cs, mr.get_mr()
             ))
 
     __hash__ = None
@@ -74,6 +76,7 @@ cpdef Column wordpiece_tokenize(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -81,7 +84,7 @@ cpdef Column wordpiece_tokenize(
             input.view(),
             dereference(vocabulary.c_obj.get()),
             max_words_per_row,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

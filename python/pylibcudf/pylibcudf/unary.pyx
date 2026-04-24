@@ -16,6 +16,7 @@ from pylibcudf.libcudf.unary import \
 from .column cimport Column
 from .types cimport DataType
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "UnaryOperator",
@@ -54,11 +55,12 @@ cpdef Column unary_operation(
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_unary.unary_operation(
-            input.view(), op, _stream.view(), mr.get_mr()
+            input.view(), op, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), _stream, mr)
@@ -86,10 +88,11 @@ cpdef Column is_null(Column input, object stream=None, DeviceMemoryResource mr=N
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_null(input.view(), _stream.view(), mr.get_mr())
+        result = cpp_unary.is_null(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(result), _stream, mr)
 
@@ -116,10 +119,11 @@ cpdef Column is_valid(Column input, object stream=None, DeviceMemoryResource mr=
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_valid(input.view(), _stream.view(), mr.get_mr())
+        result = cpp_unary.is_valid(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(result), _stream, mr)
 
@@ -150,11 +154,12 @@ cpdef Column cast(
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_unary.cast(
-            input.view(), data_type.c_obj, _stream.view(), mr.get_mr()
+            input.view(), data_type.c_obj, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(result), _stream, mr)
@@ -182,10 +187,11 @@ cpdef Column is_nan(Column input, object stream=None, DeviceMemoryResource mr=No
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_nan(input.view(), _stream.view(), mr.get_mr())
+        result = cpp_unary.is_nan(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(result), _stream, mr)
 
@@ -212,10 +218,11 @@ cpdef Column is_not_nan(Column input, object stream=None, DeviceMemoryResource m
     cdef unique_ptr[column] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_unary.is_not_nan(input.view(), _stream.view(), mr.get_mr())
+        result = cpp_unary.is_not_nan(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(result), _stream, mr)
 

@@ -15,6 +15,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "is_sorted",
@@ -59,6 +60,7 @@ cpdef Column sorted_order(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -66,7 +68,7 @@ cpdef Column sorted_order(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -103,6 +105,7 @@ cpdef Column stable_sorted_order(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -110,7 +113,7 @@ cpdef Column stable_sorted_order(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -153,6 +156,7 @@ cpdef Column rank(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -163,7 +167,7 @@ cpdef Column rank(
             null_handling,
             null_precedence,
             percentage,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -195,13 +199,14 @@ cpdef bool is_sorted(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
 
     with nogil:
         c_result = cpp_sorting.is_sorted(
             tbl.view(),
             c_orders,
             c_null_precedence,
-            _stream.view()
+            _cs
         )
     return c_result
 
@@ -242,6 +247,7 @@ cpdef Table segmented_sort_by_key(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -251,7 +257,7 @@ cpdef Table segmented_sort_by_key(
             segment_offsets.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -294,6 +300,7 @@ cpdef Table stable_segmented_sort_by_key(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -303,7 +310,7 @@ cpdef Table stable_segmented_sort_by_key(
             segment_offsets.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -342,6 +349,7 @@ cpdef Table sort_by_key(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -350,7 +358,7 @@ cpdef Table sort_by_key(
             keys.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -389,6 +397,7 @@ cpdef Table stable_sort_by_key(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -397,7 +406,7 @@ cpdef Table stable_sort_by_key(
             keys.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -433,6 +442,7 @@ cpdef Table sort(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -440,7 +450,7 @@ cpdef Table sort(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -476,6 +486,7 @@ cpdef Table stable_sort(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -483,7 +494,7 @@ cpdef Table stable_sort(
             source_table.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -519,6 +530,7 @@ cpdef Column top_k(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -526,7 +538,7 @@ cpdef Column top_k(
             col.view(),
             k,
             sort_order,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -565,6 +577,7 @@ cpdef Column top_k_order(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -572,7 +585,7 @@ cpdef Column top_k_order(
             col.view(),
             k,
             sort_order,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)

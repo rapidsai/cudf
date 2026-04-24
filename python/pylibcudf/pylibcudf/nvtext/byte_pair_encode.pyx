@@ -19,6 +19,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["BPEMergePairs", "byte_pair_encoding"]
 
@@ -35,10 +36,11 @@ cdef class BPEMergePairs:
     ):
         cdef column_view c_pairs = merge_pairs.view()
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             self.c_obj = move(
-                cpp_load_merge_pairs(c_pairs, _stream.view(), mr.get_mr())
+                cpp_load_merge_pairs(c_pairs, _cs, mr.get_mr())
             )
 
     __hash__ = None
@@ -73,11 +75,12 @@ cpdef Column byte_pair_encoding(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar(" ".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
@@ -86,7 +89,7 @@ cpdef Column byte_pair_encoding(
                 input.view(),
                 dereference(merge_pairs.c_obj.get()),
                 dereference(<const string_scalar*>separator.c_obj.get()),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )

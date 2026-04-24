@@ -24,6 +24,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["interleave_columns", "tile", "table_to_array"]
 
@@ -56,11 +57,12 @@ cpdef Column interleave_columns(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_interleave_columns(
-            source_table.view(), _stream.view(), mr.get_mr()
+            source_table.view(), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -94,11 +96,12 @@ cpdef Table tile(
     """
     cdef unique_ptr[table] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_tile(
-            source_table.view(), count, _stream.view(), mr.get_mr()
+            source_table.view(), count, _cs, mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -130,6 +133,7 @@ cpdef void table_to_array(
             "Size exceeds the size_t limit."
         )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
 
     cdef device_span[byte] span = device_span[byte](
         <byte*> ptr, size
@@ -139,5 +143,5 @@ cpdef void table_to_array(
         cpp_table_to_array(
             input_table.view(),
             span,
-            _stream.view()
+            _cs
         )

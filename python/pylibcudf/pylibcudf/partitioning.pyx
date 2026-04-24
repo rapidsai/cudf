@@ -15,6 +15,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -64,6 +65,7 @@ cpdef tuple[Table, list] hash_partition(
     cdef int c_num_partitions = num_partitions
     cdef vector[libcudf_types.size_type] columns_to_hash
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     if TableOrList is Table:
         with nogil:
@@ -73,7 +75,7 @@ cpdef tuple[Table, list] hash_partition(
                 c_num_partitions,
                 hash_function,
                 seed,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     else:
@@ -85,7 +87,7 @@ cpdef tuple[Table, list] hash_partition(
                 c_num_partitions,
                 hash_function,
                 seed,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     return Table.from_libcudf(move(c_result.first), _stream, mr), list(c_result.second)
@@ -127,6 +129,7 @@ cpdef tuple[Table, list] partition(
     cdef int c_num_partitions = num_partitions
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -134,7 +137,7 @@ cpdef tuple[Table, list] partition(
             t.view(),
             partition_map.view(),
             c_num_partitions,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -177,6 +180,7 @@ cpdef tuple[Table, list] round_robin_partition(
     cdef int c_start_partition = start_partition
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -184,7 +188,7 @@ cpdef tuple[Table, list] round_robin_partition(
             input.view(),
             c_num_partitions,
             c_start_partition,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

@@ -20,6 +20,7 @@ from .types cimport DataType, type_id
 
 from .types import MaskState, TypeId
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -103,6 +104,7 @@ cpdef Column make_numeric_column(
     else:
         raise TypeError("Invalid mask argument")
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -110,7 +112,7 @@ cpdef Column make_numeric_column(
             type_.c_obj,
             size,
             state,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -137,6 +139,7 @@ cpdef Column make_fixed_point_column(
     else:
         raise TypeError("Invalid mask argument")
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -144,7 +147,7 @@ cpdef Column make_fixed_point_column(
             type_.c_obj,
             size,
             state,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -172,6 +175,7 @@ cpdef Column make_timestamp_column(
     else:
         raise TypeError("Invalid mask argument")
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -179,7 +183,7 @@ cpdef Column make_timestamp_column(
             type_.c_obj,
             size,
             state,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -207,6 +211,7 @@ cpdef Column make_duration_column(
     else:
         raise TypeError("Invalid mask argument")
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -214,7 +219,7 @@ cpdef Column make_duration_column(
             type_.c_obj,
             size,
             state,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -242,6 +247,7 @@ cpdef Column make_fixed_width_column(
     else:
         raise TypeError("Invalid mask argument")
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -249,7 +255,7 @@ cpdef Column make_fixed_width_column(
             type_.c_obj,
             size,
             state,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

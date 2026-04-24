@@ -19,6 +19,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["filter_tokens", "replace_tokens"]
 
@@ -56,10 +57,11 @@ cpdef Column replace_tokens(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
     with nogil:
         c_result = cpp_replace_tokens(
@@ -67,7 +69,7 @@ cpdef Column replace_tokens(
             targets.view(),
             replacements.view(),
             dereference(<const string_scalar*>delimiter.get()),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -108,14 +110,15 @@ cpdef Column filter_tokens(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
     if replacement is None:
         replacement = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
@@ -124,7 +127,7 @@ cpdef Column filter_tokens(
             min_token_length,
             dereference(<const string_scalar*>replacement.get()),
             dereference(<const string_scalar*>delimiter.get()),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

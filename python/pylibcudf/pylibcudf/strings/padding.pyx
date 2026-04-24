@@ -10,6 +10,7 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["pad", "zfill", "zfill_by_widths"]
 
@@ -47,6 +48,7 @@ cpdef Column pad(
     cdef unique_ptr[column] c_result
     cdef string c_fill_char = fill_char.encode("utf-8")
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -55,7 +57,7 @@ cpdef Column pad(
             width,
             side,
             c_fill_char,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -85,13 +87,14 @@ cpdef Column zfill(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_padding.zfill(
             input.view(),
             width,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -121,13 +124,14 @@ cpdef Column zfill_by_widths(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_padding.zfill_by_widths(
             input.view(),
             widths.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

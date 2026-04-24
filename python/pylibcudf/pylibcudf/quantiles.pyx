@@ -20,6 +20,7 @@ from .column cimport Column
 from .table cimport Table
 from .types cimport interpolation
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["quantile", "quantiles"]
 
@@ -75,6 +76,7 @@ cpdef Column quantile(
         ordered_indices_view = ordered_indices.view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -84,7 +86,7 @@ cpdef Column quantile(
             interp,
             ordered_indices_view,
             exact,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -157,6 +159,7 @@ cpdef Table quantiles(
         null_precedence_vec = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -167,7 +170,7 @@ cpdef Table quantiles(
             is_input_sorted,
             column_order_vec,
             null_precedence_vec,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

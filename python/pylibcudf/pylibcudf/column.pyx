@@ -67,6 +67,7 @@ from itertools import accumulate
 import functools
 import operator
 from typing import Iterable
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 try:
     import pyarrow as pa
@@ -108,7 +109,7 @@ cdef class OwnerWithCAI:
             # Cast to Python integers before multiplying to avoid overflow.
             size = int(cv.size()) * int(cpp_size_of(cv.type()))
         elif cv.type().id() == type_id.STRING:
-            size = strings_column_view(cv).chars_size((<Stream>stream).view())
+            size = strings_column_view(cv).chars_size((<Stream>stream).view().value())
 
         obj.cai = {
             "shape": (size,),
@@ -454,6 +455,7 @@ cdef class Column:
         cdef unique_ptr[arrow_column] c_result
 
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
 
         if hasattr(obj, "__arrow_c_device_array__"):
@@ -469,7 +471,7 @@ cdef class Column:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
                     move(dereference(c_device_array)),
-                    _stream.view(),
+                    _cs,
                     result.mr.get_mr(),
                 )
             result.col.swap(c_result)
@@ -490,7 +492,7 @@ cdef class Column:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_schema)),
                     move(dereference(c_array)),
-                    _stream.view(),
+                    _cs,
                     result.mr.get_mr(),
                 )
             result.col.swap(c_result)
@@ -514,7 +516,7 @@ cdef class Column:
             with nogil:
                 c_result = make_unique[arrow_column](
                     move(dereference(c_arrow_stream)),
-                    _stream.view(),
+                    _cs,
                     result.mr.get_mr(),
                 )
             result.col.swap(c_result)
@@ -841,12 +843,13 @@ cdef class Column:
         cdef const scalar* c_scalar = slr.get()
         cdef unique_ptr[column] c_result
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             c_result = make_column_from_scalar(
                 dereference(c_scalar),
                 size,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         return Column.from_libcudf(move(c_result), _stream, mr)
@@ -875,10 +878,11 @@ cdef class Column:
         cdef column_view cv = self.view()
         cdef unique_ptr[scalar] result
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
 
         with nogil:
-            result = get_element(cv, 0, _stream.view(), mr.get_mr())
+            result = get_element(cv, 0, _cs, mr.get_mr())
 
         return Scalar.from_libcudf(move(result))
 
@@ -906,6 +910,7 @@ cdef class Column:
             An all-null column of `size` rows and type matching `like`.
         """
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         cdef Scalar slr = Scalar.empty_like(like, _stream, mr)
         cdef unique_ptr[column] c_result
@@ -913,7 +918,7 @@ cdef class Column:
             c_result = make_column_from_scalar(
                 dereference(slr.get()),
                 size,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         return Column.from_libcudf(move(c_result), _stream, mr)
@@ -1369,9 +1374,10 @@ cdef class Column:
         """Create a copy of the column."""
         cdef unique_ptr[column] c_result
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
-            c_result = make_unique[column](self.view(), _stream.view(), mr.get_mr())
+            c_result = make_unique[column](self.view(), _cs, mr.get_mr())
         return Column.from_libcudf(move(c_result), _stream, mr)
 
     cpdef uint64_t device_buffer_size(self):
@@ -1422,8 +1428,9 @@ cdef class Column:
 
     def _to_host_array(self, Stream stream):
         cdef ArrowArray* raw_host_array_ptr
+        cdef cudaStream_t _cs = stream.view().value()
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view(), stream.view())
+            raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
@@ -1501,7 +1508,7 @@ cdef class ListsColumnView:
         """
         cdef Stream _stream = _get_stream(stream)
 
-        cdef column_view c_child = self.view().get_sliced_child(_stream.view())
+        cdef column_view c_child = self.view().get_sliced_child(_stream.view().value())
         return Column.from_column_view(c_child, self._column.child(1))
 
 
@@ -1541,7 +1548,7 @@ cdef class StructsColumnView:
         """
         cdef Stream _stream = _get_stream(stream)
 
-        cdef column_view c_child = self.view().get_sliced_child(index, _stream.view())
+        cdef column_view c_child = self.view().get_sliced_child(index, _stream.view().value())
         return Column.from_column_view(c_child, self._column.child(index))
 
 

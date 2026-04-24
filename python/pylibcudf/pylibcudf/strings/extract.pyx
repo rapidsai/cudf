@@ -13,6 +13,7 @@ from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["extract", "extract_all_record", "extract_single"]
 
@@ -42,13 +43,14 @@ cpdef Table extract(
     """
     cdef unique_ptr[table] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract.extract(
             input.view(),
             prog.c_obj.get()[0],
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -81,13 +83,14 @@ cpdef Column extract_all_record(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract.extract_all_record(
             input.view(),
             prog.c_obj.get()[0],
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -125,6 +128,7 @@ cpdef Column extract_single(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -132,7 +136,7 @@ cpdef Column extract_single(
             input.view(),
             prog.c_obj.get()[0],
             group,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

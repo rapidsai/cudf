@@ -13,6 +13,7 @@ from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ByteRangeInfo",
@@ -225,6 +226,7 @@ cpdef Column multibyte_split(
     cdef unique_ptr[data_chunk_source] c_source = move(source.c_source)
     cdef string c_delimiter = delimiter.encode()
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if options is None:
@@ -237,7 +239,7 @@ cpdef Column multibyte_split(
             dereference(c_source),
             c_delimiter,
             c_options,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

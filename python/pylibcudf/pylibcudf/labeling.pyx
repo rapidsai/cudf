@@ -14,6 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["Inclusive", "label_bins"]
 
@@ -55,6 +56,7 @@ cpdef Column label_bins(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -64,7 +66,7 @@ cpdef Column label_bins(
             left_inclusive,
             right_edges.view(),
             right_inclusive,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

@@ -18,6 +18,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from ..utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["slice_strings"]
 
@@ -61,6 +62,7 @@ cpdef Column slice_strings(
     cdef numeric_scalar[size_type]* cpp_stop
     cdef numeric_scalar[size_type]* cpp_step
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if input is None:
@@ -80,22 +82,22 @@ cpdef Column slice_strings(
                 input.view(),
                 start.view(),
                 stop.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
 
     elif ColumnOrScalar is Scalar:
         if start is None:
             start = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0, _stream.view(), mr.get_mr())
+                cpp_make_fixed_width_scalar(0, _stream.view().value(), mr.get_mr())
             )
         if stop is None:
             stop = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(0, _stream.view(), mr.get_mr())
+                cpp_make_fixed_width_scalar(0, _stream.view().value(), mr.get_mr())
             )
         if step is None:
             step = Scalar.from_libcudf(
-                cpp_make_fixed_width_scalar(1, _stream.view(), mr.get_mr())
+                cpp_make_fixed_width_scalar(1, _stream.view().value(), mr.get_mr())
             )
 
         cpp_start = <numeric_scalar[size_type]*>start.c_obj.get()
@@ -108,7 +110,7 @@ cpdef Column slice_strings(
                 dereference(cpp_start),
                 dereference(cpp_stop),
                 dereference(cpp_step),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     else:

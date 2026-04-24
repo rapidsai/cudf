@@ -19,6 +19,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["replace", "replace_multiple", "replace_slice"]
 
@@ -61,6 +62,7 @@ cpdef Column replace(
     target_str = <string_scalar *>(target.c_obj.get())
     repl_str = <string_scalar *>(repl.c_obj.get())
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -69,7 +71,7 @@ cpdef Column replace(
             target_str[0],
             repl_str[0],
             maxrepl,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -110,6 +112,7 @@ cpdef Column replace_multiple(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -117,7 +120,7 @@ cpdef Column replace_multiple(
             input.view(),
             target.view(),
             repl.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -163,11 +166,12 @@ cpdef Column replace_slice(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if repl is None:
         repl = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     cdef const string_scalar* scalar_str = <string_scalar*>(repl.c_obj.get())
@@ -178,7 +182,7 @@ cpdef Column replace_slice(
             scalar_str[0],
             start,
             stop,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

@@ -14,6 +14,7 @@ from ..utils cimport _get_stream, _get_memory_resource
 from ..table cimport Table
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["make_timezone_transition_table"]
 
@@ -43,13 +44,14 @@ cpdef Table make_timezone_transition_table(
     cdef string c_tzdir = tzif_dir.encode()
     cdef string c_tzname = timezone_name.encode()
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_make_timezone_transition_table(
             make_optional[string](c_tzdir),
             c_tzname,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

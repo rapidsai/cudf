@@ -14,6 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.types import DataType
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_timestamps", "is_timestamp", "to_timestamps"]
 
@@ -52,13 +53,14 @@ cpdef Column to_timestamps(
     cdef unique_ptr[column] c_result
     cdef string c_format = format.encode()
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_convert_datetime.to_timestamps(
             input.view(),
             timestamp_type.c_obj,
             c_format,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -99,13 +101,14 @@ cpdef Column from_timestamps(
     cdef unique_ptr[column] c_result
     cdef string c_format = format.encode()
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_convert_datetime.from_timestamps(
             timestamps.view(),
             c_format,
             input_strings_names.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -142,12 +145,13 @@ cpdef Column is_timestamp(
     cdef unique_ptr[column] c_result
     cdef string c_format = format.encode()
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_convert_datetime.is_timestamp(
             input.view(),
             c_format,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

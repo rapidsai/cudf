@@ -31,6 +31,7 @@ from .types cimport DataType
 from .utils cimport _get_stream, _get_memory_resource
 
 from pylibcudf.libcudf.reduce import scan_type as ScanType  # no-cython-lint
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ScanType",
@@ -80,6 +81,7 @@ cpdef Scalar reduce(
     cdef const scalar* c_init_ptr
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if init is not None:
@@ -96,7 +98,7 @@ cpdef Scalar reduce(
             dereference(c_agg),
             data_type.c_obj,
             c_init,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Scalar.from_libcudf(move(result))
@@ -135,6 +137,7 @@ cpdef Column scan(
     cdef const scan_aggregation *c_agg = agg.view_underlying_as_scan()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -143,7 +146,7 @@ cpdef Column scan(
             dereference(c_agg),
             inclusive,
             null_policy.EXCLUDE,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(result), _stream, mr)
@@ -174,10 +177,11 @@ cpdef tuple minmax(Column col, object stream=None, DeviceMemoryResource mr=None)
     cdef Scalar max_scalar
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_minmax(col.view(), _stream.view(), mr.get_mr())
+        result = cpp_minmax(col.view(), _cs, mr.get_mr())
 
     min_scalar = Scalar.from_libcudf(move(result.first))
     max_scalar = Scalar.from_libcudf(move(result.second))
@@ -234,7 +238,7 @@ cpdef size_type unique_count(
     cdef Stream _stream = _get_stream(stream)
 
     return cpp_unique_count.unique_count(
-        source.view(), null_handling, nan_handling, _stream.view()
+        source.view(), null_handling, nan_handling, _stream.view().value()
     )
 
 
@@ -265,7 +269,7 @@ cpdef size_type distinct_count(
     cdef Stream _stream = _get_stream(stream)
 
     return cpp_distinct_count.distinct_count(
-        source.view(), null_handling, nan_handling, _stream.view()
+        source.view(), null_handling, nan_handling, _stream.view().value()
     )
 
 

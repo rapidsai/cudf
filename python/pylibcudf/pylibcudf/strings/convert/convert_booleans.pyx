@@ -15,6 +15,7 @@ from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from cython.operator import dereference
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_booleans", "to_booleans"]
 
@@ -48,13 +49,14 @@ cpdef Column to_booleans(
         true_string.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_booleans.to_booleans(
             input.view(),
             dereference(c_true_string),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -100,6 +102,7 @@ cpdef Column from_booleans(
         false_string.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -107,7 +110,7 @@ cpdef Column from_booleans(
             booleans.view(),
             dereference(c_true_string),
             dereference(c_false_string),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

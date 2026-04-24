@@ -13,6 +13,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["contains", "lower_bound", "upper_bound"]
 
@@ -53,6 +54,7 @@ cpdef Column lower_bound(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -61,7 +63,7 @@ cpdef Column lower_bound(
             needles.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -104,6 +106,7 @@ cpdef Column upper_bound(
     cdef vector[null_order] c_null_precedence = null_precedence
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -112,7 +115,7 @@ cpdef Column upper_bound(
             needles.view(),
             c_orders,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -144,13 +147,14 @@ cpdef Column contains(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_search.contains(
             haystack.view(),
             needles.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)

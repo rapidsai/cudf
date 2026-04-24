@@ -24,6 +24,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "TokenizeVocabulary",
@@ -44,9 +45,10 @@ cdef class TokenizeVocabulary:
     def __cinit__(self, Column vocab, object stream=None, DeviceMemoryResource mr=None):
         cdef column_view c_vocab = vocab.view()
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_vocabulary(c_vocab, _stream.view(), mr.get_mr()))
+            self.c_obj = move(cpp_load_vocabulary(c_vocab, _cs, mr.get_mr()))
 
     __hash__ = None
 
@@ -78,18 +80,19 @@ cpdef Column tokenize_scalar(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
         c_result = cpp_tokenize(
             input.view(),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -120,13 +123,14 @@ cpdef Column tokenize_column(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_tokenize(
             input.view(),
             delimiters.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -160,18 +164,19 @@ cpdef Column count_tokens_scalar(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
         c_result = cpp_count_tokens(
             input.view(),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -202,13 +207,14 @@ cpdef Column count_tokens_column(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_count_tokens(
             input.view(),
             delimiters.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -237,9 +243,10 @@ cpdef Column character_tokenize(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_character_tokenize(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_character_tokenize(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(c_result), _stream, mr)
 
@@ -274,11 +281,12 @@ cpdef Column detokenize(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar(" ".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
@@ -286,7 +294,7 @@ cpdef Column detokenize(
             input.view(),
             row_indices.view(),
             dereference(<const string_scalar*>separator.c_obj.get()),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -326,6 +334,7 @@ cpdef Column tokenize_with_vocabulary(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -334,7 +343,7 @@ cpdef Column tokenize_with_vocabulary(
             dereference(vocabulary.c_obj.get()),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
             default_id,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

@@ -26,6 +26,7 @@ from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
 from .types cimport DataType, null_aware, output_nullability
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "bools_to_mask",
@@ -64,11 +65,12 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.nans_to_nulls(
-            input.view(), _stream.view(), mr.get_mr()
+            input.view(), _cs, mr.get_mr()
         )
 
     return (
@@ -105,11 +107,12 @@ cpdef Column column_nans_to_nulls(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.column_nans_to_nulls(
-            input.view(), _stream.view(), mr.get_mr()
+            input.view(), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -140,11 +143,12 @@ cpdef Column compute_column(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.compute_column(
-            input.view(), dereference(expr.c_obj.get()), _stream.view(), mr.get_mr()
+            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -177,11 +181,12 @@ cpdef Column compute_column_jit(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.compute_column_jit(
-            input.view(), dereference(expr.c_obj.get()), _stream.view(), mr.get_mr()
+            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -211,11 +216,12 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.bools_to_mask(
-            input.view(), _stream.view(), mr.get_mr()
+            input.view(), _cs, mr.get_mr()
         )
 
     return (
@@ -257,6 +263,7 @@ cpdef Column mask_to_bools(
     cdef bitmask_type * bitmask_ptr = <bitmask_type*>bitmask
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -264,7 +271,7 @@ cpdef Column mask_to_bools(
             bitmask_ptr,
             begin_bit,
             end_bit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -321,6 +328,7 @@ cpdef Column transform(
     cdef optional[void *] user_data
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     for input in inputs:
@@ -335,7 +343,7 @@ cpdef Column transform(
             user_data,
             c_is_null_aware,
             c_null_policy,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -364,10 +372,11 @@ cpdef tuple[Table, Column] encode(
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.encode(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_transform.encode(input.view(), _cs, mr.get_mr())
 
     return (
         Table.from_libcudf(move(c_result.first), _stream, mr),
@@ -404,13 +413,14 @@ cpdef Table one_hot_encode(
     cdef Table owner_table
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.one_hot_encode(
             input.view(),
             categories.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

@@ -18,6 +18,7 @@ from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "build_suffix_array",
@@ -67,11 +68,12 @@ cpdef Column build_suffix_array(
     """
     cdef cpp_suffix_array_type c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_build_suffix_array(
-            input.view(), min_width, _stream.view(), mr.get_mr()
+            input.view(), min_width, _cs, mr.get_mr()
         )
 
     return _column_from_suffix_array(move(c_result), _stream, mr)
@@ -110,11 +112,12 @@ cpdef Column resolve_duplicates(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_resolve_duplicates(
-            input.view(), indices.view(), min_width, _stream.view(), mr.get_mr()
+            input.view(), indices.view(), min_width, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -160,6 +163,7 @@ cpdef Column resolve_duplicates_pair(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -169,7 +173,7 @@ cpdef Column resolve_duplicates_pair(
             input2.view(),
             indices2.view(),
             min_width,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
 

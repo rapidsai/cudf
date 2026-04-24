@@ -17,6 +17,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["capitalize", "is_title", "title"]
 
@@ -46,11 +47,12 @@ cpdef Column capitalize(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if delimiters is None:
         delimiters = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     cdef const string_scalar* cpp_delimiters = <const string_scalar*>(
@@ -61,7 +63,7 @@ cpdef Column capitalize(
         c_result = cpp_capitalize.capitalize(
             input.view(),
             dereference(cpp_delimiters),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -93,10 +95,11 @@ cpdef Column title(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_capitalize.title(
-            input.view(), sequence_type, _stream.view(), mr.get_mr()
+            input.view(), sequence_type, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -119,8 +122,9 @@ cpdef Column is_title(Column input, object stream=None, DeviceMemoryResource mr=
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_capitalize.is_title(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_capitalize.is_title(input.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(c_result), _stream, mr)

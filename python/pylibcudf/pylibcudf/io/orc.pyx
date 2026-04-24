@@ -8,6 +8,7 @@ from libcpp.vector cimport vector
 import datetime
 
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata, SinkInfo
@@ -465,10 +466,10 @@ cpdef TableWithMetadata read_orc(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
-
     with nogil:
-        c_result = move(cpp_read_orc(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_orc(options.c_obj, _cs, mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 
@@ -494,8 +495,9 @@ cpdef ParsedOrcStatistics read_parsed_orc_statistics(
     """
     cdef Stream s = _get_stream(stream)
     cdef parsed_orc_statistics parsed
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        parsed = cpp_read_parsed_orc_statistics(source_info.c_obj, s.view())
+        parsed = cpp_read_parsed_orc_statistics(source_info.c_obj, _cs)
     return ParsedOrcStatistics.from_libcudf(parsed)
 
 
@@ -688,8 +690,9 @@ cpdef void write_orc(OrcWriterOptions options, object stream = None):
     None
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        cpp_write_orc(move(options.c_obj), s.view())
+        cpp_write_orc(move(options.c_obj), _cs)
 
 
 cdef class OrcChunkedWriter:
@@ -740,7 +743,8 @@ cdef class OrcChunkedWriter:
             OrcChunkedWriter
         )
         cdef Stream s = _get_stream(stream)
-        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, s.view()))
+        cdef cudaStream_t _cs = s.view().value()
+        orc_writer.c_obj.reset(new orc_chunked_writer(options.c_obj, _cs))
         return orc_writer
 
 

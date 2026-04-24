@@ -55,6 +55,7 @@ from .column cimport Column, ListsColumnView
 from .scalar cimport Scalar
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ConcatenateNullPolicy",
@@ -106,11 +107,12 @@ cpdef Table explode_outer(
     cdef unique_ptr[table] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_explode.explode_outer(
-            input.view(), explode_column_idx, _stream.view(), mr.get_mr()
+            input.view(), explode_column_idx, _cs, mr.get_mr()
         )
 
     return Table.from_libcudf(move(c_result), _stream, mr)
@@ -140,11 +142,12 @@ cpdef Column concatenate_rows(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_concatenate_rows(
-            input.view(), concatenate_null_policy.IGNORE, _stream.view(), mr.get_mr()
+            input.view(), concatenate_null_policy.IGNORE, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -175,11 +178,12 @@ cpdef Column concatenate_list_elements(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_concatenate_list_elements(
-            input.view(), null_policy, _stream.view(), mr.get_mr()
+            input.view(), null_policy, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -219,6 +223,7 @@ cpdef Column contains(
     cdef ListsColumnView list_view = input.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if not isinstance(search_key, (Column, Scalar)):
@@ -230,7 +235,7 @@ cpdef Column contains(
             search_key.view() if ColumnOrScalar is Column else dereference(
                 search_key.get()
             ),
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -263,11 +268,12 @@ cpdef Column contains_nulls(
     cdef ListsColumnView list_view = input.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_contains.contains_nulls(
-            list_view.view(), _stream.view(), mr.get_mr()
+            list_view.view(), _cs, mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
 
@@ -308,6 +314,7 @@ cpdef Column index_of(
     cdef ListsColumnView list_view = input.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -317,7 +324,7 @@ cpdef Column index_of(
                 search_key.get()
             ),
             find_option,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -348,10 +355,11 @@ cpdef Column reverse(
     cdef ListsColumnView list_view = input.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_reverse.reverse(list_view.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_reverse.reverse(list_view.view(), _cs, mr.get_mr())
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 
@@ -395,6 +403,7 @@ cpdef Column segmented_gather(
     cdef ListsColumnView list_view2 = gather_map_list.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -402,7 +411,7 @@ cpdef Column segmented_gather(
             list_view1.view(),
             list_view2.view(),
             bounds_policy,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -434,13 +443,14 @@ cpdef Column extract_list_element(
     cdef ListsColumnView list_view = input.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract_list_element(
             list_view.view(),
             index.view() if ColumnOrSizeType is Column else index,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -473,10 +483,11 @@ cpdef Column count_elements(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_count_elements(list_view.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_count_elements(list_view.view(), _cs, mr.get_mr())
 
     return Column.from_libcudf(move(c_result), _stream, mr)
 
@@ -510,6 +521,7 @@ cpdef Column sequences(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if steps is not None:
@@ -518,13 +530,13 @@ cpdef Column sequences(
                 starts.view(),
                 steps.view(),
                 sizes.view(),
-                _stream.view(),
+                _cs,
                 mr.get_mr(),
             )
     else:
         with nogil:
             c_result = cpp_filling.sequences(
-                starts.view(), sizes.view(), _stream.view(), mr.get_mr()
+                starts.view(), sizes.view(), _cs, mr.get_mr()
             )
     return Column.from_libcudf(move(c_result), _stream, mr)
 
@@ -562,6 +574,7 @@ cpdef Column sort_lists(
     cdef ListsColumnView list_view = input.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -570,7 +583,7 @@ cpdef Column sort_lists(
                     list_view.view(),
                     sort_order,
                     na_position,
-                    _stream.view(),
+                    _cs,
                     mr.get_mr(),
             )
         else:
@@ -578,7 +591,7 @@ cpdef Column sort_lists(
                     list_view.view(),
                     sort_order,
                     na_position,
-                    _stream.view(),
+                    _cs,
                     mr.get_mr(),
             )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -618,6 +631,7 @@ cpdef Column difference_distinct(
     cdef ListsColumnView rhs_view = rhs.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -626,7 +640,7 @@ cpdef Column difference_distinct(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -665,6 +679,7 @@ cpdef Column have_overlap(
     cdef ListsColumnView rhs_view = rhs.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -673,7 +688,7 @@ cpdef Column have_overlap(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -712,6 +727,7 @@ cpdef Column intersect_distinct(
     cdef ListsColumnView rhs_view = rhs.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -720,7 +736,7 @@ cpdef Column intersect_distinct(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -760,6 +776,7 @@ cpdef Column union_distinct(
     cdef ListsColumnView rhs_view = rhs.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -768,7 +785,7 @@ cpdef Column union_distinct(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -803,13 +820,14 @@ cpdef Column apply_boolean_mask(
     cdef ListsColumnView mask_view = boolean_mask.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_apply_boolean_mask(
             list_view.view(),
             mask_view.view(),
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -844,6 +862,7 @@ cpdef Column distinct(
     cdef ListsColumnView list_view = input.list_view()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -852,7 +871,7 @@ cpdef Column distinct(
             nulls_equal,
             nans_equal,
             duplicate_keep_option.KEEP_ANY,
-            _stream.view(),
+            _cs,
             mr.get_mr(),
         )
     return Column.from_libcudf(move(c_result), _stream, mr)

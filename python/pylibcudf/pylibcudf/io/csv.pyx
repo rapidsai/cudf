@@ -8,6 +8,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, SinkInfo, TableWithMetadata
@@ -694,9 +695,10 @@ cpdef TableWithMetadata read_csv(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_csv(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_csv(options.c_obj, _cs, mr.get_mr()))
 
     cdef TableWithMetadata tbl_meta = TableWithMetadata.from_libcudf(c_result, s, mr)
     return tbl_meta
@@ -900,8 +902,9 @@ cpdef void write_csv(
         CUDA stream used for device memory operations and kernel launches
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        cpp_write_csv(move(options.c_obj), s.view())
+        cpp_write_csv(move(options.c_obj), _cs)
 
 
 cpdef bool is_supported_write_csv(DataType type):

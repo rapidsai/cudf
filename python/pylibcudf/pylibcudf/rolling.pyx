@@ -20,6 +20,7 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -165,6 +166,7 @@ cpdef Table grouped_range_rolling_window(
         crequests.push_back(move((<RollingRequest?>req).view()))
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -176,7 +178,7 @@ cpdef Table grouped_range_rolling_window(
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
             crequests,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(result), _stream, mr)
@@ -225,6 +227,7 @@ cpdef Column rolling_window(
     cdef const rolling_aggregation *c_agg = agg.view_underlying_as_rolling()
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if WindowType is Column:
@@ -235,7 +238,7 @@ cpdef Column rolling_window(
                 following_window.view(),
                 min_periods,
                 dereference(c_agg),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
     else:
@@ -246,7 +249,7 @@ cpdef Column rolling_window(
                 following_window,
                 min_periods,
                 dereference(c_agg),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
 
@@ -309,6 +312,7 @@ cpdef tuple make_range_windows(
     cdef pair[unique_ptr[column], unique_ptr[column]] result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -319,7 +323,7 @@ cpdef tuple make_range_windows(
             null_order,
             dereference(preceding.c_obj.get()),
             dereference(following.c_obj.get()),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return (

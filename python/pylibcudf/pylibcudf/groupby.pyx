@@ -28,6 +28,7 @@ from .column cimport Column
 from .table cimport Table
 from .types cimport null_order, null_policy, order, sorted
 from .utils cimport _as_vector, _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = ["GroupBy", "GroupByRequest"]
@@ -191,13 +192,14 @@ cdef class GroupBy:
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         # TODO: Need to capture C++ exceptions indicating that an invalid type was used.
         # We rely on libcudf to tell us this rather than checking the types beforehand
         # ourselves.
         with nogil:
             c_res = dereference(self.c_obj).aggregate(
-                c_requests, _stream.view(), mr.get_mr()
+                c_requests, _cs, mr.get_mr()
             )
         return GroupBy._parse_outputs(move(c_res), _stream, mr)
 
@@ -231,11 +233,12 @@ cdef class GroupBy:
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             c_res = dereference(self.c_obj).scan(
                 c_requests,
-                _stream.view(),
+                _cs,
                 mr.get_mr(),
             )
         return GroupBy._parse_outputs(move(c_res), _stream, mr)
@@ -275,13 +278,14 @@ cdef class GroupBy:
         cdef vector[size_type] c_offset = offset
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             c_res = dereference(self.c_obj).shift(
                 values.view(),
                 c_offset,
                 c_fill_values,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         return (
@@ -318,12 +322,13 @@ cdef class GroupBy:
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res
         cdef vector[replace_policy] c_replace_policies = replace_policies
         cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
             c_res = dereference(self.c_obj).replace_nulls(
                 value.view(),
                 c_replace_policies,
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         return (
@@ -361,7 +366,7 @@ cdef class GroupBy:
         mr = _get_memory_resource(mr)
         if values:
             c_groups = dereference(self.c_obj).get_groups(
-                values.view(), _stream.view(), mr.get_mr()
+                values.view(), _stream.view().value(), mr.get_mr()
             )
             return (
                 c_groups.offsets,
@@ -371,7 +376,7 @@ cdef class GroupBy:
         else:
             # c_groups.values is nullptr - call get_groups with empty table view
             c_groups = dereference(self.c_obj).get_groups(
-                empty_view, _stream.view(), mr.get_mr()
+                empty_view, _stream.view().value(), mr.get_mr()
             )
             return (
                 c_groups.offsets,

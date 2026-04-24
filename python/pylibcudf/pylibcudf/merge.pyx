@@ -14,6 +14,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["merge"]
 
@@ -59,6 +60,7 @@ cpdef Table merge (
 
     cdef unique_ptr[table] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -67,7 +69,7 @@ cpdef Table merge (
             c_key_cols,
             c_column_order,
             c_null_precedence,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Table.from_libcudf(move(c_result), _stream, mr)

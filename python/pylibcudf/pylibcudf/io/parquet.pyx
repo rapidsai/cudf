@@ -13,8 +13,6 @@ from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.contiguous_split cimport HostBuffer
 from pylibcudf.expressions cimport Expression
@@ -48,6 +46,7 @@ from pylibcudf.libcudf.io.types cimport (
 from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ChunkedParquetReader",
@@ -516,7 +515,7 @@ cdef class ChunkedParquetReader:
     ):
         self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
-        cdef cuda_stream_view stream_view = self._stream.view()
+        cdef cudaStream_t stream_view = self._stream.view().value()
         with nogil:
             self.reader.reset(
                 new cpp_chunked_parquet_reader(
@@ -587,9 +586,10 @@ cpdef read_parquet(
         Device memory resource used to allocate the returned table's device memory.
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_parquet(options.c_obj, _cs, mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 
@@ -662,8 +662,9 @@ cdef class ChunkedParquetWriter:
             ChunkedParquetWriter
         )
         cdef Stream s = _get_stream(stream)
+        cdef cudaStream_t _cs = s.view().value()
         parquet_writer.c_obj.reset(
-            new cpp_chunked_parquet_writer(options.c_obj, s.view())
+            new cpp_chunked_parquet_writer(options.c_obj, _cs)
         )
         return parquet_writer
 
@@ -1258,9 +1259,9 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, object stream = Non
     """
     cdef unique_ptr[vector[uint8_t]] c_result
     cdef Stream s = _get_stream(stream)
-
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        c_result = cpp_write_parquet(move(options.c_obj), s.view())
+        c_result = cpp_write_parquet(move(options.c_obj), _cs)
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 

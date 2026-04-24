@@ -24,6 +24,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "LIBCUDF_DEFAULT_HASH_SEED",
@@ -66,13 +67,14 @@ cpdef Column murmurhash3_x86_32(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_murmurhash3_x86_32(
             input.view(),
             seed,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -104,13 +106,14 @@ cpdef Table murmurhash3_x64_128(
     cdef unique_ptr[table] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_murmurhash3_x64_128(
             input.view(),
             seed,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -143,13 +146,14 @@ cpdef Column xxhash_32(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_xxhash_32(
             input.view(),
             seed,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -182,13 +186,14 @@ cpdef Column xxhash_64(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_xxhash_64(
             input.view(),
             seed,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -221,10 +226,11 @@ cpdef Column md5(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_md5(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_md5(input.view(), _cs, mr.get_mr())
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column sha1(
@@ -251,10 +257,11 @@ cpdef Column sha1(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha1(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_sha1(input.view(), _cs, mr.get_mr())
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 
@@ -282,10 +289,11 @@ cpdef Column sha224(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha224(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_sha224(input.view(), _cs, mr.get_mr())
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 
@@ -313,10 +321,11 @@ cpdef Column sha256(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha256(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_sha256(input.view(), _cs, mr.get_mr())
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 
@@ -344,10 +353,11 @@ cpdef Column sha384(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha384(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_sha384(input.view(), _cs, mr.get_mr())
     return Column.from_libcudf(move(c_result), _stream, mr)
 
 
@@ -375,8 +385,9 @@ cpdef Column sha512(
     cdef unique_ptr[column] c_result
 
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha512(input.view(), _stream.view(), mr.get_mr())
+        c_result = cpp_sha512(input.view(), _cs, mr.get_mr())
     return Column.from_libcudf(move(c_result), _stream, mr)

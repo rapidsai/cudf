@@ -17,6 +17,7 @@ from rmm.pylibrmm.stream cimport Stream
 
 from ..column cimport Column
 from ..utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["edit_distance", "edit_distance_matrix"]
 
@@ -49,10 +50,11 @@ cpdef Column edit_distance(
     cdef column_view c_targets = targets.view()
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_edit_distance(c_strings, c_targets, _stream.view(), mr.get_mr())
+        c_result = cpp_edit_distance(c_strings, c_targets, _cs, mr.get_mr())
 
     return Column.from_libcudf(move(c_result), _stream, mr)
 
@@ -89,9 +91,10 @@ cpdef Column edit_distance_matrix(
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_edit_distance_matrix(c_strings, _stream.view(), mr.get_mr())
+        c_result = cpp_edit_distance_matrix(c_strings, _cs, mr.get_mr())
 
     return Column.from_libcudf(move(c_result), _stream, mr)

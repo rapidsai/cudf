@@ -16,6 +16,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "rsplit",
@@ -66,6 +67,7 @@ cpdef Table split(
         delimiter.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -73,7 +75,7 @@ cpdef Table split(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -118,6 +120,7 @@ cpdef Table rsplit(
         delimiter.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -125,7 +128,7 @@ cpdef Table rsplit(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -165,6 +168,7 @@ cpdef Column split_record(
         delimiter.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -172,7 +176,7 @@ cpdef Column split_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -214,6 +218,7 @@ cpdef Column rsplit_record(
         delimiter.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -221,7 +226,7 @@ cpdef Column rsplit_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -260,6 +265,7 @@ cpdef Table split_re(
     """
     cdef unique_ptr[table] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -267,7 +273,7 @@ cpdef Table split_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -306,6 +312,7 @@ cpdef Table rsplit_re(
     """
     cdef unique_ptr[table] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -313,7 +320,7 @@ cpdef Table rsplit_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -351,6 +358,7 @@ cpdef Column split_record_re(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -358,7 +366,7 @@ cpdef Column split_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -393,6 +401,7 @@ cpdef Column rsplit_record_re(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -400,7 +409,7 @@ cpdef Column rsplit_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 
@@ -416,6 +425,7 @@ cpdef Column split_part(
         delimiter.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -423,7 +433,7 @@ cpdef Column split_part(
             input.view(),
             dereference(c_delimiter),
             index,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
 

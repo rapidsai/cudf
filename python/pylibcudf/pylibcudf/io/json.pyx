@@ -49,6 +49,7 @@ from pylibcudf.utils cimport _get_stream
 from cython.operator import dereference
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "chunked_read_json",
@@ -735,6 +736,7 @@ cpdef tuple chunked_read_json(
     child_names = None
     i = 0
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
     while True:
         options.enable_lines(True)
@@ -743,7 +745,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
+                c_result = move(cpp_read_json(options.c_obj, _cs, mr.get_mr()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -797,9 +799,10 @@ cpdef TableWithMetadata read_json(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_json(options.c_obj, _cs, mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 
@@ -853,6 +856,7 @@ cpdef TableWithMetadata read_json_from_string_column(
     cdef column_contents c_contents
     cdef table_with_metadata c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     # Join the string column into a single string
@@ -862,7 +866,7 @@ cpdef TableWithMetadata read_json_from_string_column(
                 input.view(),
                 dereference(c_separator),
                 dereference(c_narep),
-                _stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
@@ -886,7 +890,7 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Read JSON from the joined string
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, _stream.view(), mr.get_mr()))
+        c_result = move(cpp_read_json(options.c_obj, _cs, mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, _stream, mr)
 
@@ -1106,8 +1110,9 @@ cpdef void write_json(JsonWriterOptions options, object stream = None):
     None
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        cpp_write_json(options.c_obj, s.view())
+        cpp_write_json(options.c_obj, _cs)
 
 cpdef bool is_supported_write_json(DataType type):
     """Check if the dtype is supported for JSON writing

@@ -15,6 +15,8 @@ from cuda.bindings.cyruntime cimport (
     cudaError_t,
     cudaMemcpyAsync,
     cudaMemcpyKind,
+    cudaStream_t,
+    cudaStreamSynchronize,
 )
 
 from pylibcudf.libcudf.contiguous_split cimport (
@@ -27,7 +29,6 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.utilities.span cimport device_span
 
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
@@ -36,6 +37,7 @@ from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
 from .span import is_span
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -187,7 +189,7 @@ cdef class ChunkedPack:
         cdef Stream _stream = _get_stream(stream)
         temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
-            input.view(), user_buffer_size, _stream.view(), temp_mr.get_mr()
+            input.view(), user_buffer_size, _stream.view().value(), temp_mr.get_mr()
         )
 
         cdef ChunkedPack out = ChunkedPack.__new__(ChunkedPack)
@@ -292,7 +294,8 @@ cdef class ChunkedPack:
                 dereference(self.c_obj).get_total_contiguous_size()
             )
         )
-        cdef cuda_stream_view stream = self.stream.view()
+        cdef Stream py_stream = self.stream
+        cdef cudaStream_t stream = py_stream.view().value()
         with nogil:
             while dereference(self.c_obj).has_next():
                 size = dereference(self.c_obj).next(d_span)
@@ -301,15 +304,15 @@ cdef class ChunkedPack:
                     d_span.data(),
                     size,
                     cudaMemcpyKind.cudaMemcpyDeviceToHost,
-                    stream.value(),
+                    stream,
                 )
                 offset += size
                 if err != cudaError.cudaSuccess:
-                    stream.synchronize()
+                    cudaStreamSynchronize(stream)
                     raise RuntimeError(
                         f"Memcpy in pack_to_host failed error: {err}"
                     )
-        stream.synchronize()
+        cudaStreamSynchronize(stream)
         return (
             self.build_metadata(),
             memoryview(HostBuffer.from_unique_ptr(move(h_buf))),
@@ -347,10 +350,11 @@ cpdef PackedColumns pack(Table input, object stream=None, DeviceMemoryResource m
     """
     cdef unique_ptr[packed_columns] pack
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
         pack = move(make_unique[packed_columns](
-            cpp_pack(input.view(), _stream.view(), mr.get_mr())
+            cpp_pack(input.view(), _cs, mr.get_mr())
         ))
     return PackedColumns.from_libcudf(move(pack), _stream, mr)
 

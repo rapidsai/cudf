@@ -15,6 +15,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["ngrams_tokenize"]
 
@@ -53,6 +54,7 @@ cpdef Column ngrams_tokenize(
     """
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -61,7 +63,7 @@ cpdef Column ngrams_tokenize(
             ngrams,
             dereference(<const string_scalar*>delimiter.get()),
             dereference(<const string_scalar*>separator.get()),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)

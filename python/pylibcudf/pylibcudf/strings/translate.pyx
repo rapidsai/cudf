@@ -15,6 +15,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from cython.operator import dereference
+from cuda.bindings.cyruntime cimport cudaStream_t
 from pylibcudf.libcudf.strings.translate import \
     filter_type as FilterType  # no-cython-lint
 
@@ -70,13 +71,14 @@ cpdef Column translate(
         chars_table
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_translate.translate(
             input.view(),
             c_chars_table,
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -125,6 +127,7 @@ cpdef Column filter_characters(
         replacement.c_obj.get()
     )
     cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -133,7 +136,7 @@ cpdef Column filter_characters(
             c_characters_to_filter,
             keep_characters,
             dereference(c_replacement),
-            _stream.view(),
+            _cs,
             mr.get_mr()
         )
     return Column.from_libcudf(move(c_result), _stream, mr)
