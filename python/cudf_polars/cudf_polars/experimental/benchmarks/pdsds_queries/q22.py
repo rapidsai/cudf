@@ -91,15 +91,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
     base_data = (
-        inventory.join(date_dim, how="cross")
-        .join(item, how="cross")
-        .join(warehouse, how="cross")
-        .filter(
-            (pl.col("inv_date_sk") == pl.col("d_date_sk"))
-            & (pl.col("inv_item_sk") == pl.col("i_item_sk"))
-            & (pl.col("inv_warehouse_sk") == pl.col("w_warehouse_sk"))
-            & pl.col("d_month_seq").is_between(dms, dms + 11)
-        )
+        inventory.join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+        .join(item, left_on="inv_item_sk", right_on="i_item_sk")
+        .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
     )
     agg_exprs = [pl.col("inv_quantity_on_hand").mean().alias("qoh")]
 
@@ -146,19 +141,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
 
-    # SQL: FROM inventory, date_dim, item, warehouse (cross-join with filter = implicit join)
+    # SQL: FROM inventory, date_dim, item, warehouse WHERE inv_date_sk=d_date_sk AND inv_item_sk=i_item_sk AND inv_warehouse_sk=w_warehouse_sk AND d_month_seq BETWEEN {dms} AND {dms}+11
     base_data = (
-        inventory.join(date_dim, how="cross")
-        .join(item, how="cross")
-        .join(warehouse, how="cross")
-        # SQL: WHERE inv_date_sk = d_date_sk AND inv_item_sk = i_item_sk AND inv_warehouse_sk = w_warehouse_sk
-        # SQL:   AND d_month_seq BETWEEN {dms} AND {dms}+11
-        .filter(
-            (pl.col("inv_date_sk") == pl.col("d_date_sk"))
-            & (pl.col("inv_item_sk") == pl.col("i_item_sk"))
-            & (pl.col("inv_warehouse_sk") == pl.col("w_warehouse_sk"))
-            & pl.col("d_month_seq").is_between(dms, dms + 11)
-        )
+        inventory.join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+        .join(item, left_on="inv_item_sk", right_on="i_item_sk")
+        .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+        # SQL: AND d_month_seq BETWEEN {dms} AND {dms}+11
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
     )
 
     agg_exprs = [pl.col("inv_quantity_on_hand").mean().alias("qoh")]

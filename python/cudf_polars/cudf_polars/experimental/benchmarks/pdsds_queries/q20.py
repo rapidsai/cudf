@@ -92,12 +92,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            catalog_sales.join(item, how="cross")
-            .join(date_dim, how="cross")
+            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             .filter(
-                (pl.col("cs_item_sk") == pl.col("i_item_sk"))
-                & (pl.col("cs_sold_date_sk") == pl.col("d_date_sk"))
-                & pl.col("i_category").is_in(categories)
+                pl.col("i_category").is_in(categories)
                 & pl.col("d_date").is_between(pl.lit(start_date), pl.lit(end_date))
             )
             .group_by(
@@ -147,14 +145,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM catalog_sales, item, date_dim (cross-join with WHERE predicates)
-            catalog_sales.join(item, how="cross")
-            .join(date_dim, how="cross")
-            # SQL: WHERE cs_item_sk=i_item_sk AND cs_sold_date_sk=d_date_sk AND i_category IN ({categories}) AND d_date BETWEEN '{sdate}' AND '{sdate}'+30d
+            # SQL: FROM catalog_sales, item, date_dim WHERE cs_item_sk=i_item_sk AND cs_sold_date_sk=d_date_sk AND i_category IN ({categories}) AND d_date BETWEEN '{sdate}' AND '{sdate}'+30d
+            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             .filter(
-                (pl.col("cs_item_sk") == pl.col("i_item_sk"))
-                & (pl.col("cs_sold_date_sk") == pl.col("d_date_sk"))
-                & pl.col("i_category").is_in(categories)
+                pl.col("i_category").is_in(categories)
                 & pl.col("d_date").is_between(pl.lit(start_date), pl.lit(end_date))
             )
             # SQL: GROUP BY i_item_id, i_item_desc, i_category, i_class, i_current_price

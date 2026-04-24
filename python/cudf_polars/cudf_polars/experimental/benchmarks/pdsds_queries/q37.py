@@ -134,19 +134,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM item, inventory, date_dim, catalog_sales (cross-join with WHERE predicates)
-            item.join(inventory, how="cross")
-            .join(date_dim, how="cross")
-            .join(catalog_sales, how="cross")
-            # SQL: WHERE i_current_price BETWEEN {price} AND {price}+30 AND inv_item_sk=i_item_sk AND d_date_sk=inv_date_sk AND d_date BETWEEN '{invdate}' AND '{invdate}'+60d AND i_manufact_id IN ({manufact}) AND inv_quantity_on_hand BETWEEN 100 AND 500 AND cs_item_sk=i_item_sk
+            # SQL: FROM item, inventory, date_dim, catalog_sales WHERE inv_item_sk=i_item_sk AND d_date_sk=inv_date_sk AND cs_item_sk=i_item_sk AND i_current_price BETWEEN {price} AND {price}+30 AND d_date BETWEEN '{invdate}' AND '{invdate}'+60d AND i_manufact_id IN ({manufact}) AND inv_quantity_on_hand BETWEEN 100 AND 500
+            item.join(inventory, left_on="i_item_sk", right_on="inv_item_sk")
+            .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
+            .join(catalog_sales, left_on="i_item_sk", right_on="cs_item_sk")
+            # SQL: WHERE i_current_price BETWEEN {price} AND {price}+30 AND d_date BETWEEN start AND end AND i_manufact_id IN ({manufact}) AND inv_quantity_on_hand BETWEEN 100 AND 500
             .filter(
                 pl.col("i_current_price").is_between(price, price + 30)
-                & (pl.col("inv_item_sk") == pl.col("i_item_sk"))
-                & (pl.col("d_date_sk") == pl.col("inv_date_sk"))
                 & pl.col("d_date").is_between(start_date, end_date)
                 & pl.col("i_manufact_id").is_in(manufact)
                 & pl.col("inv_quantity_on_hand").is_between(100, 500)
-                & (pl.col("cs_item_sk") == pl.col("i_item_sk"))
             )
             # SQL: GROUP BY i_item_id, i_item_desc, i_current_price
             .group_by(["i_item_id", "i_item_desc", "i_current_price"])

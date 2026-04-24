@@ -99,13 +99,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # CTE: customer_total_return
     customer_total_return = (
-        web_returns.join(date_dim, how="cross")
-        .join(customer_address, how="cross")
-        .filter(
-            (pl.col("wr_returned_date_sk") == pl.col("d_date_sk"))
-            & (pl.col("d_year") == year)
-            & (pl.col("wr_returning_addr_sk") == pl.col("ca_address_sk"))
+        web_returns.join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
+        .join(
+            customer_address, left_on="wr_returning_addr_sk", right_on="ca_address_sk"
         )
+        .filter(pl.col("d_year") == year)
         .group_by(
             [
                 pl.col("wr_returning_customer_sk").alias("ctr_customer_sk"),
@@ -196,15 +194,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     # SQL: CTE customer_total_return — FROM web_returns, date_dim, customer_address WHERE wr_returned_date_sk=d_date_sk AND d_year={year} AND wr_returning_addr_sk=ca_address_sk GROUP BY wr_returning_customer_sk, ca_state
     customer_total_return = (
-        # SQL: CROSS JOIN date_dim, customer_address (filter applied below)
-        web_returns.join(date_dim, how="cross")
-        .join(customer_address, how="cross")
-        # SQL: WHERE wr_returned_date_sk=d_date_sk AND d_year={year} AND wr_returning_addr_sk=ca_address_sk
-        .filter(
-            (pl.col("wr_returned_date_sk") == pl.col("d_date_sk"))
-            & (pl.col("d_year") == year)
-            & (pl.col("wr_returning_addr_sk") == pl.col("ca_address_sk"))
+        web_returns.join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
+        .join(
+            customer_address, left_on="wr_returning_addr_sk", right_on="ca_address_sk"
         )
+        # SQL: AND d_year={year}
+        .filter(pl.col("d_year") == year)
         # SQL: GROUP BY wr_returning_customer_sk AS ctr_customer_sk, ca_state AS ctr_state
         .group_by(
             [
@@ -229,16 +224,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM customer_total_return ctr1, customer_address, customer
-            qualified_customers.join(customer_address, how="cross")
-            # SQL: CROSS JOIN customer, customer_address (filter applied below)
-            .join(customer, how="cross")
-            # SQL: WHERE ca_address_sk=c_current_addr_sk AND ca_state='{state}' AND ctr_customer_sk=c_customer_sk AND ctr_total_return>avg*1.2
-            .filter(
-                (pl.col("ca_address_sk") == pl.col("c_current_addr_sk"))
-                & (pl.col("ca_state") == state)
-                & (pl.col("ctr_customer_sk") == pl.col("c_customer_sk"))
+            # SQL: FROM customer_total_return ctr1, customer, customer_address WHERE ctr_customer_sk=c_customer_sk AND ca_address_sk=c_current_addr_sk AND ca_state='{state}'
+            qualified_customers.join(
+                customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
             )
+            .join(
+                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            )
+            # SQL: AND ca_state='{state}'
+            .filter(pl.col("ca_state") == state)
             # SQL: SELECT c_customer_id ... ctr_total_return
             .select(
                 [

@@ -129,12 +129,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     # SQL: subquery — 1.3 * Avg(cs_ext_discount_amt) per item WHERE d_date BETWEEN '{csdate}' AND '{csdate}' + 90 days
     item_avg_discounts = (
-        # SQL: FROM catalog_sales, date_dim (cross-join simulating implicit join) WHERE d_date_sk = cs_sold_date_sk AND d_date BETWEEN start AND end
-        catalog_sales.join(date_dim, how="cross")
-        .filter(
-            (pl.col("d_date_sk") == pl.col("cs_sold_date_sk"))
-            & pl.col("d_date").is_between(start_date, end_date)
-        )
+        # SQL: FROM catalog_sales, date_dim WHERE d_date_sk=cs_sold_date_sk AND d_date BETWEEN start AND end
+        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        .filter(pl.col("d_date").is_between(start_date, end_date))
         # SQL: GROUP BY cs_item_sk
         .group_by("cs_item_sk")
         # SQL: 1.3 * Avg(cs_ext_discount_amt) AS threshold_discount
@@ -143,17 +140,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM catalog_sales, item, date_dim (cross-join simulating implicit join with WHERE predicates)
-            catalog_sales.join(item, how="cross")
-            .join(date_dim, how="cross")
+            # SQL: FROM catalog_sales, item, date_dim WHERE i_item_sk=cs_item_sk AND d_date_sk=cs_sold_date_sk AND i_manufact_id={imid} AND d_date BETWEEN '{csdate}' AND '{csdate}'+90d AND cs_ext_discount_amt > 1.3*avg
+            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             # SQL: JOIN avg discount subquery ON cs_item_sk
             .join(item_avg_discounts, on="cs_item_sk")
-            # SQL: WHERE i_manufact_id={imid} AND i_item_sk=cs_item_sk AND d_date BETWEEN '{csdate}' AND '{csdate}'+90d AND d_date_sk=cs_sold_date_sk AND cs_ext_discount_amt > 1.3*avg
+            # SQL: WHERE i_manufact_id={imid} AND d_date BETWEEN '{csdate}' AND '{csdate}'+90d AND cs_ext_discount_amt > 1.3*avg
             .filter(
                 (pl.col("i_manufact_id") == imid)
-                & (pl.col("i_item_sk") == pl.col("cs_item_sk"))
                 & (pl.col("d_date").is_between(start_date, end_date))
-                & (pl.col("d_date_sk") == pl.col("cs_sold_date_sk"))
                 & (pl.col("cs_ext_discount_amt") > pl.col("threshold_discount"))
             )
             # SQL: SELECT Sum(cs_ext_discount_amt) AS 'excess discount amount'

@@ -74,11 +74,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 right_on=["sr_item_sk", "sr_ticket_number"],
                 how="left",
             )
-            .join(reason, how="cross")
-            .filter(
-                (pl.col("sr_reason_sk") == pl.col("r_reason_sk"))
-                & (pl.col("r_reason_desc") == reason_desc)
-            )
+            .join(reason, left_on="sr_reason_sk", right_on="r_reason_sk")
+            .filter(pl.col("r_reason_desc") == reason_desc)
             .with_columns(
                 [
                     pl.when(pl.col("sr_return_quantity").is_not_null())
@@ -154,13 +151,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             right_on=["sr_item_sk", "sr_ticket_number"],
             how="left",
         )
-        # SQL: JOIN reason (cross) WHERE sr_reason_sk = r_reason_sk AND r_reason_desc = '{reason_desc}'
-        .join(reason, how="cross")
-        # SQL: WHERE sr_reason_sk = r_reason_sk AND r_reason_desc = '{reason_desc}'
-        .filter(
-            (pl.col("sr_reason_sk") == pl.col("r_reason_sk"))
-            & (pl.col("r_reason_desc") == reason_desc)
-        )
+        # SQL: JOIN reason ON sr_reason_sk=r_reason_sk WHERE r_reason_desc='{reason_desc}'
+        .join(reason, left_on="sr_reason_sk", right_on="r_reason_sk")
+        # SQL: AND r_reason_desc='{reason_desc}'
+        .filter(pl.col("r_reason_desc") == reason_desc)
         # SQL: CASE WHEN sr_return_quantity IS NOT NULL THEN (ss_quantity-sr_return_quantity)*ss_sales_price ELSE ss_quantity*ss_sales_price END AS act_sales
         .with_columns(
             pl.when(pl.col("sr_return_quantity").is_not_null())

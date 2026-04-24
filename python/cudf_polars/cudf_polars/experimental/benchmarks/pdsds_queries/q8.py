@@ -168,18 +168,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM store_sales, date_dim, store, V1 (cross-join simulating SQL implicit join with WHERE predicates)
-            store_sales.join(date_dim, how="cross")
-            .join(store, how="cross")
-            .join(intersect_zips, how="cross")
-            # SQL: WHERE ss_store_sk=s_store_sk AND ss_sold_date_sk=d_date_sk AND d_qoy={qoy} AND d_year={year} AND Substr(s_zip,1,2)=Substr(ca_zip,1,2)
-            .filter(
-                (pl.col("ss_store_sk") == pl.col("s_store_sk"))
-                & (pl.col("ss_sold_date_sk") == pl.col("d_date_sk"))
-                & (pl.col("d_qoy") == qoy)
-                & (pl.col("d_year") == year)
-                & (pl.col("s_zip").str.slice(0, 2) == pl.col("ca_zip").str.slice(0, 2))
+            # SQL: FROM store_sales, date_dim, store, V1 WHERE ss_sold_date_sk=d_date_sk AND ss_store_sk=s_store_sk AND Substr(s_zip,1,2)=Substr(ca_zip,1,2)
+            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            .join(
+                intersect_zips,
+                left_on=pl.col("s_zip").str.slice(0, 2),
+                right_on=pl.col("ca_zip").str.slice(0, 2),
             )
+            # SQL: AND d_qoy={qoy} AND d_year={year}
+            .filter((pl.col("d_qoy") == qoy) & (pl.col("d_year") == year))
             # SQL: GROUP BY s_store_name
             .group_by("s_store_name")
             # SQL: Sum(ss_net_profit) AS sum(ss_net_profit)
