@@ -164,9 +164,6 @@ async def shutdown_on_error(
         An actor tracer for collecting stats (if tracing enabled), else None.
     """
     # Create tracer only if LOG_TRACES is enabled and IR is provided
-    tracer: ActorTracer | None = None
-    contextvars: dict[str, Any] = {}
-
     ir_id = trace_ir.get_stable_id()
     ir_type = type(trace_ir).__name__
     tracer = ActorTracer(ir_id, ir_type)
@@ -252,11 +249,11 @@ def _remap_scheme_simple(
     ir: IR, scheme: PartitioningScheme, child: IR
 ) -> PartitioningScheme:
     if isinstance(scheme, (HashScheme, OrderScheme)):
-        old_key_names = indices_to_names(_scheme_column_indices(scheme), child.schema)
+        old_keys = indices_to_names(_scheme_column_indices(scheme), child.schema)
         try:
-            new_indices = names_to_indices(old_key_names, ir.schema)
-        except (ValueError, IndexError):
-            return None
+            new_indices = names_to_indices(old_keys, ir.schema)
+        except (ValueError, KeyError):
+            return None  # Column missing in child or output schema
         return _update_scheme_indices(scheme, new_indices)
     return scheme  # None or "inherit" passes through unchanged
 
@@ -708,7 +705,7 @@ async def chunkwise_evaluate(
     await ch_out.drain(context)
 
 
-def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...]:
+def indices_to_names(indices: Iterable[int], schema: Schema) -> tuple[str, ...]:
     """
     Return column names for the given column indices in schema order.
 
