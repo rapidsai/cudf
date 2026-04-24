@@ -43,7 +43,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
-               INSTALL_RPATH "\$ORIGIN/../../../${lib_dir};$ENV{CONDA_PREFIX}/compute-sanitizer"
+               INSTALL_RPATH "\$ORIGIN/../../../${lib_dir}"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std

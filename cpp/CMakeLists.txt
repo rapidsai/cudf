@@ -1167,7 +1167,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
                  BUILD_RPATH "\$ORIGIN"
-                 INSTALL_RPATH "\$ORIGIN"
+                 INSTALL_RPATH "\$ORIGIN;$ENV{CONDA_PREFIX}/compute-sanitizer"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
