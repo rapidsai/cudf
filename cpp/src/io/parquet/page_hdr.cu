@@ -27,13 +27,6 @@ namespace {
 auto constexpr decode_page_headers_block_size     = 4 * cudf::detail::warp_size;
 auto constexpr count_page_headers_block_size      = 4 * cudf::detail::warp_size;
 auto constexpr build_string_dict_index_block_size = 4 * cudf::detail::warp_size;
-/// Maximum number of elements in a thrift LIST/SET/MAP field that we will parse inside a page
-/// header.
-auto constexpr max_thrift_list_elements = size_t{1} << 24;
-/// Maximum number of values a column chunk may contain.
-auto constexpr max_values_per_chunk = size_t{1} << 40;
-/// Maximum number of dictionary entries a single dictionary page may contain.
-auto constexpr max_dict_entries = size_t{1} << 28;
 
 namespace cg = cooperative_groups;
 
@@ -50,7 +43,6 @@ struct byte_stream_s {
   PageType page_type{};
   PageInfo page{};
   ColumnChunkDesc ck{};
-  bool parse_error{};  ///< Whether the parser encountered a malformed header.
 };
 
 /**
@@ -149,11 +141,6 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
         uint32_t n   = c >> 4;
         if (n == 0xf) { n = get_u32(bs); }
         field_type = c & 0xf;
-        if (n > max_thrift_list_elements) {
-          bs->parse_error = true;
-          bs->cur         = bs->end;
-          return;
-        }
         if (static_cast<FieldType>(field_type) == FieldType::STRUCT) {
           struct_depth += n;
         } else {
@@ -575,7 +562,6 @@ void __launch_bounds__(decode_page_headers_block_size)
     cg::invoke_one(warp, [&] {
       bs->base = bs->cur      = bs->ck.compressed_data;
       bs->end                 = bs->base + bs->ck.compressed_size;
-      bs->parse_error         = false;
       bs->page.chunk_idx      = chunk_idx;
       bs->page.src_col_schema = bs->ck.src_col_schema;
       zero_out_page_header_info(bs);
@@ -588,16 +574,6 @@ void __launch_bounds__(decode_page_headers_block_size)
     auto const max_num_pages       = bs->ck.num_data_pages + bs->ck.num_dict_pages;
     auto const num_dict_pages      = bs->ck.num_dict_pages;
     warp.sync();
-
-    // Validate number of values in the column chunk.
-    if (num_values > max_values_per_chunk) {
-      cg::invoke_one(warp, [&] {
-        error[warp_id] |=
-          static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
-        bs->cur = bs->end;
-      });
-      warp.sync();
-    }
 
     while (values_found < num_values and bs->cur < bs->end) {
       int index_out                 = -1;
@@ -617,9 +593,7 @@ void __launch_bounds__(decode_page_headers_block_size)
         bs->page.num_nulls                         = 0;
         bs->page.lvl_bytes[level_type::DEFINITION] = 0;
         bs->page.lvl_bytes[level_type::REPETITION] = 0;
-        bs->parse_error                            = false;
-        if (parse_page_header_fn{}(bs) and not bs->parse_error and
-            bs->page.compressed_page_size >= 0) {
+        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
             error[warp_id] |=
               static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
@@ -718,29 +692,17 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
     cg::invoke_one(warp, [&] {
       bs->base = bs->cur = bs->ck.compressed_data;
       bs->end            = bs->base + bs->ck.compressed_size;
-      bs->parse_error    = false;
     });
     size_t const num_values        = bs->ck.num_values;
     size_t values_found            = 0;
     uint32_t data_page_count       = 0;
     uint32_t dictionary_page_count = 0;
     warp.sync();
-    // Validate number of values in the column chunk.
-    if (num_values > max_values_per_chunk) {
-      cg::invoke_one(warp, [&] {
-        error[warp_id] |= static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
-        bs->cur = bs->end;
-      });
-      warp.sync();
-    }
-
     while (values_found < num_values and bs->cur < bs->end) {
       uint8_t const* const prev_cur = bs->cur;
       size_t const prev_values      = values_found;
       cg::invoke_one(warp, [&] {
-        bs->parse_error = false;
-        if (parse_page_header_fn{}(bs) and not bs->parse_error and
-            bs->page.compressed_page_size >= 0) {
+        if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
             error[warp_id] |=
               static_cast<kernel_error::value_type>(decode_error::UNSUPPORTED_ENCODING);
@@ -822,7 +784,6 @@ struct decode_page_headers_with_pgidx_fn {
     bs.ck   = colchunks[chunk_idx];
     bs.base = bs.cur = page_locations[page_idx];
     bs.end           = bs.ck.compressed_data + bs.ck.compressed_size;
-    bs.parse_error   = false;
     // Check if byte stream pointers are valid.
     if (bs.end < bs.cur) {
       set_error(static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN),
@@ -838,7 +799,7 @@ struct decode_page_headers_with_pgidx_fn {
     // bs.page.chunk_row not computed here and will be filled in later by
     // `fill_in_page_info()`.
 
-    if (not parse_page_header_fn{}(&bs) or bs.parse_error or bs.page.compressed_page_size < 0) {
+    if (not parse_page_header_fn{}(&bs) or bs.page.compressed_page_size < 0) {
       set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER),
                 error_code);
       return;
@@ -911,8 +872,8 @@ CUDF_KERNEL void __launch_bounds__(build_string_dict_index_block_size)
       string_index_pair* dict_index = ck->str_dict_index;
       uint8_t const* dict           = ck->dict_page->page_data;
       int const dict_size           = ck->dict_page->uncompressed_page_size;
-      int const num_entries         = ck->dict_page->num_input_values;
-      if (num_entries < 0 or num_entries > static_cast<int>(max_dict_entries) or dict_size < 0) {
+      int32_t const num_entries     = ck->dict_page->num_input_values;
+      if (num_entries < 0 or dict_size < 0) {
         set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DICT_WIDTH),
                   error_code);
         return;
