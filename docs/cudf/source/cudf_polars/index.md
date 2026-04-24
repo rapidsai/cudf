@@ -47,7 +47,6 @@ To learn more, visit the [GPU Support page](https://docs.pola.rs/user-guide/gpu-
 :maxdepth: 1
 :caption: Contents:
 
-self
 usage
 options
 profiling

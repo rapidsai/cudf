@@ -123,8 +123,18 @@ other = pl.scan_parquet("/data/other/*.parquet").collect(engine=engine)
 engine.shutdown()
 ```
 
-`engine.shutdown()` stops the GPU worker processes (rank actors) and, if the engine started Ray itself, also calls
-`ray.shutdown()`. It is idempotent, so calling it twice is safe.
+`engine.shutdown()` stops the GPU worker processes (rank actors) and, if the engine started Ray itself,
+also calls `ray.shutdown()`. It is idempotent, so calling it twice is safe.
+
+## Sink behavior
+
+When a streaming engine is used, sink operations such as `df.sink_parquet("my_path")` always produce
+a directory containing one or more files. It is not currently possible to disable this behavior, and
+setting `sink_to_directory=False` raises a `ValueError`.
+
+The in-memory engine, by contrast, follows standard Polars semantics and writes to a single file at
+the specified path.
+
 
 ## Cluster diagnostics
 

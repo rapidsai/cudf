@@ -2,12 +2,8 @@
 # Configuration Options
 
 {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` is the recommended
-way to configure the streaming multi-GPU engines
-({class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`,
-{class}`~cudf_polars.experimental.rapidsmpf.frontend.dask.DaskEngine`,
-{class}`~cudf_polars.experimental.rapidsmpf.frontend.spmd.SPMDEngine`).
-Build one and pass it to `Engine.from_options()` to construct a
-{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`:
+way to configure the streaming multi-GPU engines. Build one and pass it to `RayEngine.from_options()`
+to construct a {class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`:
 
 ```python
 import polars as pl
@@ -121,6 +117,7 @@ See the [RapidsMPF configuration reference][rapidsmpf-config] for the full list 
 | `target_partition_size`  | Target I/O partition size in bytes. `0` means auto.                                                                 | auto                         |
 | `dynamic_planning`       | Dynamic planning configuration, dict or {class}`~cudf_polars.utils.config.DynamicPlanningOptions`. `None` disables. | enabled                      |
 | `unique_fraction`        | Per-column uniqueness estimate (0–1).                                                                               | `{}` (i.e. `1.0` per column) |
+| `sink_to_directory`      | Whether `.sink_*()` writes its output as a directory. Currently, only `True` is supported (see [Sink behavior](usage.md#sink-behavior)). | `True`  |
 
 ### Category: `engine`
 
