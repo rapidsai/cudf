@@ -301,7 +301,6 @@ def test_groupby_nested_list_struct_raises(dtype):
 
 @pytest.mark.parametrize("nrows", [30, 300, 300_000])
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
-@pytest.mark.parametrize("blocksize_mode", ["default", "small"], indirect=True)
 def test_groupby_maintain_order_random(
     engine: pl.GPUEngine,
     blocksize_mode,

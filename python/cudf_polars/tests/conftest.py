@@ -94,10 +94,19 @@ def blocksize_mode(request: pytest.FixtureRequest) -> Literal["default", "small"
 
     Defaults to ``"default"``. Tests can override this via ``indirect``
     parametrization with ``["default", "small"]`` to run under both the
-    standard and small-partition configurations. The ``"small"`` mode uses
-    tiny partitions to exercise multi-partition code paths.
+    standard and small-partition configurations. In addition, the
+    ``engine="spmd-small"`` variant of the ``engine`` fixture implicitly
+    selects ``"small"`` mode so that every streaming-engine test exercises
+    tiny-partition / fallback paths without per-test opt-in. Explicit
+    indirect parametrization always wins over the implicit engine-derived
+    value.
     """
-    return getattr(request, "param", "default")
+    if hasattr(request, "param"):
+        return request.param
+    callspec = getattr(request.node, "callspec", None)
+    if callspec is not None and callspec.params.get("engine") == "spmd-small":
+        return "small"
+    return "default"
 
 
 @pytest.fixture
@@ -148,7 +157,7 @@ def streaming_engine(
 
 _ENGINE_PARAMS = ["in-memory"]
 if importlib.util.find_spec("rapidsmpf") is not None:
-    _ENGINE_PARAMS.append("spmd")
+    _ENGINE_PARAMS.extend(["spmd", "spmd-small"])
 
 
 @pytest.fixture(params=_ENGINE_PARAMS)
@@ -159,7 +168,12 @@ def engine(
 
     Use this fixture for tests that support any ``GPUEngine``. The test runs
     once per available variant: always with the in-memory executor, and, if
-    ``rapidsmpf`` is installed, also with a streaming :class:`SPMDEngine`.
+    ``rapidsmpf`` is installed, a streaming :class:`SPMDEngine` at the
+    default blocksize (``"spmd"``) and a second streaming engine with
+    tiny-partition / silent-fallback settings (``"spmd-small"``). The
+    ``"spmd-small"`` variant forces ``blocksize_mode="small"`` via the
+    ``blocksize_mode`` fixture, so every test using ``engine`` exercises
+    multi-partition paths for free.
 
     For tests that require a ``StreamingEngine``, use the ``streaming_engine``
     fixture instead.

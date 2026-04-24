@@ -27,7 +27,6 @@ def df():
 @pytest.mark.parametrize("null_value", [None, "NA"])
 @pytest.mark.parametrize("line_terminator", ["\n", "\n\n"])
 @pytest.mark.parametrize("separator", [",", "|"])
-@pytest.mark.parametrize("blocksize_mode", ["default", "small"], indirect=True)
 def test_sink_csv(
     engine: pl.GPUEngine,
     blocksize_mode,
