@@ -53,8 +53,7 @@ def using_streaming_engine(engine: pl.GPUEngine) -> bool:
 @pytest.fixture(autouse=True)
 def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
     """Skip tests in SPMD multi-rank mode unless marked with ``pytest.mark.spmd``."""
-    if importlib.util.find_spec("rapidsmpf") is None:
-        return
+    pytest.importorskip("rapidsmpf")
 
     from rapidsmpf.bootstrap import get_nranks, is_running_with_rrun
 
