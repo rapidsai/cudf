@@ -76,6 +76,16 @@ def test_executor_options_num_py_executors() -> None:
     assert result["num_py_executors"] == 4
 
 
+@pytest.mark.parametrize("value", [True, False])
+def test_executor_options_sink_to_directory(*, value: bool) -> None:
+    result = StreamingOptions(sink_to_directory=value).to_executor_options()
+    assert result["sink_to_directory"] is value
+
+
+def test_executor_options_sink_to_directory_absent_when_unspecified() -> None:
+    assert "sink_to_directory" not in StreamingOptions().to_executor_options()
+
+
 # ---------------------------------------------------------------------------
 # to_engine_options
 # ---------------------------------------------------------------------------
