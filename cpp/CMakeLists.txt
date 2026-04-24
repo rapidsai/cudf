@@ -1113,8 +1113,8 @@ if(CUDF_BUILD_TESTUTIL)
   )
 
   target_link_libraries(
-    cudftestutil INTERFACE cuco::cuco Threads::Threads cudf cudftest_default_stream
-                           $<TARGET_NAME_IF_EXISTS:conda_env>
+    cudftestutil INTERFACE $<BUILD_LOCAL_INTERFACE:cuco::cuco> Threads::Threads cudf
+                           cudftest_default_stream $<TARGET_NAME_IF_EXISTS:conda_env>
   )
 
   target_include_directories(
