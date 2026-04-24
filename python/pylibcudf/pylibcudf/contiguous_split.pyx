@@ -105,7 +105,7 @@ cdef class PackedColumns:
     @staticmethod
     cdef PackedColumns from_libcudf(
         unique_ptr[packed_columns] data,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     ):
         """Create a Python PackedColumns from a libcudf packed_columns."""
@@ -163,7 +163,7 @@ cdef class ChunkedPack:
     def create(
         Table input,
         size_t user_buffer_size,
-        Stream stream=None,
+        object stream=None,
         DeviceMemoryResource temp_mr=None,
     ):
         """
@@ -184,16 +184,16 @@ cdef class ChunkedPack:
         -------
         New ChunkedPack object.
         """
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
         temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
-            input.view(), user_buffer_size, stream.view(), temp_mr.get_mr()
+            input.view(), user_buffer_size, _stream.view(), temp_mr.get_mr()
         )
 
         cdef ChunkedPack out = ChunkedPack.__new__(ChunkedPack)
         out.table = input
         out.mr = temp_mr
-        out.stream = stream
+        out.stream = _stream
         out.c_obj = move(obj)
         return out
 
@@ -316,7 +316,7 @@ cdef class ChunkedPack:
         )
 
 
-cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef PackedColumns pack(Table input, object stream=None, DeviceMemoryResource mr=None):
     """Deep-copy a table into a serialized contiguous memory format.
 
     Later use `unpack` or `unpack_from_memoryviews` to unpack the serialized
@@ -346,16 +346,16 @@ cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource m
     For details, see :cpp:func:`pack`.
     """
     cdef unique_ptr[packed_columns] pack
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
         pack = move(make_unique[packed_columns](
-            cpp_pack(input.view(), stream.view(), mr.get_mr())
+            cpp_pack(input.view(), _stream.view(), mr.get_mr())
         ))
-    return PackedColumns.from_libcudf(move(pack), stream, mr)
+    return PackedColumns.from_libcudf(move(pack), _stream, mr)
 
 
-cpdef Table unpack(PackedColumns input, Stream stream=None):
+cpdef Table unpack(PackedColumns input, object stream=None):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
@@ -375,16 +375,16 @@ cpdef Table unpack(PackedColumns input, Stream stream=None):
         Copy of the packed columns.
     """
     cdef table_view v
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     with nogil:
         v = cpp_unpack(dereference(input.c_obj))
-    return Table.from_table_view_of_arbitrary(v, input, stream)
+    return Table.from_table_view_of_arbitrary(v, input, _stream)
 
 
 cpdef Table unpack_from_memoryviews(
     memoryview metadata,
     object gpu_data,
-    Stream stream=None,
+    object stream=None,
 ):
     """Deserialize the result of `pack`.
 
@@ -406,7 +406,7 @@ cpdef Table unpack_from_memoryviews(
     Table
         Copy of the packed columns.
     """
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     cdef device_span[uint8_t] d_span = _get_device_span(gpu_data)
 
     if metadata.nbytes == 0:
@@ -428,4 +428,4 @@ cpdef Table unpack_from_memoryviews(
     cdef table_view v
     with nogil:
         v = cpp_unpack(metadata_ptr, gpu_data_ptr)
-    return Table.from_table_view_of_arbitrary(v, gpu_data, stream)
+    return Table.from_table_view_of_arbitrary(v, gpu_data, _stream)
