@@ -1223,6 +1223,46 @@ TEST_F(CsvReaderTest, StringInference)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), type_id::STRING);
 }
 
+TEST_F(CsvReaderTest, DelimWhitespaceHeaderLeadingDelimiter)
+{
+  std::string buffer = " col_a col_b\n1 2\n";
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(0);
+  auto const result = cudf::io::read_csv(in_opts);
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col_a");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col_b");
+}
+
+TEST_F(CsvReaderTest, DelimWhitespaceHeaderTrailingDelimiter)
+{
+  std::string buffer = "col_a col_b \n1 2\n";
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(0);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col_a");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col_b");
+  ASSERT_EQ(result_view.num_columns(), 2);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::INT64);
+  expect_column_data_equal(std::vector<int64_t>{1}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2}, result_view.column(1));
+}
+
 TEST_F(CsvReaderTest, TypeInferenceEmptyDelimitedFields)
 {
   std::string const buffer = "1,,3\n4,,6\n";
