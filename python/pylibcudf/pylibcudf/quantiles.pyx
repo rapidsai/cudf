@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -120,7 +120,8 @@ cpdef Table quantiles(
 
         Must be a non-arithmetic interpolation strategy
         (i.e. one of
-        {`Interpolation.HIGHER`, `Interpolation.LOWER`, `Interpolation.NEAREST`})
+        {`Interpolation.HIGHER`, `Interpolation.LOWER`, `Interpolation.NEAREST`,
+        `Interpolation.NEAREST_HALF_UP`})
     is_input_sorted: Sorted, default Sorted.NO
         Whether the input table has been pre-sorted or not.
     column_order: list, default None
