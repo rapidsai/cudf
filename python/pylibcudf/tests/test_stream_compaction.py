@@ -11,9 +11,11 @@ class TestApplyBooleanMask:
         table = plc.Table(
             [
                 plc.Column.from_arrow(
-                    pa.array([10, 40, 70, 5, 2, 10], type=pa.int32())),
+                    pa.array([10, 40, 70, 5, 2, 10], type=pa.int32())
+                ),
                 plc.Column.from_arrow(
-                    pa.array([10, 40, 70, 5, 2, 10], type=pa.float64())),
+                    pa.array([10, 40, 70, 5, 2, 10], type=pa.float64())
+                ),
             ]
         )
         mask = plc.Column.from_arrow(
@@ -27,8 +29,11 @@ class TestApplyBooleanMask:
 
     def test_null_mask(self):
         table = plc.Table(
-            [plc.Column.from_arrow(
-                pa.array([10, 40, 70, 5, 2, 10], type=pa.int32()))]
+            [
+                plc.Column.from_arrow(
+                    pa.array([10, 40, 70, 5, 2, 10], type=pa.int32())
+                )
+            ]
         )
         mask = plc.Column.from_arrow(
             pa.array([None, False, True, False, True, False], type=pa.bool_())
@@ -73,7 +78,16 @@ class TestApplyBooleanMask:
             [
                 plc.Column.from_arrow(
                     pa.array(
-                        ["This", "is", "the", "a", "k12", None, "table", "column"],
+                        [
+                            "This",
+                            "is",
+                            "the",
+                            "a",
+                            "k12",
+                            None,
+                            "table",
+                            "column",
+                        ],
                         type=pa.string(),
                     )
                 )
@@ -81,7 +95,8 @@ class TestApplyBooleanMask:
         )
         mask = plc.Column.from_arrow(
             pa.array(
-                [True, True, None, True, False, True, False, True], type=pa.bool_()
+                [True, True, None, True, False, True, False, True],
+                type=pa.bool_(),
             )
         )
         result = plc.stream_compaction.apply_boolean_mask(table, mask)
@@ -89,10 +104,40 @@ class TestApplyBooleanMask:
         assert got.column(0).to_pylist() == ["This", "is", "a", None, "column"]
 
     def test_no_null_input(self):
-        values = [9668, 9590, 9526, 9205, 9434, 9347, 9160, 9569,
-                  9143, 9807, 9606, 9446, 9279, 9822, 9691]
-        mask_vals = [False, False, True, False, False, True, False, True,
-                     False, True, False, False, True, False, True]
+        values = [
+            9668,
+            9590,
+            9526,
+            9205,
+            9434,
+            9347,
+            9160,
+            9569,
+            9143,
+            9807,
+            9606,
+            9446,
+            9279,
+            9822,
+            9691,
+        ]
+        mask_vals = [
+            False,
+            False,
+            True,
+            False,
+            False,
+            True,
+            False,
+            True,
+            False,
+            True,
+            False,
+            False,
+            True,
+            False,
+            True,
+        ]
         table = plc.Table(
             [plc.Column.from_arrow(pa.array(values, type=pa.int32()))]
         )
@@ -112,8 +157,11 @@ class TestListsApplyBooleanMask:
         )
         mask_col = plc.Column.from_arrow(
             pa.array(
-                [[True, False, True, False], [True, False],
-                    [True, False, True, False]],
+                [
+                    [True, False, True, False],
+                    [True, False],
+                    [True, False, True, False],
+                ],
                 type=pa.list_(pa.bool_()),
             )
         )
@@ -232,9 +280,7 @@ class TestApplyDeletionMask:
 class TestListsApplyDeletionMask:
     def test_basic(self):
         input_col = plc.Column.from_arrow(
-            pa.array(
-                [[0, 1, 2], [3, 4], [5, 6, 7]], type=pa.list_(pa.int32())
-            )
+            pa.array([[0, 1, 2], [3, 4], [5, 6, 7]], type=pa.list_(pa.int32()))
         )
         mask_col = plc.Column.from_arrow(
             pa.array(
