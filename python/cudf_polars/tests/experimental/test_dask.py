@@ -36,8 +36,6 @@ def engine() -> Iterator[DaskEngine]:
 
 
 pytestmark = [
-    # distributed's shutdown leaves unclosed sockets; suppress the noise.
-    pytest.mark.filterwarnings("ignore::ResourceWarning"),
     pytest.mark.skipif(
         is_running_with_rrun(),
         reason="DaskEngine must not be created from within an rrun cluster",
