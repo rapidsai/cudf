@@ -1066,13 +1066,16 @@ reprog reprog::create_from(std::string_view pattern,
                            regex_flags const flags,
                            capture_groups const capture)
 {
-  reprog rtn;
+  reprog rtn(flags);
   auto pattern32 = string_to_char32_vector(pattern);
   regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
-  // for debugging, it can be helpful to call rtn.print(flags) here to dump
+  // for debugging, it can be helpful to call rtn.print() here to dump
   // out the instructions that have been created from the given pattern
+  // rtn.print();
   return rtn;
 }
+
+reprog::reprog(regex_flags flags) : _flags{flags} {}
 
 void reprog::optimize() { collapse_nops(); }
 
@@ -1213,10 +1216,80 @@ void reprog::check_for_errors()
   }
 }
 
-#ifndef NDEBUG
-void reprog::print(regex_flags const flags)
+std::string reprog::literal_only() const
 {
-  printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
+  std::string literal;
+  if (_flags != regex_flags::DEFAULT) { return literal; }
+  if (_startinst_ids.size() > 2) { return literal; }
+  auto const count = static_cast<size_type>(_insts.size());
+  if (count < 2) { return literal; }
+  auto inst = _insts[_startinst_id];
+  while (inst.type == CHAR && inst.u1.c != 0) {
+    char utf8[5];  // max 4 bytes plus null terminator
+    utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
+    literal += utf8;
+    auto const id = inst.u2.next_id;
+    if (id < 0 || id >= count) { break; }
+    inst = _insts[id];
+  }
+  if (inst.type != END) { literal.clear(); }
+  return literal;
+}
+
+std::string reprog::starts_with_only() const
+{
+  std::string literal;
+  if (_flags != regex_flags::DEFAULT) { return literal; }
+  if (_startinst_ids.size() > 2) { return literal; }
+  auto const count = static_cast<size_type>(_insts.size());
+  if (count < 3) { return literal; }
+  auto inst = _insts[_startinst_id];
+  if (inst.type != BOL) { return literal; }
+  inst = _insts[inst.u2.next_id];
+  while (inst.type == CHAR && inst.u1.c != 0) {
+    char utf8[5];  // max 4 bytes plus null terminator
+    utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
+    literal += utf8;
+    auto const id = inst.u2.next_id;
+    if (id < 0 || id >= count) { break; }
+    inst = _insts[id];
+  }
+  if (inst.type != END) { literal.clear(); }
+  return literal;
+}
+
+std::string reprog::ends_with_only() const
+{
+  std::string literal;
+  if (_flags != regex_flags::DEFAULT) { return literal; }
+  if (_startinst_ids.size() > 2) { return literal; }
+  auto const count = static_cast<size_type>(_insts.size());
+  if (count < 3) { return literal; }
+  auto inst = _insts[_startinst_id];
+  while (inst.type == CHAR && inst.u1.c != 0) {
+    char utf8[5];  // max 4 bytes plus null terminator
+    utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
+    literal += utf8;
+    auto const id = inst.u2.next_id;
+    if (id < 0 || id >= count) { break; }
+    inst = _insts[id];
+  }
+  if (inst.type != EOL) {
+    literal.clear();
+  } else {
+    auto const id = inst.u2.next_id;
+    if (id >= 0 && id < count) {
+      inst = _insts[id];
+      if (inst.type != END) { literal.clear(); }
+    }
+  }
+  return literal;
+}
+
+// #ifndef NDEBUG
+void reprog::print()
+{
+  printf("Flags = 0x%08x\n", static_cast<uint32_t>(_flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
     reinst const& inst = _insts[i];
@@ -1311,8 +1384,15 @@ void reprog::print(regex_flags const flags)
     printf("\n");
   }
   if (_num_capturing_groups) { printf("Number of capturing groups: %d\n", _num_capturing_groups); }
+
+  auto literal = literal_only();
+  if (!literal.empty()) { printf("literal: %s\n", literal.c_str()); }
+  literal = starts_with_only();
+  if (!literal.empty()) { printf("starts_with: %s\n", literal.c_str()); }
+  literal = ends_with_only();
+  if (!literal.empty()) { printf("ends_with: %s\n", literal.c_str()); }
 }
-#endif
+// #endif
 
 }  // namespace detail
 }  // namespace strings
