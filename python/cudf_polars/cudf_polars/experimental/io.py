@@ -410,7 +410,7 @@ def _(
     if (
         Path(ir.path).exists()
         and executor_options.sink_to_directory
-        and executor_options.cluster == Cluster.DISTRIBUTED
+        and executor_options.cluster in (Cluster.SINGLE, Cluster.DISTRIBUTED)
     ):
         raise NotImplementedError(
             f"Trying to sink to an existing directory: {ir.path}."
