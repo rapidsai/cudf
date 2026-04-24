@@ -649,6 +649,12 @@ struct EncPage {
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
   bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
+  uint8_t dict_rle_bits;   //!< RLE bit width for this data page's dict indices.
+                           //!< Initialized to `chunk->dict_rle_bits` (the conservative
+                           //!< chunk-wide bound) and then tightened by
+                           //!< `compute_per_page_dict_rle_bits` to
+                           //!< `max(NumRequiredBits(page_max_dict_index), 1)`. Unused
+                           //!< for the dictionary page itself and for non-dict pages.
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
   {

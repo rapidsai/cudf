@@ -170,9 +170,14 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   EXPECT_TRUE(used_dict);
 
   // and check that the correct number of bits was used
-  auto const oi    = read_offset_index(source, fmd.row_groups.front().columns.front());
-  auto const nbits = read_dict_bits(source, oi.page_locations.front());
-  EXPECT_EQ(nbits, GetParam());
+  auto const oi                 = read_offset_index(source, fmd.row_groups.front().columns.front());
+  auto const page_with_max_bits = std::max_element(
+    oi.page_locations.begin(), oi.page_locations.end(), [&source](auto const& a, auto const& b) {
+      return read_dict_bits(source, a) < read_dict_bits(source, b);
+    });
+
+  EXPECT_NE(page_with_max_bits, oi.page_locations.end());
+  EXPECT_EQ(read_dict_bits(source, *page_with_max_bits), GetParam());
 }
 
 ///////////////////////

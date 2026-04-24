@@ -677,6 +677,9 @@ CUDF_KERNEL void __launch_bounds__(128)
         page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
+        // Unused for the dictionary page itself (guarded in gpuEncodeDictPages), but
+        // initialized for consistency so the field is never observed zero on a populated page.
+        page_g.dict_rle_bits   = ck_g.dict_rle_bits;
         page_offset +=
           util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
         if (not comp_page_sizes.empty()) {
@@ -778,6 +781,10 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.data_size      = 0;
           page_g.comp_data_size = 0;
           page_g.is_compressed  = false;
+          // Conservative initial value: the chunk-wide bit width. A subsequent pass
+          // (`compute_per_page_dict_rle_bits`) tightens this to the page-local max
+          // once page boundaries are fixed and dict_index has been materialized.
+          page_g.dict_rle_bits  = ck_g.dict_rle_bits;
           page_g.max_hdr_size   = max_data_page_hdr_size;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
@@ -1909,9 +1916,16 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   }();
 
   // TODO assert dict_bits >= 0
+  //
+  // For data pages we use `page.dict_rle_bits`, which `compute_per_page_dict_rle_bits`
+  // tightens to `ceil(log2(page_max_dict_index + 1))`, not the chunk-wide upper bound
+  // stored in `chunk.dict_rle_bits`. This is the encode-side half of the per-page
+  // variable-bit-width optimization (PHASE_2_VARIABLE_BITS.md). Page-size estimation
+  // in `gpuInitPages` intentionally keeps using `chunk.dict_rle_bits` so buffer sizing
+  // remains a conservative upper bound -- PROBLEM.md §6.
   auto const dict_bits = (physical_type == Type::BOOLEAN) ? 1
                          : (s->ck.use_dictionary and s->page.page_type != PageType::DICTIONARY_PAGE)
-                           ? s->ck.dict_rle_bits
+                           ? s->page.dict_rle_bits
                            : -1;
   if (t == 0) {
     uint8_t* dst     = s->cur;
