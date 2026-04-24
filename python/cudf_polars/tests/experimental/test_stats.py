@@ -10,7 +10,12 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.experimental.io import _clear_source_info_cache
+from cudf_polars.experimental.base import SerializedDataSourceInfo
+from cudf_polars.experimental.io import (
+    DataFrameSourceInfo,
+    ParquetSourceInfo,
+    _clear_source_info_cache,
+)
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
@@ -115,6 +120,35 @@ def test_dataframescan_stats_pickle(stats_engine):
     assert unpickled_stats.scan_stats[ir].row_count == 100
 
 
+def test_parquet_round_trip() -> None:
+    info = ParquetSourceInfo(1000, {"x": 200, "y": 400})
+    data = info.serialize()
+    restored = ParquetSourceInfo.deserialize(data)
+
+    assert restored.type == "parquet"
+    assert restored.row_count == info.row_count
+    assert restored.per_file_means == info.per_file_means
+
+
+def test_parquet_round_trip_empty() -> None:
+    info = ParquetSourceInfo(None, {})
+    data = info.serialize()
+    restored = ParquetSourceInfo.deserialize(data)
+
+    assert restored.row_count is None
+    assert restored.per_file_means == {}
+
+
+def test_dataframe_round_trip() -> None:
+    info = DataFrameSourceInfo(2500)
+    data = info.serialize()
+    restored = DataFrameSourceInfo.deserialize(data)
+
+    assert restored.type == "dataframe"
+    assert restored.row_count == info.row_count
+    assert restored.column_storage_size("x") is None
+
+
 @pytest.mark.parametrize("kind", ["parquet", "csv", "frame"])
 @pytest.mark.parametrize(
     "streaming_engine",
@@ -158,3 +192,34 @@ def test_stats_planning(tmp_path, kind, streaming_engine):
         ]
     )
     assert_gpu_result_equal(q_gb.sort("customer_id"), engine=streaming_engine)
+
+
+def test_parquet_deserialize_wrong_type() -> None:
+    data = DataFrameSourceInfo(100).serialize()
+    with pytest.raises(ValueError, match="Expected ParquetSourceInfo"):
+        ParquetSourceInfo.deserialize(data)
+
+
+def test_dataframe_deserialize_wrong_type() -> None:
+    data = ParquetSourceInfo(1000, {"x": 200}).serialize()
+    with pytest.raises(ValueError, match="Expected DataFrameSourceInfo"):
+        DataFrameSourceInfo.deserialize(data)
+
+
+def test_dataframe_deserialize_missing_row_count() -> None:
+    data = SerializedDataSourceInfo(
+        type="dataframe", row_count=None, per_file_means=None
+    )
+    with pytest.raises(
+        ValueError, match="Row count is required for DataFrameSourceInfo"
+    ):
+        DataFrameSourceInfo.deserialize(data)
+
+
+def test_parquet_empty_per_file_means() -> None:
+    per_file_means: dict[str, int] = {}
+    info = ParquetSourceInfo(1000, per_file_means)
+    assert info.per_file_means is per_file_means
+
+    info = ParquetSourceInfo(1000, None)
+    assert info.per_file_means == {}
