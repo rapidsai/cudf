@@ -91,7 +91,7 @@ struct delta_binary_decoder {
   uint32_t cur_mb;               // index of the current mini-block within the block
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
-  bool error;                    // whether to catch malformed headers
+  bool error;                    // flag to catch malformed headers
 
   zigzag128_t value[delta_rolling_buf_size];  // circular buffer of delta values
 
