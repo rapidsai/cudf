@@ -1077,6 +1077,25 @@ class _FastSlowAttribute:
 
         return self._attr
 
+    def __set__(self, instance, value) -> None:
+        # Implementing ``__set__`` makes this a data descriptor, which takes
+        # precedence over an entry of the same name in ``instance.__dict__``.
+        # Without it, ``object.__setattr__`` (called from the proxy's
+        # ``__setattr__`` for underscore-prefixed names) would write to the
+        # instance dict and shadow the descriptor on reads, so private attrs
+        # declared in ``additional_attributes`` would never reach the slow
+        # object.
+        if self._private:
+            # Forward to the slow object so pandas-internal state
+            # (e.g. the ``_readonly`` flag consulted by ``__setitem__``) stays
+            # in sync with what the user assigned on the proxy.
+            object.__setattr__(instance._fsproxy_slow, self._name, value)
+        else:
+            # Preserve the pre-data-descriptor behavior for non-private
+            # entries by writing to the instance dict directly (assigning via
+            # ``object.__setattr__`` would recurse through this descriptor).
+            instance.__dict__[self._name] = value
+
 
 class _MethodProxy(_FunctionProxy):
     def __init__(self, fast, slow, _fsproxy_transfer_block=None):

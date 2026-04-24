@@ -609,6 +609,7 @@ DatetimeArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -687,6 +688,7 @@ TimedeltaArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -723,6 +725,7 @@ PeriodArray = make_final_proxy_type(
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
         "_readonly": _FastSlowAttribute("_readonly", private=True),
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )

@@ -52,7 +52,7 @@ def dask_client(worker_id: str):
 @pytest.mark.usefixtures("dask_client")
 @pytest.mark.parametrize("delayed", [True, False])
 def test_basic(delayed):
-    pdf = dask.datasets.timeseries(dtypes={"x": int}).reset_index()
+    pdf = dask.datasets.timeseries(dtypes={"x": int}, seed=1).reset_index()
     gdf = pdf.map_partitions(cudf.DataFrame)
     if delayed:
         gdf = dd.from_delayed(gdf.to_delayed())
@@ -124,6 +124,7 @@ def test_p2p_shuffle():
             start="2000-01-01",
             end="2000-01-08",
             dtypes={"x": int},
+            seed=1,
         )
         .reset_index(drop=True)
         .to_backend("cudf")
