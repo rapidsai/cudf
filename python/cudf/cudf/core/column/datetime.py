@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import calendar
+import datetime
 import functools
 import locale
 import os
@@ -31,7 +32,10 @@ from cudf.core.column.column import (
     pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
-from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.column.temporal_base import (
+    TemporalBaseColumn,
+    _raise_on_invalid_ordering_scalar,
+)
 from cudf.utils.dtypes import (
     _get_base_dtype,
     cudf_dtype_from_pa_type,
@@ -43,7 +47,6 @@ from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _EQUALITY_OPS, is_na_like
 
 if TYPE_CHECKING:
-    import datetime
     from collections.abc import Callable
     from typing import Self
 
@@ -611,8 +614,27 @@ class DatetimeColumn(TemporalBaseColumn):
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
 
+        if isinstance(
+            other, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)
+        ):
+            other = cudf.DateOffset._from_pandas_ticks_or_weeks(other)
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
+        _raise_on_invalid_ordering_scalar(self.dtype, other, op)
+        # pandas treats a bare ``datetime.date`` as not comparable with a
+        # datetime64 column — ``==`` yields all False, ``!=`` yields all
+        # True. Short-circuit here so cudf doesn't implicitly promote the
+        # date to a midnight datetime and produce a spurious match.
+        if (
+            op in {"__eq__", "__ne__"}
+            and isinstance(other, datetime.date)
+            and not isinstance(other, datetime.datetime)
+        ):
+            fill_value = op == "__ne__"
+            result = self._all_bools_with_nulls(
+                self, bool_fill_value=fill_value
+            )
+            return result.fillna(fill_value)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
@@ -644,7 +666,55 @@ class DatetimeColumn(TemporalBaseColumn):
         other_is_timedelta = other_dtype.kind == "m"
         other_is_datetime64 = other_dtype.kind == "M"
 
+        # Determine tz awareness of each operand. pandas raises for any
+        # datetime-datetime operation (subtraction, ordering comparison)
+        # that mixes a tz-aware and a tz-naive operand, and preserves the
+        # tz when adding/subtracting a timedelta.
+        self_is_tz = isinstance(self.dtype, pd.DatetimeTZDtype)
+        other_is_tz = isinstance(other_dtype, pd.DatetimeTZDtype)
+        if (
+            other_is_datetime64
+            and self_is_tz != other_is_tz
+            and not other_is_null_scalar
+            and op in {"__sub__", "__lt__", "__le__", "__gt__", "__ge__"}
+        ):
+            raise TypeError(
+                "Cannot subtract tz-naive and tz-aware datetime-like objects."
+                if op == "__sub__"
+                else "Invalid comparison between tz-naive and tz-aware "
+                "datetime-like objects."
+            )
+
+        def _preserve_tz(result_dtype: DtypeObj) -> DtypeObj:
+            # When the operation should yield another datetime and self
+            # is tz-aware, carry the tz forward with the resolved unit.
+            if (
+                self_is_tz
+                and isinstance(result_dtype, np.dtype)
+                and result_dtype.kind == "M"
+            ):
+                tz_dtype = cast(pd.DatetimeTZDtype, self.dtype)
+                unit = np.datetime_data(
+                    cast(np.dtype[np.datetime64], result_dtype)
+                )[0]
+                return pd.DatetimeTZDtype(unit, tz_dtype.tz)
+            return result_dtype
+
         out_dtype = None
+        if (
+            other_is_datetime64
+            and self_is_tz != other_is_tz
+            and not other_is_null_scalar
+            and op in {"__eq__", "__ne__"}
+        ):
+            # pandas treats tz-aware and tz-naive datetimes as unequal;
+            # short-circuit instead of byte-comparing the UTC values.
+            fill_value = op == "__ne__"
+            other_col = other if isinstance(other, ColumnBase) else self
+            result = self._all_bools_with_nulls(
+                other_col, bool_fill_value=fill_value
+            )
+            return result.fillna(fill_value)
         if (
             op
             in {
@@ -663,8 +733,10 @@ class DatetimeColumn(TemporalBaseColumn):
             # `timedelta + datetime`. Both result in DatetimeColumns.
             out_dtype = get_dtype_of_same_kind(
                 self.dtype,
-                np.dtype(
-                    f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                _preserve_tz(
+                    np.dtype(
+                        f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                    )
                 ),
             )
             if other_is_null_scalar:
@@ -688,8 +760,10 @@ class DatetimeColumn(TemporalBaseColumn):
             elif other_is_timedelta and not reflect:
                 out_dtype = get_dtype_of_same_kind(
                     self.dtype,
-                    np.dtype(
-                        f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                    _preserve_tz(
+                        np.dtype(
+                            f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                        )
                     ),
                 )
                 if other_is_null_scalar:
@@ -900,7 +974,10 @@ class DatetimeTZColumn(DatetimeColumn):
             - 1
         )
         offsets_from_utc = offsets.take(indices, nullify=True)
-        return self + offsets_from_utc
+        # Perform the add on the tz-naive UTC view so the result is naive
+        # (``self + offsets`` now preserves tz by default). The local-time
+        # column must be tz-naive to represent the wall-clock values.
+        return cast(DatetimeColumn, self._utc_time + offsets_from_utc)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         return self._local_time.as_string_column(dtype)

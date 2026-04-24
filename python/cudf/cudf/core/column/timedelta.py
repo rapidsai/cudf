@@ -21,7 +21,10 @@ from cudf.core.column.column import (
     as_column,
     fixed_dtype_policy,
 )
-from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.column.temporal_base import (
+    TemporalBaseColumn,
+    _raise_on_invalid_ordering_scalar,
+)
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
@@ -119,6 +122,7 @@ class TimeDeltaColumn(TemporalBaseColumn):
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
+        _raise_on_invalid_ordering_scalar(self.dtype, other, op)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented

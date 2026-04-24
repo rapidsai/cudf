@@ -389,6 +389,8 @@ Series = make_final_proxy_type(
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_values": _FastSlowAttribute("_values", private=True),
+        "values": _FastSlowAttribute("values"),
         "sparse": _FastSlowAttribute("sparse", private=True),
         "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
         "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(
