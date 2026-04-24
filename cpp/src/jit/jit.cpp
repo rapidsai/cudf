@@ -87,8 +87,7 @@ void install_cudf_jit_files(std::string const& target_dir, std::string const& tm
 {
   // directory does not exist, so create it
   auto tmp_dir_path_str = std::format("{}/cudf-jit-tmpdir_XXXXXX", tmp_dir);
-  (void)tmp_dir_path_str.c_str();  // ensure null-terminated string for mkdtemp
-  char* tmp_dir_path = ::mkdtemp(tmp_dir_path_str.data());
+  char* tmp_dir_path    = ::mkdtemp(tmp_dir_path_str.data());
   CUDF_EXPECTS(
     tmp_dir_path != nullptr,
     std::format("Failed to create temporary directory for JIT file installation in tmp dir: {}",
