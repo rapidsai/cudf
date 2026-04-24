@@ -5,14 +5,13 @@ from cuda.bindings.cyruntime cimport cudaStream_t
 from libcpp.vector cimport vector
 
 from pylibcudf.libcudf.detail.utilities cimport stream_pool as cpp_stream_pool
+from pylibcudf.libcudf.detail.utilities.stream_pool cimport const_cuda_stream_view
 from pylibcudf.libcudf.utilities.span cimport host_span
 
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.pylibrmm.stream cimport Stream
 
 from ..utils cimport _get_stream
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-
-ctypedef const cuda_stream_view const_cuda_stream_view
 
 
 __all__ = ["join_streams"]
@@ -51,7 +50,7 @@ cpdef void join_streams(list streams, object stream):
 
     c_streams.reserve(len(streams))
     for s in streams:
-        c_streams.push_back((_get_stream(s)).view())
+        c_streams.push_back((<Stream>_get_stream(s)).view())
 
     with nogil:
         cpp_stream_pool.join_streams(
