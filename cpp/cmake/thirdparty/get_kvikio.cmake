@@ -19,8 +19,7 @@ function(find_and_configure_kvikio VERSION)
     CPM_ARGS
     GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
     GIT_TAG "${RAPIDS_BRANCH}"
-    GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
-    ${_exclude_from_all}
+    GIT_SHALLOW TRUE SOURCE_SUBDIR cpp ${_exclude_from_all}
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF" "KvikIO_REMOTE_SUPPORT ${CUDF_KVIKIO_REMOTE_IO}"
             "BUILD_SHARED_LIBS OFF"
   )
