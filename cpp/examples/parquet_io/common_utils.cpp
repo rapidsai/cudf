@@ -25,13 +25,13 @@
  *
  */
 
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used)
 {
   if (is_pool_used) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      std::make_shared<rmm::mr::cuda_memory_resource>(), rmm::percent_of_free_device_memory(80));
+    return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
+                                         rmm::percent_of_free_device_memory(80)};
   }
-  return std::make_shared<rmm::mr::cuda_async_memory_resource>();
+  return rmm::mr::cuda_async_memory_resource{};
 }
 
 cudf::io::column_encoding get_encoding_type(std::string name)
