@@ -7,6 +7,7 @@
 #include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -42,48 +43,54 @@ VectorPair get_trivial_left_join_indices(table_view const& left,
                                          rmm::device_async_resource_ref mr);
 
 /**
- * @brief Takes two pairs of vectors and returns a single pair where the first
- * element is a vector made from concatenating the first elements of both input
- * pairs and the second element is a vector made from concatenating the second
- * elements of both input pairs.
+ * @brief Finalize a full-join result from a single probe-side `(left, right)` index pair.
  *
- * This function's primary use is for computing the indices of a full join by
- * first performing a left join, then separately getting the complementary
- * right join indices, then finally calling this function to concatenate the
- * results. In this case, each input VectorPair contains the left and right
- * indices from a join.
+ * Takes ownership of `probe_indices`, resizes both vectors to `probe_indices.first->size() +
+ * build_table_num_rows`, and appends the complement (unmatched build rows paired with
+ * `JoinNoMatch`) into the tail. The vectors are then resized down to the true output length.
  *
- * Note that this is a destructive operation, in that at least one of a or b
- * will be invalidated (by a move) by this operation. Calling code should
- * assume that neither input VectorPair is valid after this function executes.
+ * Used by the non-partitioned full-join paths (hash/mixed/conditional); consuming the caller's
+ * buffers in-place avoids a redundant concat memcpy over the probe data.
  *
- * @param a The first pair of vectors.
- * @param b The second pair of vectors.
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param probe_indices Probe-side `(left, right)` index vectors (consumed).
+ * @param probe_table_num_rows Number of rows in the probe table (0 → every build row is
+ *                             unmatched, fast path).
+ * @param build_table_num_rows Number of rows in the build table.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate working storage.
  *
- * @return A pair of vectors containing the concatenated output.
+ * @return `[left_indices, right_indices]` of the complete full-join output.
  */
-VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream);
+VectorPair finalize_full_join(VectorPair&& probe_indices,
+                              size_type probe_table_num_rows,
+                              size_type build_table_num_rows,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref mr);
 
 /**
- * @brief  Creates a table containing the complement of left join indices.
+ * @brief Finalize a full-join result from per-partition probe index spans.
  *
- * This table has two columns. The first one is filled with `JoinNoMatch`
- * and the second one contains values from 0 to right_table_row_count - 1
- * excluding those found in the right_indices column.
+ * Concatenates every `(left_partials[i], right_partials[i])` pair into the head of the output
+ * and appends the complement (unmatched build rows paired with `JoinNoMatch`) into the tail.
+ * Internally delegates to the `VectorPair&&` overload, so the mark/compact path is shared.
  *
- * @param right_indices Vector of indices
- * @param left_table_row_count Number of rows of left table
- * @param right_table_row_count Number of rows of right table
+ * Used by `cudf::hash_join::full_join_finalize` for partitioned full joins where the partials
+ * live in separate buffers and must be gathered.
+ *
+ * @param left_partials Per-partition probe-side (left) index spans.
+ * @param right_partials Per-partition probe-side (right) index spans.
+ * @param probe_table_num_rows Number of rows in the probe table.
+ * @param build_table_num_rows Number of rows in the build table.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned vectors.
  *
- * @return Pair of vectors containing the left join indices complement
+ * @return `[left_indices, right_indices]` sized `sum(left_partials[i].size()) + num_unmatched`.
  */
-VectorPair get_left_join_indices_complement(
-  std::unique_ptr<rmm::device_uvector<size_type>>& right_indices,
-  size_type left_table_row_count,
-  size_type right_table_row_count,
+VectorPair finalize_full_join(
+  cudf::host_span<cudf::device_span<size_type const> const> left_partials,
+  cudf::host_span<cudf::device_span<size_type const> const> right_partials,
+  size_type probe_table_num_rows,
+  size_type build_table_num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 

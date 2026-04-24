@@ -4,6 +4,7 @@
  */
 
 #include "common.cuh"
+#include "count_kernels.hpp"
 #include "dispatch.cuh"
 #include "join/join_common_utils.cuh"
 
@@ -12,17 +13,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/fill.h>
-#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf::detail {
-
-namespace {
-/// Functor that ensures a minimum count of 1 for LEFT/FULL join match counts.
-struct clamp_zero_to_one {
-  __device__ size_type operator()(size_type count) const { return count == 0 ? 1 : count; }
-};
-}  // namespace
 
 std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
   table_view const& build,
@@ -56,24 +51,23 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
   auto const probe_table_num_rows = probe.num_rows();
 
   auto count_matches = [&](auto equality, auto d_hasher) {
-    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
+    // Precompute probe keys: {hash(row_idx), row_idx} for each probe row.
+    auto const n = static_cast<cuda::std::int64_t>(probe_table_num_rows);
+    rmm::device_uvector<probe_key_type> probe_keys(n, stream);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(probe_table_num_rows),
+                      probe_keys.begin(),
+                      pair_fn{d_hasher});
+
+    auto const ref = hash_table.ref(cuco::op::count)
+                       .rebind_key_eq(equality)
+                       .rebind_hash_function(hash_table.hash_function());
     if (join == join_kind::INNER_JOIN) {
-      hash_table.count_each(iter,
-                            iter + probe_table_num_rows,
-                            equality,
-                            hash_table.hash_function(),
-                            match_counts->begin(),
-                            stream.value());
+      launch_count_each<false>(probe_keys.data(), n, match_counts->begin(), ref, stream);
     } else {
-      // For LEFT/FULL joins, fuse the clamp into the output to avoid a separate kernel launch.
-      auto const output =
-        thrust::make_transform_output_iterator(match_counts->begin(), clamp_zero_to_one{});
-      hash_table.count_each(iter,
-                            iter + probe_table_num_rows,
-                            equality,
-                            hash_table.hash_function(),
-                            output,
-                            stream.value());
+      // IsOuter=true handles the clamp (zero → 1) for LEFT/FULL joins internally.
+      launch_count_each<true>(probe_keys.data(), n, match_counts->begin(), ref, stream);
     }
   };
 

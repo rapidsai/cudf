@@ -10,8 +10,15 @@
 #include "join/join_common_utils.hpp"
 #include "size_impl.cuh"
 
+#include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/join/join.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/prefetch.hpp>
+
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
 #include <cuda/std/iterator>
@@ -182,9 +189,8 @@ hash_join<Hasher>::join_retrieve(cudf::table_view const& probe,
                                                                 mr);
 
   if constexpr (Join == join_kind::FULL_JOIN) {
-    auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, probe.num_rows(), _build.num_rows(), stream, mr);
-    return detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+    return detail::finalize_full_join(
+      std::move(join_indices), probe.num_rows(), _build.num_rows(), stream, mr);
   } else {
     return join_indices;
   }
