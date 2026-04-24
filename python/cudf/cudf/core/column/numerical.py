@@ -1036,6 +1036,10 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.dtype
             elif self.dtype.kind == "u":
                 return np.dtype("uint64")
+            elif self.dtype.kind == "b" and isinstance(
+                self.dtype, pd.ArrowDtype
+            ):
+                return np.dtype("uint64")
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
             return find_common_type((self.dtype, np.dtype(np.uint64)))

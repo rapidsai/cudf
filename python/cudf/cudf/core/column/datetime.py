@@ -61,6 +61,10 @@ _dtype_to_format_conversion = {
     "datetime64[us]": "%Y-%m-%d %H:%M:%S.%6f",
     "datetime64[ms]": "%Y-%m-%d %H:%M:%S.%3f",
     "datetime64[s]": "%Y-%m-%d %H:%M:%S",
+    "timestamp[ns][pyarrow]": "%Y-%m-%d %H:%M:%S.%9f",
+    "timestamp[us][pyarrow]": "%Y-%m-%d %H:%M:%S.%6f",
+    "timestamp[ms][pyarrow]": "%Y-%m-%d %H:%M:%S.%3f",
+    "timestamp[s][pyarrow]": "%Y-%m-%d %H:%M:%S",
 }
 
 
