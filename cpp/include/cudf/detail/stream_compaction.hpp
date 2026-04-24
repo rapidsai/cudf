@@ -15,7 +15,6 @@
 #include <rmm/device_uvector.hpp>
 
 namespace cudf {
-
 namespace detail {
 /**
  * @copydoc cudf::drop_nulls(table_view const&, std::vector<size_type> const&,

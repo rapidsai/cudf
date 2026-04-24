@@ -21,21 +21,6 @@
 #include <thrust/scan.h>
 
 namespace cudf::lists {
-namespace {
-
-template <typename SizesIter>
-struct kept_size_fn {
-  column_device_view d_offsets;
-  SizesIter sizes_begin;
-  __device__ size_type operator()(size_type i) const
-  {
-    auto const seg_len = d_offsets.data<size_type>()[i + 1] - d_offsets.data<size_type>()[i];
-    return seg_len - sizes_begin[i];
-  }
-};
-
-}  // namespace
-
 namespace detail {
 
 std::unique_ptr<column> apply_mask(lists_column_view const& input,
@@ -94,31 +79,17 @@ std::unique_ptr<column> apply_mask(lists_column_view const& input,
     }();
     auto const d_sizes     = column_device_view::create(*sizes, stream);
     auto const sizes_begin = cudf::detail::make_null_replacement_iterator(*d_sizes, size_type{0});
-
-    auto output_offsets = cudf::make_numeric_column(
+    auto const sizes_end   = sizes_begin + sizes->size();
+    auto output_offsets    = cudf::make_numeric_column(
       offset_data_type, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
     auto output_offsets_view = output_offsets->mutable_view();
 
-    if (mask_kind == cudf::detail::mask_type::RETENTIONS) {
-      auto const sizes_end = sizes_begin + sizes->size();
-      thrust::inclusive_scan(
-        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-        sizes_begin,
-        sizes_end,
-        output_offsets_view.begin<size_type>() + 1);
-    } else {
-      auto input_sliced_offsets =
-        cudf::detail::slice(input.offsets(), {input.offset(), input.size() + 1}, stream).front();
-      auto const d_input_offsets = column_device_view::create(input_sliced_offsets, stream);
-      auto kept_sizes_iter       = cudf::detail::make_counting_transform_iterator(
-        0, kept_size_fn<decltype(sizes_begin)>{*d_input_offsets, sizes_begin});
-      thrust::inclusive_scan(
-        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-        kept_sizes_iter,
-        kept_sizes_iter + num_rows,
-        output_offsets_view.begin<size_type>() + 1);
-    }
-
+    // Could have attempted an exclusive_scan(), but it would not compute the last entry.
+    // Instead, inclusive_scan(), followed by writing `0` to the head of the offsets column.
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                           sizes_begin,
+                           sizes_end,
+                           output_offsets_view.begin<size_type>() + 1);
     CUDF_CUDA_TRY(cudaMemsetAsync(
       output_offsets_view.begin<size_type>(), 0, sizeof(size_type), stream.value()));
     return output_offsets;
@@ -130,7 +101,6 @@ std::unique_ptr<column> apply_mask(lists_column_view const& input,
                                  input.null_count(),
                                  cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
-
 }  // namespace detail
 
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
