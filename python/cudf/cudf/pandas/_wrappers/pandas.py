@@ -606,6 +606,7 @@ DatetimeArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -681,6 +682,7 @@ TimedeltaArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
@@ -715,6 +717,7 @@ PeriodArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -799,6 +802,7 @@ StringArray = make_final_proxy_type(
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": _FastSlowAttribute("__array__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__arrow_array__": _FastSlowAttribute("__arrow_array__"),
@@ -815,6 +819,7 @@ ArrowStringArray = make_final_proxy_type(
     bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
         "__invert__": _FastSlowAttribute("__invert__"),
         "__neg__": _FastSlowAttribute("__neg__"),

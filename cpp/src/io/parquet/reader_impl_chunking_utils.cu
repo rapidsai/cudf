@@ -5,7 +5,7 @@
 
 #include "io/comp/decompression.hpp"
 #include "io/comp/gpuinflate.hpp"
-#include "io/utilities/time_utils.cuh"
+#include "io/utilities/time_utils.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_chunking_utils.cuh"
 
@@ -231,7 +231,7 @@ int64_t find_next_split(int64_t cur_pos,
   cuda::std::optional<LogicalType> logical_type)
 {
   int32_t const clock_rate =
-    is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
+    is_chrono(data_type{column_type_id}) ? cudf::io::detail::to_clockrate(timestamp_type_id) : 0;
 
   // TODO(ets): this is leftover from the original code, but will we ever output decimal as
   // anything but fixed point?

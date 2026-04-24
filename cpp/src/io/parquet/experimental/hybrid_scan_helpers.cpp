@@ -326,7 +326,8 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
 {
   // Collect equality literals for each input table column
   auto const literals =
-    equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
+    equality_literals_collector{
+      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
@@ -390,9 +391,7 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_dictionary_page_byte
   std::reference_wrapper<ast::expression const> filter)
 {
   // Collect (in)equality literals for each input table column
-  auto const literals =
-    dictionary_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
-      .get_literals();
+  auto const literals = dictionary_literals_collector{filter.get(), output_dtypes}.get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
   std::vector<cudf::size_type> dictionary_col_schemas;
@@ -557,7 +556,8 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
 {
   // Collect equality literals for each input table column
   auto const literals =
-    equality_literals_collector{filter.get(), static_cast<cudf::size_type>(output_dtypes.size())}
+    equality_literals_collector{
+      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)

@@ -162,11 +162,10 @@ def test_series_setitem_upcasting_string_column():
 
 def test_series_setitem_upcasting_string_value():
     sr = cudf.Series([0, 0, 0], dtype=int)
-    # This is a distinction with pandas, which lets you instead make an
-    # object column with ["10", 0, 0]
-    sr[0] = "10"
-    assert_eq(pd.Series([10, 0, 0], dtype=int), sr)
-    with pytest.raises(ValueError):
+    # Matches pandas: assigning a string scalar to a numeric column raises.
+    with pytest.raises(TypeError, match="Invalid value"):
+        sr[0] = "10"
+    with pytest.raises(TypeError, match="Invalid value"):
         sr[0] = "non-integer"
 
 
@@ -764,9 +763,6 @@ def test_series_setitem_basics(key, value, nulls):
     assert_eq(psr, gsr, check_dtype=False)
 
 
-@pytest.mark.xfail(
-    reason="cuDF doesn't recognize dtype misalignment of empty list"
-)
 def test_series_setitem_empty_list_raises():
     psr = pd.Series([1, 2, 3, 4, 5])
     gsr = cudf.Series([1, 2, 3, 4, 5])
