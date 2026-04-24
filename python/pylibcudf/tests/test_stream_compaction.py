@@ -143,7 +143,7 @@ class TestApplyBooleanMask:
         )
         mask = plc.Column.from_arrow(pa.array(mask_vals, type=pa.bool_()))
         result = plc.stream_compaction.apply_boolean_mask(table, mask)
-        expected = [v for v, m in zip(values, mask_vals) if m]
+        expected = [v for v, m in zip(values, mask_vals, strict=True) if m]
         assert result.to_arrow().column(0).to_pylist() == expected
 
 
