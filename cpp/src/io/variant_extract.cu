@@ -377,7 +377,7 @@ CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
 
   if (d_struct.nullable() && !d_struct.is_valid_nocheck(row)) {
     d_sizes[row] = 0;
-    cudf::clear_bit_unsafe(d_null_mask, row);
+    cudf::clear_bit(d_null_mask, row);
     return;
   }
 
@@ -394,7 +394,7 @@ CUDF_KERNEL void get_variant_field_sizes_kernel(column_device_view d_struct,
                                      depth);
   if (fs.length == 0) {
     d_sizes[row] = 0;
-    cudf::clear_bit_unsafe(d_null_mask, row);
+    cudf::clear_bit(d_null_mask, row);
     return;
   }
 
@@ -454,7 +454,7 @@ CUDF_KERNEL void cast_variant_int32_kernel(column_device_view d_struct,
 
   if (d_struct.nullable() && !d_struct.is_valid_nocheck(row)) {
     d_output[row] = 0;
-    cudf::clear_bit_unsafe(d_null_mask, row);
+    cudf::clear_bit(d_null_mask, row);
     return;
   }
 
@@ -469,7 +469,7 @@ CUDF_KERNEL void cast_variant_int32_kernel(column_device_view d_struct,
     d_output[row] = result.value;
   } else {
     d_output[row] = 0;
-    cudf::clear_bit_unsafe(d_null_mask, row);
+    cudf::clear_bit(d_null_mask, row);
   }
 }
 
@@ -489,7 +489,7 @@ struct cast_variant_string_fn {
   {
     if (d_struct.nullable() && !d_struct.is_valid_nocheck(row)) {
       if (!d_chars) { d_sizes[row] = 0; }
-      cudf::clear_bit_unsafe(d_null_mask, row);
+      cudf::clear_bit(d_null_mask, row);
       return;
     }
 
@@ -502,7 +502,7 @@ struct cast_variant_string_fn {
     auto const info = device_decode_string_info(val_ptr, val_len);
     if (!info.ok) {
       if (!d_chars) { d_sizes[row] = 0; }
-      cudf::clear_bit_unsafe(d_null_mask, row);
+      cudf::clear_bit(d_null_mask, row);
       return;
     }
 

@@ -7,9 +7,13 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/io/variant.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <array>
+#include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -1052,4 +1056,156 @@ TEST_F(VariantExtractTest, CastInt32Composed)
   auto got = cudf::io::parquet::extract_variant_field(
     struc, "$.arr[1]", cudf::data_type{cudf::type_id::INT32}, cudf::test::get_default_stream());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, cudf::test::fixed_width_column_wrapper<int32_t>{20});
+}
+
+// ---------------------------------------------------------------------------
+// Scale tests — dictionary / object scans an order of magnitude larger than
+// any other test in this file, and a multi-row deep-path fixture large enough
+// to exercise the atomic null-mask updates in the sizes/copy kernels.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Build a VARIANT object blob with `n_fields` fields.  Field ids are 0..n_fields-1
+// (sorted as required by the spec) and each field holds a bare INT32 equal to its
+// field id.  Uses 1-byte field_id_size and 1-byte field_off_size; n_fields must be
+// <= 51 so the total value bytes (5 * n_fields) still fit in 1-byte offsets.
+inline std::vector<uint8_t> build_sequential_int32_object(int n_fields)
+{
+  std::vector<uint8_t> out{0x02, static_cast<uint8_t>(n_fields)};
+  for (int fid = 0; fid < n_fields; ++fid) {
+    out.push_back(static_cast<uint8_t>(fid));
+  }
+  for (int i = 0; i <= n_fields; ++i) {
+    out.push_back(static_cast<uint8_t>(i * 5));
+  }
+  for (int fid = 0; fid < n_fields; ++fid) {
+    auto const v = enc_int32(fid);
+    out.insert(out.end(), v.begin(), v.end());
+  }
+  return out;
+}
+
+// Sorted dictionary of N zero-padded two-digit keys "k<NN>".
+inline std::vector<std::string> make_numeric_keys(int n)
+{
+  std::vector<std::string> out;
+  out.reserve(n);
+  for (int i = 0; i < n; ++i) {
+    std::array<char, 8> buf{};
+    std::snprintf(buf.data(), buf.size(), "k%02d", i);
+    out.emplace_back(buf.data());
+  }
+  return out;
+}
+
+// Wrap per-row (metadata, value) byte vectors into a VARIANT struct column.  Built
+// with make_lists_column + structs_column_wrapper directly so the helper stays
+// self-contained within this test file for dynamic row counts.
+inline cudf::test::structs_column_wrapper wrap_multi_row_variant(
+  std::vector<std::vector<uint8_t>> const& meta_rows,
+  std::vector<std::vector<uint8_t>> const& val_rows)
+{
+  auto build_list = [](std::vector<std::vector<uint8_t>> const& rows) {
+    auto const n = static_cast<cudf::size_type>(rows.size());
+    std::vector<int32_t> offsets(n + 1, 0);
+    std::vector<uint8_t> flat;
+    for (cudf::size_type i = 0; i < n; ++i) {
+      flat.insert(flat.end(), rows[i].begin(), rows[i].end());
+      offsets[i + 1] = static_cast<int32_t>(flat.size());
+    }
+    auto offs =
+      cudf::test::fixed_width_column_wrapper<int32_t>(offsets.begin(), offsets.end()).release();
+    auto data = cudf::test::fixed_width_column_wrapper<uint8_t>(flat.begin(), flat.end()).release();
+    return cudf::make_lists_column(n, std::move(offs), std::move(data), 0, {});
+  };
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.emplace_back(build_list(meta_rows));
+  children.emplace_back(build_list(val_rows));
+  return cudf::test::structs_column_wrapper{std::move(children)};
+}
+
+}  // namespace
+
+TEST_F(VariantExtractTest, LargeDictionaryAndObjectScan)
+{
+  // 50-entry dictionary + 50-field object — >10x the size of any other test in this
+  // file.  Exercises the scan loops in device_find_key_in_metadata and
+  // device_locate_object_field at a depth that would catch regressions in their
+  // scan-bound arithmetic without requiring a workload-scale fixture.
+  auto const keys = make_numeric_keys(50);
+  auto const meta = build_metadata(keys);
+  auto const val  = build_sequential_int32_object(50);
+  auto struc      = wrap_single_variant(meta, val);
+  auto stream     = cudf::test::get_default_stream();
+  auto const i32  = cudf::data_type{cudf::type_id::INT32};
+
+  // First, middle, and last keys each decode to their own field id.
+  auto first = cudf::io::parquet::extract_variant_field(struc, "k00", i32, stream);
+  auto mid   = cudf::io::parquet::extract_variant_field(struc, "k24", i32, stream);
+  auto last  = cudf::io::parquet::extract_variant_field(struc, "k49", i32, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*first, cudf::test::fixed_width_column_wrapper<int32_t>{0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*mid, cudf::test::fixed_width_column_wrapper<int32_t>{24});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*last, cudf::test::fixed_width_column_wrapper<int32_t>{49});
+
+  // Not-present key must still yield null after a full dictionary scan.
+  auto missing = cudf::io::parquet::extract_variant_field(struc, "k99", i32, stream);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*missing,
+                                 cudf::test::fixed_width_column_wrapper<int32_t>({0}, {false}));
+}
+
+TEST_F(VariantExtractTest, DeepMixedPathManyRowsWithNulls)
+{
+  // 128 rows of a depth-5 mixed-step path $.a.b[0].c.d, cycling through four row
+  // shapes that null at different depths.  With 128 rows spread across 4 bitmask
+  // words and ~75% of rows nulling, this stresses the per-row null-mask updates in
+  // the sizes and copy kernels — threads within a warp all share one bitmask word,
+  // so non-atomic bit clears would race and silently drop some nulls.  A smaller
+  // fixture (e.g. 3 rows) would not reliably catch that.
+  std::vector<std::string> const dict = {"a", "b", "c", "d"};  // fids: a=0,b=1,c=2,d=3
+  auto const meta                     = build_metadata(dict);
+
+  // Shape 0: intact — {a:{b:[{c:{d:"leaf"}}]}}
+  auto const s0_d    = enc_short_string("leaf");
+  auto const s0_cd   = build_single_field_object(/*fid=d*/ 3, s0_d);
+  auto const s0_elem = build_single_field_object(/*fid=c*/ 2, s0_cd);
+  auto const s0_arr  = build_array_value({s0_elem});
+  auto const s0_ab   = build_single_field_object(/*fid=b*/ 1, s0_arr);
+  auto const s0_root = build_single_field_object(/*fid=a*/ 0, s0_ab);
+
+  // Shape 1: missing key at depth 1 — root has "b" but no "a".
+  auto const s1_b    = enc_int32(0);
+  auto const s1_root = build_single_field_object(/*fid=b*/ 1, s1_b);
+
+  // Shape 2: kind mismatch at depth 3 — {a:{b:INT32(7)}} makes [0] nonsensical.
+  auto const s2_bval = enc_int32(7);
+  auto const s2_ab   = build_single_field_object(/*fid=b*/ 1, s2_bval);
+  auto const s2_root = build_single_field_object(/*fid=a*/ 0, s2_ab);
+
+  // Shape 3: array OOB at depth 3 — {a:{b:[]}} makes [0] out of bounds.
+  auto const s3_arr  = build_array_value({});
+  auto const s3_ab   = build_single_field_object(/*fid=b*/ 1, s3_arr);
+  auto const s3_root = build_single_field_object(/*fid=a*/ 0, s3_ab);
+
+  std::vector<std::vector<uint8_t> const*> const shapes{&s0_root, &s1_root, &s2_root, &s3_root};
+
+  constexpr int num_rows = 128;
+  std::vector<std::vector<uint8_t>> meta_rows(num_rows, meta);
+  std::vector<std::vector<uint8_t>> val_rows(num_rows);
+  std::vector<char const*> exp_strs(num_rows);
+  std::vector<bool> exp_valid(num_rows);
+  for (int i = 0; i < num_rows; ++i) {
+    int const shape = i % 4;
+    val_rows[i]     = *shapes[shape];
+    exp_strs[i]     = (shape == 0) ? "leaf" : "";
+    exp_valid[i]    = (shape == 0);
+  }
+
+  auto struc = wrap_multi_row_variant(meta_rows, val_rows);
+
+  auto got = cudf::io::parquet::extract_variant_field(
+    struc, "$.a.b[0].d", cudf::data_type{cudf::type_id::STRING}, cudf::test::get_default_stream());
+
+  cudf::test::strings_column_wrapper expected(exp_strs.begin(), exp_strs.end(), exp_valid.begin());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*got, expected);
 }
