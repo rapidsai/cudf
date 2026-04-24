@@ -41,41 +41,29 @@ def profile(function_profile, line_profile, fn):
 
 
 def main():
+
     parser = argparse.ArgumentParser(
-        prog="python -m cudf.pandas",
-        description=(
-            "Run a Python script with Pandas Accelerator Mode enabled. "
-            "In Pandas Accelerator Mode, all imports of pandas will "
-            "automatically use GPU accelerated cuDF equivalents where "
-            "possible."
-        ),
+        prog="cudf-regex-grep",
+        description="Regex search utility for CSV, Parquet, JSON, ORC files (cuDF accelerated). Matches grep CLI arguments for easy replacement.",
+        add_help=False,
+        usage="%(prog)s [OPTIONS] -e PATTERN [FILE ...]"
     )
 
-    parser.add_argument(
-        "-m",
-        dest="module",
-        nargs=1,
-    )
-    parser.add_argument(
-        "-c",
-        dest="cmd",
-        nargs=1,
-    )
-    parser.add_argument(
-        "--profile",
-        action="store_true",
-        help="Perform per-function profiling of this script.",
-    )
-    parser.add_argument(
-        "--line-profile",
-        action="store_true",
-        help="Perform per-line profiling of this script.",
-    )
-    parser.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Arguments to pass on to the script",
-    )
+    # Grep-like arguments
+    parser.add_argument("-e", "--regexp", dest="pattern", required=False, help="Pattern to search for (required unless -f)")
+    parser.add_argument("-i", "--ignore-case", dest="ignore_case", action="store_true", help="Ignore case distinctions")
+    parser.add_argument("-c", "--count", dest="count", action="store_true", help="Only print a count of matching lines per file")
+    parser.add_argument("-C", "--columns", dest="columns", help="Comma-separated list of columns to search (for tabular files)")
+    parser.add_argument("-r", "--rows", dest="rows", help="Row selection (e.g., 1-10,20,25)")
+    parser.add_argument("--gds", dest="gds", action="store_true", help="Enable GDS (GPUDirect Storage)")
+    parser.add_argument("-h", "--help", action="help", help="Show this help message and exit")
+
+    # Existing options for script/module/profiling
+    parser.add_argument("-m", dest="module", nargs=1, help=argparse.SUPPRESS)
+    parser.add_argument("-c", dest="cmd", nargs=1, help=argparse.SUPPRESS)
+    parser.add_argument("--profile", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--line-profile", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
