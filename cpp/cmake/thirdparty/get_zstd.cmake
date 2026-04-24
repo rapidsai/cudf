@@ -7,6 +7,11 @@
 
 # Use CPM to find or clone libzstd
 function(find_and_configure_zstd)
+  if(NOT BUILD_SHARED_LIBS)
+    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
+  else()
+    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
+  endif()
 
   set(CPM_DOWNLOAD_zstd ON)
   rapids_cpm_find(
@@ -16,7 +21,7 @@ function(find_and_configure_zstd)
     GIT_REPOSITORY https://github.com/facebook/zstd.git
     GIT_TAG v1.5.7
     GIT_SHALLOW FALSE SOURCE_SUBDIR build/cmake
-    EXCLUDE_FROM_ALL TRUE
+    ${_exclude_from_all}
     OPTIONS "ZSTD_BUILD_STATIC ON" "ZSTD_BUILD_SHARED OFF" "ZSTD_BUILD_TESTS OFF"
             "ZSTD_BUILD_PROGRAMS OFF" "BUILD_SHARED_LIBS OFF"
   )
