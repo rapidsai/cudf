@@ -592,7 +592,8 @@ void __launch_bounds__(decode_page_headers_block_size)
     // Validate number of values in the column chunk.
     if (num_values > max_values_per_chunk) {
       cg::invoke_one(warp, [&] {
-        set_error(error[warp_id], static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER));
+        error[warp_id] |=
+          static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
         bs->cur = bs->end;
       });
       warp.sync();
@@ -668,7 +669,8 @@ void __launch_bounds__(decode_page_headers_block_size)
         if (index_out >= 0 and index_out < max_num_pages) { page_info[index_out] = bs->page; }
         // Parsed page must advance the byte stream.
         if (bs->cur == prev_cur and values_found == prev_values) {
-          set_error(error[warp_id], static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER));
+          error[warp_id] |=
+            static_cast<kernel_error::value_type>(decode_error::INVALID_PAGE_HEADER);
           bs->cur = bs->end;
         }
       });
