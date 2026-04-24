@@ -91,7 +91,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
-  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
+  auto const data_len = cuda::std::distance(s->data_start, s->data_end);
+
+  // Check malformed BYTE_STREAM_SPLIT pages
+  if (s->dtype_len_in <= 0 or data_len <= 0) {
+    set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_BYTE_STREAM_SPLIT_SIZE),
+              error_code);
+    return;
+  }
+
   auto const num_values = data_len / s->dtype_len_in;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
