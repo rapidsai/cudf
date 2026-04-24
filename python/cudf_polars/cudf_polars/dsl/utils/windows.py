@@ -22,6 +22,7 @@ __all__ = [
     "duration_to_scalar",
     "offsets_to_windows",
     "range_window_bounds",
+    "rolling_stream_halo_extents",
 ]
 
 
@@ -165,6 +166,39 @@ def offsets_to_windows(
         duration_to_scalar(dtype, -offset_i, stream=stream),
         duration_to_scalar(dtype, offset_i + period_i, stream=stream),
     )
+
+
+# Divisors match ``duration_to_scalar``: Polars ordinals from ``duration_to_int`` are in ns;
+# native index units for halos use the same scaling as libcudf duration scalars.
+_ROLLING_HALO_DIVISOR: dict[plc.TypeId, int] = {
+    plc.TypeId.INT64: 1,
+    plc.TypeId.TIMESTAMP_NANOSECONDS: 1,
+    plc.TypeId.TIMESTAMP_MICROSECONDS: 1_000,
+    plc.TypeId.TIMESTAMP_MILLISECONDS: 1_000_000,
+    plc.TypeId.TIMESTAMP_DAYS: 86_400_000_000_000,
+}
+
+
+def rolling_stream_halo_extents(
+    index_dtype: plc.DataType,
+    preceding_ordinal: int,
+    following_ordinal: int,
+) -> tuple[int, int]:
+    """
+    Left/right halo span in native index units for partitioned/streaming rolling.
+
+    Uses the same offset/period interpretation as :func:`offsets_to_windows`
+    (libcudf preceding uses ``-offset``, following uses ``offset + period``).
+    """
+    try:
+        div = _ROLLING_HALO_DIVISOR[index_dtype.id()]
+    except KeyError as e:  # pragma: no cover
+        raise NotImplementedError(
+            f"Unsupported rolling index type {index_dtype!r} for halo extents"
+        ) from e
+    p = preceding_ordinal // div
+    f = following_ordinal // div
+    return max(0, -p), max(0, p + f)
 
 
 def range_window_bounds(

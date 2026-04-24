@@ -13,6 +13,7 @@ import cudf_polars.experimental.distinct
 import cudf_polars.experimental.groupby
 import cudf_polars.experimental.io
 import cudf_polars.experimental.join
+import cudf_polars.experimental.rolling
 import cudf_polars.experimental.select
 import cudf_polars.experimental.shuffle
 import cudf_polars.experimental.sort  # noqa: F401

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
-from cudf_polars.dsl.ir import Distinct, GroupBy
+from cudf_polars.dsl.ir import Distinct, GroupBy, Rolling
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
@@ -89,6 +89,7 @@ class ReserveOpIDs:
             Repartition,
             StreamingSink,
             ShuffleSorted,
+            Rolling,
         )
         if self.dynamic_planning_enabled:
             collective_types = (
@@ -97,6 +98,7 @@ class ReserveOpIDs:
                 Repartition,
                 StreamingSink,
                 ShuffleSorted,
+                Rolling,
                 GroupBy,
                 Distinct,
             )
@@ -131,6 +133,12 @@ class ReserveOpIDs:
                 self.collective_id_map[node] = [
                     _get_new_collective_id(),
                     _get_new_collective_id(),
+                    _get_new_collective_id(),
+                    _get_new_collective_id(),
+                ]
+            elif isinstance(node, Rolling):
+                # 2 IDs: HaloExchange op_id + allreduce termination op_id
+                self.collective_id_map[node] = [
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                 ]
