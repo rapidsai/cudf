@@ -11,7 +11,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.mark.parametrize("dtype", [pl.UInt32, pl.Int32, None])
 @pytest.mark.parametrize("empty", [False, True])
-def test_len(dtype, empty):
+def test_len(engine: pl.GPUEngine, dtype, empty):
     if empty:
         df = pl.LazyFrame({})
     else:
@@ -25,16 +25,17 @@ def test_len(dtype, empty):
     # Workaround for https://github.com/pola-rs/polars/issues/16904
     assert_gpu_result_equal(
         q,
+        engine=engine,
         collect_kwargs={"optimizations": pl.QueryOptFlags(projection_pushdown=False)},
     )
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [1, 2, None]])
-def test_col_len(data):
+def test_col_len(engine: pl.GPUEngine, data):
     data = {"a": list("xyz"), "b": data}
     q = pl.LazyFrame(data).select(
         pl.col("a").len().alias("l"),
         (pl.col("a").len() * 2).alias("l2"),
         pl.col("b").len().alias("l3"),
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)

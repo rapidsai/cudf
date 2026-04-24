@@ -48,7 +48,7 @@ def right() -> pl.LazyFrame:
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -70,16 +70,16 @@ def right() -> pl.LazyFrame:
 def test_rapidsmpf_join_metadata(
     left: pl.LazyFrame,
     right: pl.LazyFrame,
-    engine,
+    streaming_engine,
 ) -> None:
-    config_options = ConfigOptions.from_polars_engine(engine)
+    config_options = ConfigOptions.from_polars_engine(streaming_engine)
     broadcast_join_limit = config_options.executor.broadcast_join_limit
     q = left.join(
         right,
         on="y",
         how="left",
     ).filter(pl.col("x") > pl.col("zz"))
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     left_count = left.collect().height
     right_count = right.collect().height
 
@@ -349,13 +349,18 @@ def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
     return Select(out_schema, exprs, should_broadcast=False, df=child)
 
 
-def test_remap_partitioning_select_none_input(engine) -> None:
-    assert maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), None) is None
+def test_remap_partitioning_select_none_input(streaming_engine) -> None:
+    assert (
+        maybe_remap_partitioning(_make_select_ir(streaming_engine, ("a", "b")), None)
+        is None
+    )
 
 
-def test_remap_partitioning_select_preserves_keys(engine) -> None:
+def test_remap_partitioning_select_preserves_keys(streaming_engine) -> None:
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), part)
+    result = maybe_remap_partitioning(
+        _make_select_ir(streaming_engine, ("a", "b")), part
+    )
     assert result is not None
     assert result.inter_rank is not None
     assert result.inter_rank.column_indices == (0, 1)
@@ -363,14 +368,14 @@ def test_remap_partitioning_select_preserves_keys(engine) -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_groupby(engine) -> None:
+def test_remap_partitioning_groupby(streaming_engine) -> None:
     """Hash indices refer to the groupby input child; remap to groupby output columns."""
     q = (
         pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
         .group_by("a", "b")
         .agg(pl.col("c").sum())
     )
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     while isinstance(ir, (Select, Projection)):
         ir = ir.children[0]
     assert isinstance(ir, GroupBy)
@@ -391,9 +396,9 @@ def test_remap_partitioning_groupby(engine) -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_hstack_appends_preserves_keys(engine) -> None:
+def test_remap_partitioning_hstack_appends_preserves_keys(streaming_engine) -> None:
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
-    child = Translator(q._ldf.visit(), engine).translate_ir()
+    child = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     d_dtype = DataType(pl.Int64())
     hstack = HStack(
         {**child.schema, "d": d_dtype},
@@ -410,17 +415,17 @@ def test_remap_partitioning_hstack_appends_preserves_keys(engine) -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_select_drops_key(engine) -> None:
+def test_remap_partitioning_select_drops_key(streaming_engine) -> None:
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = maybe_remap_partitioning(_make_select_ir(engine, ("a",)), part)
+    result = maybe_remap_partitioning(_make_select_ir(streaming_engine, ("a",)), part)
     assert result is not None
     assert result.inter_rank is None
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_select_renamed_key(engine) -> None:
+def test_remap_partitioning_select_renamed_key(streaming_engine) -> None:
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
-    child = Translator(q._ldf.visit(), engine).translate_ir()
+    child = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     # Output (a_renamed, b) where a_renamed is Col("a")
     out_schema = {"a_renamed": child.schema["a"], "b": child.schema["b"]}
     exprs = (
@@ -437,9 +442,9 @@ def test_remap_partitioning_select_renamed_key(engine) -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_reorder_columns(engine) -> None:
+def test_remap_partitioning_reorder_columns(streaming_engine) -> None:
     # Select (b, a) from (a, b, c) -> partition keys (a,b) become indices (1, 0) in output
-    select = _make_select_ir(engine, ("b", "a"))
+    select = _make_select_ir(streaming_engine, ("b", "a"))
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
     result = maybe_remap_partitioning(select, part)
     assert result is not None
@@ -448,9 +453,9 @@ def test_remap_partitioning_reorder_columns(engine) -> None:
     assert result.inter_rank.modulus == 8
 
 
-def test_remap_partitioning_reorder_columns_projection(engine) -> None:
+def test_remap_partitioning_reorder_columns_projection(streaming_engine) -> None:
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
-    child = Translator(q._ldf.visit(), engine).translate_ir()
+    child = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     # Projection output (b, a) -> child has (a, b, c); partition keys (a,b) -> indices (1, 0)
     out_schema = {k: child.schema[k] for k in ("b", "a")}
     proj = Projection(out_schema, child)

@@ -24,9 +24,6 @@ if TYPE_CHECKING:
 # variants skip themselves in that environment.
 pytestmark = [
     pytest.mark.spmd,
-    # Ray's subprocess management and distributed's shutdown leak unclosed
-    # /dev/null handles and sockets; suppress the noise.
-    pytest.mark.filterwarnings("ignore::ResourceWarning"),
 ]
 
 

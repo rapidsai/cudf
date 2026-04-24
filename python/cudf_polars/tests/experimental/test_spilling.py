@@ -37,7 +37,7 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 
 
 @pytest.mark.parametrize(
-    "engine,spilled_host_mem_type",
+    "streaming_engine,spilled_host_mem_type",
     [
         pytest.param(
             {"rapidsmpf_options": {"pinned_memory": "true"}},
@@ -49,19 +49,19 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
         ),
         ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
     ],
-    indirect=["engine"],
+    indirect=["streaming_engine"],
 )
 def test_make_spill_function(
-    engine: SPMDEngine, spilled_host_mem_type: MemoryType
+    streaming_engine: SPMDEngine, spilled_host_mem_type: MemoryType
 ) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
-    context = engine.context
+    context = streaming_engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:
-        assert engine.context.br().pinned_mr is not None
+        assert streaming_engine.context.br().pinned_mr is not None
         other_host_mem_type = MemoryType.HOST
     else:
-        assert engine.context.br().pinned_mr is None
+        assert streaming_engine.context.br().pinned_mr is None
         other_host_mem_type = MemoryType.PINNED_HOST
 
     # Create 3 spillable message containers simulating fanout buffers

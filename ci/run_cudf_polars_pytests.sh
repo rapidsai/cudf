@@ -8,9 +8,4 @@ set -euo pipefail
 # Support invoking run_cudf_polars_pytests.sh outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-# Run all non-experimental tests using both the in-memory and streaming executor.
-IGNORE_EXPERIMENTAL="--ignore=tests/experimental/"
-python -m pytest --cache-clear "$@" tests $IGNORE_EXPERIMENTAL --executor in-memory
-python -m pytest --cache-clear "$@" tests $IGNORE_EXPERIMENTAL --executor streaming
-python -m pytest --cache-clear "$@" tests $IGNORE_EXPERIMENTAL --executor streaming \
-    --blocksize-mode small
+python -m pytest --cache-clear "$@" tests --ignore=tests/experimental

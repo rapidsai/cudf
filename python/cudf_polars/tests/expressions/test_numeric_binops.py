@@ -72,46 +72,46 @@ def df(request, ltype, rtype, with_nulls, binop):
     return pl.LazyFrame({"a": a, "b": b}, schema={"a": ltype, "b": rtype})
 
 
-def test_numeric_binop(df, binop):
+def test_numeric_binop(engine: pl.GPUEngine, df, binop):
     left = pl.col("a")
     right = pl.col("b")
 
     q = df.select(binop(left, right))
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("left_scalar", [False, True])
 @pytest.mark.parametrize("right_scalar", [False, True])
-def test_binop_with_scalar(left_scalar, right_scalar):
+def test_binop_with_scalar(engine: pl.GPUEngine, left_scalar, right_scalar):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [5, 6, 7]})
 
     lop = pl.lit(2) if left_scalar else pl.col("a")
     rop = pl.lit(6) if right_scalar else pl.col("b")
     q = df.select(lop / rop)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("zero", [0, pl.lit(0)])
-def test_floor_div_binop_by_zero(zero, ltype):
+def test_floor_div_binop_by_zero(engine: pl.GPUEngine, zero, ltype):
     df = pl.LazyFrame({"a": [1, 0, 3]}, schema={"a": ltype})
 
     q = df.select(pl.col("a") // zero)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("divisor", [1, 2.0])
-def test_true_div_boolean_column(divisor):
+def test_true_div_boolean_column(engine: pl.GPUEngine, divisor):
     df = pl.LazyFrame({"a": [True, False]})
 
     q = df.select(pl.col("a") / divisor)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_true_div_with_decimals():
+def test_true_div_with_decimals(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "foo": [Decimal("1.00"), Decimal("2.00"), Decimal("3.00"), None],
@@ -120,10 +120,10 @@ def test_true_div_with_decimals():
         schema={"foo": pl.Decimal(15, 2), "bar": pl.Decimal(15, 2)},
     )
     q = df.select(pl.col("bar") / pl.col("foo"))
-    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_132)
 
 
-def test_multiply_with_decimals():
+def test_multiply_with_decimals(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "x": [Decimal("1.23"), Decimal("4.56"), Decimal("7.89")],
@@ -133,7 +133,7 @@ def test_multiply_with_decimals():
     )
 
     q = df.select(pl.col("x") * pl.col("y"))
-    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_132)
 
 
 def test_sum_decimal_widens_precision(request) -> None:

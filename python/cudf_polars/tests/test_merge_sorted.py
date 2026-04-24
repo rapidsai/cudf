@@ -10,10 +10,12 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize("descending", [True, False])
-def test_merge_sorted_without_nulls(descending, request, using_rapidsmpf):
+def test_merge_sorted_without_nulls(
+    engine: pl.GPUEngine, descending, request, using_streaming_engine
+):
     request.applymarker(
         pytest.mark.xfail(
-            not using_rapidsmpf and descending,
+            not using_streaming_engine and descending,
             reason="https://github.com/pola-rs/polars/issues/21511",
         )
     )
@@ -28,7 +30,7 @@ def test_merge_sorted_without_nulls(descending, request, using_rapidsmpf):
         }
     ).sort("age", descending=descending)
     q = df0.merge_sorted(df1, key="age")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -41,7 +43,7 @@ def test_merge_sorted_without_nulls(descending, request, using_rapidsmpf):
         False,
     ],
 )
-def test_merge_sorted_with_nulls(descending):
+def test_merge_sorted_with_nulls(engine: pl.GPUEngine, descending):
     df0 = pl.LazyFrame(
         {
             "name": ["steve", "elise", "bob", "john"],
@@ -57,4 +59,4 @@ def test_merge_sorted_with_nulls(descending):
         }
     ).sort("age", descending=descending)
     q = df0.merge_sorted(df1, key="age")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)

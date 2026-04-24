@@ -21,7 +21,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     ],
 )
 @pytest.mark.parametrize("predicate_pushdown", [False, True])
-def test_filter_expression(expr, predicate_pushdown):
+def test_filter_expression(engine: pl.GPUEngine, expr, predicate_pushdown):
     ldf = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -33,6 +33,7 @@ def test_filter_expression(expr, predicate_pushdown):
     query = ldf.select(pl.col("a").filter(expr))
     assert_gpu_result_equal(
         query,
+        engine=engine,
         collect_kwargs={
             "optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)
         },
