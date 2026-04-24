@@ -1852,6 +1852,25 @@ def test_orc_reader_apache_negative_timestamp(datadir):
     assert_eq(pdf, gdf)
 
 
+def test_orc_reader_epoch_boundary_with_timezone(datadir):
+    # A Spark-written ORC file with writer timezone Asia/Shanghai and a
+    # timestamp near the Unix epoch.
+    path = datadir / "TestOrcFile.Spark.EpochTimestamp.Shanghai.orc"
+
+    # Expected value matches the Apache Java reference reader.
+    # Note: pyarrow/pandas use the Apache C++ reader which
+    # applies the compensation after the timezone conversion and
+    # therefore returns a value that is 1 second too high for this file
+    # (see Apache ORC-763 and ORC-1287). Comparing against pyarrow here
+    # would incorrectly propagate that upstream bug.
+    expected = cudf.DataFrame(
+        {"ts": [pd.Timestamp("1970-01-01 05:51:26.883873")]}
+    )
+    gdf = cudf.read_orc(path)
+
+    assert_eq(expected, gdf)
+
+
 def test_statistics_string_sum():
     strings = ["a string", "another string!"]
     buff = BytesIO()
