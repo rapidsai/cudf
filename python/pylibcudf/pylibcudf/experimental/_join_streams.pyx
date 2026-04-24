@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from cuda.bindings.cyruntime cimport cudaStream_t
 from libcpp.vector cimport vector
 
 from pylibcudf.libcudf.detail.utilities cimport stream_pool as cpp_stream_pool
@@ -45,7 +46,7 @@ cpdef void join_streams(list streams, object stream):
     >>> # ... continue work on join_stream ...
     """
     cdef Stream _stream = _get_stream(stream)
-    cdef cuda_stream_view _cs = _stream.view()
+    cdef cudaStream_t _cs = _stream.view().value()
     cdef vector[cuda_stream_view] c_streams
 
     c_streams.reserve(len(streams))
