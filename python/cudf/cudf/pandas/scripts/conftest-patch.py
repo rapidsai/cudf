@@ -5533,62 +5533,6 @@ NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS = {
     "tests/window/test_rolling.py::test_rolling_mean_all_nan_window_floating_artifacts[2-exp_values1]",
 }
 
-# TODO: Investigate why sometimes these fail
-NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS = {
-    "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_0-array]",
-    "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_1-array]",
-    "tests/copy_view/test_interp_fillna.py::test_interpolate_downcast_reference_triggers_copy",
-    "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint16-__rpow__]",
-    "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint32-__rpow__]",
-    "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint8-__rpow__]",
-    "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint16-__rpow__]",
-    "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint32-__rpow__]",
-    "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint8-__rpow__]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[pyarrow]-False-integer-array]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[pyarrow]-True-integer-array]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[python]-False-integer-array]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[python]-True-integer-array]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[pyarrow]-False-integer-array]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[pyarrow]-True-integer-array]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[python]-False-integer-array]",
-    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[python]-True-integer-array]",
-    "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_iloc_ea_series_indexer_with_na",
-    "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_type_error_multiindex",
-    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_2d_ndarray",
-    "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index",
-    "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index_inplace",
-    "tests/groupby/test_counting.py::TestCounting::test_ngroup_respects_groupby_order[False]",
-    "tests/groupby/test_groupby.py::test_single_element_list_grouping[selection2]",
-    "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_slice_month",
-    "tests/indexes/multi/test_monotonic.py::test_is_monotonic_with_nans[values0-is_monotonic_increasing]",
-    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]",
-    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-last]",
-    "tests/indexing/test_chaining_and_caching.py::TestChaining::test_detect_chained_assignment_warnings_errors",
-    "tests/indexing/test_indexing.py::TestMisc::test_no_reference_cycle",
-    "tests/indexing/test_loc.py::TestLocBooleanLabelsAndSlices::test_loc_bool_slice_raises[nullable_int-DataFrame]",
-    "tests/indexing/test_loc.py::TestLocBooleanLabelsAndSlices::test_loc_bool_slice_raises[nullable_int-Series]",
-    "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys",
-    "tests/reshape/test_crosstab.py::test_categoricals[category-category]",
-    "tests/reshape/test_crosstab.py::test_categoricals[category-int64]",
-    "tests/reshape/test_crosstab.py::test_categoricals[int64-category]",
-    "tests/reshape/test_crosstab.py::test_categoricals[int64-int64]",
-    "tests/series/methods/test_reindex.py::test_reindexing_with_float64_NA_log",
-    "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened",
-    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01 10-%Y-%m-%d %H:%M]",
-    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01-%Y-%m-%d %H]",
-    #      -q tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]
-    # Investigate why.
-    # TODO: These tests pass when run locally: with pandas 2.3.3, numpy 2.2.6, and cupy 13.6.0
-    # We accelerate np.dot via cupy.dot when the proxy array inputs are backed by real
-    # bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh
-    # cupy arrays. So it is possible for tests asserting equality like test_dot_2d_ndarray
-    # fail due to tiny FP differences.
-    # flaky xpasses after https://github.com/rapidsai/cudf/pull/21499
-    r"tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01 10:00-%Y-%m-%d %H:%M:%S]",
-}
-
-# TODO: Ideally cudf.pandas should be able to pass assertions with private APIs,
-# e.g. `obj._private is other_obj`, but tests with public APIs are more important.
 NODEIDS_PATHS_TO_SKIP: dict[str, str] = {
     "tests/arrays/sparse/test_libsparse.py": "Tests private pandas APIs",
     "tests/copy_view/test_internals.py": "Tests private pandas APIs",
@@ -5631,6 +5575,8 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/apply/test_frame_apply.py::test_apply_empty_infer_type[python-1-True-mean-index]": "Asserts private APIs",
     "tests/arithmetic/test_datetime64.py::TestDatetime64OverflowHandling::test_datetimeindex_sub_datetimeindex_overflow": "Asserts private APIs",
     "tests/arithmetic/test_datetime64.py::TestDatetime64OverflowHandling::test_datetimeindex_sub_timestamp_overflow": "Asserts private APIs",
+    "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_0-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/arithmetic/test_timedelta64.py::TestTimedeltaArraylikeAddSubOps::test_td64arr_sub_timedeltalike[timedelta64_1-array]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/arrays/boolean/test_construction.py::test_boolean_array_constructor_copy": "Asserts private APIs",
     "tests/arrays/boolean/test_construction.py::test_coerce_to_array": "Asserts private APIs",
     "tests/arrays/categorical/test_analytics.py::TestCategoricalAnalytics::test_memory_usage": "GPU/CPU memory_usage differs from sys.getsizeof",
@@ -5838,6 +5784,7 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/base/test_misc.py::test_memory_usage[uint32]": "GPU/CPU memory_usage differs from sys.getsizeof",
     "tests/base/test_misc.py::test_memory_usage[uint64]": "GPU/CPU memory_usage differs from sys.getsizeof",
     "tests/base/test_misc.py::test_memory_usage[uint8-series]": "GPU/CPU memory_usage differs from sys.getsizeof",
+    "tests/copy_view/test_interp_fillna.py::test_interpolate_downcast_reference_triggers_copy": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[bool-__add__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[bool-__floordiv__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[bool-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
@@ -5864,12 +5811,15 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[int8-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint16-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint16-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
+    "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint16-__rpow__]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint32-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint32-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
+    "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint32-__rpow__]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint64-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint64-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint8-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint8-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
+    "tests/extension/test_arrow.py::TestArrowArray::test_arith_frame_with_scalar[uint8-__rpow__]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_array[bool-__add__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_array[bool-__floordiv__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_array[bool-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
@@ -5936,12 +5886,15 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[int8-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint16-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint16-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
+    "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint16-__rpow__]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint32-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint32-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
+    "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint32-__rpow__]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint64-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint64-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint8-__mod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint8-__rmod__]": "Unsupported pandas features (TODO: validate with pandas 3)",
+    "tests/extension/test_arrow.py::TestArrowArray::test_arith_series_with_scalar[uint8-__rpow__]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_arrow.py::TestArrowArray::test_memory_usage[bool]": "GPU/CPU memory_usage differs from sys.getsizeof",
     "tests/extension/test_arrow.py::TestArrowArray::test_memory_usage[decimal128(7, 3)]": "GPU/CPU memory_usage differs from sys.getsizeof",
     "tests/extension/test_arrow.py::TestArrowArray::test_memory_usage[double]": "GPU/CPU memory_usage differs from sys.getsizeof",
@@ -6034,6 +5987,14 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/extension/test_period.py::TestPeriodArray::test_series_constructor[D]": "Asserts private APIs",
     "tests/extension/test_sparse.py::TestSparseArray::test_series_constructor[0]": "Asserts private APIs",
     "tests/extension/test_sparse.py::TestSparseArray::test_series_constructor[nan]": "Asserts private APIs",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[pyarrow]-False-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[pyarrow]-True-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[python]-False-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=str[python]-True-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[pyarrow]-False-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[pyarrow]-True-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[python]-False-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/extension/test_string.py::TestStringArray::test_getitem_series_integer_with_missing_raises[string=string[python]-True-integer-array]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/extension/test_string.py::TestStringArray::test_memory_usage[string=str[pyarrow]-False]": "GPU/CPU memory_usage differs from sys.getsizeof",
     "tests/extension/test_string.py::TestStringArray::test_memory_usage[string=str[pyarrow]-True]": "GPU/CPU memory_usage differs from sys.getsizeof",
     "tests/extension/test_string.py::TestStringArray::test_memory_usage[string=str[python]-False]": "GPU/CPU memory_usage differs from sys.getsizeof",
@@ -6050,8 +6011,16 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/extension/test_string.py::TestStringArray::test_series_constructor[string=string[pyarrow]-True]": "Asserts private APIs",
     "tests/extension/test_string.py::TestStringArray::test_series_constructor[string=string[python]-False]": "Asserts private APIs",
     "tests/extension/test_string.py::TestStringArray::test_series_constructor[string=string[python]-True]": "Asserts private APIs",
+    "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_iloc_ea_series_indexer_with_na": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/frame/indexing/test_indexing.py::TestDataFrameIndexing::test_type_error_multiindex": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/frame/methods/test_dot.py::TestSeriesDot::test_dot_2d_ndarray": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/frame/methods/test_info.py::test_memory_usage_empty_no_warning": "GPU/CPU memory_usage differs from sys.getsizeof",
+    "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/frame/methods/test_sort_index.py::TestDataFrameSortIndex::test_sort_index_inplace": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/frame/test_arithmetic.py::test_frame_op_subclass_nonclass_constructor": "TODO: Add reason to skip (need to validate on pandas 3)",
+    "tests/groupby/test_counting.py::TestCounting::test_ngroup_respects_groupby_order[False]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/groupby/test_groupby.py::test_single_element_list_grouping[selection2]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/indexes/datetimes/test_partial_slicing.py::TestSlicing::test_slice_month": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/indexes/interval/test_interval.py::TestIntervalIndex::test_maybe_convert_i8_numeric_identical[float-IntervalIndex]": "Asserts private APIs",
     "tests/indexes/interval/test_interval.py::TestIntervalIndex::test_maybe_convert_i8_numeric_identical[float-Interval]": "Asserts private APIs",
     "tests/indexes/interval/test_interval.py::TestIntervalIndex::test_maybe_convert_i8_numeric_identical[float32-IntervalIndex]": "Asserts private APIs",
@@ -6077,6 +6046,7 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/indexes/interval/test_interval.py::TestIntervalIndex::test_maybe_convert_i8_numeric_identical[uint8-IntervalIndex]": "Asserts private APIs",
     "tests/indexes/interval/test_interval.py::TestIntervalIndex::test_maybe_convert_i8_numeric_identical[uint8-Interval]": "Asserts private APIs",
     "tests/indexes/multi/test_integrity.py::test_memory_usage": "GPU/CPU memory_usage differs from sys.getsizeof",
+    "tests/indexes/multi/test_monotonic.py::test_is_monotonic_with_nans[values0-is_monotonic_increasing]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/indexes/test_base.py::TestMixedIntIndex::test_is_monotonic_na[index0]": "TODO: Add reason to skip (need to validate on pandas 3)",
     "tests/indexes/test_base.py::TestMixedIntIndex::test_is_monotonic_na[index1]": "TODO: Add reason to skip (need to validate on pandas 3)",
     "tests/indexes/test_base.py::TestMixedIntIndex::test_is_monotonic_na[index2]": "TODO: Add reason to skip (need to validate on pandas 3)",
@@ -6085,6 +6055,8 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/indexes/test_base.py::TestMixedIntIndex::test_is_monotonic_na[index5]": "TODO: Add reason to skip (need to validate on pandas 3)",
     "tests/indexes/test_base.py::TestMixedIntIndex::test_is_monotonic_na[index6]": "TODO: Add reason to skip (need to validate on pandas 3)",
     "tests/indexes/test_base.py::TestMixedIntIndex::test_is_monotonic_na[index7]": "TODO: Add reason to skip (need to validate on pandas 3)",
+    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-first]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/indexes/test_common.py::test_sort_values_with_missing[nullable_int-last]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/indexes/test_index_new.py::TestIndexConstructorUnwrapping::test_constructor_no_pandas_array": "Tests private pandas APIs",
     "tests/indexes/test_indexing.py::TestContains::test_index_contains[index0-2]": "TODO: Add reason to skip (need to validate on pandas 3)",
     "tests/indexes/test_indexing.py::TestContains::test_index_contains[index1-2]": "TODO: Add reason to skip (need to validate on pandas 3)",
@@ -6167,6 +6139,7 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/indexing/multiindex/test_indexing_slow.py::test_multiindex_get_loc[b-4]": "Asserts private APIs",
     "tests/indexing/multiindex/test_partial.py::TestMultiIndexPartial::test_getitem_intkey_leading_level[float]": "Asserts private APIs",
     "tests/indexing/multiindex/test_partial.py::TestMultiIndexPartial::test_getitem_intkey_leading_level[int]": "Asserts private APIs",
+    "tests/indexing/test_chaining_and_caching.py::TestChaining::test_detect_chained_assignment_warnings_errors": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/indexing/test_indexing.py::TestDatetimelikeCoercion::test_setitem_dt64_string_scalar['+01:15'-iloc]": "Asserts private APIs",
     "tests/indexing/test_indexing.py::TestDatetimelikeCoercion::test_setitem_dt64_string_scalar['+01:15'-loc]": "Asserts private APIs",
     "tests/indexing/test_indexing.py::TestDatetimelikeCoercion::test_setitem_dt64_string_scalar['+01:15'-setitem]": "Asserts private APIs",
@@ -7034,7 +7007,9 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/indexing/test_indexing.py::TestDatetimelikeCoercion::test_setitem_td64_string_values[setitem-key2-array0]": "Asserts private APIs",
     "tests/indexing/test_indexing.py::TestDatetimelikeCoercion::test_setitem_td64_string_values[setitem-key2-array1]": "Asserts private APIs",
     "tests/indexing/test_indexing.py::TestDatetimelikeCoercion::test_setitem_td64_string_values[setitem-key2-list]": "Asserts private APIs",
-    "tests/indexing/test_indexing.py::TestMisc::test_no_reference_cycle": "Uses weakrefs - sensitive to GC timing",
+    "tests/indexing/test_indexing.py::TestMisc::test_no_reference_cycle": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/indexing/test_loc.py::TestLocBooleanLabelsAndSlices::test_loc_bool_slice_raises[nullable_int-DataFrame]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/indexing/test_loc.py::TestLocBooleanLabelsAndSlices::test_loc_bool_slice_raises[nullable_int-Series]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/io/excel/test_style.py::test_styler_to_s3": "Requires moto server running on http://localhost:5000",
     "tests/io/json/test_compression.py::test_with_s3_url[None]": "Requires moto server running on http://localhost:5000",
     "tests/io/json/test_compression.py::test_with_s3_url[bz2]": "Requires moto server running on http://localhost:5000",
@@ -7915,6 +7890,11 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/resample/test_base.py::test_resample_empty_dataframe[var-h-index0]": "Crashes pytest workers (TODO: Validate on pandas 3)",
     "tests/resample/test_base.py::test_resample_empty_dataframe[var-h-index1]": "Crashes pytest workers (TODO: Validate on pandas 3)",
     "tests/resample/test_base.py::test_resample_empty_dataframe[var-h-index2]": "Crashes pytest workers (TODO: Validate on pandas 3)",
+    "tests/reshape/merge/test_multi.py::TestMergeMulti::test_merge_na_keys": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/reshape/test_crosstab.py::test_categoricals[category-category]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/reshape/test_crosstab.py::test_categoricals[category-int64]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/reshape/test_crosstab.py::test_categoricals[int64-category]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/reshape/test_crosstab.py::test_categoricals[int64-int64]": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/series/indexing/test_setitem.py::TestSetitemNADatetimeLikeDtype::test_int_key[M8[ns]-None-iloc]": "Asserts private APIs",
     "tests/series/indexing/test_setitem.py::TestSetitemNADatetimeLikeDtype::test_int_key[M8[ns]-None-loc]": "Asserts private APIs",
     "tests/series/indexing/test_setitem.py::TestSetitemNADatetimeLikeDtype::test_int_key[M8[ns]-None-setitem]": "Asserts private APIs",
@@ -8023,16 +8003,16 @@ FUTURE_NODEIDS_TO_SKIP: dict[str, str] = {
     "tests/series/indexing/test_setitem.py::TestSetitemNAPeriodDtype::test_slice_key[key1-nan-iloc]": "Asserts private APIs",
     "tests/series/indexing/test_setitem.py::TestSetitemNAPeriodDtype::test_slice_key[key1-nan-loc]": "Asserts private APIs",
     "tests/series/indexing/test_setitem.py::TestSetitemNAPeriodDtype::test_slice_key[key1-nan-setitem]": "Asserts private APIs",
+    "tests/series/methods/test_reindex.py::test_reindexing_with_float64_NA_log": "Flaky xfails (TODO: Validate with pandas 3)",
     "tests/series/test_constructors.py::TestSeriesConstructorInternals::test_constructor_no_pandas_array": "Tests private pandas APIs",
+    "tests/series/test_constructors.py::TestSeriesConstructors::test_constructor_maskedarray_hardened": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01 10-%Y-%m-%d %H:%M]": "Flaky xfails (TODO: Validate with pandas 3)",
+    "tests/tools/test_to_datetime.py::TestToDatetimeMisc::test_to_datetime_iso8601_fails[True-2012-01-01-%Y-%m-%d %H]": "Flaky xfails (TODO: Validate with pandas 3)",
 }
 
 
 def pytest_collection_modifyitems(session, config, items):
-    TO_SKIP = (
-        NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS
-        | NODEIDS_THAT_FLAKY_XFAIL_WITH_CUDF_PANDAS
-        | set(FUTURE_NODEIDS_TO_SKIP)
-    )
+    TO_SKIP = NODEIDS_THAT_XPASS_WITH_CUDF_PANDAS | set(FUTURE_NODEIDS_TO_SKIP)
     TO_XFAIL = NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS | set(
         chain.from_iterable(
             NODEIDS_THAT_FAIL_WITH_CUDF_PANDAS_WITH_REASON.values()
