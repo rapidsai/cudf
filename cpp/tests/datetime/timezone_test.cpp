@@ -11,14 +11,47 @@
 #include <cudf/timezone.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <array>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <vector>
 
 namespace {
 
-constexpr char const* kCanonicalZonePath = "/usr/share/zoneinfo/America/Los_Angeles";
+constexpr std::string_view canonical_zone_name = "America/Los_Angeles";
+
+// Candidate locations for the system TZif database, probed in order.
+constexpr std::array<std::string_view, 3> candidate_tz_dirs{
+  "/usr/share/zoneinfo",
+  "/usr/lib/zoneinfo",
+  "/etc/zoneinfo",
+};
+
+std::optional<std::filesystem::path> find_system_tz_dir()
+{
+  static std::optional<std::filesystem::path> const cached = [] {
+    namespace fs      = std::filesystem;
+    auto const usable = [](fs::path const& dir) {
+      std::error_code ec;
+      return fs::is_regular_file(dir / canonical_zone_name, ec);
+    };
+    if (auto const* env = std::getenv("TZDIR")) {
+      if (fs::path const d{env}; usable(d)) { return std::optional{d}; }
+    }
+    for (auto const sv : candidate_tz_dirs) {
+      if (fs::path const d{sv}; usable(d)) { return std::optional{d}; }
+    }
+    return std::optional<fs::path>{};
+  }();
+  return cached;
+}
 
 }  // namespace
 
@@ -40,13 +73,10 @@ TEST_F(TimezoneTransitionTableTest, EmptyZoneNameShortCircuitsWithoutReadingFile
 
 TEST_F(TimezoneTransitionTableTest, CanonicalZoneProducesTwoColumnTable)
 {
-  namespace fs = std::filesystem;
-  if (!fs::exists(kCanonicalZonePath)) {
-    GTEST_SKIP() << "System is missing " << kCanonicalZonePath;
-  }
+  auto const tz_dir = find_system_tz_dir();
+  if (!tz_dir) { GTEST_SKIP() << "No system zoneinfo directory with " << canonical_zone_name; }
 
-  auto const table =
-    cudf::make_timezone_transition_table("/usr/share/zoneinfo", "America/Los_Angeles");
+  auto const table = cudf::make_timezone_transition_table(tz_dir->string(), canonical_zone_name);
   ASSERT_EQ(table->num_columns(), 2);
   // Sanity: the future cycle dominates the row count, so we expect hundreds of rows.
   EXPECT_GT(table->num_rows(), 100);
@@ -54,12 +84,10 @@ TEST_F(TimezoneTransitionTableTest, CanonicalZoneProducesTwoColumnTable)
 
 TEST_F(TimezoneTransitionTableTest, UnknownZoneThrows)
 {
-  namespace fs = std::filesystem;
-  if (!fs::exists(kCanonicalZonePath)) {
-    GTEST_SKIP() << "System is missing " << kCanonicalZonePath;
-  }
+  auto const tz_dir = find_system_tz_dir();
+  if (!tz_dir) { GTEST_SKIP() << "No system zoneinfo directory with " << canonical_zone_name; }
 
-  EXPECT_THROW(cudf::make_timezone_transition_table("/usr/share/zoneinfo", "Not_A/Real_Zone_bXYZ"),
+  EXPECT_THROW(cudf::make_timezone_transition_table(tz_dir->string(), "Not_A/Real_Zone_bXYZ"),
                cudf::logic_error);
 }
 
@@ -67,12 +95,14 @@ class TimezoneAliasResolutionTest : public cudf::test::BaseFixture {
  protected:
   void SetUp() override
   {
-    auto const base = std::filesystem::temp_directory_path();
-    // Include the test name so parallel cases don't collide.
-    auto const test_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
-    tz_dir_              = base / (std::string{"cudf_tz_alias_test_"} + test_name);
-    std::filesystem::remove_all(tz_dir_);
-    std::filesystem::create_directories(tz_dir_);
+    // make the directory name process-unique
+    auto const tmpl =
+      (std::filesystem::temp_directory_path() / (std::string{"cudf_tz_alias_test_"} + ".XXXXXX"))
+        .string();
+    std::vector<char> buf(tmpl.begin(), tmpl.end());
+    buf.push_back('\0');
+    ASSERT_NE(::mkdtemp(buf.data()), nullptr) << "mkdtemp failed: " << std::strerror(errno);
+    tz_dir_ = buf.data();
   }
 
   void TearDown() override
@@ -83,13 +113,24 @@ class TimezoneAliasResolutionTest : public cudf::test::BaseFixture {
 
   [[nodiscard]] bool install_zone(std::string_view zone_name) const
   {
+    auto const src_dir = find_system_tz_dir();
+    if (!src_dir) { return false; }
+
     std::error_code ec;
-    if (!std::filesystem::exists(kCanonicalZonePath, ec)) { return false; }
     auto const dst = tz_dir_ / zone_name;
     std::filesystem::create_directories(dst.parent_path(), ec);
+    if (ec) {
+      ADD_FAILURE() << "create_directories(" << dst.parent_path() << ") failed: " << ec.message();
+      return false;
+    }
     std::filesystem::copy_file(
-      kCanonicalZonePath, dst, std::filesystem::copy_options::overwrite_existing, ec);
-    return !ec;
+      *src_dir / canonical_zone_name, dst, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+      ADD_FAILURE() << "copy_file(" << (*src_dir / canonical_zone_name) << " -> " << dst
+                    << ") failed: " << ec.message();
+      return false;
+    }
+    return true;
   }
 
   void write_tzdata_zi(std::string_view contents) const
@@ -105,45 +146,45 @@ class TimezoneAliasResolutionTest : public cudf::test::BaseFixture {
 
 TEST_F(TimezoneAliasResolutionTest, DirectLookupUnaffectedByNewFallback)
 {
-  if (!install_zone("America/Los_Angeles")) {
-    GTEST_SKIP() << "System is missing " << kCanonicalZonePath;
+  if (!install_zone(canonical_zone_name)) {
+    GTEST_SKIP() << "No system zoneinfo directory with " << canonical_zone_name;
   }
 
-  auto const table = cudf::make_timezone_transition_table(dir(), "America/Los_Angeles");
+  auto const table = cudf::make_timezone_transition_table(dir(), canonical_zone_name);
   EXPECT_GT(table->num_rows(), 0);
   EXPECT_EQ(table->num_columns(), 2);
 }
 
 TEST_F(TimezoneAliasResolutionTest, ResolvesShortFormLinkFromTzdataZi)
 {
-  if (!install_zone("America/Los_Angeles")) {
-    GTEST_SKIP() << "System is missing " << kCanonicalZonePath;
+  if (!install_zone(canonical_zone_name)) {
+    GTEST_SKIP() << "No system zoneinfo directory with " << canonical_zone_name;
   }
   write_tzdata_zi(
     "# synthetic tzdata.zi for libcudf tests\n"
     "L America/Los_Angeles US/Pacific\n");
 
-  auto const via_canonical = cudf::make_timezone_transition_table(dir(), "America/Los_Angeles");
+  auto const via_canonical = cudf::make_timezone_transition_table(dir(), canonical_zone_name);
   auto const via_alias     = cudf::make_timezone_transition_table(dir(), "US/Pacific");
   CUDF_TEST_EXPECT_TABLES_EQUAL(via_canonical->view(), via_alias->view());
 }
 
 TEST_F(TimezoneAliasResolutionTest, ResolvesLongFormLinkFromTzdataZi)
 {
-  if (!install_zone("America/Los_Angeles")) {
-    GTEST_SKIP() << "System is missing " << kCanonicalZonePath;
+  if (!install_zone(canonical_zone_name)) {
+    GTEST_SKIP() << "No system zoneinfo directory with " << canonical_zone_name;
   }
   write_tzdata_zi("Link America/Los_Angeles US/Pacific\n");
 
-  auto const via_canonical = cudf::make_timezone_transition_table(dir(), "America/Los_Angeles");
+  auto const via_canonical = cudf::make_timezone_transition_table(dir(), canonical_zone_name);
   auto const via_alias     = cudf::make_timezone_transition_table(dir(), "US/Pacific");
   CUDF_TEST_EXPECT_TABLES_EQUAL(via_canonical->view(), via_alias->view());
 }
 
 TEST_F(TimezoneAliasResolutionTest, ResolvesChainedLinks)
 {
-  if (!install_zone("America/Los_Angeles")) {
-    GTEST_SKIP() << "System is missing " << kCanonicalZonePath;
+  if (!install_zone(canonical_zone_name)) {
+    GTEST_SKIP() << "No system zoneinfo directory with " << canonical_zone_name;
   }
   // Neither "intermediate" nor "US/Pacific" exists on disk. The resolver must traverse
   //   US/Pacific -> intermediate -> America/Los_Angeles to find a real file.
@@ -151,7 +192,7 @@ TEST_F(TimezoneAliasResolutionTest, ResolvesChainedLinks)
     "L America/Los_Angeles intermediate\n"
     "L intermediate US/Pacific\n");
 
-  auto const via_canonical = cudf::make_timezone_transition_table(dir(), "America/Los_Angeles");
+  auto const via_canonical = cudf::make_timezone_transition_table(dir(), canonical_zone_name);
   auto const via_alias     = cudf::make_timezone_transition_table(dir(), "US/Pacific");
   CUDF_TEST_EXPECT_TABLES_EQUAL(via_canonical->view(), via_alias->view());
 }
@@ -171,8 +212,8 @@ TEST_F(TimezoneAliasResolutionTest, ThrowsWhenNoTzdataZiPresent)
 
 TEST_F(TimezoneAliasResolutionTest, IgnoresCommentsAndNonLinkDirectives)
 {
-  if (!install_zone("America/Los_Angeles")) {
-    GTEST_SKIP() << "System is missing " << kCanonicalZonePath;
+  if (!install_zone(canonical_zone_name)) {
+    GTEST_SKIP() << "No system zoneinfo directory with " << canonical_zone_name;
   }
   write_tzdata_zi(
     "# a leading comment\n"
@@ -182,7 +223,7 @@ TEST_F(TimezoneAliasResolutionTest, IgnoresCommentsAndNonLinkDirectives)
     "   L America/Los_Angeles US/Pacific\n"  // link with leading whitespace
     "# trailing comment\n");
 
-  auto const via_canonical = cudf::make_timezone_transition_table(dir(), "America/Los_Angeles");
+  auto const via_canonical = cudf::make_timezone_transition_table(dir(), canonical_zone_name);
   auto const via_alias     = cudf::make_timezone_transition_table(dir(), "US/Pacific");
   CUDF_TEST_EXPECT_TABLES_EQUAL(via_canonical->view(), via_alias->view());
 }

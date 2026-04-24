@@ -15,6 +15,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace cudf {
 
@@ -25,6 +26,8 @@ std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 
 /**
  * @brief Resolves a timezone alias via `Link` entries in `<tzif_dir>/tzdata.zi`.
+ *
+ * Returns the canonical name if it resolves to a TZif file on disk, else `std::nullopt`.
  */
 std::optional<std::string> resolve_tz_alias(std::filesystem::path const& tzif_dir,
                                             std::string_view timezone_name)
@@ -32,25 +35,13 @@ std::optional<std::string> resolve_tz_alias(std::filesystem::path const& tzif_di
   std::ifstream fin{tzif_dir / "tzdata.zi"};
   if (!fin) { return std::nullopt; }
 
-  // Parse all link entries into an alias -> target map
   std::unordered_map<std::string, std::string> links;
   for (std::string line; std::getline(fin, line);) {
+    // Handle CRLF line endings: `std::getline` keeps a trailing `\r`.
+    if (!line.empty() && line.back() == '\r') { line.pop_back(); }
+
     std::string_view v{line};
-    auto const first = v.find_first_not_of(" \t");
-    if (first == std::string_view::npos) { continue; }
-    v.remove_prefix(first);
-    if (v.empty() || v.front() == '#') { continue; }
-
-    // Match a leading "Link" or "L" token followed by whitespace.
-    if (v.starts_with("Link") && v.size() > 4 && (v[4] == ' ' || v[4] == '\t')) {
-      v.remove_prefix(4);
-    } else if (v.starts_with("L") && v.size() > 1 && (v[1] == ' ' || v[1] == '\t')) {
-      v.remove_prefix(1);
-    } else {
-      continue;
-    }
-
-    auto const take_token = [&]() -> std::string_view {
+    auto const take_token = [&v]() -> std::string_view {
       auto const ws_start = v.find_first_not_of(" \t");
       if (ws_start == std::string_view::npos) {
         v = {};
@@ -63,21 +54,30 @@ std::optional<std::string> resolve_tz_alias(std::filesystem::path const& tzif_di
       return tok;
     };
 
+    auto const directive = take_token();
+    if (directive.empty() || directive.front() == '#') { continue; }
+    if (directive != "Link" && directive != "L") { continue; }
+
     auto const target = take_token();
     auto const alias  = take_token();
     if (target.empty() || alias.empty()) { continue; }
     links.emplace(std::string{alias}, std::string{target});
   }
 
+  // Walk the alias chain, detecting cycles via the set of names already visited.
   std::string name{timezone_name};
-  // Bound the hop count to avoid loops in pathological input
-  constexpr int max_hops = 16;
-  for (int hops = 0; hops < max_hops; ++hops) {
+  std::unordered_set<std::string> visited{name};
+  while (true) {
     auto const it = links.find(name);
     if (it == links.end()) { break; }
+    if (!visited.insert(it->second).second) {
+      // Cycle in tzdata.zi; bail out instead of looping.
+      return std::nullopt;
+    }
     name = it->second;
   }
-  if (name == std::string{timezone_name}) { return std::nullopt; }
+  // No link followed: caller already tried this name directly.
+  if (std::string_view{name} == timezone_name) { return std::nullopt; }
 
   std::error_code ec;
   if (!std::filesystem::exists(tzif_dir / name, ec)) { return std::nullopt; }
@@ -199,7 +199,17 @@ struct timezone_file {
         fin.open(tz_dir / *resolved, open_flags);
       }
     }
-    CUDF_EXPECTS(fin, "Failed to open the timezone file '" + tz_filename.string() + "'");
+    if (!fin) {
+      auto err = std::string{"Failed to open the timezone file '"} + tz_filename.string() + "'";
+      std::error_code ec;
+      if (!std::filesystem::exists(tz_dir / "tzdata.zi", ec)) {
+        err += " (no tzdata.zi present in '" + tz_dir.string() + "' to resolve aliases)";
+      } else {
+        err += " (no matching Link entry in '" + (tz_dir / "tzdata.zi").string() +
+               "', or its target is also missing)";
+      }
+      CUDF_FAIL(err);
+    }
     auto const file_size = fin.tellg();
     fin.seekg(0);
 
