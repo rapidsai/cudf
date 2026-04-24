@@ -7,6 +7,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/transform.hpp>
@@ -53,7 +54,8 @@ std::vector<std::unique_ptr<column>> filter(
                                             stream,
                                             mr);
 
-  return apply_boolean_mask(cudf::table_view{filter_columns}, predicate->view(), stream, mr)
+  return apply_mask(
+           cudf::table_view{filter_columns}, predicate->view(), mask_type::RETENTION, stream, mr)
     ->release();
 }
 
