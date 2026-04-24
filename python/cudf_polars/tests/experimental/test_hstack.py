@@ -17,6 +17,7 @@ from cudf_polars.dsl.ir import Filter, HStack
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
     DEFAULT_RUNTIME,
@@ -99,7 +100,7 @@ def test_hstack_non_pointwise_redirect_covers_parallel_hstack_handler(engine):
     mask = expr.NamedExpr("m", expr.Literal(DataType(pl.Boolean()), value=True))
     root = Filter(hstack_schema, mask, hstack)
     config_options = ConfigOptions.from_polars_engine(engine)
-    lower_ir_graph(root, config_options)
+    lower_ir_graph(root, config_options, collect_statistics(root, config_options))
 
 
 def test_with_columns_scalar_upstream_20981(engine):
@@ -129,7 +130,9 @@ def test_cse_agg_shared_decomposition(engine, comm_subexpr_elim):
     assert len(inner_hstacks) == (1 if comm_subexpr_elim else 0)
 
     config_options = ConfigOptions.from_polars_engine(engine)
-    lowered, _, _ = lower_ir_graph(ir, config_options)
+    lowered, _ = lower_ir_graph(
+        ir, config_options, collect_statistics(ir, config_options)
+    )
 
     # Both paths must lower to a single Repartition computing one aggregation.
     repartitions = [n for n in traversal([lowered]) if isinstance(n, Repartition)]

@@ -35,7 +35,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
-    execute_ir_on_rank,
+    evaluate_on_rank,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -44,14 +44,13 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
 from cudf_polars.utils.config import DaskContext
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
@@ -331,30 +330,25 @@ def _get_statistics(
 
 def _worker_evaluate(
     ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
     *,
     uid: str,
     collect_metadata: bool = False,
     dask_worker: distributed.Worker | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
-    Execute a Polars IR query on this Dask worker's GPU.
+    Lower and execute a Polars IR query on this Dask worker's GPU.
+
+    IR lowering is performed collectively across all workers: rank 0
+    collects scan statistics and allgathers them, then every worker
+    lowers the graph independently.
 
     Parameters
     ----------
     ir
-        Root IR node.
-    partition_info
-        Per-node partition metadata.
+        pre-lowered root IR node.
     config_options
         Executor configuration (``dask_context`` is already stripped).
-    stats
-        Statistics collector.
-    collective_id_map
-        Mapping from IR nodes to collective operation IDs.
     uid
         Unique identifier for the cluster instance, used to look up the
         per-worker context attribute.
@@ -375,25 +369,19 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
-    return execute_ir_on_rank(
+    return evaluate_on_rank(
         mp_ctx.ctx,
         mp_ctx.comm,
         mp_ctx.py_executor,
         ir,
-        partition_info,
         config_options,
-        stats,
-        collective_id_map,
         collect_metadata=collect_metadata,
     )
 
 
 def evaluate_pipeline_dask_mode(
     ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
@@ -401,24 +389,18 @@ def evaluate_pipeline_dask_mode(
     """
     Evaluate a RapidsMPF streaming pipeline in Dask mode.
 
-    Dispatches :func:`_worker_evaluate` to every Dask worker via
-    :meth:`distributed.Client.run`. Each worker executes the full pipeline
-    on its local GPU and participates in collective operations through the
-    shared UCXX communicator. Per-worker outputs are concatenated on the
-    client before being returned.
+    The pre-lowered IR is dispatched to every Dask worker via
+    :meth:`distributed.Client.run`.  Each worker collectively lowers the
+    graph (rank 0 gathers statistics; all ranks allgather them) and then
+    executes the resulting pipeline on its local GPU.  Per-worker outputs
+    are concatenated on the client before being returned.
 
     Parameters
     ----------
     ir
-        The IR node.
-    partition_info
-        The partition information.
+        The pre-lowered IR node.
     config_options
         Executor configuration, including the ``dask_context`` handle.
-    stats
-        The statistics collector.
-    collective_id_map
-        Mapping from IR nodes to their pre-allocated collective operation IDs.
     collect_metadata
         Whether to collect runtime metadata.
     query_id
@@ -451,10 +433,7 @@ def evaluate_pipeline_dask_mode(
     result_map = dask_context.client.run(
         functools.partial(_worker_evaluate, uid=dask_context.rapidsmpf_id),
         ir,
-        partition_info,
         worker_config,
-        stats,
-        collective_id_map,
         collect_metadata=collect_metadata,
     )
 

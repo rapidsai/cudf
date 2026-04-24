@@ -67,8 +67,10 @@ def _(
 
 
 def lower_ir_graph(
-    ir: IR, config_options: ConfigOptions[StreamingExecutor]
-) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -78,13 +80,14 @@ def lower_ir_graph(
         Root of the graph to rewrite.
     config_options
         GPUEngine configuration options.
+    stats
+        Pre-computed statistics collector.
 
     Returns
     -------
-    new_ir, partition_info, stats
-        The rewritten graph, a mapping from unique nodes
-        in the new graph to associated partitioning information,
-        and the statistics collector.
+    new_ir, partition_info
+        The rewritten graph and a mapping from unique nodes
+        in the new graph to associated partitioning information.
 
     Notes
     -----
@@ -97,10 +100,10 @@ def lower_ir_graph(
     """
     state: State = {
         "config_options": config_options,
-        "stats": collect_statistics(ir, config_options),
+        "stats": stats,
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return *mapper(ir), state["stats"]
+    return mapper(ir)
 
 
 def task_graph(
@@ -277,7 +280,8 @@ def evaluate_streaming(
         return evaluate_rapidsmpf(ir, config_options)
     else:
         # Using the default task engine.
-        ir, partition_info, _ = lower_ir_graph(ir, config_options)
+        stats = collect_statistics(ir, config_options)
+        ir, partition_info = lower_ir_graph(ir, config_options, stats)
 
         graph, key = task_graph(ir, partition_info, config_options)
 

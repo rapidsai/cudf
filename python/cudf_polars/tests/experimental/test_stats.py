@@ -3,14 +3,16 @@
 
 from __future__ import annotations
 
+import json
 import pickle
+from typing import TYPE_CHECKING
 
 import pytest
 
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.experimental.base import SerializedDataSourceInfo
+from cudf_polars.experimental.base import SerializedDataSourceInfo, StatsCollector
 from cudf_polars.experimental.io import (
     DataFrameSourceInfo,
     ParquetSourceInfo,
@@ -20,6 +22,9 @@ from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
+
+if TYPE_CHECKING:
+    import pathlib
 
 
 @pytest.fixture(scope="module")
@@ -223,3 +228,49 @@ def test_parquet_empty_per_file_means() -> None:
 
     info = ParquetSourceInfo(1000, None)
     assert info.per_file_means == {}
+
+
+def test_serialize_stats_roundtrip_dataframescan(stats_engine: pl.GPUEngine) -> None:
+    df = pl.DataFrame({"x": range(200), "y": [1, 2] * 100})
+    q = pl.LazyFrame(df)
+    ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
+    config = ConfigOptions.from_polars_engine(stats_engine)
+    stats = collect_statistics(ir, config)
+
+    serialized = stats.serialize(ir)
+    wire = json.loads(json.dumps(serialized))
+    restored = StatsCollector.deserialize(wire, ir)
+
+    assert set(restored.scan_stats) == set(stats.scan_stats)
+    for node, info in stats.scan_stats.items():
+        rt = restored.scan_stats[node]
+        assert rt.row_count == info.row_count
+        assert rt.column_storage_size("x") == info.column_storage_size("x")
+
+
+def test_serialize_stats_roundtrip_parquet(
+    tmp_path: pathlib.Path, df: pl.DataFrame
+) -> None:
+    _clear_source_info_cache()
+    make_partitioned_source(df, tmp_path, "parquet", n_files=3)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"target_partition_size": 10_000},
+        parquet_options={"max_footer_samples": 3, "max_row_group_samples": 1},
+    )
+    q = pl.scan_parquet(tmp_path)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    config = ConfigOptions.from_polars_engine(engine)
+    stats = collect_statistics(ir, config)
+
+    serialized = stats.serialize(ir)
+    wire = json.loads(json.dumps(serialized))
+    restored = StatsCollector.deserialize(wire, ir)
+
+    assert set(restored.scan_stats) == set(stats.scan_stats)
+    for node, info in stats.scan_stats.items():
+        rt = restored.scan_stats[node]
+        assert rt.row_count == info.row_count
+        for col in ("x", "y", "z"):
+            assert rt.column_storage_size(col) == info.column_storage_size(col)

@@ -56,6 +56,7 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.repartition import Repartition
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.utils.config import CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
@@ -102,48 +103,39 @@ def evaluate_logical_plan(
     """
     assert config_options.executor.runtime == "rapidsmpf", "Runtime must be rapidsmpf"
 
-    # Lower the IR graph on the client process (for now).
-    ir, partition_info, stats = lower_ir_graph(ir, config_options)
-
-    # Dask may return chunks in arbitrary order.
-    # Make sure we always finish with a Repartition for now.
-    if config_options.executor.cluster == "distributed" and not isinstance(
-        ir, Repartition
-    ):
-        ir = Repartition(ir.schema, ir)
-        partition_info[ir] = PartitionInfo(count=1)
-
     query_id = uuid.uuid4()
 
-    # Reserve shuffle IDs for the entire pipeline execution
-    with (
-        ReserveOpIDs(ir, config_options) as collective_id_map,
-        cudf_polars.dsl.tracing.bound_contextvars(cudf_polars_query_id=str(query_id)),
+    with cudf_polars.dsl.tracing.bound_contextvars(
+        cudf_polars_query_id=str(query_id),
     ):
-        # Log the query plan structure for tracing (no-op if tracing disabled)
-        log_query_plan(ir, config_options)
-
-        # Build and execute the streaming pipeline.
-        # This must be done on all worker processes
-        # for cluster == "distributed".
         match config_options.executor.cluster:
             case "distributed":  # pragma: no cover; block depends on executor type and Distributed cluster
-                # Distributed execution: Use client.run
-                # NOTE: Distributed execution requires Dask for now
+                # Legacy distributed execution: lower on the client,
+                # ship the lowered plan to workers.
                 from cudf_polars.experimental.rapidsmpf.dask import (
                     evaluate_pipeline_dask,
                 )
 
-                result, metadata_collector = evaluate_pipeline_dask(
-                    evaluate_pipeline,
-                    ir,
-                    partition_info,
-                    config_options,
-                    stats,
-                    collective_id_map,
-                    collect_metadata=collect_metadata,
-                    query_id=query_id,
-                )
+                stats = collect_statistics(ir, config_options)
+                ir, partition_info = lower_ir_graph(ir, config_options, stats)
+
+                # Dask may return chunks in arbitrary order.
+                if not isinstance(ir, Repartition):
+                    ir = Repartition(ir.schema, ir)
+                    partition_info[ir] = PartitionInfo(count=1)
+
+                with ReserveOpIDs(ir, config_options) as collective_id_map:
+                    log_query_plan(ir, config_options)
+                    result, metadata_collector = evaluate_pipeline_dask(
+                        evaluate_pipeline,
+                        ir,
+                        partition_info,
+                        config_options,
+                        stats,
+                        collective_id_map,
+                        collect_metadata=collect_metadata,
+                        query_id=query_id,
+                    )
             case "spmd":
                 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
                     evaluate_pipeline_spmd_mode,
@@ -151,10 +143,7 @@ def evaluate_logical_plan(
 
                 result, metadata_collector = evaluate_pipeline_spmd_mode(
                     ir,
-                    partition_info,
                     config_options,
-                    stats,
-                    collective_id_map,
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
@@ -165,10 +154,7 @@ def evaluate_logical_plan(
 
                 result, metadata_collector = evaluate_pipeline_ray_mode(
                     ir,
-                    partition_info,
                     config_options,
-                    stats,
-                    collective_id_map,
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
@@ -179,25 +165,26 @@ def evaluate_logical_plan(
 
                 result, metadata_collector = evaluate_pipeline_dask_mode(
                     ir,
-                    partition_info,
                     config_options,
-                    stats,
-                    collective_id_map,
                     collect_metadata=collect_metadata,
                     query_id=query_id,
                 )
             case "single":
-                # Single-process execution: Run locally
-                result, metadata_collector = evaluate_pipeline(
-                    ir,
-                    partition_info,
-                    config_options,
-                    stats,
-                    collective_id_map,
-                    single_process_communicator(Options(), ProgressThread()),
-                    collect_metadata=collect_metadata,
-                    query_id=query_id,
-                )
+                # Single-process execution: lower and run locally.
+                stats = collect_statistics(ir, config_options)
+                ir, partition_info = lower_ir_graph(ir, config_options, stats)
+                with ReserveOpIDs(ir, config_options) as collective_id_map:
+                    log_query_plan(ir, config_options)
+                    result, metadata_collector = evaluate_pipeline(
+                        ir,
+                        partition_info,
+                        config_options,
+                        stats,
+                        collective_id_map,
+                        single_process_communicator(Options(), ProgressThread()),
+                        collect_metadata=collect_metadata,
+                        query_id=query_id,
+                    )
             case other:
                 raise ValueError(f"Unknown cluster mode: {other}")
 

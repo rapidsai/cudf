@@ -30,7 +30,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
-    execute_ir_on_rank,
+    evaluate_on_rank,
 )
 from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
@@ -40,7 +40,7 @@ from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Callable, MutableMapping
+    from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.statistics import Statistics
@@ -48,7 +48,6 @@ if TYPE_CHECKING:
     from ray.actor import ActorHandle
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.frontend.core import T
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
@@ -57,10 +56,7 @@ if TYPE_CHECKING:
 
 def evaluate_pipeline_ray_mode(
     ir: IR,
-    partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
-    stats: StatsCollector,
-    collective_id_map: dict[IR, list[int]],
     *,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
@@ -68,26 +64,19 @@ def evaluate_pipeline_ray_mode(
     """
     Evaluate a RapidsMPF streaming pipeline in Ray mode.
 
-    The query is dispatched in parallel to every :class:`RankActor` in the
-    Ray cluster. Each actor evaluates the full pipeline on its local GPU and
-    participates in collective operations through the shared UCXX
-    communicator. The per-rank outputs are concatenated on the client before
-    being returned.
+    The pre-lowered IR is dispatched to every :class:`RankActor` in the
+    Ray cluster.  Each actor collectively lowers the graph (rank 0
+    gathers statistics; all ranks allgather them) and then executes the
+    resulting pipeline on its local GPU.  Per-rank outputs are
+    concatenated on the client before being returned.
 
     Parameters
     ----------
     ir
-        The IR node.
-    partition_info
-        The partition information.
+        The pre-lowered IR node.
     config_options
         Executor configuration, including the rapidsmpf context and the
         Python thread-pool executor used to drive the actor network.
-    stats
-        The statistics collector.
-    collective_id_map
-        Mapping from IR nodes to their pre-allocated collective operation
-        IDs.
     collect_metadata
         Whether to collect runtime metadata.
     query_id
@@ -122,17 +111,15 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_context=None),
     )
 
-    # Serialize the IR bundle once into the Ray object store. The objects must be
-    # pickled together so IR-node keys in partition_info / collective_id_map remain
-    # identical to the nodes in the deserialized IR tree. Actors fetch the bundle
-    # by reference instead of receiving N copies.
-    query_bundle = ray.put((ir, partition_info, stats, collective_id_map))
+    # Serialize the IR into the Ray object store so actors fetch by reference
+    # instead of receiving N copies.
+    ir_ref = ray.put(ir)
     # ray.get() returns results in the same order as the input list of object refs,
     # guaranteeing that result[i] corresponds to rank_actors[i] (rank order).
     result = ray.get(
         [
             rank.evaluate_polars_ir.remote(
-                query_bundle,
+                ir_ref,
                 actor_config_options,
                 collect_metadata=collect_metadata,
             )
@@ -316,32 +303,23 @@ class RankActor:
 
     def evaluate_polars_ir(
         self,
-        query_bundle: tuple[
-            IR,
-            MutableMapping[IR, PartitionInfo],
-            StatsCollector,
-            dict[IR, list[int]],
-        ],
+        ir: IR,
         config_options: ConfigOptions[StreamingExecutor],
         *,
         collect_metadata: bool,
     ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
         """
-        Execute a Polars IR query on this actor's GPU.
+        Lower and execute a Polars IR query on this actor's GPU.
 
-        The IR is lowered to a RapidsMPF actor network, executed locally, and
-        the resulting output messages are assembled into a Polars DataFrame.
-        Collective operations in the network communicate with peer actors
-        through the shared UCXX communicator.
+        The pre-lowered IR is collectively lowered across all actors
+        (rank 0 gathers scan statistics, all ranks allgather them, then
+        each rank lowers independently) and executed as a RapidsMPF
+        actor network.
 
         Parameters
         ----------
-        query_bundle
-            Tuple of ``(ir, partition_info, stats, collective_id_map)``.
-            Bundled into a single argument so that all four objects are
-            pickled together, preserving object identity between IR-node
-            keys in ``partition_info`` / ``collective_id_map`` and the
-            nodes in the ``ir`` tree.
+        ir
+            The pre-lowered IR tree.
         config_options
             Executor configuration forwarded from the client.
         collect_metadata
@@ -360,22 +338,18 @@ class RankActor:
         RuntimeError
             If :meth:`setup_worker` has not been called first.
         """
-        ir, partition_info, stats, collective_id_map = query_bundle
         if self._ctx is None:
             raise RuntimeError("setup_worker must be called before evaluate_polars_ir")
         # Ray transfers the returned Polars DataFrame back to the client via the
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        return execute_ir_on_rank(
+        return evaluate_on_rank(
             self._ctx,
             self._comm,
             self._py_executor,
             ir,
-            partition_info,
             config_options,
-            stats,
-            collective_id_map,
             collect_metadata=collect_metadata,
         )
 

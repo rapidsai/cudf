@@ -34,6 +34,7 @@ from cudf_polars.experimental.base import (
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
+from cudf_polars.utils.config import Cluster
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 from cudf_polars.utils.versions import POLARS_VERSION_LT_137
 
@@ -406,8 +407,13 @@ def _(
     )
 
     # TODO: Support cloud storage
-    if Path(ir.path).exists() and executor_options.sink_to_directory:
+    if (
+        Path(ir.path).exists()
+        and executor_options.sink_to_directory
+        and executor_options.cluster in (Cluster.SINGLE, Cluster.DISTRIBUTED)
+    ):
         raise NotImplementedError(
+            f"Trying to sink to an existing directory: {ir.path}."
             "Writing to an existing path is not supported when sinking "
             "to a directory. If you are using the 'distributed' scheduler, "
             "please remove the target directory before calling 'collect'. "
