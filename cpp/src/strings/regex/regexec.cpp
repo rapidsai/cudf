@@ -1,8 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "strings/regex/glushkov_regcomp.h"
 #include "strings/regex/regcomp.h"
 #include "strings/regex/regex.cuh"
 
@@ -15,12 +16,17 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <cstring>
 #include <functional>
 #include <numeric>
 
 namespace cudf {
 namespace strings {
 namespace detail {
+
+// ===========================================================================
+// Thompson NFA device program creation
+// ===========================================================================
 
 // Copy reprog primitive values
 reprog_device::reprog_device(reprog const& prog)
@@ -33,10 +39,167 @@ reprog_device::reprog_device(reprog const& prog)
 {
 }
 
+// ---------------------------------------------------------------------------
+// Glushkov device program builder
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Pack a glushkov_host_program into a contiguous device buffer and
+ *        return a device pointer to the embedded glushkov_program_device struct.
+ *
+ * Buffer layout:
+ *   [glushkov_program_device struct]
+ *   [_positions    : num_states × glushkov_position]
+ *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × g_state_t]
+ *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS_DEV × uint8_t + padding]
+ *   [_reach_ascii  : GLUSHKOV_ASCII_TABLE_SIZE × g_state_t]
+ *   [_exception_succs : num_states × g_state_t]
+ *   [_classes : classes_count × reclass_device + variable-length literals]
+ *
+ * Returns {device_ptr_to_glushkov_program_device, raw_buffer_to_delete}
+ * where the device ptr is the beginning of the buffer (cast as the struct).
+ */
+static std::pair<glushkov_program_device const*, rmm::device_uvector<u_char>*>
+create_glushkov_device(glushkov_host_program const& h_gp,
+                       uint8_t const* d_codepoint_flags,
+                       rmm::cuda_stream_view stream)
+{
+  uint32_t const num_states = h_gp.num_states;
+  uint32_t const num_shifts = h_gp.shift_count;
+  int32_t const classes_cnt = static_cast<int32_t>(h_gp.classes.size());
+
+  // ---- Compute cumulative section offsets from buffer start ---------------
+  // This ensures each section's ABSOLUTE address (buf_base + offset) satisfies
+  // its alignment requirement regardless of sizeof(glushkov_program_device).
+  std::size_t off = 0;
+
+  // Header
+  std::size_t const hdr_off = off;
+  off += sizeof(glushkov_program_device);
+
+  // _positions: 4-byte aligned (int32_t / char32_t fields)
+  off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
+  std::size_t const pos_off = off;
+  off += num_states * sizeof(glushkov_position);
+
+  // _shift_masks: 8-byte aligned
+  off                          = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  std::size_t const smasks_off = off;
+  off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t);
+
+  // _shift_amounts: 1-byte aligned (uint8_t array)
+  std::size_t const samts_off = off;
+  off += GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t);
+
+  // _reach_ascii: 8-byte aligned (GLUSHKOV_ASCII_TABLE_SIZE × g_state_t = 1 KB)
+  off                               = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  std::size_t const reach_ascii_off = off;
+  off += GLUSHKOV_ASCII_TABLE_SIZE * sizeof(g_state_t);
+
+  // _exception_succs: 8-byte aligned
+  off                       = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  std::size_t const exc_off = off;
+  off += num_states * sizeof(g_state_t);
+
+  // _classes: 16-byte aligned (reclass_device is alignas(16))
+  off                       = cudf::util::round_up_unsafe(off, alignof(reclass_device));
+  std::size_t const cls_off = off;
+  std::size_t cls_size      = static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  for (auto const& cls : h_gp.classes) {
+    cls_size += cls.literals.size() * sizeof(reclass_range);
+  }
+  off += cls_size;
+  off = cudf::util::round_up_unsafe(off, sizeof(char32_t));
+
+  std::size_t const total = off;
+
+  // Allocate flat host + device buffers
+  auto h_buf = cudf::detail::make_host_vector<u_char>(total, stream);
+  std::memset(h_buf.data(), 0, total);
+  auto* d_raw = new rmm::device_uvector<u_char>(total, stream);
+
+  u_char* const h_base = h_buf.data();
+  u_char* const d_base = d_raw->data();
+
+  // ---- Place glushkov_program_device header --------------------------------
+  auto* h_gp_dev             = new (h_base + hdr_off) glushkov_program_device{};
+  h_gp_dev->num_states       = num_states;
+  h_gp_dev->shift_count      = num_shifts;
+  h_gp_dev->first_set        = h_gp.first_set;
+  h_gp_dev->accept_mask      = h_gp.accept_mask;
+  h_gp_dev->exception_mask   = h_gp.exception_mask;
+  h_gp_dev->nullable         = h_gp.nullable;
+  h_gp_dev->has_startchar    = h_gp.has_startchar;
+  h_gp_dev->startchar        = h_gp.startchar;
+  h_gp_dev->_codepoint_flags = d_codepoint_flags;
+  h_gp_dev->_prog_size       = total;
+
+  // ---- _positions ---------------------------------------------------------
+  h_gp_dev->_positions = reinterpret_cast<glushkov_position const*>(d_base + pos_off);
+  auto* pos_arr        = reinterpret_cast<glushkov_position*>(h_base + pos_off);
+  for (uint32_t i = 0; i < num_states; ++i) {
+    pos_arr[i] = {h_gp.pos_inst_type[i], h_gp.pos_ch[i], h_gp.pos_cls_idx[i]};
+  }
+
+  // ---- _shift_masks --------------------------------------------------------
+  h_gp_dev->_shift_masks = reinterpret_cast<g_state_t const*>(d_base + smasks_off);
+  std::memcpy(
+    h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(g_state_t));
+
+  // ---- _shift_amounts ------------------------------------------------------
+  h_gp_dev->_shift_amounts = reinterpret_cast<uint8_t const*>(d_base + samts_off);
+  std::memcpy(
+    h_base + samts_off, h_gp.shift_amounts.data(), GLUSHKOV_MAX_SHIFTS_DEV * sizeof(uint8_t));
+
+  // ---- _reach_ascii -------------------------------------------------------
+  h_gp_dev->_reach_ascii = reinterpret_cast<g_state_t const*>(d_base + reach_ascii_off);
+  std::memcpy(h_base + reach_ascii_off,
+              h_gp.reach_ascii.data(),
+              GLUSHKOV_ASCII_TABLE_SIZE * sizeof(g_state_t));
+
+  // ---- _exception_succs ---------------------------------------------------
+  h_gp_dev->_exception_succs = reinterpret_cast<g_state_t const*>(d_base + exc_off);
+  std::memcpy(h_base + exc_off, h_gp.exception_succs.data(), num_states * sizeof(g_state_t));
+
+  // ---- _classes (variable-length, same layout as Thompson reprog_device) --
+  h_gp_dev->_classes = reinterpret_cast<reclass_device const*>(d_base + cls_off);
+  auto* h_cls        = reinterpret_cast<reclass_device*>(h_base + cls_off);
+  u_char* h_lit = h_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  u_char* d_lit = d_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  for (int32_t ci = 0; ci < classes_cnt; ++ci) {
+    auto const& src             = h_gp.classes[ci];
+    *h_cls++                    = reclass_device{src.builtins,
+                              static_cast<int32_t>(src.literals.size()),
+                              reinterpret_cast<reclass_range const*>(d_lit)};
+    std::size_t const lit_bytes = src.literals.size() * sizeof(reclass_range);
+    std::memcpy(h_lit, src.literals.data(), lit_bytes);
+    h_lit += lit_bytes;
+    d_lit += lit_bytes;
+  }
+
+  // Copy flat buffer to device
+  cudf::detail::cuda_memcpy_async<u_char>(*d_raw, h_buf, stream);
+
+  // The glushkov_program_device struct lives at the start of the device buffer
+  auto* d_gp_ptr = reinterpret_cast<glushkov_program_device const*>(d_base);
+  return {d_gp_ptr, d_raw};
+}
+
+// ---------------------------------------------------------------------------
+// reprog_device::create  (extended to optionally build Glushkov program)
+// ---------------------------------------------------------------------------
+
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   reprog const& h_prog, rmm::cuda_stream_view stream)
 {
   // compute size to hold all the member data
+  return reprog_device::create(h_prog, nullptr, stream);
+}
+
+std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
+  reprog const& h_prog, glushkov_host_program const* h_glushkov, rmm::cuda_stream_view stream)
+{
+  // ---- Thompson NFA: existing layout ----
   auto const insts_count   = h_prog.insts_count();
   auto const classes_count = h_prog.classes_count();
   auto const starts_count  = h_prog.starts_count();
@@ -108,10 +271,19 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // copy flat prog to device memory
   cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
 
-  // build deleter to cleanup device memory
-  auto deleter = [d_buffer](reprog_device* t) {
+  // ---- Optional Glushkov program ------------------------------------------
+  rmm::device_uvector<u_char>* d_glushkov_buffer = nullptr;
+  if (h_glushkov) {
+    auto [d_gp_ptr, d_gb] = create_glushkov_device(*h_glushkov, d_prog->_codepoint_flags, stream);
+    d_prog->_glushkov     = d_gp_ptr;
+    d_glushkov_buffer     = d_gb;
+  }
+
+  // create a deleter to free both device buffers
+  auto deleter = [d_buffer, d_glushkov_buffer](reprog_device* t) {
     t->destroy();
     delete d_buffer;
+    delete d_glushkov_buffer;  // safe to delete nullptr
   };
 
   return std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>(d_prog, deleter);
@@ -119,8 +291,16 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
 
 void reprog_device::destroy() { delete this; }
 
+// ---------------------------------------------------------------------------
+// Working-memory helpers (Glushkov uses zero working memory)
+// ---------------------------------------------------------------------------
+
 std::size_t reprog_device::working_memory_size(int32_t num_threads) const
 {
+  // Glushkov uses register-only state (uint64_t bitmask) — zero working memory.
+  // Extract APIs create their reprog_device without Glushkov (use_glushkov=false),
+  // so they still get Thompson working memory allocated here.
+  if (_glushkov) return 0;
   return compute_working_memory_size(num_threads, insts_counts());
 }
 
@@ -148,9 +328,19 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
   _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
 }
 
-int32_t reprog_device::compute_shared_memory_size() const
+int32_t reprog_device::compute_shared_memory_size_thompson() const
 {
   return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
+}
+
+int32_t reprog_device::compute_shared_memory_size() const
+{
+  auto size = compute_shared_memory_size_thompson();
+  if (_glushkov) {
+    size = cudf::util::round_up_unsafe(size, 8);
+    size += static_cast<int32_t>(sizeof(glushkov_shmem_cache));
+  }
+  return size;
 }
 
 std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -30,12 +31,23 @@ namespace detail {
 constexpr auto regex_launch_kernel_block_size = 256;
 
 template <typename ForEachFunction>
-CUDF_KERNEL void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
+CUDF_KERNEL void for_each_kernel(ForEachFunction fn,
+                                 reprog_device const d_prog,
+                                 size_type size,
+                                 int32_t thompson_shmem_bytes)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
   __syncthreads();
-  auto const s_prog = reprog_device::load(d_prog, shmem);
+  auto s_prog = reprog_device::load(d_prog, shmem);
+
+  // Load Glushkov program arrays into shared memory (placed after Thompson data)
+  if (s_prog.has_glushkov()) {
+    auto* g_cache = reinterpret_cast<glushkov_shmem_cache*>(
+      shmem + cudf::util::round_up_unsafe(thompson_shmem_bytes, 8));
+    glushkov_load_shmem(*s_prog.glushkov_prog(), g_cache);
+    s_prog.set_glushkov_cache(g_cache);
+  }
 
   auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = s_prog.thread_count();
@@ -57,22 +69,32 @@ void launch_for_each_kernel(ForEachFunction fn,
   auto d_buffer = rmm::device_buffer(buffer_size, stream);
   d_prog.set_working_memory(d_buffer.data(), thread_count);
 
-  auto const shmem_size = d_prog.compute_shared_memory_size();
+  auto const thompson_shmem_bytes = d_prog.compute_shared_memory_size_thompson();
+  auto const shmem_size           = d_prog.compute_shared_memory_size();
   cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-    fn, d_prog, size);
+    fn, d_prog, size, thompson_shmem_bytes);
 }
 
 template <typename TransformFunction, typename OutputType>
 CUDF_KERNEL void transform_kernel(TransformFunction fn,
                                   reprog_device const d_prog,
                                   OutputType* d_output,
-                                  size_type size)
+                                  size_type size,
+                                  int32_t thompson_shmem_bytes)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
   __syncthreads();
-  auto const s_prog = reprog_device::load(d_prog, shmem);
+  auto s_prog = reprog_device::load(d_prog, shmem);
+
+  // Load Glushkov program arrays into shared memory (placed after Thompson data)
+  if (s_prog.has_glushkov()) {
+    auto* g_cache = reinterpret_cast<glushkov_shmem_cache*>(
+      shmem + cudf::util::round_up_unsafe(thompson_shmem_bytes, 8));
+    glushkov_load_shmem(*s_prog.glushkov_prog(), g_cache);
+    s_prog.set_glushkov_cache(g_cache);
+  }
 
   auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = s_prog.thread_count();
@@ -95,10 +117,11 @@ void launch_transform_kernel(TransformFunction fn,
   auto d_buffer = rmm::device_buffer(buffer_size, stream);
   d_prog.set_working_memory(d_buffer.data(), thread_count);
 
-  auto const shmem_size = d_prog.compute_shared_memory_size();
+  auto const thompson_shmem_bytes = d_prog.compute_shared_memory_size_thompson();
+  auto const shmem_size           = d_prog.compute_shared_memory_size();
   cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   transform_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-    fn, d_prog, d_output, size);
+    fn, d_prog, d_output, size, thompson_shmem_bytes);
 }
 
 template <typename SizeAndExecuteFunction>
@@ -115,13 +138,14 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   auto d_buffer = rmm::device_buffer(buffer_size, stream);
   d_prog.set_working_memory(d_buffer.data(), thread_count);
-  auto const shmem_size = d_prog.compute_shared_memory_size();
+  auto const thompson_shmem_bytes = d_prog.compute_shared_memory_size_thompson();
+  auto const shmem_size           = d_prog.compute_shared_memory_size();
   cudf::detail::grid_1d grid{thread_count, 256};
 
   // Compute the output size for each row
   if (strings_count > 0) {
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-      size_and_exec_fn, d_prog, strings_count);
+      size_and_exec_fn, d_prog, strings_count, thompson_shmem_bytes);
   }
   // Convert the sizes to offsets
   auto [offsets, char_bytes] = cudf::strings::detail::make_offsets_child_column(
@@ -134,7 +158,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   if (char_bytes > 0) {
     size_and_exec_fn.d_chars = chars.data();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-      size_and_exec_fn, d_prog, strings_count);
+      size_and_exec_fn, d_prog, strings_count, thompson_shmem_bytes);
   }
 
   return std::make_pair(std::move(offsets), std::move(chars));

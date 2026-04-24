@@ -83,6 +83,38 @@ TEST_F(StringsReplaceRegexTest, ReplaceMultiRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+TEST_F(StringsReplaceRegexTest, MixedEngineReplace)
+{
+  // Regression test for mixed-engine batch working memory bug.
+  //
+  // The old buggy code in multi_re.cu sized the shared working-memory buffer
+  // from the program with the MOST instructions (by insts_counts()), not from
+  // the program with the highest working_memory_size().  The bug fires when that
+  // max-instruction program is Glushkov-backed: its working_memory_size() == 0,
+  // leaving the Thompson fallback program with no working memory → silent OOB.
+  //
+  // To reliably trigger the old bug the Glushkov-eligible pattern must have MORE
+  // instructions than the Thompson fallback pattern:
+  //   "[a-z][0-9][a-z][0-9][a-z]" → 5 CCLASS + END ≈ 6 instructions (Glushkov, longer)
+  //   "^x"                         → BOL + CHAR + END ≈ 3 instructions  (Thompson, shorter)
+  // Old code: max_element picks the Glushkov program → working_memory_size() = 0
+  //           → "^x" Thompson program gets no working memory → silent OOB.
+  cudf::test::strings_column_wrapper input({"a1b2c def", "x hello"});
+  auto sv = cudf::strings_column_view(input);
+
+  // Pattern 0 "[a-z][0-9][a-z][0-9][a-z]": matches "a1b2c" in row 0, no match in row 1
+  // Pattern 1 "^x": no match in row 0, matches "x" at start of row 1
+  std::vector<std::string> patterns{"[a-z][0-9][a-z][0-9][a-z]", "^x"};
+  cudf::test::strings_column_wrapper repls({"MATCH", "X"});
+  auto repls_view = cudf::strings_column_view(repls);
+
+  auto const flags = cudf::strings::regex_flags::GLUSHKOV;
+  auto results     = cudf::strings::replace_re(sv, patterns, repls_view, flags);
+
+  cudf::test::strings_column_wrapper expected({"MATCH def", "X hello"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, InvalidRegex)
 {
   // these are quantifiers that do not have a preceding character/class

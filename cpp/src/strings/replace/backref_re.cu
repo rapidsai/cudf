@@ -102,8 +102,8 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
   CUDF_EXPECTS(!prog.pattern().empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!replacement.empty(), "Parameter replacement must not be empty");
 
-  // create device object from regex_program
-  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+  // create device object from regex_program — extract() needs Thompson (Glushkov has no groups)
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream, /*use_glushkov=*/false);
 
   // parse the repl string for back-ref indicators
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
