@@ -94,8 +94,14 @@ void reader_impl::build_string_dict_indices()
     set_str_dict_index_ptr{pass.str_dict_index.data(), str_dict_index_offsets, pass.chunks});
 
   // compute the indices
-  build_string_dictionary_index(pass.chunks.device_ptr(), pass.chunks.size(), _stream);
+  kernel_error error_code(_stream);
+  build_string_dictionary_index(
+    pass.chunks.device_ptr(), pass.chunks.size(), error_code.data(), _stream);
   pass.chunks.device_to_host(_stream);
+  auto const error = error_code.value_sync(_stream);
+  CUDF_EXPECTS(
+    error == 0,
+    "Parquet dictionary index construction failed with code(s) " + kernel_error::to_string(error));
 }
 
 void reader_impl::allocate_nesting_info()
