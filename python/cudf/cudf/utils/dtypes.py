@@ -529,6 +529,11 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     if isinstance(source_dtype, pd.ArrowDtype):
         return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
+        # Preserve StringDtype storage/na_value when target is also a StringDtype.
+        if isinstance(source_dtype, pd.StringDtype) and isinstance(
+            target_dtype, pd.StringDtype
+        ):
+            return source_dtype
         if (
             isinstance(source_dtype, pd.StringDtype)
             and source_dtype.na_value is np.nan
@@ -538,11 +543,6 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
             isinstance(source_dtype, pd.StringDtype)
             and source_dtype.storage == "pyarrow"
         ):
-            if (
-                isinstance(target_dtype, pd.StringDtype)
-                and source_dtype == target_dtype
-            ):
-                return source_dtype
             return dtype_to_pandas_arrowdtype(target_dtype)
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
