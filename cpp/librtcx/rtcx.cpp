@@ -102,6 +102,19 @@
 namespace rtcx {
 namespace {
 
+enum class object_type : std::uint8_t { LIBRARY, BLOB };
+
+std::string_view object_tag(object_type type)
+{
+  switch (type) {
+    case object_type::LIBRARY: return "cuLibrary";
+    case object_type::BLOB: return "blob";
+    default:
+      RTCX_FAIL(std::format("Unrecognized object type: ({})", static_cast<std::int64_t>(type)),
+                std::runtime_error);
+  }
+}
+
 template <typename StringType>
 std::string join_strings(std::span<StringType> strings, std::string_view separator)
 {
@@ -881,13 +894,10 @@ namespace {
 /// @brief retrieves a blob from disk based on the given sha256 hash and object type (e.g. "blob",
 /// "cuLibrary"). Returns nullopt if the file doesn't exist on disk, and throws if any other error
 /// occurs.
-std::optional<blob> get_disk_blob(std::string const& cache_dir,
-                                  std::string const& object_type,
-                                  sha256 const& sha)
+std::optional<blob> get_disk_blob(std::string const& cache_dir, object_type type, sha256 const& sha)
 {
   auto hex  = sha.to_hex_string();
-  auto path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
-
+  auto path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_tag(type));
   auto blob = blob_t::from_file(path.c_str());
 
   if (!blob.has_value()) { return std::nullopt; }
@@ -897,7 +907,12 @@ std::optional<blob> get_disk_blob(std::string const& cache_dir,
 std::optional<library> get_disk_library(std::string const& cache_dir, sha256 const& sha)
 {
   auto hex  = sha.to_hex_string();
-  auto path = std::format("{}/{}.cuLibrary.bin", cache_dir, hex.view());
+  auto path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_tag(object_type::LIBRARY));
+
+  // WAR: avoid a driver API call when the cache file is not present
+  // compute-sanitizer doesn't properly handle exceptions thrown from driver API calls, so we need
+  // to check for file existence first to avoid false positives in the sanitizer
+  if (!std::filesystem::exists(path)) { return std::nullopt; }
 
   CUlibrary handle;
   auto errc =
@@ -927,7 +942,7 @@ std::vector<std::string> get_disk_entries(std::string const& cache_dir)
 /// it to the final path.
 void cache_blob_to_disk(std::string const& cache_dir,
                         std::string const& tmp_dir,
-                        std::string const& object_type,
+                        object_type type,
                         sha256 const& sha,
                         std::span<std::uint8_t const> binary)
 {
@@ -948,7 +963,7 @@ void cache_blob_to_disk(std::string const& cache_dir,
   }
 
   auto hex        = sha.to_hex_string();
-  auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_type);
+  auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_tag(type));
 
   std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
 
@@ -992,7 +1007,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
 
     // check disk cache
     std::optional<blob> disk_blob = std::nullopt;
-    if (enabled_) { disk_blob = get_disk_blob(cache_dir_, "blob", sha); }
+    if (enabled_) { disk_blob = get_disk_blob(cache_dir_, object_type::BLOB, sha); }
 
     std::promise<blob> promise;
     auto fut       = promise.get_future().share();
@@ -1022,7 +1037,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
       promise.set_value(result);
 
       // store result to disk
-      cache_blob_to_disk(cache_dir_, tmp_dir_, "blob", sha, result->view());
+      cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::BLOB, sha, result->view());
 
       return ret_fut;
     }
@@ -1085,7 +1100,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
       promise.set_value(library);
 
       // store result to disk
-      cache_blob_to_disk(cache_dir_, tmp_dir_, "cuLibrary", sha, blob->view());
+      cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::LIBRARY, sha, blob->view());
 
       return ret_fut;
     }
