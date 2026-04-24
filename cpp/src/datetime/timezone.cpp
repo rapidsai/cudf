@@ -76,7 +76,8 @@ std::optional<std::string> resolve_tz_alias(std::filesystem::path const& tzif_di
     }
     name = it->second;
   }
-  // No link followed: caller already tried this name directly.
+
+  // No link followed
   if (std::string_view{name} == timezone_name) { return std::nullopt; }
 
   std::error_code ec;
