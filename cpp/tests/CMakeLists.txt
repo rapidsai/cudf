@@ -328,6 +328,11 @@ ConfigureTest(
   PERCENT 100
 )
 ConfigureTest(
+  PROTOBUF_TEST io/protobuf_test.cpp
+  GPUS 1
+  PERCENT 100
+)
+ConfigureTest(
   PARQUET_TEST
   io/parquet_bloom_filter_test.cu
   io/parquet_chunked_reader_test.cu
