@@ -19,8 +19,7 @@ function(find_and_configure_roaring VERSION)
     CPM_ARGS
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
     GIT_TAG v${VERSION}
-    GIT_SHALLOW TRUE
-    ${_exclude_from_all}
+    GIT_SHALLOW TRUE ${_exclude_from_all}
     OPTIONS "ROARING_BUILD_STATIC ON"
             "BUILD_SHARED_LIBS OFF"
             "ENABLE_ROARING_TESTS OFF"
