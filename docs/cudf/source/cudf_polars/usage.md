@@ -1,9 +1,11 @@
 (cudf-polars-usage)=
 # Usage
 
-`cudf-polars` enables GPU acceleration for Polars' `LazyFrame` API by executing logical plans
-with cuDF. It requires only minimal code changes: create a GPU engine, then pass that engine to
-each `collect()` call.
+`cudf-polars` runs your Polars `LazyFrame` queries on GPU. You select GPU execution by passing
+an `engine=` argument to `.collect()` or `.sink_*()`. See {doc}`engines` for the conceptual
+picture; this page walks through running your first query.
+
+## Your first GPU query
 
 ```python
 import polars as pl
@@ -20,24 +22,40 @@ with RayEngine() as engine:
     result = query.collect(engine=engine)
 print(result)
 ```
-In the example above, we use {class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`,
-which is the preferred engine for GPU acceleration. Other engines are also available, including
-{doc}`DaskEngine <dask_engine>` and {doc}`SPMDEngine <spmd_engine>`. All of these engines provide
-multi-GPU and multi-node execution. They partition inputs and stream data through the query
-graph, allowing execution to scale beyond device memory and across multiple GPUs out of the box.
 
-For the simplest streaming setup, a single GPU with no Ray, Dask, or `rrun` launcher,
-see [Single-GPU setup](spmd_engine.md#single-gpu-setup).
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine` with no arguments uses every
+GPU visible to the process, so the example above runs on one GPU if that's all that's available
+and scales automatically to every GPU on the node otherwise. It also attaches to an existing
+Ray cluster if one is already running (see [Attaching to an existing Raycluster](#attaching-to-an-existing-ray-cluster)).
 
-As an alternative, `cudf-polars` also provides an *in-memory* engine. This engine uses a
-simpler execution model: each Polars operation is translated into a corresponding GPU operation
-and executed on a single GPU. The in-memory engine works well for datasets that fit within GPU
-memory, but does not scale beyond it. See [Polars GPU Support](https://docs.pola.rs/user-guide/gpu-support/).
+```{note}
+The examples on this page use {class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`. `cudf-polars` supports
+multiple engines for GPU execution. Ssee {doc}`other_engines` for alternatives, or {doc}`engines` for a conceptual overview of when to pick which.
+```
+
+## Simpler alternative: the in-memory GPU engine
+
+If your data fits comfortably on one GPU and you don't need the streaming executor, you can use
+the in-memory path instead:
+
+```python
+result = query.collect(engine="gpu")
+```
+
+This is the path documented in Polars' own [GPU support guide][polars-gpu]. It runs entirely
+in device memory on a single GPU; it does not stream or distribute. See {doc}`engines` for
+a comparison with the streaming engines.
+
+[polars-gpu]: https://docs.pola.rs/user-guide/gpu-support/
 
 
 ## Configuring `RayEngine`
 
-{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine` starts a local [Ray][ray-docs] cluster and creates one GPU worker per visible GPU.
+The same `from_options()` / `StreamingOptions` pattern shown here works for every streaming
+engine — see {doc}`other_engines` for the DaskEngine and SPMDEngine variants.
+
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine` with no arguments starts a
+local [Ray][ray-docs] cluster and creates one GPU worker per visible GPU.
 
 For custom configuration, build a
 {class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` and use

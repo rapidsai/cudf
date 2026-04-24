@@ -1,13 +1,15 @@
 # Polars GPU engine
 
-cuDF provides a GPU-accelerated execution engine for Python users of the Polars Lazy API. The
-engine supports most of the core expressions and data types as well as a growing set of more
-advanced dataframe manipulations and data file formats. When using the GPU engine, Polars will
-convert expressions into an optimized query plan and determine whether the plan is supported on
-the GPU. If it is not, the execution will transparently fall back to the standard Polars engine
-and run on the CPU.
+cuDF provides GPU-accelerated execution engines for Python users of the Polars Lazy API. The
+engines support most of the core expressions and data types as well as a growing set of more
+advanced dataframe manipulations and data file formats. When a GPU engine is selected, Polars
+converts expressions into an optimized query plan and determines whether the plan is supported
+on the GPU. If it is not, the execution transparently falls back to the standard Polars engine
+and runs on the CPU.
 
-See {doc}`usage` to get started.
+`cudf-polars` ships multiple engine implementation: a simple in-memory path and several
+streaming engines that scale past device memory across multiple GPUs and nodes. See
+{doc}`engines` for a conceptual overview, and {doc}`usage` to get started.
 
 ## Benchmark
 
@@ -48,6 +50,7 @@ To learn more, visit the [GPU Support page](https://docs.pola.rs/user-guide/gpu-
 :caption: Contents:
 
 usage
+engines
 options
 profiling
 other_engines
