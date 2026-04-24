@@ -53,7 +53,8 @@ NVBENCH_BENCH_TYPES(nvbench_distinct_inner_join,
   .set_name("distinct_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_distinct_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -62,4 +63,5 @@ NVBENCH_BENCH_TYPES(nvbench_distinct_left_join,
   .set_name("distinct_left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});

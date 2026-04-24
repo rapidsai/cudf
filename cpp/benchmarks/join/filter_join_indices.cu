@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -131,7 +131,8 @@ NVBENCH_BENCH_TYPES(nvbench_filter_join_indices_inner_join,
   .set_name("filter_join_indices_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_filter_join_indices_inner_join_complex_ast,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -141,7 +142,8 @@ NVBENCH_BENCH_TYPES(nvbench_filter_join_indices_inner_join_complex_ast,
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("ast_levels", {1, 5, 10});
+  .add_int64_axis("ast_levels", {1, 5, 10})
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_filter_join_indices_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -150,7 +152,8 @@ NVBENCH_BENCH_TYPES(nvbench_filter_join_indices_left_join,
   .set_name("filter_join_indices_left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_filter_join_indices_full_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -159,4 +162,5 @@ NVBENCH_BENCH_TYPES(nvbench_filter_join_indices_full_join,
   .set_name("filter_join_indices_full_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
