@@ -1426,9 +1426,10 @@ cdef class Column:
 
         return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
 
-    def _to_host_array(self, Stream stream):
+    def _to_host_array(self, object stream):
         cdef ArrowArray* raw_host_array_ptr
-        cdef cudaStream_t _cs = stream.view().value()
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         with nogil:
             raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
 
@@ -1548,7 +1549,8 @@ cdef class StructsColumnView:
         """
         cdef Stream _stream = _get_stream(stream)
 
-        cdef column_view c_child = self.view().get_sliced_child(index, _stream.view().value())
+        cdef cudaStream_t _cs = _stream.view().value()
+        cdef column_view c_child = self.view().get_sliced_child(index, _cs)
         return Column.from_column_view(c_child, self._column.child(index))
 
 
