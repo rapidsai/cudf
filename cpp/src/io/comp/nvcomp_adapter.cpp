@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,27 +26,7 @@ namespace {
 
 [[nodiscard]] std::string nvcomp_status_to_string(nvcompStatus_t status)
 {
-  switch (status) {
-    case nvcompStatus_t::nvcompSuccess: return "nvcompSuccess";
-    case nvcompStatus_t::nvcompErrorInvalidValue: return "nvcompErrorInvalidValue";
-    case nvcompStatus_t::nvcompErrorNotSupported: return "nvcompErrorNotSupported";
-    case nvcompStatus_t::nvcompErrorCannotDecompress: return "nvcompErrorCannotDecompress";
-    case nvcompStatus_t::nvcompErrorBadChecksum: return "nvcompErrorBadChecksum";
-    case nvcompStatus_t::nvcompErrorCannotVerifyChecksums:
-      return "nvcompErrorCannotVerifyChecksums";
-    case nvcompStatus_t::nvcompErrorOutputBufferTooSmall: return "nvcompErrorOutputBufferTooSmall";
-    case nvcompStatus_t::nvcompErrorWrongHeaderLength: return "nvcompErrorWrongHeaderLength";
-    case nvcompStatus_t::nvcompErrorAlignment: return "nvcompErrorAlignment";
-    case nvcompStatus_t::nvcompErrorChunkSizeTooLarge: return "nvcompErrorChunkSizeTooLarge";
-    case nvcompStatus_t::nvcompErrorCudaError: return "nvcompErrorCudaError";
-    case nvcompStatus_t::nvcompErrorInternal: return "nvcompErrorInternal";
-    case nvcompStatus_t::nvcompErrorCannotCompress: return "nvcompErrorCannotCompress";
-    case nvcompStatus_t::nvcompErrorWrongInputLength: return "nvcompErrorWrongInputLength";
-#if NVCOMP_VER_MAJOR >= 5 and NVCOMP_VER_MINOR >= 1
-    case nvcompStatus_t::nvcompErrorBatchSizeTooLarge: return "nvcompErrorBatchSizeTooLarge";
-#endif
-  }
-  return "nvcompStatus_t(" + std::to_string(static_cast<int>(status)) + ")";
+  return nvcompGetStatusString(status);
 }
 
 [[nodiscard]] std::string compression_type_name(compression_type compression)
