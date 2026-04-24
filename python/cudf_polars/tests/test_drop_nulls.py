@@ -42,15 +42,7 @@ def test_drop_null(null_data):
     [0, pl.col("a").mean(), pl.col("b")],
     ids=["scalar", "aggregation", "column_expression"],
 )
-def test_fill_null(null_data, value, using_rapidsmpf, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=using_rapidsmpf
-            and "mean" in str(value)
-            and len(null_data.collect()) == 2,
-            reason="https://github.com/rapidsai/cudf/issues/21721",
-        )
-    )
+def test_fill_null(null_data, value):
     q = null_data.select(pl.col("a").fill_null(value))
     assert_gpu_result_equal(q)
 

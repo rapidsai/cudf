@@ -17,6 +17,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <cuda/iterator>
+
 #include <functional>
 #include <sstream>
 
@@ -153,7 +155,7 @@ std::string type_to_name(column_buffer_base<string_policy> const& buffer)
     std::ostringstream out;
 
     out << "Struct<";
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<cudf::size_type>{0};
     std::transform(
       iter,
       iter + buffer.children.size(),

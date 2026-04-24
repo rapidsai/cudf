@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
 rapids-logger "Running experimental legacy tests with the 'rapidsmpf' runtime and a 'single' cluster"
-CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE=1 timeout 10m python -m pytest --cache-clear "$@" "tests" \
+timeout 10m python -m pytest --cache-clear "$@" "tests" \
     --executor streaming \
     --cluster single \
     --runtime rapidsmpf \

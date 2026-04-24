@@ -17,9 +17,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
@@ -100,8 +100,8 @@ struct host_udf_reduction_example : cudf::reduce_host_udf {
 
       auto const input_dv_ptr = cudf::column_device_view::create(input, stream);
       auto const result       = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
-                                                   thrust::make_counting_iterator(0),
-                                                   thrust::make_counting_iterator(input.size()),
+                                                   cuda::counting_iterator<cudf::size_type>{0},
+                                                   cuda::counting_iterator{input.size()},
                                                    transform_fn{*input_dv_ptr},
                                                    static_cast<OutputType>(init_value),
                                                    cuda::std::plus<>{});
@@ -257,8 +257,8 @@ struct host_udf_segmented_reduction_example : cudf::segmented_reduce_host_udf {
 
       thrust::transform(
         rmm::exec_policy_nosync(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(num_segments),
+        cuda::counting_iterator<cudf::size_type>{0},
+        cuda::counting_iterator{num_segments},
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
         transform_fn{*input_dv_ptr, offsets, static_cast<OutputType>(init_value), null_handling});
 

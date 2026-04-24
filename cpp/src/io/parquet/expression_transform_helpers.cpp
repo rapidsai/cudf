@@ -16,7 +16,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 namespace cudf::io::parquet::detail {
 
@@ -95,7 +95,7 @@ named_to_reference_converter::named_to_reference_converter(
   // create map for column name.
   std::transform(metadata.schema_info.cbegin(),
                  metadata.schema_info.cend(),
-                 thrust::counting_iterator<size_t>(0),
+                 cuda::counting_iterator<std::size_t>{0},
                  std::inserter(_column_name_to_index, _column_name_to_index.end()),
                  [case_sensitive_names](auto const& sch, auto index) {
                    return std::make_pair(normalize_column_path(sch.name, case_sensitive_names),
@@ -261,7 +261,7 @@ void names_from_expression::visit_operands(
   if (selected_column_names.has_value()) {
     std::transform(selected_column_names->begin(),
                    selected_column_names->end(),
-                   thrust::counting_iterator<cudf::size_type>(0),
+                   cuda::counting_iterator<cudf::size_type>{0},
                    std::inserter(column_indices_to_names, column_indices_to_names.end()),
                    [case_sensitive_names](auto const& col_name, auto const col_index) {
                      return std::make_pair(col_index,
@@ -274,7 +274,7 @@ void names_from_expression::visit_operands(
     if (selected_column_indices.has_value()) {
       std::transform(selected_column_indices->begin(),
                      selected_column_indices->end(),
-                     thrust::counting_iterator<cudf::size_type>(0),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      std::inserter(column_indices_to_names, column_indices_to_names.end()),
                      [&](auto selected_col_idx, auto const mapped_col_idx) {
                        auto const schema_idx = root.children_idx[selected_col_idx];
@@ -285,8 +285,8 @@ void names_from_expression::visit_operands(
     } else {
       // Map all top-level column indices to their names from the schema tree
       std::for_each(
-        thrust::counting_iterator<int32_t>(0),
-        thrust::counting_iterator<int32_t>(root.children_idx.size()),
+        cuda::counting_iterator<int32_t>{0},
+        cuda::counting_iterator{static_cast<int32_t>(root.children_idx.size())},
         [&](auto col_idx) {
           auto const schema_idx = root.children_idx[col_idx];
           column_indices_to_names.insert(

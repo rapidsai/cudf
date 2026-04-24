@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.message import Message
@@ -18,6 +17,7 @@ from cudf_polars.experimental.rapidsmpf.dispatch import (
 from cudf_polars.experimental.rapidsmpf.nodes import define_actor, shutdown_on_error
 from cudf_polars.experimental.rapidsmpf.utils import (
     ChannelManager,
+    gather_in_task_group,
     process_children,
     recv_metadata,
     send_metadata,
@@ -63,12 +63,12 @@ async def union_node(
         # TODO: Warn users that Union does NOT preserve order?
         total_local_count = 0
         duplicated = True
-        async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(recv_metadata(ch, context)) for ch in chs_in]
-        for task in tasks:
-            metadata = task.result()
-            total_local_count += metadata.local_count
-            duplicated = duplicated and metadata.duplicated
+        metadata = await gather_in_task_group(
+            *(recv_metadata(ch, context) for ch in chs_in)
+        )
+        for meta in metadata:
+            total_local_count += meta.local_count
+            duplicated = duplicated and meta.duplicated
         await send_metadata(
             ch_out,
             context,
@@ -87,7 +87,9 @@ async def union_node(
                     context,
                     Message(
                         msg.sequence_number + seq_num_offset,
-                        TableChunk.from_message(msg).make_available_and_spill(
+                        TableChunk.from_message(
+                            msg, br=context.br()
+                        ).make_available_and_spill(
                             context.br(), allow_overbooking=True
                         ),
                     ),

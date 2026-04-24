@@ -7,7 +7,6 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import os
-import socket
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -21,38 +20,39 @@ from rapidsmpf.config import (
 )
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.statistics import Statistics
-from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.context import Context
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
 import rmm.mr
 
-from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import IRExecutionContext
-from cudf_polars.experimental.rapidsmpf.core import generate_network
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
+    ClusterInfo,
     StreamingEngine,
     check_reserved_keys,
+    execute_ir_on_rank,
 )
-from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
-from cudf_polars.experimental.utils import _concat
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+    bind_to_gpu,
+)
 from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import MutableMapping
+    from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
     from ray.actor import ActorHandle
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import PartitionInfo, StatsCollector
     from cudf_polars.experimental.parallel import ConfigOptions
-    from cudf_polars.utils.config import StreamingExecutor
+    from cudf_polars.experimental.rapidsmpf.frontend.core import T
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.utils.config import MemoryResourceConfig, StreamingExecutor
 
 
 def evaluate_pipeline_ray_mode(
@@ -170,9 +170,18 @@ class RankActor:
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options produced by
         :meth:`rapidsmpf.config.Options.serialize`.
-    py_executor_max_workers
+    num_py_executors
         Maximum number of threads for the actor's Python thread-pool executor.
         ``None`` lets :class:`~concurrent.futures.ThreadPoolExecutor` choose.
+    hardware_binding
+        Policy controlling topology-aware hardware binding.
+
+    Notes
+    -----
+    Calls :func:`~cudf_polars.experimental.rapidsmpf.frontend.hardware_binding.bind_to_gpu`
+    at construction time, before RMM and communicator initialisation, so that
+    CPU affinity, NUMA memory policy, and ``UCX_NET_DEVICES`` are set as early
+    as possible.
     """
 
     def __init__(
@@ -180,18 +189,23 @@ class RankActor:
         *,
         nranks: int,
         rapidsmpf_options_as_bytes: bytes,
-        py_executor_max_workers: int,
+        num_py_executors: int,
+        hardware_binding: HardwareBindingPolicy,
+        memory_resource_config: MemoryResourceConfig | None,
     ) -> None:
-        self._mr = RmmResourceAdaptor(rmm.mr.CudaAsyncMemoryResource())
+        bind_to_gpu(hardware_binding)
+        base_mr = (
+            memory_resource_config.create_memory_resource()
+            if memory_resource_config is not None
+            else rmm.mr.CudaAsyncMemoryResource()
+        )
+        self._mr = RmmResourceAdaptor(base_mr)
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
-        self._statistics: Statistics = Statistics.from_options(
-            self._mr, self._rapidsmpf_options
-        )
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
-            max_workers=py_executor_max_workers,
+            max_workers=num_py_executors,
             thread_name_prefix="ray-executor",
         )
         self._comm: Communicator | None = None
@@ -214,7 +228,7 @@ class RankActor:
             ucx_worker=None,
             root_ucxx_address=None,
             options=self._rapidsmpf_options,
-            progress_thread=ProgressThread(self._statistics),
+            progress_thread=ProgressThread(),
         )
         return get_root_ucxx_address(self._comm)
 
@@ -241,7 +255,7 @@ class RankActor:
                 ucx_worker=None,
                 root_ucxx_address=root_ucxx_address,
                 options=self._rapidsmpf_options,
-                progress_thread=ProgressThread(self._statistics),
+                progress_thread=ProgressThread(),
             )
         barrier(self._comm)
         self._ctx = Context.from_options(
@@ -265,7 +279,7 @@ class RankActor:
         self._mr = None
         ray.actor.exit_actor()
 
-    def get_info(self) -> dict[str, Any]:
+    def get_info(self) -> ClusterInfo:
         """
         Return diagnostic information about actor placement.
 
@@ -273,12 +287,32 @@ class RankActor:
         -------
         Diagnostic information about this actor's placement and state.
         """
-        return {
-            "pid": os.getpid(),
-            "hostname": socket.gethostname(),
-            "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-            "node_id": ray.get_runtime_context().get_node_id(),
-        }
+        return ClusterInfo.local()
+
+    def get_statistics(self, *, clear: bool = False) -> Statistics:
+        """
+        Return this rank's :class:`~rapidsmpf.statistics.Statistics` object.
+
+        The returned object is pickled by Ray when sent to the client, so the
+        caller receives a detached copy.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear this rank's statistics after returning a copy.
+
+        Returns
+        -------
+        The rank's Statistics object (a detached copy if ``clear`` is True).
+        """
+        assert self._ctx is not None
+        stats = self._ctx.statistics()
+        if clear:
+            # Return a deep copy so it survives the in-place clear of `stats`.
+            detached = stats.copy()
+            stats.clear()
+            return detached
+        return stats
 
     def evaluate_polars_ir(
         self,
@@ -329,59 +363,24 @@ class RankActor:
         ir, partition_info, stats, collective_id_map = query_bundle
         if self._ctx is None:
             raise RuntimeError("setup_worker must be called before evaluate_polars_ir")
-        ir_context = IRExecutionContext(get_cuda_stream=self._ctx.get_stream_from_pool)
-        metadata_collector: list[ChannelMetadata] | None = (
-            [] if collect_metadata else None
-        )
-
-        nodes, output = generate_network(
-            self._ctx,
-            self._comm,
-            ir,
-            partition_info,
-            config_options,
-            stats,
-            ir_context=ir_context,
-            collective_id_map=collective_id_map,
-            metadata_collector=metadata_collector,
-        )
-
-        run_actor_network(actors=nodes, py_executor=self._py_executor)
-
-        messages = output.release()
-        chunks = [
-            TableChunk.from_message(msg).make_available_and_spill(
-                self._ctx.br(), allow_overbooking=True
-            )
-            for msg in messages
-        ]
-        if chunks:
-            dfs = [
-                DataFrame.from_table(
-                    chunk.table_view(),
-                    list(ir.schema.keys()),
-                    list(ir.schema.values()),
-                    chunk.stream,
-                )
-                for chunk in chunks
-            ]
-            df = _concat(*dfs, context=ir_context)
-        else:
-            # No chunks received, create an empty DataFrame with the correct schema.
-            stream = ir_context.get_cuda_stream()
-            chunk = empty_table_chunk(ir, self._ctx, stream)
-            df = DataFrame.from_table(
-                chunk.table_view(),
-                list(ir.schema.keys()),
-                list(ir.schema.values()),
-                stream,
-            )
         # Ray transfers the returned Polars DataFrame back to the client via the
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        result = df.to_polars()
-        return result, metadata_collector
+        return execute_ir_on_rank(
+            self._ctx,
+            self._comm,
+            self._py_executor,
+            ir,
+            partition_info,
+            config_options,
+            stats,
+            collective_id_map,
+            collect_metadata=collect_metadata,
+        )
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+        return func(*args, **kwargs)
 
 
 def get_num_gpus_in_ray_cluster() -> int:
@@ -416,6 +415,12 @@ class RayEngine(StreamingEngine):
 
     Creates a RapidsMPF Ray cluster and returns an engine that can be passed
     to ``LazyFrame.collect(engine=engine)``.
+
+    Prefer :meth:`from_options` for typical use — pass a
+    :class:`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions`
+    instance for a unified, typed interface. The ``__init__`` parameters
+    (``rapidsmpf_options``, ``executor_options``, ``engine_options``) are
+    intended for advanced use when fine-grained control is needed.
 
     Prefer the context-manager form in scripts: it guarantees that actors and
     Ray are shut down even if an exception is raised. In interactive environments
@@ -485,6 +490,11 @@ class RayEngine(StreamingEngine):
             )
 
         check_reserved_keys(executor_options, engine_options)
+        hw_binding = engine_options.get("hardware_binding", HardwareBindingPolicy())
+
+        mr_config: MemoryResourceConfig | None = engine_options.get(
+            "memory_resource_config", None
+        )
 
         rapidsmpf_options = (
             rapidsmpf_options
@@ -512,10 +522,12 @@ class RayEngine(StreamingEngine):
                 RankActor.remote(  # type: ignore[attr-defined]
                     nranks=num_gpus,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
-                    py_executor_max_workers=cast(
+                    num_py_executors=cast(
                         int,
-                        executor_options.get("rapidsmpf_py_executor_max_workers", 1),
+                        executor_options.get("num_py_executors", 8),
                     ),
+                    hardware_binding=hw_binding,
+                    memory_resource_config=mr_config,
                 )
                 for _ in range(num_gpus)
             ]
@@ -547,6 +559,50 @@ class RayEngine(StreamingEngine):
             exit_stack.close()
             raise
 
+    @classmethod
+    def from_options(
+        cls,
+        options: StreamingOptions,
+        *,
+        ray_init_options: dict[str, object] | None = None,
+    ) -> RayEngine:
+        """
+        Create a :class:`RayEngine` from a :class:`StreamingOptions` object.
+
+        This is the recommended way to construct a ``RayEngine`` for typical
+        use. All RapidsMPF, executor, and engine options are read from
+        ``options``; unset fields fall back to environment variables and then
+        to built-in defaults.
+
+        Parameters
+        ----------
+        options
+            Unified streaming configuration.
+        ray_init_options
+            Keyword arguments forwarded to :func:`ray.init` when Ray is not
+            already initialized. These are Ray infrastructure settings and are
+            kept separate from streaming behavior options.
+
+        Returns
+        -------
+        A new :class:`RayEngine` instance.
+
+        Examples
+        --------
+        >>> from cudf_polars.experimental.rapidsmpf.frontend.options import (
+        ...     StreamingOptions,
+        ... )
+        >>> opts = StreamingOptions(num_streaming_threads=4, fallback_mode="silent")
+        >>> with RayEngine.from_options(opts) as engine:  # doctest: +SKIP
+        ...     result = pl.LazyFrame({"a": [1, 2, 3]}).collect(engine=engine)
+        """
+        return cls(
+            rapidsmpf_options=options.to_rapidsmpf_options(),
+            executor_options=options.to_executor_options(),
+            engine_options=options.to_engine_options(),
+            ray_init_options=ray_init_options,
+        )
+
     @property
     def rank_actors(self) -> list[ActorHandle[RankActor]]:
         """
@@ -561,22 +617,33 @@ class RayEngine(StreamingEngine):
             raise RuntimeError("rank_actors is not available after shutdown")
         return self._rank_actors
 
-    def gather_cluster_info(self) -> list[dict]:
+    def gather_cluster_info(self) -> list[ClusterInfo]:
         """
-        Collect diagnostic information from every rank actor.
+        Collect diagnostic information from every rank.
 
         Returns
         -------
-        List of info dicts (see :meth:`RankActor.get_info`), one per rank
-        in rank order.
-
-        Examples
-        --------
-        >>> with RayEngine() as engine:  # doctest: +SKIP
-        ...     for i, info in enumerate(engine.gather_cluster_info()):
-        ...         print(f"rank {i}: {info}")
+        List of :class:`ClusterInfo`, one per rank.
         """
         return ray.get([rank.get_info.remote() for rank in self.rank_actors])
+
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank via Ray.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
+        return ray.get(
+            [rank.get_statistics.remote(clear=clear) for rank in self.rank_actors]
+        )
 
     def shutdown(self) -> None:
         """
@@ -607,3 +674,8 @@ class RayEngine(StreamingEngine):
         finally:
             self._rank_actors = None
             super().shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return ray.get(
+            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+        )

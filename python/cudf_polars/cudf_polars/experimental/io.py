@@ -27,10 +27,10 @@ from cudf_polars.dsl.ir import (
     Union,
 )
 from cudf_polars.experimental.base import (
-    DataSourceInfo,
     IOPartitionFlavor,
     IOPartitionPlan,
     PartitionInfo,
+    SerializedDataSourceInfo,
     get_key_name,
 )
 from cudf_polars.experimental.dispatch import generate_ir_tasks, lower_ir_node
@@ -43,7 +43,11 @@ if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.experimental.base import StatsCollector
+    from cudf_polars.experimental.base import (
+        DataSourceInfo,
+        SerializedDataSourceInfo,
+        StatsCollector,
+    )
     from cudf_polars.experimental.dispatch import LowerIRTransformer
     from cudf_polars.typing import Schema
     from cudf_polars.utils.config import (
@@ -363,23 +367,25 @@ def _(
 class StreamingSink(IR):
     """Sink a dataframe in streaming mode."""
 
-    __slots__ = ("executor_options", "sink")
-    _non_child = ("schema", "sink", "executor_options")
+    __slots__ = ("sink", "sink_to_directory")
+    _non_child = ("schema", "sink", "sink_to_directory")
     _n_non_child_args = 0
 
     sink: Sink
-    executor_options: StreamingExecutor
+    sink_to_directory: bool
 
     def __init__(
         self,
         schema: Schema,
         sink: Sink,
-        executor_options: StreamingExecutor,
+        sink_to_directory: bool,  # noqa: FBT001
         df: IR,
-    ):
+    ) -> None:
+        # Order must match ``_non_child`` + ``children`` so :meth:`Node.__reduce__`
+        # / ``reconstruct`` round-trip over pickling (e.g. Dask workers).
         self.schema = schema
         self.sink = sink
-        self.executor_options = executor_options
+        self.sink_to_directory = sink_to_directory
         self._non_child_args = ()
         self.children = (df,)
 
@@ -407,10 +413,12 @@ def _(
             "please remove the target directory before calling 'collect'. "
         )
 
+    sink_to_directory = executor_options.sink_to_directory
+    assert sink_to_directory is not None  # set in StreamingExecutor.__post_init__
     new_node = StreamingSink(
         ir.schema,
         ir.reconstruct([child]),
-        executor_options,
+        sink_to_directory,
         child,
     )
     partition_info[new_node] = partition_info[child]
@@ -621,7 +629,7 @@ def _(
     partition_info: MutableMapping[IR, PartitionInfo],
     context: IRExecutionContext,
 ) -> MutableMapping[Any, Any]:
-    if ir.executor_options.sink_to_directory:
+    if ir.sink_to_directory:
         return _directory_sink_graph(ir, partition_info, context=context)
     else:
         return _file_sink_graph(ir, partition_info, context=context)
@@ -678,6 +686,7 @@ class ParquetMetadata:
 
         if not self.sample_paths:
             # No paths to sample from
+            # TODO: This requires row_count to be nullable. Why do we allow empty paths?
             return
 
         total_file_count = len(self.paths)
@@ -760,27 +769,37 @@ def _sample_rg_sizes(
     return result
 
 
-class ParquetSourceInfo(DataSourceInfo):
+class ParquetSourceInfo:
     """Parquet datasource information, fully computed at construction time."""
 
-    __slots__ = ("_per_file_means", "_row_count")
+    type: Literal["parquet"] = "parquet"
 
     def __init__(
-        self,
+        self, row_count: int | None, per_file_means: dict[str, int] | None = None
+    ):
+        if per_file_means is None:
+            per_file_means = {}
+
+        self.row_count = row_count
+        self.per_file_means = per_file_means
+
+    @classmethod
+    def from_paths(
+        cls,
         paths: tuple[str, ...],
         needed_cols: frozenset[str],
         max_footer_samples: int,
         max_row_group_samples: int,
-    ) -> None:
+    ) -> ParquetSourceInfo:
+        """Build a ParquetSourceInfo from a list of paths."""
         metadata = ParquetMetadata(paths, max_footer_samples)
-        self._row_count = metadata.row_count
+        row_count = metadata.row_count
 
         file_count = len(paths)
-        row_count = metadata.row_count
-        self._per_file_means: dict[str, int] = {}
+        per_file_means: dict[str, int] = {}
 
         if not (file_count and row_count and needed_cols):
-            return
+            return cls(row_count, {})
 
         # Floor on size: dictionary encoding can make in-memory size much larger
         # than what the compressed footer metadata reports.
@@ -794,7 +813,7 @@ class ParquetSourceInfo(DataSourceInfo):
             if footer_mean < min_floor:
                 suspicious.append(col)
             else:
-                self._per_file_means[col] = footer_mean
+                per_file_means[col] = footer_mean
 
         if suspicious and max_row_group_samples > 0:
             rg_sizes = _sample_rg_sizes(metadata, suspicious, max_row_group_samples)
@@ -805,42 +824,77 @@ class ParquetSourceInfo(DataSourceInfo):
             )
             for col in suspicious:
                 rg_size = rg_sizes.get(col)
-                self._per_file_means[col] = (
+                per_file_means[col] = (
                     max(min_floor, int(rg_size * mean_rg_count))
                     if rg_size
                     else min_floor
                 )
         else:
             for col in suspicious:
-                self._per_file_means[col] = min_floor
+                per_file_means[col] = min_floor
 
-    @property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self._row_count
+        return cls(row_count, per_file_means)
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
-        return self._per_file_means.get(column)
+        return self.per_file_means.get(column)
+
+    def serialize(self) -> SerializedDataSourceInfo:
+        """Return JSON-serializable representation of the data source info."""
+        return {
+            "type": self.type,
+            "row_count": self.row_count,
+            "per_file_means": self.per_file_means,
+        }
+
+    @classmethod
+    def deserialize(cls, data: SerializedDataSourceInfo) -> ParquetSourceInfo:
+        """Deserialize a ParquetSourceInfo from a dictionary."""
+        if data["type"] != "parquet":
+            raise ValueError(f"Expected ParquetSourceInfo, got {data['type']}")
+        return cls(data["row_count"], data["per_file_means"])
 
 
-class DataFrameSourceInfo(DataSourceInfo):
+class DataFrameSourceInfo:
     """
     In-memory DataFrame source information.
 
     Parameters
     ----------
-    df
-        In-memory DataFrame source.
+    row_count
+        Exact row-count for the polars dataframe.
     """
 
-    def __init__(self, df: pl.DataFrame):
-        self._pdf = df
+    type: Literal["dataframe"] = "dataframe"
 
-    @functools.cached_property
-    def row_count(self) -> int | None:
-        """Data source row-count estimate."""
-        return self._pdf.height
+    def __init__(self, row_count: int):
+        self.row_count = row_count
+
+    @classmethod
+    def from_polars(cls, df: pl.DataFrame) -> DataFrameSourceInfo:
+        """Build a DataFrameSourceInfo from a polars dataframe."""
+        return cls(df.height)
+
+    def column_storage_size(self, column: str) -> int | None:
+        """Return the average storage size for a single column in one file."""
+        return None
+
+    def serialize(self) -> SerializedDataSourceInfo:
+        """Return JSON-serializable representation of the data source info."""
+        return {
+            "type": self.type,
+            "row_count": self.row_count,
+            "per_file_means": None,
+        }
+
+    @classmethod
+    def deserialize(cls, data: SerializedDataSourceInfo) -> DataFrameSourceInfo:
+        """Deserialize a DataFrameSourceInfo from a dictionary."""
+        if data["type"] != "dataframe":
+            raise ValueError(f"Expected DataFrameSourceInfo, got {data['type']}")
+        if data["row_count"] is None:
+            raise ValueError("Row count is required for DataFrameSourceInfo")
+        return cls(data["row_count"])
 
 
 @functools.cache
@@ -851,7 +905,7 @@ def _build_parquet_source(
     max_row_group_samples: int,
 ) -> ParquetSourceInfo:
     """Return cached, fully-computed Parquet datasource information."""
-    return ParquetSourceInfo(
+    return ParquetSourceInfo.from_paths(
         paths, needed_cols, max_footer_samples, max_row_group_samples
     )
 
@@ -864,7 +918,7 @@ def _build_source_info(
 ) -> DataSourceInfo:
     """Return DataSourceInfo for a Scan or DataFrameScan node."""
     if isinstance(ir, DataFrameScan):
-        return DataFrameSourceInfo(pl.DataFrame._from_pydf(ir.df))
+        return DataFrameSourceInfo.from_polars(pl.DataFrame._from_pydf(ir.df))
     elif isinstance(ir, Scan) and ir.typ == "parquet":
         max_footer = config_options.parquet_options.max_footer_samples
         max_rg = config_options.parquet_options.max_row_group_samples

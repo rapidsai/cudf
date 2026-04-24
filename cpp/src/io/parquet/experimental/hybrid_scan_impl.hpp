@@ -20,7 +20,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <thrust/host_vector.h>
 
@@ -273,6 +272,12 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk();
+
+  /**
+   * @copydoc cudf::io::experimental::hybrid_scan_reader::construct_row_group_passes
+   */
+  [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
+    cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::has_next_table_chunk

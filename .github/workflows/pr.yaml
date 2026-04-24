@@ -42,6 +42,10 @@ jobs:
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
+      - streams-build-matrix
+      - streams-build
+      - streams-test-matrix
+      - streams-test
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
@@ -73,7 +77,7 @@ jobs:
           repo: ${{ github.repository }}
           target-branch: ${{ fromJSON(steps.get-pr-info.outputs.pr-info).base.ref }}
           # TODO: Fix nightly CI and remove this line
-          max-days-without-success: 30
+          max-days-without-success: 40
   changed-files:
     secrets: inherit
     needs: telemetry-setup
@@ -346,8 +350,6 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_cpp.sh
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
@@ -373,8 +375,6 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_cudf.sh"
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: [conda-python-build-noarch, changed-files]
@@ -384,8 +384,6 @@ jobs:
     with:
       build_type: pull-request
       script: "ci/test_python_other.sh"
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   conda-java-tests:
     needs: [conda-cpp-build, changed-files]
     secrets: inherit
@@ -463,8 +461,6 @@ jobs:
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000"))
   wheel-build-cudf-polars:
     needs: wheel-build-pylibcudf
     secrets: inherit
@@ -496,8 +492,7 @@ jobs:
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA" to minimize CI usage.
       # (rapidsmpf compatibility already validated in rapidsmpf CI)
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000")) | map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_experimental.sh"
   cudf-polars-polars-tests:
@@ -507,8 +502,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).neither_cudf_nor_dask_cudf
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000")) | map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: "ci/test_cudf_polars_polars_tests.sh"
   wheel-build-dask-cudf:
@@ -531,8 +525,7 @@ jobs:
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_python_wheels && fromJSON(needs.changed-files.outputs.changed_file_groups).not_cudf_polars
     with:
       # This selects "ARCH=amd64 + the latest supported Python + CUDA".
-      # Skip tests on RTX PRO 6000 (Blackwell). xref: https://github.com/rapidsai/cudf/issues/21953
-      matrix_filter: map(select(.GPU != "rtxpro6000")) | map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
   devcontainer:
@@ -608,6 +601,52 @@ jobs:
     needs: changed-files
     uses: ./.github/workflows/spark-rapids-jni.yaml
     if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_java
+  streams-build-matrix:
+    needs: [checks, changed-files]
+    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
+    if: fromJSON(needs.changed-files.outputs.changed_file_groups).test_cpp
+    with:
+      build_type: pull-request
+      matrix_name: conda-cpp-build
+      matrix_filter: map(select(.ARCH == "amd64"))
+  streams-build:
+    needs: streams-build-matrix
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.streams-build-matrix.outputs.matrix) }}
+    with:
+      build_type: pull-request
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: cpu8
+      container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}"
+      script: ci/build_streams.sh
+      artifact-name: stream_tests_${{ matrix.CUDA_VER }}
+      file_to_upload: cpp/install
+  streams-test-matrix:
+    needs: streams-build
+    uses: rapidsai/shared-workflows/.github/workflows/compute-matrix.yaml@main
+    with:
+      build_type: pull-request
+      matrix_name: conda-cpp-tests
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+  streams-test:
+    needs: streams-test-matrix
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.streams-test-matrix.outputs.matrix) }}
+    with:
+      build_type: pull-request
+      branch: ${{ inputs.branch }}
+      date: ${{ inputs.date }}
+      sha: ${{ inputs.sha }}
+      node_type: gpu-l4-latest-1
+      container_image: "rapidsai/ci-conda:26.06-cuda${{ matrix.CUDA_VER }}-${{ matrix.LINUX_VER }}-py${{ matrix.PY_VER }}"
+      script: ci/test_streams.sh stream_tests_${{ matrix.CUDA_VER }}
 
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.

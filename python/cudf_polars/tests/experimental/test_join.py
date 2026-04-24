@@ -10,12 +10,14 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.dsl.ir import Cache
+from cudf_polars.dsl.ir import Cache, Join
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.experimental.base import PartitionInfo
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.rapidsmpf.join import _use_pwise_join
 from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
 @pytest.fixture
@@ -240,6 +242,28 @@ def test_join_and_slice(zlice, engine):
         assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("how", ["inner", "semi", "left", "right"])
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {
+                "max_rows_per_partition": 2,
+                "broadcast_join_limit": 1,
+                "target_partition_size": 10,
+            }
+        }
+    ],
+    indirect=True,
+)
+def test_bloom_filter_join(how, engine):
+    dim = pl.LazyFrame({"key": range(10), "val": range(10)})
+    fact = pl.LazyFrame({"key": range(200), "data": range(200)})
+    left, right = (dim, fact) if how == "right" else (fact, dim)
+    q = left.join(right, on="key", how=how)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )
@@ -359,3 +383,23 @@ def test_cache_preserves_partitioning_join():
         1 for node in traversal([lowered_ir]) if isinstance(node, Shuffle)
     )
     assert num_shuffles == 2, f"Expected 2 shuffles, got {num_shuffles}"
+
+
+def test_dynamic_planning_skips_compile_time_partition_wise_join():
+    lf = pl.LazyFrame({"y": [1, 2, 3]})
+    q = lf.join(lf, on="y", how="inner")
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"dynamic_planning": {}},
+    )
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    join_ir = next(n for n in traversal([ir]) if isinstance(n, Join))
+    left_ir, right_ir = join_ir.children
+    executor = StreamingExecutor(dynamic_planning={})
+    partition_info = {
+        join_ir: PartitionInfo(1, partitioned_on=()),
+        left_ir: PartitionInfo(1, partitioned_on=()),
+        right_ir: PartitionInfo(1, partitioned_on=()),
+    }
+    assert not _use_pwise_join(executor, partition_info, join_ir)

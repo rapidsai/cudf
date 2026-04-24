@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -14,8 +14,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/optional>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -56,8 +56,8 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
 
   // create null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator{static_cast<size_type>(strings_count)},
     [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
       return filter_fn(idx) ? lhs_begin[idx].has_value() : rhs_begin[idx].has_value();
     },
@@ -68,8 +68,8 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
   // build vector of strings
   rmm::device_uvector<string_index_pair> indices(strings_count, stream);
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator{static_cast<size_type>(strings_count)},
                     indices.begin(),
                     [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
                       auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];

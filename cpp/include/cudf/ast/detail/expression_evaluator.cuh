@@ -594,11 +594,8 @@ struct expression_evaluator {
      * @param thread_intermediate_storage Thread-local storage for intermediate expression results
      * @param result Value to assign to output.
      */
-    template <typename Element,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
-              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
+    template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
+      requires(is_rep_layout_compatible<Element>())
     __device__ inline void resolve_output(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       detail::device_data_reference const& device_data_reference,
@@ -618,11 +615,35 @@ struct expression_evaluator {
       }
     }
 
-    template <typename Element,
-              typename ResultSubclass,
-              typename T,
-              bool result_has_nulls,
-              CUDF_ENABLE_IF(!is_rep_layout_compatible<Element>())>
+    template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
+      requires(cuda::std::is_same_v<Element, numeric::decimal32> or
+               cuda::std::is_same_v<Element, numeric::decimal64>)  // int128 > intermediate
+    __device__ inline void resolve_output(
+      expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+      detail::device_data_reference const& device_data_reference,
+      cudf::size_type const row_index,
+      IntermediateDataType<has_nulls>* thread_intermediate_storage,
+      possibly_null_value_t<Element, has_nulls> const& result) const
+    {
+      using RepType = typename Element::rep;
+      auto const v  = result.value();
+      auto const rv = [&v, &result] {
+        if constexpr (cuda::std::is_same_v<cuda::std::remove_cvref_t<decltype(v)>, RepType>) {
+          return v;  // no nulls path
+        } else {
+          // rewrap rep component value appropriately
+          using ResultType = possibly_null_value_t<RepType, has_nulls>;
+          return result.has_value() ? ResultType{v.value()} : ResultType{};
+        }
+      }();
+      resolve_output<RepType, ResultSubclass, T, result_has_nulls>(
+        output_object, device_data_reference, row_index, thread_intermediate_storage, rv);
+    }
+
+    template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
+      requires(!is_rep_layout_compatible<Element>() and
+               !(cuda::std::is_same_v<Element, numeric::decimal32> or
+                 cuda::std::is_same_v<Element, numeric::decimal64>))
     __device__ inline void resolve_output(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
       detail::device_data_reference const& device_data_reference,

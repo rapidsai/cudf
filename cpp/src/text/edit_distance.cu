@@ -25,11 +25,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
@@ -296,9 +296,9 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
 
   // calculate the size of the compute-buffer
   rmm::device_uvector<std::ptrdiff_t> offsets(input.size() + 1, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::counting_iterator<cudf::size_type>(0),
-                    thrust::counting_iterator<cudf::size_type>(input.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{input.size()},
                     offsets.begin(),
                     calculate_compute_buffer_fn{*d_strings, *d_targets});
 
@@ -393,9 +393,13 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   auto const n_upper     = (input.size() * (input.size() - 1L)) / 2L;
   auto const output_size = input.size() * input.size();
   rmm::device_uvector<std::ptrdiff_t> offsets(n_upper + 1, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end(), 0);
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<cudf::size_type>(0),
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    offsets.begin(),
+    offsets.end(),
+    0);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      output_size,
                      calculate_matrix_compute_buffer_fn{*d_strings, offsets.data()});
 
@@ -413,8 +417,8 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
     output_type, output_size, rmm::device_buffer{0, stream, mr}, 0, stream, mr);
   auto d_results = results->mutable_view().data<cudf::size_type>();
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<cudf::size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<cudf::size_type>{0},
     output_size,
     edit_distance_matrix_levenshtein_algorithm{*d_strings, d_buffer, offsets.data(), d_results});
 

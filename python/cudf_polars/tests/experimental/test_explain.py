@@ -680,6 +680,9 @@ def test_dynamic_planning_adds_repartition(df, op):
     )
     plan = explain_query(q, engine, physical=True)
 
-    # With dynamic planning enabled, these operations should include
-    # a REPARTITION to collapse partitions.
-    assert "REPARTITION" in plan
+    # With dynamic planning enabled, sum needs a REPARTITION to collapse
+    # partitions for global aggregation. Sort uses SHUFFLESORTED and does not.
+    if op == "sort":
+        assert "SHUFFLESORTED" in plan
+    else:
+        assert "REPARTITION" in plan

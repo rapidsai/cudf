@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "utilities/time_utils.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -25,11 +27,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/algorithm>
 #include <cuda/std/optional>
 #include <cuda/std/utility>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
@@ -191,18 +193,6 @@ struct parse_datetime {
   device_span<format_item const> const d_format_items;
   int8_t const subsecond_precision;
 
-  /**
-   * @brief Return power of ten value given an exponent.
-   *
-   * @return `1x10^exponent` for `0 <= exponent <= 9`
-   */
-  [[nodiscard]] __device__ constexpr int64_t power_of_ten(int32_t const exponent) const
-  {
-    constexpr int64_t powers_of_ten[] = {
-      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-    return powers_of_ten[exponent];
-  }
-
   __device__ bool format_contains(char specifier) const
   {
     return thrust::find_if(thrust::seq,
@@ -289,7 +279,7 @@ struct parse_datetime {
             cuda::std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
           auto const [fraction, left] = parse_int(ptr, read_size);
           timeparts.subsecond =
-            static_cast<int32_t>(fraction * power_of_ten(item.length - read_size + left));
+            fraction * cudf::detail::powers_of_ten[item.length - read_size + left];
           bytes_read = read_size - left;
           break;
         }
@@ -373,8 +363,10 @@ struct parse_datetime {
     if constexpr (std::is_same_v<T, cudf::timestamp_s>) { return timestamp; }
 
     int64_t const subsecond =
-      (timeparts.subsecond * power_of_ten(9 - subsecond_precision)) /  // normalize to nanoseconds
-      (1000000000L / T::period::type::den);                            // and rescale to T
+      static_cast<int64_t>(
+        timeparts.subsecond *
+        cudf::detail::powers_of_ten[9 - subsecond_precision]) /  // normalize to nanoseconds
+      (1000000000L / T::period::type::den);                      // and rescale to T
 
     timestamp *= T::period::type::den;
     timestamp += subsecond;
@@ -408,9 +400,9 @@ struct dispatch_to_timestamps_fn {
   {
     format_compiler compiler(format, stream);
     parse_datetime<T> pfn{d_strings, compiler.format_items(), compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(results_view.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{results_view.size()},
                       results_view.data<T>(),
                       pfn);
   }
@@ -688,9 +680,9 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format, stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings_count),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{strings_count},
                     d_results,
                     check_datetime_format{*d_strings, compiler.format_items()});
 

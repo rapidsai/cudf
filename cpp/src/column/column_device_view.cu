@@ -11,13 +11,27 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-
 #include <functional>
 #include <numeric>
 
 namespace cudf {
+
+template <typename A, typename B>
+inline constexpr bool layout_compatible = (sizeof(A) == sizeof(B)) && (alignof(A) == alignof(B));
+
+static_assert(
+  layout_compatible<detail::column_device_view_base, column_device_view_core>,
+  "detail::column_device_view_base and column_device_view_core must be layout-compatible");
+static_assert(layout_compatible<column_device_view_core, column_device_view>,
+              "column_device_view_core and column_device_view must be layout-compatible");
+
+static_assert(
+  layout_compatible<detail::column_device_view_base, mutable_column_device_view_core>,
+  "detail::column_device_view_base and mutable_column_device_view_core must be layout-compatible");
+static_assert(
+  layout_compatible<mutable_column_device_view_core, mutable_column_device_view>,
+  "mutable_column_device_view_core and mutable_column_device_view must be layout-compatible");
+
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
   : column_device_view_core{source.type(),
@@ -89,7 +103,7 @@ column_device_view::column_device_view(column_view source, void* h_ptr, void* d_
                             nullptr,
                             source.num_children()}
 {
-  d_children = detail::child_columns_to_device_array<column_device_view>(
+  _children = detail::child_columns_to_device_array<column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 
@@ -108,8 +122,8 @@ column_device_view::create(column_view source, rmm::cuda_stream_view stream)
 
 std::size_t column_device_view::extent(column_view const& source)
 {
-  auto get_extent = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [&source](auto i) { return extent(source.child(i)); });
+  auto get_extent = cudf::detail::make_counting_transform_iterator(
+    cudf::size_type{0}, [&source](auto i) { return extent(source.child(i)); });
 
   return std::accumulate(
     get_extent, get_extent + source.num_children(), sizeof(column_device_view));
@@ -138,7 +152,7 @@ mutable_column_device_view::mutable_column_device_view(mutable_column_view sourc
                                     nullptr,
                                     source.num_children()}
 {
-  d_children = detail::child_columns_to_device_array<mutable_column_device_view>(
+  _children = detail::child_columns_to_device_array<mutable_column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 
@@ -157,8 +171,8 @@ mutable_column_device_view::create(mutable_column_view source, rmm::cuda_stream_
 
 std::size_t mutable_column_device_view::extent(mutable_column_view source)
 {
-  auto get_extent = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [&source](auto i) { return extent(source.child(i)); });
+  auto get_extent = cudf::detail::make_counting_transform_iterator(
+    cudf::size_type{0}, [&source](auto i) { return extent(source.child(i)); });
 
   return std::accumulate(
     get_extent, get_extent + source.num_children(), sizeof(mutable_column_device_view));
