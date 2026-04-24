@@ -280,6 +280,35 @@ std::unique_ptr<column> ends_with(
   strings_column_view const& targets,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Returns the number of times the given target string
+ * matches in each string
+ *
+ * Counting proceeds left to right within the row and does not include
+ * overlapping matches.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["abababa", "bab", "aba"]
+ * r = count(s, "aba")
+ * r is now [2, 0, 1]
+ * @endcode
+ *
+ * Any null string entries return corresponding null output column entries.
+ *
+ * @param input Strings instance for this operation
+ * @param target String to search for in each row of the input column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column with counts for each row
+ */
+std::unique_ptr<column> count(
+  strings_column_view const& input,
+  string_scalar const& target,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace CUDF_EXPORT cudf
