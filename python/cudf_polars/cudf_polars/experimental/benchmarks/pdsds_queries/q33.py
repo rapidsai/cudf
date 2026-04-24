@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from cudf_polars.experimental.benchmarks.pdsds_helpers import channel_agg
 from cudf_polars.experimental.benchmarks.pdsds_parameters import load_parameters
+from cudf_polars.experimental.benchmarks.polars_naive_helpers import channel_agg
 from cudf_polars.experimental.benchmarks.utils import QueryResult, get_data
 
 if TYPE_CHECKING:
