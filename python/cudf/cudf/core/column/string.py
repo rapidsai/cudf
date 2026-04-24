@@ -16,6 +16,7 @@ import pyarrow as pa
 import pylibcudf as plc
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.api.types import is_scalar
 from cudf.core._internals import binaryop
 from cudf.core.column.column import (
@@ -122,12 +123,25 @@ class StringColumn(ColumnBase, Scannable):
 
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
-        """Pandas NA value, mostly for a repr"""
+        """Pandas NA value, mostly for a repr.
+
+        Derived from ``self.dtype`` unless an instance override has been
+        set via the setter (e.g. by ``as_string_column`` when casting a
+        nullable ``StringDtype(na_value=pd.NA)`` to numpy object dtype so
+        ``to_pandas`` preserves ``pd.NA`` for nulls).
+        """
         if isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype)):
             return self.dtype.na_value
+        override = self.__dict__.get("_PANDAS_NA_VALUE", no_default)
+        if override is not no_default:
+            return override
         # np.nan is also a valid NA value if dtype=object
         # https://github.com/pandas-dev/pandas/pull/63900#discussion_r2740653899
         return None
+
+    @_PANDAS_NA_VALUE.setter
+    def _PANDAS_NA_VALUE(self, value: ScalarLike) -> None:
+        self.__dict__["_PANDAS_NA_VALUE"] = value
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -338,7 +352,18 @@ class StringColumn(ColumnBase, Scannable):
         if isinstance(dtype, np.dtype) and dtype.kind == "U":
             dtype = np.dtype("object")
         if dtype != self.dtype:
-            return cast(Self, ColumnBase.create(self.plc_column, dtype))
+            result = cast(Self, ColumnBase.create(self.plc_column, dtype))
+            if (
+                isinstance(dtype, np.dtype)
+                and dtype == np.dtype("O")
+                and isinstance(self.dtype, (pd.StringDtype, pd.ArrowDtype))
+                and self.dtype.na_value is pd.NA
+            ):
+                # Preserve pd.NA semantics when casting a nullable
+                # StringDtype(na_value=pd.NA) to numpy object dtype so
+                # to_pandas emits pd.NA for nulls, matching pandas.
+                result._PANDAS_NA_VALUE = self.dtype.na_value
+            return result
         return self
 
     @property
@@ -398,6 +423,20 @@ class StringColumn(ColumnBase, Scannable):
                     nullable=nullable, arrow_type=arrow_type
                 )
             return pd.Index(pandas_array, copy=False)
+        if (
+            not nullable
+            and not arrow_type
+            and self.dtype == np.dtype("O")
+            and self._PANDAS_NA_VALUE is not no_default
+            and self.null_count > 0
+        ):
+            # Column was cast from a nullable StringDtype(na_value=pd.NA)
+            # to object via astype — preserve pd.NA in the output array.
+            pa_array = self.to_arrow()
+            np_array = pa_array.to_numpy(zero_copy_only=False, writable=True)
+            mask = np.asarray(pa_array.is_null())
+            np_array[mask] = self._PANDAS_NA_VALUE
+            return pd.Index(np_array, dtype=np_array.dtype, copy=False)
         return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
