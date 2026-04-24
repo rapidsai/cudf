@@ -656,6 +656,7 @@ dependencies:
           - cuda-cudart-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
+          - cuda-sanitizer-api
           - libcufile-dev
           - libcurand-dev
           - libnvjitlink-dev
