@@ -557,6 +557,7 @@ void __launch_bounds__(decode_page_headers_block_size)
     if (chunk_idx < num_chunks) { bs->ck = chunks[chunk_idx]; }
     error[warp_id] = 0;
   });
+  block.sync();
 
   if (chunk_idx < num_chunks) {
     cg::invoke_one(warp, [&] {
@@ -577,8 +578,8 @@ void __launch_bounds__(decode_page_headers_block_size)
 
     while (values_found < num_values and bs->cur < bs->end) {
       int index_out                 = -1;
-      uint8_t const* const prev_cur = bs->cur;
-      size_t const prev_values      = values_found;
+      auto const prev_cur = bs->cur;
+      auto const prev_values      = values_found;
 
       cg::invoke_one(warp, [&] {
         // this computation is only valid for flat schemas. for nested schemas,
@@ -699,8 +700,8 @@ CUDF_KERNEL void __launch_bounds__(count_page_headers_block_size)
     uint32_t dictionary_page_count = 0;
     warp.sync();
     while (values_found < num_values and bs->cur < bs->end) {
-      uint8_t const* const prev_cur = bs->cur;
-      size_t const prev_values      = values_found;
+      auto const prev_cur = bs->cur;
+      auto const prev_values      = values_found;
       cg::invoke_one(warp, [&] {
         if (parse_page_header_fn{}(bs) and bs->page.compressed_page_size >= 0) {
           if (not is_supported_encoding(bs->page.encoding)) {
