@@ -10,6 +10,8 @@
 #include <cudf/join/filtered_join.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
@@ -25,11 +27,11 @@
 
 cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used)
 {
-  rmm::mr::cuda_memory_resource cuda_mr{};
   if (is_pool_used) {
-    return rmm::mr::pool_memory_resource{cuda_mr, rmm::percent_of_free_device_memory(50)};
+    return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
+                                         rmm::percent_of_free_device_memory(80)};
   }
-  return cuda_mr;
+  return rmm::mr::cuda_async_memory_resource{};
 }
 
 cudf::io::column_encoding get_encoding_type(std::string name)
