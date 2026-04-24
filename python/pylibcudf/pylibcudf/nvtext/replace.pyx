@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -27,7 +27,7 @@ cpdef Column replace_tokens(
     Column targets,
     Column replacements,
     Scalar delimiter=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -55,11 +55,11 @@ cpdef Column replace_tokens(
         New strings column with replaced strings
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
         )
     with nogil:
         c_result = cpp_replace_tokens(
@@ -67,10 +67,10 @@ cpdef Column replace_tokens(
             targets.view(),
             replacements.view(),
             dereference(<const string_scalar*>delimiter.get()),
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column filter_tokens(
@@ -78,7 +78,7 @@ cpdef Column filter_tokens(
     size_type min_token_length,
     Scalar replacement=None,
     Scalar delimiter=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -107,15 +107,15 @@ cpdef Column filter_tokens(
         New strings column of filtered strings
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
         )
     if replacement is None:
         replacement = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
         )
 
     with nogil:
@@ -124,8 +124,8 @@ cpdef Column filter_tokens(
             min_token_length,
             dereference(<const string_scalar*>replacement.get()),
             dereference(<const string_scalar*>delimiter.get()),
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

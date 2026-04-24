@@ -146,9 +146,9 @@ cdef class GroupBy:
     ):
         # Convert libcudf aggregation/scan outputs into pylibcudf objects.
         # This function is for internal use only.
-        cdef Table group_keys = Table.from_libcudf(move(c_res.first), stream, mr)
-
         cdef Stream _stream = <Stream>stream
+        cdef Table group_keys = Table.from_libcudf(move(c_res.first), _stream, mr)
+
         cdef int i, j
         cdef list results = []
         cdef list inner_results

@@ -26,7 +26,7 @@ cpdef Column round(
     Column source,
     int32_t decimal_places = 0,
     rounding_method round_method = rounding_method.HALF_UP,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """Rounds all the values in a column to the specified number of decimal places.
@@ -58,7 +58,7 @@ cpdef Column round(
         A Column with values rounded
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -66,18 +66,18 @@ cpdef Column round(
             source.view(),
             decimal_places,
             round_method,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column round_decimal(
     Column source,
     int32_t decimal_places = 0,
     rounding_method round_method = rounding_method.HALF_UP,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """Rounds all the values in a column to the specified number of decimal places.
@@ -106,7 +106,7 @@ cpdef Column round_decimal(
         A Column with values rounded
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -114,10 +114,10 @@ cpdef Column round_decimal(
             source.view(),
             decimal_places,
             round_method,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 RoundingMethod.__str__ = RoundingMethod.__repr__

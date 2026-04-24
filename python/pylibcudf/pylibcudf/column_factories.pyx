@@ -34,7 +34,7 @@ __all__ = [
 
 cpdef Column make_empty_column(
     MakeEmptyColumnOperand type_or_id,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Creates an empty column of the specified type.
@@ -53,7 +53,7 @@ cpdef Column make_empty_column(
     """
     cdef unique_ptr[column] result
     cdef type_id id
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     if MakeEmptyColumnOperand is object:
@@ -75,14 +75,14 @@ cpdef Column make_empty_column(
         raise TypeError(
             "Must pass a TypeId or DataType"
         )
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef Column make_numeric_column(
     DataType type_,
     size_type size,
     MaskArg mstate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Creates an empty numeric column.
@@ -102,7 +102,7 @@ cpdef Column make_numeric_column(
         state = mstate
     else:
         raise TypeError("Invalid mask argument")
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -110,17 +110,17 @@ cpdef Column make_numeric_column(
             type_.c_obj,
             size,
             state,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column make_fixed_point_column(
     DataType type_,
     size_type size,
     MaskArg mstate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
 
@@ -136,7 +136,7 @@ cpdef Column make_fixed_point_column(
         state = mstate
     else:
         raise TypeError("Invalid mask argument")
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -144,18 +144,18 @@ cpdef Column make_fixed_point_column(
             type_.c_obj,
             size,
             state,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef Column make_timestamp_column(
     DataType type_,
     size_type size,
     MaskArg mstate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
 
@@ -171,7 +171,7 @@ cpdef Column make_timestamp_column(
         state = mstate
     else:
         raise TypeError("Invalid mask argument")
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -179,18 +179,18 @@ cpdef Column make_timestamp_column(
             type_.c_obj,
             size,
             state,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef Column make_duration_column(
     DataType type_,
     size_type size,
     MaskArg mstate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
 
@@ -206,7 +206,7 @@ cpdef Column make_duration_column(
         state = mstate
     else:
         raise TypeError("Invalid mask argument")
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -214,18 +214,18 @@ cpdef Column make_duration_column(
             type_.c_obj,
             size,
             state,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef Column make_fixed_width_column(
     DataType type_,
     size_type size,
     MaskArg mstate,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
 
@@ -241,7 +241,7 @@ cpdef Column make_fixed_width_column(
         state = mstate
     else:
         raise TypeError("Invalid mask argument")
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -249,16 +249,16 @@ cpdef Column make_fixed_width_column(
             type_.c_obj,
             size,
             state,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef Column make_empty_lists_column(
     DataType child_type,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Creates an empty column of the specified type.
@@ -276,10 +276,10 @@ cpdef Column make_empty_lists_column(
         An empty Column
     """
     cdef unique_ptr[column] result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_make_empty_lists_column(child_type.c_obj)
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)

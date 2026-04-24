@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.string cimport string
@@ -152,7 +152,7 @@ cdef class AvroReaderOptionsBuilder:
 
 cpdef TableWithMetadata read_avro(
     AvroReaderOptions options,
-    Stream stream = None,
+    object stream = None,
     DeviceMemoryResource mr=None,
 ):
     """

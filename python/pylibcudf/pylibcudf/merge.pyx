@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -22,7 +22,7 @@ cpdef Table merge (
     list key_cols,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """Merge a set of sorted tables.
@@ -58,7 +58,7 @@ cpdef Table merge (
         c_tables_to_merge.push_back((<Table?> tbl).view())
 
     cdef unique_ptr[table] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -67,7 +67,7 @@ cpdef Table merge (
             c_key_cols,
             c_column_order,
             c_null_precedence,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)

@@ -416,7 +416,7 @@ cpdef Table unpack_from_memoryviews(
         # used for any operations.
         return Table.from_libcudf(
             make_unique[table](table_view()),
-            stream,
+            _stream,
             _get_memory_resource(),
         )
 

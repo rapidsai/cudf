@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -23,7 +23,7 @@ __all__ = ["capitalize", "is_title", "title"]
 cpdef Column capitalize(
     Column input,
     Scalar delimiters=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
     # TODO: default scalar values
     # https://github.com/rapidsai/cudf/issues/15505
@@ -45,12 +45,12 @@ cpdef Column capitalize(
         Column of strings capitalized from the input column
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     if delimiters is None:
         delimiters = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
         )
 
     cdef const string_scalar* cpp_delimiters = <const string_scalar*>(
@@ -61,17 +61,17 @@ cpdef Column capitalize(
         c_result = cpp_capitalize.capitalize(
             input.view(),
             dereference(cpp_delimiters),
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column title(
     Column input,
     string_character_types sequence_type=string_character_types.ALPHA,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Modifies first character of each word to upper-case and lower-cases
@@ -92,17 +92,17 @@ cpdef Column title(
         Column of titled strings
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
         c_result = cpp_capitalize.title(
-            input.view(), sequence_type, stream.view(), mr.get_mr()
+            input.view(), sequence_type, _stream.view(), mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column is_title(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column is_title(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Checks if the strings in the input column are title formatted.
 
     For details, see :cpp:func:`is_title`.
@@ -118,9 +118,9 @@ cpdef Column is_title(Column input, Stream stream=None, DeviceMemoryResource mr=
         Column of type BOOL8
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_capitalize.is_title(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_capitalize.is_title(input.view(), _stream.view(), mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

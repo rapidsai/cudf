@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
@@ -43,7 +43,7 @@ cdef vector[pair[char_utf8, char_utf8]] _table_to_c_table(dict table):
 
 
 cpdef Column translate(
-    Column input, dict chars_table, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, dict chars_table, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Translates individual characters within each string.
@@ -69,17 +69,17 @@ cpdef Column translate(
     cdef vector[pair[char_utf8, char_utf8]] c_chars_table = _table_to_c_table(
         chars_table
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_translate.translate(
             input.view(),
             c_chars_table,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column filter_characters(
@@ -87,7 +87,7 @@ cpdef Column filter_characters(
     dict characters_to_filter,
     filter_type keep_characters,
     Scalar replacement,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -124,7 +124,7 @@ cpdef Column filter_characters(
     cdef const string_scalar* c_replacement = <const string_scalar*>(
         replacement.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -133,9 +133,9 @@ cpdef Column filter_characters(
             c_characters_to_filter,
             keep_characters,
             dereference(c_replacement),
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 FilterType.__str__ = FilterType.__repr__

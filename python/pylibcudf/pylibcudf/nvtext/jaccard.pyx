@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -20,7 +20,7 @@ cpdef Column jaccard_index(
     Column input1,
     Column input2,
     size_type width,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -49,7 +49,7 @@ cpdef Column jaccard_index(
     cdef column_view c_input1 = input1.view()
     cdef column_view c_input2 = input2.view()
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -57,8 +57,8 @@ cpdef Column jaccard_index(
             c_input1,
             c_input2,
             width,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

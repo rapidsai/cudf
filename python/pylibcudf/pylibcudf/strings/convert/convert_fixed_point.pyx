@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -17,7 +17,7 @@ __all__ = ["from_fixed_point", "is_fixed_point", "to_fixed_point"]
 
 
 cpdef Column to_fixed_point(
-    Column input, DataType output_type, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, DataType output_type, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a new fixed-point column parsing decimal values from the
@@ -42,21 +42,21 @@ cpdef Column to_fixed_point(
         New column of output_type.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_fixed_point.to_fixed_point(
             input.view(),
             output_type.c_obj,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column from_fixed_point(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a new strings column converting the fixed-point values
@@ -78,20 +78,20 @@ cpdef Column from_fixed_point(
         New strings column.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_fixed_point.from_fixed_point(
-            input.view(), stream.view(), mr.get_mr()
+            input.view(), _stream.view(), mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column is_fixed_point(
     Column input,
     DataType decimal_type=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -118,7 +118,7 @@ cpdef Column is_fixed_point(
         New column of boolean results for each string.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     if decimal_type is None:
@@ -128,8 +128,8 @@ cpdef Column is_fixed_point(
         c_result = cpp_fixed_point.is_fixed_point(
             input.view(),
             decimal_type.c_obj,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

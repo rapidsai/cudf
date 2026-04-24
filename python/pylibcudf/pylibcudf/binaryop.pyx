@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
@@ -28,7 +28,7 @@ cpdef Column binary_operation(
     RightBinaryOperand rhs,
     binary_operator op,
     DataType output_type,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Perform a binary operation between a column and another column or scalar.
@@ -61,7 +61,7 @@ cpdef Column binary_operation(
         The result of the binary operation
     """
     cdef unique_ptr[column] result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     if LeftBinaryOperand is Column and RightBinaryOperand is Column:
@@ -71,7 +71,7 @@ cpdef Column binary_operation(
                 rhs.view(),
                 op,
                 output_type.c_obj,
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
     elif LeftBinaryOperand is Column and RightBinaryOperand is Scalar:
@@ -81,7 +81,7 @@ cpdef Column binary_operation(
                 dereference(rhs.c_obj),
                 op,
                 output_type.c_obj,
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
     elif LeftBinaryOperand is Scalar and RightBinaryOperand is Column:
@@ -91,13 +91,13 @@ cpdef Column binary_operation(
                 rhs.view(),
                 op,
                 output_type.c_obj,
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
     else:
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
 
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 
 cpdef bool is_supported_operation(

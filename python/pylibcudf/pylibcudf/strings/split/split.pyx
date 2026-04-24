@@ -32,7 +32,7 @@ cpdef Table split(
     Column strings_column,
     Scalar delimiter,
     size_type maxsplit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -65,7 +65,7 @@ cpdef Table split(
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -73,18 +73,18 @@ cpdef Table split(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table rsplit(
     Column strings_column,
     Scalar delimiter,
     size_type maxsplit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -117,7 +117,7 @@ cpdef Table rsplit(
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -125,17 +125,17 @@ cpdef Table rsplit(
             strings_column.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column split_record(
     Column strings,
     Scalar delimiter,
     size_type maxsplit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -164,7 +164,7 @@ cpdef Column split_record(
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -172,18 +172,18 @@ cpdef Column split_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column rsplit_record(
     Column strings,
     Scalar delimiter,
     size_type maxsplit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -213,7 +213,7 @@ cpdef Column rsplit_record(
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -221,18 +221,18 @@ cpdef Column rsplit_record(
             strings.view(),
             dereference(c_delimiter),
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table split_re(
     Column input,
     RegexProgram prog,
     size_type maxsplit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -259,7 +259,7 @@ cpdef Table split_re(
         A table of columns of strings.
     """
     cdef unique_ptr[table] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -267,17 +267,17 @@ cpdef Table split_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Table rsplit_re(
     Column input,
     RegexProgram prog,
     size_type maxsplit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -305,7 +305,7 @@ cpdef Table rsplit_re(
         A table of columns of strings.
     """
     cdef unique_ptr[table] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -313,17 +313,17 @@ cpdef Table rsplit_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column split_record_re(
     Column input,
     RegexProgram prog,
     size_type maxsplit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -350,7 +350,7 @@ cpdef Column split_record_re(
         Lists column of strings.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -358,14 +358,14 @@ cpdef Column split_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column rsplit_record_re(
-    Column input, RegexProgram prog, size_type maxsplit, Stream stream=None,
+    Column input, RegexProgram prog, size_type maxsplit, object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -392,7 +392,7 @@ cpdef Column rsplit_record_re(
         Lists column of strings.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -400,22 +400,22 @@ cpdef Column rsplit_record_re(
             input.view(),
             prog.c_obj.get()[0],
             maxsplit,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column split_part(
-    Column input, Scalar delimiter, size_type index, Stream stream=None,
+    Column input, Scalar delimiter, size_type index, object stream=None,
     DeviceMemoryResource mr=None,
 ):
     cdef unique_ptr[column] c_result
     cdef const string_scalar* c_delimiter = <const string_scalar*>(
         delimiter.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -423,8 +423,8 @@ cpdef Column split_part(
             input.view(),
             dereference(c_delimiter),
             index,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

@@ -13,6 +13,8 @@ from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.contiguous_split cimport HostBuffer
 from pylibcudf.expressions cimport Expression
@@ -507,20 +509,21 @@ cdef class ChunkedParquetReader:
     def __init__(
         self,
         ParquetReaderOptions options,
-        Stream stream = None,
+        object stream = None,
         DeviceMemoryResource mr = None,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
     ):
-        self.stream = _get_stream(stream)
+        self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
+        cdef cuda_stream_view stream_view = self._stream.view()
         with nogil:
             self.reader.reset(
                 new cpp_chunked_parquet_reader(
                     chunk_read_limit,
                     pass_read_limit,
                     options.c_obj,
-                    self.stream.view(),
+                    stream_view,
                     self.mr.get_mr()
                 )
             )
@@ -564,7 +567,7 @@ cdef class ChunkedParquetReader:
 
 
 cpdef read_parquet(
-    ParquetReaderOptions options, Stream stream = None, DeviceMemoryResource mr=None
+    ParquetReaderOptions options, object stream = None, DeviceMemoryResource mr=None
 ):
     """
     Read from Parquet format.
@@ -640,7 +643,7 @@ cdef class ChunkedParquetWriter:
             self.c_obj.get()[0].write(table.view(), partitions)
 
     @staticmethod
-    def from_options(ChunkedParquetWriterOptions options, Stream stream = None):
+    def from_options(ChunkedParquetWriterOptions options, object stream = None):
         """
         Creates a chunked Parquet writer from options
 
@@ -1235,7 +1238,7 @@ cdef class ParquetWriterOptionsBuilder:
         return parquet_options
 
 
-cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = None):
+cpdef memoryview write_parquet(ParquetWriterOptions options, object stream = None):
     """
     Writes a set of columns to parquet format.
 

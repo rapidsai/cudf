@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -29,7 +29,7 @@ cpdef Column quantile(
     interpolation interp = interpolation.LINEAR,
     Column ordered_indices = None,
     bool exact=True,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Computes quantiles with interpolation.
@@ -74,7 +74,7 @@ cpdef Column quantile(
     else:
         ordered_indices_view = ordered_indices.view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -84,11 +84,11 @@ cpdef Column quantile(
             interp,
             ordered_indices_view,
             exact,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table quantiles(
@@ -98,7 +98,7 @@ cpdef Table quantiles(
     sorted is_input_sorted = sorted.NO,
     list column_order = None,
     list null_precedence = None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Computes row quantiles with interpolation.
@@ -156,7 +156,7 @@ cpdef Table quantiles(
     if null_precedence is not None:
         null_precedence_vec = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -167,8 +167,8 @@ cpdef Table quantiles(
             is_input_sorted,
             column_order_vec,
             null_precedence_vec,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)

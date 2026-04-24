@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint32_t, uint64_t
@@ -30,7 +30,7 @@ cpdef Column minhash(
     Column a,
     Column b,
     size_type width,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """
@@ -58,7 +58,7 @@ cpdef Column minhash(
         List column of minhash values for each string per seed
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -68,11 +68,11 @@ cpdef Column minhash(
             a.view(),
             b.view(),
             width,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column minhash64(
     Column input,
@@ -80,7 +80,7 @@ cpdef Column minhash64(
     Column a,
     Column b,
     size_type width,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """
@@ -110,7 +110,7 @@ cpdef Column minhash64(
         List column of minhash values for each string per seed
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -120,11 +120,11 @@ cpdef Column minhash64(
             a.view(),
             b.view(),
             width,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column minhash_ngrams(
     Column input,
@@ -132,7 +132,7 @@ cpdef Column minhash_ngrams(
     uint32_t seed,
     Column a,
     Column b,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """
@@ -163,7 +163,7 @@ cpdef Column minhash_ngrams(
         value in columns a and b.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -173,11 +173,11 @@ cpdef Column minhash_ngrams(
             seed,
             a.view(),
             b.view(),
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column minhash64_ngrams(
     Column input,
@@ -185,7 +185,7 @@ cpdef Column minhash64_ngrams(
     uint64_t seed,
     Column a,
     Column b,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None
 ):
     """
@@ -216,7 +216,7 @@ cpdef Column minhash64_ngrams(
         value in columns a and b.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -226,8 +226,8 @@ cpdef Column minhash64_ngrams(
             seed,
             a.view(),
             b.view(),
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

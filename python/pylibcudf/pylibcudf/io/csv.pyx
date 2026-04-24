@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
@@ -672,7 +672,7 @@ cdef class CsvReaderOptionsBuilder:
 
 cpdef TableWithMetadata read_csv(
     CsvReaderOptions options,
-    Stream stream = None,
+    object stream = None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -882,7 +882,7 @@ cdef class CsvWriterOptionsBuilder:
 
 cpdef void write_csv(
     CsvWriterOptions options,
-    Stream stream = None,
+    object stream = None,
 ):
     """
     Write to CSV format.

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint32_t
@@ -29,7 +29,7 @@ cpdef Column generate_ngrams(
     Column input,
     size_type ngrams,
     Scalar separator,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -56,7 +56,7 @@ cpdef Column generate_ngrams(
     cdef column_view c_strings = input.view()
     cdef const string_scalar* c_separator = <const string_scalar*>separator.c_obj.get()
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -64,16 +64,16 @@ cpdef Column generate_ngrams(
             c_strings,
             ngrams,
             c_separator[0],
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column generate_character_ngrams(
     Column input,
     size_type ngrams = 2,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -97,24 +97,24 @@ cpdef Column generate_character_ngrams(
     """
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_generate_character_ngrams(
             c_strings,
             ngrams,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column hash_character_ngrams(
     Column input,
     size_type ngrams,
     uint32_t seed,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -140,7 +140,7 @@ cpdef Column hash_character_ngrams(
     """
     cdef column_view c_strings = input.view()
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -148,7 +148,7 @@ cpdef Column hash_character_ngrams(
             c_strings,
             ngrams,
             seed,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

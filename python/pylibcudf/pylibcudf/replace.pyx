@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -31,7 +31,7 @@ __all__ = [
 cpdef Column replace_nulls(
     Column source_column,
     ReplacementType replacement,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Replace nulls in source_column.
@@ -70,7 +70,7 @@ cpdef Column replace_nulls(
     cdef unique_ptr[column] c_result
     cdef replace_policy policy
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     # Due to https://github.com/cython/cython/issues/5984, if this function is
@@ -84,10 +84,10 @@ cpdef Column replace_nulls(
                 c_result = cpp_replace.replace_nulls(
                     source_column.view(),
                     policy,
-                    stream.view(),
+                    _stream.view(),
                     mr.get_mr()
                 )
-            return Column.from_libcudf(move(c_result), stream, mr)
+            return Column.from_libcudf(move(c_result), _stream, mr)
         else:
             raise TypeError("replacement must be a Column, Scalar, or replace_policy")
 
@@ -96,33 +96,33 @@ cpdef Column replace_nulls(
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement.view(),
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
         elif ReplacementType is Scalar:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 dereference(replacement.c_obj),
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
         elif ReplacementType is replace_policy:
             c_result = cpp_replace.replace_nulls(
                 source_column.view(),
                 replacement,
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
         else:
             assert False, "Internal error. Please contact pylibcudf developers"
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column find_and_replace_all(
     Column source_column,
     Column values_to_replace,
     Column replacement_values,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Replace all occurrences of values_to_replace with replacement_values.
@@ -150,7 +150,7 @@ cpdef Column find_and_replace_all(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -158,10 +158,10 @@ cpdef Column find_and_replace_all(
             source_column.view(),
             values_to_replace.view(),
             replacement_values.view(),
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column clamp(
@@ -170,7 +170,7 @@ cpdef Column clamp(
     Scalar hi,
     Scalar lo_replace=None,
     Scalar hi_replace=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Clamp the values in source_column to the range [lo, hi].
@@ -206,7 +206,7 @@ cpdef Column clamp(
 
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -215,7 +215,7 @@ cpdef Column clamp(
                 source_column.view(),
                 dereference(lo.c_obj),
                 dereference(hi.c_obj),
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
         else:
@@ -225,16 +225,16 @@ cpdef Column clamp(
                 dereference(lo_replace.c_obj),
                 dereference(hi.c_obj),
                 dereference(hi_replace.c_obj),
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column normalize_nans_and_zeros(
     Column source_column,
     bool inplace=False,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Normalize NaNs and zeros in source_column.
@@ -260,24 +260,24 @@ cpdef Column normalize_nans_and_zeros(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     with nogil:
         if inplace:
             cpp_replace.normalize_nans_and_zeros(
                 source_column.mutable_view(),
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
         else:
             c_result = cpp_replace.normalize_nans_and_zeros(
                 source_column.view(),
-                stream.view(),
+                _stream.view(),
                 mr.get_mr()
             )
 
     if not inplace:
-        return Column.from_libcudf(move(c_result), stream, mr)
+        return Column.from_libcudf(move(c_result), _stream, mr)
 
 ReplacePolicy.__str__ = ReplacePolicy.__repr__

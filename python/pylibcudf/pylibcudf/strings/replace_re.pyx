@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
@@ -28,7 +28,7 @@ cpdef Column replace_re(
     Replacement replacement=None,
     size_type max_replace_count=-1,
     regex_flags flags=regex_flags.DEFAULT,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -64,13 +64,13 @@ cpdef Column replace_re(
     """
     cdef unique_ptr[column] c_result
     cdef vector[string] c_patterns
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
 
     if Patterns is RegexProgram and Replacement is Scalar:
         if replacement is None:
             replacement = Scalar.from_libcudf(
-                cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+                cpp_make_string_scalar("".encode(), _stream.view(), mr.get_mr())
             )
         with nogil:
             c_result = move(
@@ -79,12 +79,12 @@ cpdef Column replace_re(
                     patterns.c_obj.get()[0],
                     dereference(<string_scalar*>(replacement.get())),
                     max_replace_count,
-                    stream.view(),
+                    _stream.view(),
                     mr.get_mr()
                 )
             )
 
-        return Column.from_libcudf(move(c_result), stream, mr)
+        return Column.from_libcudf(move(c_result), _stream, mr)
     elif Patterns is list and Replacement is Column:
         c_patterns.reserve(len(patterns))
         for pattern in patterns:
@@ -97,12 +97,12 @@ cpdef Column replace_re(
                     c_patterns,
                     replacement.view(),
                     flags,
-                    stream.view(),
+                    _stream.view(),
                     mr.get_mr()
                 )
             )
 
-        return Column.from_libcudf(move(c_result), stream, mr)
+        return Column.from_libcudf(move(c_result), _stream, mr)
     else:
         raise TypeError("Must pass either a RegexProgram and a Scalar or a list")
 
@@ -111,7 +111,7 @@ cpdef Column replace_with_backrefs(
     Column input,
     RegexProgram prog,
     str replacement,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -137,7 +137,7 @@ cpdef Column replace_with_backrefs(
         New strings column.
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     mr = _get_memory_resource(mr)
     cdef string c_replacement = replacement.encode()
 
@@ -146,8 +146,8 @@ cpdef Column replace_with_backrefs(
             input.view(),
             prog.c_obj.get()[0],
             c_replacement,
-            stream.view(),
+            _stream.view(),
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

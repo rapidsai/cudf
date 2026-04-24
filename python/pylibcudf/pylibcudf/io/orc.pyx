@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.string cimport string
@@ -444,7 +444,7 @@ cdef class OrcReaderOptionsBuilder:
 
 
 cpdef TableWithMetadata read_orc(
-    OrcReaderOptions options, Stream stream = None, DeviceMemoryResource mr=None
+    OrcReaderOptions options, object stream = None, DeviceMemoryResource mr=None
 ):
     """
     Read from ORC format.
@@ -475,7 +475,7 @@ cpdef TableWithMetadata read_orc(
 
 cpdef ParsedOrcStatistics read_parsed_orc_statistics(
     SourceInfo source_info,
-    Stream stream=None
+    object stream=None
 ):
     """
     Read ORC statistics from a source.
@@ -667,7 +667,7 @@ cdef class OrcWriterOptionsBuilder:
         return orc_options
 
 
-cpdef void write_orc(OrcWriterOptions options, Stream stream = None):
+cpdef void write_orc(OrcWriterOptions options, object stream = None):
     """
     Write to ORC format.
 
@@ -721,7 +721,7 @@ cdef class OrcChunkedWriter:
             self.c_obj.get()[0].write(table.view())
 
     @staticmethod
-    def from_options(ChunkedOrcWriterOptions options, Stream stream = None):
+    def from_options(ChunkedOrcWriterOptions options, object stream = None):
         """
         Creates a chunked ORC writer from options
 
