@@ -360,6 +360,11 @@ class StringColumn(ColumnBase, Scannable):
         return False
 
     def to_arrow(self) -> pa.Array:
+        if isinstance(self.dtype, pd.ArrowDtype) and pa.types.is_null(
+            self.dtype.pyarrow_dtype
+        ):
+            # https://github.com/pandas-dev/pandas/pull/55346
+            return pa.nulls(len(self), type=pa.null())
         result = super().to_arrow()
         # libcudf produces arrow string (32-bit offsets), but pandas 3.0
         # uses large_string (64-bit offsets) for pyarrow-backed string
