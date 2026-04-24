@@ -1,230 +1,176 @@
+(cudf-polars-usage)=
 # Usage
 
-`cudf-polars` enables GPU acceleration for Polars' LazyFrame API by executing logical plans with cuDF and pylibcudf. It requires minimal code changes and works by specifying a GPU engine during execution.
+`cudf-polars` runs your Polars `LazyFrame` queries on GPU. You select GPU execution by passing
+an `engine=` argument to `.collect()` or `.sink_*()`. See {doc}`engines` for the conceptual
+picture; this page walks through running your first query.
 
-For a high-level overview of GPU support in Polars, see the [Polars GPU support guide](https://docs.pola.rs/user-guide/gpu-support/).
-
-## Getting Started
-
-Use `cudf-polars` by calling `.collect(engine="gpu")` or `.sink_<method>(engine="gpu")` on a LazyFrame:
+## Your first GPU query
 
 ```python
 import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
-q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
-result = q.collect(engine="gpu")
+query = (
+    pl.scan_parquet("/data/dataset/*.parquet")
+    .filter(pl.col("amount") > 100)
+    .group_by("customer_id")
+    .agg(pl.col("amount").sum())
+)
+
+with RayEngine() as engine:
+    result = query.collect(engine=engine)
+print(result)
 ```
 
-Alternatively, you can create a `GPUEngine` instance with custom configuration:
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine` with no arguments uses every
+GPU visible to the process, so the example above runs on one GPU if that's all that's available
+and scales automatically to every GPU on the node otherwise. It also attaches to an existing
+Ray cluster if one is already running (see [Attaching to an existing Raycluster](#attaching-to-an-existing-ray-cluster)).
+
+```{note}
+The examples on this page use {class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine`. `cudf-polars` supports
+multiple engines for GPU execution. Ssee {doc}`other_engines` for alternatives, or {doc}`engines` for a conceptual overview of when to pick which.
+```
+
+## Simpler alternative: the in-memory GPU engine
+
+If your data fits comfortably on one GPU and you don't need the streaming executor, you can use
+the in-memory path instead:
+
+```python
+result = query.collect(engine="gpu")
+```
+
+This is the path documented in Polars' own [GPU support guide][polars-gpu]. It runs entirely
+in device memory on a single GPU; it does not stream or distribute. See {doc}`engines` for
+a comparison with the streaming engines.
+
+[polars-gpu]: https://docs.pola.rs/user-guide/gpu-support/
+
+
+## Configuring `RayEngine`
+
+The same `from_options()` / `StreamingOptions` pattern shown here works for every streaming
+engine — see {doc}`other_engines` for the DaskEngine and SPMDEngine variants.
+
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine` with no arguments starts a
+local [Ray][ray-docs] cluster and creates one GPU worker per visible GPU.
+
+For custom configuration, build a
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.options.StreamingOptions` and use
+`RayEngine.from_options()`:
 
 ```python
 import polars as pl
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
 
-engine = pl.GPUEngine(raise_on_fail=True)
+opts = StreamingOptions(num_streaming_threads=8, fallback_mode="silent")
 
-q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
-result = q.collect(engine=engine)
+with RayEngine.from_options(opts) as engine:
+    result = pl.scan_parquet("/data/dataset/*.parquet").collect(engine=engine)
 ```
 
-With `raise_on_fail=True`, the query will raise an exception if it cannot be run on the GPU instead of transparently falling back to polars CPU. See more [engine options](engine_options.md).
+See {doc}`options` for the available fields.
 
-## GPU Profiling
+```{note}
+`RayEngine` is an object you create and pass to `.collect(engine=engine)`. Prefer the
+context-manager form so the Ray cluster and GPU workers are torn down automatically.
+```
 
-The `streaming` executor does not support profiling query execution through the `LazyFrame.profile` method. With the default `synchronous` scheduler for the `streaming` executor, we recommend using [NVIDIA NSight Systems](https://developer.nvidia.com/nsight-systems) to profile your queries.
-cudf-polars includes [nvtx](https://nvidia.github.io/NVTX/) annotations to help you understand where time is being spent.
+## Attaching to an existing Ray cluster
 
-With the `distributed` scheduler for the `streaming` executor, we recommend using Dask's [built-in diagnostics](https://docs.dask.org/en/stable/diagnostics-distributed.html).
-
-Finally, the `"in-memory"` *does* support [`LazyFrame.profile`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.profile.html).
+For multi-node runs, start a Ray cluster separately (for example with `ray start` on each
+node) and attach to it from your driver script. When Ray is already initialized,
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine` connects to the running
+cluster and leaves it untouched on exit:
 
 ```python
+import ray
 import polars as pl
-q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
-profile = q.profile(engine=pl.GPUEngine(executor="in-memory"))
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+ray.init(address="auto")  # attach to a running cluster
+with RayEngine() as engine:
+    result = (
+        pl.scan_parquet("s3://bucket/*.parquet")
+            .group_by("customer_id")
+            .agg(pl.col("amount").sum())
+            .collect(engine=engine)
+    )
 ```
 
-The result is a tuple containing 2 materialized DataFrames - the first with the query result and the second with profiling information of each node that is executed.
-```python
-print(profile[0])
-```
-```
-shape: (32_439_327, 19)
-┌──────────┬──────────────────────┬───────────────────────┬─────────────────┬───┬───────────────────────┬──────────────┬──────────────────────┬─────────────┐
-│ VendorID ┆ tpep_pickup_datetime ┆ tpep_dropoff_datetime ┆ passenger_count ┆ … ┆ improvement_surcharge ┆ total_amount ┆ congestion_surcharge ┆ Airport_fee │
-│ ---      ┆ ---                  ┆ ---                   ┆ ---             ┆   ┆ ---                   ┆ ---          ┆ ---                  ┆ ---         │
-│ i32      ┆ datetime[μs]         ┆ datetime[μs]          ┆ i64             ┆   ┆ f64                   ┆ f64          ┆ f64                  ┆ f64         │
-╞══════════╪══════════════════════╪═══════════════════════╪═════════════════╪═══╪═══════════════════════╪══════════════╪══════════════════════╪═════════════╡
-│ 2        ┆ 2024-01-01 00:57:55  ┆ 2024-01-01 01:17:43   ┆ 1               ┆ … ┆ 1.0                   ┆ 22.7         ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:03:00  ┆ 2024-01-01 00:09:36   ┆ 1               ┆ … ┆ 1.0                   ┆ 18.75        ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:17:06  ┆ 2024-01-01 00:35:01   ┆ 1               ┆ … ┆ 1.0                   ┆ 31.3         ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:36:38  ┆ 2024-01-01 00:44:56   ┆ 1               ┆ … ┆ 1.0                   ┆ 17.0         ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:46:51  ┆ 2024-01-01 00:52:57   ┆ 1               ┆ … ┆ 1.0                   ┆ 16.1         ┆ 2.5                  ┆ 0.0         │
-│ …        ┆ …                    ┆ …                     ┆ …               ┆ … ┆ …                     ┆ …            ┆ …                    ┆ …           │
-│ 2        ┆ 2024-12-31 23:05:43  ┆ 2024-12-31 23:18:15   ┆ null            ┆ … ┆ 1.0                   ┆ 24.67        ┆ null                 ┆ null        │
-│ 2        ┆ 2024-12-31 23:02:00  ┆ 2024-12-31 23:22:14   ┆ null            ┆ … ┆ 1.0                   ┆ 15.25        ┆ null                 ┆ null        │
-│ 2        ┆ 2024-12-31 23:17:15  ┆ 2024-12-31 23:17:34   ┆ null            ┆ … ┆ 1.0                   ┆ 24.46        ┆ null                 ┆ null        │
-│ 1        ┆ 2024-12-31 23:14:53  ┆ 2024-12-31 23:35:13   ┆ null            ┆ … ┆ 1.0                   ┆ 32.88        ┆ null                 ┆ null        │
-│ 1        ┆ 2024-12-31 23:15:33  ┆ 2024-12-31 23:36:29   ┆ null            ┆ … ┆ 1.0                   ┆ 28.57        ┆ null                 ┆ null        │
-└──────────┴──────────────────────┴───────────────────────┴─────────────────┴───┴───────────────────────┴──────────────┴──────────────────────┴─────────────┘
-```
+{class}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine` creates one rank per GPU in
+the Ray cluster and bootstraps a UCXX communicator across them. It raises `RuntimeError` if
+created inside an `rrun` cluster or if no GPUs are available.
+
+## Manual Engine Lifetime Control
+
+When you need to control the engine lifetime explicitly. For example, in a Jupyter notebook
+where a `with` block cannot span multiple cells, construct `RayEngine` once and reuse it,
+then call `engine.shutdown()` when you are done:
 
 ```python
-print(profile[1])
-```
-```
-shape: (3, 3)
-┌────────────────────┬───────┬────────┐
-│ node               ┆ start ┆ end    │
-│ ---                ┆ ---   ┆ ---    │
-│ str                ┆ u64   ┆ u64    │
-╞════════════════════╪═══════╪════════╡
-│ optimization       ┆ 0     ┆ 416    │
-│ gpu-ir-translation ┆ 416   ┆ 741    │
-│ Scan               ┆ 813   ┆ 233993 │
-└────────────────────┴───────┴────────┘
+# Cell 1: start the engine
+from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+
+engine = RayEngine()
 ```
 
-## Tracing
+```python
+# Cell 2: run a query
+import polars as pl
 
-cudf-polars can optionally trace execution of each node in the query plan.
-To enable tracing, set the environment variable ``CUDF_POLARS_LOG_TRACES`` to a
-true value ("1", "true", "y", "yes") before starting your process.
-
-cudf-polars logs traces at three scopes (levels):
-
-1. `plan`: These generally happen once per query. This will include things
-   like the (serialized) query plan.
-2. `actor`: (rapidsmpf runtime only). There will be roughly one `actor`
-   trace per node in the logical plan.
-3. `evaluate_ir_node`: Logs the evaluation of a physical node in the query plan.
-   Note that one logical node might expand to more than one physical nodes.
-
-Each trace includes a `scope` key indicating which level that trace belongs to.
-`actor`-scoped nodes will be nested under a `plan`-scoped node. When using the
-rapidsmpf runtime, `evaluate_ir_node`-scoped nodes will
-be nested under an `actor`-scoped node.
-
-### Schemas
-
-The different scopes have different schemas. Fields in **bold** are required / always present.
-
-#### scope=plan
-
-| Field Name | Type  | Description |
-| ---------- | ----- | ----------- |
-| **scope**  | Literal["plan"] | The string literal `"plan"`. Useful for distinguishing from other types of traces. |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
-| **plan**   | `PlanObject` | A serialized representation of the query plan. See #TODO below |
-| **event**  | String | A message like "Query Plan" |
-
-#### scope=actor
-
-`actor`-scoped traces will only appear with the rapidsmpf runtime.
-
-| Field Name | Type  | Description |
-| ---------- | ----- | ----------- |
-| **scope**      | Literal["actor"] | The string literal `"actor"`. Useful for distinguishing from other types of traces. |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
-| **start**      | int   | A nanosecond-resolution counter indicating when the actor started. Note: actors generally start early in the query and suspend waiting for data. |
-| **stop**      | int   | A nanosecond-resolution counter indicating when the actor completed. |
-| **event**      | String | A message like "Streaming Actor". |
-| **actor_ir_type** | String | The type of the actor, like `"Scan"`. |
-| **actor_ir_id**   | int    | A unique identifier for the actor. All traces logged under this actor will include this value. |
-| chunk_count | int | A counter for how many table chunks have been processed by this actor at the time of logging. |
-| duplicated | bool | Whether the output rows are duplicated across ranks (e.g. after an allgather). |
-| row_count       | int  | Total row count produced by this node during execution. |
-
-#### scope=evaluate_ir_node
-
-| Field Name | Type  | Description |
-| ---------- | ----- | ----------- |
-| **scope** | `Literal["evaluate_ir_node"]` | The string literal `"evaluate_ir_node"`. Useful for distinguishing from other types of traces. |
-| **cudf_polars_query_id** | UUID4 | A unique identifier for the polars query being executed. All traces logged as part of this query use this ID. |
-| **type**       | string | The name of the IR node |
-| **start**      | int    | A nanosecond-precision counter indicating when this node started executing |
-| **stop**       | int    | A nanosecond-precision counter indicating when this node finished executing |
-| **overhead_duration**   | int    | The overhead, in nanoseconds, added by tracing |
-| `count_frames_{phase}` | int | The number of dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
-| `frames_{phase}` | `list[dict]` | A list with dictionaries with "shape" and "size" fields, one per input dataframe, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_DATAFRAMES=0`. |
-| `total_bytes_{phase}` | int | The sum of the size (in bytes) of the dataframes for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| `rmm_current_bytes_{phase}` | int | The current number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| `rmm_current_count_{phase}` | int | The current number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| `rmm_peak_bytes_{phase}` | int | The peak number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| `rmm_peak_count_{phase}` | int | The peak number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| `rmm_total_bytes_{phase}` | int | The total number of bytes allocated by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| `rmm_total_count_{phase}` | int | The total number of allocations made by RMM Memory Resource used by cudf-polars for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| `nvml_current_bytes_{phase}` | int | The device memory usage of this process, as reported by NVML, for the input / output `phase`. This metric can be disabled by setting `CUDF_POLARS_LOG_TRACES_MEMORY=0`. |
-| actor_ir_id   | int    | A unique identifier for the parent actor (rapidsmpf runtime only). |
-
-Setting `CUDF_POLARS_LOG_TRACES=1` enables all the metrics. Depending on the query, the overhead
-from collecting the memory or dataframe metrics can be measurable. You can disable some metrics
-through additional environment variables. For example, do disable the memory related metrics, set:
-
-```
-CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0
+result = (
+    pl.scan_parquet("/data/*.parquet")
+      .group_by("customer_id")
+      .agg(pl.col("amount").sum())
+      .collect(engine=engine)
+)
+result
 ```
 
-And to disable the memory and dataframe metrics, which essentially leaves just
-the duration metrics, set
-```
-CUDF_POLARS_LOG_TRACES=1 CUDF_POLARS_LOG_TRACES_MEMORY=0 CUDF_POLARS_LOG_TRACES_DATAFRAMES=0
-```
-
-Note that tracing still needs to be enabled with `CUDF_POLARS_LOG_TRACES=1`.
-
-The implementation uses [structlog] to build log records. You can configure the
-output using structlog's [configuration][structlog-configure] and enrich the
-records with [context variables][structlog-context].
-
-```
->>> df = pl.DataFrame({"a": ["a", "a", "b"], "b": [1, 2, 3]}).lazy()
->>> df.group_by("a").agg(pl.col("b").min().alias("min"), pl.col("b").max().alias("max")).collect(engine="gpu")
-2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=0 count_frames_output=1 ... type=DataFrameScan
-2025-09-10 07:44:01 [info     ] Execute IR      count_frames_input=1 count_frames_output=1 ... type=GroupBy
-shape: (2, 3)
-┌─────┬─────┬─────┐
-│ a   ┆ min ┆ max │
-│ --- ┆ --- ┆ --- │
-│ str ┆ i64 ┆ i64 │
-╞═════╪═════╪═════╡
-│ b   ┆ 3   ┆ 3   │
-│ a   ┆ 1   ┆ 2   │
-└─────┴─────┴─────┘
+```python
+# Cell 3: run another query reusing the same engine
+other = pl.scan_parquet("/data/other/*.parquet").collect(engine=engine)
 ```
 
-### Serialized Query Plan
+```python
+# Final cell: tear everything down
+engine.shutdown()
+```
 
-The query plan is serialized with the following schema:
+`engine.shutdown()` stops the GPU worker processes (rank actors) and, if the engine started Ray itself,
+also calls `ray.shutdown()`. It is idempotent, so calling it twice is safe.
 
-| Field Name | Type | Description |
-| ---------- | ---- | ----------- |
-| roots      | `list<str>` | A list of string node IDs for the root nodes |
-| nodes      | `Mapping<str, IRNode>` | A mapping from string node ID to the Node |
-| partition_info | `Mapping<str, PartitionInfo>` | A mapping from string node ID to the Node |
+## Sink behavior
 
-`nodes` and `partition_info` are flat: they contain every node in the query plan.
+When a streaming engine is used, sink operations such as `df.sink_parquet("my_path")` always produce
+a directory containing one or more files. It is not currently possible to disable this behavior, and
+setting `sink_to_directory=False` raises a `ValueError`.
 
-`IRNode` objects have the following schema:
-
-| Field Name | Type | Description |
-| ---------- | ---- | ----------- |
-| id         | `str` | The string node ID. This is unique within the query plan |
-| children   | `list<str>` | The node IDs of this node's children nodes. Each child node ID is also available in the plan's `nodes` field. |
-| schema     | `Mapping<str, str>` | A mapping from column name to (string) data type identifier. |
-| properties | `Mapping<str, object>` | Additional properties, unique to each node type. |
-| type       | `str` | The name of the IR node. |
+The in-memory engine, by contrast, follows standard Polars semantics and writes to a single file at
+the specified path.
 
 
-`PartitionInfo` objects have the following schema:
+## Cluster diagnostics
 
-| Field Name | Type | Description |
-| ---------- | ---- | ----------- |
-| count      | int  | The number of partitions for this node |
-| partitioned_on | `list[str]` | The columns this node is partitioned on. |
+{meth}`~cudf_polars.experimental.rapidsmpf.frontend.ray.RayEngine.gather_cluster_info` returns
+a list of {class}`~cudf_polars.experimental.rapidsmpf.frontend.core.ClusterInfo` — one per rank
+actor — with fields `hostname`, `pid`, `cuda_visible_devices`, and `gpu_uuid`:
 
+```python
+with RayEngine() as engine:
+    print(f"cluster has {engine.nranks} ranks")
+    for i, info in enumerate(engine.gather_cluster_info()):
+        print(
+            f"rank {i}: hostname={info.hostname}, pid={info.pid}, "
+            f"cuda_visible_devices={info.cuda_visible_devices}, "
+            f"gpu_uuid={info.gpu_uuid}"
+        )
+# rank 0: hostname=node-0, pid=12345, cuda_visible_devices=0, gpu_uuid=GPU-abc123...
+# rank 1: hostname=node-0, pid=12346, cuda_visible_devices=1, gpu_uuid=GPU-def456...
+```
 
-[nvml]: https://developer.nvidia.com/management-library-nvml
-[rmm-stats]: https://docs.rapids.ai/api/rmm/stable/guide/#memory-statistics-and-profiling
-[structlog]: https://www.structlog.org/
-[structlog-configure]: https://www.structlog.org/en/stable/configuration.html
-[structlog-context]: https://www.structlog.org/en/stable/contextvars.html
+[ray-docs]: https://docs.ray.io/
