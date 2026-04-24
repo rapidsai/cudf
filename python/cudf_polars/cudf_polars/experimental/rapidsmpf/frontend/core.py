@@ -506,9 +506,12 @@ def evaluate_on_rank(
     stats = allgather_stats(comm, ctx.br(), ir, config_options)
     ir, partition_info = lower_ir_graph(ir, config_options, stats)
 
-    with ReserveOpIDs(ir, config_options) as collective_id_map:
-        # TODO: should only rank 0 log the query plan?
+    if comm.rank == 0:
+        # At least for now, the query plan is identical on all ranks,
+        # so we only log it once.
         log_query_plan(ir, config_options)
+
+    with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
             ctx,
             comm,
