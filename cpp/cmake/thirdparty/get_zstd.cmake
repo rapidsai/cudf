@@ -7,11 +7,7 @@
 
 # Use CPM to find or clone libzstd
 function(find_and_configure_zstd)
-  if(NOT BUILD_SHARED_LIBS)
-    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
-  else()
-    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
-  endif()
+  set(_exclude_from_all EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS})
 
   set(CPM_DOWNLOAD_zstd ON)
   rapids_cpm_find(

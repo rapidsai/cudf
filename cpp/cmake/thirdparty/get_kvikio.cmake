@@ -7,11 +7,7 @@
 
 # This function finds KvikIO
 function(find_and_configure_kvikio VERSION)
-  if(NOT BUILD_SHARED_LIBS)
-    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
-  else()
-    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
-  endif()
+  set(_exclude_from_all EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS})
 
   rapids_cpm_find(
     kvikio ${VERSION}

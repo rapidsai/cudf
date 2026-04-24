@@ -7,11 +7,7 @@
 
 # This function finds nanoarrow and sets any additional necessary environment variables.
 function(find_and_configure_nanoarrow)
-  if(NOT BUILD_SHARED_LIBS)
-    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
-  else()
-    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
-  endif()
+  set(_exclude_from_all EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS})
 
   rapids_cpm_find(
     nanoarrow 0.7.0

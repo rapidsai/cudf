@@ -7,11 +7,7 @@
 
 # Use CPM to clone CRoaring and set up the necessary targets and include directories.
 function(find_and_configure_roaring VERSION)
-  if(NOT BUILD_SHARED_LIBS)
-    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
-  else()
-    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
-  endif()
+  set(_exclude_from_all EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS})
 
   rapids_cpm_find(
     roaring ${VERSION}
