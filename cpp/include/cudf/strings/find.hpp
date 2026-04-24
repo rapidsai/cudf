@@ -285,6 +285,9 @@ std::unique_ptr<column> ends_with(
  * @brief Returns the number of times the given target string
  * matches in each string
  *
+ * Counting proceeds left to right within the row and does not include
+ * overlapping matches.
+ *
  * @code{.pseudo}
  * Example:
  * s = ["abababa", "bab", "aba"]
@@ -298,7 +301,7 @@ std::unique_ptr<column> ends_with(
  * @param target String to search for in each row of the input column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New column counts for each row
+ * @return New column with counts for each row
  */
 std::unique_ptr<column> count(
   strings_column_view const& input,
