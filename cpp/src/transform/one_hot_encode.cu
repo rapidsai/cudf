@@ -73,7 +73,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   auto const comparator = cudf::detail::row::equality::two_table_comparator{t_lhs, t_rhs, stream};
 
   auto const comparator_helper = [&](auto const d_equal) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<cudf::size_type>{0},
                       cuda::counting_iterator{total_size},
                       all_encodings->mutable_view().begin<bool>(),

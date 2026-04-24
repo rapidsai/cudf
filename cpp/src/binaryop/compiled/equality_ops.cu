@@ -25,13 +25,13 @@ void dispatch_equality_op(mutable_column_view& out,
   auto rhsd         = column_device_view::create(rhs, stream);
   if (common_dtype) {
     if (op == binary_operator::EQUAL) {
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_device_dispatcher<ops::Equal>{
                            *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_device_dispatcher<ops::NotEqual>{
@@ -39,13 +39,13 @@ void dispatch_equality_op(mutable_column_view& out,
     }
   } else {
     if (op == binary_operator::EQUAL) {
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_double_device_dispatcher<ops::Equal>{
                            *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
-      thrust::for_each_n(rmm::exec_policy_nosync(stream),
+      thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cuda::counting_iterator<size_type>{0},
                          out.size(),
                          binary_op_double_device_dispatcher<ops::NotEqual>{

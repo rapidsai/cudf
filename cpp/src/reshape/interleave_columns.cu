@@ -171,7 +171,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     auto num_strings = num_columns * strings_count;
 
     rmm::device_uvector<cudf::strings::detail::string_index_pair> indices(num_strings, stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       cuda::counting_iterator<size_type>{0},
                       cuda::counting_iterator<size_type>{num_strings},
                       indices.begin(),
@@ -203,7 +203,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       });
 
     if (not create_mask) {
-      thrust::transform(rmm::exec_policy_nosync(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         index_begin,
                         index_end,
                         device_output->begin<T>(),
@@ -217,7 +217,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
       return input.column(idx % divisor).is_valid(idx / divisor);
     };
 
-    thrust::transform_if(rmm::exec_policy_nosync(stream),
+    thrust::transform_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          index_begin,
                          index_end,
                          device_output->begin<T>(),

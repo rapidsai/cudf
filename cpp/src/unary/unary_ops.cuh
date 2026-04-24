@@ -56,7 +56,7 @@ struct launcher {
         rmm::device_buffer{input.null_mask(), bitmask_allocation_size_bytes(input.size())},
         input.null_count());
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input.begin<T>(),
                       input.end<T>(),
                       output_view.begin<Tout>(),
