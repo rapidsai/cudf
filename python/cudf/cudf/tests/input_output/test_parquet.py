@@ -4974,3 +4974,22 @@ def test_read_parquet_case_insensitive_structs():
         filters=[("id", "<=", 20)],
     )
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "host_decompression",
+    ["OFF", "ON"],
+)
+def test_read_parquet_snappy_malformed_copy_elem(
+    datadir, monkeypatch, host_decompression
+):
+    monkeypatch.setenv("LIBCUDF_NVCOMP_POLICY", "OFF")
+    monkeypatch.setenv("LIBCUDF_HOST_DECOMPRESSION", host_decompression)
+    fname = datadir / "invalid-snappy.parquet"
+    match_string = (
+        "Error during decompression"
+        if host_decompression == "OFF"
+        else "Snappy Decompression failed"
+    )
+    with pytest.raises(RuntimeError, match=match_string):
+        cudf.read_parquet(fname)

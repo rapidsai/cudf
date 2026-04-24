@@ -239,6 +239,13 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION``.
         Default: ``{}``.
         Category: executor.
+    sink_to_directory
+        Whether multi-partition sink operations should write to a directory
+        rather than a single file. The ``spmd``/``ray``/``dask`` engines
+        always use ``True``; passing ``False`` raises ``ValueError``.
+        Env: ``CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY``.
+        Default: ``True`` (forced by the streaming engines).
+        Category: executor.
     raise_on_fail
         Raise instead of falling back to CPU.
         Default: ``False``.
@@ -327,6 +334,9 @@ class StreamingOptions:
     )
     unique_fraction: dict[str, float] | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__UNIQUE_FRACTION", json.loads
+    )
+    sink_to_directory: bool | Unspecified = _opt(
+        "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
     # ---- Engine ----
     raise_on_fail: bool | Unspecified = _opt("engine")
