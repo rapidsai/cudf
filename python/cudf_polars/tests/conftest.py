@@ -231,6 +231,16 @@ def pytest_configure(config):
         "implementation.",
     )
 
+    # Ray's internal subprocess management leaks `/dev/null` file handles, and
+    # distributed's shutdown leaves unclosed sockets. Under Python 3.14 +
+    # pytest 9, these surface as unraisable `ResourceWarning`s and — combined
+    # with `filterwarnings = ["error", ...]` in pyproject.toml — fail
+    # otherwise-unrelated tests when the GC finalizer happens to fire during
+    # them. With `pytest-xdist --dist=worksteal`, the leak can land in any
+    # test that shares a worker with a ray/dask test, so the suppression must
+    # apply globally rather than per-module.
+    config.addinivalue_line("filterwarnings", "ignore::ResourceWarning")
+
     if (
         config.getoption("--cluster") == "distributed"
         and config.getoption("--executor") != "streaming"
