@@ -7,6 +7,11 @@
 
 # This function finds KvikIO
 function(find_and_configure_kvikio VERSION)
+  if(NOT BUILD_SHARED_LIBS)
+    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
+  else()
+    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
+  endif()
 
   rapids_cpm_find(
     kvikio ${VERSION}
@@ -15,7 +20,7 @@ function(find_and_configure_kvikio VERSION)
     GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
     GIT_TAG "${RAPIDS_BRANCH}"
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
-    EXCLUDE_FROM_ALL TRUE
+    ${_exclude_from_all}
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF" "KvikIO_REMOTE_SUPPORT ${CUDF_KVIKIO_REMOTE_IO}"
             "BUILD_SHARED_LIBS OFF"
   )
