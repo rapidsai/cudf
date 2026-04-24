@@ -301,8 +301,10 @@ def _(
             partition_info,
             left,
             right,
-            config_options.executor.shuffle_method,
-            streaming_runtime=config_options.executor.runtime,
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            config_options.executor.shuffle_method,  # type: ignore[arg-type]
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            streaming_runtime=config_options.executor.runtime.value,  # type: ignore[union-attr]
         )
     else:
         # Create a hash join
@@ -312,7 +314,8 @@ def _(
             partition_info,
             left,
             right,
-            config_options.executor.shuffle_method,
+            # Validated in StreamingExecutor.__post_init__ to not be None
+            config_options.executor.shuffle_method,  # type: ignore[arg-type]
         )
 
 

@@ -335,6 +335,7 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_rapidsmpf
       - depends_on_pylibcudf
       - depends_on_cuda_python
   py_run_cudf_polars_experimental:
@@ -345,15 +346,6 @@ files:
       key: experimental
     includes:
       - run_cudf_polars_experimental
-  py_run_cudf_polars_rapidsmpf:
-    output: pyproject
-    pyproject_dir: python/cudf_polars
-    extras:
-      table: project.optional-dependencies
-      key: rapidsmpf
-    includes:
-      - depends_on_rapidsmpf
-      - pyarrow_run
   py_test_cudf_polars:
     output: pyproject
     pyproject_dir: python/cudf_polars
@@ -823,6 +815,7 @@ dependencies:
         packages:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
+          - &rapidsmpf_unsuffixed rapidsmpf==26.6.*,>=0.0.0a0
           - packaging
           - polars>=1.30,<1.39
           - typing_extensions>=4.0.0
@@ -1238,7 +1231,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rapidsmpf_unsuffixed rapidsmpf==26.6.*,>=0.0.0a0
+          - *rapidsmpf_unsuffixed
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file

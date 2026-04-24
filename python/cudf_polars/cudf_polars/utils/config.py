@@ -27,6 +27,7 @@ import functools
 import importlib.util
 import json
 import os
+import warnings
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
@@ -151,10 +152,12 @@ class Runtime(enum.StrEnum):
     """
     The runtime to use for the streaming executor.
 
+    .. deprecated::
+        The ``runtime`` option is deprecated. The rapidsmpf will be the only
+        streaming runtime. This enum will be removed in a future release.
+
     * ``Runtime.TASKS`` : Use the task-based runtime.
-      This is the default runtime.
     * ``Runtime.RAPIDSMPF`` : Use the coroutine-based streaming runtime (rapidsmpf).
-      This runtime is experimental.
     """
 
     TASKS = "tasks"
@@ -182,6 +185,11 @@ class Cluster(enum.StrEnum):
 class ShuffleMethod(enum.StrEnum):
     """
     The method to use for shuffling data between workers with the streaming executor.
+
+    .. deprecated::
+        The ``shuffle_method`` option is deprecated. The shuffle method is now
+        determined automatically based on the cluster configuration. This enum
+        will be removed in a future release.
 
     * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
     * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf shuffler.
@@ -323,7 +331,7 @@ class ParquetOptions:
             raise TypeError("use_rapidsmpf_native must be a bool")
 
 
-def default_target_partition_size(cluster: str, runtime: str) -> int:
+def default_target_partition_size(cluster: str, runtime: Runtime) -> int:
     """Return the default blocksize."""
     if (device_size := get_total_device_memory()) is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
@@ -345,7 +353,7 @@ def default_target_partition_size(cluster: str, runtime: str) -> int:
     return min(max(blocksize, 1_000_000_000), 10_000_000_000)
 
 
-def default_broadcast_join_limit(cluster: str, runtime: str) -> int:
+def default_broadcast_join_limit(cluster: str, runtime: Runtime) -> int:
     """Return the default broadcast join limit."""
     if (device_size := get_total_device_memory()) is None:  # pragma: no cover
         # System doesn't have proper "GPU memory".
@@ -611,7 +619,11 @@ class StreamingExecutor:
     ----------
     runtime
         The runtime to use for the streaming executor.
-        ``Runtime.TASKS`` by default.
+        ``Runtime.RAPIDSMPF`` by default.
+
+        .. deprecated::
+            The ``runtime`` option is deprecated. The rapidsmpf will be the only
+            streaming runtime. This argument will be removed in a future release.
     cluster
         The cluster configuration for the streaming executor.
         ``Cluster.SINGLE`` by default.
@@ -639,6 +651,10 @@ class StreamingExecutor:
         Each factor estimates the fractional number of unique values in the
         column. By default, ``1.0`` is used for any column not included in
         ``unique_fraction``.
+
+        .. deprecated::
+            The ``unique_fraction`` option is deprecated and will be removed
+            in a future release.
     target_partition_size
         Target partition size, in bytes, for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
@@ -668,6 +684,10 @@ class StreamingExecutor:
         it will first be reduced to ``ceil(64 / 32) = 2`` partitions.
 
         This is useful when the absolute number of partitions is large.
+
+        .. deprecated::
+            The ``groupby_n_ary`` option is deprecated and will be removed
+            in a future release.
     broadcast_join_limit
         The maximum number of partitions to allow for the smaller table in
         a broadcast join. For example, if the target partition size is 1GB and the
@@ -679,9 +699,17 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
+        .. deprecated::
+            The ``shuffle_method`` option is deprecated. The shuffle method is now
+            determined automatically based on the cluster configuration. This argument
+            will be removed in a future release.
     rapidsmpf_spill
         Whether to wrap task arguments and output in objects that are
         spillable by 'rapidsmpf'.
+
+        .. deprecated::
+            The ``rapidsmpf_spill`` option is deprecated and will be removed
+            in a future release.
     client_device_threshold
         Threshold for spilling data from device memory in rapidsmpf.
         Default is 50% of device memory on the client process.
@@ -717,11 +745,11 @@ class StreamingExecutor:
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    runtime: Runtime = dataclasses.field(
+    runtime: Runtime | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__RUNTIME",
             Runtime.__call__,
-            default=Runtime.TASKS,
+            default=None,
         )
     )
     cluster: Cluster | None = dataclasses.field(
@@ -753,9 +781,9 @@ class StreamingExecutor:
             f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
         )
     )
-    groupby_n_ary: int = dataclasses.field(
+    groupby_n_ary: int | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__GROUPBY_N_ARY", int, default=32
+            f"{_env_prefix}__GROUPBY_N_ARY", int, default=None
         )
     )
     broadcast_join_limit: int = dataclasses.field(
@@ -763,16 +791,16 @@ class StreamingExecutor:
             f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
         )
     )
-    shuffle_method: ShuffleMethod = dataclasses.field(
+    shuffle_method: ShuffleMethod | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__SHUFFLE_METHOD",
             ShuffleMethod.__call__,
-            default=ShuffleMethod.TASKS,
+            default=None,
         )
     )
-    rapidsmpf_spill: bool = dataclasses.field(
+    rapidsmpf_spill: bool | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
+            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=None
         )
     )
     client_device_threshold: float = dataclasses.field(
@@ -808,41 +836,51 @@ class StreamingExecutor:
     dask_context: DaskContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
-        # Check for rapidsmpf runtime
-        if self.runtime == "rapidsmpf":  # pragma: no cover; requires rapidsmpf runtime
-            if not rapidsmpf_single_available():
-                raise ValueError("The rapidsmpf streaming engine requires rapidsmpf.")
-            object.__setattr__(self, "shuffle_method", "rapidsmpf")
+        if self.runtime is not None:
+            warnings.warn(
+                "Setting 'runtime' is deprecated and will be removed "
+                "in a future release. Do not pass a value to use the rapidsmpf runtime."
+                "The streaming executor will always use the rapidsmpf runtime "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            object.__setattr__(self, "runtime", Runtime.RAPIDSMPF)
+        assert self.runtime is not None, "Expected runtime to be set"
 
         if self.cluster is None:
             object.__setattr__(self, "cluster", Cluster.SINGLE)
         assert self.cluster is not None, "Expected cluster to be set."
 
-        # Handle shuffle_method defaults for streaming executor
+        if self.shuffle_method is not None:
+            warnings.warn(
+                "Setting 'shuffle_method' is deprecated and will be removed "
+                "in a future release. The shuffle method will be determined "
+                "automatically based on the cluster configuration in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            if self.shuffle_method == "rapidsmpf-single":
+                raise ValueError("rapidsmpf-single is not a supported shuffle method.")
+            elif self.shuffle_method == "rapidsmpf":
+                if (
+                    self.cluster == "distributed"
+                    and not rapidsmpf_distributed_available()
+                ):
+                    raise ValueError(
+                        "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
+                    )
+                if self.cluster == "single":
+                    object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
+
+        # Resolve shuffle_method from cluster when not explicitly set
         if self.shuffle_method is None:
-            if self.cluster == "distributed" and rapidsmpf_distributed_available():
-                # For distributed cluster, prefer rapidsmpf if available
+            if self.cluster == "distributed":
                 object.__setattr__(self, "shuffle_method", "rapidsmpf")
             else:
-                # Otherwise, use task-based shuffle for now.
-                # TODO: Evaluate single-process shuffle by default.
-                object.__setattr__(self, "shuffle_method", "tasks")
-        elif self.shuffle_method == "rapidsmpf-single":
-            # The user should NOT specify "rapidsmpf-single" directly.
-            raise ValueError("rapidsmpf-single is not a supported shuffle method.")
-        elif self.shuffle_method == "rapidsmpf":
-            # Check that we have rapidsmpf installed
-            if self.cluster == "distributed" and not rapidsmpf_distributed_available():
-                raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
-                )
-            elif self.cluster == "single" and not rapidsmpf_single_available():
-                raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
-                )
-            # Select "rapidsmpf-single" for single-GPU
-            if self.cluster == "single":
                 object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
+        assert self.shuffle_method is not None, "Expected shuffle_method to be set"
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(
@@ -880,6 +918,32 @@ class StreamingExecutor:
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:
             object.__setattr__(self, "sink_to_directory", False)
+
+        if self.unique_fraction:
+            warnings.warn(
+                "Setting 'unique_fraction' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        if self.groupby_n_ary is not None:
+            warnings.warn(
+                "Setting 'groupby_n_ary' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            object.__setattr__(self, "groupby_n_ary", 32)
+        if self.rapidsmpf_spill is not None:
+            warnings.warn(
+                "Setting 'rapidsmpf_spill' is deprecated and will be removed "
+                "in a future release.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        else:
+            object.__setattr__(self, "rapidsmpf_spill", False)
 
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
@@ -1100,19 +1164,6 @@ class ConfigOptions(Generic[ExecutorType]):
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
-                # Handle the interaction between the default shuffle method, the
-                # cluster, and whether rapidsmpf is available.
-                env_shuffle_method = os.environ.get(
-                    "CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", None
-                )
-                if env_shuffle_method is not None:
-                    shuffle_method_default = ShuffleMethod(env_shuffle_method)
-                else:
-                    shuffle_method_default = None
-
-                user_executor_options.setdefault(
-                    "shuffle_method", shuffle_method_default
-                )
 
                 # Handle dynamic_planning: check user config, then env var
                 user_dynamic_planning = user_executor_options.get(
