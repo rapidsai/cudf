@@ -27,7 +27,7 @@ rapids-logger "Install libcudf, pylibcudf and cudf_polars"
 rapids-pip-retry install \
     -v \
     --constraint "${PIP_CONSTRAINT}" \
-    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test]" \
+    "$(echo "${CUDF_POLARS_WHEELHOUSE}"/cudf_polars_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)[test,rapidsmpf]" \
     "$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)"
 
@@ -87,7 +87,7 @@ trap set_exitcode ERR
 set +e
 
 rapids-logger "Run polars tests"
-timeout 30m ./ci/run_cudf_polars_polars_tests.sh
+timeout 50m ./ci/run_cudf_polars_polars_tests.sh
 
 trap ERR
 set -e

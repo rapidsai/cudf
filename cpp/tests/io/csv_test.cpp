@@ -349,8 +349,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   std::vector<std::string> reference_strings = {
     "1.23", "-8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"};
 
-  auto validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
+  auto validity = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
@@ -396,8 +395,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   std::vector<std::string> reference_strings = {
     "123000", "-876000", "543000", "-12000", "25000", "-23000", "-27000", "0000", "0000"};
 
-  auto validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
+  auto validity = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
@@ -1223,6 +1221,29 @@ TEST_F(CsvReaderTest, StringInference)
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), type_id::STRING);
+}
+
+TEST_F(CsvReaderTest, TypeInferenceEmptyDelimitedFields)
+{
+  std::string const buffer = "1,,3\n4,,6\n";
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .na_filter(false)
+      .header(-1);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result_view.num_columns(), 3);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::STRING);
+  EXPECT_EQ(result_view.column(2).type().id(), type_id::INT64);
+
+  expect_column_data_equal(std::vector<int64_t>{1, 4}, result_view.column(0));
+  expect_column_data_equal(std::vector<std::string>{"", ""}, result_view.column(1));
+  expect_column_data_equal(std::vector<int64_t>{3, 6}, result_view.column(2));
 }
 
 TEST_F(CsvReaderTest, TypeInferenceThousands)

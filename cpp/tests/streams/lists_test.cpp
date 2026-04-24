@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/lists/combine.hpp>
@@ -241,8 +242,7 @@ TEST_F(ListTest, ExplodePosition)
 TEST_F(ListTest, ExplodeOuter)
 {
   constexpr auto null = 0;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids         = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::lists_column_wrapper<int32_t> list_col_a{
     cudf::test::lists_column_wrapper<int32_t>({1, null, 7}, valids),
     cudf::test::lists_column_wrapper<int32_t>({5, null, 0, null}, valids),
@@ -256,8 +256,7 @@ TEST_F(ListTest, ExplodeOuter)
 TEST_F(ListTest, ExplodeOuterPosition)
 {
   constexpr auto null = 0;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids         = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::lists_column_wrapper<int32_t> list_col_a{
     cudf::test::lists_column_wrapper<int32_t>({1, null, 7}, valids),
     cudf::test::lists_column_wrapper<int32_t>({5, null, 0, null}, valids),

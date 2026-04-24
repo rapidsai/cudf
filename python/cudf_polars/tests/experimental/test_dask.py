@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 import pytest
@@ -71,16 +72,21 @@ def test_executor_options_forwarded(engine: DaskEngine) -> None:
 
 
 def test_gather_cluster_info(engine: DaskEngine) -> None:
-    """gather_cluster_info returns one info dict per rank with expected fields."""
+    """gather_cluster_info returns one ClusterInfo per rank with expected fields."""
     infos = engine.gather_cluster_info()
     assert len(infos) == engine.nranks
     for info in infos:
-        assert "pid" in info
-        assert "hostname" in info
-        assert "cuda_visible_devices" in info
-        assert isinstance(info["pid"], int)
+        assert isinstance(info.pid, int)
+        assert isinstance(info.hostname, str)
     # Each worker runs in its own process.
-    assert len({info["pid"] for info in infos}) == engine.nranks
+    assert len({info.pid for info in infos}) == engine.nranks
+
+
+def test_worker_host_memory_limit(engine: DaskEngine) -> None:
+    """Memory limit is respected."""
+    scheduler_info = engine._dask_ctx.client.scheduler_info(n_workers=-1)
+    worker = next(iter(scheduler_info["workers"].values()))
+    assert worker["memory_limit"] == distributed.system.MEMORY_LIMIT
 
 
 def test_from_options_creates_engine() -> None:
@@ -144,3 +150,8 @@ def test_empty_dataframe(engine: DaskEngine) -> None:
         {"a": pl.Series([], dtype=pl.Int32), "b": pl.Series([], dtype=pl.Float64)}
     )
     assert_gpu_result_equal(lf, engine=engine)
+
+
+def test_run(engine: DaskEngine) -> None:
+    result = engine._run(os.getpid)
+    assert len(set(result)) == engine.nranks

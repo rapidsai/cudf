@@ -20,7 +20,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -227,7 +226,7 @@ void set_null_masks(cudf::host_span<bitmask_type*> bitmasks,
     cudf::util::div_rounding_up_safe<size_t>(cumulative_null_mask_words, num_bitmasks);
 
   // Create device vectors from host spans
-  auto const mr           = rmm::mr::get_current_device_resource_ref();
+  auto const mr           = cudf::get_current_device_resource_ref();
   auto destinations       = cudf::detail::make_device_uvector_async(bitmasks, stream, mr);
   auto const d_begin_bits = cudf::detail::make_device_uvector_async(begin_bits, stream, mr);
   auto const d_end_bits   = cudf::detail::make_device_uvector_async(end_bits, stream, mr);

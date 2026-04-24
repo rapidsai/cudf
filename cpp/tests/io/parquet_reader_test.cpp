@@ -4,6 +4,7 @@
  */
 
 #include "compression_common.hpp"
+#include "io/utilities/time_utils.hpp"
 #include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
@@ -1214,8 +1215,7 @@ TEST_F(ParquetReaderTest, NestingOptimizationTest)
 
   constexpr cudf::size_type num_values = (1 << num_nesting_levels) * rows_per_level;
   auto value_iter                      = cuda::counting_iterator<int>{0};
-  auto validity =
-    cudf::detail::make_counting_transform_iterator(0, [](cudf::size_type i) { return i % 2; });
+  auto validity                        = cudf::test::iterators::nulls_at_multiples_of(2);
   cudf::test::fixed_width_column_wrapper<int> values(value_iter, value_iter + num_values, validity);
 
   // ~256k values with num_nesting_levels = 16
@@ -4403,5 +4403,90 @@ TEST_F(ParquetReaderTest, DuplicateColumnSelection)
         .column_names({"A", "b"})
         .build();
     EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+  }
+}
+
+template <typename T>
+struct ParquetFilterPushdownTimestampPrecisions : public ParquetReaderTest {};
+using SupportedTimestampTypes =
+  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
+TYPED_TEST_SUITE(ParquetFilterPushdownTimestampPrecisions, SupportedTimestampTypes);
+
+TYPED_TEST(ParquetFilterPushdownTimestampPrecisions, AllPrecisions)
+{
+  using NativeTimestamp = TypeParam;
+  using NativeDuration  = typename NativeTimestamp::duration;
+
+  constexpr auto native_type        = cudf::type_to_id<NativeTimestamp>();
+  constexpr auto num_rows           = 20000;
+  constexpr auto rows_per_row_group = 5000;
+  static_assert(num_rows % rows_per_row_group == 0,
+                "num_rows must be a multiple of rows_per_row_group");
+
+  constexpr auto tick_offset = int64_t{num_rows / 2} * 100;
+  auto iter                  = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return NativeTimestamp{NativeDuration{i * 100 - tick_offset}}; });
+  auto const ts_col =
+    cudf::test::fixed_width_column_wrapper<NativeTimestamp>(iter, iter + num_rows).release();
+  auto const written_table = cudf::table_view{{ts_col->view()}};
+
+  // Write file at native precision
+  auto const filepath = temp_env->get_temp_filepath("TimestampFilterAllPrec.parquet");
+  {
+    auto const out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
+        .metadata(cudf::io::table_input_metadata(written_table))
+        .row_group_size_rows(rows_per_row_group)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)
+        .build();
+    cudf::io::write_parquet(out_opts);
+  }
+
+  auto const dispatch_timestamp = [](cudf::type_id id, auto&& fn) {
+    switch (id) {
+      case cudf::type_id::TIMESTAMP_MILLISECONDS:
+        return fn.template operator()<cudf::timestamp_ms>();
+      case cudf::type_id::TIMESTAMP_MICROSECONDS:
+        return fn.template operator()<cudf::timestamp_us>();
+      case cudf::type_id::TIMESTAMP_NANOSECONDS:
+        return fn.template operator()<cudf::timestamp_ns>();
+      default: CUDF_FAIL("Unexpected timestamp type");
+    }
+  };
+
+  // Test filter pushdown with all output timestamp precisions
+  for (auto const target_type : {cudf::type_id::TIMESTAMP_MILLISECONDS,
+                                 cudf::type_id::TIMESTAMP_MICROSECONDS,
+                                 cudf::type_id::TIMESTAMP_NANOSECONDS}) {
+    // Compute filter threshold: value at row (num_rows / 2) in native ticks, converted to output
+    // ticks. With the negative tick offset applied to the iterator, this threshold is 0
+    auto const threshold_native = int64_t{num_rows / 2} * 100 - tick_offset;
+    auto const scale            = static_cast<double>(cudf::io::detail::to_clockrate(target_type)) /
+                       static_cast<double>(cudf::io::detail::to_clockrate(native_type));
+    auto const threshold_output = static_cast<int64_t>(threshold_native * scale);
+
+    // Build filter: ts >= threshold_output (in output precision)
+    auto result = dispatch_timestamp(target_type, [&]<typename OutputTimestamp>() {
+      using OutputDuration = typename OutputTimestamp::duration;
+      auto scalar_val =
+        cudf::timestamp_scalar<OutputTimestamp>(OutputTimestamp{OutputDuration{threshold_output}});
+      auto literal = cudf::ast::literal(scalar_val);
+      auto col_ref = cudf::ast::column_reference(0);
+      auto filter_gte =
+        cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
+
+      auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                         .timestamp_type(cudf::data_type{target_type})
+                         .filter(filter_gte)
+                         .build();
+      return cudf::io::read_parquet(read_opts).tbl;
+    });
+
+    // Expect rows from written_table in range [num_rows / 2, num_rows) casted to the target
+    // timestamp type
+    EXPECT_EQ(result->view().column(0).type().id(), target_type);
+    auto const written_table_chunk = cudf::split(written_table, {num_rows / 2}).back();
+    auto const expected = cudf::cast(written_table_chunk.column(0), cudf::data_type{target_type});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected->view());
   }
 }

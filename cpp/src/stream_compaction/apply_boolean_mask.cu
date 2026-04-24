@@ -26,7 +26,7 @@ template <bool has_nulls = true>
 struct retention_mask_filter {
   cudf::column_device_view mask;
 
-  __device__ inline bool operator()(cudf::size_type i) const
+  __device__ inline bool operator()(cudf::size_type i) const noexcept
   {
     if constexpr (has_nulls) {
       return mask.is_valid(i) and mask.data<bool>()[i];
@@ -41,7 +41,7 @@ template <bool has_nulls = true>
 struct deletion_mask_filter {
   cudf::column_device_view mask;
 
-  __device__ inline bool operator()(cudf::size_type i) const
+  __device__ inline bool operator()(cudf::size_type i) const noexcept
   {
     if constexpr (has_nulls) {
       return mask.is_valid(i) and not mask.data<bool>()[i];
@@ -61,11 +61,11 @@ namespace detail {
  *
  * calls copy_if() with the `boolean_mask_filter` functor.
  */
-std::unique_ptr<table> apply_boolean_mask(mask_type mask_kind,
-                                          table_view const& input,
-                                          column_view const& boolean_mask,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr)
+std::unique_ptr<table> apply_mask(table_view const& input,
+                                  column_view const& boolean_mask,
+                                  mask_type mask_kind,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
 {
   if (boolean_mask.is_empty()) { return empty_like(input); }
 
@@ -75,7 +75,7 @@ std::unique_ptr<table> apply_boolean_mask(mask_type mask_kind,
 
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
 
-  auto const is_retention = (mask_kind == mask_type::RETENTIONS);
+  auto const is_retention = (mask_kind == mask_type::RETENTION);
   if (boolean_mask.has_nulls()) {
     if (is_retention) {
       return detail::copy_if(input, retention_mask_filter<true>{*device_boolean_mask}, stream, mr);
@@ -102,7 +102,7 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(detail::mask_type::RETENTIONS, input, boolean_mask, stream, mr);
+  return detail::apply_mask(input, boolean_mask, detail::mask_type::RETENTION, stream, mr);
 }
 
 std::unique_ptr<table> apply_deletion_mask(table_view const& input,
@@ -111,7 +111,7 @@ std::unique_ptr<table> apply_deletion_mask(table_view const& input,
                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::apply_boolean_mask(detail::mask_type::DELETIONS, input, deletion_mask, stream, mr);
+  return detail::apply_mask(input, deletion_mask, detail::mask_type::DELETION, stream, mr);
 }
 
 }  // namespace cudf

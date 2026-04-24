@@ -824,6 +824,7 @@ def test_dynamic_planning_defaults() -> None:
     # Dynamic planning is enabled by default
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 2
+    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.5
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -845,6 +846,37 @@ def test_dynamic_planning_sample_chunk_count_from_env(
     assert config.executor.name == "streaming"
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 3
+
+
+def test_validate_bloom_filter_threshold_type() -> None:
+    with pytest.raises(TypeError, match="bloom_filter_threshold must be a float"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"bloom_filter_threshold": "bad"}
+                },
+            )
+        )
+
+
+def test_validate_bloom_filter_threshold_range() -> None:
+    with pytest.raises(ValueError, match="bloom_filter_threshold must be between"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"bloom_filter_threshold": 1.5}},
+            )
+        )
+
+
+def test_bloom_filter_threshold_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__BLOOM_FILTER_THRESHOLD", "0.3"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.3
 
 
 def test_dynamic_planning_from_instance() -> None:
@@ -898,7 +930,7 @@ def test_num_py_executors_default() -> None:
         )
     )
     assert config.executor.name == "streaming"
-    assert config.executor.num_py_executors is None
+    assert config.executor.num_py_executors == 8
 
 
 def test_num_py_executors_from_executor_options() -> None:

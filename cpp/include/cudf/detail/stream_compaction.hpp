@@ -38,24 +38,23 @@ std::unique_ptr<table> drop_nans(table_view const& input,
                                  rmm::device_async_resource_ref mr);
 
 /**
- * @brief Specifies how the boolean mask should be interpreted by the apply_boolean_mask and
- * apply_deletion_mask detail APIs.
+ * @brief Specifies how the boolean mask should be interpreted by `apply_mask` API.
  */
 enum class mask_type : bool {
-  DELETIONS  = false,  ///< `true` elements in the boolean mask are deletions.
-  RETENTIONS = true,   ///< `true` elements in the boolean mask are retentions.
+  DELETION  = false,  ///< `true` elements in the mask indicate deletions.
+  RETENTION = true,   ///< `true` elements in the mask indicate retentions.
 };
 
 /**
  * @copydoc cudf::apply_boolean_mask
  *
- * @param mask_kind Specifies how the boolean mask is treated (deletions or retentions)
+ * @param mask_kind Specifies how the boolean mask is treated (retentions or deletions)
  */
-std::unique_ptr<table> apply_boolean_mask(mask_type mask_kind,
-                                          table_view const& input,
-                                          column_view const& boolean_mask,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr);
+std::unique_ptr<table> apply_mask(table_view const& input,
+                                  column_view const& boolean_mask,
+                                  mask_type mask_kind,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::unique
