@@ -3728,6 +3728,36 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * For each row {@code i}, returns whether {@code input[i]} contains the literal substring
+   * {@code targets[i]} (UTF-8 byte sequence, not regex).
+   *
+   * <p>This column and {@code targets} must have the same row count. Null {@code targets[i]} yields
+   * {@code false} for that row; null {@code input[i]} yields null in the output.
+   *
+   * <p>Contrast with {@link #stringContains(Scalar)} (one needle for all rows) and
+   * {@link #stringContains(ColumnView)} ({@code contains_multiple}: each needle checked against
+   * every row, returning multiple boolean columns).
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // input   = ["apple", "banana", null, "date"], DType = STRING
+   * // targets = ["pl",    "xyz",    "a",  null],   DType = STRING
+   * ColumnVector result = input.stringContainsPerRow(targets);
+   * // result  = [true,    false,    null, false],   DType = BOOL8
+   * }</pre>
+   *
+   * @param targets string column aligned row-for-row with this column
+   * @return a new BOOL8 column
+   */
+  public final ColumnVector stringContainsPerRow(ColumnView targets) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets.getType().equals(DType.STRING) : "targets type must be a string";
+    assert getRowCount() == targets.getRowCount()
+        : "column and targets must have the same number of rows";
+    return new ColumnVector(stringContainsPerRow(getNativeView(), targets.getNativeView()));
+  }
+
+  /**
    * Replaces values less than `lo` in `input` with `lo`,
    * and values greater than `hi` with `hi`.
    *
@@ -4823,6 +4853,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Row-aligned substring contains: row {@code i} searches for {@code targets[i]} in {@code input[i]}.
+   */
+  private static native long stringContainsPerRow(long cudfViewHandle, long targetsViewHandle)
+      throws CudfException;
 
   /**
    * Native method for searching for the given target strings within each string in the provided column.
