@@ -7,7 +7,7 @@
 #include "hybrid_scan_impl.hpp"
 #include "io/parquet/reader_impl_chunking_utils.cuh"
 #include "io/parquet/reader_impl_preprocess_utils.cuh"
-#include "io/utilities/time_utils.cuh"
+#include "io/utilities/time_utils.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
