@@ -129,10 +129,8 @@ class sanitizer_subscriber {
 
   static void check_result(SanitizerResult result);
 
-  template <typename Args>
-  static void check_stream_arg(const Sanitizer_CallbackData* cbdata,
-                               const char* function_name,
-                               cudaStream_t Args::* field);
+  template <typename Args, cudaStream_t Args::* Field>
+  static void check_stream_arg(const Sanitizer_CallbackData* cbdata, const char* function_name);
 
   void callback(Sanitizer_CallbackDomain domain, Sanitizer_CallbackId cbid, const void* cbdata);
 };
@@ -162,14 +160,13 @@ void sanitizer_subscriber::check_result(SanitizerResult result)
   }
 }
 
-template <typename Args>
+template <typename Args, cudaStream_t Args::* Field>
 void sanitizer_subscriber::check_stream_arg(const Sanitizer_CallbackData* cbdata,
-                                            const char* function_name,
-                                            cudaStream_t Args::* field)
+                                            const char* function_name)
 {
   if (!strcmp(cbdata->functionName, function_name)) {
     const auto* args = static_cast<const Args*>(cbdata->functionParams);
-    check_stream_and_error(args->*field);
+    check_stream_and_error(args->*Field);
   }
 }
 
@@ -182,9 +179,10 @@ void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
       const auto* runtime_cbdata = static_cast<const Sanitizer_CallbackData*>(cbdata);
 
       if (runtime_cbdata->callbackSite == SANITIZER_API_ENTER) {
-#define CHECK_STREAM_ARG(call, version, field)                                   \
-  do {                                                                           \
-    check_stream_arg(runtime_cbdata, #call, &call##_v##version##_params::field); \
+#define CHECK_STREAM_ARG(call, version, field)                       \
+  do {                                                               \
+    using args_t = call##_v##version##_params;                       \
+    check_stream_arg<args_t, &args_t::field>(runtime_cbdata, #call); \
   } while (0)
 
         CHECK_STREAM_ARG(cudaEventRecord, 3020, stream);
