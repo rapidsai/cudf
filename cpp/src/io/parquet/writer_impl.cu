@@ -659,9 +659,10 @@ std::vector<schema_tree_node> construct_parquet_schema_tree(
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool const col_nullable = is_output_column_nullable(col, col_meta, write_mode);
 
-      auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
-                                                column_in_metadata const& col_meta) {
-        if (schema[parent_idx].name != "list" and col_meta.is_parquet_field_id_set()) {
+      auto set_field_id = [](schema_tree_node& s, column_in_metadata const& col_meta) {
+        // LIST element nodes still need their own field ids. Only the synthetic repeated "list"
+        // group should remain without one.
+        if (s.name != "list" and col_meta.is_parquet_field_id_set()) {
           s.field_id = col_meta.get_parquet_field_id();
         }
       };
