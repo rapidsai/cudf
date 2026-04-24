@@ -319,9 +319,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
         if (batch_len != 0) {
           uint32_t blen = 0;
           int32_t ofs   = 0;
-          // Check and reject lanes with malformed copy elements with offset not in range [1,
-          // current dst position]. This way the batch is truncated before warp 2 executes the
-          // invalid copy.
+          // Check for bad copy element (offset == 0).
           bool is_copy_offset_bad = false;
           if (t < batch_len) {
             blen               = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
@@ -333,9 +331,12 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
             b[t].offset        = ofs;
             ofs += blen;  // for correct out-of-range detection below
           }
-          blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
-          bytes_left     = shuffle(bytes_left);
-          dst_pos        = shuffle(dst_pos);
+          blen       = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
+          bytes_left = shuffle(bytes_left);
+          dst_pos    = shuffle(dst_pos);
+          // If `is_copy_offset_bad`, truncate the batch at the first lane with a malformed copy
+          // element (offset == 0) so warp 2 never runs it; the scalar slow path below then re-reads
+          // it, breaks, and the kernel reports FAILURE.
           short_sym_mask = __ffs(
             ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen) || is_copy_offset_bad));
           if (short_sym_mask != 0) { batch_len = min(batch_len, short_sym_mask - 1); }
@@ -382,9 +383,10 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below
             }
-            blen           = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
-            bytes_left     = shuffle(bytes_left);
-            dst_pos        = shuffle(dst_pos);
+            blen       = warp_reduce_pos<cudf::detail::warp_size>(blen, t);
+            bytes_left = shuffle(bytes_left);
+            dst_pos    = shuffle(dst_pos);
+            // See comment in the fast-path block above for `is_copy_offset_bad`.
             short_sym_mask = __ffs(
               ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen) || is_copy_offset_bad));
             if (short_sym_mask != 0) { batch_add = min(batch_add, short_sym_mask - 1); }
