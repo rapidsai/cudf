@@ -184,8 +184,8 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
       if (!quotation && row[pos] == parse_opts.terminator) { break; }
 
       // Skip adjacent delimiters if delim_whitespace is set
-      while (parse_opts.multi_delimiter && pos < row.size() && row[pos] == parse_opts.delimiter &&
-             row[pos + 1] == parse_opts.delimiter) {
+      while (parse_opts.multi_delimiter && pos + 1 < row.size() &&
+             row[pos] == parse_opts.delimiter && row[pos + 1] == parse_opts.delimiter) {
         ++pos;
       }
       prev = pos + 1;

@@ -687,10 +687,10 @@ class StreamingExecutor:
         Default is 50% of device memory on the client process.
         This argument is only used by the "rapidsmpf" runtime.
     sink_to_directory
-        Whether multi-partition sink operations should write to a directory
-        rather than a single file. By default, this will be set to True for
-        the 'distributed' cluster and False otherwise. The 'distributed'
-        cluster does not currently support ``sink_to_directory=False``.
+        Whether multi-partition sink operations write to a directory rather
+        than a single file. For the distributed, spmd, ray, and dask clusters
+        this is always True; setting it to False raises a ValueError.
+        Defaults to False for the single-GPU cluster.
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
@@ -872,10 +872,10 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
-        if self.cluster == "distributed":
+        if self.cluster in ("distributed", "spmd", "ray", "dask"):
             if self.sink_to_directory is False:
                 raise ValueError(
-                    "The distributed cluster requires sink_to_directory=True"
+                    f"The {self.cluster} cluster requires sink_to_directory=True"
                 )
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:

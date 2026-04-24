@@ -335,7 +335,8 @@ class dictionary_literals_collector : public equality_literals_collector {
  public:
   dictionary_literals_collector() = default;
 
-  dictionary_literals_collector(ast::expression const& expr, cudf::size_type num_input_columns);
+  dictionary_literals_collector(ast::expression const& expr,
+                                cudf::host_span<cudf::data_type const> output_dtypes);
 
   // Bring all overloads of `visit` from equality_literals_collector into scope
   using equality_literals_collector::visit;
