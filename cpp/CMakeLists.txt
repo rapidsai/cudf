@@ -61,16 +61,8 @@ option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compila
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
-set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
-
-if(CUDA_STATIC_RUNTIME OR NOT BUILD_SHARED_LIBS)
-  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
-endif()
-
-option(
-  CUDF_BUILD_STREAMS_TEST_UTIL
-  "Whether to build the utilities for stream testing contained in libcudf"
-  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
+option(CUDF_BUILD_STREAMS_TEST_UTIL
+       "Whether to build the utilities for stream testing contained in libcudf" OFF
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
@@ -1136,11 +1128,23 @@ endif()
 
 # * build cudf_identify_stream_usage --------------------------------------------------------------
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  if(CUDA_STATIC_RUNTIME)
-    message(
-      FATAL_ERROR
-        "Stream identification cannot be used with a static CUDA runtime. Please set CUDA_STATIC_RUNTIME=OFF or CUDF_BUILD_STREAMS_TEST_UTIL=OFF."
+  if(NOT TARGET CUDA::sanitizer)
+    # TODO: Take this out and vendor in FindCUDAToolkit.cmake once the following MRs are merged:
+    #
+    # https://gitlab.kitware.com/cmake/cmake/-/merge_requests/11968 - add CUDA::sanitizer
+    # https://gitlab.kitware.com/cmake/cmake/-/merge_requests/11971 - fix issue with
+    # CUDAToolkit_LIBRARY_ROOT in Conda environments
+    find_library(
+      CUDA_sanitizer_LIBRARY
+      NAMES sanitizer-public
+      HINTS $ENV{CONDA_PREFIX}/compute-sanitizer
     )
+    if(CUDA_sanitizer_LIBRARY)
+      add_library(CUDA::sanitizer IMPORTED SHARED)
+      set_property(TARGET CUDA::sanitizer PROPERTY IMPORTED_LOCATION "${CUDA_sanitizer_LIBRARY}")
+      get_filename_component(sanitizer_dir "${CUDA_sanitizer_LIBRARY}" DIRECTORY)
+      target_include_directories(CUDA::sanitizer SYSTEM INTERFACE "${sanitizer_dir}/include")
+    endif()
   endif()
 
   # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
@@ -1169,7 +1173,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
     )
     target_include_directories(${_tgt} PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>")
-    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm)
+    target_link_libraries(${_tgt} PUBLIC CUDA::cudart rmm::rmm CUDA::sanitizer)
 
     rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})
