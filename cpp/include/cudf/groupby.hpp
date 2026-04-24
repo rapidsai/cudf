@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -407,6 +407,150 @@ class groupby {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 };
+
+/**
+ * @brief Request for a single streaming groupby aggregation on a column.
+ *
+ * Analogous to `aggregation_request` but identifies the value column by index rather than
+ * by `column_view`, since data arrives in batches after construction, and carries exactly
+ * one aggregation per request.
+ *
+ * `column_index` refers to the position of the value column in the `table_view` passed
+ * to `streaming_groupby::aggregate()`.  Multiple aggregations on the same column are
+ * expressed as separate requests (e.g., `[{col, sum}, {col, mean}]`).  Internal
+ * deduplication ensures redundant computations are shared automatically.
+ */
+struct streaming_aggregation_request {
+  size_type column_index;                            ///< Index of the value column
+  std::unique_ptr<groupby_aggregation> aggregation;  ///< Desired aggregation
+};
+
+/**
+ * @brief Stateful streaming groupby that accumulates partial aggregates across batches
+ * using a persistent hash table.
+ *
+ * Unlike `groupby`, which is stateless and computes results in a single pass,
+ * `streaming_groupby` maintains a persistent hash table and aggregation state across
+ * multiple batches. This avoids the need to repeatedly concatenate and re-groupby
+ * accumulated results, as each batch does O(batch_size) work via direct hash table
+ * insertion and in-place aggregation updates. Partial states from distributed workers
+ * can be combined via `merge()`, and final results are produced via `finalize()`.
+ *
+ * The `max_groups` parameter controls GPU memory usage by setting the upper bound on
+ * distinct key combinations. The hash table and aggregation result columns are
+ * pre-allocated to this capacity. Unique keys are accumulated incrementally — only
+ * newly discovered keys are stored, and key storage grows proportionally to actual
+ * distinct keys rather than `max_groups`. All column types (including variable-width
+ * types such as strings, lists, and structs) are supported for key columns.
+ * Only hash-based aggregation kinds are supported.
+ *
+ * Supported aggregation kinds:
+ *   SUM, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL,
+ *   MEAN, M2, VARIANCE, STD
+ *
+ * @throws std::invalid_argument for unsupported aggregation kinds
+ * @throws std::invalid_argument if a single batch exceeds `max_groups` rows
+ * @throws std::overflow_error if cumulative batch rows exceed `max_groups`
+ * @throws cudf::logic_error if cumulative distinct keys exceed `max_groups`
+ */
+class streaming_groupby {
+ public:
+  streaming_groupby() = delete;
+  ~streaming_groupby();
+  streaming_groupby(streaming_groupby const&)            = delete;
+  streaming_groupby& operator=(streaming_groupby const&) = delete;
+
+  /** @brief Move constructor. */
+  streaming_groupby(streaming_groupby&&) noexcept;
+
+  /**
+   * @brief Move assignment operator.
+   * @return Reference to this object.
+   */
+  streaming_groupby& operator=(streaming_groupby&&) noexcept;
+
+  /**
+   * @brief Construct a streaming groupby object with a persistent hash table.
+   *
+   * @param key_indices Indices of columns in the data table that serve as groupby keys
+   * @param requests The aggregations to perform and which columns to aggregate
+   * @param max_groups Upper bound on distinct key combinations. Also limits the
+   *        total number of rows that can be processed: the accumulated row count
+   *        plus the next batch size must not exceed `max_groups`.
+   * @param null_handling Indicates whether rows in keys that contain NULL values should be included
+   *
+   * @throws std::invalid_argument if `max_groups <= 0`
+   * @throws std::invalid_argument if any requested aggregation kind is unsupported
+   */
+  explicit streaming_groupby(host_span<size_type const> key_indices,
+                             host_span<streaming_aggregation_request const> requests,
+                             size_type max_groups,
+                             null_policy null_handling = null_policy::EXCLUDE);
+
+  /**
+   * @brief Feed a batch of data into the streaming aggregation.
+   *
+   * Batch keys are inserted into the persistent hash set and aggregation results
+   * are updated atomically. The input `data` table is not referenced after this
+   * call returns.
+   *
+   * @param data Table containing both key and value columns
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @throws std::invalid_argument if `data.num_rows() > max_groups`
+   * @throws std::overflow_error if accumulated rows plus batch size exceeds `max_groups`
+   * @throws cudf::logic_error if distinct keys exceed `max_groups`
+   */
+  void aggregate(table_view const& data, rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Merge another streaming_groupby's accumulated partial state into this one.
+   *
+   * Extracts the other object's accumulated intermediate state and merges it into this
+   * object's persistent hash table. The other object is not modified.
+   * Both objects must have been constructed with compatible aggregation requests,
+   * and this object must have had at least one `aggregate()` call.
+   *
+   * @param other The streaming_groupby whose partial state to merge
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @throws std::invalid_argument if the other object has more distinct keys than `max_groups`
+   * @throws std::overflow_error if accumulated rows plus batch size exceeds `max_groups`
+   * @throws cudf::logic_error if this object has not been initialized via `aggregate()`
+   * @throws cudf::logic_error if distinct keys exceed `max_groups` after merge
+   */
+  void merge(streaming_groupby const& other,
+             rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Finalize the accumulated partial aggregates into final results.
+   *
+   * For most aggregation kinds the partial state is the final result. For kinds like
+   * MEAN, VARIANCE, or STD, a finalization step converts the internal partial representation
+   * (e.g., sum+count) into the user-facing result.
+   *
+   * This does not modify the internal state; `aggregate()` may be called again afterward.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned table and columns
+   * @return Pair of distinct keys table and a vector of aggregation_results (one per request)
+   *
+   * @throws cudf::logic_error if no data has been accumulated
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> finalize(
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+ private:
+  struct impl;
+  std::unique_ptr<impl> _impl;
+
+  void do_aggregate(table_view const& data, rmm::cuda_stream_view stream);
+  void do_merge(streaming_groupby const& other, rmm::cuda_stream_view stream);
+  [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> do_finalize(
+    rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const;
+};
+
 /** @} */
 }  // namespace groupby
 }  // namespace CUDF_EXPORT cudf
