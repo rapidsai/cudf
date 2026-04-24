@@ -5,7 +5,9 @@
 
 #include "compact_protocol_reader.hpp"
 #include "expression_transform_helpers.hpp"
+#include "io/utilities/time_utils.hpp"
 #include "reader_impl_helpers.hpp"
+#include "timestamp_utils.cuh"
 
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -160,18 +162,18 @@ class bloom_filter_expression_converter : public equality_literals_collector {
  public:
   bloom_filter_expression_converter(
     ast::expression const& expr,
-    size_type num_input_columns,
+    cudf::host_span<cudf::data_type const> output_dtypes,
     cudf::host_span<std::vector<ast::literal*> const> equality_literals,
     rmm::cuda_stream_view stream)
     : _equality_literals{equality_literals},
       _always_true_scalar{std::make_unique<cudf::numeric_scalar<bool>>(true, true, stream)},
       _always_true{std::make_unique<ast::literal>(*_always_true_scalar)}
   {
-    // Set the num columns
-    _num_input_columns = num_input_columns;
+    // Set the output data types
+    _output_dtypes = output_dtypes;
 
     // Compute and store columns literals offsets
-    _col_literals_offsets.reserve(_num_input_columns + 1);
+    _col_literals_offsets.reserve(static_cast<cudf::size_type>(_output_dtypes.size()) + 1);
     _col_literals_offsets.emplace_back(0);
 
     std::transform(equality_literals.begin(),
@@ -224,6 +226,11 @@ class bloom_filter_expression_converter : public equality_literals_collector {
         auto const col_idx            = col_ref->get_column_index();
         auto const& equality_literals = _equality_literals[col_idx];
         auto col_literal_offset       = _col_literals_offsets[col_idx];
+        // Skip bloom filter probing for timestamp columns with empty vector of literals due to
+        // a timestamp scale mismatch — the literal can never match the native values.
+        if (cudf::is_timestamp(_output_dtypes[col_idx]) and equality_literals.empty()) {
+          return *_always_true;
+        }
 
         auto const literal_iter =
           std::find(equality_literals.cbegin(), equality_literals.cend(), literal);
@@ -540,7 +547,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
   // Convert AST to BloomfilterAST expression with reference to bloom filter membership
   // in above `bloom_filter_membership_table`
   bloom_filter_expression_converter bloom_filter_expr{
-    filter.get(), num_input_columns, {literals}, stream};
+    filter.get(), output_dtypes, {literals}, stream};
 
   // Filter bloom filter membership table with the BloomfilterAST expression and collect
   // filtered row group indices
@@ -550,11 +557,19 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                                             stream);
 }
 
-equality_literals_collector::equality_literals_collector(ast::expression const& expr,
-                                                         cudf::size_type num_input_columns)
-  : _num_input_columns{num_input_columns}
+equality_literals_collector::equality_literals_collector(
+  ast::expression const& expr,
+  cudf::host_span<cudf::data_type const> output_dtypes,
+  cudf::host_span<cudf::size_type const> output_column_schemas,
+  cudf::host_span<SchemaElement const> schema_tree)
+  : _output_dtypes{output_dtypes},
+    _output_column_schemas{output_column_schemas},
+    _schema_tree{schema_tree}
 {
-  _literals.resize(_num_input_columns);
+  CUDF_EXPECTS(
+    _output_column_schemas.empty() or _output_column_schemas.size() == _output_dtypes.size(),
+    "output_column_schemas must have the same size as output_dtypes when provided");
+  _literals.resize(static_cast<size_type>(_output_dtypes.size()));
   expr.accept(*this);
 }
 
@@ -569,7 +584,7 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 {
   CUDF_EXPECTS(expr.get_table_source() == ast::table_reference::LEFT,
                "DictionaryAST and BloomfilterAST support only left table");
-  CUDF_EXPECTS(expr.get_column_index() < _num_input_columns,
+  CUDF_EXPECTS(expr.get_column_index() < static_cast<cudf::size_type>(_output_dtypes.size()),
                "Column index cannot be more than number of columns in the table");
   return expr;
 }
@@ -604,8 +619,19 @@ std::reference_wrapper<ast::expression const> equality_literals_collector::visit
 
   if (lhs_kind == operand_kind::COLUMN_REF and rhs_kind == operand_kind::LITERAL) {
     col_ref->accept(*this);
+    auto const col_idx = col_ref->get_column_index();
+    // Do not collect literals for timestamp columns whose output precision differs from
+    // the column's native precision as the literal would never match the native values.
+    if (not _output_column_schemas.empty() and cudf::is_timestamp(_output_dtypes[col_idx])) {
+      auto const schema_idx = _output_column_schemas[col_idx];
+      auto const& schema    = _schema_tree[schema_idx];
+      auto const clockrate  = cudf::io::detail::to_clockrate(_output_dtypes[col_idx].id());
+      if (schema.logical_type.has_value() and
+          calc_timestamp_scale(schema.logical_type, clockrate) != 0) {
+        return expr;
+      }
+    }
     if (op == ast_operator::EQUAL) {
-      auto const col_idx = col_ref->get_column_index();
       _literals[col_idx].emplace_back(const_cast<ast::literal*>(literal));
     }
   } else {

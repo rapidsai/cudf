@@ -312,8 +312,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
 
   // Collect literal and operator pairs for each input column with an (in)equality predicate
   auto const [literals, operators] =
-    dictionary_literals_collector{expr_conv.get_converted_expr().value().get(),
-                                  static_cast<cudf::size_type>(output_dtypes.size())}
+    dictionary_literals_collector{expr_conv.get_converted_expr().value().get(), output_dtypes}
       .get_literals_and_operators();
 
   // Return all row groups if no dictionary page filtering is needed

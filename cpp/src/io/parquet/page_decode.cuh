@@ -6,6 +6,7 @@
 #pragma once
 
 #include "error.hpp"
+#include "io/parquet/timestamp_utils.cuh"
 #include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
@@ -1187,22 +1188,7 @@ inline __device__ bool setup_local_page_info(page_state_s* const s,
         case Type::FLOAT: s->dtype_len = 4; break;
         case Type::INT64:
           if (s->col.ts_clock_rate) {
-            int32_t units = 0;
-            // Duration types are not included because no scaling is done when reading
-            if (s->col.logical_type.has_value()) {
-              auto const& lt = *s->col.logical_type;
-              if (lt.is_timestamp_millis()) {
-                units = cudf::timestamp_ms::period::den;
-              } else if (lt.is_timestamp_micros()) {
-                units = cudf::timestamp_us::period::den;
-              } else if (lt.is_timestamp_nanos()) {
-                units = cudf::timestamp_ns::period::den;
-              }
-            }
-            if (units and units != s->col.ts_clock_rate) {
-              s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
-                                                           : (s->col.ts_clock_rate / units);
-            }
+            s->ts_scale = calc_timestamp_scale(s->col.logical_type, s->col.ts_clock_rate);
           }
           [[fallthrough]];
         case Type::DOUBLE: s->dtype_len = 8; break;

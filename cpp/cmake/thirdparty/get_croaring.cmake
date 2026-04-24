@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -14,6 +14,7 @@ function(find_and_configure_roaring VERSION)
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
     GIT_TAG v${VERSION}
     GIT_SHALLOW TRUE
+    EXCLUDE_FROM_ALL TRUE
     OPTIONS "ROARING_BUILD_STATIC ON"
             "BUILD_SHARED_LIBS OFF"
             "ENABLE_ROARING_TESTS OFF"
