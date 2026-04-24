@@ -1,23 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 namespace cudf {
-namespace io {
-
-/**
- * @brief Lookup table to compute power of ten
- */
-static const __device__ __constant__ int32_t powers_of_ten[10] = {
-  1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
+namespace io::detail {
 
 struct get_period {
   template <typename T>
@@ -38,5 +33,5 @@ inline int32_t to_clockrate(type_id timestamp_type_id)
            : type_dispatcher(data_type{timestamp_type_id}, get_period{});
 }
 
-}  // namespace io
+}  // namespace io::detail
 }  // namespace cudf

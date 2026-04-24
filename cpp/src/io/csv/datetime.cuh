@@ -1,14 +1,14 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/time_utils.cuh"
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/wrappers/durations.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
