@@ -7,11 +7,14 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/contiguous_split.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/filling.hpp>
 #include <cudf/null_mask.hpp>
 
 #include <cuda/iterator>
@@ -36,12 +39,31 @@ TEST_F(CopyingTest, Gather)
                cudf::test::get_default_stream());
 }
 
+// Stream-pool fork path: 2 int64 columns × 65537 rows > 512 KB threshold
+TEST_F(CopyingTest, GatherStreamPool)
+{
+  constexpr cudf::size_type source_size{65'537};
+
+  auto zero     = cudf::numeric_scalar<int64_t>(0, true, cudf::test::get_default_stream());
+  auto zero_map = cudf::numeric_scalar<cudf::size_type>(0, true, cudf::test::get_default_stream());
+  auto source_column = cudf::sequence(source_size, zero, cudf::test::get_default_stream());
+  auto gather_map    = cudf::sequence(source_size, zero_map, cudf::test::get_default_stream());
+
+  cudf::table_view source_table({source_column->view(), source_column->view()});
+
+  auto result = cudf::gather(source_table,
+                             gather_map->view(),
+                             cudf::out_of_bounds_policy::DONT_CHECK,
+                             cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(source_table, result->view());
+}
+
 TEST_F(CopyingTest, ReverseTable)
 {
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>(
-    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + num_values);
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
 
   auto input_table = cudf::table_view{{input}};
   cudf::reverse(input_table, cudf::test::get_default_stream());
@@ -52,7 +74,7 @@ TEST_F(CopyingTest, ReverseColumn)
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<int32_t, int32_t>(
-    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + num_values);
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
 
   cudf::reverse(input, cudf::test::get_default_stream());
 }
@@ -67,6 +89,25 @@ TEST_F(CopyingTest, ScatterTable)
   auto const target_table = cudf::table_view({target, target});
 
   cudf::scatter(source_table, scatter_map, target_table, cudf::test::get_default_stream());
+}
+
+// Stream-pool fork path for scatter: 2 int64 columns, target with 65537 rows
+TEST_F(CopyingTest, ScatterStreamPool)
+{
+  constexpr cudf::size_type num_rows{65'537};
+
+  auto zero     = cudf::numeric_scalar<int64_t>(0, true, cudf::test::get_default_stream());
+  auto zero_map = cudf::numeric_scalar<cudf::size_type>(0, true, cudf::test::get_default_stream());
+  auto source_col  = cudf::sequence(num_rows, zero, cudf::test::get_default_stream());
+  auto target_col  = cudf::sequence(num_rows, zero, cudf::test::get_default_stream());
+  auto scatter_map = cudf::sequence(num_rows, zero_map, cudf::test::get_default_stream());
+
+  cudf::table_view source_table({source_col->view(), source_col->view()});
+  cudf::table_view target_table({target_col->view(), target_col->view()});
+
+  auto result = cudf::scatter(
+    source_table, scatter_map->view(), target_table, cudf::test::get_default_stream());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(target_table, result->view());
 }
 
 TEST_F(CopyingTest, ScatterScalars)
@@ -117,7 +158,7 @@ TEST_F(CopyingTest, CopyRangeInPlace)
   constexpr cudf::size_type size{1000};
 
   cudf::test::fixed_width_column_wrapper<int32_t, int32_t> target(
-    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + size);
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
 
   auto source_elements =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
@@ -138,7 +179,7 @@ TEST_F(CopyingTest, CopyRange)
   constexpr cudf::size_type size{1000};
 
   cudf::test::fixed_width_column_wrapper<int32_t, int32_t> target(
-    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + size);
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
 
   auto source_elements =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
@@ -335,19 +376,18 @@ TEST_F(CopyingTest, ContiguousSplit)
     2, 16, 31, 35, 64, 97, 158, 190, 638, 899, 900, 901, 996, 4200, 7131, 8111};
 
   cudf::size_type size = 10002;
-  auto iter            = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return static_cast<double>(i); });
+  auto zero            = cudf::numeric_scalar<double>(0, true, cudf::test::get_default_stream());
 
   std::vector<std::string> base_strings(
     {"banana", "pear", "apple", "pecans", "vanilla", "cat", "mouse", "green"});
   auto string_randomizer = thrust::make_transform_iterator(
-    cuda::counting_iterator<cudf::size_type>{0},
+    thrust::make_counting_iterator(0),
     [&base_strings](cudf::size_type i) { return base_strings[rand() % base_strings.size()]; });
 
-  cudf::test::fixed_width_column_wrapper<double> col(iter, iter + size);
+  auto col = cudf::sequence(size, zero, cudf::test::get_default_stream());
   std::vector<std::string> strings(string_randomizer, string_randomizer + size);
   cudf::test::strings_column_wrapper col2(strings.begin(), strings.end());
-  cudf::table_view tbl({col, col2});
+  cudf::table_view tbl({col->view(), col2});
   auto result = cudf::contiguous_split(tbl, splits, cudf::test::get_default_stream());
 }
 
