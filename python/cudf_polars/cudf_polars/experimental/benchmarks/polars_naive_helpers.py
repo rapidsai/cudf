@@ -86,7 +86,7 @@ def channel_agg(
     like q5, q33, q56, q60, q77, q80::
 
         SELECT <group_by_cols>, <agg_exprs>
-        FROM   <sales> JOIN date_dim ON <sales_date_key> = d_date_sk
+        FROM   <sales> JOIN <dates> ON <sales_date_key> = d_date_sk
                [JOIN <entity_table> ON <entity_key_sales> = <entity_key_dim>]
                [JOIN <extra_joins> ...]
                [LEFT JOIN <returns_table> ...]
@@ -94,7 +94,7 @@ def channel_agg(
                [AND <extra_filters>]
         GROUP BY <group_by_cols>
     """
-    # SQL: <sales> JOIN date_dim ON <sales_date_key> = d_date_sk
+    # SQL: <sales> JOIN <dates> ON <sales_date_key> = d_date_sk
     lf = sales.join(dates, left_on=sales_date_key, right_on="d_date_sk")
 
     # SQL: JOIN <entity_table> ON <entity_key_sales> = <entity_key_dim>
@@ -111,7 +111,7 @@ def channel_agg(
     if returns_table is not None:
         returns_lf = returns_table
         if returns_date_key is not None:
-            # SQL: returns JOIN date_dim ON <returns_date_key> = d_date_sk
+            # SQL: returns JOIN <dates> ON <returns_date_key> = d_date_sk
             returns_lf = returns_lf.join(
                 dates, left_on=returns_date_key, right_on="d_date_sk", suffix="_ret"
             )
