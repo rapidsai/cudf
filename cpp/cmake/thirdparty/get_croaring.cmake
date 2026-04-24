@@ -7,6 +7,12 @@
 
 # Use CPM to clone CRoaring and set up the necessary targets and include directories.
 function(find_and_configure_roaring VERSION)
+  if(NOT BUILD_SHARED_LIBS)
+    set(_exclude_from_all EXCLUDE_FROM_ALL FALSE)
+  else()
+    set(_exclude_from_all EXCLUDE_FROM_ALL TRUE)
+  endif()
+
   rapids_cpm_find(
     roaring ${VERSION}
     GLOBAL_TARGETS roaring
@@ -14,7 +20,7 @@ function(find_and_configure_roaring VERSION)
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
     GIT_TAG v${VERSION}
     GIT_SHALLOW TRUE
-    EXCLUDE_FROM_ALL TRUE
+    ${_exclude_from_all}
     OPTIONS "ROARING_BUILD_STATIC ON"
             "BUILD_SHARED_LIBS OFF"
             "ENABLE_ROARING_TESTS OFF"
