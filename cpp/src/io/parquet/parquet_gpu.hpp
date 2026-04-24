@@ -221,7 +221,10 @@ enum class decode_kernel_mask {
   STRING_STREAM_SPLIT = (1 << 23),  // Run decode kernel for BYTE_STREAM_SPLIT string data
   STRING_STREAM_SPLIT_NESTED =
     (1 << 24),  // Run decode kernel for nested BYTE_STREAM_SPLIT string data
-  STRING_STREAM_SPLIT_LIST = (1 << 25)  // Run decode kernel for list BYTE_STREAM_SPLIT string data
+  STRING_STREAM_SPLIT_LIST = (1 << 25),  // Run decode kernel for list BYTE_STREAM_SPLIT string data
+  DICT_INT32               = (1 << 26),  // Run decode kernel for dict string → INT32 indices
+  DICT_INT32_NESTED        = (1 << 27),  // Run decode kernel for nested dict string → INT32 indices
+  DICT_INT32_LIST          = (1 << 28),  // Run decode kernel for list dict string → INT32 indices
 };
 
 constexpr uint32_t STRINGS_MASK_NON_DELTA = BitOr(decode_kernel_mask::STRING,
