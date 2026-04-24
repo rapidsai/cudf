@@ -17,7 +17,6 @@ import pylibcudf as plc
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr, ir
 from cudf_polars.dsl.expressions.base import ExecutionContext
-from cudf_polars.utils.versions import POLARS_VERSION_LT_134, POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Sequence
@@ -201,7 +200,7 @@ def decompose_single_agg(
         # mean/median on decimal: Polars returns float -> pre-cast
         decimal_unsupported = False
         if plc.traits.is_fixed_point(child_dtype):
-            cast_for_quantile = is_quantile and not POLARS_VERSION_LT_134
+            cast_for_quantile = is_quantile
             cast_for_mean_or_median = (
                 agg.name in {"mean", "median"}
             ) and plc.traits.is_floating_point(agg.dtype.plc_type)
@@ -215,8 +214,6 @@ def decompose_single_agg(
                     child,
                 )
                 child_dtype = child.dtype.plc_type
-            elif is_quantile and POLARS_VERSION_LT_134:  # pragma: no cover
-                decimal_unsupported = True
 
         is_group_quantile_supported = plc.traits.is_integral(
             child_dtype
@@ -251,46 +248,14 @@ def decompose_single_agg(
                 )
                 else expr.Col(agg.dtype, name)
             )
-            # Polars semantics for sum differ by context:
+            # Polars semantics for sum:
             # - GROUPBY: sum(all-null group) => 0; sum(empty group) => 0  (fill-null)
-            # - ROLLING: sum(all-null window) => null; sum(empty window) => 0 (fill only if empty)
             #
             # Must post-process because libcudf returns null for both empty and all-null windows/groups
-            if not POLARS_VERSION_LT_1323 or context in {
-                ExecutionContext.GROUPBY,
-                ExecutionContext.WINDOW,
-            }:
-                # GROUPBY: always fill top-level nulls with 0
-                return [(named_expr, True)], expr.NamedExpr(
-                    name, replace_nulls(col, 0, is_top=is_top)
-                )
-            else:  # pragma: no cover
-                # ROLLING:
-                # Add a second rolling agg to compute the window size, then only
-                # replace nulls with 0 when the window size is 0 (ie. empty window).
-                win_len_name = next(name_generator)
-                win_len = expr.NamedExpr(
-                    win_len_name,
-                    expr.Len(DataType(pl.Int32())),
-                )
-
-                win_len_col = expr.Col(DataType(pl.Int32()), win_len_name)
-                win_len_filled = replace_nulls(win_len_col, 0, is_top=True)
-
-                is_empty = expr.BinOp(
-                    DataType(pl.Boolean()),
-                    plc.binaryop.BinaryOperator.EQUAL,
-                    win_len_filled,
-                    expr.Literal(DataType(pl.Int32()), 0),
-                )
-
-                # If empty -> fill 0; else keep libcudf's semantics for all-null windows.
-                filled = replace_nulls(col, 0, is_top=is_top)
-                post_ternary_expr = expr.Ternary(agg.dtype, is_empty, filled, col)
-
-                return [(named_expr, True), (win_len, True)], expr.NamedExpr(
-                    name, post_ternary_expr
-                )
+            # Always fill top-level nulls with 0
+            return [(named_expr, True)], expr.NamedExpr(
+                name, replace_nulls(col, 0, is_top=is_top)
+            )
         elif agg.name in {"mean", "median", "quantile", "std", "var"}:
             post_agg_col: expr.Expr = expr.Col(
                 DataType(pl.Float64()), name

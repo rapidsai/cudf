@@ -18,7 +18,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     get_default_engine,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -176,10 +175,7 @@ def test_join_where(left, right, conditions, zlice):
         assert_gpu_result_equal(q_len)
 
 
-def test_cross_join_empty_right_table(request):
-    request.applymarker(
-        pytest.mark.xfail(condition=POLARS_VERSION_LT_132, reason="nested loop join")
-    )
+def test_cross_join_empty_right_table():
     a = pl.LazyFrame({"a": [1, 2, 3], "x": [7, 2, 1]})
     b = pl.LazyFrame({"b": [2, 2, 2], "x": [7, 1, 3]})
 
@@ -290,16 +286,7 @@ def test_join_maintain_order_with_slice(left, right, maintain_order, how, zlice)
         (pl.Decimal(15, 2), pl.Float64),
     ],
 )
-def test_cross_join_filter_with_decimals(request, expr, left_dtype, right_dtype):
-    request.applymarker(
-        pytest.mark.xfail(
-            POLARS_VERSION_LT_132
-            and isinstance(left_dtype, pl.Decimal)
-            and isinstance(right_dtype, pl.Decimal)
-            and "==" in repr(expr),
-            reason="Hash Inner Join between i128 and i128",
-        )
-    )
+def test_cross_join_filter_with_decimals(expr, left_dtype, right_dtype):
     left = pl.LazyFrame(
         {
             "foo": [Decimal("1.00"), Decimal("2.50"), Decimal("3.00")],

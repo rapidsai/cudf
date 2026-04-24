@@ -11,7 +11,6 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
 
 dtypes = [
     pl.Int8,
@@ -120,7 +119,7 @@ def test_true_div_with_decimals():
         schema={"foo": pl.Decimal(15, 2), "bar": pl.Decimal(15, 2)},
     )
     q = df.select(pl.col("bar") / pl.col("foo"))
-    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, check_dtypes=True)
 
 
 def test_multiply_with_decimals():
@@ -133,7 +132,7 @@ def test_multiply_with_decimals():
     )
 
     q = df.select(pl.col("x") * pl.col("y"))
-    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, check_dtypes=True)
 
 
 def test_sum_decimal_widens_precision(request) -> None:

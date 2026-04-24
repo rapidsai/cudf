@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131
 
 
 @pytest.fixture
@@ -20,47 +19,23 @@ def ldf():
     )
 
 
-def test_field_getitem(request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_field_getitem(ldf):
     q = ldf.select(pl.col("a").struct[0])
     assert_gpu_result_equal(q)
 
 
 @pytest.mark.parametrize("fields", [("b",), ("b", "d"), ("^b.*|f.*$",)])
-def test_field(request, ldf, fields):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_field(ldf, fields):
     q = ldf.select(pl.col("a").struct.field(*fields))
     assert_gpu_result_equal(q)
 
 
-def test_unnest(request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_unnest(ldf):
     q = ldf.select(pl.col("a").struct.unnest())
     assert_gpu_result_equal(q)
 
 
-def test_json_encode(request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_json_encode(ldf):
     q = ldf.select(pl.col("a").struct.json_encode())
     assert_gpu_result_equal(q)
 
@@ -69,13 +44,7 @@ def test_json_encode(request, ldf):
     assert_gpu_result_equal(q)
 
 
-def test_rename_fields(request, ldf):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_rename_fields(ldf):
     q = ldf.select(pl.col("a").struct.rename_fields(["1", "2", "3"]).struct.unnest())
     assert_gpu_result_equal(q)
 
@@ -92,13 +61,7 @@ def test_with_fields(ldf):
     [pl.col("a").name.prefix_fields, pl.col("a").name.suffix_fields],
     ids=lambda x: x.__name__,
 )
-def test_prefix_suffix_fields(request, ldf, expr):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="not supported until polars 1.31",
-        )
-    )
+def test_prefix_suffix_fields(ldf, expr):
     q = ldf.select(expr("foo").struct.unnest())
     assert_gpu_result_equal(q)
 

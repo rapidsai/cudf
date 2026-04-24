@@ -13,7 +13,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_131, POLARS_VERSION_LT_135
+from cudf_polars.utils.versions import POLARS_VERSION_LT_135
 
 
 def test_explode_multiple_raises():
@@ -43,12 +43,9 @@ def test_rename_duplicate_raises(mapping):
 
     q = df.rename(mapping)
 
-    if POLARS_VERSION_LT_131:
+    # Now raises before translation
+    with pytest.raises(pl.exceptions.DuplicateError, match="is duplicate"):
         assert_ir_translation_raises(q, NotImplementedError)
-    else:
-        # Now raises before translation
-        with pytest.raises(pl.exceptions.DuplicateError, match="is duplicate"):
-            assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -131,8 +128,8 @@ def test_set_sorted_then_inner_join(request):
 
 
 def test_explode_single_legacy_options():
-    # Cover the branch: POLARS_VERSION_LT_136 or len(self.options) == 1
-    # On polars >= 1.36 this branch is only reachable by direct construction
+    # Cover the branch: len(self.options) == 1
+    # This branch is only reachable by direct construction
     # with 1-element options (the old pre-1.36 format).
     df = pl.DataFrame({"a": [[1, 2], [3, 4]]})
     child = DataFrameScan({"a": DataType(pl.List(pl.Int64()))}, df._df, None)

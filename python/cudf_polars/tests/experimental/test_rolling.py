@@ -11,7 +11,7 @@ import polars as pl
 
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.versions import POLARS_VERSION_LT_136
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -34,11 +34,11 @@ def engine(
         yield engine
 
 
-def test_rolling_datetime(request, engine):
-    if not POLARS_VERSION_LT_136:
-        request.applymarker(
-            pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
-        )
+@pytest.mark.skipif(
+    not POLARS_VERSION_LT_136 and POLARS_VERSION_LT_139,
+    reason="Rolling window expressions are not accessible in polars 1.36-1.38",
+)
+def test_rolling_datetime(engine):
     dates = [
         "2020-01-01 13:45:48",
         "2020-01-01 16:42:13",

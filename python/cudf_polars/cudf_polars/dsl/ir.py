@@ -32,7 +32,7 @@ from pylibcudf import expressions as plc_expr
 import cudf_polars.dsl.expr as expr
 from cudf_polars.containers import Column, DataFrame, DataType
 from cudf_polars.containers.dataframe import NamedColumn
-from cudf_polars.dsl.expressions import rolling, unary
+from cudf_polars.dsl.expressions import rolling
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import to_ast, to_parquet_filter
@@ -49,8 +49,6 @@ from cudf_polars.utils.cuda_stream import (
     join_cuda_streams,
 )
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_137,
     POLARS_VERSION_LT_138,
@@ -505,16 +503,7 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if (
-            any(str(p).startswith("https:/") for p in self.paths)
-            and POLARS_VERSION_LT_131
-        ):  # pragma: no cover; polars passed us the wrong URI
-            # https://github.com/pola-rs/polars/issues/22766
-            raise NotImplementedError("Read from https")
-        if any(
-            str(p).startswith("file:/" if POLARS_VERSION_LT_131 else "file://")
-            for p in self.paths
-        ):
+        if any(str(p).startswith("file://") for p in self.paths):
             raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
@@ -1417,11 +1406,8 @@ class DataFrameScan(IR):
         if projection is not None:
             df = df.select(projection)
 
-        # Zero-width dataframes lose their row count when converted through
-        # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
         if len(schema) == 0:
             return DataFrame([], stream=context.get_cuda_stream(), num_rows=height)
-
         df = DataFrame.from_polars(df, stream=context.get_cuda_stream())
         assert all(
             c.obj.type() == dtype.plc_type
@@ -1809,16 +1795,6 @@ class GroupBy(IR):
         for dtype in schema.values():
             if _has_struct_in_list(dtype.polars_type):
                 raise NotImplementedError("Nested list[struct] types not supported")
-        for request in agg_requests:
-            expr = request.value
-            if (
-                POLARS_VERSION_LT_136
-                and isinstance(expr, unary.UnaryFunction)
-                and expr.name == "value_counts"
-            ):
-                raise NotImplementedError(
-                    "value_counts is not supported in groupby"
-                )  # pragma: no cover; Nested list[struct] types not supported
         self.agg_requests = tuple(agg_requests)
         self.maintain_order = maintain_order
         self.zlice = zlice
@@ -1978,19 +1954,15 @@ def _strip_predicate_casts(node: expr.Expr) -> expr.Expr:
         ):
             return child
 
-        if (
-            not POLARS_VERSION_LT_134
-            and isinstance(child, expr.ColRef)
-            and (
-                (
-                    plc.traits.is_floating_point(src.plc_type)
-                    and plc.traits.is_floating_point(dst.plc_type)
-                )
-                or (
-                    plc.traits.is_integral(src.plc_type)
-                    and plc.traits.is_integral(dst.plc_type)
-                    and src.plc_type.id() == dst.plc_type.id()
-                )
+        if isinstance(child, expr.ColRef) and (
+            (
+                plc.traits.is_floating_point(src.plc_type)
+                and plc.traits.is_floating_point(dst.plc_type)
+            )
+            or (
+                plc.traits.is_integral(src.plc_type)
+                and plc.traits.is_integral(dst.plc_type)
+                and src.plc_type.id() == dst.plc_type.id()
             )
         ):
             return child
@@ -3008,7 +2980,6 @@ class MapFunction(IR):
             "unpivot",
             "row_index",
             "fast_count",
-            "hint_sorted",
         ]
     )
 
@@ -3038,16 +3009,6 @@ class MapFunction(IR):
                 # same sub-shapes
                 raise NotImplementedError("Explode with more than one column")
             self.options = (tuple(to_explode),)
-        elif POLARS_VERSION_LT_131 and self.name == "rename":  # pragma: no cover
-            # As of 1.31, polars validates renaming in the IR
-            old, new, strict = self.options
-            if len(new) != len(set(new)) or (
-                set(new) & (set(df.schema.keys()) - set(old))
-            ):
-                raise NotImplementedError(
-                    "Duplicate new names in rename."
-                )  # pragma: no cover
-            self.options = (tuple(old), tuple(new), strict)
         elif self.name == "unpivot":
             indices, pivotees, variable_name, value_name = self.options
             value_name = "value" if value_name is None else value_name
@@ -3083,10 +3044,6 @@ class MapFunction(IR):
             raise NotImplementedError(
                 "Fast count unsupported for CSV scans"
             )  # pragma: no cover
-        elif (
-            self.name == "hint_sorted"
-        ):  # pragma: no cover; polars prunes hints in some cases
-            raise NotImplementedError("Hint sorted unsupported")
         self._non_child_args = (schema, name, self.options)
 
     def get_hashable(self) -> Hashable:
@@ -3121,11 +3078,6 @@ class MapFunction(IR):
             # No-op in our data model
             # Don't think this appears in a plan tree from python
             return df  # pragma: no cover
-        elif POLARS_VERSION_LT_131 and name == "rename":  # pragma: no cover
-            # final tag is "swapping" which is useful for the
-            # optimiser (it blocks some pushdown operations)
-            old, new, _ = options
-            return df.rename_columns(dict(zip(old, new, strict=True)))
         elif name == "explode":
             ((to_explode,),) = options
             index = df.column_names.index(to_explode)

@@ -19,9 +19,8 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
-    POLARS_VERSION_LT_131,
-    POLARS_VERSION_LT_135,
     POLARS_VERSION_LT_138,
+    POLARS_VERSION_LT_139,
 )
 
 if TYPE_CHECKING:
@@ -510,12 +509,6 @@ def test_scan_from_file_uri(tmp_path: Path) -> None:
 def test_scan_parquet_remote(
     request, tmp_path: Path, df: pl.DataFrame, httpserver: HTTPServer, *, chunked: bool
 ) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="remote IO not supported",
-        )
-    )
     path = tmp_path / "foo.parquet"
     df.write_parquet(path)
     bytes_ = path.read_bytes()
@@ -580,8 +573,8 @@ def test_scan_ndjson_remote(
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_131,
-            reason="remote IO not supported",
+            condition=not POLARS_VERSION_LT_139,
+            reason="polars 1.39+ ndjson remote reader requires range request support",
         )
     )
     path = tmp_path / "foo.jsonl"
@@ -645,7 +638,7 @@ def test_hits_scan_row_index_duplicate(request, tmp_path):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_138,
-            reason="polars fails ahead of time",
+            reason="polars >= 1.38 raises duplicate row_index name ahead of time",
         )
     )
     pl.DataFrame({"col": [1, 2, 3]}).write_parquet(tmp_path / "a.parquet")
@@ -654,11 +647,7 @@ def test_hits_scan_row_index_duplicate(request, tmp_path):
         "index"
     )
 
-    if POLARS_VERSION_LT_135:
-        # Did not raise before
-        assert_gpu_result_equal(q)
-    else:
-        assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, NotImplementedError)
 
 
 @pytest.mark.parametrize("compression", ["gzip", "zlib", "zstd"])
@@ -698,8 +687,7 @@ def test_scan_tiny_file_not_compressed(tmp_path):
 
 
 @pytest.mark.skipif(
-    POLARS_VERSION_LT_138,
-    reason="height parameter added in Polars 1.38",
+    POLARS_VERSION_LT_138, reason="pl.LazyFrame(height=...) requires polars >= 1.38"
 )
 @pytest.mark.parametrize("engine", [None, NO_CHUNK_ENGINE])
 def test_scan_parquet_zero_width_with_limit(tmp_path, engine, request, using_rapidsmpf):

@@ -161,12 +161,8 @@ def test_orderby_nulls_raises_computeerror():
 
 
 def test_rolling_nested_raises(request):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_136,
-            reason="polars raises now",
-        )
-    )
+    if not POLARS_VERSION_LT_136:
+        request.applymarker(pytest.mark.xfail(reason="polars raises now"))
     q = (
         pl.LazyFrame(
             {

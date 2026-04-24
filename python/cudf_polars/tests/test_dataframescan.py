@@ -83,8 +83,7 @@ def test_dataframescan_with_decimals():
 
 
 @pytest.mark.skipif(
-    POLARS_VERSION_LT_138,
-    reason="height parameter added in Polars 1.38",
+    POLARS_VERSION_LT_138, reason="pl.LazyFrame(height=...) requires polars >= 1.38"
 )
 def test_dataframescan_zero_width_with_rows(request, using_rapidsmpf):
     request.applymarker(

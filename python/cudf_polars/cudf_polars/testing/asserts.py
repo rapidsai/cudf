@@ -14,7 +14,6 @@ from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import ConfigOptions, StreamingFallbackMode
-from cudf_polars.utils.versions import POLARS_VERSION_LT_1323
 
 if TYPE_CHECKING:
     from cudf_polars.typing import OptimizationArgs
@@ -137,10 +136,7 @@ def assert_gpu_result_equal(
     }
 
     tol_kwargs: dict[str, float]
-    if POLARS_VERSION_LT_1323:  # pragma: no cover
-        tol_kwargs = {"rtol": rtol, "atol": atol}
-    else:
-        tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
+    tol_kwargs = {"rel_tol": rtol, "abs_tol": atol}
 
     # the type checker errors with:
     # Argument 4 to "assert_frame_equal" has incompatible type "**dict[str, float]"; expected "bool"  [arg-type]

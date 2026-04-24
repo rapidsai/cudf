@@ -122,7 +122,6 @@ class DataFrame:
             if POLARS_VERSION_LT_138:  # pragma: no cover
                 return pl.DataFrame()
             return pl.DataFrame(height=self._num_rows_override)
-
         # If the arrow table has empty names, from_arrow produces
         # column_$i. But here we know there is only one such column
         # (by construction) and it should have an empty name.
