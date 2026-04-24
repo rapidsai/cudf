@@ -564,7 +564,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   block.sync();
 
   // Propagate malformed-header errors from either underlying DELTA_BINARY_PACKED decoder.
-  if (prefix_db->error || suffix_db->error) {
+  if (prefix_db->error or suffix_db->error) {
     set_error(static_cast<kernel_error::value_type>(decode_error::DELTA_PARAMS_UNSUPPORTED),
               error_code);
     return;
