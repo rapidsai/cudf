@@ -409,6 +409,11 @@ class RunConfig:
     # Validation
     validation_method: ValidationMethod | None = None
 
+    # DuckDB configuration
+    duckdb_threads: int | None = None
+    duckdb_memory_limit: str | None = None
+    duckdb_temp_dir: str | None = None
+
     # Metadata / output (populated at runtime)
     n_workers: int = 1
     extra_info: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -534,6 +539,9 @@ class RunConfig:
             num_gpus=args.num_gpus,
             validation_method=validation_method,
             extra_info=args.extra_info,
+            duckdb_threads=args.duckdb_threads,
+            duckdb_memory_limit=args.duckdb_memory_limit,
+            duckdb_temp_dir=args.duckdb_temp_dir,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
@@ -928,6 +936,7 @@ def run_polars_query(
                 run_config.dataset_path,
                 query_set=duckdb_queries_cls.name,
                 suffix=run_config.suffix,
+                run_config=run_config,
             ).with_columns(*casts)
         else:
             raise ValueError(f"Invalid baseline: {args.baseline}")
@@ -1423,6 +1432,20 @@ PDSH_TABLE_NAMES: list[str] = [
 ]
 
 
+def _make_duckdb_config(run_config: RunConfig | None) -> dict[str, Any]:
+    """Build a DuckDB connection config dict from a RunConfig."""
+    config: dict[str, Any] = {
+        "threads": run_config.duckdb_threads
+        if (run_config and run_config.duckdb_threads is not None)
+        else os.cpu_count(),
+    }
+    if run_config and run_config.duckdb_memory_limit is not None:
+        config["memory_limit"] = run_config.duckdb_memory_limit
+    if run_config and run_config.duckdb_temp_dir is not None:
+        config["temp_directory"] = run_config.duckdb_temp_dir
+    return config
+
+
 def print_duckdb_plan(
     q_id: int,
     sql: str,
@@ -1430,6 +1453,7 @@ def print_duckdb_plan(
     suffix: str,
     query_set: str,
     args: argparse.Namespace,
+    run_config: RunConfig | None = None,
 ) -> None:
     """Print DuckDB query plan using EXPLAIN."""
     if duckdb is None:
@@ -1440,7 +1464,7 @@ def print_duckdb_plan(
     else:
         tbl_names = PDSH_TABLE_NAMES
 
-    with duckdb.connect() as conn:
+    with duckdb.connect(config=_make_duckdb_config(run_config)) as conn:
         for name in tbl_names:
             pattern = (Path(dataset_path) / name).as_posix() + suffix
             conn.execute(
@@ -1468,6 +1492,7 @@ def execute_duckdb_query(
     *,
     suffix: str = ".parquet",
     query_set: str = "pdsh",
+    run_config: RunConfig | None = None,
 ) -> pl.DataFrame:
     """Execute a query with DuckDB."""
     if duckdb is None:
@@ -1476,7 +1501,7 @@ def execute_duckdb_query(
         tbl_names = PDSDS_TABLE_NAMES
     else:
         tbl_names = PDSH_TABLE_NAMES
-    with duckdb.connect() as conn:
+    with duckdb.connect(config=_make_duckdb_config(run_config)) as conn:
         for name in tbl_names:
             pattern = (Path(dataset_path) / name).as_posix() + suffix
             conn.execute(
@@ -1508,6 +1533,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
                 suffix=run_config.suffix,
                 query_set=duckdb_queries_cls.name,
                 args=args,
+                run_config=run_config,
             )
 
         print(f"DuckDB Executing: {q_id}")
@@ -1522,6 +1548,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
                 run_config.dataset_path,
                 suffix=run_config.suffix,
                 query_set=duckdb_queries_cls.name,
+                run_config=run_config,
             )
             t1 = time.time()
             record = SuccessRecord(query=q_id, iteration=i, duration=t1 - t0)
@@ -1844,6 +1871,25 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=json.loads,
         default={},
         help="Extra information to add to the output file (must be JSON-serializable).",
+    )
+
+    parser.add_argument(
+        "--duckdb-threads",
+        type=int,
+        default=None,
+        help="Number of threads for DuckDB to use. Defaults to os.cpu_count().",
+    )
+    parser.add_argument(
+        "--duckdb-memory-limit",
+        type=str,
+        default=None,
+        help="DuckDB memory limit (e.g. '500GB'). If unset, DuckDB uses its default.",
+    )
+    parser.add_argument(
+        "--duckdb-temp-dir",
+        type=str,
+        default=None,
+        help="Directory for DuckDB to spill temporary data to disk.",
     )
 
     StreamingOptions._add_cli_args(parser)
