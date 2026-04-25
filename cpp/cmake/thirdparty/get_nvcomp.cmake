@@ -5,9 +5,10 @@
 # cmake-format: on
 # =============================================================================
 
-# This function contains more branches and statements than cmake-lint allows, because it faithfully
-# ports rapids_cpm_nvcomp() from rapids-cmake. The spacing below is necessary to prevent
-# cmake-format from combining the lint directive with the surrounding comments.
+# This function finds or downloads nvcomp and sets any additional necessary environment variables.
+# The CPM build-from-source fallback has been removed since nvcomp cannot be built from source. The
+# spacing below is necessary to prevent cmake-format from combining the lint directive with the
+# surrounding comments.
 
 # cmake-lint: disable=R0915,R0912,C0103
 
@@ -34,6 +35,9 @@ function(find_and_configure_nvcomp)
     if(nvcomp_FOUND)
       message(STATUS "Found nvcomp: ${nvcomp_DIR} (found version ${nvcomp_VERSION})")
     endif()
+  endif()
+  if(nvcomp_FOUND)
+    return()
   endif()
 
   # --- 3. Stage 2: Proprietary binary download (if not found and USE_PROPRIETARY_BINARY) ---
@@ -134,8 +138,6 @@ function(find_and_configure_nvcomp)
 
       # Enforce usage of the local download only
       list(APPEND CMAKE_PREFIX_PATH "${nvcomp_ROOT}/${lib_dir}/cmake/nvcomp")
-      unset(CPM_DOWNLOAD_ALL)
-      set(CPM_USE_LOCAL_PACKAGES ON)
     endif()
   elseif(DEFINED nvcomp_DIR)
     # Re-configuration: restore state if nvcomp_DIR points to our proprietary root
@@ -148,19 +150,17 @@ function(find_and_configure_nvcomp)
     endif()
   endif()
 
-  # --- 4. Stage 3: CPM fallback ---
-  include("${rapids-cmake-dir}/cpm/find.cmake")
-  rapids_cpm_find(
+  # --- 4. Find proprietary binary + FATAL_ERROR if not found ---
+  rapids_find_package(
     nvcomp ${version}
     GLOBAL_TARGETS nvcomp::nvcomp
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
-    CPM_ARGS
-    OPTIONS "BUILD_STATIC ON" "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
 
-  include("${rapids-cmake-dir}/cpm/detail/display_patch_status.cmake")
-  rapids_cpm_display_patch_status(nvcomp)
+  if(NOT nvcomp_FOUND)
+    message(FATAL_ERROR "nvcomp ${version} not found. nvcomp cannot be built from source.")
+  endif()
 
   # --- 5. Target aliases ---
   foreach(name IN ITEMS nvcomp nvcomp_cpu nvcomp_cpu_static nvcomp_static)
@@ -170,18 +170,6 @@ function(find_and_configure_nvcomp)
   endforeach()
 
   # --- 6. Propagate parent-scope variables ---
-  set(nvcomp_SOURCE_DIR
-      "${nvcomp_SOURCE_DIR}"
-      PARENT_SCOPE
-  )
-  set(nvcomp_BINARY_DIR
-      "${nvcomp_BINARY_DIR}"
-      PARENT_SCOPE
-  )
-  set(nvcomp_ADDED
-      "${nvcomp_ADDED}"
-      PARENT_SCOPE
-  )
   set(nvcomp_VERSION
       ${version}
       PARENT_SCOPE
