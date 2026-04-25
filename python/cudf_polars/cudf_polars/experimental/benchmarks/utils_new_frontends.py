@@ -377,7 +377,9 @@ def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float
 class RunConfig:
     """Benchmark run configuration for SPMD / Ray / DuckDB frontends."""
 
-    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
+    engine_name: Literal[
+        "polars-cpu", "cudf-polars", "polars-cpu-naive", "cudf-polars-naive", "duckdb"
+    ]
     # Query selection & dataset
     queries: list[int]
     query_set: str
@@ -503,14 +505,21 @@ class RunConfig:
         else:
             validation_method = None
 
-        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
+        engine_name: Literal[
+            "polars-cpu",
+            "cudf-polars",
+            "polars-cpu-naive",
+            "cudf-polars-naive",
+            "duckdb",
+        ]
         if args.engine == "duckdb":
             engine_name = "duckdb"
-        elif args.engine == "polars":
+        elif args.engine in ("polars", "polars-naive"):
+            naive = args.engine == "polars-naive"
             if args.executor == "cpu":
-                engine_name = "polars-cpu"
+                engine_name = "polars-cpu-naive" if naive else "polars-cpu"
             else:
-                engine_name = "cudf-polars"
+                engine_name = "cudf-polars-naive" if naive else "cudf-polars"
         else:
             raise ValueError(f"Invalid engine: {args.engine}")
 
