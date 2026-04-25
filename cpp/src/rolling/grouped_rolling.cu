@@ -6,6 +6,7 @@
 #include "detail/optimized_unbounded_window.hpp"
 #include "detail/range_window_bounds.hpp"
 #include "detail/rolling.cuh"
+#include "detail/rolling_jit.cuh"
 #include "detail/rolling_udf.cuh"
 #include "detail/rolling_utils.cuh"
 
@@ -92,21 +93,16 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
-    cudf::detail::preceding_window_wrapper grouped_preceding_window{
-      group_offsets.data(), group_labels.data(), preceding_window};
-
-    cudf::detail::following_window_wrapper grouped_following_window{
-      group_offsets.data(), group_labels.data(), following_window};
-
-    return cudf::detail::rolling_window_udf(input,
-                                            grouped_preceding_window,
-                                            "cudf::detail::preceding_window_wrapper",
-                                            grouped_following_window,
-                                            "cudf::detail::following_window_wrapper",
-                                            min_periods,
-                                            aggr,
-                                            stream,
-                                            mr);
+    return cudf::detail::rolling_window_udf(
+      input,
+      cudf::detail::preceding_window_wrapper{
+        group_offsets.data(), group_labels.data(), preceding_window},
+      cudf::detail::following_window_wrapper{
+        group_offsets.data(), group_labels.data(), following_window},
+      min_periods,
+      aggr,
+      stream,
+      mr);
   } else {
     namespace utils = cudf::detail::rolling;
     auto groups     = utils::grouped{group_labels.data(), group_offsets.data()};

@@ -28,6 +28,7 @@
 // clang-format off
 // This header is an inlined header that defines the GENERIC_TRANSFORM_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
@@ -111,3 +112,13 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 
 }  // namespace jit
 }  // namespace cudf
+
+extern "C" __global__ void cudf_kernel(
+  cudf::size_type row_size,
+  cudf::bitmask_type const* __restrict__ stencil,
+  void* __restrict__ user_data,
+  cudf::column_device_view_core const* __restrict__ input_cols,
+  cudf::mutable_column_device_view_core const* __restrict__ output_cols)
+{
+  CUDF_KERNEL_INSTANCE(row_size, stencil, user_data, input_cols, output_cols);
+}

@@ -671,7 +671,7 @@ TEST_F(StringOperationTest, Output)
 
   std::string cuda = R"***(
     __device__ void transform(cudf::string_view * out, cudf::string_view a, cudf::string_view b, cudf::string_view c, cudf::string_view d){
-      *out =  std::max(std::max(std::max(a, b), c), d);
+      *out =  cuda::std::max(cuda::std::max(cuda::std::max(a, b), c), d);
     }
     )***";
 

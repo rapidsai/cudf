@@ -37,6 +37,7 @@
                     // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
+#include <cudf/detail/kernel-instance.hpp>
 #include <cudf/detail/operation-udf.hpp>
 // clang-format on
 
@@ -56,11 +57,14 @@ struct UserDefinedOp {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-CUDF_KERNEL void kernel_v_v(cudf::size_type size,
-                            TypeOut* out_data,
-                            TypeLhs* lhs_data,
-                            TypeRhs* rhs_data)
+CUDF_KERNEL void binaryop_kernel(cudf::size_type size,
+                                 void* p_out_data,
+                                 void* p_lhs_data,
+                                 void* p_rhs_data)
 {
+  auto out_data    = static_cast<TypeOut*>(p_out_data);
+  auto lhs_data    = static_cast<TypeLhs*>(p_lhs_data);
+  auto rhs_data    = static_cast<TypeRhs*>(p_rhs_data);
   auto const start = cudf::detail::grid_1d::global_thread_id();
   auto const step  = cudf::detail::grid_1d::grid_stride();
 
@@ -69,32 +73,14 @@ CUDF_KERNEL void kernel_v_v(cudf::size_type size,
   }
 }
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-CUDF_KERNEL void kernel_v_v_with_validity(cudf::size_type size,
-                                          TypeOut* out_data,
-                                          TypeLhs* lhs_data,
-                                          TypeRhs* rhs_data,
-                                          cudf::bitmask_type* output_mask,
-                                          cudf::bitmask_type const* lhs_mask,
-                                          cudf::size_type lhs_offset,
-                                          cudf::bitmask_type const* rhs_mask,
-                                          cudf::size_type rhs_offset)
-{
-  auto const start = cudf::detail::grid_1d::global_thread_id();
-  auto const step  = cudf::detail::grid_1d::grid_stride();
-
-  for (auto i = start; i < size; i += step) {
-    bool output_valid = false;
-    out_data[i]       = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(
-      lhs_data[i],
-      rhs_data[i],
-      lhs_mask ? cudf::bit_is_set(lhs_mask, lhs_offset + i) : true,
-      rhs_mask ? cudf::bit_is_set(rhs_mask, rhs_offset + i) : true,
-      output_valid);
-    if (output_mask && !output_valid) cudf::clear_bit(output_mask, i);
-  }
-}
-
 }  // namespace jit
 }  // namespace binops
 }  // namespace cudf
+
+extern "C" __global__ void cudf_kernel(cudf::size_type size,
+                                       void* out_data,
+                                       void* lhs_data,
+                                       void* rhs_data)
+{
+  CUDF_KERNEL_INSTANCE(size, out_data, lhs_data, rhs_data);
+}

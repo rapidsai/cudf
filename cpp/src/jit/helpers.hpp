@@ -12,7 +12,7 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <jit/cache.hpp>
+#include <jit/jit.hpp>
 #include <jit/span.cuh>
 
 #include <algorithm>
@@ -75,10 +75,10 @@ column_views_to_device(std::span<ColumnView const> views,
 std::vector<std::string> input_type_names(
   std::span<std::variant<column_view, scalar_column_view> const> views);
 
-jitify2::Kernel get_udf_kernel(jitify2::PreprocessedProgramData const& preprocessed_program_data,
-                               std::string const& kernel_name,
-                               std::string const& cuda_source,
-                               std::vector<std::string> const& extra_options = {});
+kernel get_udf_kernel(std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& udf_cuda_source,
+                      std::vector<std::string> const& extra_options = {});
 
 }  // namespace jit
 }  // namespace cudf

@@ -22,8 +22,8 @@
  */
 
 #include "compiled/binary_ops.hpp"
-#include "jit/cache.hpp"
 #include "jit/helpers.hpp"
+#include "jit/jit.hpp"
 #include "jit/parser.hpp"
 #include "jit/util.hpp"
 
@@ -42,8 +42,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/optional>
-
-#include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
 #include <string>
 
@@ -156,18 +154,23 @@ void binary_operation(mutable_column_view& out,
                                            {2, cudf::type_to_name(rhs.type())},
                                          });
 
-  std::string kernel_reflection = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
-                                    .instantiate(output_type_name,  // list of template arguments
-                                                 cudf::type_to_name(lhs.type()),
-                                                 cudf::type_to_name(rhs.type()),
-                                                 std::string("cudf::binops::jit::UserDefinedOp"));
+  auto kernel_reflection = rtcx::reflect_template("cudf::binops::jit::binaryop_kernel",
+                                                  output_type_name,
+                                                  cudf::type_to_name(lhs.type()),
+                                                  cudf::type_to_name(rhs.type()),
+                                                  "cudf::binops::jit::UserDefinedOp");
 
-  cudf::jit::get_udf_kernel(*binaryop_jit_kernel_cu_jit, kernel_reflection, cuda_source)
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())
-    ->launch(out.size(),
-             cudf::jit::get_data_ptr(out),
-             cudf::jit::get_data_ptr(lhs),
-             cudf::jit::get_data_ptr(rhs));
+  auto kernel = cudf::jit::get_udf_kernel("binaryop/jit/kernel.cu", kernel_reflection, cuda_source);
+
+  auto size_arg = static_cast<size_type>(out.size());
+  auto out_arg  = cudf::jit::get_data_ptr(out);
+  auto lhs_arg  = cudf::jit::get_data_ptr(lhs);
+  auto rhs_arg  = cudf::jit::get_data_ptr(rhs);
+
+  void* args[] = {&size_arg, &out_arg, &lhs_arg, &rhs_arg};  // NOLINT(modernize-avoid-c-arrays)
+
+  auto cfg = kernel.max_occupancy_config(0, 0);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 }  // namespace jit
 
