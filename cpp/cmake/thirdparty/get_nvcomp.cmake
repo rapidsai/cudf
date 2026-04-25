@@ -60,14 +60,9 @@ function(find_and_configure_nvcomp)
     message(FATAL_ERROR "No nvcomp binary available for ${CMAKE_SYSTEM_PROCESSOR}")
   endif()
 
-  # Determine CUDA version mapping
+  # Determine CUDA version for download URL
   find_package(CUDAToolkit REQUIRED)
   set(cuda_version_mapping "${CUDAToolkit_VERSION_MAJOR}")
-  if(CUDAToolkit_VERSION_MAJOR STREQUAL "12")
-    set(cuda_version_mapping "12")
-  elseif(CUDAToolkit_VERSION_MAJOR STREQUAL "13")
-    set(cuda_version_mapping "13")
-  endif()
 
   # Evaluate URL template
   cmake_language(EVAL CODE "set(nvcomp_url ${nvcomp_url})")
