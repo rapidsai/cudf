@@ -112,18 +112,16 @@ function(find_and_configure_nvcomp)
   endif()
   list(APPEND CMAKE_PREFIX_PATH "${nvcomp_ROOT}/${lib_dir}/cmake/nvcomp")
 
-  # --- 4. Find the downloaded binary + FATAL_ERROR if not found ---
+  # --- 4. Find the downloaded binary ---
   include("${rapids-cmake-dir}/find/package.cmake")
   rapids_find_package(
     nvcomp ${version}
     GLOBAL_TARGETS nvcomp::nvcomp
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
+    FIND_ARGS
+    REQUIRED
   )
-
-  if(NOT nvcomp_FOUND)
-    message(FATAL_ERROR "nvcomp ${version} not found. nvcomp cannot be built from source.")
-  endif()
 
   # --- 5. Target aliases ---
   foreach(name IN ITEMS nvcomp nvcomp_cpu nvcomp_cpu_static nvcomp_static)
