@@ -17,7 +17,7 @@ function(find_and_configure_nvcomp)
   set(one_value VERSION)
   cmake_parse_arguments(_NVCOMP "${options}" "${one_value}" "" ${ARGN})
 
-  # --- 2. Local search (skip if DOWNLOAD_ONLY) ---
+  # If DOWNLOAD_ONLY is not set, try searching for an existing installation first
   if(NOT _NVCOMP_DOWNLOAD_ONLY)
     include("${rapids-cmake-dir}/find/package.cmake")
     rapids_find_package(
@@ -33,34 +33,33 @@ function(find_and_configure_nvcomp)
     endif()
   endif()
 
-  # --- 3. Proprietary binary download ---
+  # Find and download the platform-specific proprietary binary
   include("${rapids-cmake-dir}/cmake/install_lib_dir.cmake")
   rapids_cmake_install_lib_dir(lib_dir)
-
-  # Determine CUDA major version for download URL
   find_package(CUDAToolkit REQUIRED)
-  set(cuda_version_mapping "${CUDAToolkit_VERSION_MAJOR}")
 
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     set(nvcomp_url
-        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-x86_64/nvcomp-linux-x86_64-${_NVCOMP_VERSION}_cuda${cuda_version_mapping}-archive.tar.xz"
+        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-x86_64/nvcomp-linux-x86_64-${_NVCOMP_VERSION}_cuda${CUDAToolkit_VERSION_MAJOR}-archive.tar.xz"
     )
   elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     set(nvcomp_url
-        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-sbsa/nvcomp-linux-sbsa-${_NVCOMP_VERSION}_cuda${cuda_version_mapping}-archive.tar.xz"
+        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-sbsa/nvcomp-linux-sbsa-${_NVCOMP_VERSION}_cuda${CUDAToolkit_VERSION_MAJOR}-archive.tar.xz"
     )
   else()
     message(FATAL_ERROR "No nvcomp binary available for ${CMAKE_SYSTEM_PROCESSOR}")
   endif()
 
-  # Download proprietary binary
   include(FetchContent)
   set(pkg_name "nvcomp_proprietary_binary")
   FetchContent_Declare(${pkg_name} URL ${nvcomp_url})
   FetchContent_MakeAvailable(${pkg_name})
   set(nvcomp_ROOT "${nvcomp_proprietary_binary_SOURCE_DIR}")
 
-  # Normalize lib64 layout if needed
+  # The downloaded nvcomp binary always uses `lib`, but some platforms use `lib64` for 64-bit
+  # libraries. If the platform's lib directory is `lib64`, move the contents of the downloaded `lib`
+  # directory to a new `lib64` directory and update the CMake config files to point to the new
+  # location.
   if(NOT EXISTS "${nvcomp_ROOT}/${lib_dir}/cmake/nvcomp/nvcomp-config.cmake")
     include(GNUInstallDirs)
     cmake_path(GET lib_dir PARENT_PATH lib_dir_parent)
@@ -96,7 +95,8 @@ function(find_and_configure_nvcomp)
     file(RENAME "${nvcomp_ROOT}/include/" "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/")
   endif()
 
-  # --- 4. Find the downloaded binary ---
+  # Now that the downloaded binary is configured correctly, perform a find_package call to generate
+  # the necessary targets
   include("${rapids-cmake-dir}/find/package.cmake")
   rapids_find_package(
     nvcomp ${_NVCOMP_VERSION}
@@ -107,7 +107,6 @@ function(find_and_configure_nvcomp)
     REQUIRED
   )
 
-  # --- 6. Install rules for downloaded binary ---
   include(GNUInstallDirs)
   install(DIRECTORY "${nvcomp_ROOT}/${lib_dir}/" DESTINATION "${lib_dir}")
   install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/"
@@ -129,7 +128,6 @@ function(find_and_configure_nvcomp)
     RENAME NVCOMP_LICENSE
   )
 
-  # --- 7. Export tracking ---
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
   rapids_export_find_package_root(BUILD nvcomp "${nvcomp_ROOT}" EXPORT_SET cudf-exports)
 
