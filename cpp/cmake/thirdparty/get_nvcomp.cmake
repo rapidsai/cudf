@@ -110,15 +110,6 @@ function(find_and_configure_nvcomp)
     # Move the `include` dir if necessary as well
     file(RENAME "${nvcomp_ROOT}/include/" "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/")
   endif()
-
-  # Record the proprietary root dir location
-  set(nvcomp_proprietary_root "${nvcomp_ROOT}")
-  cmake_path(NORMAL_PATH nvcomp_proprietary_root)
-  set(rapids_cpm_nvcomp_proprietary_root
-      "${nvcomp_proprietary_root}"
-      CACHE INTERNAL "nvcomp proprietary root dir location"
-  )
-
   list(APPEND CMAKE_PREFIX_PATH "${nvcomp_ROOT}/${lib_dir}/cmake/nvcomp")
 
   # --- 4. Find the downloaded binary + FATAL_ERROR if not found ---
