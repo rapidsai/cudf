@@ -14,16 +14,14 @@
 # This function finds nvcomp and sets any additional necessary environment variables.
 function(find_and_configure_nvcomp)
   set(options DOWNLOAD_ONLY)
-  cmake_parse_arguments(_NVCOMP "${options}" "" "" ${ARGN})
-
-  # --- 1. Hardcoded version/URL data ---
-  set(version "5.2.0.10")
+  set(one_value VERSION)
+  cmake_parse_arguments(_NVCOMP "${options}" "${one_value}" "" ${ARGN})
 
   # --- 2. Local search (skip if DOWNLOAD_ONLY) ---
   if(NOT _NVCOMP_DOWNLOAD_ONLY)
     include("${rapids-cmake-dir}/find/package.cmake")
     rapids_find_package(
-      nvcomp ${version}
+      nvcomp ${_NVCOMP_VERSION}
       GLOBAL_TARGETS nvcomp::nvcomp
       BUILD_EXPORT_SET cudf-exports
       INSTALL_EXPORT_SET cudf-exports
@@ -45,11 +43,11 @@ function(find_and_configure_nvcomp)
 
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     set(nvcomp_url
-        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-x86_64/nvcomp-linux-x86_64-${version}_cuda${cuda_version_mapping}-archive.tar.xz"
+        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-x86_64/nvcomp-linux-x86_64-${_NVCOMP_VERSION}_cuda${cuda_version_mapping}-archive.tar.xz"
     )
   elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     set(nvcomp_url
-        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-sbsa/nvcomp-linux-sbsa-${version}_cuda${cuda_version_mapping}-archive.tar.xz"
+        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-sbsa/nvcomp-linux-sbsa-${_NVCOMP_VERSION}_cuda${cuda_version_mapping}-archive.tar.xz"
     )
   else()
     message(FATAL_ERROR "No nvcomp binary available for ${CMAKE_SYSTEM_PROCESSOR}")
@@ -101,7 +99,7 @@ function(find_and_configure_nvcomp)
   # --- 4. Find the downloaded binary ---
   include("${rapids-cmake-dir}/find/package.cmake")
   rapids_find_package(
-    nvcomp ${version}
+    nvcomp ${_NVCOMP_VERSION}
     GLOBAL_TARGETS nvcomp::nvcomp
     BUILD_EXPORT_SET cudf-exports
     INSTALL_EXPORT_SET cudf-exports
@@ -137,7 +135,7 @@ function(find_and_configure_nvcomp)
 
 endfunction()
 
-find_and_configure_nvcomp()
+find_and_configure_nvcomp(VERSION 5.2.0.10)
 
 # Per-thread default stream
 if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
