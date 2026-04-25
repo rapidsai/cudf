@@ -110,14 +110,6 @@ function(find_and_configure_nvcomp)
     REQUIRED
   )
 
-  # --- 5. Target aliases ---
-  foreach(name IN ITEMS nvcomp nvcomp_cpu nvcomp_cpu_static nvcomp_static)
-    if(NOT TARGET nvcomp::${name} AND TARGET ${name})
-      message("Got here")
-      add_library(nvcomp::${name} ALIAS ${name})
-    endif()
-  endforeach()
-
   # --- 6. Install rules for downloaded binary ---
   include(GNUInstallDirs)
   install(DIRECTORY "${nvcomp_ROOT}/${lib_dir}/" DESTINATION "${lib_dir}")
