@@ -41,8 +41,6 @@ function(find_and_configure_nvcomp)
   include("${rapids-cmake-dir}/cmake/install_lib_dir.cmake")
   rapids_cmake_install_lib_dir(lib_dir)
 
-  set(nvcomp_proprietary_binary OFF)
-
   # Resolve platform key
   set(platform_key "${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_SYSTEM_NAME}")
   string(TOLOWER "${platform_key}" platform_key)
@@ -73,7 +71,6 @@ function(find_and_configure_nvcomp)
   FetchContent_Declare(${pkg_name} URL ${nvcomp_url})
   FetchContent_MakeAvailable(${pkg_name})
   set(nvcomp_ROOT "${nvcomp_proprietary_binary_SOURCE_DIR}")
-  set(nvcomp_proprietary_binary ON)
 
   # Normalize lib64 layout if needed
   if(NOT EXISTS "${nvcomp_ROOT}/${lib_dir}/cmake/nvcomp/nvcomp-config.cmake")
@@ -135,43 +132,32 @@ function(find_and_configure_nvcomp)
       ${version}
       PARENT_SCOPE
   )
-  set(nvcomp_proprietary_binary
-      ${nvcomp_proprietary_binary}
-      PARENT_SCOPE
-  )
 
-  # --- 7. Install rules (if to_install AND nvcomp_proprietary_binary) ---
-  set(to_install ON)
-  if(to_install AND nvcomp_proprietary_binary)
-    include(GNUInstallDirs)
-    install(DIRECTORY "${nvcomp_ROOT}/${lib_dir}/" DESTINATION "${lib_dir}")
-    install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    )
-    if(EXISTS "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}")
-      install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}/"
-              DESTINATION "${CMAKE_INSTALL_BINDIR}"
-      )
-    endif()
-    install(
-      FILES "${nvcomp_ROOT}/NOTICE"
-      DESTINATION info/
-      RENAME NVCOMP_NOTICE
-    )
-    install(
-      FILES "${nvcomp_ROOT}/LICENSE"
-      DESTINATION info/
-      RENAME NVCOMP_LICENSE
+  # --- 7. Install rules for downloaded binary ---
+  include(GNUInstallDirs)
+  install(DIRECTORY "${nvcomp_ROOT}/${lib_dir}/" DESTINATION "${lib_dir}")
+  install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/"
+          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  )
+  if(EXISTS "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}")
+    install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_BINDIR}/"
+            DESTINATION "${CMAKE_INSTALL_BINDIR}"
     )
   endif()
+  install(
+    FILES "${nvcomp_ROOT}/NOTICE"
+    DESTINATION info/
+    RENAME NVCOMP_NOTICE
+  )
+  install(
+    FILES "${nvcomp_ROOT}/LICENSE"
+    DESTINATION info/
+    RENAME NVCOMP_LICENSE
+  )
 
   # --- 8. Export tracking ---
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
-  rapids_export_find_package_root(
-    BUILD nvcomp "${nvcomp_ROOT}"
-    EXPORT_SET cudf-exports
-    CONDITION nvcomp_proprietary_binary
-  )
+  rapids_export_find_package_root(BUILD nvcomp "${nvcomp_ROOT}" EXPORT_SET cudf-exports)
 
 endfunction()
 
