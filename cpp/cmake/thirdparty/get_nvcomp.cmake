@@ -45,25 +45,22 @@ function(find_and_configure_nvcomp)
   set(platform_key "${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_SYSTEM_NAME}")
   string(TOLOWER "${platform_key}" platform_key)
 
-  # Look up URL for this platform
-  if(platform_key STREQUAL "x86_64-linux")
-    set(nvcomp_url
-        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-x86_64/nvcomp-linux-x86_64-\${version}_cuda\${cuda_version_mapping}-archive.tar.xz"
-    )
-  elseif(platform_key STREQUAL "aarch64-linux")
-    set(nvcomp_url
-        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-sbsa/nvcomp-linux-sbsa-\${version}_cuda\${cuda_version_mapping}-archive.tar.xz"
-    )
-  else()
-    message(FATAL_ERROR "No nvcomp binary available for ${CMAKE_SYSTEM_PROCESSOR}")
-  endif()
-
   # Determine CUDA version for download URL
   find_package(CUDAToolkit REQUIRED)
   set(cuda_version_mapping "${CUDAToolkit_VERSION_MAJOR}")
 
-  # Evaluate URL template
-  cmake_language(EVAL CODE "set(nvcomp_url ${nvcomp_url})")
+  # Look up URL for this platform
+  if(platform_key STREQUAL "x86_64-linux")
+    set(nvcomp_url
+        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-x86_64/nvcomp-linux-x86_64-${version}_cuda${cuda_version_mapping}-archive.tar.xz"
+    )
+  elseif(platform_key STREQUAL "aarch64-linux")
+    set(nvcomp_url
+        "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-sbsa/nvcomp-linux-sbsa-${version}_cuda${cuda_version_mapping}-archive.tar.xz"
+    )
+  else()
+    message(FATAL_ERROR "No nvcomp binary available for ${CMAKE_SYSTEM_PROCESSOR}")
+  endif()
 
   # Download proprietary binary
   include(FetchContent)
