@@ -2468,3 +2468,19 @@ copyreg.dispatch_table[pd.MultiIndex] = lambda obj: _generic_reduce_obj(
 )
 
 copyreg.dispatch_table[pd.DateOffset] = _reduce_offset_obj
+
+
+def _unpickle_NaT():
+    return pd.NaT
+
+
+def _reduce_NaT(obj):
+    # NaT.__reduce__ returns the cyfunction ``_nat_unpickle`` directly,
+    # but cudf.pandas replaces ``pandas._libs.tslibs.nattype._nat_unpickle``
+    # with a function proxy. Pickle's identity check between the cyfunction
+    # and the module-level proxy then raises ``PicklingError``. Round-trip
+    # NaT via our own helper to avoid the lookup.
+    return _unpickle_NaT, ()
+
+
+copyreg.dispatch_table[type(pd.NaT)] = _reduce_NaT
