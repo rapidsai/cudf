@@ -3497,7 +3497,17 @@ def as_column(
                 )
             ):
                 raise MixedTypeError("Cannot create column with mixed types")
-            if inferred_dtype in {"string", "empty"} and dtype is None:
+            if dtype is None and (
+                inferred_dtype in {"string", "empty"}
+                or (
+                    inferred_dtype == "mixed"
+                    and pa.types.is_string(pyarrow_array.type)
+                    and isinstance(arbitrary, (pd.Series, pd.Index))
+                    and not isinstance(
+                        arbitrary, pd.arrays.NumpyExtensionArray
+                    )
+                )
+            ):
                 dtype = arbitrary.dtype
             return as_column(
                 pyarrow_array,

@@ -91,10 +91,16 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
 
+        original_dtype = self.dtype
         self = self.nans_to_nulls().dropna()
 
         if len(self) < 4:
-            return _get_nan_for_dtype(self.dtype)  # type: ignore[return-value]
+            return _get_nan_for_dtype(original_dtype)  # type: ignore[return-value]
+
+        if original_dtype.kind == "f" and original_dtype.itemsize < 8:
+            # Compute in float64 to match pandas precision for narrower
+            # floating point dtypes (e.g. float32).
+            self = self.astype(np.dtype(np.float64))  # type: ignore[assignment]
 
         n = len(self)
         miu = self.mean()
@@ -102,12 +108,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         V = self.var()
 
         if V == 0:
-            return np.float64(0)
+            return np.dtype(original_dtype).type(0)
 
         term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
         term_one_section_two = m4_numerator / (V**2)
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
+        if original_dtype.kind == "f" and original_dtype.itemsize < 8:
+            kurt = np.dtype(original_dtype).type(kurt)
         return kurt
 
     def skew(self, skipna: bool = True) -> ScalarLike:
