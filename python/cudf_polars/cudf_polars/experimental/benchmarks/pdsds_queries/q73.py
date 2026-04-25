@@ -212,7 +212,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ]
             )
             # SQL: ORDER BY cnt DESC, c_last_name ASC
-            .sort(["cnt", "c_last_name"], descending=[True, False])
+            .sort(["cnt", "c_last_name"], descending=[True, False], nulls_last=True)
         ),
         sort_by=[("cnt", True), ("c_last_name", False)],
         limit=None,

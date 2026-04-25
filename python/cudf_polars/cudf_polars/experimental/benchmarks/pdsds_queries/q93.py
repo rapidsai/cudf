@@ -159,10 +159,25 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .with_columns(
             pl.when(pl.col("sr_return_quantity").is_not_null())
             .then(
-                (pl.col("ss_quantity") - pl.col("sr_return_quantity"))
-                * pl.col("ss_sales_price")
+                pl.when(
+                    pl.col("ss_quantity").is_not_null()
+                    & pl.col("sr_return_quantity").is_not_null()
+                    & pl.col("ss_sales_price").is_not_null()
+                )
+                .then(
+                    (pl.col("ss_quantity") - pl.col("sr_return_quantity"))
+                    * pl.col("ss_sales_price")
+                )
+                .otherwise(None)
             )
-            .otherwise(pl.col("ss_quantity") * pl.col("ss_sales_price"))
+            .otherwise(
+                pl.when(
+                    pl.col("ss_quantity").is_not_null()
+                    & pl.col("ss_sales_price").is_not_null()
+                )
+                .then(pl.col("ss_quantity") * pl.col("ss_sales_price"))
+                .otherwise(None)
+            )
             .alias("act_sales")
         )
     )
@@ -171,8 +186,22 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         frame=(
             # SQL: GROUP BY ss_customer_sk
             base.group_by("ss_customer_sk")
-            # SQL: Sum(act_sales) AS sumsales
-            .agg(pl.col("act_sales").sum().alias("sumsales"))
+            # SQL: Sum(act_sales) AS sumsales (null if no non-null values)
+            .agg(
+                [
+                    pl.col("act_sales").count().alias("sumsales_count"),
+                    pl.col("act_sales").sum().alias("sumsales_sum"),
+                ]
+            )
+            .select(
+                [
+                    "ss_customer_sk",
+                    pl.when(pl.col("sumsales_count") == 0)
+                    .then(None)
+                    .otherwise(pl.col("sumsales_sum"))
+                    .alias("sumsales"),
+                ]
+            )
             # SQL: ORDER BY sumsales, ss_customer_sk
             .sort(["sumsales", "ss_customer_sk"], nulls_last=True)
             # SQL: LIMIT 100

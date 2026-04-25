@@ -195,19 +195,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
-    # SQL: correlated subquery — top-5 states by Sum(ss_net_profit) with Rank() OVER (PARTITION BY s_state)
+    # SQL: correlated subquery — RANK() OVER (PARTITION BY s_state) gives rank=1 for every state
+    # (since each state appears once after GROUP BY s_state). The IN-subquery semantically returns
+    # all states that qualify — which, after PARTITION BY s_state, is every state.
+    # Match optimized version: just return distinct states from the filtered base.
     tmp1 = (
-        # SQL: FROM store_sales, store, date_dim WHERE d_month_seq BETWEEN ... GROUP BY s_state HAVING Rank()<=5
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
-        .group_by("s_state")
-        .agg(pl.col("ss_net_profit").sum().alias("total_sum"))
-        .with_columns(
-            pl.col("total_sum").rank(method="min", descending=True).alias("ranking")
-        )
-        .filter(pl.col("ranking") <= 5)
         .select("s_state")
+        .unique()
     )
 
     # SQL: CTE base — FROM store_sales, date_dim, store WHERE d_month_seq BETWEEN {dms} AND {dms}+11 AND s_state IN (top_states)
