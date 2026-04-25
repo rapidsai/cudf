@@ -13,8 +13,6 @@
 
 # This function finds nvcomp and sets any additional necessary environment variables.
 function(find_and_configure_nvcomp)
-  list(APPEND CMAKE_MESSAGE_CONTEXT "cudf.get_nvcomp")
-
   set(options DOWNLOAD_ONLY)
   cmake_parse_arguments(_NVCOMP "${options}" "" "" ${ARGN})
 
@@ -40,6 +38,10 @@ function(find_and_configure_nvcomp)
   # --- 3. Proprietary binary download ---
   include("${rapids-cmake-dir}/cmake/install_lib_dir.cmake")
   rapids_cmake_install_lib_dir(lib_dir)
+
+  # Determine CUDA major version for download URL
+  find_package(CUDAToolkit REQUIRED)
+  set(cuda_version_mapping "${CUDAToolkit_VERSION_MAJOR}")
 
   if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     set(nvcomp_url
@@ -111,17 +113,12 @@ function(find_and_configure_nvcomp)
   # --- 5. Target aliases ---
   foreach(name IN ITEMS nvcomp nvcomp_cpu nvcomp_cpu_static nvcomp_static)
     if(NOT TARGET nvcomp::${name} AND TARGET ${name})
+      message("Got here")
       add_library(nvcomp::${name} ALIAS ${name})
     endif()
   endforeach()
 
-  # --- 6. Propagate parent-scope variables ---
-  set(nvcomp_VERSION
-      ${version}
-      PARENT_SCOPE
-  )
-
-  # --- 7. Install rules for downloaded binary ---
+  # --- 6. Install rules for downloaded binary ---
   include(GNUInstallDirs)
   install(DIRECTORY "${nvcomp_ROOT}/${lib_dir}/" DESTINATION "${lib_dir}")
   install(DIRECTORY "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/"
@@ -143,7 +140,7 @@ function(find_and_configure_nvcomp)
     RENAME NVCOMP_LICENSE
   )
 
-  # --- 8. Export tracking ---
+  # --- 7. Export tracking ---
   include("${rapids-cmake-dir}/export/find_package_root.cmake")
   rapids_export_find_package_root(BUILD nvcomp "${nvcomp_ROOT}" EXPORT_SET cudf-exports)
 
