@@ -234,19 +234,37 @@ class _FrameIndexer:
                     name=idx.name,
                 )
             else:
-                idx_copy = idx._as_int_index()
-                _append_new_row_inplace(idx_copy._column, key_val)
+                int_idx = idx._as_int_index()
+                new_index_col = _append_new_row(int_idx._column, key_val)
+                idx_copy = cudf.Index._from_column(
+                    new_index_col, name=int_idx.name
+                )
         else:
-            idx_copy = idx.copy(deep=True)
-            _append_new_row_inplace(idx_copy._column, key_val)
+            new_index_col = _append_new_row(idx._column, key_val)
+            idx_copy = cudf.Index._from_column(new_index_col, name=idx.name)
 
-        # Append value(s) to column(s)
+        # Append value(s) to column(s) without mutating the existing
+        # column object. Column objects can be shared between Series
+        # and DataFrame views, so in-place mutation would corrupt views.
+        # Bypass ColumnAccessor's length-validation by writing to the
+        # underlying mapping directly; both `nrows` and the cached
+        # `columns` tuple are invalidated so the frame's view of its
+        # columns reflects the new lengths.
+        old_ncols = len(self._frame._data)
         if columns_df is not None:
             for col in columns_df._column_names:
-                _append_new_row_inplace(self._frame._data[col], value)
+                self._frame._data._data[col] = _append_new_row(
+                    self._frame._data[col], value
+                )
         elif column is not None:
-            _append_new_row_inplace(self._frame._column, value)
+            new_col = _append_new_row(self._frame._column, value)
+            self._frame._data._data[self._frame.name] = new_col
 
+        try:
+            del self._frame._data.nrows
+        except AttributeError:
+            pass
+        self._frame._data._clear_cache(old_ncols, len(self._frame._data))
         self._frame._index = idx_copy
 
 
@@ -6987,8 +7005,8 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         return False
 
 
-def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
-    """Append a scalar `value` to the end of `col` inplace.
+def _append_new_row(col: ColumnBase, value: ScalarLike) -> ColumnBase:
+    """Return a new column with a scalar `value` appended to the end of `col`.
     Cast to common type if possible
     """
     val_col = as_column(
@@ -7041,4 +7059,4 @@ def _append_new_row_inplace(col: ColumnBase, value: ScalarLike) -> None:
             "Cannot append mixed types: "
             f"Column dtype {col.dtype} is not compatible with {res_col.dtype}"
         )
-    col._mimic_inplace(res_col, inplace=True)
+    return res_col

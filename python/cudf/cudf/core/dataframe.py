@@ -1015,8 +1015,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             attrs = deepcopy(data.attrs)
             allows_duplicate_labels = data.flags.allows_duplicate_labels
             if isinstance(data, pd.DataFrame):
+                # Pass the Series itself (rather than ``.array``) so that
+                # as_column can preserve the Series' dtype (e.g. object)
+                # instead of re-inferring from the underlying array.
                 cols = {
-                    i: as_column(col_value.array, nan_as_null=nan_as_null)
+                    i: as_column(col_value, nan_as_null=nan_as_null)
                     for i, (_, col_value) in enumerate(data.items())
                 }
                 new_idx = from_pandas(data.index, nan_as_null=nan_as_null)
