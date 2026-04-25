@@ -97,7 +97,6 @@ function(find_and_configure_nvcomp)
     # Move the `include` dir if necessary as well
     file(RENAME "${nvcomp_ROOT}/include/" "${nvcomp_ROOT}/${CMAKE_INSTALL_INCLUDEDIR}/")
   endif()
-  list(APPEND CMAKE_PREFIX_PATH "${nvcomp_ROOT}/${lib_dir}/cmake/nvcomp")
 
   # --- 4. Find the downloaded binary ---
   include("${rapids-cmake-dir}/find/package.cmake")
