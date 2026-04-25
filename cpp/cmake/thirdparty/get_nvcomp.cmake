@@ -41,20 +41,11 @@ function(find_and_configure_nvcomp)
   include("${rapids-cmake-dir}/cmake/install_lib_dir.cmake")
   rapids_cmake_install_lib_dir(lib_dir)
 
-  # Resolve platform key
-  set(platform_key "${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_SYSTEM_NAME}")
-  string(TOLOWER "${platform_key}" platform_key)
-
-  # Determine CUDA version for download URL
-  find_package(CUDAToolkit REQUIRED)
-  set(cuda_version_mapping "${CUDAToolkit_VERSION_MAJOR}")
-
-  # Look up URL for this platform
-  if(platform_key STREQUAL "x86_64-linux")
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     set(nvcomp_url
         "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-x86_64/nvcomp-linux-x86_64-${version}_cuda${cuda_version_mapping}-archive.tar.xz"
     )
-  elseif(platform_key STREQUAL "aarch64-linux")
+  elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     set(nvcomp_url
         "https://developer.download.nvidia.com/compute/nvcomp/redist/nvcomp/linux-sbsa/nvcomp-linux-sbsa-${version}_cuda${cuda_version_mapping}-archive.tar.xz"
     )
