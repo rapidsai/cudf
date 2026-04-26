@@ -7,7 +7,6 @@
 #include <cudf/operators/types.cuh>
 
 namespace CUDF_EXPORT cudf {
-
 namespace ops {
 
 template <typename T>
@@ -20,7 +19,7 @@ __device__ inline errc bit_and(T* out, T const* a, T const* b)
 template <typename T>
 __device__ inline errc bit_and(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     bit_and(&r, &a->value(), &b->value());
     *out = r;
@@ -40,7 +39,7 @@ __device__ inline errc bit_invert(T* out, T const* a)
 template <typename T>
 __device__ inline errc bit_invert(optional<T>* out, optional<T> const* a)
 {
-  if (a->is_valid()) {
+  if (a->has_value()) {
     T r;
     bit_invert(&r, &a->value());
     *out = r;
@@ -60,7 +59,7 @@ __device__ inline errc bit_or(T* out, T const* a, T const* b)
 template <typename T>
 __device__ inline errc bit_or(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     bit_or(&r, &a->value(), &b->value());
     *out = r;
@@ -80,7 +79,7 @@ __device__ inline errc bit_xor(T* out, T const* a, T const* b)
 template <typename T>
 __device__ inline errc bit_xor(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     bit_xor(&r, &a->value(), &b->value());
     *out = r;

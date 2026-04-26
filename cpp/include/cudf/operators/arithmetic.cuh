@@ -27,28 +27,17 @@ __device__ inline errc abs(T* out, T const* a)
 }
 
 template <typename R>
-__device__ inline errc abs(numeric::fixed_point<R, numeric::Radix::BASE_10>* out,
-                           numeric::fixed_point<R, numeric::Radix::BASE_10> const* a)
+__device__ inline errc abs(decimal<R>* out, decimal<R> const* a)
 {
   auto rep = a->value() < 0 ? -a->value() : a->value();
-  *out =
-    numeric::fixed_point<R, numeric::Radix::BASE_10>{numeric::scaled_integer<R>{rep, a->scale()}};
-  return errc::OK;
-}
-
-template <typename R, typename Ratio>
-__device__ inline errc abs(cuda::std::chrono::duration<R, Ratio>* out,
-                           cuda::std::chrono::duration<R, Ratio> const* a)
-{
-  auto rep = a->count() < 0 ? -a->count() : a->count();
-  *out     = cuda::std::chrono::duration<R, Ratio>{rep};
+  *out     = decimal<R>{numeric::scaled_integer<R>{rep, a->scale()}};
   return errc::OK;
 }
 
 template <typename T>
 __device__ inline errc abs(optional<T>* out, optional<T> const* a)
 {
-  if (a->is_valid()) {
+  if (a->has_value()) {
     T r;
     abs(&r, &a->value());
     *out = r;
@@ -68,7 +57,7 @@ __device__ inline errc add(T* out, T const* a, T const* b)
 template <typename T>
 __device__ inline errc add(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     add(&r, &a->value(), &b->value());
     *out = r;
@@ -88,7 +77,7 @@ __device__ inline errc div(T* out, T const* a, T const* b)
 template <typename T>
 __device__ inline errc div(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     div(&r, &a->value(), &b->value());
     *out = r;
@@ -105,15 +94,13 @@ __device__ inline errc mod(T* out, T const* a, T const* b)
   return errc::OK;
 }
 
-template <>
-__device__ inline errc mod<float>(float* out, float const* a, float const* b)
+__device__ inline errc mod(float* out, float const* a, float const* b)
 {
   *out = ::fmodf(*a, *b);
   return errc::OK;
 }
 
-template <>
-__device__ inline errc mod<double>(double* out, double const* a, double const* b)
+__device__ inline errc mod(double* out, double const* a, double const* b)
 {
   *out = ::fmod(*a, *b);
   return errc::OK;
@@ -122,7 +109,7 @@ __device__ inline errc mod<double>(double* out, double const* a, double const* b
 template <typename T>
 __device__ inline errc mod(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     mod(&r, &a->value(), &b->value());
     *out = r;
@@ -142,7 +129,7 @@ __device__ inline errc mul(T* out, T const* a, T const* b)
 template <typename T>
 __device__ inline errc mul(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     mul(&r, &a->value(), &b->value());
     *out = r;
@@ -161,28 +148,17 @@ __device__ inline errc neg(T* out, T const* a)
 }
 
 template <typename Rep>
-__device__ inline errc neg(numeric::fixed_point<Rep, numeric::Radix::BASE_10>* out,
-                           numeric::fixed_point<Rep, numeric::Radix::BASE_10> const* a)
+__device__ inline errc neg(decimal<Rep>* out, decimal<Rep> const* a)
 {
   auto rep = -a->value();
-  *out     = numeric::fixed_point<Rep, numeric::Radix::BASE_10>{
-    numeric::scaled_integer<Rep>{rep, a->scale()}};
-  return errc::OK;
-}
-
-template <typename Rep, typename Ratio>
-__device__ inline errc neg(cuda::std::chrono::duration<Rep, Ratio>* out,
-                           cuda::std::chrono::duration<Rep, Ratio> const* a)
-{
-  auto rep = -a->count();
-  *out     = cuda::std::chrono::duration<Rep, Ratio>{rep};
+  *out     = decimal<Rep>{numeric::scaled_integer<Rep>{rep, a->scale()}};
   return errc::OK;
 }
 
 template <typename T>
 __device__ inline errc neg(optional<T>* out, optional<T> const* a)
 {
-  if (a->is_valid()) {
+  if (a->has_value()) {
     T r;
     neg(&r, &a->value());
     *out = r;
@@ -202,7 +178,7 @@ __device__ inline errc sub(T* out, T const* a, T const* b)
 template <typename T>
 __device__ inline errc sub(optional<T>* out, optional<T> const* a, optional<T> const* b)
 {
-  if (a->is_valid() && b->is_valid()) {
+  if (a->has_value() && b->has_value()) {
     T r;
     sub(&r, &a->value(), &b->value());
     *out = r;
