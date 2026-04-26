@@ -12,6 +12,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
+import zstandard as zstd
 
 import cudf
 from cudf import read_csv
@@ -2080,12 +2081,80 @@ def test_to_csv_encoding_error():
         df.to_csv("test.csv", encoding=encoding)
 
 
-def test_to_csv_compression_error():
+@pytest.mark.parametrize("compression", ["snappy", "gzip", "bz2", "xz"])
+def test_to_csv_unsupported_compression_error(compression):
+    """Test that unsupported compression types raise NotImplementedError."""
     df = cudf.DataFrame({"a": ["test"]})
-    compression = "snappy"
-    error_message = "Writing compressed csv is not currently supported in cudf"
+    error_message = f"Compression {compression} is not supported"
     with pytest.raises(NotImplementedError, match=re.escape(error_message)):
         df.to_csv("test.csv", compression=compression)
+
+
+def test_to_csv_zstd_compression(tmp_path):
+    """Test ZSTD compression for CSV writer.
+
+    ZSTD is the only supported compression type because it allows
+    concatenated frames, enabling progressive compression that's
+    compatible with standard decompression tools (zstd -d).
+    """
+    df = cudf.DataFrame(
+        {
+            "int_col": [1, 2, 3, 4, 5],
+            "str_col": ["a", "b", "c", "d", "e"],
+            "float_col": [1.1, 2.2, 3.3, 4.4, 5.5],
+        }
+    )
+
+    fname = tmp_path / "test_zstd.csv.zst"
+    df.to_csv(fname, index=False, compression="zstd")
+
+    # Verify file exists and is compressed
+    assert fname.exists()
+
+    # Decompress and verify content using zstandard library
+    with open(fname, "rb") as f:
+        dctx = zstd.ZstdDecompressor()
+        decompressed = dctx.decompress(f.read())
+        csv_content = decompressed.decode("utf-8")
+
+    # Parse decompressed CSV and verify content
+    result = cudf.read_csv(StringIO(csv_content))
+    assert_eq(df, result)
+
+
+def test_to_csv_zstd_compression_chunked(tmp_path):
+    """Test ZSTD compression with chunked writing.
+
+    ZSTD supports concatenated frames, meaning each chunk can be
+    compressed independently and the resulting file can be decompressed
+    as a single stream using standard tools. This test verifies that
+    chunked writes work correctly.
+    """
+    # Create a larger DataFrame to test chunking
+    df = cudf.DataFrame(
+        {
+            "int_col": list(range(100)),
+            "str_col": [f"row_{i}" for i in range(100)],
+        }
+    )
+
+    fname = tmp_path / "test_zstd_chunked.csv.zst"
+    # Use small rows_per_chunk to force multiple chunks
+    df.to_csv(fname, index=False, compression="zstd", chunksize=10)
+
+    # Verify file exists
+    assert fname.exists()
+
+    # Decompress using streaming decompressor (handles concatenated frames)
+    with open(fname, "rb") as f:
+        dctx = zstd.ZstdDecompressor()
+        reader = dctx.stream_reader(f)
+        decompressed = reader.read()
+        csv_content = decompressed.decode("utf-8")
+
+    # Parse decompressed CSV and verify content
+    result = cudf.read_csv(StringIO(csv_content))
+    assert_eq(df, result)
 
 
 def test_empty_df_no_index():
