@@ -1055,8 +1055,8 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
                  "Predicate filter should return a boolean");
 
     // Apply the final row mask to get the final output table
-    auto output_table =
-      cudf::detail::apply_boolean_mask(read_table->view(), *final_row_mask, _stream, _mr);
+    auto output_table = cudf::detail::apply_mask(
+      read_table->view(), *final_row_mask, cudf::detail::mask_type::RETENTION, _stream, _mr);
 
     auto const mask_offset = _rows_processed_so_far;
     _rows_processed_so_far += read_table->num_rows();
@@ -1080,8 +1080,8 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
       (read_table->num_rows() == row_mask.size())
         ? row_mask
         : cudf::split(row_mask, {mask_offset, mask_offset + read_table->num_rows()}, _stream)[1];
-    auto output_table =
-      cudf::detail::apply_boolean_mask(read_table->view(), effective_row_mask, _stream, _mr);
+    auto output_table = cudf::detail::apply_mask(
+      read_table->view(), effective_row_mask, cudf::detail::mask_type::RETENTION, _stream, _mr);
     return {std::move(output_table), std::move(out_metadata)};
   }
 }
