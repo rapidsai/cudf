@@ -114,18 +114,18 @@ void initialize(init_flags flags)
   std::call_once(*_context_init_flag, [&]() {
     bool dump_codegen      = get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
     bool use_jit           = get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
-    bool preload_jit_cache = get_bool_env_or("LIBCUDF_JIT_PRELOAD_CACHE", false);
-    bool disable_jit_cache = get_bool_env_or("LIBCUDF_JIT_CACHE_DISABLED", false);
-    bool clear_jit_cache   = get_bool_env_or("LIBCUDF_JIT_CLEAR_CACHE", false);
+    bool preload_jit_cache = get_bool_env_or("LIBCUDF_KERNEL_CACHE_PRELOAD", false);
+    bool disable_jit_cache = get_bool_env_or("LIBCUDF_KERNEL_CACHE_DISABLED", false);
+    bool clear_jit_cache   = get_bool_env_or("LIBCUDF_KERNEL_CACHE_CLEAR", false);
 
     auto kernel_cache_limit_process = getenv_or("LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS", 16'384U);
 
     flags = flags | (use_jit ? init_flags::INIT_JIT_CACHE : init_flags::NONE);
 
-    auto jit_bundle_dir = get_cudf_kernel_cache_dir() / "jit" / "bundle";
-    auto rtcx_cache_dir = get_cudf_kernel_cache_dir() / "jit" / "rtcx_cache";
-    auto jit_pch_dir    = get_cudf_kernel_cache_dir() / "jit" / "pch";
-    auto jit_tmp_dir    = get_cudf_kernel_cache_dir() / "jit" / "tmp";
+    auto jit_bundle_dir = get_cudf_kernel_cache_dir() / "bundle";
+    auto rtcx_cache_dir = get_cudf_kernel_cache_dir() / "rtcx_cache";
+    auto jit_pch_dir    = get_cudf_kernel_cache_dir() / "pch";
+    auto jit_tmp_dir    = get_cudf_kernel_cache_dir() / "tmp";
 
     context_config cfg{.dump_codegen               = dump_codegen,
                        .use_jit                    = use_jit,
