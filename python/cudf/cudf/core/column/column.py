@@ -3362,6 +3362,7 @@ def as_column(
                     # pa.array(arbitrary, from_pandas=True) drops the tz from
                     # the dictionary value type, so build the categorical
                     # column manually so the categories' timezone is preserved.
+                    # pyarrow bug: https://github.com/apache/arrow/issues/49875
                     new_tz = get_compatible_timezone(
                         arbitrary.dtype.categories.dtype
                     )
@@ -3384,7 +3385,7 @@ def as_column(
                             codes_plc, expected_codes_dtype
                         )
                     return ColumnBase.create(codes_plc, cat_dtype)
-                elif dtype is None:
+                if dtype is None:
                     # Going through Arrow below erases pandas extension dtypes
                     # of the categories, if any, so always along pass the exact type
                     dtype = CategoricalDtype(
