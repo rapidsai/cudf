@@ -34,20 +34,20 @@ def _struct(rank: int) -> bytes:
 
 
 @pytest.mark.parametrize("make_data", [_empty, _text, _bytearray, _struct])
-def test_all_gather_host_data(engine, make_data) -> None:
+def test_all_gather_host_data(streaming_engine, make_data) -> None:
     """Each rank sends rank-specific data; results are correct and ordered."""
-    comm = engine.comm
-    br = engine.context.br()
+    comm = streaming_engine.comm
+    br = streaming_engine.context.br()
     result = all_gather_host_data(comm, br, op_id=0, data=make_data(comm.rank))
     assert len(result) == comm.nranks
     for i, item in enumerate(result):
         assert item == bytes(make_data(i))
 
 
-def test_gather_cluster_info(engine) -> None:
+def test_gather_cluster_info(streaming_engine) -> None:
     """SPMDEngine.gather_cluster_info returns ClusterInfo for each rank."""
-    infos = engine.gather_cluster_info()
-    assert len(infos) == engine.nranks
+    infos = streaming_engine.gather_cluster_info()
+    assert len(infos) == streaming_engine.nranks
     for info in infos:
         assert isinstance(info, ClusterInfo)
         assert info.pid > 0
@@ -57,9 +57,9 @@ def test_gather_cluster_info(engine) -> None:
         )
         assert isinstance(info.gpu_uuid, str)
     # Each rank runs in its own process.
-    assert len({info.pid for info in infos}) == engine.nranks
+    assert len({info.pid for info in infos}) == streaming_engine.nranks
     # Without allow_gpu_sharing, all UUIDs must be unique (enforced at init).
-    assert len({info.gpu_uuid for info in infos}) == engine.nranks
+    assert len({info.gpu_uuid for info in infos}) == streaming_engine.nranks
 
 
 def test_cluster_info_cuda_visible_devices(monkeypatch) -> None:
@@ -75,10 +75,10 @@ def test_cluster_info_cuda_visible_devices_unset(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"engine_options": {"allow_gpu_sharing": True}}],
     indirect=True,
 )
-def test_allow_gpu_sharing(engine) -> None:
+def test_allow_gpu_sharing(streaming_engine) -> None:
     """Engine init succeeds with allow_gpu_sharing=True."""
-    assert engine.nranks >= 1
+    assert streaming_engine.nranks >= 1
