@@ -51,5 +51,20 @@ __device__ constexpr T ipow10(T exponent)
 }
 
 }  // namespace detail
+
+template <typename T>
+__device__ inline errc identity(T* out, T const* a)
+{
+  *out = *a;
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc identity(optional<T>* out, optional<T> const* a)
+{
+  *out = *a;
+  return errc::OK;
+}
+
 }  // namespace ops
 }  // namespace CUDF_EXPORT cudf

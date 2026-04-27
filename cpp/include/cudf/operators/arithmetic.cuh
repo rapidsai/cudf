@@ -4,10 +4,10 @@
  */
 #pragma once
 
+#include <cudf/detail/integral_math.cuh>
 #include <cudf/operators/types.cuh>
 
 namespace CUDF_EXPORT cudf {
-
 namespace ops {
 
 template <typename T>
@@ -88,6 +88,39 @@ __device__ inline errc div(optional<T>* out, optional<T> const* a, optional<T> c
 }
 
 template <typename T>
+  requires(cuda::std::is_integral_v<T>)
+__device__ inline errc floor_div(T* out, T const* a, T const* b)
+{
+  *out = cudf::detail::integral_floor_div(*a, *b);
+  return errc::OK;
+}
+
+__device__ inline errc floor_div(float* out, float const* a, float const* b)
+{
+  *out = ::floorf(*a / *b);
+  return errc::OK;
+}
+
+__device__ inline errc floor_div(double* out, double const* a, double const* b)
+{
+  *out = ::floor(*a / *b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc floor_div(optional<T>* out, optional<T> const* a, optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    T r;
+    floor_div(&r, &a->value(), &b->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
 __device__ inline errc mod(T* out, T const* a, T const* b)
 {
   *out = (*a % *b);
@@ -112,6 +145,38 @@ __device__ inline errc mod(optional<T>* out, optional<T> const* a, optional<T> c
   if (a->has_value() && b->has_value()) {
     T r;
     mod(&r, &a->value(), &b->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc pymod(T* out, T const* a, T const* b)
+{
+  *out = (*a % *b + *b) % *b;
+  return errc::OK;
+}
+
+__device__ inline errc pymod(float* out, float const* a, float const* b)
+{
+  *out = ::fmodf(::fmodf(*a, *b) + *b, *b);
+  return errc::OK;
+}
+
+__device__ inline errc pymod(double* out, double const* a, double const* b)
+{
+  *out = ::fmod(::fmod(*a, *b) + *b, *b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc pymod(optional<T>* out, optional<T> const* a, optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    T r;
+    pymod(&r, &a->value(), &b->value());
     *out = r;
   } else {
     *out = nullopt;

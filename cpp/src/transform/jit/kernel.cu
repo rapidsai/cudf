@@ -6,6 +6,15 @@
 #include <cudf/ast/detail/operator_functor.cuh>
 #include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/operators/ansi_arithmetic.cuh>
+#include <cudf/operators/arithmetic.cuh>
+#include <cudf/operators/bitwise.cuh>
+#include <cudf/operators/casts.cuh>
+#include <cudf/operators/comparison.cuh>
+#include <cudf/operators/logic.cuh>
+#include <cudf/operators/math.cuh>
+#include <cudf/operators/null_handling.cuh>
+#include <cudf/operators/trigonometric.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>

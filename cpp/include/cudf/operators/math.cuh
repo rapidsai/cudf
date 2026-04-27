@@ -189,38 +189,6 @@ __device__ inline errc pow(optional<T>* out, optional<T> const* a, optional<T> c
   return errc::OK;
 }
 
-template <typename T>
-__device__ inline errc pymod(T* out, T const* a, T const* b)
-{
-  *out = (*a % *b + *b) % *b;
-  return errc::OK;
-}
-
-__device__ inline errc pymod(float* out, float const* a, float const* b)
-{
-  *out = ::fmodf(::fmodf(*a, *b) + *b, *b);
-  return errc::OK;
-}
-
-__device__ inline errc pymod(double* out, double const* a, double const* b)
-{
-  *out = ::fmod(::fmod(*a, *b) + *b, *b);
-  return errc::OK;
-}
-
-template <typename T>
-__device__ inline errc pymod(optional<T>* out, optional<T> const* a, optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    T r;
-    pymod(&r, &a->value(), &b->value());
-    *out = r;
-  } else {
-    *out = nullopt;
-  }
-  return errc::OK;
-}
-
 __device__ inline errc rint(float* out, float const* a)
 {
   *out = ::rintf(*a);

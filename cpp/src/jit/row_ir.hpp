@@ -117,7 +117,13 @@ struct [[nodiscard]] instance_context {
 };
 
 struct [[nodiscard]] code_sink {
-  void emit(std::string_view code);
+ private:
+  std::string code_;
+
+ public:
+  void emit(std::string_view code) { code_ += code; }
+
+  [[nodiscard]] std::string_view get_code() const { return code_; }
 };
 
 struct [[nodiscard]] input_reference {
@@ -346,14 +352,13 @@ struct [[nodiscard]] ast_converter {
   friend class ast::literal;
   friend class ast::column_reference;
   friend class ast::operation;
-  friend class ast::column_name_reference; 
+  friend class ast::column_name_reference;
 
   row_ir::node add_ir_node(ast::literal const& expr);
 
   row_ir::node add_ir_node(ast::column_reference const& expr);
 
   row_ir::node add_ir_node(ast::operation const& expr);
-
 
   [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
 
@@ -368,7 +373,7 @@ struct [[nodiscard]] ast_converter {
 
   void add_output_var();
 
-  [[nodiscard]] std::tuple<null_aware, output_nullability> generate_code(
+  [[nodiscard]] std::tuple<null_aware, output_nullability, bool> generate_code(
     target target, ast::expression const& expr, ast_args const& args);
 
  public:

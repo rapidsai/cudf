@@ -8,7 +8,6 @@
 #include <cudf/operators/types.cuh>
 
 namespace CUDF_EXPORT cudf {
-
 namespace ops {
 namespace detail {
 

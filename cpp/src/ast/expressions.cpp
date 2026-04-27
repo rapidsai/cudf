@@ -79,7 +79,6 @@ bool operation::may_evaluate_null(table_view const& left,
                        return subexpr.get().may_evaluate_null(left, right, stream);
                      });
 };
- 
 
 auto column_name_reference::accept(detail::expression_transformer& visitor) const
   -> decltype(visitor.visit(*this))
@@ -87,32 +86,28 @@ auto column_name_reference::accept(detail::expression_transformer& visitor) cons
   return visitor.visit(*this);
 }
 
-std::unique_ptr<cudf::detail::row_ir::node> literal::accept(
+cudf::detail::row_ir::node literal::accept(cudf::detail::row_ir::ast_converter& converter) const
+{
+  return converter.add_ir_node(*this);
+}
+
+cudf::detail::row_ir::node column_reference::accept(
   cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);
 }
 
-std::unique_ptr<cudf::detail::row_ir::node> column_reference::accept(
-  cudf::detail::row_ir::ast_converter& converter) const
+cudf::detail::row_ir::node operation::accept(cudf::detail::row_ir::ast_converter& converter) const
 {
   return converter.add_ir_node(*this);
 }
 
-std::unique_ptr<cudf::detail::row_ir::node> operation::accept(
-  cudf::detail::row_ir::ast_converter& converter) const
-{
-  return converter.add_ir_node(*this);
-}
-
-std::unique_ptr<cudf::detail::row_ir::node> column_name_reference::accept(
-  cudf::detail::row_ir::ast_converter&) const
+cudf::detail::row_ir::node column_name_reference::accept(cudf::detail::row_ir::ast_converter&) const
 {
   CUDF_FAIL(
     "column_name_reference is not supported in row_ir. row_ir only supports resolved expressions",
     std::invalid_argument);
 }
- 
 
 }  // namespace ast
 }  // namespace cudf

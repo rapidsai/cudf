@@ -32,6 +32,28 @@ __device__ inline errc equal(optional<bool>* out, optional<T> const* a, optional
 }
 
 template <typename T>
+__device__ inline errc not_equal(bool* out, T const* a, T const* b)
+{
+  *out = (*a != *b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc not_equal(optional<bool>* out, optional<T> const* a, optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    bool r;
+    not_equal(&r, &a->value(), &b->value());
+    *out = r;
+  } else if (!a->has_value() && !b->has_value()) {
+    *out = false;
+  } else {
+    *out = true;
+  }
+  return errc::OK;
+}
+
+template <typename T>
 __device__ inline errc greater(bool* out, T const* a, T const* b)
 {
   *out = (*a > *b);
@@ -129,60 +151,6 @@ __device__ inline errc null_equal(optional<bool>* out, optional<T> const* a, opt
     *out = true;
   } else {
     *out = false;
-  }
-  return errc::OK;
-}
-
-template <typename T>
-__device__ inline errc null_logical_and(T* out, T const* a, T const* b)
-{
-  *out = (*a && *b);
-  return errc::OK;
-}
-
-template <typename T>
-__device__ inline errc null_logical_and(optional<T>* out,
-                                        optional<T> const* a,
-                                        optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    null_logical_and(&r, &a->value(), &b->value());
-    *out = r;
-  } else if (!a->has_value() && !b->has_value()) {
-    *out = nullopt;
-  } else {
-    if (a->has_value() ? *(*a) : *(*b)) {
-      *out = nullopt;
-    } else {
-      *out = false;
-    }
-  }
-  return errc::OK;
-}
-
-template <typename T>
-__device__ inline errc null_logical_or(T* out, T const* a, T const* b)
-{
-  *out = (*a || *b);
-  return errc::OK;
-}
-
-template <typename T>
-__device__ inline errc null_logical_or(optional<T>* out, optional<T> const* a, optional<T> const* b)
-{
-  if (a->has_value() && b->has_value()) {
-    bool r;
-    null_logical_or(&r, &a->value(), &b->value());
-    *out = r;
-  } else if (!a->has_value() && !b->has_value()) {
-    *out = nullopt;
-  } else {
-    if (a->has_value() ? *(*a) : *(*b)) {
-      *out = true;
-    } else {
-      *out = nullopt;
-    }
   }
   return errc::OK;
 }

@@ -6,9 +6,11 @@
 #pragma once
 #include <cudf/operators/opcodes.hpp>
 
+#include <array>
+
 namespace cudf::detail::row_ir {
 
-enum typing : uint64_t {
+enum [[nodiscard]] typing : uint64_t {
   NONE                   = 0x0,
   BOOL8                  = 0x1,
   INT8                   = 0x2,
@@ -43,40 +45,44 @@ enum typing : uint64_t {
   ARITHMETIC             = SIGNED_INTEGERS | UNSIGNED_INTEGERS | FLOATS | DECIMALS,
   SIGNED_ARITHMETIC      = SIGNED_INTEGERS | FLOATS | DECIMALS,
   ALL                    = 0x0FFFFFFF,
+  ARG_MASK               = 0x10000000,
   ARG0                   = 0x10000000,
   ARG1                   = 0x10000001,
   ARG2                   = 0x10000002,
+  ARG3                   = 0x10000003,
   INPUT                  = 0x20000000,
 };
 
-struct op_typing {
-  typing output = typing::NONE;
-  typing arg0   = typing::NONE;
-  typing arg1   = typing::NONE;
-  typing arg2   = typing::NONE;
+struct [[nodiscard]] op_typing {
+  typing output              = typing::NONE;
+  std::array<typing, 3> args = {typing::NONE, typing::NONE, typing::NONE};
 };
 
 /**
  * @brief Indicates how an operator propagates null values
  */
-enum class null_output : uint8_t {
+enum class [[nodiscard]] null_output : uint8_t {
   PROPAGATE       = 0,
   ALWAYS_VALID    = 1,
   ALWAYS_NULLABLE = 2,
 };
 
-inline std::string_view get_op_name(opcode op)
+[[nodiscard]] inline std::string_view get_op_name(opcode op)
 {
   switch (op) {
     case opcode::GET_INPUT: return "get_input";
     case opcode::SET_OUTPUT: return "set_output";
+    case opcode::IDENTITY: return "identity";
     case opcode::IS_NULL: return "is_null";
     case opcode::NULLIFY_IF: return "nullify_if";
     case opcode::COALESCE: return "coalesce";
+    case opcode::REPLACE_NULLS: return "replace_nulls";
     case opcode::ABS: return "abs";
     case opcode::ADD: return "add";
     case opcode::DIV: return "div";
+    case opcode::FLOOR_DIV: return "floor_div";
     case opcode::MOD: return "mod";
+    case opcode::PYMOD: return "pymod";
     case opcode::MUL: return "mul";
     case opcode::NEG: return "neg";
     case opcode::SUB: return "sub";
@@ -110,6 +116,7 @@ inline std::string_view get_op_name(opcode op)
     case opcode::CAST_TO_DEC64: return "cast_to_dec64";
     case opcode::CAST_TO_DEC128: return "cast_to_dec128";
     case opcode::EQUAL: return "equal";
+    case opcode::NOT_EQUAL: return "not_equal";
     case opcode::GREATER: return "greater";
     case opcode::GREATER_EQUAL: return "greater_equal";
     case opcode::LESS: return "less";
@@ -117,11 +124,14 @@ inline std::string_view get_op_name(opcode op)
     case opcode::NULL_EQUAL: return "null_equal";
     case opcode::NULL_LOGICAL_AND: return "null_logical_and";
     case opcode::NULL_LOGICAL_OR: return "null_logical_or";
+    case opcode::LOGICAL_AND: return "logical_and";
+    case opcode::LOGICAL_OR: return "logical_or";
     case opcode::LOGICAL_NOT: return "logical_not";
     case opcode::IF_ELSE: return "if_else";
     case opcode::CBRT: return "cbrt";
     case opcode::CEIL: return "ceil";
     case opcode::FLOOR: return "floor";
+    case opcode::RINT: return "rint";
     case opcode::SQRT: return "sqrt";
     case opcode::POW: return "pow";
     case opcode::EXP: return "exp";
@@ -138,22 +148,29 @@ inline std::string_view get_op_name(opcode op)
     case opcode::SINH: return "sinh";
     case opcode::TAN: return "tan";
     case opcode::TANH: return "tanh";
+    default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
 
-inline null_output get_op_null_output(opcode op)
+[[nodiscard]] inline null_output get_op_null_output(opcode op)
 {
   switch (op) {
     case opcode::IS_NULL:
-    case opcode::NULL_EQUAL: return null_output::ALWAYS_VALID;
+    case opcode::NULL_EQUAL:
+    case opcode::REPLACE_NULLS: return null_output::ALWAYS_VALID;
 
     case opcode::GET_INPUT:
     case opcode::SET_OUTPUT:
+    case opcode::IDENTITY:
     case opcode::LOGICAL_NOT:
+    case opcode::LOGICAL_AND:
+    case opcode::LOGICAL_OR:
     case opcode::ABS:
     case opcode::ADD:
     case opcode::DIV:
+    case opcode::FLOOR_DIV:
     case opcode::MOD:
+    case opcode::PYMOD:
     case opcode::MUL:
     case opcode::NEG:
     case opcode::SUB:
@@ -169,6 +186,7 @@ inline null_output get_op_null_output(opcode op)
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
+    case opcode::RINT:
     case opcode::SQRT:
     case opcode::POW:
     case opcode::EXP:
@@ -198,6 +216,7 @@ inline null_output get_op_null_output(opcode op)
     case opcode::CAST_TO_DEC64:
     case opcode::CAST_TO_DEC128:
     case opcode::EQUAL:
+    case opcode::NOT_EQUAL:
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
@@ -216,6 +235,8 @@ inline null_output get_op_null_output(opcode op)
     case opcode::ANSI_TRY_PRECISION_CAST:
     case opcode::NULL_LOGICAL_AND:
     case opcode::NULL_LOGICAL_OR: return null_output::ALWAYS_NULLABLE;
+
+    default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
 
@@ -223,16 +244,19 @@ inline null_output get_op_null_output(opcode op)
  * @brief Indicates whether the output of the operator will be different when it is called with or
  * without the null-ness of a value.
  */
-inline bool get_op_requires_nulls(opcode op)
+[[nodiscard]] inline bool get_op_requires_nulls(opcode op)
 {
   switch (op) {
     case opcode::GET_INPUT:
     case opcode::SET_OUTPUT:
     case opcode::NULLIFY_IF:
+    case opcode::IDENTITY:
     case opcode::ABS:
     case opcode::ADD:
     case opcode::DIV:
+    case opcode::FLOOR_DIV:
     case opcode::MOD:
+    case opcode::PYMOD:
     case opcode::MUL:
     case opcode::NEG:
     case opcode::SUB:
@@ -266,15 +290,19 @@ inline bool get_op_requires_nulls(opcode op)
     case opcode::CAST_TO_DEC64:
     case opcode::CAST_TO_DEC128:
     case opcode::EQUAL:
+    case opcode::NOT_EQUAL:
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
     case opcode::LESS_EQUAL:
     case opcode::LOGICAL_NOT:
+    case opcode::LOGICAL_AND:
+    case opcode::LOGICAL_OR:
     case opcode::IF_ELSE:
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
+    case opcode::RINT:
     case opcode::SQRT:
     case opcode::POW:
     case opcode::EXP:
@@ -296,11 +324,14 @@ inline bool get_op_requires_nulls(opcode op)
     case opcode::IS_NULL:
     case opcode::NULL_EQUAL:
     case opcode::NULL_LOGICAL_AND:
-    case opcode::NULL_LOGICAL_OR: return true;
+    case opcode::NULL_LOGICAL_OR:
+    case opcode::REPLACE_NULLS: return true;
+
+    default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
 
-inline bool get_op_is_fallible(opcode op)
+[[nodiscard]] inline bool get_op_is_fallible(opcode op)
 {
   switch (op) {
     case opcode::ANSI_ADD:
@@ -315,12 +346,16 @@ inline bool get_op_is_fallible(opcode op)
     case opcode::GET_INPUT:
     case opcode::SET_OUTPUT:
     case opcode::IS_NULL:
+    case opcode::IDENTITY:
     case opcode::NULLIFY_IF:
     case opcode::COALESCE:
+    case opcode::REPLACE_NULLS:
     case opcode::ABS:
     case opcode::ADD:
     case opcode::DIV:
+    case opcode::FLOOR_DIV:
     case opcode::MOD:
+    case opcode::PYMOD:
     case opcode::MUL:
     case opcode::NEG:
     case opcode::SUB:
@@ -346,6 +381,7 @@ inline bool get_op_is_fallible(opcode op)
     case opcode::CAST_TO_DEC64:
     case opcode::CAST_TO_DEC128:
     case opcode::EQUAL:
+    case opcode::NOT_EQUAL:
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
@@ -353,11 +389,14 @@ inline bool get_op_is_fallible(opcode op)
     case opcode::NULL_EQUAL:
     case opcode::NULL_LOGICAL_AND:
     case opcode::NULL_LOGICAL_OR:
+    case opcode::LOGICAL_AND:
+    case opcode::LOGICAL_OR:
     case opcode::LOGICAL_NOT:
     case opcode::IF_ELSE:
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
+    case opcode::RINT:
     case opcode::SQRT:
     case opcode::POW:
     case opcode::EXP:
@@ -374,10 +413,12 @@ inline bool get_op_is_fallible(opcode op)
     case opcode::SINH:
     case opcode::TAN:
     case opcode::TANH: return false;
+
+    default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
 
-inline constexpr int32_t get_op_arity(opcode op)
+[[nodiscard]] inline constexpr int32_t get_op_arity(opcode op)
 {
   switch (op) {
     case opcode::GET_INPUT: return 0;
@@ -385,6 +426,7 @@ inline constexpr int32_t get_op_arity(opcode op)
     case opcode::SET_OUTPUT:
     case opcode::IS_NULL:
     case opcode::NULLIFY_IF:
+    case opcode::IDENTITY:
     case opcode::ABS:
     case opcode::NEG:
     case opcode::ANSI_ABS:
@@ -405,6 +447,7 @@ inline constexpr int32_t get_op_arity(opcode op)
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
+    case opcode::RINT:
     case opcode::SQRT:
     case opcode::EXP:
     case opcode::LOG:
@@ -422,9 +465,12 @@ inline constexpr int32_t get_op_arity(opcode op)
     case opcode::TANH: return 1;
 
     case opcode::COALESCE:
+    case opcode::REPLACE_NULLS:
     case opcode::ADD:
     case opcode::DIV:
+    case opcode::FLOOR_DIV:
     case opcode::MOD:
+    case opcode::PYMOD:
     case opcode::MUL:
     case opcode::SUB:
     case opcode::ANSI_ADD:
@@ -443,6 +489,7 @@ inline constexpr int32_t get_op_arity(opcode op)
     case opcode::BIT_OR:
     case opcode::BIT_XOR:
     case opcode::EQUAL:
+    case opcode::NOT_EQUAL:
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
@@ -450,9 +497,13 @@ inline constexpr int32_t get_op_arity(opcode op)
     case opcode::NULL_EQUAL:
     case opcode::NULL_LOGICAL_OR:
     case opcode::NULL_LOGICAL_AND:
+    case opcode::LOGICAL_AND:
+    case opcode::LOGICAL_OR:
     case opcode::POW: return 2;
 
     case opcode::IF_ELSE: return 3;
+
+    default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
 
@@ -464,29 +515,28 @@ inline constexpr int32_t get_op_arity(opcode op)
  * @return An `op_typing` struct containing the expected output type and input types for the
  * operator
  */
-inline op_typing get_op_typing(opcode op)
+[[nodiscard]] inline op_typing get_op_typing(opcode op)
 {
   switch (op) {
-    case opcode::GET_INPUT: return {typing::INPUT, typing::NONE, typing::NONE, typing::NONE};
-
-    case opcode::SET_OUTPUT: return {typing::NONE, typing::ALL, typing::NONE, typing::NONE};
-
-    case opcode::IS_NULL: return {typing::ARG0, typing::ALL, typing::NONE, typing::NONE};
-
-    case opcode::NULLIFY_IF: return {typing::ARG1, typing::BOOL8, typing::ALL, typing::NONE};
-    case opcode::COALESCE: return {typing::ARG0, typing::ALL, typing::ARG0, typing::NONE};
-
+    case opcode::GET_INPUT: return {typing::INPUT, {}};
+    case opcode::SET_OUTPUT: return {typing::NONE, {typing::ALL}};
+    case opcode::IDENTITY: return {typing::ARG0, {typing::ALL}};
+    case opcode::IS_NULL: return {typing::BOOL8, {typing::ALL}};
+    case opcode::NULLIFY_IF: return {typing::ARG1, {typing::BOOL8, typing::ALL}};
+    case opcode::COALESCE: return {typing::ARG0, {typing::ALL, typing::ARG0}};
+    case opcode::REPLACE_NULLS: return {typing::ARG0, {typing::ALL, typing::ARG0}};
     case opcode::ABS:
     case opcode::NEG:
     case opcode::ANSI_ABS:
     case opcode::ANSI_NEG:
     case opcode::ANSI_TRY_NEG:
-    case opcode::ANSI_TRY_ABS:
-      return {typing::ARG0, typing::ARITHMETIC, typing::NONE, typing::NONE};
-
+    case opcode::ANSI_TRY_ABS: return {typing::ARG0, {typing::ARITHMETIC}};
+    case opcode::FLOOR_DIV:
+      return {typing::ARG0, {typing{typing::FLOATS | typing::INTEGERS}, typing::ARG0}};
     case opcode::ADD:
     case opcode::DIV:
     case opcode::MOD:
+    case opcode::PYMOD:
     case opcode::MUL:
     case opcode::SUB:
     case opcode::ANSI_ADD:
@@ -498,48 +548,39 @@ inline op_typing get_op_typing(opcode op)
     case opcode::ANSI_TRY_SUB:
     case opcode::ANSI_TRY_MUL:
     case opcode::ANSI_TRY_DIV:
-    case opcode::ANSI_TRY_MOD:
-      return {typing::ARG0, typing::ARITHMETIC, typing::ARG0, typing::NONE};
-
+    case opcode::ANSI_TRY_MOD: return {typing::ARG0, {typing::ARITHMETIC, typing::ARG0}};
     case opcode::ANSI_PRECISION_CAST:
-    case opcode::ANSI_TRY_PRECISION_CAST:
-      return {typing::ARG0, typing::DECIMALS, typing::INT32, typing::NONE};
-
+    case opcode::ANSI_TRY_PRECISION_CAST: return {typing::ARG0, {typing::DECIMALS, typing::INT32}};
     case opcode::BIT_AND:
     case opcode::BIT_INVERT:
     case opcode::BIT_OR:
-    case opcode::BIT_XOR: return {typing::ARG0, typing::INTEGERS, typing::ARG0, typing::NONE};
-
+    case opcode::BIT_XOR: return {typing::ARG0, {typing::INTEGERS, typing::ARG0}};
     case opcode::CAST_TO_I32:
     case opcode::CAST_TO_I64:
     case opcode::CAST_TO_U32:
     case opcode::CAST_TO_U64:
     case opcode::CAST_TO_F32:
-    case opcode::CAST_TO_F64:
-      return {typing::ARG0, typing{typing::INTEGERS | typing::FLOATS}, typing::NONE, typing::NONE};
-
+    case opcode::CAST_TO_F64: return {typing::ARG0, {typing{typing::INTEGERS | typing::FLOATS}}};
     case opcode::CAST_TO_DEC32:
     case opcode::CAST_TO_DEC64:
-    case opcode::CAST_TO_DEC128:
-      return {typing::ARG0, typing::DECIMALS, typing::NONE, typing::NONE};
-
+    case opcode::CAST_TO_DEC128: return {typing::ARG0, {typing::DECIMALS}};
     case opcode::EQUAL:
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
-    case opcode::LESS_EQUAL: return {typing::BOOL8, typing::ALL, typing::ARG0, typing::NONE};
-
-    case opcode::NULL_EQUAL:
+    case opcode::LESS_EQUAL: return {typing::BOOL8, {typing::ALL, typing::ARG0}};
+    case opcode::NOT_EQUAL:
+    case opcode::NULL_EQUAL: return {typing::BOOL8, {typing::ALL, typing::ARG0}};
     case opcode::NULL_LOGICAL_AND:
-    case opcode::NULL_LOGICAL_OR: return {typing::BOOL8, typing::BOOL8, typing::ARG0, typing::NONE};
-
-    case opcode::LOGICAL_NOT: return {typing::ARG0, typing::BOOL8, typing::NONE, typing::NONE};
-
-    case opcode::IF_ELSE: return {typing::ARG1, typing::BOOL8, typing::ALL, typing::ARG0};
-
+    case opcode::NULL_LOGICAL_OR:
+    case opcode::LOGICAL_AND:
+    case opcode::LOGICAL_OR: return {typing::BOOL8, {typing::BOOL8, typing::ARG0}};
+    case opcode::LOGICAL_NOT: return {typing::ARG0, {typing::BOOL8}};
+    case opcode::IF_ELSE: return {typing::ARG1, {typing::BOOL8, typing::ALL, typing::ARG0}};
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
+    case opcode::RINT:
     case opcode::SQRT:
     case opcode::POW:
     case opcode::EXP:
@@ -555,7 +596,8 @@ inline op_typing get_op_typing(opcode op)
     case opcode::SIN:
     case opcode::SINH:
     case opcode::TAN:
-    case opcode::TANH: return {typing::ARG0, typing::FLOATS, typing::NONE, typing::NONE};
+    case opcode::TANH: return {typing::ARG0, {typing::FLOATS}};
+    default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
 

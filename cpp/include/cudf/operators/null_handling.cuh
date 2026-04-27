@@ -6,8 +6,6 @@
 #pragma once
 #include <cudf/operators/types.cuh>
 
-#include <format>
-
 namespace CUDF_EXPORT cudf {
 namespace ops {
 
@@ -58,6 +56,24 @@ __device__ inline errc coalesce(optional<T>* out, optional<T> const* a, optional
     *out = b->value();
   } else {
     *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc replace_nulls(T* out, T const* a, [[maybe_unused]] T const* replacement)
+{
+  *out = *a;
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc replace_nulls(optional<T>* out, optional<T> const* a, T const* replacement)
+{
+  if (a->has_value()) {
+    *out = a->value();
+  } else {
+    *out = *replacement;
   }
   return errc::OK;
 }

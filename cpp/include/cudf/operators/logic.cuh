@@ -9,6 +9,62 @@
 namespace CUDF_EXPORT cudf {
 namespace ops {
 
+
+template <typename T>
+__device__ inline errc null_logical_and(T* out, T const* a, T const* b)
+{
+  *out = (*a && *b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc null_logical_and(optional<T>* out,
+                                        optional<T> const* a,
+                                        optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    bool r;
+    null_logical_and(&r, &a->value(), &b->value());
+    *out = r;
+  } else if (!a->has_value() && !b->has_value()) {
+    *out = nullopt;
+  } else {
+    if (a->has_value() ? *(*a) : *(*b)) {
+      *out = nullopt;
+    } else {
+      *out = false;
+    }
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc null_logical_or(T* out, T const* a, T const* b)
+{
+  *out = (*a || *b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc null_logical_or(optional<T>* out, optional<T> const* a, optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    bool r;
+    null_logical_or(&r, &a->value(), &b->value());
+    *out = r;
+  } else if (!a->has_value() && !b->has_value()) {
+    *out = nullopt;
+  } else {
+    if (a->has_value() ? *(*a) : *(*b)) {
+      *out = true;
+    } else {
+      *out = nullopt;
+    }
+  }
+  return errc::OK;
+}
+
+
 template <typename T>
 __device__ inline errc logical_and(T* out, T const* a, T const* b)
 {

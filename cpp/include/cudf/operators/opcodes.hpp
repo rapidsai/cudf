@@ -15,16 +15,22 @@ enum class [[nodiscard]] opcode : int32_t {
   GET_INPUT,
   SET_OUTPUT,
 
+  // Identity operators
+  IDENTITY,
+
   // Null handling operators
   IS_NULL,
   NULLIFY_IF,
   COALESCE,
+  REPLACE_NULLS,
 
   /// Arithmetic operators
   ABS,
   ADD,
   DIV,
+  FLOOR_DIV,
   MOD,
+  PYMOD,
   MUL,
   NEG,
   SUB,
@@ -68,6 +74,7 @@ enum class [[nodiscard]] opcode : int32_t {
 
   /// Comparison & Logical operators
   EQUAL,
+  NOT_EQUAL,
   GREATER,
   GREATER_EQUAL,
   LESS,
@@ -75,6 +82,8 @@ enum class [[nodiscard]] opcode : int32_t {
   NULL_EQUAL,
   NULL_LOGICAL_AND,
   NULL_LOGICAL_OR,
+  LOGICAL_AND,
+  LOGICAL_OR,
   LOGICAL_NOT,
   IF_ELSE,
 
@@ -82,6 +91,7 @@ enum class [[nodiscard]] opcode : int32_t {
   CBRT,
   CEIL,
   FLOOR,
+  RINT,
   SQRT,
   POW,
   EXP,
