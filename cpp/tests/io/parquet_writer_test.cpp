@@ -1832,6 +1832,88 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   EXPECT_TRUE(has_delta);
 }
 
+TEST_F(ParquetWriterTest, ListElementFieldIds)
+{
+  // Field-id overview for the written Parquet schema:
+  //
+  //   simple_list                           -> id=1
+  //   simple_list.list                      -> synthetic repeated group, no id
+  //   simple_list.list.element              -> id=2
+  //
+  //   nested_list                           -> id=3
+  //   nested_list.list                      -> synthetic repeated group, no id
+  //   nested_list.list.element              -> id=4
+  //   nested_list.list.element.list         -> synthetic repeated group, no id
+  //   nested_list.list.element.list.element -> id=5
+  auto simple_values  = cudf::test::fixed_width_column_wrapper<int64_t>{1, 2, 3};
+  auto simple_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
+  auto simple_list =
+    cudf::make_lists_column(2, simple_offsets.release(), simple_values.release(), 0, {});
+
+  auto nested_values  = cudf::test::fixed_width_column_wrapper<int32_t>{10, 11, 12, 13};
+  auto nested_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3, 4};
+  auto inner_list =
+    cudf::make_lists_column(3, nested_offsets.release(), nested_values.release(), 0, {});
+  auto outer_offsets = cudf::test::fixed_width_column_wrapper<int32_t>{0, 2, 3};
+  auto nested_list =
+    cudf::make_lists_column(2, outer_offsets.release(), std::move(inner_list), 0, {});
+
+  auto const expected = cudf::table_view{{*simple_list, *nested_list}};
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("simple_list").set_parquet_field_id(1);
+  expected_metadata.column_metadata[0].child(1).set_name("element").set_parquet_field_id(2);
+  expected_metadata.column_metadata[1].set_name("nested_list").set_parquet_field_id(3);
+  expected_metadata.column_metadata[1].child(1).set_name("element").set_parquet_field_id(4);
+  expected_metadata.column_metadata[1].child(1).child(1).set_name("element").set_parquet_field_id(
+    5);
+
+  auto const filepath = temp_env->get_temp_filepath("ListElementFieldIds.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // The footer schema is stored in pre-order traversal:
+  //   [1] simple_list(id=1), [2] list(no id), [3] element(id=2)
+  //   [4] nested_list(id=3), [5] list(no id), [6] element(id=4),
+  //   [7] list(no id), [8] element(id=5)
+  ASSERT_GE(fmd.schema.size(), 9);
+
+  ASSERT_TRUE(fmd.schema[1].field_id.has_value());
+  EXPECT_EQ(fmd.schema[1].name, "simple_list");
+  EXPECT_EQ(fmd.schema[1].field_id.value(), 1);
+
+  EXPECT_EQ(fmd.schema[2].name, "list");
+  EXPECT_FALSE(fmd.schema[2].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[3].field_id.has_value());
+  EXPECT_EQ(fmd.schema[3].name, "element");
+  EXPECT_EQ(fmd.schema[3].field_id.value(), 2);
+
+  ASSERT_TRUE(fmd.schema[4].field_id.has_value());
+  EXPECT_EQ(fmd.schema[4].name, "nested_list");
+  EXPECT_EQ(fmd.schema[4].field_id.value(), 3);
+
+  EXPECT_EQ(fmd.schema[5].name, "list");
+  EXPECT_FALSE(fmd.schema[5].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[6].field_id.has_value());
+  EXPECT_EQ(fmd.schema[6].name, "element");
+  EXPECT_EQ(fmd.schema[6].field_id.value(), 4);
+
+  EXPECT_EQ(fmd.schema[7].name, "list");
+  EXPECT_FALSE(fmd.schema[7].field_id.has_value());
+
+  ASSERT_TRUE(fmd.schema[8].field_id.has_value());
+  EXPECT_EQ(fmd.schema[8].name, "element");
+  EXPECT_EQ(fmd.schema[8].field_id.value(), 5);
+}
+
 TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
 {
   // decimal128 in cuDF maps to FIXED_LEN_BYTE_ARRAY, which is allowed by the spec to use
