@@ -7,7 +7,6 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import (
-    DEFAULT_BLOCKSIZE_MODE,
     assert_sink_ir_translation_raises,
     assert_sink_result_equal,
 )
@@ -28,13 +27,23 @@ def df():
 @pytest.mark.parametrize("null_value", [None, "NA"])
 @pytest.mark.parametrize("line_terminator", ["\n", "\n\n"])
 @pytest.mark.parametrize("separator", [",", "|"])
-def test_sink_csv(df, tmp_path, include_header, null_value, line_terminator, separator):
-    if line_terminator == "\n\n" and DEFAULT_BLOCKSIZE_MODE == "small":
+def test_sink_csv(
+    engine: pl.GPUEngine,
+    blocksize_mode,
+    df,
+    tmp_path,
+    include_header,
+    null_value,
+    line_terminator,
+    separator,
+):
+    if line_terminator == "\n\n" and blocksize_mode == "small":
         # We end up with an extra row per partition.
         pytest.skip("Multi-line terminator not supported with small blocksize")
     assert_sink_result_equal(
         df,
         tmp_path / "out.csv",
+        engine=engine,
         write_kwargs={
             "include_header": include_header,
             "null_value": null_value,
@@ -69,10 +78,11 @@ def test_sink_csv_unsupported_kwargs(df, tmp_path, kwarg, value):
     )
 
 
-def test_sink_ndjson(df, tmp_path):
+def test_sink_ndjson(engine: pl.GPUEngine, df, tmp_path):
     assert_sink_result_equal(
         df,
         tmp_path / "out.ndjson",
+        engine=engine,
     )
 
 
