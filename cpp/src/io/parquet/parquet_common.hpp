@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,5 +33,7 @@ constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xff'ffffu);
 constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
 // if this column has a list parent anywhere above it in the hierarchy
 constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_HAS_LIST_PARENT = (1 << 25);
+/// BYTE_ARRAY leaf under a Parquet VARIANT group (`metadata` / `value`); decode as list<uint8>
+constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY = (1 << 26);
 
 }  // namespace cudf::io::parquet::detail

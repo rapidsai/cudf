@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -84,7 +84,12 @@ size_t CompactProtocolWriter::write(LogicalType const& logical_type)
     case LogicalType::DATE:
     case LogicalType::UNKNOWN:
     case LogicalType::JSON:
-    case LogicalType::BSON: c.field_empty_struct(static_cast<int>(logical_type.type)); break;
+    case LogicalType::BSON:
+    case LogicalType::UUID:
+    case LogicalType::FLOAT16:
+    case LogicalType::VARIANT:
+    case LogicalType::GEOMETRY:
+    case LogicalType::GEOGRAPHY: c.field_empty_struct(static_cast<int>(logical_type.type)); break;
     case LogicalType::DECIMAL:
       c.field_struct(static_cast<int>(LogicalType::DECIMAL), logical_type.decimal_type.value());
       break;

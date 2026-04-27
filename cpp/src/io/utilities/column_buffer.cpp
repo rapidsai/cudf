@@ -10,6 +10,8 @@
 
 #include "column_buffer.hpp"
 
+#include "io/parquet/parquet_common.hpp"
+
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -187,8 +189,12 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       schema_info->is_nullable = buffer.is_nullable;
     }
     switch (buffer.type.id()) {
-      case type_id::STRING:
-        if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
+      case type_id::STRING: {
+        bool const variant_binary =
+          (buffer.user_data &
+           cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY) != 0;
+        if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings() and
+            not variant_binary) {
           if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
 
           // make_strings_column allocates new memory, it does not simply move
@@ -231,6 +237,7 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
             null_count,
             std::move(*col_content.null_mask));
         }
+      } break;
 
       case type_id::LIST: {
         // make offsets column
@@ -316,6 +323,23 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
   switch (buffer.type.id()) {
+    case type_id::STRING: {
+      bool const variant_binary =
+        (buffer.user_data & cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY) !=
+        0;
+      if (variant_binary) {
+        auto offsets = cudf::make_empty_column(type_id::INT32);
+        auto child   = cudf::make_empty_column(type_id::UINT8);
+        if (schema_info != nullptr) {
+          schema_info->children.emplace_back("offsets");
+          schema_info->children.emplace_back("");
+        }
+        return make_lists_column(
+          0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream, mr});
+      }
+      return cudf::make_empty_column(buffer.type);
+    } break;
+
     case type_id::LIST: {
       // make offsets column
       auto offsets = cudf::make_empty_column(type_id::INT32);
