@@ -1786,6 +1786,8 @@ aggregate_reader_metadata::select_columns(
         path_is_valid = true;  // If we're able to reach leaf then path is valid
       }
 
+      // Flag the `metadata` / `value` BYTE_ARRAY children of a VARIANT group so
+      // that column_buffer surfaces them as `list<uint8>` instead of strings.
       if (schema_elem.num_children == 0 and schema_elem.parent_idx >= 0 and
           schema_elem.type == Type::BYTE_ARRAY) {
         auto const& parent = get_schema(schema_elem.parent_idx);
