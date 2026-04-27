@@ -122,10 +122,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    customer_demographics_1 = get_data(
-        run_config.dataset_path, "customer_demographics", run_config.suffix
-    )
-    customer_demographics_2 = get_data(
+    customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
@@ -139,14 +136,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .join(
-            customer_demographics_1,
+            customer_demographics,
             left_on="cs_bill_cdemo_sk",
             right_on="cd_demo_sk",
             suffix="_cd1",
         )
         .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
         .join(
-            customer_demographics_2,
+            customer_demographics,
             left_on="c_current_cdemo_sk",
             right_on="cd_demo_sk",
             suffix="_cd2",
@@ -221,10 +218,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    customer_demographics_1 = get_data(
-        run_config.dataset_path, "customer_demographics", run_config.suffix
-    )
-    customer_demographics_2 = get_data(
+    customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
@@ -238,7 +232,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     base_query = (
         # SQL: JOIN customer_demographics cd1 ON cs_bill_cdemo_sk = cd_demo_sk
         catalog_sales.join(
-            customer_demographics_1,
+            customer_demographics,
             left_on="cs_bill_cdemo_sk",
             right_on="cd_demo_sk",
             suffix="_cd1",
@@ -247,7 +241,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
         # SQL: JOIN customer_demographics cd2 ON c_current_cdemo_sk = cd_demo_sk
         .join(
-            customer_demographics_2,
+            customer_demographics,
             left_on="c_current_cdemo_sk",
             right_on="cd_demo_sk",
             suffix="_cd2",
