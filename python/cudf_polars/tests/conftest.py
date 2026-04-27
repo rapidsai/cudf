@@ -41,7 +41,7 @@ def clear_memory_resource_cache():
 
 @pytest.fixture
 def using_streaming_engine(engine: pl.GPUEngine) -> bool:
-    """True when the active ``engine`` fixture is an :class:`StreamingEngine`."""
+    """True when the active ``engine`` fixture is a :class:`StreamingEngine`."""
     try:
         from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
