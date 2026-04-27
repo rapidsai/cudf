@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -25,13 +25,13 @@ def df():
 
 @pytest.mark.parametrize("col", ["test", "bool_val", "str_value", "col_with_nulls"])
 @pytest.mark.parametrize("k", [0, 1, 2, 3, 4])
-def test_top_k(df, col, k):
+def test_top_k(engine: pl.GPUEngine, df, col, k):
     q = df.select(pl.col(col).top_k(k))
-    assert_gpu_result_equal(q, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 @pytest.mark.parametrize("col", ["test", "bool_val", "str_value", "col_with_nulls"])
 @pytest.mark.parametrize("k", [0, 1, 2, 3, 4])
-def test_bottom_k(df, col, k):
+def test_bottom_k(engine: pl.GPUEngine, df, col, k):
     q = df.select(pl.col(col).bottom_k(k))
-    assert_gpu_result_equal(q, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
