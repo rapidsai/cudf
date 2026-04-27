@@ -6565,8 +6565,8 @@ class IndexedFrame(Frame):
             :class:`Series` (still experimental). Behaviour is as follows:
 
             * ``"numpy_nullable"``: returns nullable-dtype-backed
-              :class:`DataFrame` or :class:`Serires`.
-            * ``"pyarrow"``: returns pyarrow-backed nullable :class:`ArrowDtype`
+              :class:`DataFrame` or :class:`Series`.
+            * ``"pyarrow"``: returns pyarrow-backed nullable ``ArrowDtype``
               :class:`DataFrame` or :class:`Series`.
 
         Returns
@@ -6576,9 +6576,7 @@ class IndexedFrame(Frame):
 
         See Also
         --------
-        infer_objects : Infer dtypes of objects.
         to_datetime : Convert argument to datetime.
-        to_timedelta : Convert argument to timedelta.
         to_numeric : Convert argument to a numeric type.
 
         Notes
