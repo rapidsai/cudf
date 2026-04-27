@@ -128,9 +128,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     combined_sales = pl.concat([web_component, catalog_component, store_component])
-    combined_sales = combined_sales.select(
-        ["ext_price", "sold_date_sk", "sold_item_sk", "time_sk"]
-    )
 
     filtered_items = item.filter(pl.col("i_manager_id") == manager).select(
         ["i_item_sk", "i_brand_id", "i_brand"]
