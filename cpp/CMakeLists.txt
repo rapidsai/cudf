@@ -788,6 +788,7 @@ add_library(
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
   src/strings/search/contains_multiple.cu
+  src/strings/search/count.cu
   src/strings/search/findall.cu
   src/strings/search/find.cu
   src/strings/search/find_instance.cu

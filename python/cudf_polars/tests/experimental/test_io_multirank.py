@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 # variants skip themselves in that environment.
 pytestmark = [
     pytest.mark.spmd,
-    pytest.mark.filterwarnings("ignore::ResourceWarning"),
 ]
 
 
