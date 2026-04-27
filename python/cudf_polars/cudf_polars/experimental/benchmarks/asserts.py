@@ -251,16 +251,24 @@ def assert_tpch_result_equal(
                 ) from e
 
         # We know that each dataframe is sorted on `sort_by` according to itself.
-        # Now we have some freedom to reorder the rows. We'll use this freedom to avoid
-        # any kind of sorting on floating-point columns, which introduces all sorts of
-        # fuzziness we don't want to deal with.
+        # Now we have some freedom to reorder the rows. Sort by non-float columns
+        # first (avoiding float-precision-induced sort-order differences for the
+        # primary keys), then by float columns as tiebreakers for rows whose
+        # non-float columns are identical. Both frames go through the same sort, so
+        # any remaining float-tied rows end up in the same relative position.
         non_float_columns = [
             col
             for col in left.columns
             if left.schema[col] not in (pl.Float32, pl.Float64)
         ]
-        left_sorted = left.sort(by=non_float_columns, nulls_last=nulls_last)
-        right_sorted = right.sort(by=non_float_columns, nulls_last=nulls_last)
+        float_columns = [
+            col
+            for col in left.columns
+            if left.schema[col] in (pl.Float32, pl.Float64)
+        ]
+        sort_columns = non_float_columns + float_columns
+        left_sorted = left.sort(by=sort_columns, nulls_last=nulls_last)
+        right_sorted = right.sort(by=sort_columns, nulls_last=nulls_last)
 
         if limit is None or left.is_empty():
             try:
@@ -325,8 +333,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_first.sort(by=non_float_columns, nulls_last=nulls_last),
-                    expected_first.sort(by=non_float_columns, nulls_last=nulls_last),
+                    result_first.sort(by=sort_columns, nulls_last=nulls_last),
+                    expected_first.sort(by=sort_columns, nulls_last=nulls_last),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
@@ -344,12 +352,8 @@ def assert_tpch_result_equal(
 
             try:
                 polars.testing.assert_frame_equal(
-                    result_ties.sort(non_float_columns, nulls_last=nulls_last).select(
-                        by
-                    ),
-                    expected_ties.sort(non_float_columns, nulls_last=nulls_last).select(
-                        by
-                    ),
+                    result_ties.sort(sort_columns, nulls_last=nulls_last).select(by),
+                    expected_ties.sort(sort_columns, nulls_last=nulls_last).select(by),
                     **polars_kwargs,  # type: ignore[arg-type]
                 )
             except AssertionError as e:
