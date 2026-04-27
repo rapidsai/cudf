@@ -33,6 +33,7 @@
 #include <bit>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <random>
 
 using cudf::test::iterators::no_nulls;
@@ -1127,6 +1128,51 @@ namespace {
     });
 }
 
+[[nodiscard]] std::vector<int> read_page_dict_bits(
+  std::unique_ptr<cudf::io::datasource> const& source, cudf::io::parquet::ColumnChunk const& chunk)
+{
+  auto const oi = read_offset_index(source, chunk);
+  std::vector<int> page_dict_bits;
+  page_dict_bits.reserve(oi.page_locations.size());
+  std::transform(
+    oi.page_locations.begin(),
+    oi.page_locations.end(),
+    std::back_inserter(page_dict_bits),
+    [&source](auto const& page_location) { return read_dict_bits(source, page_location); });
+  return page_dict_bits;
+}
+
+template <typename ConfigureWriter>
+[[nodiscard]] auto write_and_read_dict_bits(table_view const& expected,
+                                            ConfigureWriter&& configure_writer)
+  -> std::pair<std::vector<int>, cudf::io::parquet::FileMetaData>
+{
+  auto buffer  = std::vector<char>{};
+  auto builder = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+                   .compression(cudf::io::compression_type::NONE)
+                   .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+                   .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
+  configure_writer(builder);
+
+  cudf::io::parquet_writer_options out_opts = builder;
+  cudf::io::write_parquet(out_opts);
+
+  auto const buffer_span =
+    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size());
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
+  auto const result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  auto source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  auto const& chunk = fmd.row_groups.front().columns.front();
+  return {is_chunk_dict_encoded(chunk) ? read_page_dict_bits(source, chunk) : std::vector<int>{},
+          std::move(fmd)};
+}
+
 }  // namespace
 
 // Phase 2 per-page variable-bit-width RLE coverage (PHASE_2_VARIABLE_BITS.md §2.4).
@@ -1155,28 +1201,10 @@ TEST_F(ParquetWriterTest, VariableBitWidthRoundTripIntegers)
     std::generate(values.begin(), values.end(), [&] { return dist(rng); });
 
     auto const col = cudf::test::fixed_width_column_wrapper<int64_t>(values.begin(), values.end());
-    auto const expected = table_view{{col}};
-
-    auto buffer = std::vector<char>{};
-    cudf::io::parquet_writer_options out_opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-        .compression(cudf::io::compression_type::NONE)
-        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-        .row_group_size_rows(nrows)
-        .max_page_size_rows(nrows / 4);
-    cudf::io::write_parquet(out_opts);
-
-    auto const buffer_span =
-      cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size());
-    cudf::io::parquet_reader_options in_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
-    auto const result = cudf::io::read_parquet(in_opts);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-    auto const source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
-    cudf::io::parquet::FileMetaData fmd;
-    read_footer(source, &fmd);
+    auto const expected              = table_view{{col}};
+    auto const [page_dict_bits, fmd] = write_and_read_dict_bits(expected, [=](auto& builder) {
+      builder.row_group_size_rows(nrows).max_page_size_rows(nrows / 4);
+    });
 
     auto const& chunk = fmd.row_groups.front().columns.front();
     // Under `dictionary_policy::ALWAYS` the writer still falls back to PLAIN
@@ -1186,10 +1214,8 @@ TEST_F(ParquetWriterTest, VariableBitWidthRoundTripIntegers)
     if (not is_chunk_dict_encoded(chunk)) { continue; }
 
     auto const chunk_wide_max_bits = std::bit_width<uint32_t>(cardinality - 1);
-    auto const oi                  = read_offset_index(source, chunk);
-    ASSERT_GT(oi.page_locations.size(), 1u) << "cardinality=" << cardinality;
-    for (auto const& pl : oi.page_locations) {
-      auto const nbits = read_dict_bits(source, pl);
+    ASSERT_GT(page_dict_bits.size(), 1u) << "cardinality=" << cardinality;
+    for (auto const nbits : page_dict_bits) {
       EXPECT_GE(nbits, 1) << "cardinality=" << cardinality;
       EXPECT_LE(nbits, chunk_wide_max_bits) << "cardinality=" << cardinality;
     }
@@ -1212,34 +1238,15 @@ TEST_F(ParquetWriterTest, VariableBitWidthRoundTripStrings)
 
   auto const col      = cudf::test::strings_column_wrapper(values.begin(), values.end());
   auto const expected = table_view{{col}};
-
-  auto buffer = std::vector<char>{};
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-      .compression(cudf::io::compression_type::NONE)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-      .row_group_size_rows(nrows)
-      .max_page_size_rows(nrows / 4);
-  cudf::io::write_parquet(out_opts);
-
-  auto const buffer_span =
-    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size());
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
-  auto const result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-  auto const source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
-  cudf::io::parquet::FileMetaData fmd;
-  read_footer(source, &fmd);
+  auto const [page_dict_bits, fmd] = write_and_read_dict_bits(expected, [=](auto& builder) {
+    builder.row_group_size_rows(nrows).max_page_size_rows(nrows / 4);
+  });
 
   auto const chunk_wide_max_bits =
     std::max(std::bit_width(static_cast<uint32_t>(cardinality - 1)), 1);
-  auto const oi = read_offset_index(source, fmd.row_groups.front().columns.front());
-  ASSERT_GT(oi.page_locations.size(), 1u);
-  for (auto const& pl : oi.page_locations) {
-    auto const nbits = read_dict_bits(source, pl);
+  ASSERT_TRUE(is_chunk_dict_encoded(fmd.row_groups.front().columns.front()));
+  ASSERT_GT(page_dict_bits.size(), 1u);
+  for (auto const nbits : page_dict_bits) {
     EXPECT_GE(nbits, 1);
     EXPECT_LE(nbits, chunk_wide_max_bits);
   }
@@ -1285,28 +1292,11 @@ TEST_F(ParquetWriterTest, VariableBitWidthRoundTripLists)
       .release();
   auto list_col = cudf::make_lists_column(
     num_lists, std::move(offsets_col), std::move(leaf_col), 0, rmm::device_buffer{});
-  auto const expected = table_view{{*list_col}};
-
-  auto buffer = std::vector<char>{};
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-      .compression(cudf::io::compression_type::NONE)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-      .row_group_size_rows(num_lists)
-      .max_page_size_rows(num_lists / 4);
-  cudf::io::write_parquet(out_opts);
-
-  auto const buffer_span =
-    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size());
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
-  auto const result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-  auto const source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
-  cudf::io::parquet::FileMetaData fmd;
-  read_footer(source, &fmd);
+  auto const expected              = table_view{{*list_col}};
+  auto const [page_dict_bits, fmd] = write_and_read_dict_bits(expected, [=](auto& builder) {
+    builder.row_group_size_rows(num_lists).max_page_size_rows(num_lists / 4);
+  });
+  static_cast<void>(page_dict_bits);
   EXPECT_TRUE(is_chunk_dict_encoded(fmd.row_groups.front().columns.front()));
 }
 
@@ -1342,31 +1332,40 @@ TEST_F(ParquetWriterTest, VariableBitWidthSmallerThanChunkWide)
   }
 
   auto const col = cudf::test::fixed_width_column_wrapper<int64_t>(values.begin(), values.end());
-  auto const expected = table_view{{col}};
+  auto const expected              = table_view{{col}};
+  auto buffer                      = std::vector<char>{};
+  auto const [page_dict_bits, fmd] = [&]() {
+    auto local_buffer = std::vector<char>{};
+    auto builder =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&local_buffer}, expected)
+        .compression(cudf::io::compression_type::NONE)
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+        .row_group_size_rows(num_rows)
+        .max_page_size_rows(page_size_rows)
+        .max_page_size_bytes(std::size_t{64} << 20);
+    cudf::io::parquet_writer_options out_opts = builder;
+    cudf::io::write_parquet(out_opts);
 
-  auto buffer = std::vector<char>{};
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-      .compression(cudf::io::compression_type::NONE)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-      .row_group_size_rows(num_rows)
-      .max_page_size_rows(page_size_rows)
-      .max_page_size_bytes(std::size_t{64} << 20);
-  cudf::io::write_parquet(out_opts);
+    auto const buffer_span = cudf::host_span<std::byte>(
+      reinterpret_cast<std::byte*>(local_buffer.data()), local_buffer.size());
+    cudf::io::parquet_reader_options in_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
+    auto const result = cudf::io::read_parquet(in_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 
-  auto const buffer_span =
-    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size());
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
-  auto const result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    auto source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
+    cudf::io::parquet::FileMetaData local_fmd;
+    read_footer(source, &local_fmd);
 
-  auto const source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
-  cudf::io::parquet::FileMetaData fmd;
-  read_footer(source, &fmd);
+    buffer            = std::move(local_buffer);
+    auto const& chunk = local_fmd.row_groups.front().columns.front();
+    return std::pair{
+      is_chunk_dict_encoded(chunk) ? read_page_dict_bits(source, chunk) : std::vector<int>{},
+      std::move(local_fmd)};
+  }();
 
-  ASSERT_TRUE(is_chunk_dict_encoded(fmd.row_groups.front().columns.front()));
+  EXPECT_TRUE(is_chunk_dict_encoded(fmd.row_groups.front().columns.front()));
 
   // Chunk-wide upper bound computed from the full cardinality. The writer's
   // `dict_rle_bits` is `NumRequiredBits(num_dict_entries - 1)`, and under
@@ -1376,14 +1375,12 @@ TEST_F(ParquetWriterTest, VariableBitWidthSmallerThanChunkWide)
   auto const chunk_wide_max_bits = std::bit_width<uint32_t>(cardinality - 1);
   auto const frequent_max_bits   = std::bit_width<uint32_t>(frequent_set_size - 1);  // 6
 
-  auto const oi = read_offset_index(source, fmd.row_groups.front().columns.front());
-  ASSERT_EQ(oi.page_locations.size(), static_cast<std::size_t>(pages_per_chunk));
+  ASSERT_EQ(page_dict_bits.size(), static_cast<std::size_t>(pages_per_chunk));
 
   int common_page_count = 0;
   int rare_page_count   = 0;
   int max_observed_bits = 0;
-  for (auto const& pl : oi.page_locations) {
-    auto const nbits = read_dict_bits(source, pl);
+  for (auto const nbits : page_dict_bits) {
     EXPECT_GE(nbits, 1);
     EXPECT_LE(nbits, chunk_wide_max_bits);
     max_observed_bits = std::max(max_observed_bits, nbits);

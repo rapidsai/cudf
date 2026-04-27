@@ -277,6 +277,23 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 // the alternative of launching a separate `cub::DeviceHistogram` +
 // `DeviceScan` per chunk (kernel-launch overhead dominates for many small
 // chunks; see PROBLEM.md §5.1 and PHASE_1_ORDERING.md §1.2.2).
+//
+// Performance note: the inner shared-atomic `atomicAdd` in Pass 1/3 is *not*
+// the bottleneck for this kernel on sm_100. Profiling (see
+// `l1tex__data_bank_conflicts_pipe_lsu.sum` + warp-state stalls) shows the
+// kernel is stall-bound on L1TEX scoreboard dependencies, i.e. the global
+// loads of `chunk_slots[slot_idx]`, with SMs mostly idle because the grid is
+// `num_chunks` blocks (often << number of SMs). Splitting the histogram into
+// per-warp-group replicas to reduce atomic contention was tried and produced
+// no measurable speedup (same 1.04 ms kernel time on B200 at 32-way vs 8-way
+// replica contention). Future optimization effort should target either:
+//   - Wider parallelism (one block per N fragments instead of per chunk), or
+//   - Coalesced prefetch of the slot array into shared memory per pass to
+//     amortize the global-load stalls across Pass 1 and Pass 3.
+// The `cuda::atomic_ref<..., thread_scope_block>::fetch_add(..., relaxed)`
+// alternative was also tried; on CUDA 13.1 it lowers to the generic LSU
+// atomic pipe (`ATOM.E.ADD.S32.STRONG.SM`) instead of the dedicated shared-
+// atomic unit (`ATOMS.ADD`), adding ~75% to kernel runtime.
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_span<slot_type> const map_storage,

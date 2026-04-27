@@ -212,14 +212,16 @@ void BM_parq_write_dict_encoding(nvbench::state& state)
       cudf::io::parquet::fetch_page_index_to_host(datasource_ref, page_index_bytes);
     reader.setup_page_index(*page_index_buffer);
 
-    auto const metadata      = reader.parquet_metadata();
-    auto const page_rle_bits = compute_page_dict_bits(datasource_ref, metadata);
+    auto const metadata       = reader.parquet_metadata();
+    auto const page_dict_bits = compute_page_dict_bits(datasource_ref, metadata);
 
-    CUDF_EXPECTS(not page_rle_bits.empty(), "No dictionary-encoded pages found");
+    CUDF_EXPECTS(not page_dict_bits.empty(), "No dictionary-encoded pages found");
 
-    auto const [min_it, max_it] = std::minmax_element(page_rle_bits.begin(), page_rle_bits.end());
-    auto const sum  = std::accumulate(page_rle_bits.begin(), page_rle_bits.end(), std::uint64_t{0});
-    auto const mean = static_cast<double>(sum) / static_cast<double>(page_rle_bits.size());
+    auto const [min_it, max_it] = std::minmax_element(page_dict_bits.begin(), page_dict_bits.end());
+    auto const sum =
+      std::accumulate(page_dict_bits.begin(), page_dict_bits.end(), std::uint64_t{0});
+    auto const mean =
+      std::round(static_cast<double>(sum) / static_cast<double>(page_dict_bits.size()));
     state.add_element_count(static_cast<double>(*min_it), "dict_rle_bits_min");
     state.add_element_count(static_cast<double>(*max_it), "dict_rle_bits_max");
     state.add_element_count(mean, "dict_rle_bits_mean");

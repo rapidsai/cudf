@@ -12,7 +12,9 @@
 
 #include <cuda/iterator>
 
+#include <algorithm>
 #include <array>
+#include <vector>
 
 ////////////////////////////////
 // delta encoding writer tests
@@ -170,14 +172,18 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   EXPECT_TRUE(used_dict);
 
   // and check that the correct number of bits was used
-  auto const oi                 = read_offset_index(source, fmd.row_groups.front().columns.front());
-  auto const page_with_max_bits = std::max_element(
-    oi.page_locations.begin(), oi.page_locations.end(), [&source](auto const& a, auto const& b) {
-      return read_dict_bits(source, a) < read_dict_bits(source, b);
-    });
+  auto const oi = read_offset_index(source, fmd.row_groups.front().columns.front());
+  std::vector<int> page_dict_bits;
+  page_dict_bits.reserve(oi.page_locations.size());
+  std::transform(
+    oi.page_locations.begin(),
+    oi.page_locations.end(),
+    std::back_inserter(page_dict_bits),
+    [&source](auto const& page_location) { return read_dict_bits(source, page_location); });
 
-  EXPECT_NE(page_with_max_bits, oi.page_locations.end());
-  EXPECT_EQ(read_dict_bits(source, *page_with_max_bits), GetParam());
+  auto const max_bits = std::max_element(page_dict_bits.begin(), page_dict_bits.end());
+  EXPECT_NE(max_bits, page_dict_bits.end());
+  EXPECT_EQ(*max_bits, GetParam());
 }
 
 ///////////////////////
