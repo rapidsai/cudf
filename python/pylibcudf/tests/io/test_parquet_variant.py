@@ -44,6 +44,21 @@ def test_read_unshredded_variant_parquet_shape(filename):
     assert col.num_children() == 2
 
 
+def test_read_variant_parquet_zero_rows():
+    path = os.path.join(_FIXTURE_DIR, "variant_multirow.parquet")
+    options = plc.io.parquet.ParquetReaderOptions.builder(
+        plc.io.SourceInfo([path])
+    ).build()
+    options.set_num_rows(0)
+    tbl = plc.io.parquet.read_parquet(options).tbl
+    assert tbl.num_rows() == 0
+    variant_col = tbl.columns()[0]
+    _expect_variant_metadata_value_pair(variant_col)
+    assert variant_col.size() == 0
+    assert variant_col.child(0).size() == 0
+    assert variant_col.child(1).size() == 0
+
+
 def test_read_shredded_variant_parquet_shape():
     tbl = _read_table("duckdb_variant_sample.parquet")
     columns = tbl.columns()
