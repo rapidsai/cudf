@@ -121,8 +121,8 @@ class StreamingEngine(pl.GPUEngine):
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
-        # allow_gpu_sharing is consumed here only; polars' GPUEngine doesn't
-        # accept it and would reject it via from_polars_engine's allowlist.
+        # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
+        # accept it.
         engine_options = dict(engine_options)
         allow_gpu_sharing = engine_options.pop("allow_gpu_sharing", False)
         super().__init__(
@@ -130,7 +130,7 @@ class StreamingEngine(pl.GPUEngine):
             executor_options=executor_options,
             **engine_options,
         )
-        if nranks > 1 and allow_gpu_sharing is False:
+        if nranks > 1 and not allow_gpu_sharing:
             uuids = [info.gpu_uuid for info in self.gather_cluster_info()]
             if len(uuids) != len(set(uuids)):
                 raise RuntimeError(
