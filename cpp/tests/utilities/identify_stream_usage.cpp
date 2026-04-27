@@ -130,7 +130,7 @@ class sanitizer_subscriber {
   static void check_result(SanitizerResult result);
 
   template <typename Args, cudaStream_t Args::* Field>
-  static void check_stream_arg(const Sanitizer_CallbackData* cbdata, const char* function_name);
+  static void check_stream_arg(const Sanitizer_CallbackData* cbdata);
 
   void callback(Sanitizer_CallbackDomain domain, Sanitizer_CallbackId cbid, const void* cbdata);
 };
@@ -161,13 +161,10 @@ void sanitizer_subscriber::check_result(SanitizerResult result)
 }
 
 template <typename Args, cudaStream_t Args::* Field>
-void sanitizer_subscriber::check_stream_arg(const Sanitizer_CallbackData* cbdata,
-                                            const char* function_name)
+void sanitizer_subscriber::check_stream_arg(const Sanitizer_CallbackData* cbdata)
 {
-  if (!strcmp(cbdata->functionName, function_name)) {
-    const auto* args = static_cast<const Args*>(cbdata->functionParams);
-    check_stream_and_error(args->*Field);
-  }
+  const auto* args = static_cast<const Args*>(cbdata->functionParams);
+  check_stream_and_error(args->*Field);
 }
 
 void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
@@ -179,59 +176,61 @@ void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
       const auto* runtime_cbdata = static_cast<const Sanitizer_CallbackData*>(cbdata);
 
       if (runtime_cbdata->callbackSite == SANITIZER_API_ENTER) {
-#define CHECK_STREAM_ARG(call, version, field)                       \
-  do {                                                               \
-    using args_t = call##_v##version##_params;                       \
-    check_stream_arg<args_t, &args_t::field>(runtime_cbdata, #call); \
-  } while (0)
+        switch (cbid) {
+#define CHECK_STREAM_ARG(call, version, field)                \
+  case SANITIZER_CBID_RUNTIME_API_##call: {                   \
+    using args_t = call##_v##version##_params;                \
+    check_stream_arg<args_t, &args_t::field>(runtime_cbdata); \
+  } break
 
-        CHECK_STREAM_ARG(cudaEventRecord, 3020, stream);
-        CHECK_STREAM_ARG(cudaEventRecord_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaEventRecordWithFlags, 11010, stream);
-        CHECK_STREAM_ARG(cudaEventRecordWithFlags_ptsz, 11010, stream);
-        CHECK_STREAM_ARG(cudaLaunchKernel, 7000, stream);
-        CHECK_STREAM_ARG(cudaLaunchKernel_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaLaunchCooperativeKernel, 9000, stream);
-        CHECK_STREAM_ARG(cudaLaunchCooperativeKernel_ptsz, 9000, stream);
-        CHECK_STREAM_ARG(cudaLaunchHostFunc, 10000, stream);
-        CHECK_STREAM_ARG(cudaLaunchHostFunc_ptsz, 10000, stream);
+          CHECK_STREAM_ARG(cudaEventRecord, 3020, stream);
+          CHECK_STREAM_ARG(cudaEventRecord_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaEventRecordWithFlags, 11010, stream);
+          CHECK_STREAM_ARG(cudaEventRecordWithFlags_ptsz, 11010, stream);
+          CHECK_STREAM_ARG(cudaLaunchKernel, 7000, stream);
+          CHECK_STREAM_ARG(cudaLaunchKernel_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaLaunchCooperativeKernel, 9000, stream);
+          CHECK_STREAM_ARG(cudaLaunchCooperativeKernel_ptsz, 9000, stream);
+          CHECK_STREAM_ARG(cudaLaunchHostFunc, 10000, stream);
+          CHECK_STREAM_ARG(cudaLaunchHostFunc_ptsz, 10000, stream);
 #if CUDART_VERSION >= 13000
-        CHECK_STREAM_ARG(cudaMemPrefetchAsync, 12020, stream);
-        CHECK_STREAM_ARG(cudaMemPrefetchAsync_ptsz, 12020, stream);
+          CHECK_STREAM_ARG(cudaMemPrefetchAsync, 12020, stream);
+          CHECK_STREAM_ARG(cudaMemPrefetchAsync_ptsz, 12020, stream);
 #else
-        CHECK_STREAM_ARG(cudaMemPrefetchAsync, 8000, stream);
-        CHECK_STREAM_ARG(cudaMemPrefetchAsync_ptsz, 8000, stream);
-        CHECK_STREAM_ARG(cudaMemPrefetchAsync_v2, 12020, stream);
-        CHECK_STREAM_ARG(cudaMemPrefetchAsync_v2_ptsz, 12020, stream);
+          CHECK_STREAM_ARG(cudaMemPrefetchAsync, 8000, stream);
+          CHECK_STREAM_ARG(cudaMemPrefetchAsync_ptsz, 8000, stream);
+          CHECK_STREAM_ARG(cudaMemPrefetchAsync_v2, 12020, stream);
+          CHECK_STREAM_ARG(cudaMemPrefetchAsync_v2_ptsz, 12020, stream);
 #endif
-        CHECK_STREAM_ARG(cudaMemcpy2DAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemcpy2DAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemcpy2DFromArrayAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemcpy2DFromArrayAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemcpy3DAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemcpy3DAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemcpy3DPeerAsync, 4000, stream);
-        CHECK_STREAM_ARG(cudaMemcpy3DPeerAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemcpyAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemcpyAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemcpyFromSymbolAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemcpyFromSymbolAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemcpyToSymbolAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemcpyToSymbolAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemset2DAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemset2DAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemset3DAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemset3DAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaMemsetAsync, 3020, stream);
-        CHECK_STREAM_ARG(cudaMemsetAsync_ptsz, 7000, stream);
-        CHECK_STREAM_ARG(cudaFreeAsync, 11020, hStream);
-        CHECK_STREAM_ARG(cudaFreeAsync_ptsz, 11020, hStream);
-        CHECK_STREAM_ARG(cudaMallocAsync, 11020, hStream);
-        CHECK_STREAM_ARG(cudaMallocAsync_ptsz, 11020, hStream);
-        CHECK_STREAM_ARG(cudaMallocFromPoolAsync, 11020, stream);
-        CHECK_STREAM_ARG(cudaMallocFromPoolAsync_ptsz, 11020, stream);
+          CHECK_STREAM_ARG(cudaMemcpy2DAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemcpy2DAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemcpy2DFromArrayAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemcpy2DFromArrayAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemcpy3DAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemcpy3DAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemcpy3DPeerAsync, 4000, stream);
+          CHECK_STREAM_ARG(cudaMemcpy3DPeerAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemcpyAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemcpyAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemcpyFromSymbolAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemcpyFromSymbolAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemcpyToSymbolAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemcpyToSymbolAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemset2DAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemset2DAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemset3DAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemset3DAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemsetAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemsetAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaFreeAsync, 11020, hStream);
+          CHECK_STREAM_ARG(cudaFreeAsync_ptsz, 11020, hStream);
+          CHECK_STREAM_ARG(cudaMallocAsync, 11020, hStream);
+          CHECK_STREAM_ARG(cudaMallocAsync_ptsz, 11020, hStream);
+          CHECK_STREAM_ARG(cudaMallocFromPoolAsync, 11020, stream);
+          CHECK_STREAM_ARG(cudaMallocFromPoolAsync_ptsz, 11020, stream);
 
 #undef CHECK_STREAM_ARG
+        }
       }
     } break;
     default: break;
