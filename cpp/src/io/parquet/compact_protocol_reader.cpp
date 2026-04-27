@@ -642,11 +642,7 @@ void CompactProtocolReader::read(LogicalType* l)
     parquet_field_union_enumerator(11, l->type),
     parquet_field_union_enumerator(12, l->type),
     parquet_field_union_enumerator(13, l->type),
-    parquet_field_union_enumerator(14, l->type),
-    parquet_field_union_enumerator(15, l->type),
-    parquet_field_union_enumerator(16, l->type),
-    parquet_field_union_enumerator(17, l->type),
-    parquet_field_union_enumerator(18, l->type));
+    parquet_field_union_enumerator(16, l->type));
   function_builder(this, op);
 }
 
