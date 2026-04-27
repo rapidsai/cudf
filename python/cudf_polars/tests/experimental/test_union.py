@@ -8,7 +8,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_union_shared_fanout_no_deadlock(engine):
+def test_union_shared_fanout_no_deadlock(streaming_engine):
     # union actor can deadlock when input branches share a fanout.
     # See https://github.com/rapidsai/cudf/issues/21750
     n = 100
@@ -16,4 +16,4 @@ def test_union_shared_fanout_no_deadlock(engine):
     gb = df.group_by("key").agg(pl.col("val").sum())
     project = df.select("key", "val")
     q = pl.concat([gb, project])
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
