@@ -22,7 +22,6 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/managed_memory_resource.hpp>
-#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
 #include <algorithm>
@@ -388,12 +387,6 @@ void write_to_parquet_device_buffer(std::unique_ptr<cudf::table> const& table,
   cudf::io::write_parquet(options, stream);
 }
 
-inline auto make_managed_pool()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    std::make_shared<rmm::mr::managed_memory_resource>(), rmm::percent_of_free_device_memory(50));
-}
-
 void generate_parquet_data_sources(double scale_factor,
                                    std::vector<std::string> const& table_names,
                                    std::unordered_map<std::string, cuio_source_sink_pair>& sources)
@@ -403,9 +396,9 @@ void generate_parquet_data_sources(double scale_factor,
   // Set the memory resource to the managed pool
   auto old_mr = cudf::get_current_device_resource_ref();
   // TODO: if old_mr is already managed pool or managed, don't create new one.
-  using managed_pool_mr_t           = decltype(make_managed_pool());
-  managed_pool_mr_t managed_pool_mr = make_managed_pool();
-  cudf::set_current_device_resource_ref(managed_pool_mr.get());
+  rmm::mr::pool_memory_resource managed_pool_mr{rmm::mr::managed_memory_resource{},
+                                                rmm::percent_of_free_device_memory(50)};
+  cudf::set_current_device_resource(managed_pool_mr);
   // drawback: if already pool takes 50% of free memory, we are left with 50% of 50% of free memory
 
   std::unordered_set<std::string> const requested_table_names = [&table_names]() {
@@ -469,5 +462,5 @@ void generate_parquet_data_sources(double scale_factor,
   }
 
   // Restore the original memory resource
-  cudf::set_current_device_resource_ref(old_mr);
+  cudf::set_current_device_resource(old_mr);
 }

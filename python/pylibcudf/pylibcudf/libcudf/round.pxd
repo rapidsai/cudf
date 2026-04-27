@@ -7,7 +7,7 @@ from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view
 
 from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
@@ -21,7 +21,7 @@ cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
         int32_t decimal_places,
         rounding_method method,
         cuda_stream_view stream,
-        device_memory_resource* mr
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[column] round_decimal (
@@ -29,5 +29,5 @@ cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
         int32_t decimal_places,
         rounding_method method,
         cuda_stream_view stream,
-        device_memory_resource* mr
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler

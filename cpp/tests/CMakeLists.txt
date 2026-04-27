@@ -12,6 +12,7 @@ enable_testing()
 
 include(rapids-test)
 rapids_test_init()
+rapids_cmake_install_lib_dir(lib_dir)
 
 # This function takes in a test name and test source and handles setting all of the associated
 # properties and linking to build the test
@@ -42,7 +43,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
   set_target_properties(
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
-               INSTALL_RPATH "\$ORIGIN/../../../lib"
+               INSTALL_RPATH "\$ORIGIN/../../../${lib_dir}"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                # For std:: support of __int128_t. Can be removed once using cuda::std
@@ -350,7 +351,7 @@ ConfigureTest(
 )
 ConfigureTest(
   PARQUET_DELETION_VECTORS_TEST
-  io/parquet_deletion_vectors_test.cu
+  io/parquet_deletion_vectors_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
   EXTRA_LIBS
@@ -752,6 +753,19 @@ ConfigureTest(STREAM_QUANTILE_TEST streams/quantile_test.cpp STREAM_MODE testing
 ConfigureTest(STREAM_REDUCTION_TEST streams/reduction_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_RESHAPE_TEST streams/reshape_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_ROARING_BITMAP_TEST
+  streams/roaring_bitmap_test.cpp
+  STREAM_MODE
+  testing
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
+)
 ConfigureTest(STREAM_ROLLING_TEST streams/rolling_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_ROUND_TEST streams/round_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SCALAR_TEST streams/scalar_test.cpp STREAM_MODE testing)
@@ -789,6 +803,20 @@ ConfigureTest(
 ConfigureTest(STREAM_TRANSFORM_TEST streams/transform_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_TRANSPOSE_TEST streams/transpose_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
+
+# ##################################################################################################
+# * roaring bitmap tests ---------------------------------------------------------------------------
+ConfigureTest(
+  ROARING_BITMAP_TEST
+  utilities/roaring_bitmap_test.cpp
+  EXTRA_LIBS
+  roaring
+  EXTRA_COMPILE_DEFINITIONS
+  DISABLENEON=1
+  ROARING_DISABLE_X64=1
+  ROARING_DISABLE_AVX=1
+  CROARING_COMPILER_SUPPORTS_AVX512=0
+)
 
 # ##################################################################################################
 # Install tests ####################################################################################
