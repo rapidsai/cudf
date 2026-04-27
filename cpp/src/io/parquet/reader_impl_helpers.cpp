@@ -275,10 +275,10 @@ void metadata::sanitize_schema()
     auto& schema_elem = schema[schema_idx];
     if (schema_idx != 0 && schema_elem.type == Type::UNDEFINED) {
       auto const& parent_schema    = schema[schema_elem.parent_idx];
-      auto const parent_is_variant = parent_schema.logical_type.has_value() &&
+      auto const is_parent_variant = parent_schema.logical_type.has_value() &&
                                      parent_schema.logical_type->type == LogicalType::VARIANT;
       auto const parent_type = parent_schema.converted_type;
-      if (not parent_is_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
+      if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
           schema_elem.num_children > 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
         // This is a list of structs, so we need to mark this as a list, but also
