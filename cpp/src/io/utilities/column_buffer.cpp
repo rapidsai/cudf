@@ -190,11 +190,11 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
     }
     switch (buffer.type.id()) {
       case type_id::STRING: {
-        bool const variant_binary =
+        bool const is_variant_binary =
           (buffer.user_data &
            cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY) != 0;
         if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings() and
-            not variant_binary) {
+            not is_variant_binary) {
           if (schema_info != nullptr) { schema_info->children.emplace_back("offsets"); }
 
           // make_strings_column allocates new memory, it does not simply move
@@ -324,10 +324,10 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
 
   switch (buffer.type.id()) {
     case type_id::STRING: {
-      bool const variant_binary =
+      bool const is_variant_binary =
         (buffer.user_data & cudf::io::parquet::detail::PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY) !=
         0;
-      if (variant_binary) {
+      if (is_variant_binary) {
         auto offsets = cudf::make_empty_column(type_id::INT32);
         auto child   = cudf::make_empty_column(type_id::UINT8);
         if (schema_info != nullptr) {
