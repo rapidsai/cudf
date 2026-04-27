@@ -19,7 +19,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -38,7 +38,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     ],
     indirect=True,
 )
-def test_join_rapidsmpf(engine) -> None:
+def test_join_rapidsmpf(streaming_engine) -> None:
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -54,11 +54,11 @@ def test_join_rapidsmpf(engine) -> None:
         }
     )
     q = left.join(right, on="y", how="inner")
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -75,7 +75,7 @@ def test_join_rapidsmpf(engine) -> None:
     ],
     indirect=True,
 )
-def test_sort_rapidsmpf(engine) -> None:
+def test_sort_rapidsmpf(streaming_engine) -> None:
     df = pl.LazyFrame(
         {
             "x": range(15),
@@ -84,7 +84,7 @@ def test_sort_rapidsmpf(engine) -> None:
         }
     )
     q = df.sort(by=["y", "z"])
-    assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=True)
 
 
 def test_is_already_partitioned():
