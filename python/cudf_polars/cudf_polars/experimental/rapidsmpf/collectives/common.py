@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 
 from rapidsmpf.shuffler import Shuffler
 
-from cudf_polars.dsl.ir import Distinct, GroupBy
+from cudf_polars.dsl.ir import Distinct, GroupBy, Sort
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.io import StreamingSink
 from cudf_polars.experimental.join import Join
@@ -19,10 +19,11 @@ from cudf_polars.experimental.shuffle import Shuffle
 from cudf_polars.experimental.sort import ShuffleSorted
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, MutableMapping
     from types import TracebackType
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.experimental.base import PartitionInfo
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -48,6 +49,19 @@ def _release_collective_id(collective_id: int) -> None:
         _collective_id_vacancy.add(collective_id)
 
 
+def _streaming_sort_needs_collectives(
+    node: Sort,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    *,
+    dynamic_planning_enabled: bool,
+) -> bool:
+    """Whether a ``Sort`` node uses ``sort_actor`` collectives on the RapidsMPF runtime."""
+    pi = partition_info.get(node)
+    if pi is None:
+        return False
+    return pi.count > 1 or dynamic_planning_enabled
+
+
 class ReserveOpIDs:
     """
     Context manager to reserve collective IDs for pipeline execution.
@@ -58,6 +72,9 @@ class ReserveOpIDs:
         The root IR node of the pipeline.
     config_options : ConfigOptions, optional
         Configuration options (needed for dynamic planning).
+    partition_info
+        Partition counts after lowering; required to detect RapidsMPF ``Sort``
+        nodes that need shuffle collectives.
 
     Notes
     -----
@@ -72,9 +89,13 @@ class ReserveOpIDs:
     """
 
     def __init__(
-        self, ir: IR, config_options: ConfigOptions[StreamingExecutor] | None = None
+        self,
+        ir: IR,
+        config_options: ConfigOptions[StreamingExecutor] | None = None,
+        partition_info: MutableMapping[IR, PartitionInfo] | None = None,
     ):
         self.config_options = config_options
+        self.partition_info = partition_info
 
         # Check if dynamic planning is enabled
         self.dynamic_planning_enabled = (
@@ -82,27 +103,24 @@ class ReserveOpIDs:
             and config_options.executor.dynamic_planning is not None
         )
 
-        # Find all collective IR nodes.
-        collective_types: tuple[type, ...] = (
-            Shuffle,
-            Join,
-            Repartition,
-            StreamingSink,
-            ShuffleSorted,
-        )
-        if self.dynamic_planning_enabled:
-            collective_types = (
-                Shuffle,
-                Join,
-                Repartition,
-                StreamingSink,
-                ShuffleSorted,
-                GroupBy,
-                Distinct,
-            )
+        runtime = config_options.executor.runtime if config_options is not None else ""
 
-        self.collective_nodes: list[IR] = [
-            node for node in traversal([ir]) if isinstance(node, collective_types)
+        common_types = (Shuffle, Join, Repartition, StreamingSink, ShuffleSorted)
+        self.collective_nodes = [
+            node
+            for node in traversal([ir])
+            if isinstance(node, common_types)
+            or (self.dynamic_planning_enabled and isinstance(node, (GroupBy, Distinct)))
+            or (
+                runtime == "rapidsmpf"
+                and isinstance(node, Sort)
+                and partition_info is not None
+                and _streaming_sort_needs_collectives(
+                    node,
+                    partition_info,
+                    dynamic_planning_enabled=self.dynamic_planning_enabled,
+                )
+            )
         ]
         self.collective_id_map: dict[IR, list[int]] = {}
 
@@ -134,7 +152,7 @@ class ReserveOpIDs:
                     _get_new_collective_id(),
                     _get_new_collective_id(),
                 ]
-            elif isinstance(node, ShuffleSorted):
+            elif isinstance(node, (ShuffleSorted, Sort)):
                 if self.dynamic_planning_enabled:
                     # 3 IDs: size-estimate allgather, boundary allgather, shuffle
                     self.collective_id_map[node] = [

@@ -117,7 +117,7 @@ def evaluate_logical_plan(
 
     # Reserve shuffle IDs for the entire pipeline execution
     with (
-        ReserveOpIDs(ir, config_options) as collective_id_map,
+        ReserveOpIDs(ir, config_options, partition_info) as collective_id_map,
         cudf_polars.dsl.tracing.bound_contextvars(cudf_polars_query_id=str(query_id)),
     ):
         # Log the query plan structure for tracing (no-op if tracing disabled)
