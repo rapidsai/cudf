@@ -572,7 +572,8 @@ def _(
         sort_node = ir.reconstruct([child])
         partition_info[sort_node] = partition_info[child]
         return sort_node, partition_info
-    # TODO: Remove everything below when "tasks" is removed.
+
+    # TODO: Remove everything below here when "tasks" is removed.
 
     # Avoid rapidsmpf shuffle with maintain_order=True (for now)
     shuffle_method = (

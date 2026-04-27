@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-"""Distributed sort logic for the RapidsMPF streaming runtime (``Sort`` IR)."""
+"""Sort logic for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
@@ -94,6 +94,7 @@ async def _simple_top_or_bottom_k(
     tracer: ActorTracer | None,
 ) -> None:
     """Sort + simple head/tail slice."""
+    # TODO: We may need to gate this optimization on the slice size.
     await send_metadata(
         ch_out,
         context,
@@ -278,7 +279,7 @@ async def _receive_and_buffer_chunks(
     comm: Communicator,
     ir_context: IRExecutionContext,
 ) -> list[TableChunk]:
-    """Receive chunks, apply local ``Sort`` IR, then sample split candidates and buffer."""
+    """Receive input chunks, collect local split candidates, and buffer chunks for later insert."""
     await recv_metadata(ch_in, context)
     local_candidates_list: list[TableChunk] = []
     local_row_offset = 0
@@ -286,6 +287,7 @@ async def _receive_and_buffer_chunks(
     while (msg := await ch_in.recv(context)) is not None:
         seq_num = msg.sequence_number
         df = chunk_to_frame(
+            # Make sure chunks are pre-sorted
             await evaluate_chunk(
                 context,
                 TableChunk.from_message(msg, br=context.br()),
@@ -463,7 +465,7 @@ async def sort_actor(
     executor: StreamingExecutor,
     collective_ids: list[int],
 ) -> None:
-    """Streaming distributed sort (RapidsMPF shuffle)."""
+    """Streaming sort actor."""
     ch_replay = context.create_channel()
     async with shutdown_on_error(
         context, ch_in, ch_out, ch_replay, trace_ir=ir, ir_context=ir_context
