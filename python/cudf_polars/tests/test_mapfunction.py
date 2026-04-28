@@ -115,8 +115,7 @@ def test_unique_hash():
     assert hash(ir_a) != hash(ir_b)
 
 
-def test_set_sorted_then_inner_join(engine: pl.GPUEngine, request):
-    _engine_param = request.node.callspec.params.get("engine", "in-memory")
+def test_set_sorted_then_inner_join(engine: pl.GPUEngine, blocksize_mode, request):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_135,
@@ -125,7 +124,7 @@ def test_set_sorted_then_inner_join(engine: pl.GPUEngine, request):
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=_engine_param == "spmd-small" and POLARS_VERSION_LT_135,
+            condition=blocksize_mode == "small" and POLARS_VERSION_LT_135,
             reason="set_sorted join result order differs in polars < 1.35",
         )
     )
