@@ -578,8 +578,7 @@ struct EncColumnChunk {
   uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
-  uint32_t num_fragments;   //!< Number of fragments in chunk. Set host-side during row group setup
-                            //!< and consumed by `collect_map_entries_kernel` as the bucket count.
+  uint32_t num_fragments;   //!< Number of fragments in chunk
   EncPage* pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
   uint32_t num_pages;       //!< Number of pages in chunk
@@ -651,12 +650,7 @@ struct EncPage {
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
   bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
-  uint8_t dict_rle_bits;   //!< RLE bit width for this data page's dict indices.
-                           //!< Initialized to `chunk->dict_rle_bits` (the conservative
-                           //!< chunk-wide bound) and then tightened by
-                           //!< `compute_per_page_dict_rle_bits` to
-                           //!< `max(NumRequiredBits(page_max_dict_index), 1)`. Unused
-                           //!< for the dictionary page itself and for non-dict pages.
+  uint8_t dict_rle_bits;   //!< RLE bit width for this data page's dict indices
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
   {

@@ -2123,12 +2123,8 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                        write_v2_headers,
                        stream);
 
-    // Now that page boundaries are finalized and `chunk->dict_index` has been
-    // materialized by `build_chunk_dictionaries`, tighten each data page's
-    // `dict_rle_bits` from the chunk-wide conservative bound to the page-local
-    // minimum required width. Page-size estimation intentionally keeps the
-    // chunk-wide value (see PROBLEM.md §6): estimation is upstream of this
-    // pass and must remain conservative so page buffers never overflow.
+    // Now that page boundaries are finalized and dictionary indices have been materialized, compute
+    // minimum required RLE bit width for each data page
     compute_per_page_dict_rle_bits({pages.data(), pages.size()}, stream);
   }
 
