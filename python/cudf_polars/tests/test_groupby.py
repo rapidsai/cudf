@@ -17,7 +17,7 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_132,
-    POLARS_VERSION_LT_135,
+    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_1321,
 )
@@ -423,9 +423,10 @@ def test_groupby_aggs_keep_unsupported_as_null(
     request.applymarker(
         pytest.mark.xfail(
             condition="quantile" in str(agg_expr)
-            and POLARS_VERSION_LT_135
+            and not POLARS_VERSION_LT_132
+            and POLARS_VERSION_LT_134
             and using_streaming_engine,
-            reason="Decimal precision mismatch (9 vs 38) in polars < 1.35",
+            reason="Decimal precision mismatch (9 vs 38)",
         )
     )
     lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
