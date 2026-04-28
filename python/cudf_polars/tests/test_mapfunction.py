@@ -118,8 +118,8 @@ def test_unique_hash():
 def test_set_sorted_then_inner_join(engine: pl.GPUEngine, request):
     request.applymarker(
         pytest.mark.xfail(
-            condition=not POLARS_VERSION_LT_135,
-            reason="HintIR not supported",
+            condition=POLARS_VERSION_LT_135,
+            reason="set_sorted join result order differs in polars < 1.35",
         )
     )
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5]})
