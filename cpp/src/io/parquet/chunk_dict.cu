@@ -24,17 +24,22 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-// Upper bound on the number of fragments per column chunk that the
-// shared-memory histogram in `collect_map_entries_kernel` can accommodate.
-// A typical workload is 1M row groups / ~5000-row fragments ≈ 200 fragments
-// per chunk, so 1024 is a comfortable ceiling. Host-side code must enforce
-// this before launching the kernel (see `build_chunk_dictionaries`); the
-// kernel also has a `cudf_assert` as a debug-build safety net, but that is
-// compiled out in release builds.
-constexpr size_type MAX_FRAGMENTS_PER_BLOCK = 1024;
+/// Maximum number of chunk fragments for which spatially-local dictionary indices across fragment
+/// keys are claimed using shared memory
+constexpr size_type MAX_FRAGMENTS_PER_CHUNK = 1024;
 
+/// Default block size for kernel launches
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 
+/**
+ * @brief Functor for checking equality of two keys.
+ *
+ * @tparam T Type of the keys
+ * @param col Column view
+ * @param lhs_idx Index of the left-hand side key
+ * @param rhs_idx Index of the right-hand side key
+ * @return Whether the keys are equal
+ */
 template <typename T>
 struct equality_functor {
   column_device_view const& col;
@@ -46,6 +51,14 @@ struct equality_functor {
   }
 };
 
+/**
+ * @brief Functor for hashing a key
+ *
+ * @tparam T Type of the key
+ * @param col Column view
+ * @param idx Key index of the key
+ * @return Hash value of the key
+ */
 template <typename T>
 struct hash_functor {
   column_device_view const& col;
@@ -56,6 +69,15 @@ struct hash_functor {
   }
 };
 
+/**
+ * @brief Functor for inserting a key into a hash map
+ *
+ * @tparam block_size Thread block size
+ * @param storage_ref Hash map storage reference
+ * @param chunk Column chunk pointer
+ * @param frag Page fragment pointer
+ * @param frag_idx Page fragment index
+ */
 template <int block_size>
 struct map_insert_fn {
   storage_ref_type const& storage_ref;
@@ -170,6 +192,13 @@ struct map_insert_fn {
   }
 };
 
+/**
+ * @brief Functor for finding a key in a hash map
+ *
+ * @tparam block_size Thread block size
+ * @param storage_ref Hash map storage reference
+ * @param chunk Column chunk pointerk
+ */
 template <int block_size>
 struct map_find_fn {
   storage_ref_type const& storage_ref;
@@ -219,6 +248,13 @@ struct map_find_fn {
   }
 };
 
+/**
+ * @brief Populate the hash maps for all chunks (thread block per page fragment)
+ *
+ * @tparam block_size Thread block size
+ * @param map_storage Hash map storage span
+ * @param frags 2D span of page fragments
+ */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   populate_chunk_hash_maps_kernel(device_span<slot_type> const map_storage,
@@ -249,6 +285,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     end_value_idx);
 }
 
+/**
+ * @brief Collect the dictionary indices for all chunks (thread block per column chunk)
+ *
+ * @tparam block_size Thread block size
+ * @param map_storage Hash map storage span
+ * @param chunks Column chunks span
+ * @param frags 2D span of page fragments
+ */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_span<slot_type> const map_storage,
@@ -258,32 +302,19 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto& chunk = chunks[blockIdx.x];
   if (not chunk.use_dictionary) { return; }
 
-  auto t = threadIdx.x;
-
-  // Resolve the chunk's column-relative fragment range [frag_start, frag_start + num_frags).
-  // Both values come directly from host-populated fields on the chunk; no in-kernel reduction
-  // or shared memory is needed. `chunk.fragments` points into `col_frags` (set in
-  // writer_impl.cu during row_group_fragments setup, before build_chunk_dictionaries runs),
-  // so the subtraction is the first fragment index stamped into any of this chunk's slots
-  // by populate_chunk_hash_maps_kernel. `chunk.num_fragments` is the run length.
+  auto t               = threadIdx.x;
   auto const num_frags = chunk.num_fragments;
 
-  if (num_frags <= MAX_FRAGMENTS_PER_BLOCK) {
+  // If a chunk has less fragments than the maximum fragments per chunk, resolve its
+  // column-relative fragment range.
+  if (num_frags <= MAX_FRAGMENTS_PER_CHUNK) {
     auto const col_idx    = chunk.col_desc_id;
     auto const& col_frags = frags[col_idx];
     auto const frag_start = static_cast<size_type>(chunk.fragments - col_frags.data());
 
-    // Per-bucket cursors: initialized to the exclusive-prefix offsets of the
-    // per-fragment winning-insert counts; threads `atomicAdd` into these to
-    // claim dict_ids in Pass 2.
-    __shared__ size_type fragment_cursor[MAX_FRAGMENTS_PER_BLOCK];
-
-    // Pass 1: in-block exclusive scan over the per-fragment winning-insert
-    // counts populate wrote into each fragment. This replaces the old
-    // slot-rescan histogram: `frag.num_dict_vals` already equals
-    // "number of slots in `chunk_slots[]` stamped with column-relative fragment
-    // index (f_start + i)", because populate's `blockIdx.x` is exactly that
-    // fragment index and each winning CAS contributes exactly one stamp.
+    // Initialize fragment_offsets with prefix sum (exclusive) of number of dictionary values
+    // inserted by each fragment in this chunk.
+    __shared__ size_type fragment_offsets[MAX_FRAGMENTS_PER_CHUNK];
     {
       using block_scan = cub::BlockScan<size_type, block_size>;
       __shared__ typename block_scan::TempStorage scan_storage;
@@ -295,13 +326,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
           (idx < num_frags) ? col_frags[frag_start + idx].num_dict_vals : 0;
         auto per_thread_offset = 0;
         block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
-        if (idx < num_frags) { fragment_cursor[idx] = per_thread_offset; }
+        if (idx < num_frags) { fragment_offsets[idx] = per_thread_offset; }
         base_idx += block_size;
         __syncthreads();
       }
     }
 
-    // Iterate over all slots in the map, claim a dict_id in the bucket and write it to dict_data
+    // Iterate over slots and claim a dictionary index from the fragment offsets (spatial-locality
+    // for keys in the same fragment).
     for (; t < chunk.dict_map_size; t += block_size) {
       auto* slot     = map_storage.data() + chunk.dict_map_offset + t;
       auto const key = slot->first;
@@ -309,19 +341,21 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         auto const frag_loc = static_cast<size_type>(slot->second) - frag_start;
         cudf_assert(frag_loc >= 0 && frag_loc < num_frags &&
                     "populate stamped a fragment hint outside this chunk's fragment range");
-        auto const loc = atomicAdd(&fragment_cursor[frag_loc], 1);
+        auto const loc = atomicAdd(&fragment_offsets[frag_loc], 1);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
         slot->second         = loc;
       }
     }
-  } else {
+  }
+  // Otherwise, iterate over slots and claim monotonically increasing dictionary indices for each
+  // key
+  else {
     __shared__ cuda::atomic<size_type, SCOPE> counter;
     using cuda::std::memory_order_relaxed;
     if (t == 0) { new (&counter) cuda::atomic<size_type, SCOPE>{0}; }
     __syncthreads();
 
-    // Iterate over all slots in the map.
     for (; t < chunk.dict_map_size; t += block_size) {
       auto* slot     = map_storage.data() + chunk.dict_map_offset + t;
       auto const key = slot->first;
@@ -335,6 +369,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   }
 }
 
+/**
+ * @brief Get the dictionary indices for all chunks (thread block per page fragment)
+ *
+ * @tparam block_size Thread block size
+ * @param map_storage Hash map storage span
+ * @param frags 2D span of page fragments
+ */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(device_span<slot_type> const map_storage,
@@ -367,8 +408,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                   ck_start_val_idx);
 }
 
+/**
+ * @brief Compute the RLE bits for the dictionary indices for all pages (warp per page)
+ *
+ * @tparam block_size Thread block size
+ * @param pages Pages span
+ */
 CUDF_KERNEL void __launch_bounds__(DEFAULT_BLOCK_SIZE)
-  compute_page_dict_rle_bits_kernel(device_span<EncPage> pages)
+  compute_page_dict_bits_kernel(device_span<EncPage> pages)
 {
   constexpr auto warp_size       = cudf::detail::warp_size;
   auto const warp_lane           = static_cast<size_type>(threadIdx.x % warp_size);
@@ -442,8 +489,8 @@ void collect_map_entries(device_span<slot_type> const map_storage,
                          rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  static_assert(block_size >= MAX_FRAGMENTS_PER_BLOCK,
-                "block_size must be >= MAX_FRAGMENTS_PER_BLOCK so one BlockScan thread backs "
+  static_assert(block_size >= MAX_FRAGMENTS_PER_CHUNK,
+                "block_size must be >= MAX_FRAGMENTS_PER_CHUNK so one BlockScan thread backs "
                 "each histogram bucket.");
   collect_map_entries_kernel<block_size>
     <<<chunks.size(), block_size, 0, stream.value()>>>(map_storage, chunks, frags);
@@ -458,13 +505,13 @@ void get_dictionary_indices(device_span<slot_type> const map_storage,
     <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(map_storage, frags);
 }
 
-void compute_per_page_dict_rle_bits(device_span<EncPage> pages, rmm::cuda_stream_view stream)
+void compute_per_page_dict_bits(device_span<EncPage> pages, rmm::cuda_stream_view stream)
 {
   if (pages.empty()) { return; }
   auto constexpr warps_per_block = DEFAULT_BLOCK_SIZE / cudf::detail::warp_size;
   auto const num_blocks =
     cudf::util::div_rounding_up_safe(static_cast<size_type>(pages.size()), warps_per_block);
-  compute_page_dict_rle_bits_kernel<<<num_blocks, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(pages);
+  compute_page_dict_bits_kernel<<<num_blocks, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(pages);
 }
 
 }  // namespace cudf::io::parquet::detail

@@ -97,18 +97,12 @@ void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
 /**
  * @brief Compact dictionary hash map entries into chunk.dict_data
  *
- * Each chunk's `dict_id`s are assigned monotonically in fragment-first-
- * appearance order: values whose slot was first won by an earlier fragment
- * get strictly lower `dict_id`s than values first won by a later fragment.
- * This is the ordering prerequisite that lets per-page RLE bit widths shrink
- * for pages that only touch values in early fragments.
+ * `dict_id`s are assigned in fragment-first-insert order, so pages over earlier
+ * fragments see smaller ids and can use narrower RLE bit widths.
  *
  * @param map_storage Bulk hashmap storage
  * @param chunks Flat span of chunks to compact hash maps for
- * @param frags 2D span of per-column page fragments. Used by the collect
- *              kernel to determine each chunk's column-relative fragment
- *              range; the span itself matches the one passed to
- *              `populate_chunk_hash_maps`.
+ * @param frags 2D span of per-column page fragments
  * @param stream CUDA stream to use
  */
 void collect_map_entries(device_span<slot_type> const map_storage,
@@ -134,19 +128,11 @@ void get_dictionary_indices(device_span<slot_type> const map_storage,
                             rmm::cuda_stream_view stream);
 
 /**
- * @brief Tighten each data page's `dict_rle_bits` to the minimum width required
- *        by the max `dict_index` observed in that page's rows.
+ * @brief Compute the minimum width required for the dictionary indices for each data page
  *
- * Must be invoked after `InitEncoderPages` has finalized page boundaries *and*
- * `get_dictionary_indices` has materialized per-chunk `dict_index` arrays, but
- * before `EncodePages` reads `page.dict_rle_bits`. Pages that do not use
- * dictionary encoding (non-dict chunks, the dictionary page itself, BOOLEAN
- * columns) are skipped and keep the `chunk->dict_rle_bits` fallback that
- * `gpuInitPages` wrote during page initialization.
- *
- * @param pages  Device span of encoder pages. Field `dict_rle_bits` is written.
+ * @param pages Device span of encoder pages
  * @param stream CUDA stream to use
  */
-void compute_per_page_dict_rle_bits(device_span<EncPage> pages, rmm::cuda_stream_view stream);
+void compute_per_page_dict_bits(device_span<EncPage> pages, rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail
