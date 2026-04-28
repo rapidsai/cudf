@@ -25,7 +25,7 @@ def df() -> pl.LazyFrame:
 
 @pytest.mark.parametrize("subset", [None, ("y",), ("x", "y")])
 @pytest.mark.parametrize("keep", ["any", "none"])
-def test_dynamic_distinct_basic(df, engine, subset, keep):
+def test_dynamic_distinct_basic(df, streaming_engine, subset, keep):
     """Test dynamic distinct with various subset and keep options."""
     q = df.unique(subset=subset, keep=keep, maintain_order=False)
 
@@ -34,50 +34,50 @@ def test_dynamic_distinct_basic(df, engine, subset, keep):
     if keep == "any" and subset:
         q = q.select(*(pl.col(col) for col in subset))
 
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"executor_options": {"target_partition_size": 100_000_000}}],
     indirect=True,
 )
-def test_dynamic_distinct_tree_strategy(df, engine):
+def test_dynamic_distinct_tree_strategy(df, streaming_engine):
     """Test that small output uses tree reduction (high target_partition_size)."""
     subset = ("y",)
     q = df.unique(subset=subset, keep="any", maintain_order=False)
     # With keep="any", non-subset columns are non-deterministic, so only check subset
     q = q.select(*(pl.col(col) for col in subset))
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"executor_options": {"target_partition_size": 1000}}],
     indirect=True,
 )
-def test_dynamic_distinct_shuffle_strategy(engine):
+def test_dynamic_distinct_shuffle_strategy(streaming_engine):
     """Test that large output uses shuffle (low target_partition_size)."""
     df = pl.LazyFrame({"x": range(1000), "y": range(1000)})
     q = df.unique(subset=None, keep="any", maintain_order=False)
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-def test_dynamic_distinct_all_duplicates(engine):
+def test_dynamic_distinct_all_duplicates(streaming_engine):
     """Test dynamic distinct where all rows are duplicates."""
     df = pl.LazyFrame({"x": [1, 1, 1, 1], "y": [2, 2, 2, 2]})
     q = df.unique()
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-def test_dynamic_distinct_single_row(engine):
+def test_dynamic_distinct_single_row(streaming_engine):
     """Test dynamic distinct on single-row DataFrame."""
     df = pl.LazyFrame({"x": [1], "y": [2]})
     q = df.unique()
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
-def test_dynamic_distinct_chunkwise_after_groupby(engine):
+def test_dynamic_distinct_chunkwise_after_groupby(streaming_engine):
     """Test distinct after group_by is handled chunkwise."""
     df = pl.LazyFrame(
         {
@@ -87,4 +87,4 @@ def test_dynamic_distinct_chunkwise_after_groupby(engine):
     )
     # Groupby partitions data by "key", then unique on "key" should be chunkwise
     q = df.group_by("key").agg(pl.col("value").sum()).unique(subset=("key",))
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
