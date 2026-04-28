@@ -97,9 +97,7 @@ struct aggregate_writer_metadata {
       std::transform(kv_md[p].begin(),
                      kv_md[p].end(),
                      std::back_inserter(this->files[p].key_value_metadata),
-                     [](auto const& kv) {
-                       return KeyValue{kv.first, kv.second};
-                     });
+                     [](auto const& kv) { return KeyValue{kv.first, kv.second}; });
     }
 
     // Append arrow schema to the key-value metadata
