@@ -14,6 +14,7 @@ from cudf_polars import Translator
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.experimental.parallel import evaluate_streaming, lower_ir_graph
 from cudf_polars.experimental.shuffle import Shuffle
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import DEFAULT_CLUSTER, DEFAULT_RUNTIME
 from cudf_polars.utils.config import ConfigOptions
 
@@ -70,7 +71,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
 
     # Check that sequential shuffles on the same keys
     # are replaced with a single shuffle node
-    partition_info = lower_ir_graph(qir2, options)[1]
+    partition_info = lower_ir_graph(qir2, options, collect_statistics(qir2, options))[1]
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 1
 
     # Add second Shuffle node (on different keys)
@@ -84,7 +85,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
 
     # Check that we have an additional shuffle
     # node after shuffling on different keys
-    partition_info = lower_ir_graph(qir3, options)[1]
+    partition_info = lower_ir_graph(qir3, options, collect_statistics(qir3, options))[1]
     assert len([node for node in partition_info if isinstance(node, Shuffle)]) == 2
 
     # Check that streaming evaluation works
