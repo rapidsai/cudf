@@ -70,15 +70,13 @@ struct map_insert_fn {
       using block_reduce = cub::BlockReduce<size_type, block_size>;
       __shared__ typename block_reduce::TempStorage reduce_storage;
 
-      namespace cg = cooperative_groups;
-
-      auto const block                   = cg::this_thread_block();
+      auto const t                       = threadIdx.x;
       auto const col                     = chunk->col_desc;
       column_device_view const& data_col = *col->leaf_column;
       __shared__ size_type total_num_dict_entries;
       __shared__ size_type num_dict_vals;
-      cg::invoke_one(block, [&]() { num_dict_vals = 0; });
-      block.sync();
+      if (t == 0) { num_dict_vals = 0; };
+      __syncthreads();
 
       using equality_fn_type = equality_functor<T>;
       using hash_fn_type     = hash_functor<T>;
@@ -96,14 +94,13 @@ struct map_insert_fn {
 
       // Create a map ref with `cuco::insert` operator
       auto map_insert_ref = hash_map_ref.rebind_operators(cuco::insert);
-      auto const t        = threadIdx.x;
 
       // Create atomic refs to the current chunk's num_dict_entries and uniq_data_size
       cuda::atomic_ref<size_type, SCOPE> const chunk_num_dict_entries{chunk->num_dict_entries};
       cuda::atomic_ref<size_type, SCOPE> const chunk_uniq_data_size{chunk->uniq_data_size};
 
       // Note: Adjust the following loop to use `cg::tile<map_cg_size>` if needed in the future.
-      for (key_type val_idx = start_value_idx + t; val_idx - t < end_value_idx;
+      for (size_type val_idx = start_value_idx + t; val_idx - t < end_value_idx;
            val_idx += block_size) {
         size_type is_unique      = 0;
         size_type uniq_elem_size = 0;
@@ -115,7 +112,7 @@ struct map_insert_fn {
         // Insert tile_val_idx to hash map and count successful insertions.
         if (is_valid) {
           // Insert the keys using a single thread for best performance for now.
-          is_unique      = map_insert_ref.insert(slot_type{val_idx, frag_idx});
+          is_unique = map_insert_ref.insert(slot_type{static_cast<key_type>(val_idx), frag_idx});
           uniq_elem_size = [&]() -> size_type {
             if (not is_unique) { return 0; }
             switch (col->physical_type) {
@@ -149,24 +146,24 @@ struct map_insert_fn {
         }
         // Reduce num_unique and uniq_data_size from all tiles.
         auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-        block.sync();
+        __syncthreads();
         auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
         // One thread atomically updates the number and data size of total unique values as well as
         // the number of unique values inserted by this fragment.
-        cg::invoke_one(block, [&]() {
+        if (t == 0) {
           total_num_dict_entries =
             chunk_num_dict_entries.fetch_add(num_unique, cuda::std::memory_order_relaxed);
           total_num_dict_entries += num_unique;
           num_dict_vals += num_unique;
           chunk_uniq_data_size.fetch_add(uniq_data_size, cuda::std::memory_order_relaxed);
-        });
-        block.sync();
+        }
+        __syncthreads();
 
         // Check if the num unique values in chunk has already exceeded max dict size and early exit
         if (total_num_dict_entries > MAX_DICT_SIZE) { break; }
       }  // for loop
       // Flush the number of unique values inserted by this fragment
-      cg::invoke_one(block, [&]() { frag->num_dict_vals = num_dict_vals; });
+      if (t == 0) { frag->num_dict_vals = num_dict_vals; };
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
@@ -291,12 +288,18 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       using block_scan = cub::BlockScan<size_type, block_size>;
       __shared__ typename block_scan::TempStorage scan_storage;
 
-      auto const per_thread_count = (t < num_frags) ? col_frags[frag_start + t].num_dict_vals : 0;
-      auto per_thread_offset      = 0;
-      block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
-      if (t < num_frags) { fragment_cursor[t] = per_thread_offset; }
+      auto base_idx = 0;
+      while (base_idx < num_frags) {
+        auto const idx = base_idx + t;
+        auto const per_thread_count =
+          (idx < num_frags) ? col_frags[frag_start + idx].num_dict_vals : 0;
+        auto per_thread_offset = 0;
+        block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
+        if (idx < num_frags) { fragment_cursor[idx] = per_thread_offset; }
+        base_idx += block_size;
+        __syncthreads();
+      }
     }
-    __syncthreads();
 
     // Iterate over all slots in the map, claim a dict_id in the bucket and write it to dict_data
     for (; t < chunk.dict_map_size; t += block_size) {
@@ -326,10 +329,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         auto const loc = counter.fetch_add(1, memory_order_relaxed);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
-        // If sorting dict page ever becomes a hard requirement, enable the following statement
-        // and add a dict sorting step before storing into the slot's second field.
-        // chunk.dict_data_idx[loc] = idx;
-        slot->second = loc;
+        slot->second         = loc;
       }
     }
   }
