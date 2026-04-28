@@ -140,16 +140,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
     return QueryResult(
         frame=(
-            # SQL: FROM catalog_sales, date_dim WHERE cs_sold_date_sk = d_date_sk
-            catalog_sales.join(
-                date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk"
-            )
-            # SQL: JOIN item ON cs_item_sk = i_item_sk
-            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            # SQL: FROM catalog_sales, customer_demographics, date_dim, item, promotion
             # SQL: JOIN customer_demographics ON cs_bill_cdemo_sk = cd_demo_sk
-            .join(
+            catalog_sales.join(
                 customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk"
             )
+            # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+            # SQL: JOIN item ON cs_item_sk = i_item_sk
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
             # SQL: JOIN promotion ON cs_promo_sk = p_promo_sk
             .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
             # SQL: WHERE cd_gender='{gen}' AND cd_marital_status='{ms}' AND cd_education_status='{es}' AND (p_channel_email='N' OR p_channel_event='N') AND d_year={year}
