@@ -5,8 +5,6 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/utilities/cuda_memcpy.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -16,7 +14,6 @@
 
 #include <cassert>
 #include <memory>
-#include <numeric>
 
 /**
  * @file table_device_view.cuh
