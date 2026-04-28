@@ -812,25 +812,25 @@ TEST_F(StreamingGroupbyTest, ManySmallBatches)
   verify_against_groupby(keys, results, batches, KEY_COL, reqs);
 }
 
-// Test that exceeding unique key capacity throws.
-TEST_F(StreamingGroupbyTest, ExceedsKeyTableCapacityThrows)
+// Test that exceeding distinct-key capacity throws.
+TEST_F(StreamingGroupbyTest, ExceedsDistinctKeyCapacityThrows)
 {
   using K = int32_t;
   using V = int32_t;
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  // max_groups=4: can hold at most 4 distinct keys and 4 cumulative rows.
+  // max_groups=4: can hold at most 4 distinct keys.
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 4);
 
-  // Batch with 4 unique keys fills both row and distinct-key capacity.
+  // Batch with 4 unique keys fills distinct-key capacity.
   cudf::test::fixed_width_column_wrapper<K> k1{0, 1, 2, 3};
   cudf::test::fixed_width_column_wrapper<V> v1{10, 20, 30, 40};
   streaming_agg.aggregate(cudf::table_view{{k1, v1}});
 
-  // Any further batch exceeds cumulative row capacity (4 + 1 > 4).
-  cudf::test::fixed_width_column_wrapper<K> k2{0};
+  // Any further batch with a new distinct key exceeds distinct-key capacity (4 + 1 > 4).
+  cudf::test::fixed_width_column_wrapper<K> k2{4};
   cudf::test::fixed_width_column_wrapper<V> v2{50};
-  EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k2, v2}}), std::overflow_error);
+  EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k2, v2}}), cudf::logic_error);
 }
 
 // Test that sliced input columns with non-zero offsets work correctly.
@@ -1235,21 +1235,45 @@ TEST_F(StreamingGroupbyTest, EncodingOverflowThrows)
   using V = int32_t;
 
   auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
-  // max_groups=6: cumulative row count must not exceed 6.
+  // max_groups=6, encoding-buffer capacity = max_groups *
+  // STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER (currently 2) = 12.
+  // Cumulative input rows must not exceed 12.
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 6);
 
-  cudf::test::fixed_width_column_wrapper<K> k1{0, 1, 2};
-  cudf::test::fixed_width_column_wrapper<V> v1{10, 20, 30};
-  streaming_agg.aggregate(cudf::table_view{{k1, v1}});  // num_stored=3
+  cudf::test::fixed_width_column_wrapper<K> k{0, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> v{10, 20, 30};
+  streaming_agg.aggregate(cudf::table_view{{k, v}});  // total_input_rows=3
+  streaming_agg.aggregate(cudf::table_view{{k, v}});  // total_input_rows=6
+  streaming_agg.aggregate(cudf::table_view{{k, v}});  // total_input_rows=9
+  streaming_agg.aggregate(cudf::table_view{{k, v}});  // total_input_rows=12
 
-  cudf::test::fixed_width_column_wrapper<K> k2{0, 1, 2};
-  cudf::test::fixed_width_column_wrapper<V> v2{10, 20, 30};
-  streaming_agg.aggregate(cudf::table_view{{k2, v2}});  // num_stored=6
+  // Fifth batch: total_input_rows=12, batch_size=3, 12+3=15 > 12 = encoding capacity.
+  EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k, v}}), std::overflow_error);
+}
 
-  // Third batch: num_stored=6, batch_size=3, 6+3=9 > 6 = max_groups.
-  cudf::test::fixed_width_column_wrapper<K> k3{0, 1, 2};
-  cudf::test::fixed_width_column_wrapper<V> v3{10, 20, 30};
-  EXPECT_THROW(streaming_agg.aggregate(cudf::table_view{{k3, v3}}), std::overflow_error);
+// Test that cumulative input rows can exceed `max_groups` thanks to the encoding-buffer
+// over-allocation, as long as distinct keys remain within `max_groups`.
+TEST_F(StreamingGroupbyTest, EncodingBufferAllowsRowsBeyondMaxGroups)
+{
+  using K = int32_t;
+  using V = int32_t;
+
+  auto reqs = single_agg_req(1, cudf::make_sum_aggregation<cudf::groupby_aggregation>());
+  // max_groups=3: only 3 distinct keys, but encoding buffer allows more cumulative rows.
+  cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 3);
+
+  cudf::test::fixed_width_column_wrapper<K> k{0, 1, 2};
+  cudf::test::fixed_width_column_wrapper<V> v{10, 20, 30};
+  cudf::table_view batch{{k, v}};
+
+  // Two batches: 6 cumulative rows > max_groups=3, but distinct_count stays at 3.
+  streaming_agg.aggregate(batch);
+  streaming_agg.aggregate(batch);
+
+  EXPECT_EQ(streaming_agg.distinct_count(), 3);
+
+  auto [keys, results] = streaming_agg.finalize();
+  verify_against_groupby(keys, results, {batch, batch}, KEY_COL, reqs);
 }
 
 TEST_F(StreamingGroupbyTest, StructKeySumTwoBatches)

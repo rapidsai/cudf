@@ -436,21 +436,25 @@ struct streaming_aggregation_request {
  * insertion and in-place aggregation updates. Partial states from distributed workers
  * can be combined via `merge()`, and final results are produced via `finalize()`.
  *
- * The `max_groups` parameter controls GPU memory usage by setting the upper bound on
- * distinct key combinations. The hash table and aggregation result columns are
- * pre-allocated to this capacity. Unique keys are accumulated incrementally — only
- * newly discovered keys are stored, and key storage grows proportionally to actual
- * distinct keys rather than `max_groups`. All column types (including variable-width
- * types such as strings, lists, and structs) are supported for key columns.
- * Only hash-based aggregation kinds are supported.
+ * The `max_groups` parameter sets the upper bound on distinct key combinations. The
+ * hash set and dense aggregation slots are pre-allocated to this capacity. To allow
+ * cumulative input rows to exceed `max_groups` (useful for high-duplicate streams),
+ * the encoding buffer (companion vectors and sparse aggregation results table) is
+ * internally sized to a multiple of `max_groups`; cumulative input rows must remain
+ * within that buffer.
+ *
+ * Unique keys are accumulated incrementally — only newly discovered keys are stored,
+ * and key storage grows proportionally to actual distinct keys rather than `max_groups`.
+ * All column types (including variable-width types such as strings, lists, and structs)
+ * are supported for key columns. Only hash-based aggregation kinds are supported.
  *
  * Supported aggregation kinds:
  *   SUM, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL,
  *   MEAN, M2, VARIANCE, STD
  *
  * @throws std::invalid_argument for unsupported aggregation kinds
- * @throws std::invalid_argument if a single batch exceeds `max_groups` rows
- * @throws std::overflow_error if cumulative batch rows exceed `max_groups`
+ * @throws std::invalid_argument if a single batch exceeds the encoding buffer capacity
+ * @throws std::overflow_error if cumulative batch rows exceed the encoding buffer capacity
  * @throws cudf::logic_error if cumulative distinct keys exceed `max_groups`
  */
 class streaming_groupby {
@@ -474,9 +478,10 @@ class streaming_groupby {
    *
    * @param key_indices Indices of columns in the data table that serve as groupby keys
    * @param requests The aggregations to perform and which columns to aggregate
-   * @param max_groups Upper bound on distinct key combinations. Also limits the
-   *        total number of rows that can be processed: the accumulated row count
-   *        plus the next batch size must not exceed `max_groups`.
+   * @param max_groups Upper bound on distinct key combinations. The hash set and
+   *        dense aggregation slots are sized to this capacity. The encoding buffer
+   *        is sized to a multiple of `max_groups` to allow cumulative input rows to
+   *        exceed the distinct-key bound.
    * @param null_handling Indicates whether rows in keys that contain NULL values should be included
    *
    * @throws std::invalid_argument if `max_groups <= 0`
@@ -497,8 +502,8 @@ class streaming_groupby {
    * @param data Table containing both key and value columns
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
-   * @throws std::invalid_argument if `data.num_rows() > max_groups`
-   * @throws std::overflow_error if accumulated rows plus batch size exceeds `max_groups`
+   * @throws std::invalid_argument if `data.num_rows()` exceeds the encoding buffer capacity
+   * @throws std::overflow_error if accumulated rows plus batch size exceeds the encoding buffer capacity
    * @throws cudf::logic_error if distinct keys exceed `max_groups`
    */
   void aggregate(table_view const& data, rmm::cuda_stream_view stream = cudf::get_default_stream());
@@ -515,7 +520,7 @@ class streaming_groupby {
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @throws std::invalid_argument if the other object has more distinct keys than `max_groups`
-   * @throws std::overflow_error if accumulated rows plus batch size exceeds `max_groups`
+   * @throws std::overflow_error if accumulated rows plus distinct keys merged exceed the encoding buffer capacity
    * @throws cudf::logic_error if this object has not been initialized via `aggregate()`
    * @throws cudf::logic_error if distinct keys exceed `max_groups` after merge
    */
@@ -540,6 +545,15 @@ class streaming_groupby {
   [[nodiscard]] std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> finalize(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const;
+
+  /**
+   * @brief Returns the number of distinct keys accumulated so far.
+   *
+   * Returns 0 before any successful `aggregate()` or `merge()` call.
+   *
+   * @return The current count of unique keys in the persistent hash table
+   */
+  [[nodiscard]] size_type distinct_count() const noexcept;
 
  private:
   struct impl;

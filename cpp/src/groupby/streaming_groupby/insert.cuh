@@ -31,15 +31,16 @@ template <bool has_nested>
 streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_insert_impl(
   table_view const& batch_keys, rmm::cuda_stream_view stream)
 {
-  auto const batch_size = batch_keys.num_rows();
-  auto const num_stored = _num_stored;
-  auto const temp_mr    = cudf::get_current_device_resource_ref();
-  auto const has_null   = cudf::nullate::DYNAMIC{_has_nullable_keys};
+  auto const batch_size       = batch_keys.num_rows();
+  auto const total_input_rows = _total_input_rows;
+  auto const temp_mr          = cudf::get_current_device_resource_ref();
+  auto const has_null         = cudf::nullate::DYNAMIC{_has_nullable_keys};
 
-  CUDF_EXPECTS(static_cast<int64_t>(num_stored) + batch_size <= _max_groups,
-               "Cumulative batch rows (" + std::to_string(num_stored) + " + " +
-                 std::to_string(batch_size) + ") exceeds max_groups (" +
-                 std::to_string(_max_groups) + "). Use smaller batches or increase max_groups.",
+  CUDF_EXPECTS(static_cast<int64_t>(total_input_rows) + batch_size <= _encoding_capacity,
+               "Cumulative batch rows (" + std::to_string(total_input_rows) + " + " +
+                 std::to_string(batch_size) + ") exceeds encoding-buffer capacity (" +
+                 std::to_string(_encoding_capacity) +
+                 "). Use smaller batches or increase max_groups.",
                std::overflow_error);
 
   // Preprocess batch for row operators.
@@ -70,8 +71,8 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     preprocessed_batch, _preprocessed_batches, has_null, stream);
 
   auto const comparator = n_table_comparator{
-    batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), num_stored};
-  auto const hasher = offset_cache_hasher{batch_hash_cache.data(), num_stored};
+    batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), total_input_rows};
+  auto const hasher = offset_cache_hasher{batch_hash_cache.data(), total_input_rows};
 
   auto set_ref =
     _key_set->ref(cuco::op::insert_and_find).rebind_key_eq(comparator).rebind_hash_function(hasher);
@@ -84,7 +85,8 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                     cuda::counting_iterator<size_type>(0),
                     cuda::counting_iterator<size_type>(batch_size),
                     target_indices.begin(),
-                    insert_and_map_fn{set_ref, batch_bitmask, num_stored, inserted_flags.data()});
+                    insert_and_map_fn{
+                      set_ref, batch_bitmask, total_input_rows, inserted_flags.data()});
 
   // Count newly inserted keys.
   auto const new_distinct_count = static_cast<size_type>(thrust::count(
@@ -129,7 +131,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
                                                 _key_batch->data(),
                                                 _key_row->data(),
                                                 _encoded_indices->data(),
-                                                num_stored,
+                                                total_input_rows,
                                                 new_batch_id,
                                                 _distinct_count});
 
@@ -137,7 +139,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   }
 
   // Advance encoding offset by the full batch size.
-  _num_stored += batch_size;
+  _total_input_rows += batch_size;
 
   return batch_insert_result{
     std::move(target_indices), new_distinct_count, std::move(bitmask_buffer)};

@@ -30,6 +30,17 @@
 
 namespace cudf::groupby {
 
+/// Encoding-buffer over-allocation factor for streaming_groupby.
+///
+/// The hash set and dense aggregation slot count are bounded by `max_groups`
+/// (the user-facing distinct-key capacity), but the encoding scheme reserves one
+/// slot per *input* row (whether or not it ends up being a new distinct key).
+/// To allow cumulative input rows to exceed `max_groups` without sacrificing
+/// runtime perf (no compaction, no translation lookup), companion vectors and
+/// the sparse aggregation results table are pre-allocated to
+/// `max_groups * STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER`.
+inline constexpr size_type STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER = 2;
+
 // The actual comparator and hasher are always rebinded per-batch via
 // rebind_key_eq / rebind_hash_function, so the types used here are never invoked.
 using streaming_probing_scheme_t =
@@ -46,8 +57,8 @@ using streaming_set_t = cuco::static_set<cudf::size_type,
 
 /// N-table comparator for the persistent hash set.
 ///
-/// Indices >= num_stored are "batch rows" (encoded as num_stored + batch_idx).
-/// Indices < num_stored are "stored groups" resolved via companion vectors
+/// Indices >= total_input_rows are "batch rows" (encoded as total_input_rows + batch_idx).
+/// Indices < total_input_rows are "stored groups" resolved via companion vectors
 /// key_batch[idx] and key_row[idx] to (compacted_batch_table, row_within_batch).
 ///
 /// Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
@@ -58,16 +69,18 @@ struct n_table_comparator {
   RowEqT const* cross_eqs;     ///< Device array [num_compacted_batches]: batch vs compacted[k]
   size_type const* key_batch;  ///< Companion vector: compacted batch index per stored entry
   size_type const* key_row;    ///< Companion vector: row index within compacted batch
-  size_type num_stored;        ///< Threshold: idx >= num_stored is a batch row
+  size_type total_input_rows;  ///< Threshold: idx >= total_input_rows is a batch row
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
-    bool const lhs_is_batch = (lhs >= num_stored);
-    bool const rhs_is_batch = (rhs >= num_stored);
+    bool const lhs_is_batch = (lhs >= total_input_rows);
+    bool const rhs_is_batch = (rhs >= total_input_rows);
 
-    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - num_stored, rhs - num_stored); }
-    if (lhs_is_batch) { return cross_eqs[key_batch[rhs]](lhs - num_stored, key_row[rhs]); }
-    if (rhs_is_batch) { return cross_eqs[key_batch[lhs]](rhs - num_stored, key_row[lhs]); }
+    if (lhs_is_batch && rhs_is_batch) {
+      return batch_self_eq(lhs - total_input_rows, rhs - total_input_rows);
+    }
+    if (lhs_is_batch) { return cross_eqs[key_batch[rhs]](lhs - total_input_rows, key_row[rhs]); }
+    if (rhs_is_batch) { return cross_eqs[key_batch[lhs]](rhs - total_input_rows, key_row[lhs]); }
     return lhs == rhs;
   }
 };
@@ -111,7 +124,7 @@ struct scatter_new_key_metadata {
   size_type* key_batch;                  ///< companion: batch id at encoded index
   size_type* key_row;                    ///< companion: row within compacted batch
   size_type* encoded_indices;            ///< encoded_indices[dense_group] = encoded index
-  size_type encoding_offset;             ///< num_stored: added to batch-local index to get encoded
+  size_type encoding_offset;             ///< total_input_rows: added to batch-local index to get encoded
   size_type batch_id;
   size_type num_groups_before;
   __device__ void operator()(size_type idx) const
@@ -156,15 +169,19 @@ struct streaming_groupby::impl {
   std::vector<size_type> _key_indices;
   std::vector<streaming_aggregation_request> _requests_clone;
   size_type _max_groups;
+  /// Capacity of the encoding buffer (companion vectors and sparse agg results table).
+  /// `_max_groups * STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER`. Bounds cumulative
+  /// input rows; distinct keys are still bounded by `_max_groups`.
+  size_type _encoding_capacity{0};
   null_policy _null_handling;
 
   bool _initialized{false};
   size_type _distinct_count{0};
   /// High-water mark of encoded indices consumed.  Encoded batch indices are
-  /// [_num_stored, _num_stored + batch_size).  After each batch, _num_stored
-  /// advances by batch_size (the full encoding range, not just distinct count).
-  /// The sum of all batch sizes must not exceed max_groups.
-  size_type _num_stored{0};
+  /// [_total_input_rows, _total_input_rows + batch_size).  After each batch,
+  /// _total_input_rows advances by batch_size (the full encoding range, not
+  /// just distinct count). The sum of all batch sizes must not exceed max_groups.
+  size_type _total_input_rows{0};
   bool _has_nullable_keys{false};
   bool _has_nested_keys{false};
 

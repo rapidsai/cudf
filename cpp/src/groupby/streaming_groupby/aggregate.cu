@@ -25,9 +25,9 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, rmm::cuda_str
   auto const batch_size = data.num_rows();
   if (batch_size == 0) { return; }
 
-  CUDF_EXPECTS(batch_size <= _max_groups,
-               "Batch size (" + std::to_string(batch_size) + ") exceeds max_groups (" +
-                 std::to_string(_max_groups) + ").",
+  CUDF_EXPECTS(batch_size <= _encoding_capacity,
+               "Batch size (" + std::to_string(batch_size) +
+                 ") exceeds encoding-buffer capacity (" + std::to_string(_encoding_capacity) + ").",
                std::invalid_argument);
 
   if (!_initialized) { initialize(data, stream); }
