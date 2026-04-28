@@ -283,9 +283,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             selected_dates,
             left_on="d_date",
             right_on="selected_date",
-            how="left",
         )
-        .filter(pl.col("selected_date").is_not_null())
+        .filter(pl.col("d_date").is_not_null())
         # SQL: GROUP BY i_item_id; Sum(sr_return_quantity) AS sr_item_qty
         .group_by("i_item_id")
         .agg(
@@ -310,9 +309,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             selected_dates,
             left_on="d_date",
             right_on="selected_date",
-            how="left",
         )
-        .filter(pl.col("selected_date").is_not_null())
+        .filter(pl.col("d_date").is_not_null())
         .group_by("i_item_id")
         .agg(
             [
@@ -336,9 +334,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             selected_dates,
             left_on="d_date",
             right_on="selected_date",
-            how="left",
         )
-        .filter(pl.col("selected_date").is_not_null())
+        .filter(pl.col("d_date").is_not_null())
         .group_by("i_item_id")
         .agg(
             [
