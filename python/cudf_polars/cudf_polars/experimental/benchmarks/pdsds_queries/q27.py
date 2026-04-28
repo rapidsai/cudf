@@ -68,31 +68,29 @@ def level(  # noqa: D103
     group_cols: list[str],
     g_state_val: int,
 ) -> pl.LazyFrame:
-    lf = base_data.group_by(group_cols).agg(agg_exprs)
-    if "s_state" in group_cols:
-        return lf.select(
-            [
-                "i_item_id",
-                "s_state",
-                pl.lit(g_state_val, dtype=pl.Int64).alias("g_state"),
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-            ]
-        )
+    if group_cols:
+        lf = base_data.group_by(group_cols).agg(agg_exprs)
     else:
-        return lf.select(
-            [
-                "i_item_id",
-                pl.lit(None, dtype=pl.String).alias("s_state"),
-                pl.lit(g_state_val, dtype=pl.Int64).alias("g_state"),
-                "agg1",
-                "agg2",
-                "agg3",
-                "agg4",
-            ]
-        )
+        lf = base_data.select(agg_exprs)
+    cols: list[str | pl.Expr] = []
+    if "i_item_id" in group_cols:
+        cols.append("i_item_id")
+    else:
+        cols.append(pl.lit(None, dtype=pl.String).alias("i_item_id"))
+    if "s_state" in group_cols:
+        cols.append("s_state")
+    else:
+        cols.append(pl.lit(None, dtype=pl.String).alias("s_state"))
+    cols.extend(
+        [
+            pl.lit(g_state_val, dtype=pl.Int64).alias("g_state"),
+            "agg1",
+            "agg2",
+            "agg3",
+            "agg4",
+        ]
+    )
+    return lf.select(cols)
 
 
 def polars_impl(run_config: RunConfig) -> QueryResult:
@@ -140,12 +138,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     level1 = level(base_data, agg_exprs, ["i_item_id", "s_state"], 0)
     level2 = level(base_data, agg_exprs, ["i_item_id"], 1)
+    level3 = level(base_data, agg_exprs, [], 1)
 
     sort_by = {"i_item_id": False, "s_state": False}
     limit = 100
     return QueryResult(
         frame=(
-            pl.concat([level1, level2])
+            pl.concat([level1, level2, level3])
             .sort(sort_by.keys(), nulls_last=True)
             .limit(limit)
         ),
@@ -226,11 +225,21 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         grouping_col="g_state",
         grouping_value=1,
     )
+    # SQL: GROUP BY ROLLUP(i_item_id, s_state) — Level 2: grand total
+    level3 = rollup_level(
+        base_data,
+        [],
+        all_cols,
+        agg_exprs,
+        output_order,
+        grouping_col="g_state",
+        grouping_value=1,
+    )
 
     return QueryResult(
         frame=(
-            # SQL: UNION ALL (rollup level 0 + level 1)
-            pl.concat([level1, level2])
+            # SQL: UNION ALL (rollup levels 0 + 1 + 2)
+            pl.concat([level1, level2, level3])
             # SQL: ORDER BY i_item_id, s_state
             .sort(["i_item_id", "s_state"], nulls_last=True)
             # SQL: LIMIT 100
