@@ -26,7 +26,7 @@ using nested_equality_t = pair_equal<row::equality::strong_index_comparator_adap
 using flat_equality_t = pair_equal<row::equality::strong_index_comparator_adapter<
   row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>>;
 
-// --- Count ref types (used by count_each kernel) ---
+// --- Count ref types (used by partitioned_count kernel) ---
 
 template <typename Equality>
 using count_ref_t =

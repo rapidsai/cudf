@@ -13,9 +13,9 @@
 
 namespace cudf::detail {
 
-/// Launch the count_each kernel.
+/// Launch the partitioned_count kernel.
 template <bool IsOuter, typename Ref>
-void launch_count_each(probe_key_type const* keys,
+void launch_partitioned_count(probe_key_type const* keys,
                        cuda::std::int64_t n,
                        size_type* output,
                        Ref ref,

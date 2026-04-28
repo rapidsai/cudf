@@ -4,7 +4,7 @@
  */
 
 #include "common.cuh"
-#include "count_kernels.hpp"
+#include "partitioned_count_kernels.hpp"
 #include "dispatch.cuh"
 #include "join/join_common_utils.cuh"
 
@@ -63,10 +63,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> make_join_match_counts(
                        .rebind_key_eq(equality)
                        .rebind_hash_function(hash_table.hash_function());
     if (join == join_kind::INNER_JOIN) {
-      launch_count_each<false>(probe_keys.data(), n, match_counts->begin(), ref, stream);
+      launch_partitioned_count<false>(probe_keys.data(), n, match_counts->begin(), ref, stream);
     } else {
       // IsOuter=true handles the clamp (zero → 1) for LEFT/FULL joins internally.
-      launch_count_each<true>(probe_keys.data(), n, match_counts->begin(), ref, stream);
+      launch_partitioned_count<true>(probe_keys.data(), n, match_counts->begin(), ref, stream);
     }
   };
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Ported from cuco's open_addressing count_each kernel.
+// Ported from cuco's open_addressing partitioned_count kernel.
 
 #pragma once
 
@@ -20,7 +20,7 @@ namespace cudf::detail {
 
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
-  count_each_kernel(probe_key_type const* __restrict__ keys,
+  partitioned_count_kernel(probe_key_type const* __restrict__ keys,
                     cuda::std::int64_t n,
                     size_type* __restrict__ output,
                     Ref ref)
@@ -60,7 +60,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 }
 
 template <bool IsOuter, typename Ref>
-void launch_count_each(probe_key_type const* keys,
+void launch_partitioned_count(probe_key_type const* keys,
                        cuda::std::int64_t n,
                        size_type* output,
                        Ref ref,
@@ -71,7 +71,7 @@ void launch_count_each(probe_key_type const* keys,
   auto const config =
     grid_1d{static_cast<thread_index_type>(n * DEFAULT_JOIN_CG_SIZE), DEFAULT_JOIN_BLOCK_SIZE};
 
-  count_each_kernel<IsOuter>
+  partitioned_count_kernel<IsOuter>
     <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(keys, n, output, ref);
 }
 
