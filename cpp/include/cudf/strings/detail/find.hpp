@@ -35,4 +35,13 @@ std::unique_ptr<column> ends_with(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @copydoc cudf::strings::count
+ */
+std::unique_ptr<column> count(
+  strings_column_view const& input,
+  string_scalar const& target,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 }  // namespace cudf::strings::detail
