@@ -163,7 +163,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # SQL: subquery dj — ss_ticket_number, ss_customer_sk, Count(*) cnt FROM store_sales, date_dim, store, household_demographics WHERE ...
-    inner_query = (
+    dj = (
         # SQL: FROM store_sales, date_dim WHERE ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         # SQL: JOIN store ON ss_store_sk = s_store_sk
@@ -195,9 +195,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             # SQL: FROM dj (subquery), customer WHERE ss_customer_sk = c_customer_sk
-            inner_query.join(
-                customer, left_on="ss_customer_sk", right_on="c_customer_sk"
-            )
+            dj.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
             # SQL: AND cnt BETWEEN 1 AND 5
             .filter(pl.col("cnt").is_between(1, 5))
             # SQL: SELECT c_last_name, c_first_name, c_salutation, c_preferred_cust_flag, ss_ticket_number, cnt
