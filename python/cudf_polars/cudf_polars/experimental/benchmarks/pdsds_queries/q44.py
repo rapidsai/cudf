@@ -217,7 +217,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .with_columns(pl.lit(1).alias("join_key"))
     )
 
-    # SQL: ascending subquery — Rank() OVER (ORDER BY avg_profit ASC) WHERE avg > 0.9 * benchmark
+    # SQL: inner subquery shared by ascending and descending — item-level avg profit filtered
+    # against the benchmark. Polars' comm_subplan_elim optimization detects that both branches
+    # reference an identical subtree and inserts a CACHE node, so sharing a variable here does
+    # not give an unfair advantage over inlining the definition into each branch.
     item_profits = (
         # SQL: WHERE ss_store_sk = {store_sk}
         store_sales.filter(pl.col("ss_store_sk") == store_sk)
