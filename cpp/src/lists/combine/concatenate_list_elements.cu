@@ -14,6 +14,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -244,6 +245,28 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                std::invalid_argument);
 
   if (input.size() == 0) { return cudf::empty_like(input); }
+
+  // Guard: when the inner list column has 0 rows, every outer row is either null or a
+  // valid-but-empty list.  The kernels below read the inner column's offsets buffer via
+  // a raw device pointer; for a 0-row list column that buffer may be unallocated (zero
+  // bytes), so the pointer is invalid and the read triggers cudaErrorIllegalAddress.
+  // Build the result directly: all-zero offsets, a 0-row child, and the outer null mask.
+  //
+  // null_policy need not be consulted: child.size() == 0 implies child.has_nulls() == false,
+  // so both policies would dispatch to concatenate_lists_ignore_null with build_null_mask=false,
+  // which simply copies the outer null mask — exactly what we do below.
+  if (child.size() == 0) {
+    auto const num_rows = input.size();
+    auto out_offsets    = cudf::make_column_from_scalar(
+      numeric_scalar<size_type>(0, true, stream, mr), num_rows + 1, stream, mr);
+    // Use the grandchild's schema (not child's) so out_entries has type T, not list<T>.
+    auto out_entries = cudf::empty_like(lists_column_view(child).child());
+    return make_lists_column(num_rows,
+                             std::move(out_offsets),
+                             std::move(out_entries),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input, stream, mr));
+  }
 
   bool const has_null_list = child.has_nulls();
   return (null_policy == concatenate_null_policy::IGNORE || !has_null_list)

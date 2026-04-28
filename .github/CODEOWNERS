@@ -6,6 +6,7 @@ python/cudf/udf_cpp/ @rapidsai/cudf-cpp-codeowners
 python/            @rapidsai/cudf-python-codeowners
 notebooks/         @rapidsai/cudf-python-codeowners
 python/dask_cudf/  @rapidsai/cudf-dask-codeowners
+python/cudf_polars/ @rapidsai/cudf-polars-codeowners
 
 #cmake code owners
 CMakeLists.txt @rapidsai/cudf-cmake-codeowners

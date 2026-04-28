@@ -390,6 +390,10 @@ class DynamicPlanningOptions:
     sample_chunk_count
         The maximum number of chunks to sample before deciding whether
         to shuffle. Default is 2.
+    bloom_filter_threshold
+        Row-count ratio (small / large) below which a bloom filter is applied
+        to pre-filter the large side of an inner or semi shuffle join.
+        Set to 0 to disable bloom filtering. Default is 0.5.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -399,12 +403,21 @@ class DynamicPlanningOptions:
             f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
         )
     )
+    bloom_filter_threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.sample_chunk_count, int):
             raise TypeError("sample_chunk_count must be an int")
         if self.sample_chunk_count < 1:
             raise ValueError("sample_chunk_count must be at least 1")
+        if not isinstance(self.bloom_filter_threshold, float):
+            raise TypeError("bloom_filter_threshold must be a float")
+        if not 0.0 <= self.bloom_filter_threshold <= 1.0:
+            raise ValueError("bloom_filter_threshold must be between 0 and 1")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -674,10 +687,10 @@ class StreamingExecutor:
         Default is 50% of device memory on the client process.
         This argument is only used by the "rapidsmpf" runtime.
     sink_to_directory
-        Whether multi-partition sink operations should write to a directory
-        rather than a single file. By default, this will be set to True for
-        the 'distributed' cluster and False otherwise. The 'distributed'
-        cluster does not currently support ``sink_to_directory=False``.
+        Whether multi-partition sink operations write to a directory rather
+        than a single file. For the distributed, spmd, ray, and dask clusters
+        this is always True; setting it to False raises a ValueError.
+        Defaults to False for the single-GPU cluster.
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
@@ -859,10 +872,10 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
-        if self.cluster == "distributed":
+        if self.cluster in ("distributed", "spmd", "ray", "dask"):
             if self.sink_to_directory is False:
                 raise ValueError(
-                    "The distributed cluster requires sink_to_directory=True"
+                    f"The {self.cluster} cluster requires sink_to_directory=True"
                 )
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:
