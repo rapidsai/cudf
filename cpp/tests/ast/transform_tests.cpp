@@ -1319,24 +1319,52 @@ TYPED_TEST(DecimalTests, DecimalComparator)
   }
 }
 
-TYPED_TEST(DecimalTests, DecimalScaleMismatch)
+TYPED_TEST(DecimalTests, DecimalDifferentScales)
 {
   using decimalXX = TypeParam;
   using RepType   = cudf::device_storage_type_t<decimalXX>;
 
-  auto scale1 = numeric::scale_type{-1};
+  auto scale1 = numeric::scale_type{0};
   auto scale2 = numeric::scale_type{-2};
 
-  auto value0   = cudf::fixed_point_scalar<decimalXX>(RepType{100}, scale1, true);
+  auto value0   = cudf::fixed_point_scalar<decimalXX>(RepType{10}, scale1, true);
   auto literal0 = cudf::ast::literal(value0);
-  auto c_0      = cudf::test::fixed_point_column_wrapper<RepType>({1000, 2000, 3000, 4000}, scale2);
-  auto table    = cudf::table_view({c_0});
+  auto c_0 = cudf::test::fixed_point_column_wrapper<RepType>({500, 1000, 2000, 3000, 4000}, scale2);
+  auto table     = cudf::table_view({c_0});
   auto col_ref_0 = cudf::ast::column_reference(0);
 
-  cudf::ast::tree tree{};
-  auto const& expr =
-    tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, literal0, col_ref_0));
-  EXPECT_THROW(cudf::compute_column(table, expr), cudf::logic_error);
+  {
+    cudf::ast::tree tree{};
+    auto const& expr =
+      tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_0, literal0));
+    auto expected = cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 0, 0});
+    auto result   = cudf::compute_column(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::compute_column_jit(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+  {
+    cudf::ast::tree tree{};
+    auto const& expr =
+      tree.push(cudf::ast::operation(cudf::ast::ast_operator::DIV, col_ref_0, literal0));
+    auto expected =
+      cudf::test::fixed_point_column_wrapper<RepType>({50, 100, 200, 300, 400}, scale2);
+    auto result = cudf::compute_column(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::compute_column_jit(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+  {
+    cudf::ast::tree tree{};
+    auto const& expr =
+      tree.push(cudf::ast::operation(cudf::ast::ast_operator::SUB, col_ref_0, literal0));
+    auto expected =
+      cudf::test::fixed_point_column_wrapper<RepType>({-500, 0, 1000, 2000, 3000}, scale2);
+    auto result = cudf::compute_column(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::compute_column_jit(table, expr);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
 }
 
 TYPED_TEST(TransformTest, NonDefaultStream)

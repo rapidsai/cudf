@@ -61,21 +61,22 @@ def test_trace_basic(
     assert b"overhead_duration" in result
 
 
-def test_import_without_structlog(monkeypatch: pytest.MonkeyPatch) -> None:
-    modules = list(sys.modules)
-
-    for module in modules:
-        if module.startswith("cudf_polars"):
-            monkeypatch.delitem(sys.modules, module)
-    monkeypatch.setitem(sys.modules, "structlog", None)
+def test_import_without_structlog() -> None:
+    # This test could avoid the subprocess by monkeypatching sys.modules, but
+    # that was flaky. https://github.com/rapidsai/cudf/pull/22012#issuecomment-4284536686
+    # has more details.
+    code = textwrap.dedent("""\
+    import sys
+    sys.modules["structlog"] = None
 
     import cudf_polars.dsl.tracing
-
     assert not cudf_polars.dsl.tracing._HAS_STRUCTLOG
 
-    # And we can run a query without error
+    import polars as pl
     q = pl.DataFrame({"a": [1, 2, 3]}).lazy().select(pl.col("a").sum())
     q.collect(engine="gpu")
+    """)
+    subprocess.check_call([sys.executable, "-c", code])
 
 
 @pytest.mark.skipif(

@@ -821,6 +821,44 @@ cdef class HybridScanReader:
             c_result, self.stream, self.mr
         )
 
+    def construct_row_group_passes(
+        self,
+        list row_group_indices,
+        size_t pass_read_limit,
+    ):
+        """Partition row groups into passes such that the GPU memory required to
+        materialize a pass is bounded by the specified limit.
+
+        Note that ``pass_read_limit`` is a hint, not an absolute limit. i.e. if
+        a row group cannot fit within the limit, it will still constitute a valid
+        pass.
+
+        Parameters
+        ----------
+        row_group_indices : list[int]
+            Input row group indices
+        pass_read_limit : int
+            Limit on the amount of memory used for reading and decompressing data
+        or 0 if there is no limit.
+
+        Returns
+        -------
+        list[list[int]]
+            Lists of row group indices, one per pass.
+
+        Raises
+        ------
+        ValueError
+            If ``row_group_indices`` is empty.
+        """
+        cdef vector[size_type] indices_vec = row_group_indices
+        return self.c_obj.get()[0].construct_row_group_passes(
+            host_span[const_size_type](
+                indices_vec.data(), indices_vec.size()
+            ),
+            pass_read_limit
+        )
+
     def has_next_table_chunk(self):
         """Check if there is any parquet data left to read.
 

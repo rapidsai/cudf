@@ -44,10 +44,10 @@ def tests(dtypes):
 
 
 @pytest.mark.parametrize("dtypes", _supported_dtypes, indirect=True)
-def test_cast_supported(tests):
+def test_cast_supported(engine: pl.GPUEngine, tests):
     df, totype = tests
     q = df.select(pl.col("a").cast(totype))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("dtypes", _unsupported_dtypes, indirect=True)
@@ -58,15 +58,15 @@ def test_cast_unsupported(tests):
     )
 
 
-def test_allow_double_cast():
+def test_allow_double_cast(engine: pl.GPUEngine):
     df = pl.LazyFrame({"c0": [1000]})
     query = df.select(pl.col("c0").cast(pl.Boolean).cast(pl.Int8))
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
 @pytest.mark.parametrize("dtype", [pl.Int64(), pl.Float64()])
 @pytest.mark.parametrize("strict", [True, False])
-def test_cast_strict_false_string_to_numeric(dtype, strict):
+def test_cast_strict_false_string_to_numeric(engine: pl.GPUEngine, dtype, strict):
     df = pl.LazyFrame({"c0": ["1969-12-08 17:00:01", "1", None]})
     query = df.with_columns(pl.col("c0").cast(dtype, strict=strict))
     if strict:
@@ -77,7 +77,7 @@ def test_cast_strict_false_string_to_numeric(dtype, strict):
             cudf_except=cudf_except,
         )
     else:
-        assert_gpu_result_equal(query)
+        assert_gpu_result_equal(query, engine=engine)
 
 
 def test_cast_from_string_unsupported():
@@ -92,7 +92,7 @@ def test_cast_to_string_unsupported():
     assert_ir_translation_raises(query, NotImplementedError)
 
 
-def test_float_to_decimal_rounding():
+def test_float_to_decimal_rounding(engine: pl.GPUEngine):
     # See https://github.com/rapidsai/cudf/pull/21450
     df = pl.LazyFrame(
         {
@@ -101,4 +101,4 @@ def test_float_to_decimal_rounding():
         }
     )
     q = df.select(pl.col("foo") / pl.col("bar"))
-    assert_gpu_result_equal(q, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_132)
