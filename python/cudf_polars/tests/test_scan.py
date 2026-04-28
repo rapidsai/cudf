@@ -184,7 +184,7 @@ def test_scan_row_index_projected_out(tmp_path):
     assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
 
-def test_scan_csv_column_renames_projection_schema(tmp_path):
+def test_scan_csv_column_renames_projection_schema(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
 
@@ -198,7 +198,7 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         },
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -221,7 +221,7 @@ def test_scan_csv_column_renames_projection_schema(tmp_path):
         (4, 2),
     ],
 )
-def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
+def test_scan_csv_multi(engine: pl.GPUEngine, tmp_path, filename, glob, nrows_skiprows):
     n_rows, skiprows = nrows_skiprows
     with (tmp_path / "test1.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5""")
@@ -235,7 +235,7 @@ def test_scan_csv_multi(tmp_path, filename, glob, nrows_skiprows):
         source = tmp_path / filename
     q = pl.scan_csv(source, glob=glob, n_rows=n_rows, skip_rows=skiprows)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_scan_csv_multi_differing_colnames(tmp_path):
@@ -277,35 +277,35 @@ def test_scan_csv_comment_str_not_implemented(tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_csv_comment_char(tmp_path):
+def test_scan_csv_comment_char(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo,bar,baz\n# 1,2,3\n3,4,5""")
 
     q = pl.scan_csv(tmp_path / "test.csv", comment_prefix="#")
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("nulls", [None, "3", ["3", "5"]])
-def test_scan_csv_null_values(tmp_path, nulls):
+def test_scan_csv_null_values(engine: pl.GPUEngine, tmp_path, nulls):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2,3\n3,4,5\n5,,2""")
 
     q = pl.scan_csv(tmp_path / "test.csv", null_values=nulls)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_csv_decimal_comma(tmp_path):
+def test_scan_csv_decimal_comma(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo|bar|baz\n1,23|2,34|3,56\n1""")
 
     q = pl.scan_csv(tmp_path / "test.csv", separator="|", decimal_comma=True)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_csv_skip_initial_empty_rows(tmp_path):
+def test_scan_csv_skip_initial_empty_rows(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""\n\n\n\nfoo|bar|baz\n1|2|3\n1""")
 
@@ -315,16 +315,16 @@ def test_scan_csv_skip_initial_empty_rows(tmp_path):
 
     q = pl.scan_csv(tmp_path / "test.csv", separator="|", skip_rows=1)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_csv_slice_end_none(tmp_path):
+def test_scan_csv_slice_end_none(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""c0\ntrue\nfalse""")
 
     q = pl.scan_csv(tmp_path / "test.csv").slice(10, None)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -335,10 +335,10 @@ def test_scan_csv_slice_end_none(tmp_path):
         {"a": pl.UInt64},
     ],
 )
-def test_scan_ndjson_schema(df, tmp_path, schema):
+def test_scan_ndjson_schema(engine: pl.GPUEngine, df, tmp_path, schema):
     make_partitioned_source(df, tmp_path / "file", "ndjson")
     q = pl.scan_ndjson(tmp_path / "file", schema=schema)
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_scan_ndjson_unsupported(df, tmp_path):
@@ -439,13 +439,13 @@ def test_scan_parquet_chunked(
     )
 
 
-def test_select_arbitrary_order_with_row_index_column(tmp_path):
+def test_select_arbitrary_order_with_row_index_column(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
     df.write_parquet(tmp_path / "df.parquet")
     q = pl.scan_parquet(tmp_path / "df.parquet", row_index_name="foo").select(
         [pl.col("a"), pl.col("foo")]
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -456,7 +456,14 @@ def test_select_arbitrary_order_with_row_index_column(tmp_path):
     ],
 )
 def test_scan_csv_with_and_without_header(
-    df, tmp_path, has_header, new_columns, row_index, columns, zlice
+    engine: pl.GPUEngine,
+    df,
+    tmp_path,
+    has_header,
+    new_columns,
+    row_index,
+    columns,
+    zlice,
 ):
     path = tmp_path / "test.csv"
     make_partitioned_source(
@@ -478,7 +485,7 @@ def test_scan_csv_with_and_without_header(
     if columns is not None:
         q = q.select(columns)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_scan_csv_without_header_and_new_column_names_raises(df, tmp_path):
@@ -488,13 +495,13 @@ def test_scan_csv_without_header_and_new_column_names_raises(df, tmp_path):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_with_row_index(tmp_path: Path) -> None:
+def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
     df = pl.DataFrame({"a": [1, 2, 3, 4]})
     df.write_csv(tmp_path / "test-0.csv")
     df.write_csv(tmp_path / "test-1.csv")
 
     q = pl.scan_csv(tmp_path / "test-*.csv", row_index_name="index", row_index_offset=0)
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_scan_from_file_uri(tmp_path: Path) -> None:
@@ -573,6 +580,7 @@ def test_scan_parquet_remote(
 
 
 def test_scan_ndjson_remote(
+    engine: pl.GPUEngine,
     request: pytest.FixtureRequest,
     tmp_path: Path,
     df: pl.DataFrame,
@@ -617,10 +625,12 @@ def test_scan_ndjson_remote(
     )
 
     q = pl.scan_ndjson(httpserver.url_for(server_path))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_parquet_with_decimal_literal_in_predicate(df, tmp_path):
+def test_scan_parquet_with_decimal_literal_in_predicate(
+    engine: pl.GPUEngine, df, tmp_path
+):
     make_partitioned_source(df, tmp_path / "file", "parquet")
 
     q = pl.scan_parquet(tmp_path / "file").filter(
@@ -628,20 +638,20 @@ def test_scan_parquet_with_decimal_literal_in_predicate(df, tmp_path):
         & (pl.lit(Decimal("2.00")).cast(pl.Decimal(15, 2)) < pl.col("d"))
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_csv_blank_line(tmp_path):
+def test_scan_csv_blank_line(engine: pl.GPUEngine, tmp_path):
     data = """c0
 
 polars"""
     fle = tmp_path / "test.csv"
     fle.write_text(data)
     q = pl.scan_csv(fle)
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_hits_scan_row_index_duplicate(request, tmp_path):
+def test_hits_scan_row_index_duplicate(engine: pl.GPUEngine, request, tmp_path):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_138,
@@ -656,7 +666,7 @@ def test_hits_scan_row_index_duplicate(request, tmp_path):
 
     if POLARS_VERSION_LT_135:
         # Did not raise before
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=engine)
     else:
         assert_ir_translation_raises(q, NotImplementedError)
 
@@ -687,29 +697,33 @@ def test_scan_compressed_file_raises(tmp_path, compression, file_type):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_scan_tiny_file_not_compressed(tmp_path):
+def test_scan_tiny_file_not_compressed(engine: pl.GPUEngine, tmp_path):
     # code coverage for the case where we try to
     # detect compression but the file is too small
     # to have a valid signature.
     path = tmp_path / "tiny.csv"
     path.write_bytes(b"a\n")
     q = pl.scan_csv(path, has_header=False, new_columns=["a"])
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.skipif(
     POLARS_VERSION_LT_138,
     reason="height parameter added in Polars 1.38",
 )
-@pytest.mark.parametrize("engine", [None, NO_CHUNK_ENGINE])
-def test_scan_parquet_zero_width_with_limit(tmp_path, engine, request, using_rapidsmpf):
+@pytest.mark.parametrize("custom_engine", [None, NO_CHUNK_ENGINE])
+def test_scan_parquet_zero_width_with_limit(
+    engine: pl.GPUEngine, tmp_path, custom_engine, request, using_streaming_engine
+):
     request.applymarker(
         pytest.mark.xfail(
-            using_rapidsmpf and engine is None,
+            using_streaming_engine and custom_engine is None,
             reason="https://github.com/rapidsai/cudf/issues/21644",
         )
     )
     path = tmp_path / "zero_width.parquet"
     pl.LazyFrame(height=20).sink_parquet(path)
     q = pl.scan_parquet(path).head(5)
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(
+        q, engine=custom_engine if custom_engine is not None else engine
+    )
