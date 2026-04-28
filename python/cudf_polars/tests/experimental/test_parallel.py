@@ -20,7 +20,7 @@ from cudf_polars.utils.config import ConfigOptions
 
 
 @pytest.mark.parametrize("column", ["a", "b"])
-def test_explode_multi(column, engine):
+def test_explode_multi(column, streaming_engine):
     df = pl.LazyFrame(
         {
             "a": [[1, 2], [3, 4], None],
@@ -29,19 +29,19 @@ def test_explode_multi(column, engine):
         }
     )
     q = df.explode(column)
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 @pytest.mark.parametrize(
     "mapping", [{}, {"b": "c"}, {"b": "a", "a": "b"}, {"a": "c", "b": "d"}]
 )
-def test_rename_multi(mapping, engine):
+def test_rename_multi(mapping, streaming_engine):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5]})
     q = df.rename(mapping)
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
-def test_rename_concat(engine) -> None:
+def test_rename_concat(streaming_engine) -> None:
     # https://github.com/rapidsai/cudf/pull/19121#issuecomment-2959305678
     q = pl.concat(
         [
@@ -49,10 +49,10 @@ def test_rename_concat(engine) -> None:
             pl.LazyFrame({"a": [4, 5, 6]}).rename({"a": "A"}),
         ]
     )
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
-def test_fallback_on_concat_zlice(engine) -> None:
+def test_fallback_on_concat_zlice(streaming_engine) -> None:
     q = pl.concat(
         [
             pl.LazyFrame({"a": [1, 2]}),
@@ -64,7 +64,7 @@ def test_fallback_on_concat_zlice(engine) -> None:
     with pytest.raises(
         UserWarning, match="This slice not supported for multiple partitions."
     ):
-        assert_gpu_result_equal(q, engine=engine)
+        assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 # ---------------------------------------------------------------------------
@@ -72,13 +72,13 @@ def test_fallback_on_concat_zlice(engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_evaluate_streaming(engine):
+def test_evaluate_streaming(streaming_engine):
     df = pl.LazyFrame({"a": [1, 2, 3], "b": [3, 4, 5], "c": [5, 6, 7], "d": [7, 9, 8]})
     q = df.select(pl.col("a") - (pl.col("b") + pl.col("c") * 2), pl.col("d")).sort("d")
 
     expected = q.collect(engine="cpu")
     got_gpu = q.collect(engine=pl.GPUEngine(raise_on_fail=True))
-    got_streaming = q.collect(engine=engine)
+    got_streaming = q.collect(engine=streaming_engine)
     assert_frame_equal(expected, got_gpu)
     assert_frame_equal(expected, got_streaming)
 
@@ -132,7 +132,7 @@ def test_pickle_conditional_join_args():
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -144,7 +144,7 @@ def test_pickle_conditional_join_args():
     ],
     indirect=True,
 )
-def test_preserve_partitioning(engine):
+def test_preserve_partitioning(streaming_engine):
     left = pl.LazyFrame({"a": [1, 2, 3, 4] * 5, "b": range(20)})
     right = pl.LazyFrame({"a": [3, 4, 5, 6, 7] * 4, "c": range(20)})
     q = (
@@ -169,4 +169,4 @@ def test_preserve_partitioning(engine):
     expect_dtype = ir.schema["a"]
     expect_expr = (NamedExpr("a", Col(expect_dtype, "a")),)
     assert partition_info[ir].partitioned_on == expect_expr
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
