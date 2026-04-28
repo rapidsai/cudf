@@ -26,7 +26,7 @@ void nvbench_inner_join(nvbench::state& state,
       return cudf::inner_join(left_input, right_input, compare_nulls);
     };
     BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
-  } else {
+  } else if (mode == "partitioned") {
     // Partitioned code path: build hash join, compute match context, then retrieve the
     // entire probe table as a single partition.  This exercises the two-phase
     // count-then-retrieve flow used for chunked probing.
@@ -40,6 +40,8 @@ void nvbench_inner_join(nvbench::state& state,
       return hash_joiner.partitioned_inner_join(part_ctx);
     };
     BM_join<Nullable, join_t::HASH, NullEquality>(state, dtypes, join);
+  } else {
+    CUDF_FAIL("unrecognized mode: " + mode);
   }
 }
 

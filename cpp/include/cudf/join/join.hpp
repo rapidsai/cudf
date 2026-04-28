@@ -87,7 +87,9 @@ struct join_match_context {
     : _left_table{left_table}, _match_counts{std::move(match_counts)}
   {
   }
-  join_match_context(join_match_context&&) = default;  ///< Move constructor
+  join_match_context(join_match_context const&)            = delete;
+  join_match_context& operator=(join_match_context const&) = delete;
+  join_match_context(join_match_context&&)                 = default;  ///< Move constructor
   /**
    * @brief Move assignment operator
    * @return Reference to this object
