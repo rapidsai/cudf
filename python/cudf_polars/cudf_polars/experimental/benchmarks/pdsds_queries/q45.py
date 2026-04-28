@@ -167,23 +167,30 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         item.filter(pl.col("i_item_sk").is_in(item_sks)).select("i_item_id").unique()
     )
 
-    # SQL: FROM web_sales, customer, customer_address, item, date_dim — main join chain + date filter
+    # SQL: FROM web_sales, customer, customer_address, date_dim, item
     joined = (
         web_sales.join(
             customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
         )
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
-        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        # SQL: JOIN date_dim ON ws_sold_date_sk = d_date_sk (before item, matching SQL FROM order)
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        # SQL: WHERE d_qoy={qoy} AND d_year={year}
-        .filter((pl.col("d_qoy") == qoy) & (pl.col("d_year") == year))
+        .join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .with_columns([pl.col("ca_zip").str.slice(0, 5).alias("zip_prefix")])
     )
 
-    # SQL: WHERE Substr(ca_zip,1,5) IN ({zip_codes})
-    zip_match = joined.filter(pl.col("zip_prefix").is_in(zip_codes))
-    # SQL: WHERE i_item_id IN (subquery)
-    item_match = joined.join(item_ids, on="i_item_id", how="semi")
+    # SQL: WHERE (Substr(ca_zip,1,5) IN ({zip_codes}) OR i_item_id IN (subquery))
+    # SQL:   AND d_qoy={qoy} AND d_year={year}
+    # These are the two branches of the OR, each filtered after all joins:
+    zip_match = joined.filter(
+        (pl.col("d_qoy") == qoy)
+        & (pl.col("d_year") == year)
+        & pl.col("zip_prefix").is_in(zip_codes)
+    )
+    # SQL: WHERE i_item_id IN (subquery) AND d_qoy={qoy} AND d_year={year}
+    item_match = joined.filter(
+        (pl.col("d_qoy") == qoy) & (pl.col("d_year") == year)
+    ).join(item_ids, on="i_item_id", how="semi")
 
     sort_by = {"ca_zip": False, "ca_state": False}
     limit = 100

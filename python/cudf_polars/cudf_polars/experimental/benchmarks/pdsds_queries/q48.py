@@ -192,9 +192,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
             .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
             # SQL: WHERE d_year={year} AND (demo conditions) AND (geography conditions)
-            .filter(pl.col("d_year") == year)
-            .filter(demo_filter)
-            .filter(geo_filter)
+            .filter((pl.col("d_year") == year) & demo_filter & geo_filter)
             # SQL: SELECT Sum(ss_quantity)
             .select(
                 [
