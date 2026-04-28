@@ -1215,10 +1215,20 @@ DatetimeIndexResampler = make_intermediate_proxy_type(
     pd.core.resample.DatetimeIndexResampler,
 )
 
-StataReader = make_intermediate_proxy_type(
+StataReader = make_final_proxy_type(
     "StataReader",
     _Unusable,
     pd.io.stata.StataReader,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_nvar": _FastSlowAttribute("_nvar", private=True),
+        "_typlist": _FastSlowAttribute("_typlist", private=True),
+        "_varlist": _FastSlowAttribute("_varlist", private=True),
+        "_fmtlist": _FastSlowAttribute("_fmtlist", private=True),
+        "_path_or_buf": _FastSlowAttribute("_path_or_buf", private=True),
+        "_chunk": _FastSlowAttribute("_chunk", private=True),
+    },
 )
 
 HDFStore = make_final_proxy_type(
