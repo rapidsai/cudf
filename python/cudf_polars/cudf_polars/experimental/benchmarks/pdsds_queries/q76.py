@@ -230,10 +230,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
-    # SQL: web_component — same with web_sales, {nullcol_ws} IS NULL
+    # SQL: web_component — SELECT 'web' channel, {nullcol_ws} col_name, d_year, d_qoy, i_category, ws_ext_sales_price
+    # SQL:   FROM web_sales, item, date_dim WHERE ws_item_sk = i_item_sk AND {nullcol_ws} IS NULL
     web_component = (
+        # SQL: JOIN item ON ws_item_sk = i_item_sk
         web_sales.join(item, left_on="ws_item_sk", right_on="i_item_sk")
+        # SQL: JOIN date_dim ON ws_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE {nullcol_ws} IS NULL
         .filter(pl.col(nullcol_ws).is_null())
         .select(
             [
@@ -246,10 +250,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
     )
-    # SQL: catalog_component — same with catalog_sales, {nullcol_cs} IS NULL
+    # SQL: catalog_component — SELECT 'catalog' channel, {nullcol_cs} col_name, d_year, d_qoy, i_category, cs_ext_sales_price
+    # SQL:   FROM catalog_sales, item, date_dim WHERE cs_item_sk = i_item_sk AND {nullcol_cs} IS NULL
     catalog_component = (
+        # SQL: JOIN item ON cs_item_sk = i_item_sk
         catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+        # SQL: JOIN date_dim ON cs_sold_date_sk = d_date_sk
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        # SQL: WHERE {nullcol_cs} IS NULL
         .filter(pl.col(nullcol_cs).is_null())
         .select(
             [
