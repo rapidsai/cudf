@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,9 +35,9 @@ auto constexpr VALUE_SENTINEL = mapped_type{-1};
 auto constexpr SCOPE          = cuda::thread_scope_block;
 
 using storage_type     = cuco::bucket_storage<slot_type,
-                                          bucket_size,
-                                          cuco::extent<std::size_t>,
-                                          rmm::mr::polymorphic_allocator<char>>;
+                                              bucket_size,
+                                              cuco::extent<std::size_t>,
+                                              rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
