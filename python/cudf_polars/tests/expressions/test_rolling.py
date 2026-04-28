@@ -33,7 +33,7 @@ def df():
 
 
 @pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
-def test_rolling_datetime(request, time_unit):
+def test_rolling_datetime(engine: pl.GPUEngine, request, time_unit):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_136,
@@ -59,10 +59,10 @@ def test_rolling_datetime(request, time_unit):
         max_a=pl.max("a").rolling(index_column="dt", period="10d", offset="2d"),
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_rolling_date(request):
+def test_rolling_date(engine: pl.GPUEngine, request):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
@@ -84,11 +84,11 @@ def test_rolling_date(request):
         max_a=pl.max("a").rolling(index_column="dt", period="10d", offset="2d"),
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("dtype", [pl.Int32, pl.UInt32, pl.Int64, pl.UInt64])
-def test_rolling_integral_orderby(request, dtype):
+def test_rolling_integral_orderby(engine: pl.GPUEngine, request, dtype):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
@@ -103,7 +103,7 @@ def test_rolling_integral_orderby(request, dtype):
         pl.col("values").sum().rolling("orderby", period="4i", closed="both")
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.skipif(
@@ -129,7 +129,7 @@ def test_rolling_collect_list_raises():
     )
 
 
-def test_unsorted_raises(request):
+def test_unsorted_raises(engine_raise_on_fail: pl.GPUEngine, request):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
@@ -142,10 +142,10 @@ def test_unsorted_raises(request):
         RuntimeError,
         match=r"Index column.*in rolling is not sorted, please sort first",
     ):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+        q.collect(engine=engine_raise_on_fail)
 
 
-def test_orderby_nulls_raises_computeerror(request):
+def test_orderby_nulls_raises_computeerror(engine_raise_on_fail: pl.GPUEngine, request):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
@@ -157,7 +157,7 @@ def test_orderby_nulls_raises_computeerror(request):
     with pytest.raises(
         RuntimeError, match=r"Index column.*in rolling may not contain nulls"
     ):
-        q.collect(engine=pl.GPUEngine(raise_on_fail=True))
+        q.collect(engine=engine_raise_on_fail)
 
 
 def test_invalid_duration_spec_raises_in_translation(request):
@@ -188,7 +188,7 @@ def test_rolling_inside_groupby_raises(request):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_rolling_sum_all_null_window_returns_null(request):
+def test_rolling_sum_all_null_window_returns_null(engine: pl.GPUEngine, request):
     if not POLARS_VERSION_LT_136:
         request.applymarker(
             pytest.mark.xfail(reason="See https://github.com/pola-rs/polars/pull/25117")
@@ -203,7 +203,7 @@ def test_rolling_sum_all_null_window_returns_null(request):
         out=pl.col("null_windows").sum().rolling("orderby", period="2i", closed="both")
     )
     # Expected: [null, null, 5, 5, 5, 1]
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -231,19 +231,19 @@ def test_rolling_sum_all_null_window_returns_null(request):
         "literal_partition",
     ],
 )
-def test_over_group_various(df, expr):
+def test_over_group_various(engine: pl.GPUEngine, df, expr):
     q = df.select(expr)
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_window_over_group_sum_all_null_group_is_zero(df):
+def test_window_over_group_sum_all_null_group_is_zero(engine: pl.GPUEngine, df):
     q = df.with_columns(
         pl.when(pl.col("g") == 1)
         .then(pl.lit(None, dtype=pl.Int64))
         .otherwise(pl.col("x"))
         .alias("null")
     ).select(s=pl.col("null").sum().over("g"))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -259,7 +259,9 @@ def test_window_over_group_sum_all_null_group_is_zero(df):
 )
 @pytest.mark.parametrize("order_by_descending", [False, True])
 @pytest.mark.parametrize("order_by_nulls_last", [False, True])
-def test_over_with_order_by(df, order_by, order_by_descending, order_by_nulls_last):
+def test_over_with_order_by(
+    engine: pl.GPUEngine, df, order_by, order_by_descending, order_by_nulls_last
+):
     q = df.select(
         pl.col("x")
         .sum()
@@ -270,7 +272,7 @@ def test_over_with_order_by(df, order_by, order_by_descending, order_by_nulls_la
             nulls_last=order_by_nulls_last,
         )
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("strategy", ["explode", "join"], ids=["explode", "join"])
@@ -284,7 +286,7 @@ def test_over_boolean_function_unsupported(df):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_over_ternary(df):
+def test_over_ternary(engine: pl.GPUEngine, df):
     q = df.select(
         pl.when(pl.col("g") == 1)
         .then(pl.lit(None, dtype=pl.Int64))
@@ -293,10 +295,13 @@ def test_over_ternary(df):
         .over("g")
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_over_broadcast_input_row_group_indices_aligned():
+@pytest.mark.skip_on_streaming_engine(
+    "GroupedWindow not supported for multiple partitions"
+)
+def test_over_broadcast_input_row_group_indices_aligned(engine: pl.GPUEngine):
     num_rows, num_groups = 512, 64
 
     df = pl.LazyFrame(
@@ -307,13 +312,14 @@ def test_over_broadcast_input_row_group_indices_aligned():
     )
     q = df.select(pl.col("x").sum().over("g"))
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over(
+    engine: pl.GPUEngine,
     request,
     df: pl.LazyFrame,
     method: RankMethod,
@@ -329,13 +335,14 @@ def test_rank_over(
         .rank(method=method, descending=descending)
         .over("g", order_by=order_by)
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_ties(
+    engine: pl.GPUEngine,
     request,
     df: pl.LazyFrame,
     method: RankMethod,
@@ -353,13 +360,14 @@ def test_rank_over_with_ties(
         .rank(method=method, descending=descending)
         .over("g", order_by=order_by)
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_null_values(
+    engine: pl.GPUEngine,
     request,
     df: pl.LazyFrame,
     method: RankMethod,
@@ -377,13 +385,14 @@ def test_rank_over_with_null_values(
         .rank(method=method, descending=descending)
         .over("g", order_by=order_by)
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
 def test_rank_over_with_null_group_keys(
+    engine: pl.GPUEngine,
     request,
     df: pl.LazyFrame,
     method: RankMethod,
@@ -399,7 +408,7 @@ def test_rank_over_with_null_group_keys(
         .rank(method=method, descending=descending)
         .over("g_null", order_by=order_by)
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("strategy", ["forward", "backward"])
@@ -420,6 +429,7 @@ def test_rank_over_with_null_group_keys(
     ],
 )
 def test_fill_over(
+    engine: pl.GPUEngine,
     df: pl.LazyFrame,
     strategy: str,
     order_by: None | list[str | pl.Expr],
@@ -434,7 +444,7 @@ def test_fill_over(
     if POLARS_VERSION_LT_132:
         assert_ir_translation_raises(q, NotImplementedError)
     else:
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=engine)
 
 
 def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
@@ -458,6 +468,7 @@ def test_fill_null_with_mean_over_unsupported(df: pl.LazyFrame) -> None:
     ],
 )
 def test_cum_sum_over(
+    engine: pl.GPUEngine,
     df: pl.LazyFrame,
     *,
     expr: pl.Expr,
@@ -465,7 +476,7 @@ def test_cum_sum_over(
     order_by: None | list[str | pl.Expr],
 ) -> None:
     q = df.select(expr.cum_sum().over(group_key, order_by=order_by))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -484,7 +495,9 @@ def test_cum_sum_over(
         ["g_null", "g2"],
     ],
 )
-def test_order_sensitive_over_scalar_aggs(df, expr, descending, nulls_last, order_by):
+def test_order_sensitive_over_scalar_aggs(
+    engine: pl.GPUEngine, df, expr, descending, nulls_last, order_by
+):
     q = df.select(
         expr.over(
             "g",
@@ -496,4 +509,4 @@ def test_order_sensitive_over_scalar_aggs(df, expr, descending, nulls_last, orde
     if isinstance(order_by, list):
         assert_ir_translation_raises(q, NotImplementedError)
     else:
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=engine)

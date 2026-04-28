@@ -56,7 +56,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     qir1 = Shuffle(
         qir.schema,
         keys,
-        options.executor.shuffle_method,
+        options.executor.shuffle_method,  # type: ignore[arg-type]
         qir,
     )
 
@@ -64,7 +64,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     qir2 = Shuffle(
         qir.schema,
         keys,
-        options.executor.shuffle_method,
+        options.executor.shuffle_method,  # type: ignore[arg-type]
         qir1,
     )
 
@@ -78,7 +78,7 @@ def test_hash_shuffle(df: pl.LazyFrame, engine: pl.GPUEngine) -> None:
     qir3 = Shuffle(
         qir2.schema,
         keys2,
-        options.executor.shuffle_method,
+        options.executor.shuffle_method,  # type: ignore[arg-type]
         qir2,
     )
 

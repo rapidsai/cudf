@@ -33,14 +33,14 @@ def df():
         ("parquet", pl.scan_parquet),
     ],
 )
-def test_parallel_scan(tmp_path, df, fmt, scan_fn, engine):
+def test_parallel_scan(tmp_path, df, fmt, scan_fn, streaming_engine):
     make_partitioned_source(df, tmp_path, fmt, n_files=3)
     q = scan_fn(tmp_path)
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {"target_partition_size": 1_000},
@@ -49,9 +49,9 @@ def test_parallel_scan(tmp_path, df, fmt, scan_fn, engine):
     ],
     indirect=True,
 )
-def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, engine):
+def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, streaming_engine):
     make_partitioned_source(df, tmp_path, "parquet", n_files=1)
-    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=engine)
+    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
 # ---------------------------------------------------------------------------
@@ -60,44 +60,44 @@ def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, engine):
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"executor_options": {"target_partition_size": 1_000}}],
     indirect=True,
 )
-def test_split_scan_aligns_to_row_group_boundaries(tmp_path, df, engine):
+def test_split_scan_aligns_to_row_group_boundaries(tmp_path, df, streaming_engine):
     make_partitioned_source(df, tmp_path, "parquet", n_files=1, row_group_size=10)
     q = pl.scan_parquet(tmp_path)
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 @pytest.mark.parametrize("mask", [None, pl.col("x") < 1_000])
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"executor_options": {"target_partition_size": 1_000}}],
     indirect=True,
 )
-def test_split_scan_predicate(tmp_path, df, mask, engine):
+def test_split_scan_predicate(tmp_path, df, mask, streaming_engine):
     make_partitioned_source(df, tmp_path, "parquet", n_files=1)
     q = pl.scan_parquet(tmp_path)
     if mask is not None:
         q = q.filter(mask)
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
 
 @pytest.mark.parametrize("n_files", [2, 3])
 @pytest.mark.parametrize(
-    "blocksize,engine",
+    "blocksize,streaming_engine",
     [
         (1_000, {"executor_options": {"target_partition_size": 1_000}}),
         (10_000, {"executor_options": {"target_partition_size": 10_000}}),
         (1_000_000, {"executor_options": {"target_partition_size": 1_000_000}}),
     ],
-    indirect=["engine"],
+    indirect=["streaming_engine"],
 )
-def test_target_partition_size(tmp_path, df, blocksize, n_files, engine):
+def test_target_partition_size(tmp_path, df, blocksize, n_files, streaming_engine):
     make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
     q = pl.scan_parquet(tmp_path)
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=streaming_engine)
 
     # Check partitioning (throwaway engine — no cluster/runtime needed)
     _engine = pl.GPUEngine(
