@@ -154,7 +154,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .join(avg_price_per_category, on="i_category")
             # SQL: AND d_month_seq = (subquery for d_year={year}, d_moy={month})
             .join(target_month_seq_table, on="d_month_seq", how="semi")
-            # SQL: AND i.i_current_price > 1.2 * Avg(j.i_current_price)
+            # SQL: WHERE clauses (applied after all joins)
             .filter(pl.col("i_current_price") > 1.2 * pl.col("avg_price"))
             # SQL: GROUP BY a.ca_state
             .group_by("ca_state")

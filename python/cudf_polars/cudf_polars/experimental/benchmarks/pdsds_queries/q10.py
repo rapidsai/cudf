@@ -328,7 +328,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 right_on="customer_sk",
                 how="inner",
             )
-            # SQL: WHERE ca_county IN (...)
+            # SQL: WHERE ca_county IN (...) (applied after all joins)
             .filter(pl.col("ca_county").is_in(counties))
             # SQL: GROUP BY cd_gender, cd_marital_status, cd_education_status, cd_purchase_estimate, cd_credit_rating, cd_dep_count, cd_dep_employed_count, cd_dep_college_count
             .group_by(

@@ -237,14 +237,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM reason WHERE r_reason_sk = 1 (cross-join with bucket stats)
-            reason.filter(pl.col("r_reason_sk") == 1)
-            .with_columns(pl.lit(1).alias("join_key"))
+            # SQL: FROM reason
+            reason.with_columns(pl.lit(1).alias("join_key"))
+            # SQL: JOIN bucket stats (scalar subqueries)
             .join(bucket1_stats, on="join_key")
             .join(bucket2_stats, on="join_key")
             .join(bucket3_stats, on="join_key")
             .join(bucket4_stats, on="join_key")
             .join(bucket5_stats, on="join_key")
+            # SQL: WHERE r_reason_sk = 1 (applied after all joins)
+            .filter(pl.col("r_reason_sk") == 1)
             # SQL: SELECT CASE WHEN count_N > rc[i] THEN avg_then_N ELSE avg_else_N END AS bucket{i} ...
             .select(
                 [
