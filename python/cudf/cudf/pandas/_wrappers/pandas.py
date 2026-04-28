@@ -1611,6 +1611,28 @@ BDay = make_final_proxy_type(
     },
 )
 
+BHalfYearBegin = make_final_proxy_type(
+    "BHalfYearBegin",
+    _Unusable,
+    pd.offsets.BHalfYearBegin,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+BHalfYearEnd = make_final_proxy_type(
+    "BHalfYearEnd",
+    _Unusable,
+    pd.offsets.BHalfYearEnd,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
 BMonthBegin = make_final_proxy_type(
     "BMonthBegin",
     _Unusable,
@@ -1846,6 +1868,28 @@ FY5253Quarter = make_final_proxy_type(
     "FY5253Quarter",
     _Unusable,
     pd.offsets.FY5253Quarter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+HalfYearBegin = make_final_proxy_type(
+    "HalfYearBegin",
+    _Unusable,
+    pd.offsets.HalfYearBegin,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+HalfYearEnd = make_final_proxy_type(
+    "HalfYearEnd",
+    _Unusable,
+    pd.offsets.HalfYearEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
