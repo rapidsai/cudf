@@ -205,57 +205,57 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     quarter_q1 = f"{year}Q1"
     quarter_q1_q3 = [f"{year}Q1", f"{year}Q2", f"{year}Q3"]
 
-    store_returns_base = store_returns.join(
-        date_dim.select(["d_date_sk", "d_quarter_name"])
-        .with_columns(pl.col("d_quarter_name").alias("d_quarter_name_d2"))
-        .drop("d_quarter_name"),
-        left_on="sr_returned_date_sk",
-        right_on="d_date_sk",
-        suffix="_d2",
-    )
-    catalog_sales_base = catalog_sales.join(
-        date_dim.select(["d_date_sk", "d_quarter_name"])
-        .with_columns(pl.col("d_quarter_name").alias("d_quarter_name_d3"))
-        .drop("d_quarter_name"),
-        left_on="cs_sold_date_sk",
-        right_on="d_date_sk",
-        suffix="_d3",
-    )
-
     return QueryResult(
         frame=(
-            # SQL: FROM store_sales, date_dim d1 WHERE d1.d_quarter_name = '{year}Q1' AND d1.d_date_sk = ss_sold_date_sk
+            # SQL: FROM store_sales, store_returns WHERE ss_customer_sk = sr_customer_sk AND ss_item_sk = sr_item_sk AND ss_ticket_number = sr_ticket_number
             store_sales.join(
-                date_dim.select(["d_date_sk", "d_quarter_name"])
-                .with_columns(pl.col("d_quarter_name").alias("d_quarter_name_d1"))
-                .drop("d_quarter_name"),
-                left_on="ss_sold_date_sk",
-                right_on="d_date_sk",
-                suffix="_d1",
-            )
-            # SQL: JOIN item ON ss_item_sk = i_item_sk
-            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-            # SQL: JOIN store ON ss_store_sk = s_store_sk
-            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-            # SQL: JOIN store_returns ON ss_customer_sk=sr_customer_sk AND ss_item_sk=sr_item_sk AND ss_ticket_number=sr_ticket_number
-            .join(
-                store_returns_base,
+                store_returns,
                 left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
                 right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
                 how="inner",
             )
-            # SQL: JOIN catalog_sales ON sr_customer_sk=cs_bill_customer_sk AND sr_item_sk=cs_item_sk
+            # SQL: JOIN catalog_sales ON sr_customer_sk = cs_bill_customer_sk AND sr_item_sk = cs_item_sk
             .join(
-                catalog_sales_base,
+                catalog_sales,
                 left_on=["ss_customer_sk", "ss_item_sk"],
                 right_on=["cs_bill_customer_sk", "cs_item_sk"],
                 how="inner",
             )
-            # SQL: WHERE d1.d_quarter_name='{year}Q1' AND d2.d_quarter_name IN (Q1,Q2,Q3) AND d3.d_quarter_name IN (Q1,Q2,Q3)
+            # SQL: JOIN date_dim d1 ON d1.d_date_sk = ss_sold_date_sk
+            .join(
+                date_dim.select(["d_date_sk", "d_quarter_name"]).rename(
+                    {"d_date_sk": "d1_date_sk", "d_quarter_name": "d1_quarter_name"}
+                ),
+                left_on="ss_sold_date_sk",
+                right_on="d1_date_sk",
+            )
+            # SQL: JOIN date_dim d2 ON d2.d_date_sk = sr_returned_date_sk
+            .join(
+                date_dim.select(["d_date_sk", "d_quarter_name"]).rename(
+                    {"d_date_sk": "d2_date_sk", "d_quarter_name": "d2_quarter_name"}
+                ),
+                left_on="sr_returned_date_sk",
+                right_on="d2_date_sk",
+            )
+            # SQL: JOIN date_dim d3 ON d3.d_date_sk = cs_sold_date_sk
+            .join(
+                date_dim.select(["d_date_sk", "d_quarter_name"]).rename(
+                    {"d_date_sk": "d3_date_sk", "d_quarter_name": "d3_quarter_name"}
+                ),
+                left_on="cs_sold_date_sk",
+                right_on="d3_date_sk",
+            )
+            # SQL: JOIN store ON s_store_sk = ss_store_sk
+            .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            # SQL: JOIN item ON i_item_sk = ss_item_sk
+            .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+            # SQL: WHERE d1.d_quarter_name = '{year}Q1'
+            # SQL:   AND d2.d_quarter_name IN ('{year}Q1','{year}Q2','{year}Q3')
+            # SQL:   AND d3.d_quarter_name IN ('{year}Q1','{year}Q2','{year}Q3')
             .filter(
-                (pl.col("d_quarter_name_d1") == quarter_q1)
-                & pl.col("d_quarter_name_d2").is_in(quarter_q1_q3)
-                & pl.col("d_quarter_name_d3").is_in(quarter_q1_q3)
+                (pl.col("d1_quarter_name") == quarter_q1)
+                & pl.col("d2_quarter_name").is_in(quarter_q1_q3)
+                & pl.col("d3_quarter_name").is_in(quarter_q1_q3)
             )
             # SQL: GROUP BY i_item_id, i_item_desc, s_state
             .group_by(["i_item_id", "i_item_desc", "s_state"])
