@@ -42,14 +42,11 @@ jobs:
       - narwhals-tests
       - telemetry-setup
       - third-party-integration-tests-cudf-pandas
-<<<<<<< HEAD
       - cuml-compat-tests
-=======
       - streams-build-matrix
       - streams-build
       - streams-test-matrix
       - streams-test
->>>>>>> main
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@main
     if: always()
