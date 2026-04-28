@@ -17,6 +17,26 @@
 
 namespace cudf::detail {
 
+/**
+ * @brief Count matching build-side rows for each probe key.
+ *
+ * Each probing tile (@p cg_size threads) calls `ref.count()` for one probe key
+ * and reduces the per-lane counts across the tile with a warp reduce. The result
+ * is written to @p output by a single elected thread via `invoke_one`. If
+ * @p IsOuter is true, keys with zero matches are recorded as 1 so every probe
+ * row contributes at least one output row in the subsequent retrieve pass.
+ *
+ * This is the first phase of the two-phase partitioned join: count then retrieve.
+ * The output array is consumed by `launch_partitioned_retrieve` to pre-allocate
+ * the output index buffers.
+ *
+ * @tparam IsOuter  If true, zero-match keys produce a count of 1
+ * @tparam Ref      cuco open-addressing reference type (carries hash, equality, storage)
+ * @param keys    Packed probe keys: `.first` = hash, `.second` = probe row index
+ * @param n       Number of probe keys
+ * @param output  Per-key match count output (one entry per probe key)
+ * @param ref     cuco hash-table reference for counting
+ */
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   partitioned_count_kernel(probe_key_type const* __restrict__ keys,
