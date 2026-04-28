@@ -140,12 +140,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM catalog_sales, item, date_dim WHERE i_item_sk=cs_item_sk AND d_date_sk=cs_sold_date_sk AND i_manufact_id={imid} AND d_date BETWEEN '{csdate}' AND '{csdate}'+90d AND cs_ext_discount_amt > 1.3*avg
-            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            # SQL: FROM catalog_sales
+            catalog_sales
+            # SQL: JOIN item ON i_item_sk = cs_item_sk
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            # SQL: JOIN date_dim ON d_date_sk = cs_sold_date_sk
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             # SQL: JOIN avg discount subquery ON cs_item_sk
             .join(item_avg_discounts, on="cs_item_sk")
-            # SQL: WHERE i_manufact_id={imid} AND d_date BETWEEN '{csdate}' AND '{csdate}'+90d AND cs_ext_discount_amt > 1.3*avg
+            # SQL: WHERE i_manufact_id={imid}
+            # SQL:   AND d_date BETWEEN '{csdate}' AND '{csdate}'+90d
+            # SQL:   AND cs_ext_discount_amt > 1.3*avg
             .filter(
                 (pl.col("i_manufact_id") == imid)
                 & (pl.col("d_date").is_between(start_date, end_date))

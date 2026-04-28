@@ -204,8 +204,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     return QueryResult(
         frame=(
+            # SQL: FROM (subquery dn)
+            dn
             # SQL: JOIN customer ON ss_customer_sk = c_customer_sk
-            dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
             # SQL: WHERE cnt BETWEEN 15 AND 20
             .filter(pl.col("cnt").is_between(15, 20))
             # SQL: SELECT c_last_name, c_first_name, c_salutation, c_preferred_cust_flag, ss_ticket_number, cnt

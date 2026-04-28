@@ -152,12 +152,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            # SQL: FROM item i1 WHERE i_manufact_id BETWEEN {manufact} AND {manufact}+40
-            item.filter(pl.col("i_manufact_id").is_between(manufact, manufact + 40))
-            # SQL: AND (subquery COUNT(*)) > 0 — JOIN items with matching manufact
+            # SQL: FROM item i1
+            item
+            # SQL: JOIN (subquery COUNT(*)) ON i1.i_manufact = i_manufact
             .join(item_counts, on="i_manufact", how="inner")
-            # SQL: AND subquery item_cnt > 0
-            .filter(pl.col("item_cnt") > 0)
+            # SQL: WHERE i_manufact_id BETWEEN {manufact} AND {manufact}+40
+            # SQL:   AND subquery item_cnt > 0
+            .filter(
+                pl.col("i_manufact_id").is_between(manufact, manufact + 40)
+                & (pl.col("item_cnt") > 0)
+            )
             # SQL: SELECT DISTINCT i_product_name
             .select("i_product_name")
             # SQL: (DISTINCT)
