@@ -133,9 +133,12 @@ struct map_insert_fn {
         auto const is_valid =
           val_idx < end_value_idx and val_idx < data_col.size() and data_col.is_valid(val_idx);
 
-        // Insert tile_val_idx to hash map and count successful insertions.
+        // Insert fragment index to hash map using a single thread (for best performance for now)
+        // and count successful insertions.
         if (is_valid) {
-          // Insert the keys using a single thread for best performance for now.
+          // TODO(mh): Here we insert the fragment index of the CAS winner, which may not be the
+          // smallest one (relies on monotonic block scheduling). Switch to static_map's
+          // `insert_or_apply` with `cuco::op::min` for deterministic first-fragment semantics
           is_unique = map_insert_ref.insert(slot_type{static_cast<key_type>(val_idx), frag_idx});
           uniq_elem_size = [&]() -> size_type {
             if (not is_unique) { return 0; }
