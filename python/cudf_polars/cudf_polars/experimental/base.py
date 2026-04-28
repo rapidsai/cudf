@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
-import abc
 import enum
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict
+
+from cudf_polars.dsl.traversal import traversal
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -55,7 +56,22 @@ def get_key_name(node: Node) -> str:
     return f"{type(node).__name__.lower()}-{hash(node)}"
 
 
-class DataSourceInfo(abc.ABC):
+class SerializedDataSourceInfo(TypedDict):
+    """The serialized form of DataSourceInfo."""
+
+    type: Literal["parquet", "dataframe"]
+    row_count: int | None
+    per_file_means: dict[str, int] | None
+
+
+class SerializedStatsEntry(TypedDict):
+    """The serialized form of a stats entry."""
+
+    index: int
+    info: SerializedDataSourceInfo
+
+
+class DataSourceInfo(Protocol):
     """
     Table data source information.
 
@@ -65,13 +81,22 @@ class DataSourceInfo(abc.ABC):
     """
 
     @property
-    @abc.abstractmethod
+    def type(self) -> Literal["parquet", "dataframe"]:
+        """The type of the data source. Useful for serialization and deserialization."""
+
+    @property
     def row_count(self) -> int | None:
         """Data source row-count estimate."""
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""
-        return None
+
+    def serialize(self) -> SerializedDataSourceInfo:
+        """Return JSON-serializable representation of the data source info."""
+
+    @classmethod
+    def deserialize(cls, data: SerializedDataSourceInfo) -> DataSourceInfo:
+        """Deserialize a DataSourceInfo from a dictionary."""
 
 
 class StatsCollector:
@@ -84,6 +109,50 @@ class StatsCollector:
 
     def __init__(self) -> None:
         self.scan_stats: dict[IR, DataSourceInfo] = {}
+
+    def serialize(self, ir: IR) -> list[SerializedStatsEntry]:
+        """
+        Serialize to a JSON-compatible list.
+
+        IR nodes are represented by their position in a deterministic
+        traversal of *ir* so that the result is independent of object
+        identity.
+        """
+        node_to_idx = {id(node): i for i, node in enumerate(traversal([ir]))}
+        return [
+            {"index": node_to_idx[id(node)], "info": info.serialize()}
+            for node, info in self.scan_stats.items()
+        ]
+
+    @classmethod
+    def deserialize(cls, entries: list[SerializedStatsEntry], ir: IR) -> StatsCollector:
+        """
+        Reconstruct a :class:`StatsCollector` from its serialized form.
+
+        Parameters
+        ----------
+        entries
+            Serialized stats produced by :meth:`serialize`.
+        ir
+            Root of the (pre-lowered) IR graph on the local rank.
+        """
+        from cudf_polars.experimental.io import DataFrameSourceInfo, ParquetSourceInfo
+
+        _deserializers: dict[
+            str, type[ParquetSourceInfo] | type[DataFrameSourceInfo]
+        ] = {
+            "parquet": ParquetSourceInfo,
+            "dataframe": DataFrameSourceInfo,
+        }
+        idx_to_node = dict(enumerate(traversal([ir])))
+        stats = cls()
+        for entry in entries:
+            info_data = entry["info"]
+            info_cls = _deserializers[info_data["type"]]
+            stats.scan_stats[idx_to_node[entry["index"]]] = info_cls.deserialize(
+                info_data
+            )
+        return stats
 
 
 class IOPartitionFlavor(IntEnum):
