@@ -784,9 +784,35 @@ class _FinalProxy(_FastSlowProxy):
         # Need a local import to avoid circular import issues
         from .module_accelerator import disable_module_accelerator
 
-        with disable_module_accelerator():
-            unpickled_wrapped_obj = pickle.loads(state)
-        self._fsproxy_wrapped = unpickled_wrapped_obj
+        if isinstance(state, bytes):
+            # State produced by ``__reduce__`` above.
+            with disable_module_accelerator():
+                unpickled_wrapped_obj = pickle.loads(state)
+            self._fsproxy_wrapped = unpickled_wrapped_obj
+        else:
+            # Native state from the slow class. Reached when raw
+            # ``pickle.load`` resolves a reference to one of our proxy
+            # classes via ordinary attribute lookup (no
+            # ``disable_module_accelerator`` shielding) and then drives
+            # ``__setstate__`` with whatever the slow class's own
+            # ``__reduce__`` produced (e.g. dict for CategoricalDtype,
+            # tuple for PeriodArray). The state may itself contain proxy
+            # objects, so unwrap them to the underlying slow values
+            # before handing the state to the slow class.
+            with disable_module_accelerator():
+                slow_state = _slow_arg(state)
+                slow_type = type(self)._fsproxy_slow_type
+                wrapped = slow_type.__new__(slow_type)
+                if hasattr(wrapped, "__setstate__"):
+                    wrapped.__setstate__(slow_state)
+                elif isinstance(slow_state, dict):
+                    wrapped.__dict__.update(slow_state)
+                else:
+                    raise TypeError(
+                        f"Cannot restore proxy {type(self).__name__} from "
+                        f"state of type {type(slow_state).__name__}"
+                    )
+            self._fsproxy_wrapped = wrapped
 
 
 class _IntermediateProxy(_FastSlowProxy):

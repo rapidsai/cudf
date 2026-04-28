@@ -2708,9 +2708,9 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             header["dtype-is-cudf-serialized"] = True
         except AttributeError:
             header["dtype"] = (
-                pickle.dumps(col_to_serialize.dtype)
-                if is_pandas_nullable_extension_dtype(col_to_serialize.dtype)
-                else col_to_serialize.dtype.str
+                col_to_serialize.dtype.str
+                if isinstance(col_to_serialize.dtype, np.dtype)
+                else pickle.dumps(col_to_serialize.dtype)
             )
             header["dtype-is-cudf-serialized"] = False
 
