@@ -18,12 +18,8 @@
 
 ### GPU/CUDA Errors
 - Unchecked CUDA errors (kernel launches, memory operations, synchronization)
-- Race conditions in GPU kernels (shared memory, atomics, warps)
-- Device memory leaks (allocation/deallocation imbalance, leaked streams/events)
 - Invalid memory access (out-of-bounds, use-after-free, host/device confusion)
-- Missing CUDA synchronization causing non-deterministic failures
 - Kernel launch with zero blocks/threads or invalid grid/block dimensions
-- Use of `cudaDeviceSynchronize()` — sync only via `stream.synchronize()` when required
 
 ### Algorithm Correctness
 - Logic errors producing wrong results
@@ -84,7 +80,6 @@
 ### Concurrency & Stream Safety
 - Stream and MR parameters not propagated across all internal APIs
 - Implicit use of CUDA default stream (discourages asynchronous execution)
-- Race conditions in concurrent kernel access patterns
 
 ### Type Dispatch Patterns
 - New dispatch functors using `CUDF_ENABLE_IF` instead of C++20 `requires` clauses
