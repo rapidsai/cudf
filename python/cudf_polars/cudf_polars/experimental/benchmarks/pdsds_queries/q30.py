@@ -211,28 +211,31 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .agg([pl.col("wr_return_amt").sum().alias("ctr_total_return")])
     )
 
-    # Pre-computed correlated subquery — structurally required for Polars
     # SQL: correlated subquery — Avg(ctr_total_return)*1.2 per state
     state_averages = customer_total_return.group_by("ctr_state").agg(
         [(pl.col("ctr_total_return").mean() * 1.2).alias("avg_return")]
     )
 
-    # SQL: WHERE ctr1.ctr_total_return > Avg(ctr2.ctr_total_return)*1.2 WHERE ctr1.ctr_state=ctr2.ctr_state
-    qualified_customers = customer_total_return.join(
-        state_averages, on="ctr_state"
-    ).filter(pl.col("ctr_total_return") > pl.col("avg_return"))
+    # SQL: FROM customer_address, customer WHERE ca_address_sk = c_current_addr_sk
+    address_customer = customer_address.join(
+        customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
+    )
 
     return QueryResult(
         frame=(
-            # SQL: FROM customer_total_return ctr1, customer, customer_address WHERE ctr_customer_sk=c_customer_sk AND ca_address_sk=c_current_addr_sk AND ca_state='{state}'
-            qualified_customers.join(
-                customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
+            # SQL: FROM customer_total_return ctr1, customer_address, customer
+            # SQL: JOIN customer_address/customer ON ca_address_sk = c_current_addr_sk
+            # SQL: JOIN customer ON ctr1.ctr_customer_sk = c_customer_sk
+            customer_total_return.join(
+                address_customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
             )
-            .join(
-                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            # SQL: JOIN state_averages ON ctr_state
+            .join(state_averages, on="ctr_state")
+            # SQL: WHERE ctr_total_return > avg_return AND ca_state = '{state}'
+            .filter(
+                (pl.col("ctr_total_return") > pl.col("avg_return"))
+                & (pl.col("ca_state") == state)
             )
-            # SQL: AND ca_state='{state}'
-            .filter(pl.col("ca_state") == state)
             # SQL: SELECT c_customer_id ... ctr_total_return
             .select(
                 [

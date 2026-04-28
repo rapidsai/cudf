@@ -244,6 +244,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         (pl.col("ctr_total_return").mean() * 1.2).alias("threshold")
     )
 
+    # SQL: FROM customer_address, customer WHERE ca_address_sk = c_current_addr_sk
+    address_customer = customer_address.join(
+        customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
+    )
+
     sort_by = {
         "c_customer_id": False,
         "c_salutation": False,
@@ -265,13 +270,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            # SQL: JOIN customer ON ctr_customer_sk = c_customer_sk
+            # SQL: FROM customer_total_return ctr1, customer_address, customer
             customer_total_return.join(
-                customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
-            )
-            # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
-            .join(
-                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+                address_customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
             )
             # SQL: JOIN state_averages ON ctr_state (threshold join)
             .join(state_averages, on="ctr_state")

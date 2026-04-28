@@ -150,11 +150,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            # SQL: FROM customer_total_return ctr1, store, customer WHERE s_store_sk = ctr1.ctr_store_sk
+            # SQL: FROM customer_total_return ctr1, store, customer
+            # SQL: JOIN store ON s_store_sk = ctr1.ctr_store_sk
             customer_total_return.join(
                 store, left_on="ctr_store_sk", right_on="s_store_sk"
             )
-            # SQL: AND ctr1.ctr_customer_sk = c_customer_sk
+            # SQL: JOIN customer ON ctr1.ctr_customer_sk = c_customer_sk
             .join(customer, left_on="ctr_customer_sk", right_on="c_customer_sk")
             # SQL: JOIN avg threshold subquery ON ctr_store_sk
             .join(store_avg_returns, on="ctr_store_sk")

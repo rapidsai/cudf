@@ -259,15 +259,26 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     }
     return QueryResult(
         frame=(
-            # SQL: self-join inv ON inv_item_sk, inv_warehouse_sk WHERE d_moy = {month} AND d_moy2 = {month}+1
+            # SQL: FROM inv inv1, inv inv2
+            # SQL: JOIN inv inv2 ON inv1.i_item_sk = inv2.i_item_sk AND inv1.w_warehouse_sk = inv2.w_warehouse_sk
             inv.join(
-                inv,
+                inv.rename(
+                    {
+                        "w_warehouse_name": "w_warehouse_name_inv2",
+                        "inv_warehouse_sk": "inv_warehouse_sk_inv2",
+                        "inv_item_sk": "inv_item_sk_inv2",
+                        "d_moy": "d_moy_inv2",
+                        "stdev": "stdev_inv2",
+                        "mean": "mean_inv2",
+                        "cov": "cov_inv2",
+                    }
+                ),
                 left_on=["inv_item_sk", "inv_warehouse_sk"],
-                right_on=["inv_item_sk", "inv_warehouse_sk"],
+                right_on=["inv_item_sk_inv2", "inv_warehouse_sk_inv2"],
                 how="inner",
-                suffix="_inv2",
             )
-            # SQL: WHERE inv1.d_moy = {month} AND inv2.d_moy = {month}+1
+            # SQL: WHERE inv1.i_item_sk = inv2.i_item_sk AND inv1.w_warehouse_sk = inv2.w_warehouse_sk
+            # SQL: AND inv1.d_moy = {month} AND inv2.d_moy = {month}+1
             .filter((pl.col("d_moy") == month) & (pl.col("d_moy_inv2") == month + 1))
             # SQL: SELECT wsk1, isk1, dmoy1, mean1, cov1, w_warehouse_sk, i_item_sk, d_moy, mean, cov
             .select(
@@ -277,8 +288,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("d_moy").alias("dmoy1"),
                     pl.col("mean").alias("mean1"),
                     pl.col("cov").alias("cov1"),
-                    pl.col("inv_warehouse_sk").alias("w_warehouse_sk"),
-                    pl.col("inv_item_sk").alias("i_item_sk"),
+                    pl.col("inv_warehouse_sk_inv2").alias("w_warehouse_sk"),
+                    pl.col("inv_item_sk_inv2").alias("i_item_sk"),
                     pl.col("d_moy_inv2").alias("d_moy"),
                     pl.col("mean_inv2").alias("mean"),
                     pl.col("cov_inv2").alias("cov"),
