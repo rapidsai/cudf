@@ -59,23 +59,26 @@ struct hash_functor {
 template <int block_size>
 struct map_insert_fn {
   storage_ref_type const& storage_ref;
-  EncColumnChunk* const& chunk;
-  PageFragment* const& frag;
+  EncColumnChunk* const chunk;
+  PageFragment* const frag;
   mapped_type const frag_idx;
 
   template <typename T>
-  __device__ void operator()(size_type const s_start_value_idx, size_type const end_value_idx)
+  __device__ void operator()(size_type const start_value_idx, size_type const end_value_idx)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       using block_reduce = cub::BlockReduce<size_type, block_size>;
       __shared__ typename block_reduce::TempStorage reduce_storage;
 
+      namespace cg = cooperative_groups;
+
+      auto const block                   = cg::this_thread_block();
       auto const col                     = chunk->col_desc;
       column_device_view const& data_col = *col->leaf_column;
       __shared__ size_type total_num_dict_entries;
       __shared__ size_type num_dict_vals;
-      if (threadIdx.x == 0) { num_dict_vals = 0; }
-      __syncthreads();
+      cg::invoke_one(block, [&]() { num_dict_vals = 0; });
+      block.sync();
 
       using equality_fn_type = equality_functor<T>;
       using hash_fn_type     = hash_functor<T>;
@@ -100,7 +103,7 @@ struct map_insert_fn {
       cuda::atomic_ref<size_type, SCOPE> const chunk_uniq_data_size{chunk->uniq_data_size};
 
       // Note: Adjust the following loop to use `cg::tile<map_cg_size>` if needed in the future.
-      for (size_type val_idx = s_start_value_idx + t; val_idx - t < end_value_idx;
+      for (key_type val_idx = start_value_idx + t; val_idx - t < end_value_idx;
            val_idx += block_size) {
         size_type is_unique      = 0;
         size_type uniq_elem_size = 0;
@@ -112,7 +115,7 @@ struct map_insert_fn {
         // Insert tile_val_idx to hash map and count successful insertions.
         if (is_valid) {
           // Insert the keys using a single thread for best performance for now.
-          is_unique = map_insert_ref.insert(slot_type{static_cast<key_type>(val_idx), frag_idx});
+          is_unique      = map_insert_ref.insert(slot_type{val_idx, frag_idx});
           uniq_elem_size = [&]() -> size_type {
             if (not is_unique) { return 0; }
             switch (col->physical_type) {
@@ -146,24 +149,24 @@ struct map_insert_fn {
         }
         // Reduce num_unique and uniq_data_size from all tiles.
         auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-        __syncthreads();
+        block.sync();
         auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
-        // The first thread in the block atomically updates total num_unique and uniq_data_size,
-        // and accumulates the per-fragment winning-insert count.
-        if (t == 0) {
+        // One thread atomically updates the number and data size of total unique values as well as
+        // the number of unique values inserted by this fragment.
+        cg::invoke_one(block, [&]() {
           total_num_dict_entries =
             chunk_num_dict_entries.fetch_add(num_unique, cuda::std::memory_order_relaxed);
           total_num_dict_entries += num_unique;
           num_dict_vals += num_unique;
           chunk_uniq_data_size.fetch_add(uniq_data_size, cuda::std::memory_order_relaxed);
-        }
-        __syncthreads();
+        });
+        block.sync();
 
         // Check if the num unique values in chunk has already exceeded max dict size and early exit
         if (total_num_dict_entries > MAX_DICT_SIZE) { break; }
       }  // for loop
-      // Flush the number of unique values inserted to the fragment.
-      if (t == 0) { frag->num_dict_vals = num_dict_vals; }
+      // Flush the number of unique values inserted by this fragment
+      cg::invoke_one(block, [&]() { frag->num_dict_vals = num_dict_vals; });
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
@@ -173,11 +176,11 @@ struct map_insert_fn {
 template <int block_size>
 struct map_find_fn {
   storage_ref_type const& storage_ref;
-  EncColumnChunk* const& chunk;
+  EncColumnChunk* const chunk;
   template <typename T>
-  __device__ void operator()(size_type const s_start_value_idx,
+  __device__ void operator()(size_type const start_value_idx,
                              size_type const end_value_idx,
-                             size_type const s_ck_start_val_idx)
+                             size_type const ck_start_val_idx)
   {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       auto const col       = chunk->col_desc;
@@ -202,8 +205,7 @@ struct map_find_fn {
       auto const t            = threadIdx.x;
 
       // Note: Adjust the following loop to use `cg::tiles<map_cg_size>` if needed in the future.
-      for (thread_index_type val_idx = s_start_value_idx + t; val_idx < end_value_idx;
-           val_idx += block_size) {
+      for (key_type val_idx = start_value_idx + t; val_idx < end_value_idx; val_idx += block_size) {
         // Find the key using a single thread for best performance for now.
         if (data_col.is_valid(val_idx)) {
           auto const found_slot = map_find_ref.find(val_idx);
@@ -211,7 +213,7 @@ struct map_find_fn {
           cudf_assert(found_slot != map_find_ref.end() &&
                       "Unable to find value in map in dictionary index construction");
           // No need for atomic as this is not going to be modified by any other thread.
-          chunk->dict_index[val_idx - s_ck_start_val_idx] = found_slot->second;
+          chunk->dict_index[val_idx - ck_start_val_idx] = found_slot->second;
         }
       }
     } else {
@@ -228,17 +230,17 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   auto const col_idx  = blockIdx.y;
   auto const frag_idx = blockIdx.x;
   auto& frag          = frags[col_idx][frag_idx];
-  auto chunk          = frag.chunk;
+  auto const chunk    = frag.chunk;
   auto col            = chunk->col_desc;
 
   if (not chunk->use_dictionary) { return; }
 
-  size_type start_row = frag.start_row;
-  size_type end_row   = frag.start_row + frag.num_rows;
+  auto const start_row = frag.start_row;
+  auto const end_row   = frag.start_row + frag.num_rows;
 
   // Find the bounds of values in leaf column to be inserted into the map for current chunk.
-  size_type const s_start_value_idx = row_to_value_idx(start_row, *col);
-  size_type const end_value_idx     = row_to_value_idx(end_row, *col);
+  auto const start_value_idx = row_to_value_idx(start_row, *col);
+  auto const end_value_idx   = row_to_value_idx(end_row, *col);
 
   column_device_view const& data_col = *col->leaf_column;
   storage_ref_type const storage_ref{chunk->dict_map_size,
@@ -246,7 +248,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   type_dispatcher(
     data_col.type(),
     map_insert_fn<block_size>{storage_ref, chunk, &frag, static_cast<mapped_type>(frag_idx)},
-    s_start_value_idx,
+    start_value_idx,
     end_value_idx);
 }
 
@@ -338,21 +340,21 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(device_span<slot_type> const map_storage,
                                 cudf::detail::device_2dspan<PageFragment const> frags)
 {
-  auto const col_idx = blockIdx.y;
-  auto const block_x = blockIdx.x;
-  auto const frag    = frags[col_idx][block_x];
-  auto chunk         = frag.chunk;
+  auto const col_idx  = blockIdx.y;
+  auto const frag_idx = blockIdx.x;
+  auto const& frag    = frags[col_idx][frag_idx];
+  auto const chunk    = frag.chunk;
 
   if (not chunk->use_dictionary) { return; }
 
-  size_type start_row = frag.start_row;
-  size_type end_row   = frag.start_row + frag.num_rows;
+  auto const start_row = frag.start_row;
+  auto const end_row   = frag.start_row + frag.num_rows;
 
   auto const col = chunk->col_desc;
   // Find the bounds of values in leaf column to be searched in the map for current chunk
-  auto const s_start_value_idx  = row_to_value_idx(start_row, *col);
-  auto const s_ck_start_val_idx = row_to_value_idx(chunk->start_row, *col);
-  auto const end_value_idx      = row_to_value_idx(end_row, *col);
+  auto const start_value_idx  = row_to_value_idx(start_row, *col);
+  auto const end_value_idx    = row_to_value_idx(end_row, *col);
+  auto const ck_start_val_idx = row_to_value_idx(chunk->start_row, *col);
 
   column_device_view const& data_col = *col->leaf_column;
   storage_ref_type const storage_ref{chunk->dict_map_size,
@@ -360,9 +362,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   type_dispatcher(data_col.type(),
                   map_find_fn<block_size>{storage_ref, chunk},
-                  s_start_value_idx,
+                  start_value_idx,
                   end_value_idx,
-                  s_ck_start_val_idx);
+                  ck_start_val_idx);
 }
 
 CUDF_KERNEL void __launch_bounds__(DEFAULT_BLOCK_SIZE)
