@@ -15,7 +15,7 @@ from cudf_polars.testing.asserts import (
 from cudf_polars.utils.versions import POLARS_VERSION_LT_134
 
 
-def test_select():
+def test_select(engine: pl.GPUEngine):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -27,15 +27,15 @@ def test_select():
         pl.col("a") + pl.col("b"), (pl.col("a") * 2 + pl.col("b")).alias("d")
     )
 
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_decimal():
+def test_select_decimal(engine: pl.GPUEngine):
     ldf = pl.LazyFrame(
         {"a": pl.Series(values=[decimal.Decimal("1.0"), None], dtype=pl.Decimal(3, 1))}
     )
     query = ldf.select(pl.col("a"))
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
 def test_select_decimal_precision_none_result_max_precision():
@@ -55,7 +55,7 @@ def test_select_decimal_precision_none_result_max_precision():
     assert gpu_result.schema["a"].precision == 38
 
 
-def test_select_reduce():
+def test_select_reduce(engine: pl.GPUEngine):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -68,26 +68,26 @@ def test_select_reduce():
         (pl.col("a") * 2 + pl.col("b")).alias("d").mean(),
     )
 
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
 @pytest.mark.parametrize("expr", [pl.col("a").first(), pl.col("a").last()])
-def test_select_first_last_empty(expr):
+def test_select_first_last_empty(engine: pl.GPUEngine, expr):
     ldf = pl.LazyFrame({"a": []}, schema={"a": pl.Int64})
     query = ldf.select(expr)
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_with_cse_no_agg():
+def test_select_with_cse_no_agg(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     expr = pl.col("a") + pl.col("a")
 
     query = df.select(expr, (expr * 2).alias("b"), ((expr * 2) + 10).alias("c"))
 
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_with_cse_with_agg():
+def test_select_with_cse_with_agg(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     expr = pl.col("a") + pl.col("a")
     asum = pl.col("a").sum() + pl.col("a").sum()
@@ -96,13 +96,13 @@ def test_select_with_cse_with_agg():
         expr, (expr * 2).alias("b"), asum.alias("c"), (asum + 10).alias("d")
     )
 
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_select_native_datetime():
+def test_select_native_datetime(engine: pl.GPUEngine):
     df = pl.LazyFrame({"c0": [1]})
     query = df.select(pl.datetime(1969, 12, 7, 20, 47, 14))
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
 @pytest.mark.parametrize("fmt", ["ndjson", "csv"])
@@ -122,13 +122,13 @@ def test_select_fast_count_unsupported_formats(tmp_path, fmt):
     assert_ir_translation_raises(q, NotImplementedError)
 
 
-def test_select_fast_count_parquet(tmp_path):
+def test_select_fast_count_parquet(engine: pl.GPUEngine, tmp_path):
     df = pl.DataFrame({"a": [1, 2, 3]})
     file = tmp_path / "data.parquet"
     df.write_parquet(file)
 
     q = pl.scan_parquet(file).select(pl.len())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -139,10 +139,12 @@ def test_select_fast_count_parquet(tmp_path):
         (-1,),
     ],
 )
-def test_select_fast_count_parquet_skip_rows(request, tmp_path, zlice):
+def test_select_fast_count_parquet_skip_rows(
+    engine: pl.GPUEngine, request, tmp_path, zlice
+):
     df = pl.DataFrame({"a": [1, 2, 3]})
     file = tmp_path / "data.parquet"
     df.write_parquet(file)
 
     q = pl.scan_parquet(file).slice(1, 5).select(pl.len())
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)

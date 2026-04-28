@@ -358,4 +358,188 @@ TEST_F(ApplyBooleanMask, StructOfListsFiltering)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(filtered_lists_column, expected_structs_column);
 }
 
+struct ApplyDeletionMask : public cudf::test::BaseFixture {};
+
+TEST_F(ApplyDeletionMask, NonNullDeletionMask)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
+                                                       {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::table_view input{{col1, col2, col3}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{
+    {true, false, true, false, true, false}};
+  cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{false, false, false}, {1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{40, 5, 10}, {1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col3_expected{{40, 5, 10}, {1, 1, 0}};
+  cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+  auto got = cudf::apply_deletion_mask(input, deletion_mask);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, NullDeletionMask)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
+                                                       {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::table_view input{{col1, col2, col3}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{
+    {true, false, true, false, true, false}, {0, 1, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{{false, false, false}, {1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{{40, 5, 10}, {1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col3_expected{{40, 5, 10}, {1, 1, 0}};
+  cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+  auto got = cudf::apply_deletion_mask(input, deletion_mask);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, EmptyMask)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
+                                                       {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::test::fixed_width_column_wrapper<double> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
+  cudf::table_view input{{col1, col2, col3}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{};
+  cudf::test::fixed_width_column_wrapper<int16_t> col1_expected{};
+  cudf::test::fixed_width_column_wrapper<int32_t> col2_expected{};
+  cudf::test::fixed_width_column_wrapper<double> col3_expected{};
+  cudf::table_view expected{{col1_expected, col2_expected, col3_expected}};
+
+  auto got = cudf::apply_deletion_mask(input, deletion_mask);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, WrongMaskType)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
+                                                       {1, 1, 0, 1, 1, 0}};
+  cudf::table_view input{{col1}};
+  cudf::test::fixed_width_column_wrapper<int16_t> deletion_mask{
+    {true, false, true, false, true, false}};
+
+  EXPECT_THROW(cudf::apply_deletion_mask(input, deletion_mask), cudf::logic_error);
+}
+
+TEST_F(ApplyDeletionMask, MaskAndInputSizeMismatch)
+{
+  cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
+                                                       {1, 1, 0, 1, 1, 0}};
+  cudf::table_view input{{col1}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{{true, false, true, false, true}};
+
+  EXPECT_THROW(cudf::apply_deletion_mask(input, deletion_mask), cudf::logic_error);
+}
+
+TEST_F(ApplyDeletionMask, AllTrue)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col{1, 2, 3, 4, 5};
+  cudf::table_view input{{col}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{true, true, true, true, true};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_expected{};
+  cudf::table_view expected{{col_expected}};
+
+  auto got = cudf::apply_deletion_mask(input, deletion_mask);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, AllFalse)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col{1, 2, 3, 4, 5};
+  cudf::table_view input{{col}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{false, false, false, false, false};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_expected{1, 2, 3, 4, 5};
+  cudf::table_view expected{{col_expected}};
+
+  auto got = cudf::apply_deletion_mask(input, deletion_mask);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, AllDeletedMixedNullAndTrue)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col{1, 2, 3, 4, 5};
+  cudf::table_view input{{col}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{{true, true, true, true, true},
+                                                             {1, 1, 1, 0, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col_expected{};
+  cudf::table_view expected{{col_expected}};
+
+  auto got = cudf::apply_deletion_mask(input, deletion_mask);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, StringColumnTest)
+{
+  cudf::test::strings_column_wrapper col1{
+    {"This", "is", "the", "a", "k12", "string", "table", "column"}, {1, 1, 1, 1, 1, 0, 1, 1}};
+  cudf::table_view input{{col1}};
+  cudf::test::fixed_width_column_wrapper<bool> deletion_mask{
+    {true, true, false, true, false, true, false, true}, {1, 1, 0, 1, 1, 1, 1, 1}};
+  cudf::test::strings_column_wrapper col1_expected(
+    std::initializer_list<std::string>{"k12", "table"}, std::initializer_list<bool>{1, 1});
+  cudf::table_view expected{{col1_expected}};
+
+  auto got = cudf::apply_deletion_mask(input, deletion_mask);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, NoNullInput)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col(
+    {9668, 9590, 9526, 9205, 9434, 9347, 9160, 9569, 9143, 9807, 9606, 9446, 9279, 9822, 9691});
+  cudf::test::fixed_width_column_wrapper<bool> mask({false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     false,
+                                                     true,
+                                                     false,
+                                                     true});
+  cudf::table_view input({col});
+  cudf::test::fixed_width_column_wrapper<int32_t> col_expected(
+    {9668, 9590, 9205, 9434, 9160, 9143, 9606, 9446, 9822});
+  cudf::table_view expected({col_expected});
+  auto got = cudf::apply_deletion_mask(input, mask);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyDeletionMask, StructFiltering)
+{
+  using namespace cudf::test;
+
+  auto int_member = fixed_width_column_wrapper<int32_t>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+                                                        {1, 1, 1, 1, 0, 1, 1, 1, 1, 0}};
+
+  auto struct_column = structs_column_wrapper{{int_member}, {0, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+
+  auto deletion_mask = fixed_width_column_wrapper<bool>{{1, 1, 1, 1, 1, 0, 0, 0, 0, 0}};
+
+  auto filtered_table = cudf::apply_deletion_mask(cudf::table_view({struct_column}), deletion_mask);
+  auto filtered_struct_column = filtered_table->get_column(0);
+
+  auto expected_int_member =
+    fixed_width_column_wrapper<int32_t>{{-1, 6, 7, 8, -1}, {0, 1, 1, 1, 0}};
+
+  auto expected_struct_column = structs_column_wrapper{{expected_int_member}, {0, 1, 1, 1, 1}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(filtered_struct_column, expected_struct_column);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
