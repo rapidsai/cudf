@@ -232,7 +232,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         # SQL: JOIN catalog_sales ON sr_customer_sk=cs_bill_customer_sk AND sr_item_sk=cs_item_sk
         .join(
             catalog_sales,
-            left_on=["sr_customer_sk", "sr_item_sk"],
+            left_on=["ss_customer_sk", "ss_item_sk"],
             right_on=["cs_bill_customer_sk", "cs_item_sk"],
         )
         # SQL: JOIN d1 (date_dim) ON ss_sold_date_sk = d1_date_sk

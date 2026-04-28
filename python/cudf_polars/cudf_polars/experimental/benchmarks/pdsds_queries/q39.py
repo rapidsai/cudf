@@ -272,6 +272,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                         "mean": "mean_inv2",
                         "cov": "cov_inv2",
                     }
+                ).with_columns(
+                    [
+                        pl.col("inv_warehouse_sk_inv2").alias("w_warehouse_sk_inv2"),
+                        pl.col("inv_item_sk_inv2").alias("i_item_sk_inv2"),
+                    ]
                 ),
                 left_on=["inv_item_sk", "inv_warehouse_sk"],
                 right_on=["inv_item_sk_inv2", "inv_warehouse_sk_inv2"],
@@ -288,8 +293,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                     pl.col("d_moy").alias("dmoy1"),
                     pl.col("mean").alias("mean1"),
                     pl.col("cov").alias("cov1"),
-                    pl.col("inv_warehouse_sk_inv2").alias("w_warehouse_sk"),
-                    pl.col("inv_item_sk_inv2").alias("i_item_sk"),
+                    pl.col("w_warehouse_sk_inv2").alias("w_warehouse_sk"),
+                    pl.col("i_item_sk_inv2").alias("i_item_sk"),
                     pl.col("d_moy_inv2").alias("d_moy"),
                     pl.col("mean_inv2").alias("mean"),
                     pl.col("cov_inv2").alias("cov"),

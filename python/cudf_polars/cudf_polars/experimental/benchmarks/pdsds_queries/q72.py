@@ -314,7 +314,12 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 right_on="d3_date_sk",
             )
             # SQL: LEFT OUTER JOIN promotion ON cs_promo_sk = p_promo_sk
-            .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk", how="left")
+            .join(
+                promotion.with_columns(pl.lit(1).alias("promo_matched")),
+                left_on="cs_promo_sk",
+                right_on="p_promo_sk",
+                how="left",
+            )
             # SQL: LEFT OUTER JOIN catalog_returns ON cr_item_sk = cs_item_sk
             #   AND cr_order_number = cs_order_number
             .join(
@@ -339,11 +344,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             # SQL: CASE WHEN p_promo_sk IS NULL THEN 1 ELSE 0 END
             .with_columns(
                 [
-                    pl.when(pl.col("p_promo_sk").is_null())
+                    pl.when(pl.col("promo_matched").is_null())
                     .then(pl.lit(1, dtype=COUNT_DTYPE))
                     .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
                     .alias("no_promo"),
-                    pl.when(pl.col("p_promo_sk").is_not_null())
+                    pl.when(pl.col("promo_matched").is_not_null())
                     .then(pl.lit(1, dtype=COUNT_DTYPE))
                     .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
                     .alias("promo"),
