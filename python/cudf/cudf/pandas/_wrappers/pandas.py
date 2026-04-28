@@ -872,7 +872,7 @@ BooleanDtype = make_final_proxy_type(
     pd.BooleanDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.BooleanDtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -898,7 +898,7 @@ Int8Dtype = make_final_proxy_type(
     pd.Int8Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.Int8Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -911,7 +911,7 @@ Int16Dtype = make_final_proxy_type(
     pd.Int16Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.Int16Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -923,7 +923,7 @@ Int32Dtype = make_final_proxy_type(
     pd.Int32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.Int32Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -935,7 +935,7 @@ Int64Dtype = make_final_proxy_type(
     pd.Int64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.Int64Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -947,7 +947,7 @@ UInt8Dtype = make_final_proxy_type(
     pd.UInt8Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.UInt8Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -959,7 +959,7 @@ UInt16Dtype = make_final_proxy_type(
     pd.UInt16Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.UInt16Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -971,7 +971,7 @@ UInt32Dtype = make_final_proxy_type(
     pd.UInt32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.UInt32Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -983,7 +983,7 @@ UInt64Dtype = make_final_proxy_type(
     pd.UInt64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.UInt64Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -1064,7 +1064,7 @@ Float32Dtype = make_final_proxy_type(
     pd.Float32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.Float32Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },
@@ -1076,7 +1076,7 @@ Float64Dtype = make_final_proxy_type(
     pd.Float64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    bases=(pd.Float64Dtype,),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
     },

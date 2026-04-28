@@ -108,14 +108,14 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         V = self.var()
 
         if V == 0:
-            return np.dtype(original_dtype).type(0)
+            return original_dtype.type(0)
 
         term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
         term_one_section_two = m4_numerator / (V**2)
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         if original_dtype.kind == "f" and original_dtype.itemsize < 8:
-            kurt = np.dtype(original_dtype).type(kurt)
+            kurt = original_dtype.type(kurt)
         return kurt
 
     def skew(self, skipna: bool = True) -> ScalarLike:
