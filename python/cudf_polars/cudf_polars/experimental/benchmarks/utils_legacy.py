@@ -490,7 +490,7 @@ class RunConfig:
         engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
         if args.engine == "duckdb":
             engine_name = "duckdb"
-        elif args.engine == "polars":
+        elif args.engine in ("polars", "polars-naive"):
             if executor == "cpu":
                 engine_name = "polars-cpu"
             else:
