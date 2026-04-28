@@ -145,7 +145,6 @@ def evaluate_logical_plan(
                     ir,
                     config_options,
                     collect_metadata=collect_metadata,
-                    query_id=query_id,
                 )
             case "ray":
                 from cudf_polars.experimental.rapidsmpf.frontend.ray import (

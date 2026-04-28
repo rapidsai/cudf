@@ -69,6 +69,7 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
 
+
 __all__ = [
     "IR",
     "Cache",

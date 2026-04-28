@@ -9,6 +9,7 @@ import dataclasses
 import json
 import os
 import socket
+import uuid
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 import cuda.core
@@ -20,10 +21,11 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import polars as pl
 
+import cudf_polars.quent
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.experimental.base import StatsCollector
-from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.parallel import lower_ir_graph_with_node_map
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
 from cudf_polars.experimental.rapidsmpf.core import generate_network
@@ -125,6 +127,7 @@ class StreamingEngine(pl.GPUEngine):
         exit_stack: contextlib.ExitStack | None = None,
     ):
         self._nranks = nranks
+        self._worker_quent_events: list[dict[str, Any]] = []
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
@@ -205,6 +208,12 @@ class StreamingEngine(pl.GPUEngine):
         """
         Shut down engine and release all owned resources.
 
+        Subclasses should emit their final lifecycle events and extend
+        ``_worker_quent_events`` with remote worker events *before*
+        calling ``super().shutdown()``. This base implementation drains
+        any locally buffered Quent events (e.g. Engine init/exit emitted
+        on the driver).
+
         Idempotent: safe to call more than once. Must be called on the same
         thread that created the engine.
         """
@@ -213,6 +222,9 @@ class StreamingEngine(pl.GPUEngine):
         try:
             self._exit_stack.close()
         finally:
+            from cudf_polars.quent._relay import drain_buffered_events
+
+            self._worker_quent_events.extend(drain_buffered_events())
             self._exit_stack = None
             self.device = None
             self.memory_resource = None
@@ -225,6 +237,22 @@ class StreamingEngine(pl.GPUEngine):
     def __exit__(self, *_: object) -> None:
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
+
+    @property
+    def worker_quent_events(self) -> list[dict[str, Any]]:
+        """
+        Quent telemetry events collected from workers during shutdown.
+
+        Empty until :meth:`shutdown` is called. For distributed engines
+        (Ray, Dask) this contains events that were buffered on remote
+        workers and drained back to the driver. Events are sorted by
+        timestamp.
+
+        Returns
+        -------
+        List of serialized Quent event dicts, sorted by timestamp.
+        """
+        return sorted(self._worker_quent_events, key=lambda e: e.get("timestamp", 0))
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         """
@@ -472,6 +500,7 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
+    worker_id: uuid.UUID | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Evaluate a polars IR plan on a single rank.
@@ -498,6 +527,12 @@ def evaluate_on_rank(
         Executor configuration forwarded from the client.
     collect_metadata
         Whether to collect channel metadata during execution.
+    worker_id
+        Quent worker ID for this rank. When provided, rank 0 emits
+        plan-level Quent telemetry (logical and physical plan
+        declarations). Passed explicitly so that all frontends
+        (SPMD, Ray, Dask) can supply their own ID without requiring
+        a specific context type.
 
     Returns
     -------
@@ -507,13 +542,43 @@ def evaluate_on_rank(
         Collected channel metadata if *collect_metadata* is ``True``,
         otherwise ``None``.
     """
-    stats = allgather_stats(comm, ctx.br(), ir, config_options)
-    ir, partition_info = lower_ir_graph(ir, config_options, stats)
+    if worker_id is None:
+        spmd_context = config_options.executor.spmd_context
+        if spmd_context is not None:
+            worker_id = spmd_context.worker_id
 
-    if comm.rank == 0:
-        # At least for now, the query plan is identical on all ranks,
-        # so we only log it once.
+    stats = allgather_stats(comm, ctx.br(), ir, config_options)
+
+    logical_plan_id = uuid.uuid4()
+    physical_plan_id = uuid.uuid4()
+
+    quent_context = cudf_polars.quent.quent_context.get()
+
+    if comm.rank == 0 and worker_id is not None:
+        logical_op_by_id = quent_context.emit_plan_events(
+            ir,
+            config_options,
+            plan_id=logical_plan_id,
+            worker_id=worker_id,
+            query_id=quent_context.query.id,
+            instance_name="logical",
+        )
+
+    ir, partition_info, node_map = lower_ir_graph_with_node_map(
+        ir, config_options, stats
+    )
+
+    if comm.rank == 0 and worker_id is not None:
         log_query_plan(ir, config_options)
+        quent_context.emit_physical_plan_events(
+            ir,
+            config_options,
+            plan_id=physical_plan_id,
+            worker_id=worker_id,
+            parent_plan_id=logical_plan_id,
+            node_map=node_map,
+            logical_op_by_id=logical_op_by_id,
+        )
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(

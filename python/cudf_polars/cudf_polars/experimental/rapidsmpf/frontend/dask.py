@@ -31,6 +31,8 @@ import polars as pl
 
 import rmm.mr
 
+import cudf_polars.quent._logging
+import cudf_polars.quent._types
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
     StreamingEngine,
@@ -41,6 +43,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.quent._relay import configure_quent_logging, drain_buffered_events
 from cudf_polars.utils.config import DaskContext
 
 if TYPE_CHECKING:
@@ -116,6 +119,8 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     mr: RmmResourceAdaptor | None
+    worker_id: uuid.UUID | None = None
+    engine_id: uuid.UUID | None = None
 
 
 def _setup_root(
@@ -188,6 +193,8 @@ def _setup_worker(
     uid: str,
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
+    worker_ids: list[uuid.UUID] | None = None,
+    engine_id: uuid.UUID | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -214,6 +221,11 @@ def _setup_worker(
     memory_resource_config
         Optional RMM memory resource configuration. If ``None``, defaults to
         :class:`rmm.mr.CudaAsyncMemoryResource`.
+    worker_ids
+        List of Quent worker UUIDs indexed by rank. Each worker picks
+        its own ID after the barrier using ``comm.rank``.
+    engine_id
+        Quent engine UUID that owns this worker.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
 
@@ -247,6 +259,18 @@ def _setup_worker(
         comm = mp_ctx.comm
 
     barrier(comm)
+
+    worker_id = worker_ids[comm.rank] if worker_ids is not None else None
+
+    configure_quent_logging()
+    if worker_id is not None and engine_id is not None:
+        quent_worker = cudf_polars.quent._types.Worker(
+            id=worker_id,
+            engine_id=engine_id,
+            instance_name=f"rank-{comm.rank}",
+        )
+        cudf_polars.quent._logging.emit(quent_worker.init())
+
     ctx = Context.from_options(comm.logger, mr, options)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
@@ -261,7 +285,14 @@ def _setup_worker(
     setattr(
         dask_worker,
         attr,
-        _WorkerContext(comm=comm, ctx=ctx, py_executor=py_executor, mr=mr),
+        _WorkerContext(
+            comm=comm,
+            ctx=ctx,
+            py_executor=py_executor,
+            mr=mr,
+            worker_id=worker_id,
+            engine_id=engine_id,
+        ),
     )
 
 
@@ -269,7 +300,7 @@ def _teardown_worker(
     *, uid: str, dask_worker: distributed.Worker | None = None
 ) -> None:
     """
-    Release per-worker GPU resources.
+    Emit Worker.exit, then release per-worker GPU resources.
 
     Shuts down the thread pool, drops the streaming context and communicator,
     and removes the worker attribute.
@@ -285,6 +316,14 @@ def _teardown_worker(
     attr = f"_cudf_polars_mp_context_{uid}"
     mp_ctx: _WorkerContext | None = getattr(dask_worker, attr, None)
     if mp_ctx is not None:
+        if mp_ctx.worker_id is not None and mp_ctx.engine_id is not None:
+            quent_worker = cudf_polars.quent._types.Worker(
+                id=mp_ctx.worker_id,
+                engine_id=mp_ctx.engine_id,
+                instance_name=f"rank-{mp_ctx.comm.rank if mp_ctx.comm else '?'}",
+            )
+            cudf_polars.quent._logging.emit(quent_worker.exit())
+
         if mp_ctx.py_executor is not None:
             mp_ctx.py_executor.shutdown(wait=True, cancel_futures=True)
         mp_ctx.ctx = None
@@ -376,6 +415,7 @@ def _worker_evaluate(
         ir,
         config_options,
         collect_metadata=collect_metadata,
+        worker_id=mp_ctx.worker_id,
     )
 
 
@@ -611,7 +651,20 @@ class DaskEngine(StreamingEngine):
         nranks = len(workers_info)
         if nranks == 0:
             raise RuntimeError("No workers found in the Dask cluster.")
-        root_worker = next(iter(workers_info))
+        worker_addresses = list(workers_info.keys())
+        root_worker = worker_addresses[0]
+
+        self._engine_id = uuid.uuid4()
+        worker_ids = [uuid.uuid4() for _ in range(nranks)]
+
+        # Emit Engine.init on the driver.
+        self._quent_engine = cudf_polars.quent._types.Engine(
+            id=self._engine_id,
+            implementation=cudf_polars.quent._types.Implementation(
+                implementation_id=self._engine_id, name="cudf-polars-dask"
+            ),
+        )
+        cudf_polars.quent._logging.emit(self._quent_engine.init())
 
         # Phase 1: initialize root communicator on one worker.
         root_result = dask_client.run(
@@ -629,12 +682,15 @@ class DaskEngine(StreamingEngine):
 
         # Phase 2: complete bootstrap on all workers concurrently.
         # All workers call barrier() so they must all run simultaneously.
+        # Each worker picks its own worker_id from the list using comm.rank.
         dask_client.run(
             functools.partial(
                 _setup_worker,
                 uid=uid,
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
+                worker_ids=worker_ids,
+                engine_id=self._engine_id,
             ),
             root_ucxx_address_as_bytes,
             nranks,
@@ -746,9 +802,10 @@ class DaskEngine(StreamingEngine):
         """
         Shut down all Dask workers' GPU resources.
 
-        If the cluster and client were created by this engine, they are also
-        closed. Safe to call more than once. Must be called on the same thread
-        that created the engine.
+        Drains buffered Quent events from all workers before tearing down,
+        then emits ``Engine.exit`` on the driver. If the cluster and client
+        were created by this engine, they are also closed. Safe to call more
+        than once. Must be called on the same thread that created the engine.
 
         Raises
         ------
@@ -761,10 +818,17 @@ class DaskEngine(StreamingEngine):
         self._dask_context = None
         exceptions: list[Exception] = []
         try:
+            # Teardown emits Worker.exit, then we drain all buffered events
+            # (including the exit event) from workers.
             ctx.client.run(functools.partial(_teardown_worker, uid=ctx.rapidsmpf_id))
+
+            worker_events = ctx.client.run(drain_buffered_events)
+            for events in worker_events.values():
+                self._worker_quent_events.extend(events)
         except Exception as e:
             exceptions.append(e)
         finally:
+            cudf_polars.quent._logging.emit(self._quent_engine.exit())
             if ctx.owned_client is not None:
                 ctx.owned_client.close()
             if ctx.owned_cluster is not None:

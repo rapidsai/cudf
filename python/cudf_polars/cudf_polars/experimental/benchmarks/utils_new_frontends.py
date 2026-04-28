@@ -59,6 +59,7 @@ except ImportError:
     pynvml = None
 
 try:
+    import cudf_polars.quent
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
@@ -964,6 +965,26 @@ def run_polars_query(
             if engine is not None:
                 engine._run(setup_logging, q_id, i)
 
+                # Update the query name for the current iteration.
+                # TODO: Figure out the division of responsibility for emitting
+                # events related to query groups / queries. Right now,
+                # we do query groups events (i.e. *require* the user to do it).
+                # Polars doesn't really have a concept of a query group, so
+                # we need to put it *somewhere*, unless we have a query group
+                # per query?
+                #
+                # We also do query events here, but that could be pushed.
+                # into the `.collect()`.
+                quent_context = cudf_polars.quent.QuentContext()
+                token = cudf_polars.quent.quent_context.set(
+                    dataclasses.replace(
+                        quent_context,
+                        query=cudf_polars.quent.Query(
+                            instance_name=f"Iteration {i + 1}",
+                        ),
+                    ),
+                )
+                token.var.get().emit_query_events()
         try:
             record = run_polars_query_iteration(
                 q_id=q_id,
@@ -1035,6 +1056,19 @@ def _run_query_loop(
     query_failures: list[tuple[int, int]] = []
 
     for q_id in run_config.queries:
+        if engine is not None:
+            # Set the query group for the current query.
+            quent_context = cudf_polars.quent.QuentContext()
+            token = cudf_polars.quent.quent_context.set(
+                dataclasses.replace(
+                    quent_context,
+                    query_group=cudf_polars.quent.QueryGroup(
+                        instance_name=f"PDSH Query {q_id}",
+                    ),
+                )
+            )
+            token.var.get().emit_query_group_events()
+
         try:
             result = run_polars_query(
                 q_id=q_id,
@@ -1117,6 +1151,13 @@ def run_polars_spmd(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+
+    if _HAS_STRUCTLOG and run_config.collect_traces:
+        # Ensure that we configure our logger before any engine lifecycle events are emitted.
+        setup_logging(-1, -1)
+
+    cudf_polars.quent.quent_context.set(cudf_polars.quent.QuentContext())
+
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
@@ -1146,13 +1187,17 @@ def run_polars_spmd(
             validation_files,
             prepare_validation_result=_allgather_result,
         )
-        if engine.rank > 0:
-            sys.exit(1 if (query_failures or validation_failures) else 0)
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
-        _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
+        if engine.rank > 0:
+            sys.exit(1 if (query_failures or validation_failures) else 0)
+
+    if _HAS_STRUCTLOG and run_config.collect_traces:
+        _write_quent_traces(run_config.run_id, engine=engine)
+
+    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
 def run_polars_ray(
@@ -1180,6 +1225,11 @@ def run_polars_ray(
         ray_init_options["address"] = run_config.connect
     if run_config.num_gpus is not None:
         ray_init_options["num_gpus"] = run_config.num_gpus
+    if _HAS_STRUCTLOG and run_config.collect_traces:
+        ray_init_options["runtime_env"] = {"worker_process_setup_hook": setup_logging}
+        from cudf_polars.quent._relay import configure_quent_logging
+
+        configure_quent_logging()
 
     with RayEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
@@ -1199,6 +1249,9 @@ def run_polars_ray(
         )
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
+
+    if _HAS_STRUCTLOG and run_config.collect_traces:
+        _write_quent_traces(run_config.run_id, engine=engine)
 
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
@@ -1237,6 +1290,11 @@ def run_polars_dask(
             str(i) for i in range(run_config.num_gpus)
         )
 
+    if _HAS_STRUCTLOG and run_config.collect_traces:
+        from cudf_polars.quent._relay import configure_quent_logging
+
+        configure_quent_logging()
+
     try:
         with DaskEngine(
             rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
@@ -1258,13 +1316,16 @@ def run_polars_dask(
                 run_config, records=dict(records), plans=plans
             )
             run_config = _consolidate_logs(run_config, engine)
+
+        if _HAS_STRUCTLOG and run_config.collect_traces:
+            _write_quent_traces(run_config.run_id, engine=engine)
     finally:
         if dask_client is not None:
             dask_client.close()
     _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
-def setup_logging(query_id: int, iteration: int) -> None:
+def setup_logging(query_id: int = -1, iteration: int = -1) -> None:
     import cudf_polars.dsl.tracing
 
     if not cudf_polars.dsl.tracing.LOG_TRACES:
@@ -1337,6 +1398,40 @@ def setup_logging(query_id: int, iteration: int) -> None:
             wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
             cache_logger_on_first_use=True,
         )
+
+
+def _write_quent_traces(run_id: uuid.UUID, engine: StreamingEngine) -> None:
+    """
+    Write collected Quent events to logs/{run_id}.ndjson.
+
+    Reads ``engine.worker_quent_events`` which is populated during
+    :meth:`~StreamingEngine.shutdown` — the base class drains the local
+    relay buffer (driver-side events like Engine init/exit) and each
+    subclass extends it with remote worker events (Worker init/exit,
+    Plan declarations, etc.).
+
+    Call this *after* engine shutdown (i.e. after the ``with engine:``
+    block exits).
+
+    Parameters
+    ----------
+    run_id
+        Unique run identifier, used for the output filename.
+    engine
+        The (already shut down) engine instance.
+    """
+    quent_logs = engine.worker_quent_events
+    if not quent_logs:
+        return
+
+    logs_dir = Path("logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    output_path = logs_dir / f"{run_id}.ndjson"
+    with output_path.open("w") as f:
+        for log in quent_logs:
+            f.write(json.dumps(log))
+            f.write("\n")
+    print(f"Wrote {len(quent_logs)} Quent trace events to {output_path}")
 
 
 def _consolidate_logs(

@@ -106,6 +106,54 @@ def lower_ir_graph(
     return mapper(ir)
 
 
+def lower_ir_graph_with_node_map(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], dict[str, list[str]]]:
+    """
+    Lower an IR graph and return a mapping from physical to logical stable IDs.
+
+    Behaves like :func:`lower_ir_graph`, but additionally returns a
+    mapping from each physical (post-lowering) node's stable ID to the
+    logical (pre-lowering) node(s) it was derived from.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to rewrite.
+    config_options
+        GPUEngine configuration options.
+    stats
+        Pre-computed statistics collector.
+
+    Returns
+    -------
+    new_ir
+        The rewritten IR graph.
+    partition_info
+        Mapping from unique nodes in the new graph to partitioning info.
+    node_map
+        Mapping ``{physical_stable_id: [logical_stable_id, ...]}`` built
+        from the internal :class:`CachingVisitor` cache. Nodes inserted
+        by lowering (e.g. ``Repartition``) will not appear as keys.
+    """
+    state: State = {
+        "config_options": config_options,
+        "stats": stats,
+    }
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
+    result = mapper(ir)
+
+    node_map: dict[str, list[str]] = {}
+    for old_node, (new_node, _) in mapper.cache.items():  # type: ignore[attr-defined]
+        new_key = str(new_node.get_stable_id())
+        old_key = str(old_node.get_stable_id())
+        node_map.setdefault(new_key, []).append(old_key)
+
+    return *result, node_map
+
+
 def task_graph(
     ir: IR,
     partition_info: MutableMapping[IR, PartitionInfo],

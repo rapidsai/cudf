@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
@@ -26,6 +27,9 @@ import polars as pl
 
 import rmm.mr
 
+import cudf_polars.quent
+import cudf_polars.quent._logging
+import cudf_polars.quent._types
 from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
     StreamingEngine,
@@ -36,10 +40,10 @@ from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.quent._relay import configure_quent_logging, drain_buffered_events
 from cudf_polars.utils.config import RayContext
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
@@ -179,7 +183,11 @@ class RankActor:
         num_py_executors: int,
         hardware_binding: HardwareBindingPolicy,
         memory_resource_config: MemoryResourceConfig | None,
+        worker_id: uuid.UUID | None = None,
+        engine_id: uuid.UUID | None = None,
+        rank: int = 0,
     ) -> None:
+        configure_quent_logging()
         bind_to_gpu(hardware_binding)
         base_mr = (
             memory_resource_config.create_memory_resource()
@@ -197,6 +205,17 @@ class RankActor:
         )
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
+        self._worker_id: uuid.UUID | None = worker_id
+        self._engine_id: uuid.UUID = engine_id or uuid.uuid4()
+        self._rank: int = rank
+        self._quent_worker: cudf_polars.quent._types.Worker | None = None
+        if worker_id is not None:
+            self._quent_worker = cudf_polars.quent._types.Worker(
+                id=worker_id,
+                engine_id=self._engine_id,
+                instance_name=f"rank-{rank}",
+            )
+            cudf_polars.quent._logging.emit(self._quent_worker.init())
 
     def setup_root(self) -> bytes:
         """
@@ -387,7 +406,22 @@ class RankActor:
             ir,
             config_options,
             collect_metadata=collect_metadata,
+            worker_id=self._worker_id,
         )
+
+    def drain_quent_events(self, *, emit_exit: bool = False) -> list[dict]:
+        """
+        Return and clear all buffered Quent events from this actor.
+
+        Parameters
+        ----------
+        emit_exit
+            If True, emit Worker.exit before draining so that the exit
+            event is included in the returned buffer.
+        """
+        if emit_exit and self._quent_worker is not None:
+            cudf_polars.quent._logging.emit(self._quent_worker.exit())
+        return drain_buffered_events()
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         return func(*args, **kwargs)
@@ -515,10 +549,13 @@ class RayEngine(StreamingEngine):
         engine_options: dict[str, Any] | None = None,
         ray_init_options: dict[str, Any] | None = None,
         num_ranks: int | None = None,
+        engine_id: uuid.UUID | None = None,
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
-        ray_init_options = ray_init_options or {}
+        ray_init_options = dict(ray_init_options or {})
+        # ray_init_options.setdefault("logging_config", ray.LoggingConfig(encoding="JSON", log_level="INFO"))
+        self._engine_id = engine_id or uuid.uuid4()
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -562,6 +599,14 @@ class RayEngine(StreamingEngine):
             # Ensure Ray is shut down when RayEngine shuts down.
             exit_stack.callback(ray.shutdown)
 
+        self._quent_engine = cudf_polars.quent._types.Engine(
+            id=self._engine_id,
+            implementation=cudf_polars.quent._types.Implementation(
+                implementation_id=self._engine_id, name="cudf-polars-ray"
+            ),
+        )
+        cudf_polars.quent._logging.emit(self._quent_engine.init())
+
         try:
             # Override num_gpus=0 when num_ranks is set so Ray doesn't gate
             # actor scheduling on GPU resources; .options() with no overrides
@@ -572,19 +617,24 @@ class RayEngine(StreamingEngine):
             nranks = (
                 num_ranks if num_ranks is not None else get_num_gpus_in_ray_cluster()
             )
+            worker_ids = [uuid.uuid4() for _ in range(nranks)]
+            self._worker_ids = worker_ids
 
             rank_actors: list[ActorHandle[RankActor]] = [
                 RankActor.options(**actor_options).remote(  # type: ignore[attr-defined]
                     nranks=nranks,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
-                        int,
+                        "int",
                         executor_options.get("num_py_executors", 8),
                     ),
                     hardware_binding=hw_binding,
                     memory_resource_config=mr_config,
+                    worker_id=worker_id,
+                    engine_id=self._engine_id,
+                    rank=i,
                 )
-                for _ in range(nranks)
+                for i, worker_id in enumerate(worker_ids)
             ]
 
             root_ucxx_address_as_bytes = ray.get(rank_actors[0].setup_root.remote())
@@ -806,8 +856,10 @@ class RayEngine(StreamingEngine):
         """
         Shut down all rank actors and release resources.
 
-        If Ray was initialized by this engine, also calls :func:`ray.shutdown`.
-        Safe to call more than once.
+        Drains buffered Quent events from all actors before teardown,
+        then emits ``Engine.exit`` on the driver. If Ray was initialized
+        by this engine, also calls :func:`ray.shutdown`. Safe to call
+        more than once.
 
         Raises
         ------
@@ -824,17 +876,34 @@ class RayEngine(StreamingEngine):
             # and start a new cluster.
             if not ray.is_initialized():
                 return
+            # Drain all buffered Quent events (including Worker.exit) before
+            # actors terminate. emit_exit=True ensures the exit event is
+            # emitted and captured before the buffer is drained.
+            try:
+                event_lists = ray.get(
+                    [
+                        a.drain_quent_events.remote(emit_exit=True)
+                        for a in self._rank_actors
+                    ]
+                )
+                for events in event_lists:
+                    self._worker_quent_events.extend(events)
+            except Exception as e:
+                exceptions.append(e)
+
             refs = [a.shutdown.remote() for a in self._rank_actors]
             for ref in refs:
                 try:
                     ray.get(ref)
                 except ray.exceptions.RayActorError:
-                    pass  # expected: exit_actor() terminates the process immediately
+                    pass  # expected: exit_actor() terminates the process
                 except Exception as e:
                     exceptions.append(e)
+
             if exceptions:
                 raise ExceptionGroup("Actor shutdown failed", exceptions)
         finally:
+            cudf_polars.quent._logging.emit(self._quent_engine.exit())
             self._rank_actors = None
             super().shutdown()
 

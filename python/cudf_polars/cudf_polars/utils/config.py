@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
@@ -543,6 +544,8 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+    engine_id: uuid.UUID
+    worker_id: uuid.UUID
 
 
 @dataclasses.dataclass(frozen=True)
@@ -806,6 +809,7 @@ class StreamingExecutor:
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
+    # quent_context: QuentContext = dataclasses.field(default_factory=QuentContext)
 
     def __post_init__(self) -> None:  # noqa: D105
         # Check for rapidsmpf runtime

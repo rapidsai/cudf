@@ -1,0 +1,185 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Quent telemetry tracing."""
+
+from __future__ import annotations
+
+import dataclasses
+from typing import TYPE_CHECKING
+
+from cudf_polars.quent._logging import emit
+from cudf_polars.quent._plan import (
+    build_parent_operators_map,
+    build_plan,
+)
+from cudf_polars.quent._types import (
+    Engine,
+    Query,
+    QueryGroup,
+)
+
+if TYPE_CHECKING:
+    import uuid
+
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.quent._types import (
+        Operator,
+        Plan,
+        Port,
+    )
+    from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
+
+
+__all__ = [
+    "QuentContext",
+]
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class QuentContext:
+    """Configuration for Quent execution."""
+
+    engine: Engine = dataclasses.field(default_factory=Engine)
+    query_group: QueryGroup = dataclasses.field(default_factory=QueryGroup)
+    query: Query = dataclasses.field(default_factory=Query)
+
+    def emit_query_group_events(self) -> None:
+        """Emit a Quent QueryGroup declaration event."""
+        emit(
+            QueryGroup(
+                self.query_group.id,
+                instance_name=self.query_group.instance_name
+                or self.query_group.id.hex[:8],
+            ).declare(engine_id=self.engine.id)
+        )
+
+    def emit_query_events(self) -> None:
+        """
+        Emit Quent Query events.
+
+        This includes events for 'Declare', 'Init', and 'Planning'.
+        """
+        emit(self.query.init(query_group_id=self.query_group.id))
+
+    def emit_plan_declarations(
+        self, plan: Plan, operators: list[Operator], ports: list[Port]
+    ) -> None:
+        """Emit declaration events for a plan and all its operators and ports."""
+        emit(plan.declare())
+        for operator in operators:
+            emit(operator.declare())
+        for port in ports:
+            emit(port.declare())
+
+    def emit_plan_events(
+        self,
+        ir: IR,
+        config_options: ConfigOptions[StreamingExecutor],
+        plan_id: uuid.UUID,
+        worker_id: uuid.UUID,
+        query_id: uuid.UUID | None = None,
+        instance_name: str = "logical",
+        parent_plan_id: uuid.UUID | None = None,
+        parent_operators_by_node_id: dict[str, list[Operator]] | None = None,
+    ) -> dict[str, Operator]:
+        """
+        Build and emit declaration events for a plan.
+
+        Serializes ``ir`` into a :class:`SerializablePlan`, constructs the
+        operators, ports and edges, emits the declarations, and returns a
+        mapping from each node's stable ID to its :class:`Operator`.
+
+        Parameters
+        ----------
+        ir
+            Root of the IR graph for this plan.
+        config_options
+            Executor configuration.
+        plan_id
+            Unique ID for this plan.
+        worker_id
+            The Quent worker ID.
+        query_id
+            The Quent query ID this plan belongs to (``None`` for physical
+            plans that hang off a parent plan instead).
+        instance_name
+            Human-readable plan name (e.g. ``"logical"`` or ``"physical"``).
+        parent_plan_id
+            If this plan was derived from another, the parent plan's ID.
+        parent_operators_by_node_id
+            Optional mapping from node stable ID to parent
+            :class:`Operator` objects (used for physical plans).
+
+        Returns
+        -------
+        Mapping from node stable ID to the :class:`Operator` created for
+        that node.
+        """
+        plan, ops, ports, op_by_id = build_plan(
+            ir,
+            config_options,
+            query_id,
+            plan_id,
+            worker_id=worker_id,
+            instance_name=instance_name,
+            parent_plan_id=parent_plan_id,
+            parent_operators_by_node_id=parent_operators_by_node_id,
+        )
+        self.emit_plan_declarations(plan, ops, ports)
+        return op_by_id
+
+    def emit_physical_plan_events(
+        self,
+        ir: IR,
+        config_options: ConfigOptions[StreamingExecutor],
+        plan_id: uuid.UUID,
+        worker_id: uuid.UUID,
+        *,
+        parent_plan_id: uuid.UUID,
+        node_map: dict[str, list[str]],
+        logical_op_by_id: dict[str, Operator],
+    ) -> dict[str, Operator]:
+        """
+        Build and emit declaration events for a physical plan.
+
+        Derives parent-operator linkage from the lowering ``node_map`` and
+        delegates to :func:`emit_plan_events`.
+
+        Parameters
+        ----------
+        ir
+            Root of the **lowered** IR graph.
+        config_options
+            Executor configuration.
+        plan_id
+            Unique ID for the physical plan.
+        worker_id
+            The Quent worker ID.
+        parent_plan_id
+            ID of the logical plan this physical plan was derived from.
+        node_map
+            Mapping from physical stable IDs to the logical stable IDs
+            they were derived from (as returned by
+            :func:`~cudf_polars.experimental.parallel.lower_ir_graph_with_node_map`).
+        logical_op_by_id
+            Mapping from logical stable ID to its :class:`Operator`
+            (as returned by :func:`emit_plan_events` for the logical plan).
+
+        Returns
+        -------
+        Mapping from physical stable ID to the :class:`Operator` created
+        for that node.
+        """
+        parent_operators_by_node_id = build_parent_operators_map(
+            node_map, logical_op_by_id
+        )
+        return self.emit_plan_events(
+            ir,
+            config_options,
+            plan_id,
+            worker_id,
+            instance_name="physical",
+            parent_plan_id=parent_plan_id,
+            parent_operators_by_node_id=parent_operators_by_node_id,
+        )
