@@ -1112,7 +1112,7 @@ async def _choose_strategy(
         indices=names_to_indices(ir.right_on, ir.children[1].schema),
     )
 
-    if left_partitioning.is_aligned_with(right_partitioning):
+    if left_partitioning.is_aligned_with(right_partitioning, context.br()):
         # We can use a chunkwise join
         chunkwise = True
         left_sample = JoinSideStats(total_chunks=left_metadata.local_count)

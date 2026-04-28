@@ -188,7 +188,7 @@ def _update_scheme_indices(
 ) -> HashScheme | OrderScheme:
     if isinstance(scheme, HashScheme):
         return HashScheme(new_indices, scheme.modulus)
-    return scheme.replace_keys(
+    return scheme.with_keys(
         [
             OrderKey(idx, k.order, k.null_order)
             for k, idx in zip(scheme.keys, new_indices, strict=False)
@@ -701,7 +701,9 @@ class NormalizedPartitioning:
                 return False
         return True
 
-    def is_aligned_with(self, other: NormalizedPartitioning) -> bool:
+    def is_aligned_with(
+        self, other: NormalizedPartitioning, br: BufferResource | None = None
+    ) -> bool:
         """True when both sides share identical inter-rank and local chunk layouts."""
 
         def _schemes_aligned(
@@ -709,7 +711,13 @@ class NormalizedPartitioning:
             rhs: HashScheme | OrderScheme | None,
         ) -> bool:
             if isinstance(lhs, OrderScheme):
-                return isinstance(rhs, OrderScheme) and lhs.boundaries_aligned_with(rhs)
+                if br is None:
+                    raise ValueError(
+                        "br is required when comparing OrderScheme partitionings"
+                    )
+                return isinstance(rhs, OrderScheme) and lhs.boundaries_aligned_with(
+                    rhs, br
+                )
             elif isinstance(lhs, HashScheme):
                 return (
                     isinstance(rhs, HashScheme)

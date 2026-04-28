@@ -528,13 +528,13 @@ def test_is_aligned_with_order_scheme(rapidsmpf_context):
         rapidsmpf_context, values=(100, 200), strict=False
     )
     assert NormalizedPartitioning(s1, "inherit").is_aligned_with(
-        NormalizedPartitioning(s2, "inherit")
+        NormalizedPartitioning(s2, "inherit"), rapidsmpf_context.br()
     )
     assert not NormalizedPartitioning(s1, "inherit").is_aligned_with(
-        NormalizedPartitioning(s_diff, "inherit")
+        NormalizedPartitioning(s_diff, "inherit"), rapidsmpf_context.br()
     )
     assert not NormalizedPartitioning(s1, "inherit").is_aligned_with(
-        NormalizedPartitioning(s_non_strict, "inherit")
+        NormalizedPartitioning(s_non_strict, "inherit"), rapidsmpf_context.br()
     )
 
 
