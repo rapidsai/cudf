@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,9 +11,6 @@ import polars as pl
 
 from cudf_polars.testing.asserts import assert_sink_result_equal
 from cudf_polars.utils.config import ConfigOptions
-
-if TYPE_CHECKING:
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
 @pytest.fixture(scope="module")
@@ -136,26 +132,29 @@ def test_sink_parquet_raises_spmd(spmd_comm):
         ConfigOptions.from_polars_engine(engine)
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [
-        {
-            "executor_options": {
-                "max_rows_per_partition": 100_000,
-                "sink_to_directory": True,
-            }
+def test_sink_parquet_raises(df, tmp_path):
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 100_000,
+            "sink_to_directory": False,
         },
-    ],
-    indirect=True,
-)
-def test_sink_parquet_raises(df, tmp_path, streaming_engine: StreamingEngine):
+    )
     path = tmp_path / "test_sink_raises.parquet"
-    # Write a file with cpu polars.
-    df.sink_parquet(path)
+    df.sink_parquet(path, engine=engine)
 
     # Cannot overwrite an existing path with sink_to_directory=True
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={
+            "max_rows_per_partition": 100_000,
+            "sink_to_directory": True,
+        },
+    )
     with pytest.raises(NotImplementedError, match="not supported"):
-        df.sink_parquet(path, engine=streaming_engine)
+        df.sink_parquet(path, engine=engine)
 
 
 @pytest.mark.parametrize("include_header", [True, False])
