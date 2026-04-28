@@ -274,7 +274,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     # SQL: CTE v2 — FROM v1, v1 v1_lag, v1 v1_lead WHERE v1.rn = v1_lag.rn+1 AND v1.rn = v1_lead.rn-1 (self-join for lag/lead)
     v2 = (
-        # SQL: JOIN v1 (lag) ON i_category/i_brand/cc_name match AND rn = rn_lag+1
         v1.join(
             v1.select(
                 [
@@ -289,8 +288,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             right_on=["i_category_lag", "i_brand_lag", "cc_name_lag"],
             how="inner",
         )
-        .filter(pl.col("rn") == pl.col("rn_lag") + 1)
-        # SQL: JOIN v1 (lead) ON i_category/i_brand/cc_name match AND rn = rn_lead-1
         .join(
             v1.select(
                 [
@@ -305,7 +302,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             right_on=["i_category_lead", "i_brand_lead", "cc_name_lead"],
             how="inner",
         )
-        .filter(pl.col("rn") == pl.col("rn_lead") - 1)
+        .filter(
+            (pl.col("rn") == pl.col("rn_lag") + 1)
+            & (pl.col("rn") == pl.col("rn_lead") - 1)
+        )
         .select(["i_brand", "d_year", "avg_monthly_sales", "sum_sales", "psum", "nsum"])
     )
 
