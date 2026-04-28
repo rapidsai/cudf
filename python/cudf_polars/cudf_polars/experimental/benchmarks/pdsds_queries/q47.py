@@ -347,51 +347,27 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
+    # SQL: CTE v2 — FROM v1, v1 v1_lag, v1 v1_lead WHERE same partition keys AND v1.rn = v1_lag.rn+1 AND v1.rn = v1_lead.rn-1
     v2 = (
+        # SQL: v1 JOIN v1 v1_lag ON i_category, i_brand, s_store_name, s_company_name
         v1.join(
-            v1.select(
-                [
-                    pl.col("i_category").alias("i_category_lag"),
-                    pl.col("i_brand").alias("i_brand_lag"),
-                    pl.col("s_store_name").alias("s_store_name_lag"),
-                    pl.col("s_company_name").alias("s_company_name_lag"),
-                    pl.col("rn").alias("rn_lag"),
-                    pl.col("sum_sales").alias("psum"),
-                ]
-            ),
-            left_on=["i_category", "i_brand", "s_store_name", "s_company_name"],
-            right_on=[
-                "i_category_lag",
-                "i_brand_lag",
-                "s_store_name_lag",
-                "s_company_name_lag",
-            ],
+            v1,
+            on=["i_category", "i_brand", "s_store_name", "s_company_name"],
+            suffix="_lag",
             how="inner",
         )
+        # SQL: WHERE v1.rn = v1_lag.rn + 1
+        .filter(pl.col("rn") == pl.col("rn_lag") + 1)
+        # SQL: JOIN v1 v1_lead ON i_category, i_brand, s_store_name, s_company_name
         .join(
-            v1.select(
-                [
-                    pl.col("i_category").alias("i_category_lead"),
-                    pl.col("i_brand").alias("i_brand_lead"),
-                    pl.col("s_store_name").alias("s_store_name_lead"),
-                    pl.col("s_company_name").alias("s_company_name_lead"),
-                    pl.col("rn").alias("rn_lead"),
-                    pl.col("sum_sales").alias("nsum"),
-                ]
-            ),
-            left_on=["i_category", "i_brand", "s_store_name", "s_company_name"],
-            right_on=[
-                "i_category_lead",
-                "i_brand_lead",
-                "s_store_name_lead",
-                "s_company_name_lead",
-            ],
+            v1,
+            on=["i_category", "i_brand", "s_store_name", "s_company_name"],
+            suffix="_lead",
             how="inner",
         )
-        .filter(
-            (pl.col("rn") == pl.col("rn_lag") + 1)
-            & (pl.col("rn") == pl.col("rn_lead") - 1)
-        )
+        # SQL: WHERE v1.rn = v1_lead.rn - 1
+        .filter(pl.col("rn") == pl.col("rn_lead") - 1)
+        # SQL: SELECT v1.i_category, v1.d_year, v1.d_moy, v1.avg_monthly_sales, v1.sum_sales, v1_lag.sum_sales psum, v1_lead.sum_sales nsum
         .select(
             [
                 "i_category",
@@ -399,8 +375,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 "d_moy",
                 "avg_monthly_sales",
                 "sum_sales",
-                "psum",
-                "nsum",
+                pl.col("sum_sales_lag").alias("psum"),
+                pl.col("sum_sales_lead").alias("nsum"),
             ]
         )
     )

@@ -285,33 +285,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 right_on="hd_demo_sk",
             )
             # SQL: JOIN date_dim d1 ON cs_sold_date_sk = d1.d_date_sk
-            .join(
-                date_dim.select(["d_date_sk", "d_week_seq", "d_date", "d_year"]).rename(
-                    {
-                        "d_date_sk": "d1_date_sk",
-                        "d_week_seq": "d1_week_seq",
-                        "d_date": "d1_date",
-                        "d_year": "d1_year",
-                    }
-                ),
-                left_on="cs_sold_date_sk",
-                right_on="d1_date_sk",
-            )
+            .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             # SQL: JOIN date_dim d2 ON inv_date_sk = d2.d_date_sk
-            .join(
-                date_dim.select(["d_date_sk", "d_week_seq"]).rename(
-                    {"d_date_sk": "d2_date_sk", "d_week_seq": "d2_week_seq"}
-                ),
-                left_on="inv_date_sk",
-                right_on="d2_date_sk",
-            )
+            .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk", suffix="_d2")
             # SQL: JOIN date_dim d3 ON cs_ship_date_sk = d3.d_date_sk
             .join(
-                date_dim.select(["d_date_sk", "d_date"]).rename(
-                    {"d_date_sk": "d3_date_sk", "d_date": "d3_date"}
-                ),
+                date_dim,
                 left_on="cs_ship_date_sk",
-                right_on="d3_date_sk",
+                right_on="d_date_sk",
+                suffix="_d3",
             )
             # SQL: LEFT OUTER JOIN promotion ON cs_promo_sk = p_promo_sk
             .join(
@@ -330,15 +312,15 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             )
             # SQL: WHERE clauses (applied after all joins)
             .filter(
-                (pl.col("d1_week_seq") == pl.col("d2_week_seq"))
+                (pl.col("d_week_seq") == pl.col("d_week_seq_d2"))
                 & (pl.col("inv_quantity_on_hand") < pl.col("cs_quantity"))
                 & (
-                    pl.col("d3_date").cast(pl.Datetime("us"))
-                    > pl.col("d1_date").cast(pl.Datetime("us"))
+                    pl.col("d_date_d3").cast(pl.Datetime("us"))
+                    > pl.col("d_date").cast(pl.Datetime("us"))
                     + pl.duration(days=5).cast(pl.Duration("us"))
                 )
                 & (pl.col("hd_buy_potential") == bp)
-                & (pl.col("d1_year") == year)
+                & (pl.col("d_year") == year)
                 & (pl.col("cd_marital_status") == ms)
             )
             # SQL: CASE WHEN p_promo_sk IS NULL THEN 1 ELSE 0 END
@@ -355,7 +337,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ]
             )
             # SQL: GROUP BY i_item_desc, w_warehouse_name, d1.d_week_seq
-            .group_by(["i_item_desc", "w_warehouse_name", "d1_week_seq"])
+            .group_by(["i_item_desc", "w_warehouse_name", "d_week_seq"])
             # SQL: Sum(...) AS no_promo, Sum(...) AS promo, Count(*) AS total_cnt
             .agg(
                 [
@@ -369,7 +351,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 [
                     "i_item_desc",
                     "w_warehouse_name",
-                    pl.col("d1_week_seq").alias("d_week_seq"),
+                    "d_week_seq",
                     "no_promo",
                     "promo",
                     "total_cnt",

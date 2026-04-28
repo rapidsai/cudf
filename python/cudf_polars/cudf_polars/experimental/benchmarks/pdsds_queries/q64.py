@@ -517,59 +517,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             ]
         )
         .filter(pl.col("sale") > 2 * pl.col("refund"))
-        .select("cs_item_sk")
-    )
-
-    # SQL: alias date_dim d1, d2, d3 (for ss_sold_date_sk, c_first_sales_date_sk, c_first_shipto_date_sk)
-    d1 = date_dim.select(["d_date_sk", "d_year"]).rename(
-        {"d_date_sk": "d1_date_sk", "d_year": "syear"}
-    )
-    d2 = date_dim.select(["d_date_sk", "d_year"]).rename(
-        {"d_date_sk": "d2_date_sk", "d_year": "fsyear"}
-    )
-    d3 = date_dim.select(["d_date_sk", "d_year"]).rename(
-        {"d_date_sk": "d3_date_sk", "d_year": "s2year"}
-    )
-    # SQL: alias customer_demographics cd1 (ss_cdemo_sk), cd2 (c_current_cdemo_sk); household_demographics hd1/hd2; income_band ib1/ib2; customer_address ad1/ad2
-    cd1 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
-        {"cd_demo_sk": "cd1_demo_sk", "cd_marital_status": "cd1_status"}
-    )
-    cd2 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
-        {"cd_demo_sk": "cd2_demo_sk", "cd_marital_status": "cd2_status"}
-    )
-    hd1 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
-        {"hd_demo_sk": "hd1_demo_sk", "hd_income_band_sk": "hd1_income_sk"}
-    )
-    hd2 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
-        {"hd_demo_sk": "hd2_demo_sk", "hd_income_band_sk": "hd2_income_sk"}
-    )
-    ib1 = income_band.select(["ib_income_band_sk"]).rename(
-        {"ib_income_band_sk": "ib1_income_band_sk"}
-    )
-    ib2 = income_band.select(["ib_income_band_sk"]).rename(
-        {"ib_income_band_sk": "ib2_income_band_sk"}
-    )
-    ad1 = customer_address.select(
-        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
-    ).rename(
-        {
-            "ca_address_sk": "ad1_address_sk",
-            "ca_street_number": "b_street_number",
-            "ca_street_name": "b_streen_name",
-            "ca_city": "b_city",
-            "ca_zip": "b_zip",
-        }
-    )
-    ad2 = customer_address.select(
-        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
-    ).rename(
-        {
-            "ca_address_sk": "ad2_address_sk",
-            "ca_street_number": "c_street_number",
-            "ca_street_name": "c_street_name",
-            "ca_city": "c_city",
-            "ca_zip": "c_zip",
-        }
     )
 
     item_renamed = item.rename({"i_item_sk": "ss_item_sk"})
@@ -582,26 +529,73 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             right_on=["sr_item_sk", "sr_ticket_number"],
         )
         .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
-        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
+        # SQL: JOIN date_dim d1 ON ss_sold_date_sk = d_date_sk
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .join(d2, left_on="c_first_sales_date_sk", right_on="d2_date_sk")
-        .join(d3, left_on="c_first_shipto_date_sk", right_on="d3_date_sk")
-        .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
-        .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
+        # SQL: JOIN date_dim d2 ON c_first_sales_date_sk = d_date_sk
+        .join(date_dim, left_on="c_first_sales_date_sk", right_on="d_date_sk", suffix="_d2")
+        # SQL: JOIN date_dim d3 ON c_first_shipto_date_sk = d_date_sk
+        .join(date_dim, left_on="c_first_shipto_date_sk", right_on="d_date_sk", suffix="_d3")
+        # SQL: JOIN customer_demographics cd1 ON ss_cdemo_sk = cd_demo_sk
+        .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+        # SQL: JOIN customer_demographics cd2 ON c_current_cdemo_sk = cd_demo_sk
+        .join(
+            customer_demographics,
+            left_on="c_current_cdemo_sk",
+            right_on="cd_demo_sk",
+            suffix="_cd2",
+        )
         .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
-        .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
-        .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
-        .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
-        .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
-        .join(ib1, left_on="hd1_income_sk", right_on="ib1_income_band_sk")
-        .join(ib2, left_on="hd2_income_sk", right_on="ib2_income_band_sk")
+        # SQL: JOIN household_demographics hd1 ON ss_hdemo_sk = hd_demo_sk
+        .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        # SQL: JOIN household_demographics hd2 ON c_current_hdemo_sk = hd_demo_sk
+        .join(
+            household_demographics,
+            left_on="c_current_hdemo_sk",
+            right_on="hd_demo_sk",
+            suffix="_hd2",
+        )
+        # SQL: JOIN customer_address ad1 ON ss_addr_sk = ca_address_sk
+        .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+        # SQL: JOIN customer_address ad2 ON c_current_addr_sk = ca_address_sk
+        .join(
+            customer_address,
+            left_on="c_current_addr_sk",
+            right_on="ca_address_sk",
+            suffix="_ad2",
+        )
+        # SQL: JOIN income_band ib1 ON hd1.hd_income_band_sk = ib_income_band_sk
+        .join(income_band, left_on="hd_income_band_sk", right_on="ib_income_band_sk")
+        # SQL: JOIN income_band ib2 ON hd2.hd_income_band_sk = ib_income_band_sk
+        .join(
+            income_band,
+            left_on="hd_income_band_sk_hd2",
+            right_on="ib_income_band_sk",
+            suffix="_ib2",
+        )
         .join(item_renamed, on="ss_item_sk")
         .filter(
             pl.col("i_color").is_in(colors)
             & pl.col("i_current_price").is_between(price, price + 10)
             & pl.col("i_current_price").is_between(price + 1, price + 15)
-            & (pl.col("cd1_status") != pl.col("cd2_status"))
+            & (pl.col("cd_marital_status") != pl.col("cd_marital_status_cd2"))
+        )
+        # SQL: alias d1.d_year→syear, d2.d_year→fsyear, d3.d_year→s2year; ad1/ad2 address cols
+        .with_columns(
+            [
+                pl.col("d_year").alias("syear"),
+                pl.col("d_year_d2").alias("fsyear"),
+                pl.col("d_year_d3").alias("s2year"),
+                pl.col("ca_street_number").alias("b_street_number"),
+                pl.col("ca_street_name").alias("b_streen_name"),
+                pl.col("ca_city").alias("b_city"),
+                pl.col("ca_zip").alias("b_zip"),
+                pl.col("ca_street_number_ad2").alias("c_street_number"),
+                pl.col("ca_street_name_ad2").alias("c_street_name"),
+                pl.col("ca_city_ad2").alias("c_city"),
+                pl.col("ca_zip_ad2").alias("c_zip"),
+            ]
         )
         # SQL: GROUP BY i_product_name, i_item_sk, s_store_name, s_zip, ad1/ad2 address cols, d1/d2/d3 year
         .group_by(

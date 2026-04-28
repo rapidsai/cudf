@@ -274,39 +274,25 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     # SQL: CTE v2 — FROM v1, v1 v1_lag, v1 v1_lead WHERE v1.rn = v1_lag.rn+1 AND v1.rn = v1_lead.rn-1 (self-join for lag/lead)
     v2 = (
-        v1.join(
-            v1.select(
-                [
-                    pl.col("i_category").alias("i_category_lag"),
-                    pl.col("i_brand").alias("i_brand_lag"),
-                    pl.col("cc_name").alias("cc_name_lag"),
-                    pl.col("rn").alias("rn_lag"),
-                    pl.col("sum_sales").alias("psum"),
-                ]
-            ),
-            left_on=["i_category", "i_brand", "cc_name"],
-            right_on=["i_category_lag", "i_brand_lag", "cc_name_lag"],
-            how="inner",
+        # SQL: v1 JOIN v1 v1_lag ON i_category, i_brand, cc_name
+        v1.join(v1, on=["i_category", "i_brand", "cc_name"], suffix="_lag", how="inner")
+        # SQL: WHERE v1.rn = v1_lag.rn + 1
+        .filter(pl.col("rn") == pl.col("rn_lag") + 1)
+        # SQL: JOIN v1 v1_lead ON i_category, i_brand, cc_name
+        .join(v1, on=["i_category", "i_brand", "cc_name"], suffix="_lead", how="inner")
+        # SQL: WHERE v1.rn = v1_lead.rn - 1
+        .filter(pl.col("rn") == pl.col("rn_lead") - 1)
+        # SQL: SELECT v1.i_brand, v1.d_year, v1.avg_monthly_sales, v1.sum_sales, v1_lag.sum_sales psum, v1_lead.sum_sales nsum
+        .select(
+            [
+                "i_brand",
+                "d_year",
+                "avg_monthly_sales",
+                "sum_sales",
+                pl.col("sum_sales_lag").alias("psum"),
+                pl.col("sum_sales_lead").alias("nsum"),
+            ]
         )
-        .join(
-            v1.select(
-                [
-                    pl.col("i_category").alias("i_category_lead"),
-                    pl.col("i_brand").alias("i_brand_lead"),
-                    pl.col("cc_name").alias("cc_name_lead"),
-                    pl.col("rn").alias("rn_lead"),
-                    pl.col("sum_sales").alias("nsum"),
-                ]
-            ),
-            left_on=["i_category", "i_brand", "cc_name"],
-            right_on=["i_category_lead", "i_brand_lead", "cc_name_lead"],
-            how="inner",
-        )
-        .filter(
-            (pl.col("rn") == pl.col("rn_lag") + 1)
-            & (pl.col("rn") == pl.col("rn_lead") - 1)
-        )
-        .select(["i_brand", "d_year", "avg_monthly_sales", "sum_sales", "psum", "nsum"])
     )
 
     sort_by = {"avg_monthly_sales": False}

@@ -222,28 +222,20 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 how="inner",
             )
             # SQL: JOIN date_dim d1 ON d1.d_date_sk = ss_sold_date_sk
-            .join(
-                date_dim.select(["d_date_sk", "d_quarter_name"]).rename(
-                    {"d_date_sk": "d1_date_sk", "d_quarter_name": "d1_quarter_name"}
-                ),
-                left_on="ss_sold_date_sk",
-                right_on="d1_date_sk",
-            )
+            .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
             # SQL: JOIN date_dim d2 ON d2.d_date_sk = sr_returned_date_sk
             .join(
-                date_dim.select(["d_date_sk", "d_quarter_name"]).rename(
-                    {"d_date_sk": "d2_date_sk", "d_quarter_name": "d2_quarter_name"}
-                ),
+                date_dim,
                 left_on="sr_returned_date_sk",
-                right_on="d2_date_sk",
+                right_on="d_date_sk",
+                suffix="_d2",
             )
             # SQL: JOIN date_dim d3 ON d3.d_date_sk = cs_sold_date_sk
             .join(
-                date_dim.select(["d_date_sk", "d_quarter_name"]).rename(
-                    {"d_date_sk": "d3_date_sk", "d_quarter_name": "d3_quarter_name"}
-                ),
+                date_dim,
                 left_on="cs_sold_date_sk",
-                right_on="d3_date_sk",
+                right_on="d_date_sk",
+                suffix="_d3",
             )
             # SQL: JOIN store ON s_store_sk = ss_store_sk
             .join(store, left_on="ss_store_sk", right_on="s_store_sk")
@@ -253,9 +245,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             # SQL:   AND d2.d_quarter_name IN ('{year}Q1','{year}Q2','{year}Q3')
             # SQL:   AND d3.d_quarter_name IN ('{year}Q1','{year}Q2','{year}Q3')
             .filter(
-                (pl.col("d1_quarter_name") == quarter_q1)
-                & pl.col("d2_quarter_name").is_in(quarter_q1_q3)
-                & pl.col("d3_quarter_name").is_in(quarter_q1_q3)
+                (pl.col("d_quarter_name") == quarter_q1)
+                & pl.col("d_quarter_name_d2").is_in(quarter_q1_q3)
+                & pl.col("d_quarter_name_d3").is_in(quarter_q1_q3)
             )
             # SQL: GROUP BY i_item_id, i_item_desc, s_state
             .group_by(["i_item_id", "i_item_desc", "s_state"])

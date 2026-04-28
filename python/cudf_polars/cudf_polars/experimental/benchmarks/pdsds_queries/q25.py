@@ -185,28 +185,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    d1 = date_dim.select(
-        [
-            pl.col("d_date_sk").alias("d1_date_sk"),
-            pl.col("d_moy").alias("d1_moy"),
-            pl.col("d_year").alias("d1_year"),
-        ]
-    )
-    d2 = date_dim.select(
-        [
-            pl.col("d_date_sk").alias("d2_date_sk"),
-            pl.col("d_moy").alias("d2_moy"),
-            pl.col("d_year").alias("d2_year"),
-        ]
-    )
-    d3 = date_dim.select(
-        [
-            pl.col("d_date_sk").alias("d3_date_sk"),
-            pl.col("d_moy").alias("d3_moy"),
-            pl.col("d_year").alias("d3_year"),
-        ]
-    )
-
     sort_by = {
         "i_item_id": False,
         "i_item_desc": False,
@@ -229,25 +207,25 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             left_on=["ss_customer_sk", "ss_item_sk"],
             right_on=["cs_bill_customer_sk", "cs_item_sk"],
         )
-        # SQL: JOIN d1 (date_dim) ON ss_sold_date_sk = d1_date_sk
-        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
-        # SQL: JOIN d2 (date_dim) ON sr_returned_date_sk = d2_date_sk
-        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
-        # SQL: JOIN d3 (date_dim) ON cs_sold_date_sk = d3_date_sk
-        .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
+        # SQL: JOIN date_dim d1 ON ss_sold_date_sk = d1.d_date_sk
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN date_dim d2 ON sr_returned_date_sk = d2.d_date_sk
+        .join(date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk", suffix="_d2")
+        # SQL: JOIN date_dim d3 ON cs_sold_date_sk = d3.d_date_sk
+        .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk", suffix="_d3")
         # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         # SQL: JOIN item ON ss_item_sk = i_item_sk
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        # SQL: WHERE d1_moy=4 AND d1_year={year} AND d2_moy BETWEEN 4 AND 10 AND d2_year={year}
-        # SQL:   AND d3_moy BETWEEN 4 AND 10 AND d3_year={year}
+        # SQL: WHERE d1.d_moy=4 AND d1.d_year={year} AND d2.d_moy BETWEEN 4 AND 10 AND d2.d_year={year}
+        # SQL:   AND d3.d_moy BETWEEN 4 AND 10 AND d3.d_year={year}
         .filter(
-            (pl.col("d1_moy") == 4)
-            & (pl.col("d1_year") == year)
-            & pl.col("d2_moy").is_between(4, 10)
-            & (pl.col("d2_year") == year)
-            & pl.col("d3_moy").is_between(4, 10)
-            & (pl.col("d3_year") == year)
+            (pl.col("d_moy") == 4)
+            & (pl.col("d_year") == year)
+            & pl.col("d_moy_d2").is_between(4, 10)
+            & (pl.col("d_year_d2") == year)
+            & pl.col("d_moy_d3").is_between(4, 10)
+            & (pl.col("d_year_d3") == year)
         )
         # SQL: GROUP BY i_item_id, i_item_desc, s_store_id, s_store_name
         .group_by(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
