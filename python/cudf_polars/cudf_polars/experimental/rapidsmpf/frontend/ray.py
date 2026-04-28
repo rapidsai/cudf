@@ -20,7 +20,6 @@ from rapidsmpf.config import (
 )
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
-from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
 import polars as pl
@@ -44,6 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.statistics import Statistics
     from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
     from ray.actor import ActorHandle
 
@@ -203,9 +203,6 @@ class RankActor:
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
-        self._statistics: Statistics = Statistics.from_options(
-            self._mr, self._rapidsmpf_options
-        )
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
             max_workers=num_py_executors,
@@ -231,7 +228,7 @@ class RankActor:
             ucx_worker=None,
             root_ucxx_address=None,
             options=self._rapidsmpf_options,
-            progress_thread=ProgressThread(self._statistics),
+            progress_thread=ProgressThread(),
         )
         return get_root_ucxx_address(self._comm)
 
@@ -258,7 +255,7 @@ class RankActor:
                 ucx_worker=None,
                 root_ucxx_address=root_ucxx_address,
                 options=self._rapidsmpf_options,
-                progress_thread=ProgressThread(self._statistics),
+                progress_thread=ProgressThread(),
             )
         barrier(self._comm)
         self._ctx = Context.from_options(
@@ -291,6 +288,31 @@ class RankActor:
         Diagnostic information about this actor's placement and state.
         """
         return ClusterInfo.local()
+
+    def get_statistics(self, *, clear: bool = False) -> Statistics:
+        """
+        Return this rank's :class:`~rapidsmpf.statistics.Statistics` object.
+
+        The returned object is pickled by Ray when sent to the client, so the
+        caller receives a detached copy.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear this rank's statistics after returning a copy.
+
+        Returns
+        -------
+        The rank's Statistics object (a detached copy if ``clear`` is True).
+        """
+        assert self._ctx is not None
+        stats = self._ctx.statistics()
+        if clear:
+            # Return a deep copy so it survives the in-place clear of `stats`.
+            detached = stats.copy()
+            stats.clear()
+            return detached
+        return stats
 
     def evaluate_polars_ir(
         self,
@@ -605,9 +627,22 @@ class RayEngine(StreamingEngine):
         """
         return ray.get([rank.get_info.remote() for rank in self.rank_actors])
 
-    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+    def gather_statistics(self, *, clear: bool = False) -> list[Statistics]:
+        """
+        Collect statistics from every rank via Ray.
+
+        Parameters
+        ----------
+        clear
+            If ``True``, clear each rank's statistics after gathering.
+
+        Returns
+        -------
+        List of :class:`~rapidsmpf.statistics.Statistics`, one per rank,
+        ordered by rank index.
+        """
         return ray.get(
-            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+            [rank.get_statistics.remote(clear=clear) for rank in self.rank_actors]
         )
 
     def shutdown(self) -> None:
@@ -639,3 +674,8 @@ class RayEngine(StreamingEngine):
         finally:
             self._rank_actors = None
             super().shutdown()
+
+    def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
+        return ray.get(
+            [rank._run.remote(func, *args, **kwargs) for rank in self.rank_actors]
+        )
