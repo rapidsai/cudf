@@ -195,16 +195,27 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
-    # SQL: correlated subquery — RANK() OVER (PARTITION BY s_state) gives rank=1 for every state
-    # (since each state appears once after GROUP BY s_state). The IN-subquery semantically returns
-    # all states that qualify — which, after PARTITION BY s_state, is every state.
-    # Match optimized version: just return distinct states from the filtered base.
+    # SQL: tmp1 — correlated subquery to find top-5 states by net profit
+    # Note: RANK() OVER (PARTITION BY s_state) on a GROUP BY s_state result always
+    # gives rank=1 (one row per partition), so ranking <= 5 keeps all states.
+    # We translate the SQL literally here rather than short-circuiting.
     tmp1 = (
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+        # SQL: GROUP BY s_state
+        .group_by("s_state")
+        .agg(pl.col("ss_net_profit").sum().alias("total_profit"))
+        # SQL: Rank() OVER (PARTITION BY s_state ORDER BY Sum(ss_net_profit) DESC)
+        .with_columns(
+            pl.col("total_profit")
+            .rank(method="min", descending=True)
+            .over("s_state")
+            .alias("ranking")
+        )
+        # SQL: WHERE ranking <= 5
+        .filter(pl.col("ranking") <= 5)
         .select("s_state")
-        .unique()
     )
 
     # SQL: CTE base — FROM store_sales, date_dim, store WHERE d_month_seq BETWEEN {dms} AND {dms}+11 AND s_state IN (top_states)
