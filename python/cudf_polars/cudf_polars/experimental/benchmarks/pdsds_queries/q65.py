@@ -164,9 +164,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    # SQL: CTE sc — FROM store_sales, date_dim WHERE ss_sold_date_sk = d_date_sk
-    # SQL:   AND d_month_seq BETWEEN {dms} AND {dms}+11 GROUP BY ss_store_sk, ss_item_sk
-    sc = (
+    # SQL: sa and sc are identical subqueries (revenue per store-item). We define
+    # the subquery once as 'sa' and derive both sc (= sa) and sb (= avg over sa).
+    sa = (
         # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         # SQL: WHERE d_month_seq BETWEEN {dms} AND {dms}+11
@@ -188,8 +188,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
         .select(["ss_store_sk", "ss_item_sk", "revenue"])
     )
-    # SQL: CTE sb — SELECT ss_store_sk, Avg(revenue) AS ave FROM sc GROUP BY ss_store_sk
-    sb = sc.group_by("ss_store_sk").agg(pl.col("revenue").mean().alias("ave"))
+    # SQL: sb derives from sa — Avg(revenue) per store
+    sb = sa.group_by("ss_store_sk").agg(pl.col("revenue").mean().alias("ave"))
+    # SQL: sc is the same subquery as sa
+    sc = sa
 
     return QueryResult(
         frame=(
