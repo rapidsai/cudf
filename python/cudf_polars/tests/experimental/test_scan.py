@@ -9,6 +9,7 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.config import ConfigOptions
@@ -106,7 +107,10 @@ def test_target_partition_size(tmp_path, df, blocksize, n_files, streaming_engin
         executor_options={"target_partition_size": blocksize},
     )
     qir = Translator(q._ldf.visit(), _engine).translate_ir()
-    ir, info, _ = lower_ir_graph(qir, ConfigOptions.from_polars_engine(_engine))
+    config_options = ConfigOptions.from_polars_engine(_engine)
+    ir, info = lower_ir_graph(
+        qir, config_options, collect_statistics(qir, config_options)
+    )
     count = info[ir].count
     if blocksize <= 12_000:
         assert count > n_files
