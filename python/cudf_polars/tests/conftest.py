@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from rapidsmpf.communicator.communicator import Communicator
 
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
@@ -117,20 +117,26 @@ def blocksize_mode(request: pytest.FixtureRequest) -> Literal["default", "small"
 def streaming_engine_factory(
     spmd_comm: Communicator,
     blocksize_mode: Literal["default", "small"],
-) -> Generator[Callable[..., SPMDEngine], None, None]:
-    """Yield a callable that constructs and manages :class:`SPMDEngine` lifetimes.
+) -> Generator[Callable[..., StreamingEngine], None, None]:
+    """Yield a callable that constructs and manages :class:`StreamingEngine` lifetimes.
 
     Tests pass a :class:`StreamingOptions` describing only the fields they
     care about; the factory layers test-suite defaults underneath, applies
     ``blocksize_mode`` adjustments, and enters the engine context manager.
     All produced engines are torn down at fixture teardown in reverse order.
+
+    Today the factory builds an :class:`SPMDEngine`, but it is typed as the
+    abstract :class:`StreamingEngine` because future variants (``RayEngine``,
+    ``DaskEngine``) will plug in here. Tests that genuinely need
+    SPMDEngine-specific attributes (``comm``, ``context``) should construct
+    an :class:`SPMDEngine` directly using the ``spmd_comm`` fixture.
     """
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
     engines: list[SPMDEngine] = []
 
-    def factory(options: StreamingOptions | None = None) -> SPMDEngine:
+    def factory(options: StreamingOptions | None = None) -> StreamingEngine:
         baseline: dict[str, Any] = {
             "max_rows_per_partition": 50,
             "dynamic_planning": {},
@@ -154,21 +160,20 @@ def streaming_engine_factory(
             executor_options=merged.to_executor_options(),
             engine_options=merged.to_engine_options(),
         )
-        engine.__enter__()
         engines.append(engine)
         return engine
 
     yield factory
 
     for engine in reversed(engines):
-        engine.__exit__(None, None, None)
+        engine.shutdown()
 
 
 @pytest.fixture
 def streaming_engine(
-    streaming_engine_factory: Callable[..., SPMDEngine],
-) -> SPMDEngine:
-    """Default-configured :class:`SPMDEngine` (no per-test overrides).
+    streaming_engine_factory: Callable[..., StreamingEngine],
+) -> StreamingEngine:
+    """Default-configured :class:`StreamingEngine` (no per-test overrides).
 
     Kept as a thin wrapper because the ``engine`` fixture's spmd /
     spmd-small branches resolve it via ``request.getfixturevalue("streaming_engine")``.
