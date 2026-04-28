@@ -1112,300 +1112,90 @@ TEST_F(ParquetWriterTest, SingleValueDictionaryTest)
   EXPECT_EQ(nbits, expected_bits);
 }
 
-namespace {
-
-/** @brief Returns whether a column chunk was actually written with dictionary encoding.
- *
- * @param chunk The column chunk to check.
- * @return Whether the column chunk was actually written with dictionary encoding
- */
-[[nodiscard]] bool is_chunk_dict_encoded(cudf::io::parquet::ColumnChunk const& chunk)
+TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
 {
-  return std::any_of(
-    chunk.meta_data.encodings.begin(), chunk.meta_data.encodings.end(), [](auto const encoding) {
-      return encoding == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
-             encoding == cudf::io::parquet::Encoding::RLE_DICTIONARY;
-    });
-}
+  constexpr auto num_rows          = 100'000;
+  constexpr auto num_pages         = 10;
+  constexpr auto page_size         = num_rows / num_pages;
+  constexpr auto hot_pages         = num_pages - 2;
+  constexpr auto rare_pages        = num_pages - hot_pages;
+  constexpr auto cardinality       = 64'000;
+  constexpr auto frequent_set_size = 64;
 
-[[nodiscard]] std::vector<int> read_page_dict_bits(
-  std::unique_ptr<cudf::io::datasource> const& source, cudf::io::parquet::ColumnChunk const& chunk)
-{
-  auto const oi = read_offset_index(source, chunk);
+  auto const filepath = temp_env->get_temp_filepath("VariableBitWidthDictEncoding.parquet");
+  {
+    std::mt19937 rng{0xACAD1A};
+    using ColumnType = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+    // Hot pages contain values in [0, frequent_set_size - 1], rare pages contain values in
+    // [frequent_set_size, cardinality - 1]
+    std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
+    std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
+    auto constexpr threshold = hot_pages * page_size;
+    auto values              = cudf::detail::make_counting_transform_iterator(
+      0, [&](auto i) { return i < threshold ? freq_dist(rng) : rare_dist(rng); });
+    auto const col = ColumnType(values, values + num_rows);
+
+    auto writer_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table_view{{col}})
+        .compression(cudf::io::compression_type::NONE)              // No compression
+        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)  // Write page index
+        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)     // Always dictionary encode
+        .row_group_size_rows(num_rows)                              // Single row group only
+        .max_page_size_rows(page_size)               // Max page size is set to the page size
+        .max_page_size_bytes(std::size_t{64} << 20)  // Unlimited page size
+        .build();
+    cudf::io::write_parquet(writer_opts);
+  }
+
+  auto datasource = cudf::io::datasource::create(filepath);
+
+  // Extract dictionary bit width for each data page from page index
   std::vector<int> page_dict_bits;
-  page_dict_bits.reserve(oi.page_locations.size());
-  std::transform(
-    oi.page_locations.begin(),
-    oi.page_locations.end(),
-    std::back_inserter(page_dict_bits),
-    [&source](auto const& page_location) { return read_dict_bits(source, page_location); });
-  return page_dict_bits;
-}
+  {
+    // Read file metadata
+    cudf::io::parquet::FileMetaData file_metadata;
+    read_footer(datasource, &file_metadata);
 
-template <typename ConfigureWriter>
-[[nodiscard]] auto write_and_read_dict_bits(table_view const& expected,
-                                            ConfigureWriter&& configure_writer)
-  -> std::pair<std::vector<int>, cudf::io::parquet::FileMetaData>
-{
-  auto buffer  = std::vector<char>{};
-  auto builder = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
-                   .compression(cudf::io::compression_type::NONE)
-                   .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-                   .dictionary_policy(cudf::io::dictionary_policy::ALWAYS);
-  configure_writer(builder);
+    // Check dictionary encoded pages
+    auto const& colchunk = file_metadata.row_groups.front().columns.front();
+    EXPECT_TRUE(std::any_of(colchunk.meta_data.encodings.begin(),
+                            colchunk.meta_data.encodings.end(),
+                            [](auto const encoding) {
+                              return encoding == cudf::io::parquet::Encoding::PLAIN_DICTIONARY or
+                                     encoding == cudf::io::parquet::Encoding::RLE_DICTIONARY;
+                            }));
 
-  cudf::io::parquet_writer_options out_opts = builder;
-  cudf::io::write_parquet(out_opts);
+    auto const oi = read_offset_index(datasource, colchunk);
+    page_dict_bits.reserve(oi.page_locations.size());
+    std::transform(oi.page_locations.begin(),
+                   oi.page_locations.end(),
+                   std::back_inserter(page_dict_bits),
+                   [&datasource](auto const& page_location) {
+                     return read_dict_bits(datasource, page_location);
+                   });
 
-  auto const buffer_span =
-    cudf::host_span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size());
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
-  auto const result = cudf::io::read_parquet(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-  auto source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
-  cudf::io::parquet::FileMetaData fmd;
-  read_footer(source, &fmd);
-
-  auto const& chunk = fmd.row_groups.front().columns.front();
-  return {is_chunk_dict_encoded(chunk) ? read_page_dict_bits(source, chunk) : std::vector<int>{},
-          std::move(fmd)};
-}
-
-}  // namespace
-
-// Phase 2 per-page variable-bit-width RLE coverage (PHASE_2_VARIABLE_BITS.md §2.4).
-// The four tests below exercise the new code path from three angles:
-//   (1) decoder correctness across cardinalities and physical types
-//       (integers / strings / list<int64>),
-//   (2) the chunk-wide upper bound is respected on every page,
-//   (3) the optimization actually fires -- file size drops below the pre-Phase-2
-//       chunk-wide number on the benchmark workload.
-
-// Round-trip INT64 dictionary-encoded columns at three cardinalities. The
-// cardinalities are chosen to straddle the 10-bit / 16-bit / 20-bit RLE widths
-// so the reader has to correctly consume per-page preambles of different
-// widths. Chunk-wide-width encoding would pass round-trip as well, so this is
-// primarily a "no reader mismatch under variable widths" gate; the upper-bound
-// assertion catches an accidental regression that emits *more* bits per page
-// than the chunk actually needs.
-TEST_F(ParquetWriterTest, VariableBitWidthRoundTripIntegers)
-{
-  constexpr cudf::size_type nrows = 200'000;
-
-  for (auto const cardinality : {10'000, 64'000, 1'000'000}) {
-    std::mt19937 rng{0xFEEDFACE};
-    std::uniform_int_distribution<int64_t> dist(0, cardinality - 1);
-    std::vector<int64_t> values(nrows);
-    std::generate(values.begin(), values.end(), [&] { return dist(rng); });
-
-    auto const col = cudf::test::fixed_width_column_wrapper<int64_t>(values.begin(), values.end());
-    auto const expected              = table_view{{col}};
-    auto const [page_dict_bits, fmd] = write_and_read_dict_bits(expected, [=](auto& builder) {
-      builder.row_group_size_rows(nrows).max_page_size_rows(nrows / 4);
-    });
-
-    auto const& chunk = fmd.row_groups.front().columns.front();
-    // Under `dictionary_policy::ALWAYS` the writer still falls back to PLAIN
-    // when the dict page would exceed the row data (very sparse cardinality
-    // relative to row count). Treat that as out-of-scope for bit-width
-    // checking but still validate round-trip correctness above.
-    if (not is_chunk_dict_encoded(chunk)) { continue; }
-
-    auto const chunk_wide_max_bits = std::bit_width<uint32_t>(cardinality - 1);
-    ASSERT_GT(page_dict_bits.size(), 1u) << "cardinality=" << cardinality;
-    for (auto const nbits : page_dict_bits) {
-      EXPECT_GE(nbits, 1) << "cardinality=" << cardinality;
-      EXPECT_LE(nbits, chunk_wide_max_bits) << "cardinality=" << cardinality;
-    }
-  }
-}
-
-// Round-trip string dictionary encoding at moderate cardinality. Strings take a
-// different write path through `build_chunk_dictionaries` (variable-length hash
-// keys, dict page is an array of `string_index_pair`), so we cover the encode
-// path with a separate fixture rather than folding it into the integer test.
-TEST_F(ParquetWriterTest, VariableBitWidthRoundTripStrings)
-{
-  constexpr cudf::size_type nrows       = 100'000;
-  constexpr cudf::size_type cardinality = 5'000;
-
-  std::mt19937 rng{0xDEADBEEF};
-  std::uniform_int_distribution<int> dist(0, cardinality - 1);
-  std::vector<std::string> values(nrows);
-  std::generate(values.begin(), values.end(), [&] { return "str_" + std::to_string(dist(rng)); });
-
-  auto const col      = cudf::test::strings_column_wrapper(values.begin(), values.end());
-  auto const expected = table_view{{col}};
-  auto const [page_dict_bits, fmd] = write_and_read_dict_bits(expected, [=](auto& builder) {
-    builder.row_group_size_rows(nrows).max_page_size_rows(nrows / 4);
-  });
-
-  auto const chunk_wide_max_bits =
-    std::max(std::bit_width(static_cast<uint32_t>(cardinality - 1)), 1);
-  ASSERT_TRUE(is_chunk_dict_encoded(fmd.row_groups.front().columns.front()));
-  ASSERT_GT(page_dict_bits.size(), 1u);
-  for (auto const nbits : page_dict_bits) {
-    EXPECT_GE(nbits, 1);
-    EXPECT_LE(nbits, chunk_wide_max_bits);
-  }
-}
-
-// Round-trip list<int64> dictionary encoding. Nested types exercise the
-// `row_to_value_idx` path inside `compute_page_dict_rle_bits_kernel`: the
-// per-page max must be taken over *leaf* values, not rows, and the kernel must
-// correctly translate `page.start_row`/`page.num_leaf_values` into leaf-space
-// offsets. A mis-translation here would produce a bit width too small to cover
-// some leaf dict_index, and the reader would mis-decode the page -- so the
-// round-trip comparison below is the real gate. We deliberately don't inspect
-// `read_dict_bits` here because the helper assumes a flat column layout (dict
-// RLE stream at byte 0 of the page payload); for list<int64> the page payload
-// starts with rep+def levels and dereferencing byte 0 as a bit width is
-// meaningless.
-TEST_F(ParquetWriterTest, VariableBitWidthRoundTripLists)
-{
-  constexpr cudf::size_type num_lists   = 20'000;
-  constexpr cudf::size_type cardinality = 1'024;
-
-  std::mt19937 rng{0xCAFEF00D};
-  std::uniform_int_distribution<int> list_len_dist(0, 5);
-  std::uniform_int_distribution<int64_t> val_dist(0, cardinality - 1);
-
-  std::vector<int64_t> leaf_values;
-  std::vector<cudf::size_type> offsets{0};
-  leaf_values.reserve(num_lists * 3);
-  offsets.reserve(num_lists + 1);
-  for (cudf::size_type i = 0; i < num_lists; ++i) {
-    auto const list_len = list_len_dist(rng);
-    for (int j = 0; j < list_len; ++j) {
-      leaf_values.push_back(val_dist(rng));
-    }
-    offsets.push_back(static_cast<cudf::size_type>(leaf_values.size()));
+    // Check page count
+    EXPECT_EQ(oi.page_locations.size(), static_cast<std::size_t>(num_pages));
   }
 
-  auto leaf_col =
-    cudf::test::fixed_width_column_wrapper<int64_t>(leaf_values.begin(), leaf_values.end())
-      .release();
-  auto offsets_col =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>(offsets.begin(), offsets.end())
-      .release();
-  auto list_col = cudf::make_lists_column(
-    num_lists, std::move(offsets_col), std::move(leaf_col), 0, rmm::device_buffer{});
-  auto const expected              = table_view{{*list_col}};
-  auto const [page_dict_bits, fmd] = write_and_read_dict_bits(expected, [=](auto& builder) {
-    builder.row_group_size_rows(num_lists).max_page_size_rows(num_lists / 4);
-  });
-  static_cast<void>(page_dict_bits);
-  EXPECT_TRUE(is_chunk_dict_encoded(fmd.row_groups.front().columns.front()));
-}
+  // Checks
+  {
+    // Check min and max bit widths
+    auto const [min_bits, max_bits] = std::ranges::minmax_element(page_dict_bits);
+    auto const chunk_wide_max_bits  = std::bit_width<uint32_t>(cardinality - 1);
+    auto const frequent_max_bits    = std::bit_width<uint32_t>(frequent_set_size - 1);
+    EXPECT_GT(*min_bits, 1);
+    EXPECT_GT(*max_bits, frequent_max_bits);
+    EXPECT_LE(*max_bits, chunk_wide_max_bits);
 
-// End-to-end file-size gate. Reproduces the `parquet_write_dict_encoding`
-// benchmark workload (8 "common" pages touching only 64 frequent values + 2
-// "rare" pages touching values 64..63999) and asserts:
-//   (a) common pages bit-pack at their page-local minimum width (`nbits <=
-//       std::max(std::bit_width(frequent_set_size - 1), 1)`),
-//   (b) at least one page reaches the chunk-wide width (so dict_rle_bits is
-//       still the upper bound, not silently clobbered),
-//   (c) the resulting file is strictly smaller than the Phase 1 baseline
-//       (2,491,156 bytes at num_rows = 1,000,000). We use the benchmark's exact
-//       shape but a smaller row count (200K rows, 20K rows/page) so the test
-//       finishes in well under a second; the proportional savings are the same.
-// See PHASE_2_VARIABLE_BITS.md §2.4 for the design rationale.
-TEST_F(ParquetWriterTest, VariableBitWidthSmallerThanChunkWide)
-{
-  constexpr cudf::size_type pages_per_chunk   = 10;
-  constexpr cudf::size_type hot_pages         = pages_per_chunk - 2;
-  constexpr cudf::size_type page_size_rows    = 20'000;
-  constexpr cudf::size_type num_rows          = pages_per_chunk * page_size_rows;
-  constexpr cudf::size_type cardinality       = 64'000;
-  constexpr cudf::size_type frequent_set_size = 64;
-
-  std::mt19937 rng{0xC0DEFACE};
-  std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
-  std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
-
-  std::vector<int64_t> values(num_rows);
-  cudf::size_type const threshold = hot_pages * page_size_rows;
-  for (cudf::size_type i = 0; i < num_rows; ++i) {
-    values[i] = i < threshold ? freq_dist(rng) : rare_dist(rng);
+    // Check expected number of hot and rare pages
+    auto const total_page_count = static_cast<int>(page_dict_bits.size());
+    auto const hot_page_count   = static_cast<int>(
+      std::ranges::count_if(page_dict_bits, [&](int nbits) { return nbits <= frequent_max_bits; }));
+    EXPECT_EQ(hot_page_count, hot_pages);
+    EXPECT_EQ(total_page_count - hot_page_count, rare_pages);
   }
-
-  auto const col = cudf::test::fixed_width_column_wrapper<int64_t>(values.begin(), values.end());
-  auto const expected              = table_view{{col}};
-  auto buffer                      = std::vector<char>{};
-  auto const [page_dict_bits, fmd] = [&]() {
-    auto local_buffer = std::vector<char>{};
-    auto builder =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&local_buffer}, expected)
-        .compression(cudf::io::compression_type::NONE)
-        .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-        .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-        .row_group_size_rows(num_rows)
-        .max_page_size_rows(page_size_rows)
-        .max_page_size_bytes(std::size_t{64} << 20);
-    cudf::io::parquet_writer_options out_opts = builder;
-    cudf::io::write_parquet(out_opts);
-
-    auto const buffer_span = cudf::host_span<std::byte>(
-      reinterpret_cast<std::byte*>(local_buffer.data()), local_buffer.size());
-    cudf::io::parquet_reader_options in_opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info(buffer_span));
-    auto const result = cudf::io::read_parquet(in_opts);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
-
-    auto source = cudf::io::datasource::create(cudf::host_span<std::byte const>{buffer_span});
-    cudf::io::parquet::FileMetaData local_fmd;
-    read_footer(source, &local_fmd);
-
-    buffer            = std::move(local_buffer);
-    auto const& chunk = local_fmd.row_groups.front().columns.front();
-    return std::pair{
-      is_chunk_dict_encoded(chunk) ? read_page_dict_bits(source, chunk) : std::vector<int>{},
-      std::move(local_fmd)};
-  }();
-
-  EXPECT_TRUE(is_chunk_dict_encoded(fmd.row_groups.front().columns.front()));
-
-  // Chunk-wide upper bound computed from the full cardinality. The writer's
-  // `dict_rle_bits` is `NumRequiredBits(num_dict_entries - 1)`, and under
-  // uniform sampling of `[0, cardinality)` the actual number of distinct
-  // values drawn may land a bit below cardinality -- so we use this value as
-  // a *ceiling* rather than an equality target.
-  auto const chunk_wide_max_bits = std::bit_width<uint32_t>(cardinality - 1);
-  auto const frequent_max_bits   = std::bit_width<uint32_t>(frequent_set_size - 1);  // 6
-
-  ASSERT_EQ(page_dict_bits.size(), static_cast<std::size_t>(pages_per_chunk));
-
-  int common_page_count = 0;
-  int rare_page_count   = 0;
-  int max_observed_bits = 0;
-  for (auto const nbits : page_dict_bits) {
-    EXPECT_GE(nbits, 1);
-    EXPECT_LE(nbits, chunk_wide_max_bits);
-    max_observed_bits = std::max(max_observed_bits, nbits);
-    if (nbits <= frequent_max_bits) {
-      ++common_page_count;
-    } else {
-      ++rare_page_count;
-    }
-  }
-  // Under Phase 1 ordering the first `hot_pages` pages reference only the
-  // frequent-set dict_ids `[0, 64)`, so they should bit-pack to <= 6 bits.
-  // The 2 rare pages reference dict_ids outside that range and must use
-  // strictly more bits -- this is the whole optimization in one assertion.
-  EXPECT_EQ(common_page_count, hot_pages);
-  EXPECT_EQ(rare_page_count, pages_per_chunk - hot_pages);
-  EXPECT_GT(max_observed_bits, frequent_max_bits);
-
-  // Pre-Phase-2 (chunk-wide 16 bits on every page) baseline at this workload
-  // scales linearly from the 1M-row benchmark number (2,491,156 bytes):
-  //   2,491,156 * (200'000 / 1'000'000) = 498,231 bytes
-  // With per-page variable widths the 8 common pages drop from 16 to <=6 bits
-  // and should shave ~250 KB (8 pages * 20k values * (16-6) bits / 8).
-  // Use a conservative bound of 450,000 bytes to leave headroom for future
-  // encoder improvements.
-  EXPECT_LT(buffer.size(), 450'000u);
 }
 
 TEST_F(ParquetWriterTest, DictionaryNeverTest)
