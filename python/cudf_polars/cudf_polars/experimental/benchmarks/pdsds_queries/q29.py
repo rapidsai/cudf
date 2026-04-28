@@ -223,28 +223,28 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
 
     # SQL: FROM store_sales, store_returns, catalog_sales, date_dim d1/d2/d3, store, item
     result = (
-        # SQL: JOIN d1 (date_dim) ON ss_sold_date_sk = d1_date_sk
-        store_sales.join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
-        # SQL: JOIN item ON ss_item_sk = i_item_sk
-        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-        # SQL: JOIN store ON ss_store_sk = s_store_sk
-        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         # SQL: JOIN store_returns ON ss_customer_sk=sr_customer_sk AND ss_item_sk=sr_item_sk AND ss_ticket_number=sr_ticket_number
-        .join(
+        store_sales.join(
             store_returns,
             left_on=["ss_customer_sk", "ss_item_sk", "ss_ticket_number"],
             right_on=["sr_customer_sk", "sr_item_sk", "sr_ticket_number"],
         )
-        # SQL: JOIN d2 (date_dim) ON sr_returned_date_sk = d2_date_sk
-        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
-        # SQL: JOIN catalog_sales ON ss_customer_sk=cs_bill_customer_sk AND ss_item_sk=cs_item_sk
+        # SQL: JOIN catalog_sales ON sr_customer_sk=cs_bill_customer_sk AND sr_item_sk=cs_item_sk
         .join(
             catalog_sales,
-            left_on=["ss_customer_sk", "ss_item_sk"],
+            left_on=["sr_customer_sk", "sr_item_sk"],
             right_on=["cs_bill_customer_sk", "cs_item_sk"],
         )
+        # SQL: JOIN d1 (date_dim) ON ss_sold_date_sk = d1_date_sk
+        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
+        # SQL: JOIN d2 (date_dim) ON sr_returned_date_sk = d2_date_sk
+        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
         # SQL: JOIN d3 (date_dim) ON cs_sold_date_sk = d3_date_sk
         .join(d3, left_on="cs_sold_date_sk", right_on="d3_date_sk")
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: JOIN item ON ss_item_sk = i_item_sk
+        .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         # SQL: WHERE d1_moy={month} AND d1_year={year} AND d2_moy BETWEEN {month} AND {month}+3
         # SQL:   AND d2_year={year} AND d3_year IN (year, year+1, year+2)
         .filter(
