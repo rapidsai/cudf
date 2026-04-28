@@ -8,13 +8,15 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
 #include <rmm/exec_policy.hpp>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
 #include <cub/block/block_scan.cuh>
-#include <cub/warp/warp_reduce.cuh>
 #include <cuco/static_map_ref.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
@@ -417,27 +419,25 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 CUDF_KERNEL void __launch_bounds__(DEFAULT_BLOCK_SIZE)
   compute_page_dict_bits_kernel(device_span<EncPage> pages)
 {
-  constexpr auto warp_size       = cudf::detail::warp_size;
-  auto const warp_lane           = static_cast<size_type>(threadIdx.x % warp_size);
-  auto const warp_id             = static_cast<size_type>(threadIdx.x / warp_size);
-  auto constexpr warps_per_block = DEFAULT_BLOCK_SIZE / warp_size;
-  auto const page_idx            = static_cast<size_type>(blockIdx.x) * warps_per_block + warp_id;
+  namespace cg = cooperative_groups;
+  using cudf::detail::warp_size;
 
-  __shared__ typename cub::WarpReduce<size_type>::TempStorage reduce_storage[warps_per_block];
-
+  auto const page_idx = cudf::detail::grid_1d::global_thread_id() / warp_size;
   if (page_idx >= static_cast<size_type>(pages.size())) { return; }
 
-  auto& page        = pages[page_idx];
-  auto const* chunk = page.chunk;
-  // Non-dict chunk: `dict_rle_bits` is unused by the encoder; skip.
+  auto const warp  = cg::tiled_partition<warp_size>(cg::this_thread_block());
+  auto& page       = pages[page_idx];
+  auto const chunk = page.chunk;
+
+  // Return if non-dict chunk: `dict_rle_bits` is unused by the encoder
   if (not chunk->use_dictionary) { return; }
-  // Dictionary page itself does not encode dict_indices; skip.
+  // Return if dictionary page itself does not encode dict_indices
   if (page.page_type == PageType::DICTIONARY_PAGE) { return; }
 
-  auto const* col = chunk->col_desc;
-  // BOOLEAN columns emit dict_bits=1 through a separate code path in
-  // `gpuEncodeDictPages`, independent of `dict_rle_bits`. Leave the field at
-  // its chunk-wide init value (it is ignored for booleans).
+  auto const col = chunk->col_desc;
+
+  // Return if BOOLEAN column: dict_bits=1 through a separate code path in
+  // `gpuEncodeDictPages`, independent of `dict_rle_bits`
   if (col->physical_type == Type::BOOLEAN) { return; }
 
   auto const chunk_start_val      = row_to_value_idx(chunk->start_row, *col);
@@ -446,30 +446,29 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_BLOCK_SIZE)
   auto const begin                = page_start_val - chunk_start_val;
   auto const end                  = begin + page_num_leaf_values;
 
-  auto const* dict_index             = chunk->dict_index;
-  column_device_view const& leaf_col = *col->leaf_column;
-  auto const leaf_size               = leaf_col.size();
+  auto const* dict_index = chunk->dict_index;
+  auto const& leaf_col   = *col->leaf_column;
+  auto const leaf_size   = leaf_col.size();
 
-  // Accumulate per-lane max. Null rows leave `dict_index` undefined; gate
-  // the read with the column's validity bitmap to avoid pulling garbage
-  // bits into the max.
+  // Accumulate per-lane max dict index for this page
   size_type lane_max = 0;
-  for (size_type i = begin + warp_lane; i < end; i += warp_size) {
+  for (size_type i = begin + warp.thread_rank(); i < end; i += warp_size) {
     auto const val_idx = chunk_start_val + i;
+    // Null rows leave `dict_index` undefined; gate the read with the column's validity bitmap to
+    // avoid pulling garbage bits into the max.
     if (val_idx < leaf_size && leaf_col.is_valid(val_idx)) {
       lane_max = cuda::std::max(lane_max, dict_index[i]);
     }
   }
 
-  auto const page_max =
-    cub::WarpReduce<size_type>(reduce_storage[warp_id]).Reduce(lane_max, cuda::maximum{});
-
-  if (warp_lane == 0) {
-    // Floor at 1 to match the chunk-wide convention (all-null pages still
-    // emit a 1-bit RLE preamble; see `writer_impl.cu`'s `std::max(..., 1)`).
+  // Write this page's RLE bits
+  auto const page_max = cg::reduce(warp, lane_max, cg::greater<size_type>{});
+  cg::invoke_one(warp, [&] {
+    // Floor at 1 to match the chunk-wide convention (all-null pages still emit a 1-bit RLE
+    // preamble)
     auto const nbits   = cuda::std::max(cuda::std::bit_width(static_cast<uint32_t>(page_max)), 1);
     page.dict_rle_bits = static_cast<uint8_t>(nbits);
-  }
+  });
 }
 
 }  // namespace
