@@ -265,57 +265,39 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            # SQL: Filter catalog_sales by year and demographics before the large inventory join
-            # (filter pushdown — same semantics, avoids 118GB intermediate at SF100+)
             catalog_sales
-            # Filter catalog_sales first: join date_dim to apply year filter (reduces rows before big joins)
+            # SQL: JOIN inventory ON cs_item_sk = inv_item_sk
+            .join(inventory, left_on="cs_item_sk", right_on="inv_item_sk")
+            # SQL: JOIN warehouse ON w_warehouse_sk = inv_warehouse_sk
+            .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+            # SQL: JOIN item ON i_item_sk = cs_item_sk
+            .join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            # SQL: JOIN customer_demographics ON cs_bill_cdemo_sk = cd_demo_sk
             .join(
-                date_dim.filter(pl.col("d_year") == year).select(
-                    ["d_date_sk", "d_week_seq", "d_date"]
-                ),
-                left_on="cs_sold_date_sk",
-                right_on="d_date_sk",
-            )
-            # Filter by demographics (reduces rows further before joining with large inventory)
-            .join(
-                customer_demographics.filter(pl.col("cd_marital_status") == ms).select(
-                    ["cd_demo_sk"]
-                ),
+                customer_demographics,
                 left_on="cs_bill_cdemo_sk",
                 right_on="cd_demo_sk",
             )
+            # SQL: JOIN household_demographics ON cs_bill_hdemo_sk = hd_demo_sk
             .join(
-                household_demographics.filter(pl.col("hd_buy_potential") == bp).select(
-                    ["hd_demo_sk"]
-                ),
+                household_demographics,
                 left_on="cs_bill_hdemo_sk",
                 right_on="hd_demo_sk",
             )
-            # Project down to only needed columns before the large inventory join
-            .select(
-                [
-                    "cs_item_sk",
-                    "cs_order_number",
-                    "cs_quantity",
-                    "cs_promo_sk",
-                    "cs_ship_date_sk",
-                    "d_week_seq",
-                    "d_date",
-                ]
-            )
-            # SQL: JOIN inventory ON cs_item_sk = inv_item_sk
-            .join(inventory, left_on="cs_item_sk", right_on="inv_item_sk")
-            # SQL: WHERE inv_quantity_on_hand < cs_quantity
-            .filter(pl.col("inv_quantity_on_hand") < pl.col("cs_quantity"))
-            # SQL: JOIN warehouse ON inv_warehouse_sk = w_warehouse_sk
-            .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
-            # SQL: JOIN item ON cs_item_sk = i_item_sk
+            # SQL: JOIN date_dim d1 ON cs_sold_date_sk = d1.d_date_sk
             .join(
-                item.select(["i_item_sk", "i_item_desc"]),
-                left_on="cs_item_sk",
-                right_on="i_item_sk",
+                date_dim.select(["d_date_sk", "d_week_seq", "d_date", "d_year"]).rename(
+                    {
+                        "d_date_sk": "d1_date_sk",
+                        "d_week_seq": "d1_week_seq",
+                        "d_date": "d1_date",
+                        "d_year": "d1_year",
+                    }
+                ),
+                left_on="cs_sold_date_sk",
+                right_on="d1_date_sk",
             )
-            # SQL: JOIN date_dim d2 ON inv_date_sk = d2.d_date_sk WHERE d1.d_week_seq = d2.d_week_seq
+            # SQL: JOIN date_dim d2 ON inv_date_sk = d2.d_date_sk
             .join(
                 date_dim.select(["d_date_sk", "d_week_seq"]).rename(
                     {"d_date_sk": "d2_date_sk", "d_week_seq": "d2_week_seq"}
@@ -323,8 +305,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 left_on="inv_date_sk",
                 right_on="d2_date_sk",
             )
-            .filter(pl.col("d_week_seq") == pl.col("d2_week_seq"))
-            # SQL: JOIN date_dim d3 ON cs_ship_date_sk = d3.d_date_sk WHERE d3.d_date > d1.d_date + 5 days
+            # SQL: JOIN date_dim d3 ON cs_ship_date_sk = d3.d_date_sk
             .join(
                 date_dim.select(["d_date_sk", "d_date"]).rename(
                     {"d_date_sk": "d3_date_sk", "d_date": "d3_date"}
@@ -332,50 +313,58 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 left_on="cs_ship_date_sk",
                 right_on="d3_date_sk",
             )
-            .filter(
-                pl.col("d3_date").cast(pl.Datetime("us"))
-                > pl.col("d_date").cast(pl.Datetime("us"))
-                + pl.duration(days=5).cast(pl.Duration("us"))
-            )
-            # SQL: CASE WHEN p_promo_sk IS NULL THEN 1 ELSE 0 END AS no_promo_flag
-            # Use cs_promo_sk (matches optimized behavior; p_promo_sk after LEFT JOIN is equivalent)
-            .with_columns(
-                [
-                    pl.when(pl.col("cs_promo_sk").is_null())
-                    .then(pl.lit(1, dtype=COUNT_DTYPE))
-                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
-                    .alias("no_promo_flag"),
-                    pl.when(pl.col("cs_promo_sk").is_not_null())
-                    .then(pl.lit(1, dtype=COUNT_DTYPE))
-                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
-                    .alias("promo_flag"),
-                ]
-            )
             # SQL: LEFT OUTER JOIN promotion ON cs_promo_sk = p_promo_sk
             .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk", how="left")
-            # SQL: LEFT OUTER JOIN catalog_returns ON cr_item_sk=cs_item_sk AND cr_order_number=cs_order_number
+            # SQL: LEFT OUTER JOIN catalog_returns ON cr_item_sk = cs_item_sk
+            #   AND cr_order_number = cs_order_number
             .join(
                 catalog_returns,
                 left_on=["cs_item_sk", "cs_order_number"],
                 right_on=["cr_item_sk", "cr_order_number"],
                 how="left",
             )
+            # SQL: WHERE clauses (applied after all joins)
+            .filter(
+                (pl.col("d1_week_seq") == pl.col("d2_week_seq"))
+                & (pl.col("inv_quantity_on_hand") < pl.col("cs_quantity"))
+                & (
+                    pl.col("d3_date").cast(pl.Datetime("us"))
+                    > pl.col("d1_date").cast(pl.Datetime("us"))
+                    + pl.duration(days=5).cast(pl.Duration("us"))
+                )
+                & (pl.col("hd_buy_potential") == bp)
+                & (pl.col("d1_year") == year)
+                & (pl.col("cd_marital_status") == ms)
+            )
+            # SQL: CASE WHEN p_promo_sk IS NULL THEN 1 ELSE 0 END
+            .with_columns(
+                [
+                    pl.when(pl.col("p_promo_sk").is_null())
+                    .then(pl.lit(1, dtype=COUNT_DTYPE))
+                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
+                    .alias("no_promo"),
+                    pl.when(pl.col("p_promo_sk").is_not_null())
+                    .then(pl.lit(1, dtype=COUNT_DTYPE))
+                    .otherwise(pl.lit(0, dtype=COUNT_DTYPE))
+                    .alias("promo"),
+                ]
+            )
             # SQL: GROUP BY i_item_desc, w_warehouse_name, d1.d_week_seq
-            .group_by(["i_item_desc", "w_warehouse_name", "d_week_seq"])
-            # SQL: Sum(no_promo_flag) AS no_promo, Sum(promo_flag) AS promo, Count(*) AS total_cnt
+            .group_by(["i_item_desc", "w_warehouse_name", "d1_week_seq"])
+            # SQL: Sum(...) AS no_promo, Sum(...) AS promo, Count(*) AS total_cnt
             .agg(
                 [
-                    pl.col("no_promo_flag").sum().alias("no_promo"),
-                    pl.col("promo_flag").sum().alias("promo"),
+                    pl.col("no_promo").sum().alias("no_promo"),
+                    pl.col("promo").sum().alias("promo"),
                     pl.len().alias("total_cnt"),
                 ]
             )
-            # SQL: SELECT i_item_desc, w_warehouse_name, d1.d_week_seq AS d_week_seq, no_promo, promo, total_cnt
+            # SQL: SELECT i_item_desc, w_warehouse_name, d_week_seq, no_promo, promo, total_cnt
             .select(
                 [
                     "i_item_desc",
                     "w_warehouse_name",
-                    pl.col("d_week_seq"),
+                    pl.col("d1_week_seq").alias("d_week_seq"),
                     "no_promo",
                     "promo",
                     "total_cnt",
