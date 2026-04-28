@@ -21,6 +21,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_1321,
 )
+from tests.conftest import is_streaming_engine
 
 
 @pytest.fixture
@@ -142,12 +143,11 @@ def test_groupby_sorted_keys(
     df: pl.LazyFrame,
     keys,
     exprs,
-    using_streaming_engine,
     request,
 ):
     request.applymarker(
         pytest.mark.xfail(
-            using_streaming_engine,
+            is_streaming_engine(engine),
             strict=False,
             reason="https://github.com/rapidsai/cudf/issues/21642 -  no deterministic sort for keys",
         )
@@ -308,9 +308,8 @@ def test_groupby_maintain_order_random(
     nrows,
     nkeys,
     with_nulls,
-    using_streaming_engine,
 ):
-    if nrows > 30 and (blocksize_mode == "small" or using_streaming_engine):
+    if nrows > 30 and (blocksize_mode == "small" or is_streaming_engine(engine)):
         pytest.skip("streaming executor too slow for large n_rows")
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)

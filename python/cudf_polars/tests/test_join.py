@@ -16,6 +16,7 @@ from cudf_polars.dsl import expr as ir_expr
 from cudf_polars.dsl.ir import ConditionalJoin
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from tests.conftest import is_streaming_engine
 
 
 @pytest.fixture(params=[False, True], ids=["nulls_not_equal", "nulls_equal"])
@@ -80,12 +81,11 @@ def test_non_coalesce_join(
     how,
     nulls_equal,
     join_expr,
-    using_streaming_engine,
     request,
 ):
     request.applymarker(
         pytest.mark.xfail(
-            using_streaming_engine,
+            is_streaming_engine(engine),
             strict=False,
             reason="Non deterministic sort/join on nulls",
         )

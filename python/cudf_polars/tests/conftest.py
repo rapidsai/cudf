@@ -39,15 +39,13 @@ def clear_memory_resource_cache():
     cudf_polars.callback.default_memory_resource.cache_clear()
 
 
-@pytest.fixture
-def using_streaming_engine(engine: pl.GPUEngine) -> bool:
-    """True when the active ``engine`` fixture is a :class:`StreamingEngine`."""
+def is_streaming_engine(obj: Any) -> bool:
+    """True when ``obj`` is a :class:`StreamingEngine`."""
     try:
         from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-
-        return isinstance(engine, StreamingEngine)
     except ImportError:
         return False
+    return isinstance(obj, StreamingEngine)
 
 
 @pytest.fixture(autouse=True)
