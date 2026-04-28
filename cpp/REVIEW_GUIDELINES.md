@@ -1,6 +1,6 @@
 # AI Code Review Guidelines - cuDF C++/CUDA
 
-**Role**: Act as a principal engineer with 10+ years experience in GPU computing, Modern C++, and high-performance data processing. Focus ONLY on CRITICAL and HIGH issues.
+**Role**: Act as a principal engineer with 10+ years experience in GPU computing, Modern C++, and high-performance data processing. Strongly prefer modern C++ and established CUDA/C++ library algorithms over raw loops. Focus ONLY on CRITICAL and HIGH issues.
 
 **Target**: Sub-3% false positive rate. Be direct, concise, minimal.
 
@@ -79,7 +79,9 @@
 
 ### Concurrency & Stream Safety
 - Stream and MR parameters not propagated across all internal APIs
-- Implicit CUDA default stream use outside public API boundaries; internal APIs must propagate explicit streams
+- Implicit CUDA default stream use outside tests, benchmarks, and public API default parameters
+- Unnecessary `cudaDeviceSynchronize()`; use `stream.synchronize()` when synchronization is required
+- Operations incorrectly ordered on different streams without events or explicit dependencies
 
 ### Type Dispatch Patterns
 - New dispatch functors using `CUDF_ENABLE_IF` instead of C++20 `requires` clauses
@@ -108,19 +110,9 @@
 - Prefer CUB device-wide primitives for reductions, scans, selections, histograms, sorts, and segmented operations before reviewing custom kernels as necessary
 - Prefer Thrust algorithms with `rmm::exec_policy_nosync(stream)` for straightforward transformations, gathers/scatters, sorts, and binary searches
 - Prefer `cuda::std` / libcudacxx utilities in device-callable code and C++ standard library algorithms for host-only code
+- Prefer kernel fusion when multiple outputs depend on the same input traversal
+- Treat each kernel launch and memory pass as expensive; minimize redundant global memory reads and writes when operations can be combined without sacrificing clarity or reuse
 - Treat custom kernels and raw loops as justified only when existing CUB, Thrust, STL, or libcudf utilities cannot express the operation without a correctness or substantial performance cost
-
-## Review Protocol
-
-1. **CUDA correctness**: Errors checked? Memory safety? Race conditions? Synchronization?
-2. **Algorithm correctness**: Does the logic produce correct results? Null handling? Edge cases?
-3. **Device code**: `cuda::std::` used instead of `std::`? No relaxed constexpr?
-4. **Resource management**: GPU memory leaks? Stream/event cleanup? RAII?
-5. **Performance**: GPU bottlenecks? Unnecessary sync? Memory access patterns?
-6. **Memory management**: Correct MR usage? Pinned vectors? Async memcpy?
-7. **API stability**: Breaking changes? Deprecation path?
-8. **Stream handling**: Stream/MR propagated? No default stream?
-9. **Ask, don't tell**: "Have you considered X?" not "You should do X"
 
 ## Quality Threshold
 
@@ -228,7 +220,7 @@ Suggested fix:
 **Stream Management**:
 - Stream and MR as last two parameters (stream before MR)
 - Public APIs have default values; detail APIs do not
-- Allow default stream values at public API boundaries only; disallow implicit default stream use in internal APIs
+- Disallow implicit default stream use except in tests, benchmarks, and public API default parameters
 - All kernel launches and Thrust calls must use the stream parameter
 - Use `rmm::exec_policy_nosync(stream)` for all Thrust device execution
 
@@ -252,81 +244,6 @@ Suggested fix:
 - Use modern C++20: `concepts`, `std::ranges`, `std::transform` over manual implementations
 - Use `static_assert` with clear messages to prevent template misuse
 - Anonymous namespaces for single-TU helpers; never in headers
-
----
-
-## Common Bug Patterns
-
-### 1. Null Handling Violations
-**Pattern**: Reading undefined null values or accessing empty column children
-
-**Red flags**:
-- Accessing element values without checking null mask on fixed-width columns
-- Accessing offsets child of an empty string or list column
-- Nested types (LIST, STRUCT) without sanitized null masks
-
-### 2. Device Code Portability
-**Pattern**: Using `std::` instead of `cuda::std::` in device-callable code
-
-**Red flags**:
-- `std::min`, `std::max`, `std::numeric_limits` in `__device__` or `CUDF_HOST_DEVICE` functions
-- `std::is_void_v<T>` and other type traits in templates instantiated on device
-- Bare `constexpr` (host-only) on functions callable from device code
-
-### 3. Memory Resource Misuse
-**Pattern**: Using wrong MR for allocations
-
-**Red flags**:
-- Temporary buffers allocated with the passed-in `mr` parameter
-- Returned memory allocated with `cudf::get_current_device_resource_ref()` instead of `mr`
-- `thrust::device_vector` or `rmm::device_scalar` used anywhere
-
-### 4. Stream Ordering Violations
-**Pattern**: Operations not properly ordered on streams
-
-**Red flags**:
-- Missing stream parameter in kernel launches or Thrust calls
-- `cudaDeviceSynchronize()` used anywhere (must use `stream.synchronize()`)
-- Async memcpy with staging buffers that may be destroyed before copy completes
-
----
-
-## Code Review Checklists
-
-### When Reviewing CUDA Kernels
-- [ ] Are CUDA errors checked after kernel launch?
-- [ ] Uses `CUDF_KERNEL` macro (not raw `__global__`)?
-- [ ] Is shared memory usage within limits and avoiding bank conflicts?
-- [ ] Is thread synchronization correct? Any `__syncthreads` unnecessary, misplaced, or missing?
-- [ ] Is memory access coalesced and aligned?
-- [ ] Are warp divergence issues minimized?
-- [ ] Are grid/block dimensions validated?
-- [ ] Uses `cuda::std::` not `std::` in device code?
-
-### When Reviewing Public APIs
-- [ ] `CUDF_EXPORT` present?
-- [ ] Stream and MR as last two params (stream before MR)?
-- [ ] `CUDF_FUNC_RANGE()` before delegating to `detail::`?
-- [ ] Doxygen documentation complete?
-- [ ] `[[nodiscard]]` on pure functions?
-- [ ] Breaking changes have deprecation path?
-
-### When Reviewing Memory Operations
-- [ ] Returned memory uses passed-in MR?
-- [ ] Temporary memory uses `cudf::get_current_device_resource_ref()`?
-- [ ] Uses `rmm::device_uvector` (not `thrust::device_vector`)?
-- [ ] Uses `cudf::detail::device_scalar` (not `rmm::device_scalar`)?
-- [ ] Uses `cudf::detail::cuda_memcpy_async` (not raw `cudaMemcpyAsync`)?
-- [ ] RAII used for all GPU resources?
-
-### When Reviewing Tests
-- [ ] Uses `#include <cudf_test/cudf_gtest.hpp>` (not raw gtest)?
-- [ ] Test code in global namespace?
-- [ ] Edge cases covered: empty input, nulls, sliced columns, boundary sizes?
-- [ ] String tests include non-ASCII UTF-8?
-- [ ] Decimal types use correct type list (`FixedWidthTypes` not `NumericTypes`)?
-- [ ] All datasets synthetic (no external resource dependencies)?
-- [ ] Benchmarks use NVBench (not Google Benchmark)?
 
 ---
 
