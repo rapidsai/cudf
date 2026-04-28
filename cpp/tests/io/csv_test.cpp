@@ -1225,7 +1225,7 @@ TEST_F(CsvReaderTest, StringInference)
 
 TEST_F(CsvReaderTest, DelimWhitespaceHeaderLeadingTrailingDelimiter)
 {
-  std::string buffer = " col_a col_b \n1 2\n";
+  std::string buffer = "  col_a   col_b  \n  1   2  \n  3   4  \n";
   cudf::io::csv_reader_options const in_opts =
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
@@ -1242,13 +1242,13 @@ TEST_F(CsvReaderTest, DelimWhitespaceHeaderLeadingTrailingDelimiter)
   ASSERT_EQ(result_view.num_columns(), 2);
   EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
   EXPECT_EQ(result_view.column(1).type().id(), type_id::INT64);
-  expect_column_data_equal(std::vector<int64_t>{1}, result_view.column(0));
-  expect_column_data_equal(std::vector<int64_t>{2}, result_view.column(1));
+  expect_column_data_equal(std::vector<int64_t>{1, 3}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2, 4}, result_view.column(1));
 }
 
 TEST_F(CsvReaderTest, DelimWhitespaceNoHeaderLeadingTrailingDelimiter)
 {
-  std::string buffer = " 1 2 \n 3 4 \n";
+  std::string buffer = "  1   2  \n  3   4  \n";
   cudf::io::csv_reader_options const in_opts =
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{

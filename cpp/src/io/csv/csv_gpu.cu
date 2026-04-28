@@ -187,6 +187,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 
   // Going through all the columns of a given record
   while (col < column_flags.size() && field_start < row_end) {
+    // In delim_whitespace mode (multi_delimiter), skip leading delimiter runs so leading
+    // whitespace does not produce empty leading fields (matches pandas behavior).
+    while (opts.multi_delimiter && field_start < row_end && *field_start == opts.delimiter) {
+      ++field_start;
+    }
+    if (field_start >= row_end) break;
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
@@ -333,6 +339,13 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   int actual_col  = 0;
 
   while (col < column_flags.size() && field_start < row_end) {
+    // In delim_whitespace mode (multi_delimiter), skip leading delimiter runs so leading
+    // whitespace does not produce empty leading fields (matches pandas behavior).
+    while (options.multi_delimiter && field_start < row_end && *field_start == options.delimiter) {
+      ++field_start;
+    }
+    next_field = field_start;
+    if (field_start >= row_end) break;
     auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
 
     if (column_flags[col] & column_parse::enabled) {
