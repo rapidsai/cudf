@@ -239,29 +239,6 @@ TEST_F(MixedEngineBatchTests, AllAssertionTypesMixed)
   auto const flags = cudf::strings::regex_flags::GLUSHKOV;
   auto results     = cudf::strings::replace_re(sv, patterns, repls_view, flags);
 
-  // Row 0: "^start" matches at 0 → "BEGIN abc end"; then "end$" matches → "BEGIN abc FINISH";
-  //         then \babc\b matches "abc" → "BEGIN X FINISH"
-  //         Wait — multi_re processes char-by-char left to right, first pattern match at each pos
-  //         wins. Let me reconsider.
-  //
-  //   pos 0: "^start" matches [0,5) → replaced by "BEGIN" → "BEGIN abc end"
-  //   pos 6 (after "BEGIN "): \babc\b matches [6,9) → replaced by "X" → "BEGIN X end"
-  //   pos 10 (after "BEGIN X "): "end$" matches [10,13) → replaced by "FINISH"
-  //   Result: "BEGIN X FINISH"
-  //
-  // Row 1: pos 0: no ^start (starts with "abc"), \babc\b matches [0,3) → "X start end abc"
-  //         pos 4: no match at pos 4 for any pattern  (s of start)
-  //         ...
-  //         pos 10: "end" doesn't match "end$" because "end abc" not at end; but \babc\b [14,17)
-  //         Let me just verify: "abc start end abc"
-  //         pos 0: \babc\b matches "abc" [0,3) → "X start end abc"
-  //         pos 4: nothing (start not at ^)
-  //         pos 14: \babc\b matches "abc" [14,17) → but "end$" checks "abc" at end...
-  //              "end$" matches [10,13) "end" — is "end" at end? String is "abc start end abc"
-  //              so "end" is at [10,13) but "abc" follows → not at end. No match for "end$".
-  //              pos 14: \babc\b matches [14,17) → "X start end X"
-  //
-  // Row 2: no match for any pattern → unchanged
   cudf::test::strings_column_wrapper expected({"BEGIN X FINISH", "X start end X", "no match here"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
