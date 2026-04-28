@@ -158,7 +158,7 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   // Companion vectors: sized to the encoding-buffer capacity to accommodate
   // encoded indices in [0, total_input_rows), which can grow up to _encoding_capacity.
   _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_encoding_capacity, stream, mr);
-  _key_row = std::make_unique<rmm::device_uvector<size_type>>(_encoding_capacity, stream, mr);
+  _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_encoding_capacity, stream, mr);
 
   // Group-to-encoded-index map: sized to max_groups (one entry per distinct key).
   _encoded_indices = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);

@@ -503,7 +503,8 @@ class streaming_groupby {
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @throws std::invalid_argument if `data.num_rows()` exceeds the encoding buffer capacity
-   * @throws std::overflow_error if accumulated rows plus batch size exceeds the encoding buffer capacity
+   * @throws std::overflow_error if accumulated rows plus batch size exceeds the encoding buffer
+   * capacity
    * @throws cudf::logic_error if distinct keys exceed `max_groups`
    */
   void aggregate(table_view const& data, rmm::cuda_stream_view stream = cudf::get_default_stream());
@@ -520,7 +521,8 @@ class streaming_groupby {
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @throws std::invalid_argument if the other object has more distinct keys than `max_groups`
-   * @throws std::overflow_error if accumulated rows plus distinct keys merged exceed the encoding buffer capacity
+   * @throws std::overflow_error if accumulated rows plus distinct keys merged exceed the encoding
+   * buffer capacity
    * @throws cudf::logic_error if this object has not been initialized via `aggregate()`
    * @throws cudf::logic_error if distinct keys exceed `max_groups` after merge
    */

@@ -124,7 +124,7 @@ struct scatter_new_key_metadata {
   size_type* key_batch;                  ///< companion: batch id at encoded index
   size_type* key_row;                    ///< companion: row within compacted batch
   size_type* encoded_indices;            ///< encoded_indices[dense_group] = encoded index
-  size_type encoding_offset;             ///< total_input_rows: added to batch-local index to get encoded
+  size_type encoding_offset;  ///< total_input_rows: added to batch-local index to get encoded
   size_type batch_id;
   size_type num_groups_before;
   __device__ void operator()(size_type idx) const

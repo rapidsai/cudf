@@ -81,12 +81,12 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
   rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
   rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
 
-  thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
-                    cuda::counting_iterator<size_type>(0),
-                    cuda::counting_iterator<size_type>(batch_size),
-                    target_indices.begin(),
-                    insert_and_map_fn{
-                      set_ref, batch_bitmask, total_input_rows, inserted_flags.data()});
+  thrust::transform(
+    rmm::exec_policy_nosync(stream, temp_mr),
+    cuda::counting_iterator<size_type>(0),
+    cuda::counting_iterator<size_type>(batch_size),
+    target_indices.begin(),
+    insert_and_map_fn{set_ref, batch_bitmask, total_input_rows, inserted_flags.data()});
 
   // Count newly inserted keys.
   auto const new_distinct_count = static_cast<size_type>(thrust::count(
