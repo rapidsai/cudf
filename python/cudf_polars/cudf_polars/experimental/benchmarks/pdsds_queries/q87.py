@@ -205,20 +205,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
-    # SQL: store_customers — SELECT DISTINCT c_last_name, c_first_name, d_date
-    # SQL:   FROM store_sales, date_dim, customer WHERE ss_sold_date_sk = d_date_sk
-    # SQL:   AND ss_customer_sk = c_customer_sk AND d_month_seq BETWEEN {d_month_seq} AND {d_month_seq}+11
     store_customers = (
-        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        # SQL: JOIN customer ON ss_customer_sk = c_customer_sk
         .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        # SQL: WHERE d_month_seq BETWEEN {d_month_seq} AND {d_month_seq}+11
         .filter(pl.col("d_month_seq").is_between(d_month_seq, d_month_seq + 11))
         .select(["c_last_name", "c_first_name", "d_date"])
         .unique()
     )
-    # SQL: catalog_customers — same pattern with catalog_sales, cs_bill_customer_sk
     catalog_customers = (
         catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
         .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
@@ -226,7 +219,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .select(["c_last_name", "c_first_name", "d_date"])
         .unique()
     )
-    # SQL: web_customers — same pattern with web_sales, ws_bill_customer_sk
     web_customers = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk")
@@ -244,13 +236,11 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     catalog_customers = _apply_sentinels(catalog_customers, sentinel_map)
     web_customers = _apply_sentinels(web_customers, sentinel_map)
 
-    # SQL: EXCEPT — store_customers EXCEPT catalog_customers (anti-join on c_last_name, c_first_name, d_date)
     after_first_except = store_customers.join(
         catalog_customers,
         on=["c_last_name", "c_first_name", "d_date"],
         how="anti",
     ).unique()
-    # SQL: EXCEPT — result EXCEPT web_customers (second anti-join)
     after_second_except = (
         after_first_except.join(
             web_customers,
@@ -274,7 +264,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
 
     return QueryResult(
-        # SQL: SELECT count(*) FROM (...)
         frame=after_second_except.select(
             [pl.len().cast(pl.Int64).alias("count_star()")]
         ),

@@ -250,6 +250,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         | ((pl.col("hd_dep_count") == hd3) & (pl.col("hd_vehicle_count") <= hd3 + 2))
     )
 
+    # Shared base: Polars CSE makes this equivalent to independent scans
     base = (
         # SQL: JOIN household_demographics ON ss_hdemo_sk = hd_demo_sk
         store_sales.join(
