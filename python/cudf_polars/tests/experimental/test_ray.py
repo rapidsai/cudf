@@ -73,19 +73,18 @@ def test_raises_inside_rrun() -> None:
         RayEngine()
 
 
-def test_force_num_ranks_requires_allow_gpu_sharing() -> None:
-    """force_num_ranks must be paired with engine_options['allow_gpu_sharing']=True."""
+def test_num_ranks_requires_allow_gpu_sharing() -> None:
+    """num_ranks requires engine_options['allow_gpu_sharing']=True."""
     with pytest.raises(ValueError, match="allow_gpu_sharing"):
-        RayEngine(force_num_ranks=2)
+        RayEngine(num_ranks=2)
+    with pytest.raises(ValueError, match="allow_gpu_sharing"):
+        RayEngine(num_ranks=2, engine_options={"allow_gpu_sharing": False})
 
 
-def test_force_num_ranks_must_be_positive() -> None:
-    """force_num_ranks must be at least 1."""
-    with pytest.raises(ValueError, match="force_num_ranks"):
-        RayEngine(
-            force_num_ranks=0,
-            engine_options={"allow_gpu_sharing": True},
-        )
+def test_num_ranks_must_be_positive() -> None:
+    """num_ranks must be at least 1."""
+    with pytest.raises(ValueError, match="num_ranks"):
+        RayEngine(num_ranks=0, engine_options={"allow_gpu_sharing": True})
 
 
 # ---------------------------------------------------------------------------
@@ -194,13 +193,13 @@ def test_run(engine: RayEngine) -> None:
     assert len(set(result)) == engine.nranks
 
 
-def test_force_num_ranks_oversubscribes() -> None:
-    """force_num_ranks creates the requested number of actors sharing GPU 0."""
+def test_num_ranks_oversubscribes() -> None:
+    """num_ranks creates the requested number of actors sharing GPU 0."""
     n = 2
     with RayEngine(
-        engine_options={"allow_gpu_sharing": True},
         executor_options={"max_rows_per_partition": 10},
-        force_num_ranks=n,
+        engine_options={"allow_gpu_sharing": True},
+        num_ranks=n,
         ray_init_options={"include_dashboard": False},
     ) as engine:
         assert engine.nranks == n
