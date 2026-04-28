@@ -30,7 +30,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         choices=("in-memory", "spmd"),
         help="Which GPU engine variant to inject globally.",
     )
-    # TODO: We never run with --blocksize-mode in ci/run_cudf_polars_polars_tests.sh. Remove?
+    # TODO: We never run with --inject-gpu-engine-blocksize in ci/run_cudf_polars_polars_tests.sh. Remove?
     group.addoption(
         "--inject-gpu-engine-blocksize",
         action="store",
