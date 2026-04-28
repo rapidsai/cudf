@@ -218,19 +218,21 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         # SQL: WHERE d_month_seq IN ({dms}..{dms}+11)
-        .filter(pl.col("d_month_seq").is_in(month_seq_list))
-        # SQL: AND (i_category IN categories1 AND i_class IN classes1 AND i_brand IN brands1)
-        # SQL:   OR (i_category IN categories2 AND i_class IN classes2 AND i_brand IN brands2)
+        # SQL:   AND (i_category IN categories1 AND i_class IN classes1 AND i_brand IN brands1)
+        # SQL:    OR (i_category IN categories2 AND i_class IN classes2 AND i_brand IN brands2)
         .filter(
-            (
-                pl.col("i_category").is_in(categories1)
-                & pl.col("i_class").is_in(classes1)
-                & pl.col("i_brand").is_in(brands1)
-            )
-            | (
-                pl.col("i_category").is_in(categories2)
-                & pl.col("i_class").is_in(classes2)
-                & pl.col("i_brand").is_in(brands2)
+            (pl.col("d_month_seq").is_in(month_seq_list))
+            & (
+                (
+                    pl.col("i_category").is_in(categories1)
+                    & pl.col("i_class").is_in(classes1)
+                    & pl.col("i_brand").is_in(brands1)
+                )
+                | (
+                    pl.col("i_category").is_in(categories2)
+                    & pl.col("i_class").is_in(classes2)
+                    & pl.col("i_brand").is_in(brands2)
+                )
             )
         )
         # SQL: GROUP BY i_manufact_id, d_qoy

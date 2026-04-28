@@ -238,11 +238,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     # SQL: UNION ALL (web, catalog, store components) — this is 'tmp' in the SQL
     tmp = pl.concat([web_component, catalog_component, store_component])
 
-    # SQL: FROM item, tmp, time_dim WHERE sold_item_sk=i_item_sk AND i_manager_id={manager}
-    #   AND time_sk=t_time_sk AND (t_meal_time='breakfast' OR t_meal_time='dinner')
+    # SQL: FROM item, tmp, time_dim
     result = (
-        tmp.join(item, left_on="sold_item_sk", right_on="i_item_sk")
+        # SQL: JOIN tmp ON sold_item_sk = i_item_sk
+        item.join(tmp, left_on="i_item_sk", right_on="sold_item_sk")
+        # SQL: JOIN time_dim ON time_sk = t_time_sk
         .join(time_dim, left_on="time_sk", right_on="t_time_sk")
+        # SQL: WHERE sold_item_sk = i_item_sk AND i_manager_id={manager}
+        #   AND time_sk=t_time_sk AND (t_meal_time='breakfast' OR t_meal_time='dinner')
         .filter(
             (pl.col("i_manager_id") == manager)
             & (

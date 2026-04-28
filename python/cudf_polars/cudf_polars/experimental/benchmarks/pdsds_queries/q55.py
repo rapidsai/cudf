@@ -112,7 +112,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     return QueryResult(
         frame=(
-            # SQL: FROM date_dim, store_sales WHERE d_date_sk = ss_sold_date_sk
+            # SQL: FROM date_dim, store_sales, item
+            # SQL: JOIN store_sales ON d_date_sk = ss_sold_date_sk
             date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
             # SQL: JOIN item ON ss_item_sk = i_item_sk
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
