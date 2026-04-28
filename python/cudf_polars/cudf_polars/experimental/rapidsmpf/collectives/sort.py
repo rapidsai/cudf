@@ -43,6 +43,7 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     replay_buffered_channel,
     send_metadata,
 )
+from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.sort import (
     _get_final_sort_boundaries,
     _has_simple_zlice,
@@ -559,7 +560,9 @@ def _sort_rapidsmpf_network(ir: Sort, rec: SubNetGenerator) -> tuple[dict, dict]
     partition_info = rec.state["partition_info"]
     dynamic = executor.dynamic_planning is not None
 
-    if partition_info[ir].count == 1 and not dynamic:
+    if partition_info[ir].count == 1 and (
+        not dynamic or isinstance(ir.children[0], Repartition)
+    ):
         nodes, channels = process_children(ir, rec)
         channels[ir] = ChannelManager(rec.state["context"])
         nodes[ir] = [
