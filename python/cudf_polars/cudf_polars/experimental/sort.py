@@ -504,8 +504,10 @@ class ShuffleSorted(IR):
         return df
 
 
-def _has_simple_zlice(zlice: tuple[int, int | None]) -> bool:
+def _has_simple_zlice(zlice: tuple[int, int | None] | None) -> bool:
     """Check if a zlice is a simple top-k/bottom-k operation."""
+    if zlice is None:
+        return False
     has_offset = zlice[0] > 0 or (
         zlice[0] < 0 and zlice[1] is not None and zlice[0] + zlice[1] < 0
     )
@@ -530,39 +532,38 @@ def _(
     executor = config_options.executor
     runtime = executor.runtime
 
-    if ir.zlice is not None:
-        # Special handling for slicing
-        # (May be a top- or bottom-k operation)
-        simple_zlice = _has_simple_zlice(ir.zlice)
-        if simple_zlice and runtime == "tasks":
-            from cudf_polars.experimental.parallel import _lower_ir_pwise
+    # Special handling for slicing
+    # (May be a top- or bottom-k operation)
+    simple_zlice = _has_simple_zlice(ir.zlice)
+    if simple_zlice and runtime == "tasks":
+        from cudf_polars.experimental.parallel import _lower_ir_pwise
 
-            new_node, partition_info = _lower_ir_pwise(ir, rec)
-            if partition_info[new_node].count > 1:
-                # Collapse down to single partition
-                inter = Repartition(new_node.schema, new_node)
-                partition_info[inter] = PartitionInfo(count=1)
-                # Sort reduced partition
-                new_node = ir.reconstruct([inter])
-                partition_info[new_node] = PartitionInfo(count=1)
-            return new_node, partition_info
-        elif not simple_zlice:
-            # Pull "complex" slices out of the Sort node altogether.
-            return rec(
-                Slice(
+        new_node, partition_info = _lower_ir_pwise(ir, rec)
+        if partition_info[new_node].count > 1:
+            # Collapse down to single partition
+            inter = Repartition(new_node.schema, new_node)
+            partition_info[inter] = PartitionInfo(count=1)
+            # Sort reduced partition
+            new_node = ir.reconstruct([inter])
+            partition_info[new_node] = PartitionInfo(count=1)
+        return new_node, partition_info
+    elif ir.zlice is not None and not simple_zlice:
+        # Pull "complex" slices out of the Sort node altogether.
+        return rec(
+            Slice(
+                ir.schema,
+                *ir.zlice,
+                Sort(
                     ir.schema,
-                    *ir.zlice,
-                    Sort(
-                        ir.schema,
-                        ir.by,
-                        ir.order,
-                        ir.null_order,
-                        ir.stable,
-                        None,
-                        ir.children[0],
-                    ),
-                )
+                    ir.by,
+                    ir.order,
+                    ir.null_order,
+                    ir.stable,
+                    None,
+                    ir.children[0],
+                ),
             )
+        )
 
     # Extract child partitioning
     child, partition_info = rec(ir.children[0])

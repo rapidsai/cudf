@@ -424,29 +424,31 @@ async def _extract_partitions_and_send(
     ncols_out = len(output_schema)
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
-        table = post_sort_ir.do_evaluate(
-            *post_sort_ir._non_child_args,
-            DataFrame.from_table(
-                shuffle.extract_chunk(partition_id, stream),
-                list(post_sort_ir.schema.keys()),
-                list(post_sort_ir.schema.values()),
-                stream,
-            ),
-            context=ir_context,
-        ).table
-        if table.num_columns() > ncols_out:
-            table = plc.Table(table.columns()[:ncols_out])
-        if tracer is not None:
-            tracer.add_chunk(table=table)
-        await ch_out.send(
-            context,
-            Message(
-                partition_id,
-                TableChunk.from_pylibcudf_table(
-                    table, stream, exclusive_view=True, br=context.br()
+        table = shuffle.extract_chunk(partition_id, stream)
+        if table.num_rows() > 0:
+            table = post_sort_ir.do_evaluate(
+                *post_sort_ir._non_child_args,
+                DataFrame.from_table(
+                    table,
+                    list(post_sort_ir.schema.keys()),
+                    list(post_sort_ir.schema.values()),
+                    stream,
                 ),
-            ),
-        )
+                context=ir_context,
+            ).table
+            if table.num_columns() > ncols_out:
+                table = plc.Table(table.columns()[:ncols_out])
+            if tracer is not None:
+                tracer.add_chunk(table=table)
+            await ch_out.send(
+                context,
+                Message(
+                    partition_id,
+                    TableChunk.from_pylibcudf_table(
+                        table, stream, exclusive_view=True, br=context.br()
+                    ),
+                ),
+            )
 
     await ch_out.drain(context)
 
