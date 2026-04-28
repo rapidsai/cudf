@@ -1132,9 +1132,14 @@ TEST_F(ParquetWriterTest, VariableBitWidthDictEncoding)
     std::uniform_int_distribution<int64_t> freq_dist(0, frequent_set_size - 1);
     std::uniform_int_distribution<int64_t> rare_dist(frequent_set_size, cardinality - 1);
     auto constexpr threshold = hot_pages * page_size;
-    auto values              = cudf::detail::make_counting_transform_iterator(
-      0, [&](auto i) { return i < threshold ? freq_dist(rng) : rare_dist(rng); });
-    auto const col = ColumnType(values, values + num_rows);
+    auto values              = std::vector<int64_t>{};
+    values.reserve(num_rows);
+    std::transform(
+      cuda::counting_iterator(0),
+      cuda::counting_iterator(num_rows),
+      std::back_inserter(values),
+      [&](auto row_idx) { return row_idx < threshold ? freq_dist(rng) : rare_dist(rng); });
+    auto const col = ColumnType(values.begin(), values.end());
 
     auto writer_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table_view{{col}})

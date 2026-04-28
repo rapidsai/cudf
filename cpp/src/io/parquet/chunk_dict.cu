@@ -465,7 +465,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_BLOCK_SIZE)
   }
 
   // Write this page's RLE bits
-  auto const page_max = cg::reduce(warp, lane_max, cg::greater<size_type>{});
+  auto const page_max = cg::reduce(warp, lane_max, cuda::std::greater{});
   cg::invoke_one(warp, [&] {
     // Floor at 1 to match the chunk-wide convention (all-null pages still emit a 1-bit RLE
     // preamble)

@@ -24,6 +24,7 @@
 #include <nvbench/nvbench.cuh>
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <random>
 #include <utility>
