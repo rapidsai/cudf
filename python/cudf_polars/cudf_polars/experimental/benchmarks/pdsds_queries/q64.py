@@ -573,34 +573,36 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
 
     item_renamed = item.rename({"i_item_sk": "ss_item_sk"})
-    # SQL: CTE cross_sales: FROM store_sales, store_returns, cs_ui, date_dim d1/d2/d3, store, customer, cd1/cd2, promotion, hd1/hd2, ad1/ad2, ib1/ib2, item
+    # SQL: CTE cross_sales: FROM store_sales, store_returns, cs_ui, date_dim d1/d2/d3,
+    # store, customer, cd1/cd2, promotion, hd1/hd2, ad1/ad2, ib1/ib2, item
     cross_sales = (
-        store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
-        .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
-        .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
-        .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
-        .join(item_renamed, on="ss_item_sk")
-        .join(
+        store_sales.join(
             store_returns,
             left_on=["ss_item_sk", "ss_ticket_number"],
             right_on=["sr_item_sk", "sr_ticket_number"],
         )
         .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
-        .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
-        .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
-        .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
+        .join(d1, left_on="ss_sold_date_sk", right_on="d1_date_sk")
         .join(d2, left_on="c_first_sales_date_sk", right_on="d2_date_sk")
         .join(d3, left_on="c_first_shipto_date_sk", right_on="d3_date_sk")
+        .join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
+        .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
         .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
+        .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
+        .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
+        .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
+        .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
         .join(ib1, left_on="hd1_income_sk", right_on="ib1_income_band_sk")
         .join(ib2, left_on="hd2_income_sk", right_on="ib2_income_band_sk")
-        # SQL: WHERE ss_store_sk=s_store_sk AND ss_sold_date_sk=d1 AND ss_customer_sk=c_customer_sk AND ... AND i_color IN (...) AND i_current_price BETWEEN {price} AND {price}+10/+15 AND cd1.marital_status <> cd2.marital_status
-        .filter(pl.col("i_color").is_in(colors))
-        .filter(pl.col("i_current_price").is_between(price, price + 10))
-        .filter(pl.col("i_current_price").is_between(price + 1, price + 15))
-        .filter(pl.col("cd1_status") != pl.col("cd2_status"))
+        .join(item_renamed, on="ss_item_sk")
+        .filter(
+            pl.col("i_color").is_in(colors)
+            & pl.col("i_current_price").is_between(price, price + 10)
+            & pl.col("i_current_price").is_between(price + 1, price + 15)
+            & (pl.col("cd1_status") != pl.col("cd2_status"))
+        )
         # SQL: GROUP BY i_product_name, i_item_sk, s_store_name, s_zip, ad1/ad2 address cols, d1/d2/d3 year
         .group_by(
             [

@@ -356,7 +356,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            # SQL: FROM y, x WHERE s_store_id1=s_store_id2 AND d_week_seq1=d_week_seq2-52
             y.join(x, left_on="s_store_id1", right_on="s_store_id2")
             .filter(pl.col("d_week_seq1") == (pl.col("d_week_seq2") - 52))
             # SQL: SELECT s_store_name1, s_store_id1, d_week_seq1, sun_sales1/sun_sales2, mon/tue/wed/thu/fri/sat ratios

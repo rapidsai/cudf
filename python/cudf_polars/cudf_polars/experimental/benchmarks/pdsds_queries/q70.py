@@ -222,8 +222,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     base = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
         .join(tmp1, on="s_state", how="semi")
+        .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
     )
 
     all_cols = {"s_state": pl.Utf8, "s_county": pl.Utf8}
