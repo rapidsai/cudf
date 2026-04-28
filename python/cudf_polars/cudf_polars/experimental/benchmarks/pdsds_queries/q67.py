@@ -94,25 +94,6 @@ OUTPUT_ORDER = [
     "s_store_id",
     "sumsales",
 ]
-LEVEL0_COLS = [
-    "i_category",
-    "i_class",
-    "i_brand",
-    "i_product_name",
-    "d_year",
-    "d_qoy",
-    "d_moy",
-    "s_store_id",
-]
-LEVEL1_COLS = [
-    "i_category",
-    "i_class",
-    "i_brand",
-    "i_product_name",
-    "d_year",
-    "d_qoy",
-    "d_moy",
-]
 
 
 def polars_impl(run_config: RunConfig) -> QueryResult:
@@ -144,14 +125,31 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     level0 = rollup_level(
         base_data,
-        LEVEL0_COLS,
+        [
+            "i_category",
+            "i_class",
+            "i_brand",
+            "i_product_name",
+            "d_year",
+            "d_qoy",
+            "d_moy",
+            "s_store_id",
+        ],
         ALL_COLS,
         AGG_EXPRS,
         OUTPUT_ORDER,
     )
     level1 = rollup_level(
         base_data,
-        LEVEL1_COLS,
+        [
+            "i_category",
+            "i_class",
+            "i_brand",
+            "i_product_name",
+            "d_year",
+            "d_qoy",
+            "d_moy",
+        ],
         ALL_COLS,
         AGG_EXPRS,
         OUTPUT_ORDER,
@@ -286,14 +284,31 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     # SQL: ROLLUP(i_category, i_class, i_brand, i_product_name, d_year, d_qoy, d_moy, s_store_id) — 9 levels
     level0 = rollup_level(
         base_data,
-        LEVEL0_COLS,
+        [
+            "i_category",
+            "i_class",
+            "i_brand",
+            "i_product_name",
+            "d_year",
+            "d_qoy",
+            "d_moy",
+            "s_store_id",
+        ],
         ALL_COLS,
         AGG_EXPRS,
         OUTPUT_ORDER,
     )
     level1 = rollup_level(
         base_data,
-        LEVEL1_COLS,
+        [
+            "i_category",
+            "i_class",
+            "i_brand",
+            "i_product_name",
+            "d_year",
+            "d_qoy",
+            "d_moy",
+        ],
         ALL_COLS,
         AGG_EXPRS,
         OUTPUT_ORDER,
