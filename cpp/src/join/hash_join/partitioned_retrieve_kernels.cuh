@@ -41,9 +41,30 @@ __device__ __forceinline__ int count_lower_set_bits(unsigned int mask, int pos)
 
 namespace cudf::detail {
 
+/**
+ * @brief Retrieve matching build-side rows for each probe key.
+ *
+ * Each probing tile (@p cg_size threads) walks the hash table for one probe key,
+ * collecting matches via warp ballot. Matches are staged in a per-flushing-tile (warp)
+ * shared-memory buffer instead of being written directly to global memory. When the buffer
+ * nears capacity, the flushing tile claims a contiguous range in the global output arrays
+ * via a single atomic and flushes with coalesced writes, amortising atomic overhead across
+ * many matches. If @p IsOuter is true, probe rows with no matches emit a
+ * `(left_index, JoinNoMatch)` pair.
+ *
+ * @tparam IsOuter  If true, unmatched probe rows emit a null-padded output row
+ * @tparam Ref      cuco open-addressing reference type (carries hash, equality, storage)
+ * @param input_probe    Packed probe keys: `.first` = hash, `.second` = probe row index
+ * @param n              Number of probe keys
+ * @param left_offset    Added to each probe row index to produce an absolute left index
+ * @param left_output    Output buffer for left (probe-side) row indices
+ * @param right_output   Output buffer for right (build-side) row indices
+ * @param output_counter Global atomic counter tracking total pairs written so far
+ * @param ref            cuco hash-table reference for probing
+ */
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
-  retrieve_kernel(probe_key_type const* __restrict__ input_probe,
+  partitioned_retrieve_kernel(probe_key_type const* __restrict__ input_probe,
                   cuda::std::int64_t n,
                   size_type left_offset,
                   size_type* __restrict__ left_output,
@@ -200,7 +221,7 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 template <bool IsOuter, typename Ref>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-launch_retrieve(probe_key_type const* keys,
+launch_partitioned_retrieve(probe_key_type const* keys,
                 cuda::std::int64_t n,
                 size_type const* match_counts,
                 Ref ref,
@@ -235,7 +256,7 @@ launch_retrieve(probe_key_type const* keys,
   auto constexpr tiles_in_block = DEFAULT_JOIN_BLOCK_SIZE / Ref::cg_size;
   auto const num_blocks = static_cast<unsigned int>((n + tiles_in_block - 1) / tiles_in_block);
 
-  retrieve_kernel<IsOuter><<<num_blocks, DEFAULT_JOIN_BLOCK_SIZE, 0, stream.value()>>>(
+  partitioned_retrieve_kernel<IsOuter><<<num_blocks, DEFAULT_JOIN_BLOCK_SIZE, 0, stream.value()>>>(
     keys, n, left_offset, left_indices->data(), right_indices->data(), output_counter.data(), ref);
 
   return std::pair(std::move(left_indices), std::move(right_indices));

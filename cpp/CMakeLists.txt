@@ -689,8 +689,8 @@ add_library(
   src/join/hash_join/partitioned_inner_join.cu
   src/join/hash_join/partitioned_join_retrieve.cu
   src/join/hash_join/partitioned_left_join.cu
-  src/join/hash_join/retrieve.cu
-  src/join/hash_join/retrieve_outer.cu
+  src/join/hash_join/partitioned_retrieve.cu
+  src/join/hash_join/partitioned_retrieve_outer.cu
   src/join/mark_join.cu
   src/join/filter_join_indices_jit.cu
   src/join/join.cu

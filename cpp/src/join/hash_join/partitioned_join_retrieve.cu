@@ -7,7 +7,7 @@
 #include "dispatch.cuh"
 #include "join/join_common_utils.cuh"
 #include "join/join_common_utils.hpp"
-#include "retrieve_kernels.hpp"
+#include "partitioned_retrieve_kernels.hpp"
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -100,7 +100,7 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
   // For FULL_JOIN, probe with LEFT_JOIN semantics (no complement here)
   bool const is_outer = (join != join_kind::INNER_JOIN);
 
-  // launch_retrieve computes output size from match counts via exclusive scan
+  // launch_partitioned_retrieve computes output size from match counts via exclusive scan
   // (total = last_offset + last_count), allocates output buffers, and launches the kernel.
   auto const* partition_counts = match_ctx._match_counts->data() + left_start_idx;
   auto const n                 = static_cast<cuda::std::int64_t>(partition_size);
@@ -123,10 +123,10 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
                        .rebind_hash_function(_impl->_hash_table.hash_function());
 
     if (is_outer) {
-      join_indices = launch_retrieve<true>(
+      join_indices = launch_partitioned_retrieve<true>(
         probe_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
     } else {
-      join_indices = launch_retrieve<false>(
+      join_indices = launch_partitioned_retrieve<false>(
         probe_keys.data(), n, partition_counts, ref, left_start_idx, stream, mr);
     }
   };

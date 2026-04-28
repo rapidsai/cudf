@@ -4,13 +4,13 @@
  */
 
 #include "ref_types.cuh"
-#include "retrieve_kernels.cuh"
+#include "partitioned_retrieve_kernels.cuh"
 
 namespace cudf::detail {
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                    std::unique_ptr<rmm::device_uvector<size_type>>>
-launch_retrieve<false, primitive_count_ref_t>(probe_key_type const*,
+launch_partitioned_retrieve<false, primitive_count_ref_t>(probe_key_type const*,
                                               cuda::std::int64_t,
                                               size_type const*,
                                               primitive_count_ref_t,
@@ -20,7 +20,7 @@ launch_retrieve<false, primitive_count_ref_t>(probe_key_type const*,
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                    std::unique_ptr<rmm::device_uvector<size_type>>>
-launch_retrieve<false, nested_count_ref_t>(probe_key_type const*,
+launch_partitioned_retrieve<false, nested_count_ref_t>(probe_key_type const*,
                                            cuda::std::int64_t,
                                            size_type const*,
                                            nested_count_ref_t,
@@ -30,7 +30,7 @@ launch_retrieve<false, nested_count_ref_t>(probe_key_type const*,
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                    std::unique_ptr<rmm::device_uvector<size_type>>>
-launch_retrieve<false, flat_count_ref_t>(probe_key_type const*,
+launch_partitioned_retrieve<false, flat_count_ref_t>(probe_key_type const*,
                                          cuda::std::int64_t,
                                          size_type const*,
                                          flat_count_ref_t,
