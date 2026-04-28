@@ -99,7 +99,7 @@ exclude_also = [
 # tests (some require optional dependencies and others are not yet fully covered),
 # so we omit them from coverage checks.
 omit = [
-  "cudf_polars/testing/plugin.py",
+  "cudf_polars/testing/inject_gpu_engine.py",
   "cudf_polars/experimental/**",
 ]
 

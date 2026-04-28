@@ -29,7 +29,6 @@ import pylibcudf as plc
 from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Join
 from cudf_polars.experimental.rapidsmpf.collectives.allgather import AllGatherManager
 from cudf_polars.experimental.rapidsmpf.collectives.shuffle import _global_shuffle
@@ -45,7 +44,6 @@ from cudf_polars.experimental.rapidsmpf.utils import (
     chunk_to_frame,
     empty_table_chunk,
     gather_in_task_group,
-    indices_to_names,
     maybe_remap_partitioning,
     names_to_indices,
     process_children,
@@ -504,20 +502,16 @@ def _log_shuffle_strategy_decision(
     partitioning_left: NormalizedPartitioning,
     partitioning_right: NormalizedPartitioning,
 ) -> None:
-    left_partitioning_desired = NormalizedPartitioning(
-        inter_rank_modulus=strategy.shuffle_modulus,
-        inter_rank_indices=strategy.left_indices,
-        local_modulus=None,
-        local_indices=(),
+    left_scheme_desired = HashScheme(strategy.left_indices, strategy.shuffle_modulus)
+    right_scheme_desired = HashScheme(strategy.right_indices, strategy.shuffle_modulus)
+    left_partitioned = (
+        partitioning_left.inter_rank_scheme == left_scheme_desired
+        and partitioning_left.local_scheme == "inherit"
     )
-    right_partitioning_desired = NormalizedPartitioning(
-        inter_rank_modulus=strategy.shuffle_modulus,
-        inter_rank_indices=strategy.right_indices,
-        local_modulus=None,
-        local_indices=(),
+    right_partitioned = (
+        partitioning_right.inter_rank_scheme == right_scheme_desired
+        and partitioning_right.local_scheme == "inherit"
     )
-    left_partitioned = partitioning_left == left_partitioning_desired
-    right_partitioned = partitioning_right == right_partitioning_desired
     if left_partitioned and right_partitioned:
         tracer.decision = "chunkwise"
     elif left_partitioned:
@@ -773,14 +767,7 @@ async def _shuffle_join(
         ir_context=ir_context,
     ):
         left, right = ir.children
-        left_keys_to_hash = tuple(
-            NamedExpr(name, Col(left.schema[name], name))
-            for name in indices_to_names(strategy.left_indices, left.schema)
-        )
-        right_keys_to_hash = tuple(
-            NamedExpr(name, Col(right.schema[name], name))
-            for name in indices_to_names(strategy.right_indices, right.schema)
-        )
+        n_keys = len(strategy.left_indices)
         actor_tasks = [
             *filter_tasks,
             _global_shuffle(
@@ -791,7 +778,7 @@ async def _shuffle_join(
                 ch_left,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
-                left_keys_to_hash,
+                ir.left_on[:n_keys],
                 left,
             ),
             _global_shuffle(
@@ -802,7 +789,7 @@ async def _shuffle_join(
                 ch_right,
                 strategy.shuffle_modulus,
                 collective_ids.pop(0),
-                right_keys_to_hash,
+                ir.right_on[:n_keys],
                 right,
             ),
             _join_chunks(
@@ -827,9 +814,17 @@ def _make_shuffle_strategy(
     right_metadata: ChannelMetadata,
 ) -> JoinStrategy:
     """Make a shuffle strategy."""
+
     # Use the coarsest prefix so we only shuffle on keys one side may already have
-    n_left = len(left_partitioning.inter_rank_indices)
-    n_right = len(right_partitioning.inter_rank_indices)
+    def _num_indices(partitioning: NormalizedPartitioning) -> int:
+        return (
+            len(partitioning.inter_rank_scheme.column_indices)
+            if isinstance(partitioning.inter_rank_scheme, HashScheme)
+            else 0
+        )
+
+    n_left = _num_indices(left_partitioning)
+    n_right = _num_indices(right_partitioning)
     if n_left and n_right:
         n_partitioned_keys = min(n_left, n_right)
     elif n_left or n_right:
@@ -914,9 +909,10 @@ async def _choose_strategy_from_samples(
             tracer.decision = "chunkwise"
         # TODO: Ensure this emits a "dynamic planning" decision of "chunkwise"
         # Or push it up a level to the caller?
+        assert isinstance(left_partitioning.inter_rank_scheme, HashScheme)
         return _make_shuffle_strategy(
             ir,
-            left_partitioning.inter_rank_modulus,
+            left_partitioning.inter_rank_scheme.modulus,
             left_partitioning,
             right_partitioning,
             left_metadata,
@@ -1021,14 +1017,16 @@ def _choose_shuffle_modulus(
     min_shuffle_modulus: int,
 ) -> int:
     """Choose an appropriate modulus for a shuffle join."""
-    left_modulus = (
-        left_partitioning.inter_rank_modulus if left_partitioning is not None else None
-    )
-    right_modulus = (
-        right_partitioning.inter_rank_modulus
-        if right_partitioning is not None
-        else None
-    )
+
+    def _modulus(partitioning: NormalizedPartitioning) -> int | None:
+        return (
+            partitioning.inter_rank_scheme.modulus
+            if isinstance(partitioning.inter_rank_scheme, HashScheme)
+            else None
+        )
+
+    left_modulus = _modulus(left_partitioning)
+    right_modulus = _modulus(right_partitioning)
     default_modulus = max(comm.nranks, min_shuffle_modulus)
     small, large = sorted(
         [left_modulus or default_modulus, right_modulus or default_modulus]
@@ -1107,18 +1105,18 @@ async def _choose_strategy(
 ) -> tuple[JoinSideStats, JoinSideStats, JoinStrategy]:
     """Sample both sides, aggregate estimates, and choose broadcast vs shuffle."""
     nranks = comm.nranks
-    left_partitioning = NormalizedPartitioning.from_indices(
+    left_partitioning = NormalizedPartitioning.from_keys(
         left_metadata.partitioning,
         nranks,
         indices=names_to_indices(ir.left_on, ir.children[0].schema),
     )
-    right_partitioning = NormalizedPartitioning.from_indices(
+    right_partitioning = NormalizedPartitioning.from_keys(
         right_metadata.partitioning,
         nranks,
         indices=names_to_indices(ir.right_on, ir.children[1].schema),
     )
 
-    if left_partitioning.is_compatible_with(right_partitioning):
+    if left_partitioning.is_aligned_with(right_partitioning):
         # We can use a chunkwise join
         chunkwise = True
         left_sample = JoinSideStats(total_chunks=left_metadata.local_count)

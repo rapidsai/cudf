@@ -10,18 +10,11 @@ set -euo pipefail
 # Support invoking outside the script directory
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../python/cudf_polars/
 
-rapids-logger "Running experimental legacy tests with the 'rapidsmpf' runtime and a 'single' cluster"
-timeout 10m python -m pytest --cache-clear "$@" "tests" \
-    --executor streaming \
-    --cluster single \
-    --runtime rapidsmpf \
-    --blocksize-mode small
+echo "Running the full cudf-polars test suite with both the in-memory and spmd engine"
+timeout 10m python -m pytest --cache-clear "$@" tests --ignore=tests/experimental/legacy
 
-rapids-logger "Running experimental legacy tests with the 'rapidsmpf' runtime and a 'distributed' cluster"
+echo "Running experimental legacy tests with the 'rapidsmpf' runtime and a 'distributed' cluster"
 timeout 10m python -m pytest --cache-clear "$@" "tests/experimental/legacy" \
     --executor streaming \
     --cluster distributed \
     --runtime rapidsmpf
-
-rapids-logger "Running experimental tests"
-timeout 10m python -m pytest --cache-clear "$@" tests/experimental --ignore=tests/experimental/legacy

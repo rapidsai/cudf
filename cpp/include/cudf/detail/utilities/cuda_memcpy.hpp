@@ -38,6 +38,9 @@ void cuda_memcpy_async_impl(
  * @param sizes Host pointer to a list of sizes.
  * @param count Size of dsts, srcs, sizes arrays
  * @param stream CUDA stream on which copies are enqueued
+ *
+ * @note if \p stream is the default stream, this function will fallback to `cudaMemcpyAsync` for
+ * each copy.
  */
 [[nodiscard]] cudaError_t memcpy_batch_async(void* const* dsts,
                                              void const* const* srcs,

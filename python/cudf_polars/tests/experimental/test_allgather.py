@@ -52,8 +52,8 @@ async def _test_allgather(engine) -> None:
     assert col.type().id().value == plc.types.TypeId.INT32.value
 
 
-def test_allgather(engine) -> None:
-    asyncio.run(_test_allgather(engine))
+def test_allgather(streaming_engine) -> None:
+    asyncio.run(_test_allgather(streaming_engine))
 
 
 async def _test_allgather_reduce(engine) -> None:
@@ -70,5 +70,5 @@ async def _test_allgather_reduce(engine) -> None:
     assert results == (10, 20, 30)  # Single rank, so sums are just the local values
 
 
-def test_allgather_reduce(engine) -> None:
-    asyncio.run(_test_allgather_reduce(engine))
+def test_allgather_reduce(streaming_engine) -> None:
+    asyncio.run(_test_allgather_reduce(streaming_engine))

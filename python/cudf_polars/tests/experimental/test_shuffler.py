@@ -12,12 +12,14 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 
 import polars as pl
 
-from cudf_polars.experimental.rapidsmpf.utils import _is_already_partitioned
+from cudf_polars.experimental.rapidsmpf.utils import (
+    _is_already_partitioned,
+)
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -36,7 +38,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     ],
     indirect=True,
 )
-def test_join_rapidsmpf(engine) -> None:
+def test_join_rapidsmpf(streaming_engine) -> None:
     left = pl.LazyFrame(
         {
             "x": range(15),
@@ -52,11 +54,11 @@ def test_join_rapidsmpf(engine) -> None:
         }
     )
     q = left.join(right, on="y", how="inner")
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -73,7 +75,7 @@ def test_join_rapidsmpf(engine) -> None:
     ],
     indirect=True,
 )
-def test_sort_rapidsmpf(engine) -> None:
+def test_sort_rapidsmpf(streaming_engine) -> None:
     df = pl.LazyFrame(
         {
             "x": range(15),
@@ -82,7 +84,7 @@ def test_sort_rapidsmpf(engine) -> None:
         }
     )
     q = df.sort(by=["y", "z"])
-    assert_gpu_result_equal(q, engine=engine, check_row_order=True)
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=True)
 
 
 @pytest.mark.parametrize(
@@ -122,6 +124,27 @@ def test_join_non_col_keys_rapidsmpf(engine, join_expr) -> None:
         }
     )
     q = left.join(right, on=join_expr, how="inner", coalesce=True)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [
+        {
+            "executor_options": {
+                "max_rows_per_partition": 1,
+                "broadcast_join_limit": 2,
+                "shuffle_method": "rapidsmpf",
+            }
+        },
+    ],
+    indirect=True,
+)
+def test_join_asymmetric_non_col_keys_rapidsmpf(engine) -> None:
+    """Asymmetric non-Col join keys (left_on != right_on). Must shuffle."""
+    left = pl.LazyFrame({"a": [1, 2, 3, 4], "val_l": ["x", "y", "z", "w"]})
+    right = pl.LazyFrame({"b": [2, 3, 4, 5], "val_r": ["p", "q", "r", "s"]})
+    q = left.join(right, left_on=pl.col("a") + 1, right_on=pl.col("b"), how="inner")
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
