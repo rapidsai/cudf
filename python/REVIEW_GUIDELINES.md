@@ -20,8 +20,8 @@
 - Memory leaks from improper resource management
 - Use-after-free scenarios in device memory handling
 - Incorrect lifetime management of memory resources
-- **Cython memory management errors** in pylibcudf (missing `del`, incorrect reference counting)
-- **Incorrect ownership semantics** between Python and C++ layers
+- Cython memory management errors in pylibcudf (missing `del`, incorrect reference counting)
+- Incorrect ownership semantics between Python and C++ layers
 
 ### API Breaking Changes
 - Python API changes breaking backward compatibility
@@ -33,12 +33,12 @@
 - Logic errors producing wrong results
 - Silent data corruption from type coercion
 - Incorrect null/NA handling (cuDF uses nullable dtypes throughout)
-- **cudf_polars**: Incorrect Polars IR translation producing wrong results on GPU
+- cudf_polars: Incorrect Polars IR translation producing wrong results on GPU
 
 ### Integration Errors
 - Incorrect handling of `__cuda_array_interface__` (CuPy, PyTorch interop)
 - Missing validation causing crashes on invalid input
-- **Incorrect CUDA stream handling in Cython bindings**
+- Incorrect CUDA stream handling in Cython bindings
 
 ### Resource Management
 - GPU memory leaks from Python objects
@@ -57,7 +57,7 @@
 - Not handling edge cases (empty DataFrames, all-null columns)
 
 ### pylibcudf (Cython Bindings)
-- Incorrect `__dealloc__` implementation
+- Incorrect Cython object lifetime management
 - Exceptions not handled correctly across Python/C++ boundary
 - Incorrect GIL handling for CUDA operations
 - Cython bindings not matching the C++ API
@@ -74,14 +74,14 @@
 
 ### Test Quality
 - Missing edge case coverage (empty, all-null, single-element, mixed types)
-- **Using external datasets** (tests must not depend on external resources)
+- Using external datasets (tests must not depend on external resources)
 - Missing tests for different array types (CuPy, Numba)
 - New pytest files not conforming to standards and patterns of existing test files in that directory
 
 ### Documentation
 - Missing or incorrect docstrings for public methods
 - Parameters not documented
-- **New public API not added to docs**
+- New public API not added to docs
 
 ## MEDIUM Issues (Comment Selectively)
 
@@ -183,10 +183,15 @@ Why: Can cause cryptic CUDA errors or silent data corruption
 ### pylibcudf (Cython Bindings)
 
 **Memory Management**:
-- Use proper `__dealloc__` for cleanup
 - Handle exceptions correctly across Python/C++ boundary
-- Ensure GIL handling is correct for CUDA operations
 - Cython bindings must match the C++ API signatures and semantics
+
+**GIL and CUDA Locks**:
+- Long-running libcudf calls should run inside `with nogil:` after all Python object conversion and validation is complete
+- Do not access Python objects, call Python callbacks, or allocate Python-owned objects inside `with nogil:` blocks
+- Do not hold Python-level locks while entering `with nogil:` libcudf calls that may allocate device memory or synchronize CUDA work
+- Watch for lock-order inversions where one path holds the GIL while waiting for CUDA/RMM state and another path holds CUDA/RMM state while trying to reacquire the GIL
+- If a binding must reacquire the GIL after launching CUDA work, verify the CUDA work is ordered on the provided stream and no Python-visible object can observe partially completed device state
 
 **Array Interfaces**:
 - Support `__cuda_array_interface__` for interoperability with CuPy and PyTorch
@@ -223,71 +228,6 @@ Why: Can cause cryptic CUDA errors or silent data corruption
 - Must work with Dask DataFrame API
 - Serialization of GPU objects must be correct
 - Partition operations must preserve data integrity
-
----
-
-## Common Bug Patterns
-
-### 1. Resource Cleanup Issues
-**Pattern**: GPU memory not properly released
-
-**Red flags**:
-- Missing `__del__` or `__dealloc__` methods
-- Cleanup not happening on exception paths
-- Circular references preventing garbage collection
-
-### 2. Array Interface Errors
-**Pattern**: Incorrect `__cuda_array_interface__` implementation
-
-**Red flags**:
-- Wrong shape/strides in interface dict
-- Missing required keys
-- Incorrect data pointer
-
-### 3. Lifetime Management
-**Pattern**: Python object outliving underlying C++ resource
-
-**Red flags**:
-- Weak references to memory resources
-- Callbacks holding stale references
-- Missing ref-counting in Cython
-
-### 4. Null Handling
-**Pattern**: Incorrect NA/null propagation
-
-**Red flags**:
-- Operations not preserving null mask correctly
-- Missing null handling in aggregations
-- Type coercion dropping null information
-
----
-
-## Code Review Checklists
-
-### When Reviewing pylibcudf (Cython)
-- [ ] Is `__dealloc__` implemented correctly?
-- [ ] Are exceptions handled across the Python/C++ boundary?
-- [ ] Is GIL handling correct?
-- [ ] Is memory management correct (no leaks, no double-free)?
-- [ ] Do bindings match the C++ API?
-
-### When Reviewing cudf (High-Level)
-- [ ] Is pandas API compatibility maintained?
-- [ ] Are nullable dtypes handled correctly?
-- [ ] Are edge cases handled (empty, all-null, mixed types)?
-- [ ] Is the public API documented with docstrings?
-
-### When Reviewing cudf_polars
-- [ ] Is the IR translation correct?
-- [ ] Do GPU results match Polars CPU results?
-- [ ] Does fallback to CPU work correctly for unsupported ops?
-- [ ] Are all supported expression types covered?
-
-### When Reviewing Tests
-- [ ] Are edge cases tested (empty, all-null, single-element)?
-- [ ] Do new tests match patterns of existing tests in that directory?
-- [ ] Are all datasets synthetic (no external resource dependencies)?
-- [ ] Are different array types tested where applicable?
 
 ---
 

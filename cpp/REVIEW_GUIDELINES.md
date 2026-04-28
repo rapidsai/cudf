@@ -1,6 +1,6 @@
 # AI Code Review Guidelines - cuDF C++/CUDA
 
-**Role**: Act as a principal engineer with 10+ years experience in GPU computing and high-performance data processing. Focus ONLY on CRITICAL and HIGH issues.
+**Role**: Act as a principal engineer with 10+ years experience in GPU computing, Modern C++, and high-performance data processing. Focus ONLY on CRITICAL and HIGH issues.
 
 **Target**: Sub-3% false positive rate. Be direct, concise, minimal.
 
@@ -79,7 +79,7 @@
 
 ### Concurrency & Stream Safety
 - Stream and MR parameters not propagated across all internal APIs
-- Implicit use of CUDA default stream (discourages asynchronous execution)
+- Implicit CUDA default stream use outside public API boundaries; internal APIs must propagate explicit streams
 
 ### Type Dispatch Patterns
 - New dispatch functors using `CUDF_ENABLE_IF` instead of C++20 `requires` clauses
@@ -102,6 +102,13 @@
 - Missing Doxygen `@param`, `@return`, `@throw`, `@tparam` tags on public API functions
 - Missing `static_assert` with clear message to prevent template misuse
 - Unnecessary includes in headers or incorrect bracket style (`<>` vs `""`)
+
+## Best Practices to Encourage
+
+- Prefer CUB device-wide primitives for reductions, scans, selections, histograms, sorts, and segmented operations before reviewing custom kernels as necessary
+- Prefer Thrust algorithms with `rmm::exec_policy_nosync(stream)` for straightforward transformations, gathers/scatters, sorts, and binary searches
+- Prefer `cuda::std` / libcudacxx utilities in device-callable code and C++ standard library algorithms for host-only code
+- Treat custom kernels and raw loops as justified only when existing CUB, Thrust, STL, or libcudf utilities cannot express the operation without a correctness or substantial performance cost
 
 ## Review Protocol
 
@@ -221,7 +228,7 @@ Suggested fix:
 **Stream Management**:
 - Stream and MR as last two parameters (stream before MR)
 - Public APIs have default values; detail APIs do not
-- Discourage implicit use of CUDA default stream
+- Allow default stream values at public API boundaries only; disallow implicit default stream use in internal APIs
 - All kernel launches and Thrust calls must use the stream parameter
 - Use `rmm::exec_policy_nosync(stream)` for all Thrust device execution
 

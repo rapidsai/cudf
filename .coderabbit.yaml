@@ -40,20 +40,6 @@ reviews:
         - Consistency: Version numbers, parameter types, and terminology match code
         - Missing docs: If PR changes public APIs without updating docs, flag as HIGH priority
 
-    - path: "cpp/include/cudf/**/*"
-      instructions: |
-        For public C++ API headers, additionally check:
-        - Doxygen documentation for all public functions/classes
-        - API changes flagged for docs/ updates
-        - Breaking changes require deprecation warnings and migration guide updates
-
-    - path: "cpp/include/nvtext/**/*"
-      instructions: |
-        For public NVText API headers, additionally check:
-        - Doxygen documentation for all public functions/classes
-        - API changes flagged for docs/ updates
-        - Breaking changes require deprecation warnings and migration guide updates
-
     - path: "java/**/*"
       instructions: |
         For Java bindings:
