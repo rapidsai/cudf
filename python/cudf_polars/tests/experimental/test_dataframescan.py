@@ -10,9 +10,15 @@ import pytest
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
+
+
+def _assert_stable_ids_match(orig, loaded) -> None:
+    for a, b in zip(traversal([orig]), traversal([loaded]), strict=True):
+        assert a.get_stable_id() == b.get_stable_id()
 
 
 @pytest.fixture(scope="module")
@@ -27,16 +33,16 @@ def df():
 
 
 @pytest.mark.parametrize(
-    "max_rows_per_partition,engine",
+    "max_rows_per_partition,streaming_engine",
     [
         (1_000, {"executor_options": {"max_rows_per_partition": 1_000}}),
         (1_000_000, {"executor_options": {"max_rows_per_partition": 1_000_000}}),
     ],
-    indirect=["engine"],
+    indirect=["streaming_engine"],
 )
-def test_parallel_dataframescan(df, max_rows_per_partition, engine):
+def test_parallel_dataframescan(df, max_rows_per_partition, streaming_engine):
     total_row_count = len(df.collect())
-    assert_gpu_result_equal(df, engine=engine)
+    assert_gpu_result_equal(df, engine=streaming_engine)
 
     # Check partitioning (throwaway engine — no cluster/runtime needed)
     _engine = pl.GPUEngine(
@@ -54,13 +60,28 @@ def test_parallel_dataframescan(df, max_rows_per_partition, engine):
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [{"executor_options": {"max_rows_per_partition": 1_000}}],
     indirect=True,
 )
-def test_dataframescan_concat(df, engine):
+def test_dataframescan_concat(df, streaming_engine):
     df2 = pl.concat([df, df])
-    assert_gpu_result_equal(df2, engine=engine)
+    assert_gpu_result_equal(df2, engine=streaming_engine)
+
+
+def test_join_in_memory_lazy_stable_id_pickle():
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"max_rows_per_partition": 1_000},
+    )
+    left = pl.LazyFrame({"k": [1, 2, 3], "x": [10, 20, 30]}).collect().lazy()
+    right = pl.LazyFrame({"k": [2, 3, 4], "y": [1, 2, 3]}).collect().lazy()
+    ir, _, _ = lower_ir_graph(
+        Translator(left.join(right, on="k")._ldf.visit(), engine).translate_ir(),
+        ConfigOptions.from_polars_engine(engine),
+    )
+    _assert_stable_ids_match(ir, pickle.loads(pickle.dumps(ir)))
 
 
 def test_dataframescan_pickle(df):
@@ -79,3 +100,4 @@ def test_dataframescan_pickle(df):
     # Verify the unpickled IR is equivalent
     assert type(unpickled_ir) is type(ir)
     assert unpickled_ir.schema == ir.schema
+    _assert_stable_ids_match(ir, unpickled_ir)

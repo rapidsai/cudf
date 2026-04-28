@@ -43,6 +43,14 @@ enum class join_kind : int32_t {
 };
 
 /**
+ * @brief Specifies whether a join implementation should apply an optional probe-side prefilter.
+ *
+ * `NO` preserves the current direct probe behavior. `YES` enables implementation-defined
+ * prefiltering, such as bloom-filter-based candidate reduction before probing a hash table.
+ */
+enum class join_prefilter : bool { NO = false, YES = true };
+
+/**
  * @brief Sentinel value used to indicate an unmatched row index in join operations.
  *
  * This value is used in join result indices to represent rows that do not have a match

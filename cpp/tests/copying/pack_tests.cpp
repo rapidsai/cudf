@@ -7,6 +7,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/contiguous_split.hpp>
@@ -131,8 +132,7 @@ std::vector<std::unique_ptr<cudf::column>> generate_lists(bool include_validity)
   using LCW = cudf::test::lists_column_wrapper<int>;
 
   if (include_validity) {
-    auto valids =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+    auto valids = cudf::test::iterators::valids_at_multiples_of(2);
     cudf::test::lists_column_wrapper<int> list0{{1, 2, 3},
                                                 {4, 5},
                                                 {6},
@@ -506,8 +506,7 @@ TEST_F(PackUnpackTest, NestedSliced)
 {
   // list
   {
-    auto valids =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+    auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
     using LCW = cudf::test::lists_column_wrapper<int>;
 

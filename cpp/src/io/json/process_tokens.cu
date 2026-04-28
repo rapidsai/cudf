@@ -282,7 +282,7 @@ void validate_token_stream(device_span<char const> d_input,
       [d_invalid = d_invalid.begin()] __device__(size_type i, bool x) -> void {
         if (x) { d_invalid[i] = true; }
       }));
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     count_it,
                     count_it + num_tokens,
                     conditional_invalidout_it,
@@ -302,12 +302,13 @@ void validate_token_stream(device_span<char const> d_input,
       return {static_cast<token_t>(tokens[i]), tokens[i] == token_t::LineEnd};
     });
 
-  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
-                                   count_it,
-                                   count_it + num_tokens,
-                                   conditional_output_it,
-                                   transform_op,
-                                   binary_op);  // in-place scan
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    count_it,
+    count_it + num_tokens,
+    conditional_output_it,
+    transform_op,
+    binary_op);  // in-place scan
 }
 }  // namespace detail
 }  // namespace cudf::io::json

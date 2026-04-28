@@ -184,8 +184,8 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
       if (!quotation && row[pos] == parse_opts.terminator) { break; }
 
       // Skip adjacent delimiters if delim_whitespace is set
-      while (parse_opts.multi_delimiter && pos < row.size() && row[pos] == parse_opts.delimiter &&
-             row[pos + 1] == parse_opts.delimiter) {
+      while (parse_opts.multi_delimiter && pos + 1 < row.size() &&
+             row[pos] == parse_opts.delimiter && row[pos + 1] == parse_opts.delimiter) {
         ++pos;
       }
       prev = pos + 1;
@@ -992,7 +992,10 @@ table_with_metadata read_csv(cudf::io::datasource* source,
 
         // Count how many rows were quoted to determine the fast path
         auto const num_quoted = thrust::count(
-          rmm::exec_policy_nosync(col_stream), is_quoted.begin(), is_quoted.end(), true);
+          rmm::exec_policy_nosync(col_stream, cudf::get_current_device_resource_ref()),
+          is_quoted.begin(),
+          is_quoted.end(),
+          true);
         if (num_quoted == 0) {
           // Fast path: no rows were quoted, skip replacement entirely
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);

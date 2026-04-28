@@ -31,14 +31,15 @@ std::size_t compute_left_join_complement_size(cudf::device_span<size_type const>
 
   auto invalid_index_map =
     std::make_unique<rmm::device_uvector<size_type>>(right_table_row_count, stream);
-  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream),
-                             invalid_index_map->begin(),
-                             invalid_index_map->end(),
-                             int32_t{1});
+  thrust::uninitialized_fill(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    invalid_index_map->begin(),
+    invalid_index_map->end(),
+    int32_t{1});
 
   valid_range<size_type> valid(0, right_table_row_count);
 
-  thrust::scatter_if(rmm::exec_policy_nosync(stream),
+  thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::make_constant_iterator(0),
                      cuda::make_constant_iterator(0) + right_indices.size(),
                      right_indices.begin(),

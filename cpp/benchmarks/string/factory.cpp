@@ -1,14 +1,14 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -29,8 +29,7 @@ static void bench_factory(nvbench::state& state)
   auto const sv     = cudf::strings_column_view(column->view());
 
   auto stream    = cudf::get_default_stream();
-  auto mr        = cudf::get_current_device_resource_ref();
-  auto d_strings = cudf::strings::detail::create_string_vector_from_column(sv, stream, mr);
+  auto d_strings = cudf::strings::create_string_vector_from_column(sv);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   auto const data_size = column->alloc_size();

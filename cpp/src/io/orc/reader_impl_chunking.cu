@@ -431,7 +431,7 @@ void reader_impl::preprocess_file(read_mode mode)
 
   // Compute the prefix sum of stripes' data sizes.
   total_stripe_sizes.host_to_device_async(_stream);
-  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                          total_stripe_sizes.d_begin(),
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
@@ -702,7 +702,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
 
   // Compute the prefix sum of stripe data sizes and rows.
   stripe_decomp_sizes.host_to_device_async(_stream);
-  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                          stripe_decomp_sizes.d_begin(),
                          stripe_decomp_sizes.d_end(),
                          stripe_decomp_sizes.d_begin(),

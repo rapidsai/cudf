@@ -37,7 +37,7 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 
 
 @pytest.mark.parametrize(
-    "engine,spilled_host_mem_type",
+    "streaming_engine,spilled_host_mem_type",
     [
         pytest.param(
             {"rapidsmpf_options": {"pinned_memory": "true"}},
@@ -49,26 +49,26 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
         ),
         ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
     ],
-    indirect=["engine"],
+    indirect=["streaming_engine"],
 )
 def test_make_spill_function(
-    engine: SPMDEngine, spilled_host_mem_type: MemoryType
+    streaming_engine: SPMDEngine, spilled_host_mem_type: MemoryType
 ) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
-    context = engine.context
+    context = streaming_engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:
-        assert engine.context.br().pinned_mr is not None
+        assert streaming_engine.context.br().pinned_mr is not None
         other_host_mem_type = MemoryType.HOST
     else:
-        assert engine.context.br().pinned_mr is None
+        assert streaming_engine.context.br().pinned_mr is None
         other_host_mem_type = MemoryType.PINNED_HOST
 
     # Create 3 spillable message containers simulating fanout buffers
     # Buffer 0: Fast consumer (2 messages)
     # Buffer 1: Slow consumer (5 messages) <- should spill from here first
     # Buffer 2: Medium consumer (3 messages)
-    buffers = [SpillableMessages() for _ in range(3)]
+    buffers = [SpillableMessages(context.br()) for _ in range(3)]
     messages_per_buffer = [2, 5, 3]
 
     # Track message IDs for each buffer
@@ -83,7 +83,9 @@ def test_make_spill_function(
         for msg_idx in range(count):
             # Create 1MB messages
             table = create_test_table(1024 * 1024, stream)
-            chunk = TableChunk.from_pylibcudf_table(table, stream, exclusive_view=True)
+            chunk = TableChunk.from_pylibcudf_table(
+                table, stream, exclusive_view=True, br=context.br()
+            )
             msg = Message(msg_idx, chunk)
             mid = sm.insert(msg)
             message_ids[buffer_idx].append(mid)
@@ -132,7 +134,7 @@ def test_make_spill_function(
         spilled_mid = message_ids[1][4]  # Newest message from longest queue
         spilled_msg = buffers[1].extract(mid=spilled_mid)
 
-        chunk = TableChunk.from_message(spilled_msg)
+        chunk = TableChunk.from_message(spilled_msg, br=context.br())
         assert not chunk.is_available()  # Should be on host
 
         # Make it available should bring it back to device

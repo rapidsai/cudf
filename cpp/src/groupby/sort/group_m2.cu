@@ -61,8 +61,11 @@ void compute_m2_fn(column_device_view const& values,
   // using the transform-iterator directly in reduce_by_key
   // improves compile-time significantly.
   auto m2_vals = rmm::device_uvector<ResultType>(values.size(), stream);
-  thrust::transform(
-    rmm::exec_policy_nosync(stream), itr, itr + values.size(), m2_vals.begin(), m2_fn);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    itr,
+                    itr + values.size(),
+                    m2_vals.begin(),
+                    m2_fn);
 
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),

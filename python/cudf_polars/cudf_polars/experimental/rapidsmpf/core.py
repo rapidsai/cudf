@@ -46,7 +46,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.experimental.base import PartitionInfo
-from cudf_polars.experimental.dispatch import lower_ir_node
+from cudf_polars.experimental.parallel import lower_ir_graph
 from cudf_polars.experimental.rapidsmpf.collectives import ReserveOpIDs
 from cudf_polars.experimental.rapidsmpf.dispatch import FanoutInfo
 from cudf_polars.experimental.rapidsmpf.nodes import (
@@ -56,7 +56,6 @@ from cudf_polars.experimental.rapidsmpf.nodes import (
 from cudf_polars.experimental.rapidsmpf.tracing import log_query_plan
 from cudf_polars.experimental.rapidsmpf.utils import empty_table_chunk
 from cudf_polars.experimental.repartition import Repartition
-from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.utils.config import CUDAStreamPoolConfig
 
 if TYPE_CHECKING:
@@ -71,10 +70,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.experimental.base import StatsCollector
-    from cudf_polars.experimental.dispatch import (
-        LowerIRTransformer,
-        State as LowerState,
-    )
     from cudf_polars.experimental.parallel import ConfigOptions
     from cudf_polars.experimental.rapidsmpf.dispatch import (
         GenState,
@@ -312,9 +307,7 @@ def evaluate_pipeline(
                 get_cuda_stream=rmpf_context.get_stream_from_pool, query_id=query_id
             )
         else:
-            ir_context = IRExecutionContext.from_config_options(
-                config_options, query_id=query_id
-            )
+            ir_context = IRExecutionContext(query_id=query_id)
 
         # Generate network nodes
         assert rmpf_context is not None, "RapidsMPF context must defined."
@@ -346,7 +339,7 @@ def evaluate_pipeline(
             # use-after-free with stream-ordered allocations
             messages = output.release()
             chunks = [
-                TableChunk.from_message(msg).make_available_and_spill(
+                TableChunk.from_message(msg, br=br).make_available_and_spill(
                     br, allow_overbooking=True
                 )
                 for msg in messages
@@ -399,49 +392,6 @@ def evaluate_pipeline(
                 rmm.mr.set_current_device_resource(_original_mr)
 
         return result, metadata_collector
-
-
-def lower_ir_graph(
-    ir: IR,
-    config_options: ConfigOptions[StreamingExecutor],
-) -> tuple[IR, MutableMapping[IR, PartitionInfo], StatsCollector]:
-    """
-    Rewrite an IR graph and extract partitioning information.
-
-    Parameters
-    ----------
-    ir
-        Root of the graph to rewrite.
-    config_options
-        GPUEngine configuration options.
-    stats
-        The statistics collector.
-
-    Returns
-    -------
-    new_ir, partition_info, stats
-        The rewritten graph, a mapping from unique nodes
-        in the new graph to associated partitioning information,
-        and the statistics collector.
-
-    Notes
-    -----
-    This function is nearly identical to the `lower_ir_graph` function
-    in the `parallel` module, but with some differences:
-    - A distinct `lower_ir_node` function is used.
-    - A `Repartition` node is added to ensure a single chunk is produced.
-    - Statistics are returned.
-
-    See Also
-    --------
-    lower_ir_node
-    """
-    state: LowerState = {
-        "config_options": config_options,
-        "stats": collect_statistics(ir, config_options),
-    }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return *mapper(ir), state["stats"]
 
 
 def determine_fanout_nodes(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,6 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/mr/cuda_memory_resource.hpp>
-#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
 #include <chrono>
@@ -24,12 +23,11 @@
  *
  */
 
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used)
 {
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
+  rmm::mr::cuda_memory_resource cuda_mr{};
   if (is_pool_used) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
+    return rmm::mr::pool_memory_resource{cuda_mr, rmm::percent_of_free_device_memory(50)};
   }
   return cuda_mr;
 }
@@ -90,8 +88,7 @@ void check_tables_equal(cudf::table_view const& lhs_table,
   try {
     // Left anti-join the original and transcoded tables identical tables should not throw an
     // exception and return an empty indices vector
-    cudf::filtered_join join_obj(
-      lhs_table, cudf::null_equality::EQUAL, cudf::set_as_build_table::RIGHT, stream);
+    cudf::filtered_join join_obj(lhs_table, cudf::null_equality::EQUAL, stream);
     auto const indices = join_obj.anti_join(rhs_table, stream);
 
     // No exception thrown, check indices

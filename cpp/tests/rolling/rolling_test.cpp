@@ -1149,7 +1149,7 @@ using RollingTestStrings = RollingTest<cudf::string_view>;
 
 TEST_F(RollingTestStrings, StringsUnsupportedOperators)
 {
-  cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
+  cudf::test::strings_column_wrapper input{{"This", "is", "not", "", "string", ""},
                                            {1, 1, 1, 0, 1, 0}};
 
   std::vector<cudf::size_type> window{1};

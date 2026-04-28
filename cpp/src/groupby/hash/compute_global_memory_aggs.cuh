@@ -50,7 +50,7 @@ rmm::device_uvector<size_type> compute_matching_keys(bitmask_type const* row_bit
 
   // Need to set to sentinel value for rows that are null (if any).
   // The sentinel value will then be used to identify null rows instead of using the bitmask.
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     cuda::counting_iterator<size_type>(0),
                     cuda::counting_iterator<size_type>(num_rows),
                     key_indices.begin(),
@@ -104,7 +104,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_d
                                           mr);
   auto d_results_ptr  = mutable_table_device_view::create(*agg_results, stream);
 
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::counting_iterator<int64_t>{0},
                      num_rows * static_cast<int64_t>(h_agg_kinds.size()),
                      compute_single_pass_aggs_dense_output_fn{
@@ -139,7 +139,7 @@ std::pair<std::unique_ptr<table>, rmm::device_uvector<size_type>> compute_aggs_s
   auto d_results_ptr = mutable_table_device_view::create(*agg_results, stream);
 
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     cuda::counting_iterator<cudf::size_type>{0},
     num_rows,
     compute_single_pass_aggs_sparse_output_fn{key_set.ref(cuco::op::insert_and_find),

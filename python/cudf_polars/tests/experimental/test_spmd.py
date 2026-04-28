@@ -4,7 +4,9 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 import pytest
 from rapidsmpf.bootstrap import is_running_with_rrun
@@ -15,10 +17,12 @@ import polars as pl
 import rmm.mr
 
 from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
     SPMDEngine,
     allgather_polars_dataframe,
 )
+from cudf_polars.utils.config import MemoryResourceConfig
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
@@ -32,6 +36,13 @@ def test_yields_context_and_engine(spmd_comm: Communicator) -> None:
         assert engine.comm is not None
         assert engine.context is not None
         assert isinstance(engine, pl.GPUEngine)
+
+
+def test_from_options() -> None:
+    """from_options with default StreamingOptions creates a valid SPMDEngine."""
+    opts = StreamingOptions(fallback_mode="silent", raise_on_fail=True)
+    with SPMDEngine.from_options(opts) as engine:
+        assert engine.nranks >= 1
 
 
 def test_single_communicator_outside_rrun() -> None:
@@ -249,6 +260,23 @@ def test_shutdown_idempotent(spmd_comm: Communicator) -> None:
     engine.shutdown()
 
 
+def test_memory_resource_config() -> None:
+    """SPMDEngine uses the MR from memory_resource_config when provided."""
+    config = MemoryResourceConfig(qualname="rmm.mr.CudaMemoryResource")
+    opts = StreamingOptions(
+        fallback_mode="silent",
+        memory_resource_config=config,
+    )
+    with patch.object(
+        MemoryResourceConfig,
+        "create_memory_resource",
+        wraps=config.create_memory_resource,
+    ) as mock_create:
+        with SPMDEngine.from_options(opts) as engine:
+            assert engine.nranks >= 1
+        mock_create.assert_called_once()
+
+
 def test_comm_and_context_unavailable_after_shutdown(spmd_comm: Communicator) -> None:
     """Accessing comm or context after shutdown raises RuntimeError."""
     engine = SPMDEngine(comm=spmd_comm)
@@ -257,3 +285,10 @@ def test_comm_and_context_unavailable_after_shutdown(spmd_comm: Communicator) ->
         _ = engine.comm
     with pytest.raises(RuntimeError, match="shutdown"):
         _ = engine.context
+
+
+def test_run(spmd_comm):
+    with SPMDEngine(comm=spmd_comm) as engine:
+        result = engine._run(os.getpid)
+
+    assert result == [os.getpid()]

@@ -14,8 +14,9 @@ from rapidsmpf.streaming.cudf.channel_metadata import (
 import polars as pl
 
 from cudf_polars import Translator
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Projection, Select
+from cudf_polars.dsl.ir import GroupBy, HStack, Projection, Select
 from cudf_polars.experimental.rapidsmpf.core import evaluate_logical_plan
 from cudf_polars.experimental.rapidsmpf.utils import (
     NormalizedPartitioning,
@@ -47,7 +48,7 @@ def right() -> pl.LazyFrame:
 
 
 @pytest.mark.parametrize(
-    "engine",
+    "streaming_engine",
     [
         {
             "executor_options": {
@@ -69,16 +70,16 @@ def right() -> pl.LazyFrame:
 def test_rapidsmpf_join_metadata(
     left: pl.LazyFrame,
     right: pl.LazyFrame,
-    engine,
+    streaming_engine,
 ) -> None:
-    config_options = ConfigOptions.from_polars_engine(engine)
+    config_options = ConfigOptions.from_polars_engine(streaming_engine)
     broadcast_join_limit = config_options.executor.broadcast_join_limit
     q = left.join(
         right,
         on="y",
         how="left",
     ).filter(pl.col("x") > pl.col("zz"))
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    ir = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     left_count = left.collect().height
     right_count = right.collect().height
 
@@ -105,13 +106,18 @@ def test_rapidsmpf_join_metadata(
 @pytest.mark.parametrize(
     "partitioning,key_indices,nranks,expected",
     [
-        (None, (0, 1), 1, (1, 0)),
-        (None, (0, 1), 4, (0, 0)),
+        (
+            None,
+            (0, 1),
+            1,
+            NormalizedPartitioning(HashScheme((0, 1), 1), None),
+        ),
+        (None, (0, 1), 4, NormalizedPartitioning(None, None)),
         (
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0, 1),
             4,
-            (8, None),
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
         ),
         (
             Partitioning(
@@ -120,7 +126,7 @@ def test_rapidsmpf_join_metadata(
             ),
             (0, 1),
             4,
-            (8, 4),
+            NormalizedPartitioning(HashScheme((0, 1), 8), HashScheme((0, 1), 4)),
         ),
         (
             Partitioning(
@@ -129,19 +135,19 @@ def test_rapidsmpf_join_metadata(
             ),
             (0, 1),
             4,
-            (8, 0),
+            NormalizedPartitioning(HashScheme((0, 1), 8), None),
         ),
         (
             Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
             (0, 1),
             4,
-            (0, 0),
+            NormalizedPartitioning(None, None),
         ),
         (
             Partitioning(inter_rank=HashScheme((1, 0), 8), local="inherit"),
             (0, 1),
             4,
-            (0, 0),
+            NormalizedPartitioning(None, None),
         ),
         (
             Partitioning(
@@ -150,7 +156,7 @@ def test_rapidsmpf_join_metadata(
             ),
             (0, 1),
             1,
-            (4, None),
+            NormalizedPartitioning(HashScheme((0, 1), 4), "inherit"),
         ),
         (
             Partitioning(
@@ -159,7 +165,7 @@ def test_rapidsmpf_join_metadata(
             ),
             (0, 1),
             4,
-            (0, 0),
+            NormalizedPartitioning(None, None),
         ),
         (
             Partitioning(
@@ -168,16 +174,16 @@ def test_rapidsmpf_join_metadata(
             ),
             (0, 1),
             4,
-            (8, 0),
+            NormalizedPartitioning(HashScheme((0, 1), 8), None),
         ),
     ],
 )
 def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) -> None:
-    """NormalizedPartitioning.from_indices returns (inter_rank_modulus, local_modulus) (allow_subset=False)."""
-    state = NormalizedPartitioning.from_indices(
+    """from_keys(..., allow_subset=False) matches expected NormalizedPartitioning."""
+    state = NormalizedPartitioning.from_keys(
         partitioning, nranks, indices=key_indices, allow_subset=False
     )
-    assert (state.inter_rank_modulus, state.local_modulus) == expected
+    assert state == expected
 
 
 @pytest.mark.parametrize(
@@ -188,14 +194,14 @@ def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) ->
             Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
             (0, 1),
             4,
-            (8, None),
+            NormalizedPartitioning(HashScheme((0,), 8), "inherit"),
         ),
         # Partitioned on (0, 1); keys (0, 1, 2) → prefix (0, 1) matches
         (
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0, 1, 2),
             4,
-            (8, None),
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
         ),
         # Partitioned on (0,) with explicit local; keys (0, 1) → prefix matches
         (
@@ -205,46 +211,131 @@ def test_get_partitioning_moduli(partitioning, key_indices, nranks, expected) ->
             ),
             (0, 1),
             4,
-            (8, 4),
+            NormalizedPartitioning(HashScheme((0,), 8), HashScheme((0,), 4)),
         ),
         # Full key match with allow_subset: same as exact match
         (
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0, 1),
             4,
-            (8, None),
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
         ),
         # Keys (0,) are shorter than partition (0, 1) → no prefix match
         (
             Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit"),
             (0,),
             4,
-            (0, 0),
+            NormalizedPartitioning(None, None),
         ),
         # Partitioned on (1,); keys (0, 1) → prefix of keys is (0,), not (1,) → no match
         (
             Partitioning(inter_rank=HashScheme((1,), 8), local="inherit"),
             (0, 1),
             4,
-            (0, 0),
+            NormalizedPartitioning(None, None),
         ),
         # Resolves https://github.com/rapidsai/cudf/issues/21742
         (
             Partitioning(inter_rank=HashScheme((0,), 8), local="inherit"),
             (1,),
             1,
-            (1, 0),
+            NormalizedPartitioning(HashScheme((1,), 1), None),
         ),
     ],
 )
 def test_get_partitioning_moduli_allow_subset(
     partitioning, key_indices, nranks, expected
 ) -> None:
-    """NormalizedPartitioning.from_indices with allow_subset=True matches on prefix of key_indices."""
-    state = NormalizedPartitioning.from_indices(
+    """from_keys(..., allow_subset=True) matches expected NormalizedPartitioning."""
+    state = NormalizedPartitioning.from_keys(
         partitioning, nranks, indices=key_indices, allow_subset=True
     )
-    assert (state.inter_rank_modulus, state.local_modulus) == expected
+    assert state == expected
+
+
+@pytest.mark.parametrize(
+    "left,right,expected",
+    [
+        # Same inter_rank modulus and key count, both "inherit" → aligned
+        (
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
+            NormalizedPartitioning(HashScheme((2, 3), 8), "inherit"),
+            True,
+        ),
+        # Same modulus, same local HashScheme arity → aligned (column_indices not compared)
+        (
+            NormalizedPartitioning(HashScheme((0,), 8), HashScheme((0,), 4)),
+            NormalizedPartitioning(HashScheme((1,), 8), HashScheme((1,), 4)),
+            True,
+        ),
+        # Different inter_rank modulus → not aligned
+        (
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
+            NormalizedPartitioning(HashScheme((0, 1), 4), "inherit"),
+            False,
+        ),
+        # Different key count → not aligned
+        (
+            NormalizedPartitioning(HashScheme((0,), 8), "inherit"),
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
+            False,
+        ),
+        # One side has local=None → not aligned (bool is False)
+        (
+            NormalizedPartitioning(HashScheme((0,), 8), "inherit"),
+            NormalizedPartitioning(HashScheme((0,), 8), None),
+            False,
+        ),
+        # Both None inter_rank → not aligned
+        (
+            NormalizedPartitioning(None, None),
+            NormalizedPartitioning(None, None),
+            False,
+        ),
+        # Mismatched local types: "inherit" vs HashScheme → not aligned
+        (
+            NormalizedPartitioning(HashScheme((0,), 8), "inherit"),
+            NormalizedPartitioning(HashScheme((0,), 8), HashScheme((0,), 4)),
+            False,
+        ),
+        # Local HashSchemes with different modulus → not aligned
+        (
+            NormalizedPartitioning(HashScheme((0,), 8), HashScheme((0,), 4)),
+            NormalizedPartitioning(HashScheme((0,), 8), HashScheme((0,), 2)),
+            False,
+        ),
+        # Inter-rank aligned; local HashSchemes same modulus but different arity → not aligned
+        (
+            NormalizedPartitioning(HashScheme((0, 1), 8), HashScheme((0,), 4)),
+            NormalizedPartitioning(HashScheme((0, 1), 8), HashScheme((0, 1), 4)),
+            False,
+        ),
+        # Reflexive when both sides fully partitioned and identical
+        (
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
+            True,
+        ),
+        # Inter-rank missing on one side → not aligned
+        (
+            NormalizedPartitioning(None, "inherit"),
+            NormalizedPartitioning(HashScheme((0, 1), 8), "inherit"),
+            False,
+        ),
+    ],
+)
+def test_is_aligned_with(left, right, expected) -> None:
+    """is_aligned_with checks compatible hash layout for chunkwise operations."""
+    assert left.is_aligned_with(right) is expected
+    assert right.is_aligned_with(left) is expected
+
+
+def test_normalized_partitioning_eq() -> None:
+    a = NormalizedPartitioning(HashScheme((0, 1), 8), "inherit")
+    b = NormalizedPartitioning(HashScheme((0, 1), 8), "inherit")
+    c = NormalizedPartitioning(HashScheme((0, 1), 4), "inherit")
+    assert a == b
+    assert a != c
 
 
 def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
@@ -258,13 +349,18 @@ def _make_select_ir(engine: pl.GPUEngine, output_columns: tuple[str, ...]):
     return Select(out_schema, exprs, should_broadcast=False, df=child)
 
 
-def test_remap_partitioning_select_none_input(engine) -> None:
-    assert maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), None) is None
+def test_remap_partitioning_select_none_input(streaming_engine) -> None:
+    assert (
+        maybe_remap_partitioning(_make_select_ir(streaming_engine, ("a", "b")), None)
+        is None
+    )
 
 
-def test_remap_partitioning_select_preserves_keys(engine) -> None:
+def test_remap_partitioning_select_preserves_keys(streaming_engine) -> None:
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = maybe_remap_partitioning(_make_select_ir(engine, ("a", "b")), part)
+    result = maybe_remap_partitioning(
+        _make_select_ir(streaming_engine, ("a", "b")), part
+    )
     assert result is not None
     assert result.inter_rank is not None
     assert result.inter_rank.column_indices == (0, 1)
@@ -272,17 +368,64 @@ def test_remap_partitioning_select_preserves_keys(engine) -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_select_drops_key(engine) -> None:
+def test_remap_partitioning_groupby(streaming_engine) -> None:
+    """Hash indices refer to the groupby input child; remap to groupby output columns."""
+    q = (
+        pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+        .group_by("a", "b")
+        .agg(pl.col("c").sum())
+    )
+    ir = Translator(q._ldf.visit(), streaming_engine).translate_ir()
+    while isinstance(ir, (Select, Projection)):
+        ir = ir.children[0]
+    assert isinstance(ir, GroupBy)
+
+    gb = ir
+    key_names = tuple(ne.name for ne in gb.keys)
+    child_cols = list(gb.children[0].schema.keys())
+    input_indices = tuple(child_cols.index(n) for n in key_names)
+    out_cols = list(gb.schema.keys())
+    expected = tuple(out_cols.index(n) for n in key_names)
+
+    part = Partitioning(inter_rank=HashScheme(input_indices, 8), local="inherit")
+    result = maybe_remap_partitioning(gb, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == expected
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_hstack_appends_preserves_keys(streaming_engine) -> None:
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    child = Translator(q._ldf.visit(), streaming_engine).translate_ir()
+    d_dtype = DataType(pl.Int64())
+    hstack = HStack(
+        {**child.schema, "d": d_dtype},
+        (expr.NamedExpr("d", expr.Literal(d_dtype, 0)),),
+        should_broadcast=True,
+        df=child,
+    )
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
-    result = maybe_remap_partitioning(_make_select_ir(engine, ("a",)), part)
+    result = maybe_remap_partitioning(hstack, part)
+    assert result is not None
+    assert result.inter_rank is not None
+    assert result.inter_rank.column_indices == (0, 1)
+    assert result.inter_rank.modulus == 8
+    assert result.local == "inherit"
+
+
+def test_remap_partitioning_select_drops_key(streaming_engine) -> None:
+    part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
+    result = maybe_remap_partitioning(_make_select_ir(streaming_engine, ("a",)), part)
     assert result is not None
     assert result.inter_rank is None
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_select_renamed_key(engine) -> None:
+def test_remap_partitioning_select_renamed_key(streaming_engine) -> None:
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
-    child = Translator(q._ldf.visit(), engine).translate_ir()
+    child = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     # Output (a_renamed, b) where a_renamed is Col("a")
     out_schema = {"a_renamed": child.schema["a"], "b": child.schema["b"]}
     exprs = (
@@ -299,9 +442,9 @@ def test_remap_partitioning_select_renamed_key(engine) -> None:
     assert result.local == "inherit"
 
 
-def test_remap_partitioning_reorder_columns(engine) -> None:
+def test_remap_partitioning_reorder_columns(streaming_engine) -> None:
     # Select (b, a) from (a, b, c) -> partition keys (a,b) become indices (1, 0) in output
-    select = _make_select_ir(engine, ("b", "a"))
+    select = _make_select_ir(streaming_engine, ("b", "a"))
     part = Partitioning(inter_rank=HashScheme((0, 1), 8), local="inherit")
     result = maybe_remap_partitioning(select, part)
     assert result is not None
@@ -310,9 +453,9 @@ def test_remap_partitioning_reorder_columns(engine) -> None:
     assert result.inter_rank.modulus == 8
 
 
-def test_remap_partitioning_reorder_columns_projection(engine) -> None:
+def test_remap_partitioning_reorder_columns_projection(streaming_engine) -> None:
     q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
-    child = Translator(q._ldf.visit(), engine).translate_ir()
+    child = Translator(q._ldf.visit(), streaming_engine).translate_ir()
     # Projection output (b, a) -> child has (a, b, c); partition keys (a,b) -> indices (1, 0)
     out_schema = {k: child.schema[k] for k in ("b", "a")}
     proj = Projection(out_schema, child)

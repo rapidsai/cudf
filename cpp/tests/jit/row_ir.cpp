@@ -11,13 +11,13 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
+
+#include <cuda/iterator>
 
 #include <algorithm>
 #include <cctype>
 
-using namespace cudf;
 namespace row_ir = cudf::detail::row_ir;
 
 struct RowIRCudaCodeGenTest : public ::testing::Test {};
@@ -26,8 +26,8 @@ TEST_F(RowIRCudaCodeGenTest, GetInput)
 {
   row_ir::target_info target_info{row_ir::target::CUDA};
 
-  row_ir::var_info inputs[] = {{"in_0", {data_type{type_id::INT32}}},
-                               {"in_1", {data_type{type_id::FLOAT32}}}};
+  row_ir::var_info inputs[] = {{"in_0", {cudf::data_type{cudf::type_id::INT32}}},
+                               {"in_1", {cudf::data_type{cudf::type_id::FLOAT32}}}};
 
   row_ir::instance_info info{inputs, {}};
 
@@ -58,8 +58,8 @@ TEST_F(RowIRCudaCodeGenTest, SetOutput)
 {
   row_ir::target_info target_info{row_ir::target::CUDA};
 
-  row_ir::var_info inputs[] = {{"in_0", {data_type{type_id::INT32}}},
-                               {"in_1", {data_type{type_id::FLOAT32}}}};
+  row_ir::var_info inputs[] = {{"in_0", {cudf::data_type{cudf::type_id::INT32}}},
+                               {"in_1", {cudf::data_type{cudf::type_id::FLOAT32}}}};
 
   row_ir::untyped_var_info outputs[] = {{"out_0"}, {"out_1"}};
 
@@ -98,8 +98,8 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
 {
   row_ir::target_info target_info{row_ir::target::CUDA};
 
-  row_ir::var_info inputs[] = {{"in_0", {data_type{type_id::INT32}}},
-                               {"in_1", {data_type{type_id::DECIMAL32}}}};
+  row_ir::var_info inputs[] = {{"in_0", {cudf::data_type{cudf::type_id::INT32}}},
+                               {"in_1", {cudf::data_type{cudf::type_id::DECIMAL32}}}};
 
   row_ir::untyped_var_info outputs[] = {{"out_0"}, {"out_1"}};
 
@@ -138,8 +138,8 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
 {
   row_ir::target_info target_info{row_ir::target::CUDA};
 
-  row_ir::var_info inputs[] = {{"in_0", {data_type{type_id::INT32}}},
-                               {"in_1", {data_type{type_id::DECIMAL32}}}};
+  row_ir::var_info inputs[] = {{"in_0", {cudf::data_type{cudf::type_id::INT32}}},
+                               {"in_1", {cudf::data_type{cudf::type_id::DECIMAL32}}}};
 
   row_ir::untyped_var_info outputs[] = {{"out_0"}, {"out_1"}};
 
@@ -181,10 +181,10 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
   row_ir::target_info target_info{row_ir::target::CUDA};
 
   row_ir::var_info inputs[] = {
-    {"in_0", {data_type{type_id::FLOAT64}}},
-    {"in_1", {data_type{type_id::FLOAT64}}},
-    {"in_2", {data_type{type_id::FLOAT64}}},
-    {"in_3", {data_type{type_id::FLOAT64}}},
+    {"in_0", {cudf::data_type{cudf::type_id::FLOAT64}}},
+    {"in_1", {cudf::data_type{cudf::type_id::FLOAT64}}},
+    {"in_2", {cudf::data_type{cudf::type_id::FLOAT64}}},
+    {"in_3", {cudf::data_type{cudf::type_id::FLOAT64}}},
   };
 
   row_ir::untyped_var_info outputs[] = {{"out_0"}, {"out_1"}};
@@ -238,16 +238,17 @@ double tmp_8 = tmp_7;
 
 TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 {
-  ast::tree ast_tree;
-  auto forty_two          = cudf::numeric_scalar(42);
-  auto& column_ref        = ast_tree.push(ast::column_reference{0, ast::table_reference::LEFT});
-  auto& forty_two_literal = ast_tree.push(ast::literal{forty_two});
-  auto& add_op =
-    ast_tree.push(ast::operation{ast::ast_operator::ADD, forty_two_literal, column_ref});
+  cudf::ast::tree ast_tree;
+  auto forty_two = cudf::numeric_scalar(42);
+  auto& column_ref =
+    ast_tree.push(cudf::ast::column_reference{0, cudf::ast::table_reference::LEFT});
+  auto& forty_two_literal = ast_tree.push(cudf::ast::literal{forty_two});
+  auto& add_op            = ast_tree.push(
+    cudf::ast::operation{cudf::ast::ast_operator::ADD, forty_two_literal, column_ref});
 
   auto column = cudf::test::fixed_width_column_wrapper<int32_t>({69, 69, 69, 69, 69, 69}).release();
 
-  auto expected_iter = detail::make_counting_transform_iterator(0, [](auto i) { return 69 + 42; });
+  auto expected_iter = cuda::constant_iterator{69 + 42};
   auto expected =
     cudf::test::fixed_width_column_wrapper<int32_t>(expected_iter, expected_iter + column->size());
 
@@ -263,22 +264,23 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
   ASSERT_EQ(transform_args.scalar_columns.size(), 1);
   ASSERT_EQ(transform_args.scalar_columns[0]->view().size(), 1);
   EXPECT_EQ(transform_args.source_type, cudf::udf_source_type::CUDA);
-  EXPECT_EQ(transform_args.is_null_aware, null_aware::NO);
-  EXPECT_EQ(transform_args.null_policy, output_nullability::ALL_VALID);
-  EXPECT_EQ(transform_args.output_type, data_type{type_id::INT32});
+  EXPECT_EQ(transform_args.is_null_aware, cudf::null_aware::NO);
+  EXPECT_EQ(transform_args.null_policy, cudf::output_nullability::ALL_VALID);
+  EXPECT_EQ(transform_args.output_type, cudf::data_type{cudf::type_id::INT32});
   ASSERT_EQ(transform_args.inputs.size(), 2);
 
   /// The first input should be a scalar value of 42
-  ASSERT_TRUE(std::holds_alternative<scalar_column_view>(transform_args.inputs[0]));
-  EXPECT_EQ(std::get<scalar_column_view>(transform_args.inputs[0]).type(),
-            data_type{type_id::INT32});
-  EXPECT_EQ(std::get<scalar_column_view>(transform_args.inputs[0]).null_count(), 0);
+  ASSERT_TRUE(std::holds_alternative<cudf::scalar_column_view>(transform_args.inputs[0]));
+  EXPECT_EQ(std::get<cudf::scalar_column_view>(transform_args.inputs[0]).type(),
+            cudf::data_type{cudf::type_id::INT32});
+  EXPECT_EQ(std::get<cudf::scalar_column_view>(transform_args.inputs[0]).null_count(), 0);
 
   /// The input column should be the second column in the transform args
-  ASSERT_TRUE(std::holds_alternative<column_view>(transform_args.inputs[1]));
-  ASSERT_EQ(std::get<column_view>(transform_args.inputs[1]).size(), column->size());
-  EXPECT_EQ(std::get<column_view>(transform_args.inputs[1]).type(), column->type());
-  EXPECT_EQ(std::get<column_view>(transform_args.inputs[1]).null_count(), column->null_count());
+  ASSERT_TRUE(std::holds_alternative<cudf::column_view>(transform_args.inputs[1]));
+  ASSERT_EQ(std::get<cudf::column_view>(transform_args.inputs[1]).size(), column->size());
+  EXPECT_EQ(std::get<cudf::column_view>(transform_args.inputs[1]).type(), column->type());
+  EXPECT_EQ(std::get<cudf::column_view>(transform_args.inputs[1]).null_count(),
+            column->null_count());
 
   auto expected_udf = R"***(
 __device__ void expression(int32_t* out_0, int32_t in_0, int32_t in_1)
@@ -311,7 +313,7 @@ TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
 {
   row_ir::target_info target_info{row_ir::target::CUDA};
 
-  row_ir::var_info inputs[] = {{"in_0", {data_type{type_id::BOOL8}}}};
+  row_ir::var_info inputs[] = {{"in_0", {cudf::data_type{cudf::type_id::BOOL8}}}};
 
   row_ir::instance_info info{inputs, {}};
 

@@ -43,7 +43,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
   auto gather_map = rmm::device_uvector<size_type>(child.size(), stream);
 
   // Build a segmented reversed order for the child column.
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      cuda::counting_iterator<size_type>{0},
                      child.size(),
                      [list_offsets = out_offsets->view().begin<size_type>(),

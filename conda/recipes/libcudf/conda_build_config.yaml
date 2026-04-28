@@ -23,7 +23,7 @@ flatbuffers_version:
   - "=24.3.25"
 
 nvcomp_version:
-  - "=5.1.0.21"
+  - "=5.2.0.10"
 
 zlib_version:
   - ">=1.2.13"

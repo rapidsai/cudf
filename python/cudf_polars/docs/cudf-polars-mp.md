@@ -43,11 +43,11 @@ This document describes these three execution modes.
 It provides a single typed object covering all configuration knobs across three
 categories:
 
-| Category    | Controls                                                   |
-| ----------- | ---------------------------------------------------------- |
-| `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level  |
-| `executor`  | Partitioning, fallback behavior, dynamic planning          |
-| `engine`    | Polars integration, IO options, RMM memory resource        |
+| Category    | Controls                                                              |
+| ----------- | --------------------------------------------------------------------- |
+| `rapidsmpf` | Threads, CUDA streams, spilling, pinned memory, log level             |
+| `executor`  | Partitioning, fallback behavior, dynamic planning                     |
+| `engine`    | Polars integration, IO, RMM, hardware binding, thread-pool sizing     |
 
 All fields default to `UNSPECIFIED`, which means: use the corresponding
 environment variable if set, otherwise let the underlying library apply its
@@ -94,6 +94,99 @@ opts = StreamingOptions.from_dict({
     "num_streaming_threads": 8,
     "fallback_mode": "silent",
 })
+```
+
+### Memory resource configuration
+
+Use `memory_resource_config` to control the RMM memory resource used by the
+engine. It accepts a `MemoryResourceConfig` object that specifies the fully
+qualified class name and optional constructor arguments:
+
+```python
+from cudf_polars.utils.config import MemoryResourceConfig
+
+opts = StreamingOptions(
+    memory_resource_config=MemoryResourceConfig(
+        qualname="rmm.mr.CudaAsyncMemoryResource",
+    ),
+)
+```
+
+Nested resources (e.g. a pool wrapping a managed resource) are supported:
+
+```python
+opts = StreamingOptions(
+    memory_resource_config=MemoryResourceConfig(
+        qualname="rmm.mr.PoolMemoryResource",
+        options={
+            "upstream_mr": {
+                "qualname": "rmm.mr.ManagedMemoryResource",
+            },
+        },
+    ),
+)
+```
+
+When no `memory_resource_config` is provided:
+
+- **SPMDEngine** uses `rmm.mr.get_current_device_resource()` (the in-process
+  default — useful when user code has already configured a resource).
+- **DaskEngine** and **RayEngine** default to `rmm.mr.CudaAsyncMemoryResource()`
+  (workers start in a fresh process with no pre-configured resource).
+
+### Hardware binding
+
+All three engines automatically bind each worker process to the CPU cores,
+NUMA memory nodes, and network devices that are topologically close to the
+worker's GPU. This is done via `rapidsmpf.rrun.rrun.bind()` and improves
+performance by ensuring memory allocations and network traffic stay local to
+the GPU's NUMA node.
+
+Binding is controlled by the `hardware_binding` executor option, which accepts
+a `HardwareBindingPolicy` instance:
+
+```python
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
+```
+
+The default policy (`HardwareBindingPolicy()`) skips binding when running under `rrun`,
+which already handles binding at launch. Otherwise, it binds once per process based on
+`CUDA_VISIBLE_DEVICES`. If `CUDA_VISIBLE_DEVICES` is unset, binding falls back to GPU 0.
+
+
+| Field             | Default | Description                                                                                                        |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `skip_under_rrun` | `True`  | Skip binding when launched via `rrun` (which already performs binding). If skipped, all other options are ignored. |
+| `enabled`         | `True`  | Enable or disable hardware binding.                                                                                |
+| `enable_once`     | `True`  | Perform binding at most once per process. Subsequent calls are no-ops.                                             |
+| `raise_on_fail`   | `False` | Surface binding failures by enabling `verbose=True` in `rrun.bind()`.                                              |
+
+
+Examples:
+
+```python
+# Disable binding entirely:
+opts = StreamingOptions(hardware_binding=HardwareBindingPolicy(enabled=False))
+
+# Enable failure reporting:
+opts = StreamingOptions(
+    hardware_binding=HardwareBindingPolicy(raise_on_fail=True),
+)
+```
+
+Via the environment variable (JSON):
+
+```bash
+# Disable binding:
+export CUDF_POLARS__HARDWARE_BINDING='{"enabled": false}'
+```
+
+Via the CLI:
+
+```bash
+python my_script.py --hardware-binding '{"raise_on_fail": true}'
 ```
 
 ---
@@ -233,10 +326,8 @@ from rapidsmpf.config import Options
 
 with RayEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    executor_options={
-        "max_rows_per_partition": 500_000,
-        "num_py_executors": 2,
-    },
+    executor_options={"num_py_executors": 2},
+    executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
     ray_init_options={"num_cpus": 4},
 ) as engine:
@@ -286,14 +377,14 @@ Conceptually the system looks like this:
 
 ### Prerequisites
 
-* Dask distributed (`distributed`) and `dask-cuda` installed
+* Dask distributed (`distributed`) installed
 * RapidsMPF and UCXX available on all GPU nodes
 
 ### Running in Dask mode
 
 `DaskEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.dask`. On construction it:
 
-1. If `dask_client` is `None`, creates a `dask_cuda.LocalCUDACluster` (one worker per GPU) and a `distributed.Client`
+1. If `dask_client` is `None`, creates a `distributed.LocalCluster` (one worker per visible GPU) and a `distributed.Client`
 2. Bootstraps a UCXX communicator across all workers
 
 `DaskEngine` is a `StreamingEngine` subclass (and therefore a `pl.GPUEngine`) that can be used directly or as a context manager.
@@ -343,6 +434,57 @@ engine.shutdown()
 
 `DaskEngine` raises `RuntimeError` if created inside an `rrun` cluster.
 
+### Hardware binding with pre-configured clusters
+
+When using a pre-configured cluster that already performs its own hardware
+binding — such as `dask_cuda.LocalCUDACluster`, which pins CPU affinity and
+sets `CUDA_VISIBLE_DEVICES` per worker — disable the built-in binding to
+avoid conflicts:
+
+```python
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+    HardwareBindingPolicy,
+)
+
+with DaskEngine(
+    dask_client=dc,
+    engine_options={
+        "hardware_binding": HardwareBindingPolicy(enabled=False),
+    },
+) as engine:
+    ...
+```
+
+### Manually launched Dask clusters
+
+When launching workers manually (e.g. on a multi-node HPC cluster), use the
+built-in nanny preload to assign one GPU per worker. The preload sets
+`CUDA_VISIBLE_DEVICES` on each worker before the process spawns:
+
+```bash
+# On each node — launch one worker per GPU with a single thread each:
+dask worker SCHEDULER:8786 --nworkers N --nthreads 1 \
+    --preload-nanny cudf_polars.experimental.rapidsmpf.frontend.dask
+```
+
+Then connect from the client:
+
+```python
+from distributed import Client
+from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+
+with Client("SCHEDULER:8786") as dc:
+    with DaskEngine(dask_client=dc) as engine:
+        result = lf.collect(engine=engine)
+```
+
+Hardware binding (CPU affinity, NUMA, network) is handled automatically by
+`DaskEngine` via `HardwareBindingPolicy` — the nanny preload only handles
+GPU assignment.
+
+See the [Dask CLI deployment guide][dask-cli] for more on `dask worker` options.
+
 ### Cluster diagnostics
 
 ```python
@@ -368,10 +510,8 @@ from rapidsmpf.config import Options
 
 with DaskEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    executor_options={
-        "max_rows_per_partition": 500_000,
-        "num_py_executors": 2,
-    },
+    executor_options={"num_py_executors": 2},
+    executor_options={"max_rows_per_partition": 500_000},
     engine_options={"raise_on_fail": True},
 ) as engine:
     ...
@@ -601,26 +741,23 @@ Prefer `SPMDEngine.from_options()` with a `StreamingOptions` object (see
 fine-grained control, the `__init__` parameters accept raw dicts:
 
 ```python
-import rmm
 from rapidsmpf.config import Options
 
 with SPMDEngine(
     rapidsmpf_options=Options(num_streaming_threads=8),
-    executor_options={
-        "max_rows_per_partition": 500_000,
-        "num_py_executors": 2,
-    },
+    executor_options={"num_py_executors": 2},
+    executor_options={"max_rows_per_partition": 500_000},
     engine_options={"parquet_options": {"use_rapidsmpf_native": True}},
 ) as engine:
     ...
 ```
 
-**Memory resource:** `SPMDEngine` captures `rmm.mr.get_current_device_resource()`
-at construction, wraps it in `RmmResourceAdaptor` (so libcudf temporary allocations and the
-RapidsMPF `Context` share the same resource), sets the wrapped resource as current, and
-restores the original resource on shutdown. To use a custom allocator, call
-`rmm.mr.set_current_device_resource(your_mr)` **before** constructing `SPMDEngine`.
-Do not pre-wrap it in `RmmResourceAdaptor`.
+**Memory resource:** All engines accept a `memory_resource_config` option (via
+`StreamingOptions` or `engine_options`) that controls the RMM memory resource.
+See [Memory resource configuration](#memory-resource-configuration) for details.
+When no config is provided, `SPMDEngine` falls back to
+`rmm.mr.get_current_device_resource()`, while `DaskEngine` and `RayEngine`
+default to `rmm.mr.CudaAsyncMemoryResource()`.
 
 `comm` is an already-bootstrapped communicator. When provided, the bootstrap step
 is skipped and the caller retains ownership (see
@@ -637,6 +774,7 @@ pass `engine_options={"parquet_options": {"use_rapidsmpf_native": True}}` to ena
 native Parquet reads.
 
 <!-- Reference links -->
+[dask-cli]: https://docs.dask.org/en/latest/deploying-cli.html
 [dask-distributed]: https://distributed.dask.org/
 [spmd-wiki]: https://en.wikipedia.org/wiki/Single_program,_multiple_data
 [ray-docs]: https://docs.ray.io/

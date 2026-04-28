@@ -830,8 +830,7 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    cudf::filtered_join obj(
-      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    cudf::filtered_join obj(right, compare_nulls, cudf::get_default_stream());
     return obj.semi_join(left);
   }
 };
@@ -889,8 +888,7 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view right,
     cudf::null_equality compare_nulls = cudf::null_equality::EQUAL) override
   {
-    cudf::filtered_join obj(
-      right, compare_nulls, cudf::set_as_build_table::RIGHT, cudf::get_default_stream());
+    cudf::filtered_join obj(right, compare_nulls, cudf::get_default_stream());
     return obj.anti_join(left);
   }
 };

@@ -59,7 +59,11 @@ class Agg(Expr):
             req = plc.aggregation.median()
         elif name == "n_unique":
             # TODO: datatype of result
-            req = plc.aggregation.nunique(null_handling=plc.types.NullPolicy.INCLUDE)
+            req = plc.aggregation.nunique(
+                null_handling=plc.types.NullPolicy.EXCLUDE
+                if options
+                else plc.types.NullPolicy.INCLUDE
+            )
         elif name == "first" or name == "last":
             req = None
         elif name == "mean":
@@ -78,6 +82,12 @@ class Agg(Expr):
                 if not options
                 else plc.types.NullPolicy.INCLUDE
             )
+        elif name == "m2":  # pragma: no cover; doesn't have a direct polars equivalent
+            req = plc.aggregation.m2()
+        elif (
+            name == "merge_m2"
+        ):  # pragma: no cover; doesn't have a direct polars equivalent
+            req = plc.aggregation.merge_m2()
         elif name == "quantile":
             child, quantile = self.children
             if not isinstance(quantile, Literal):
@@ -131,6 +141,8 @@ class Agg(Expr):
             "first",
             "last",
             "mean",
+            "m2",
+            "merge_m2",
             "sum",
             "count",
             "std",

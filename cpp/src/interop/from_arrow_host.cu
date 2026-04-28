@@ -375,10 +375,11 @@ std::tuple<std::unique_ptr<column>, int64_t, int64_t> copy_offsets_column(
   if (offset != 0) {
     auto begin = result->mutable_view().template begin<OffsetType>();
     auto end   = begin + offsets->length;
-    thrust::transform(
-      rmm::exec_policy_nosync(stream), begin, end, begin, [offset] __device__(auto o) {
-        return o - offset;
-      });
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      begin,
+                      end,
+                      begin,
+                      [offset] __device__(auto o) { return o - offset; });
   }
   return std::tuple{std::move(result), offset, length};
 }

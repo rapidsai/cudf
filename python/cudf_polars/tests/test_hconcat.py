@@ -7,10 +7,9 @@ import polars as pl
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import DataFrameScan, Empty, HConcat, IRExecutionContext
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.config import ConfigOptions
 
 
-def test_hconcat():
+def test_hconcat(engine: pl.GPUEngine):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -19,23 +18,22 @@ def test_hconcat():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"))
     query = pl.concat([ldf, ldf2], how="horizontal")
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_hconcat_different_heights():
+def test_hconcat_different_heights(engine: pl.GPUEngine):
     left = pl.LazyFrame({"a": [1, 2, 3, 4]})
 
     right = pl.LazyFrame({"b": [[1], [2]], "c": ["a", "bcde"]})
 
     q = pl.concat([left, right], how="horizontal")
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_hconcat_should_broadcast():
     # HConcat with should_broadcast=True is used by the streaming engine to
     # recombine decomposed expressions. Test it by constructing IR directly.
-    config_options = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    context = IRExecutionContext.from_config_options(config_options)
+    context = IRExecutionContext()
 
     df1 = pl.DataFrame({"a": [1, 2, 3]})
     df2 = pl.DataFrame({"b": [4.0]})  # 1 row to be broadcast to 3

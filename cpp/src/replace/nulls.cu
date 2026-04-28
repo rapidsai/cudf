@@ -217,7 +217,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     auto device_in   = cudf::column_device_view::create(input, stream);
 
     auto func = replace_nulls_functor<col_type>{s1.data()};
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input.data<col_type>(),
                       input.data<col_type>() + input.size(),
                       cudf::detail::make_validity_iterator(*device_in),
@@ -281,13 +281,19 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
 
   auto func = cudf::detail::replace_policy_functor();
   if (replace_policy == cudf::replace_policy::PRECEDING) {
-    thrust::inclusive_scan(
-      rmm::exec_policy_nosync(stream), in_begin, in_begin + input.size(), gm_begin, func);
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                           in_begin,
+                           in_begin + input.size(),
+                           gm_begin,
+                           func);
   } else {
     auto in_rbegin = cuda::std::make_reverse_iterator(in_begin + input.size());
     auto gm_rbegin = cuda::std::make_reverse_iterator(gm_begin + gather_map.size());
-    thrust::inclusive_scan(
-      rmm::exec_policy_nosync(stream), in_rbegin, in_rbegin + input.size(), gm_rbegin, func);
+    thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                           in_rbegin,
+                           in_rbegin + input.size(),
+                           gm_rbegin,
+                           func);
   }
 
   auto output = cudf::detail::gather(cudf::table_view({input}),
