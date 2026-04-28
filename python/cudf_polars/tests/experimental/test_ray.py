@@ -35,9 +35,6 @@ def engine() -> Iterator[RayEngine]:
 
 
 pytestmark = [
-    # Ray's internal subprocess management leaks /dev/null file handles;
-    # suppress the resulting ResourceWarning noise from its internals.
-    pytest.mark.filterwarnings("ignore::ResourceWarning"),
     pytest.mark.skipif(
         is_running_with_rrun(),
         reason="RayEngine must not be created from within an rrun cluster",
