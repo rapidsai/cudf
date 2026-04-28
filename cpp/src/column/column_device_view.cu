@@ -68,23 +68,25 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is copied to device memory
   // and then set into the d_children member pointer.
-  auto staging_buffer = detail::make_pinned_vector_async<char>(descendant_storage_bytes, stream);
+  auto staging_buffer = new detail::host_vector<char>(
+    detail::make_pinned_vector_async<char>(descendant_storage_bytes, stream));
 
   // Each ColumnDeviceView instance may have child objects that
   // require setting some internal device pointers before being copied
   // from CPU to device.
   auto const descendant_storage = new rmm::device_uvector<char>(descendant_storage_bytes, stream);
 
-  auto deleter = [descendant_storage](ColumnDeviceView* v) {
+  auto deleter = [descendant_storage, staging_buffer](ColumnDeviceView* v) {
     v->destroy();
     delete descendant_storage;
+    delete staging_buffer;
   };
 
   std::unique_ptr<ColumnDeviceView, decltype(deleter)> result{
-    new ColumnDeviceView(source, staging_buffer.data(), descendant_storage->data()), deleter};
+    new ColumnDeviceView(source, staging_buffer->data(), descendant_storage->data()), deleter};
 
   // copy the CPU memory with all the children into device memory
-  detail::cuda_memcpy_async<char>(*descendant_storage, staging_buffer, stream);
+  detail::cuda_memcpy_async<char>(*descendant_storage, *staging_buffer, stream);
 
   return result;
 }
