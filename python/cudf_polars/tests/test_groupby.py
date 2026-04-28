@@ -21,7 +21,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_1321,
 )
-from tests.conftest import is_streaming_engine
+from tests.conftest import get_blocksize_mode, is_streaming_engine
 
 
 @pytest.fixture
@@ -304,12 +304,13 @@ def test_groupby_nested_list_struct_raises(dtype):
 @pytest.mark.parametrize("nkeys", [1, 2, 4])
 def test_groupby_maintain_order_random(
     engine: pl.GPUEngine,
-    blocksize_mode,
     nrows,
     nkeys,
     with_nulls,
 ):
-    if nrows > 30 and (blocksize_mode == "small" or is_streaming_engine(engine)):
+    if nrows > 30 and (
+        get_blocksize_mode(engine) == "small" or is_streaming_engine(engine)
+    ):
         pytest.skip("streaming executor too slow for large n_rows")
     key_names = [f"key{key}" for key in range(nkeys)]
     rng = random.Random(2)

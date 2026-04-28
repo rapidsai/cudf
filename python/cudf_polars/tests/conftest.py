@@ -48,6 +48,21 @@ def is_streaming_engine(obj: Any) -> bool:
     return isinstance(obj, StreamingEngine)
 
 
+def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["default", "small"]:
+    """Recover the blocksize mode an engine was configured with.
+
+    Inspects ``max_rows_per_partition`` in the engine's executor options
+    and returns ``"small"`` if it matches the value set by the
+    ``blocksize_mode == "small"`` branch of ``streaming_engine_factory``,
+    otherwise ``"default"``. Non-streaming engines have no blocksize mode
+    and always return ``"default"``.
+    """
+    if not is_streaming_engine(obj):
+        return "default"
+    executor_options = obj.config.get("executor_options", {})
+    return "small" if executor_options.get("max_rows_per_partition") == 4 else "default"
+
+
 @pytest.fixture(autouse=True)
 def _skip_unless_spmd(request: pytest.FixtureRequest) -> None:
     """Skip tests in SPMD multi-rank mode unless marked with ``pytest.mark.spmd``."""
