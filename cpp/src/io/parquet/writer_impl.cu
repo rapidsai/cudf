@@ -97,7 +97,9 @@ struct aggregate_writer_metadata {
       std::transform(kv_md[p].begin(),
                      kv_md[p].end(),
                      std::back_inserter(this->files[p].key_value_metadata),
-                     [](auto const& kv) { return KeyValue{kv.first, kv.second}; });
+                     [](auto const& kv) {
+                       return KeyValue{kv.first, kv.second};
+                     });
     }
 
     // Append arrow schema to the key-value metadata
@@ -2124,7 +2126,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
 
     // Now that page boundaries are finalized and dictionary indices have been materialized, compute
     // minimum required RLE bit width for each data page
-    compute_per_page_dict_rle_bits({pages.data(), pages.size()}, stream);
+    compute_per_page_dict_bits({pages.data(), pages.size()}, stream);
   }
 
   // Check device write support for all chunks and initialize bounce_buffer.
