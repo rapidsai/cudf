@@ -412,7 +412,7 @@ def test_groupby_sum_all_null_group_returns_null(engine: pl.GPUEngine):
     ids=["sum", "mean", "median", "quantile-0.5"],
 )
 def test_groupby_aggs_keep_unsupported_as_null(
-    engine: pl.GPUEngine, request, df: pl.LazyFrame, agg_expr
+    engine: pl.GPUEngine, using_streaming_engine, request, df: pl.LazyFrame, agg_expr
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
@@ -422,7 +422,9 @@ def test_groupby_aggs_keep_unsupported_as_null(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition="quantile" in str(agg_expr) and POLARS_VERSION_LT_135,
+            condition="quantile" in str(agg_expr)
+            and POLARS_VERSION_LT_135
+            and using_streaming_engine,
             reason="Decimal precision mismatch (9 vs 38) in polars < 1.35",
         )
     )

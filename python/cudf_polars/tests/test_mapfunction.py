@@ -116,9 +116,16 @@ def test_unique_hash():
 
 
 def test_set_sorted_then_inner_join(engine: pl.GPUEngine, request):
+    _engine_param = request.node.callspec.params.get("engine", "in-memory")
     request.applymarker(
         pytest.mark.xfail(
-            condition=POLARS_VERSION_LT_135,
+            condition=not POLARS_VERSION_LT_135,
+            reason="HintIR not supported",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=_engine_param == "spmd-small" and POLARS_VERSION_LT_135,
             reason="set_sorted join result order differs in polars < 1.35",
         )
     )
