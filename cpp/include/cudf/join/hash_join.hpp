@@ -362,7 +362,7 @@ class hash_join {
    * previously created by calling full_join_match_context().
    *
    * @note This method does NOT include unmatched build rows (the complement).  After all
-   * partitions have been processed, pass the collected results to `full_join_finalize()` to
+   * partitions have been processed, pass the collected results to `finalize_partitioned_full_join()` to
    * obtain the complete full join output.
    *
    * The returned left_indices are relative to the original complete probe table.
@@ -401,7 +401,7 @@ class hash_join {
    */
   [[nodiscard]] static std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                                  std::unique_ptr<rmm::device_uvector<size_type>>>
-  full_join_finalize(cudf::host_span<cudf::device_span<size_type const> const> left_partials,
+  finalize_partitioned_full_join(cudf::host_span<cudf::device_span<size_type const> const> left_partials,
                      cudf::host_span<cudf::device_span<size_type const> const> right_partials,
                      size_type probe_table_num_rows,
                      size_type build_table_num_rows,

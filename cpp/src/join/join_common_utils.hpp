@@ -74,7 +74,7 @@ VectorPair finalize_full_join(VectorPair&& probe_indices,
  * and appends the complement (unmatched build rows paired with `JoinNoMatch`) into the tail.
  * Internally delegates to the `VectorPair&&` overload, so the mark/compact path is shared.
  *
- * Used by `cudf::hash_join::full_join_finalize` for partitioned full joins where the partials
+ * Used by `cudf::hash_join::finalize_partitioned_full_join` for partitioned full joins where the partials
  * live in separate buffers and must be gathered.
  *
  * @param left_partials Per-partition probe-side (left) index spans.

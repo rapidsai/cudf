@@ -18,7 +18,7 @@ namespace cudf {
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::full_join_finalize(
+hash_join::finalize_partitioned_full_join(
   cudf::host_span<cudf::device_span<size_type const> const> left_partials,
   cudf::host_span<cudf::device_span<size_type const> const> right_partials,
   size_type probe_table_num_rows,

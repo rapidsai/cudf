@@ -288,7 +288,7 @@ std::unique_ptr<cudf::table> full_join(
           cudf::device_span<cudf::size_type const>{probe_left->data(), probe_left->size()}};
         std::vector<cudf::device_span<cudf::size_type const>> right_partials{
           cudf::device_span<cudf::size_type const>{probe_right->data(), probe_right->size()}};
-        return cudf::hash_join::full_join_finalize(
+        return cudf::hash_join::finalize_partitioned_full_join(
           left_partials, right_partials, left.num_rows(), right.num_rows(), stream, mr);
       },
       full_input,
@@ -3399,7 +3399,7 @@ TEST_F(JoinTest, HashJoinPartitionedFullJoin)
   }
 
   auto [final_left, final_right] =
-    cudf::hash_join::full_join_finalize(left_partials,
+    cudf::hash_join::finalize_partitioned_full_join(left_partials,
                                         right_partials,
                                         t0.select(left_on).num_rows(),
                                         t1.select(right_on).num_rows(),
