@@ -617,19 +617,18 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         ]
     )
 
-    # SQL: catalog_channel — cs CROSS JOIN cr (no join key for call centers); channel='catalog channel', id=cs_call_center_sk
-    catalog_channel = cs.join(
-        cr,
-        on=pl.lit(1),
-        how="inner",
-    ).select(
-        [
-            pl.lit("catalog channel").alias("channel"),
-            pl.col("cs_call_center_sk").alias("id"),
-            pl.col("sales"),
-            pl.col("returns1"),
-            (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
-        ]
+    catalog_channel = (
+        cs.with_columns(pl.lit(1).alias("join_key"))
+        .join(cr.with_columns(pl.lit(1).alias("join_key")), on="join_key")
+        .select(
+            [
+                pl.lit("catalog channel").alias("channel"),
+                pl.col("cs_call_center_sk").alias("id"),
+                pl.col("sales"),
+                pl.col("returns1"),
+                (pl.col("profit") - pl.col("profit_loss")).alias("profit"),
+            ]
+        )
     )
 
     # SQL: web_channel — ws LEFT JOIN wr ON ws_web_page_sk=wr_web_page_sk; channel='web channel', id=ws_web_page_sk

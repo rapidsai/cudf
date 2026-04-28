@@ -305,11 +305,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     catalog_returns = catalog_returns.with_columns(pl.lit(1).alias("cr_has_return"))
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    store_returns = (
-        get_data(run_config.dataset_path, "store_returns", run_config.suffix)
-        .with_columns(pl.lit(1).alias("sr_has_return"))
-        .select(["sr_ticket_number", "sr_item_sk", "sr_has_return"])
-    )
+    store_returns = get_data(
+        run_config.dataset_path, "store_returns", run_config.suffix
+    ).with_columns(pl.lit(1).alias("sr_has_return"))
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
     # SQL: CTE ws — web_sales LEFT JOIN web_returns ON ws_order_number=wr_order_number AND ws_item_sk=wr_item_sk JOIN date_dim WHERE wr_has_return IS NULL
@@ -430,9 +428,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             how="left",
         )
         .filter(
-            (pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0)
+            ((pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0))
+            & (pl.col("ss_sold_year") == year)
         )
-        .filter(pl.col("ss_sold_year") == year)
         # SQL: SELECT ss_sold_year, ss_item_sk, ss_customer_sk, round(ss_qty/(ws_qty+cs_qty),2) ratio, ss_qty store_qty, ...
         .select(
             [

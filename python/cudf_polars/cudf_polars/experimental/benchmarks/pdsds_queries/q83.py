@@ -268,7 +268,10 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
     selected_dates = (
-        date_dim.join(selected_weeks, on="d_week_seq").select("d_date").unique()
+        date_dim.join(selected_weeks, on="d_week_seq")
+        .select("d_date")
+        .unique()
+        .rename({"d_date": "selected_date"})
     )
 
     # SQL: CTE sr_items — FROM store_returns, item, date_dim WHERE sr_item_sk=i_item_sk AND d_date IN (SELECT d_date WHERE d_week_seq IN (...)) AND sr_returned_date_sk=d_date_sk GROUP BY i_item_id; Sum(sr_return_quantity)
@@ -276,7 +279,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         # SQL: JOIN item ON sr_item_sk=i_item_sk; JOIN date_dim ON sr_returned_date_sk=d_date_sk; JOIN selected_dates ON d_date
         store_returns.join(item, left_on="sr_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="sr_returned_date_sk", right_on="d_date_sk")
-        .join(selected_dates, on="d_date")
+        .join(
+            selected_dates,
+            left_on="d_date",
+            right_on="selected_date",
+            how="left",
+        )
+        .filter(pl.col("selected_date").is_not_null())
         # SQL: GROUP BY i_item_id; Sum(sr_return_quantity) AS sr_item_qty
         .group_by("i_item_id")
         .agg(
@@ -297,7 +306,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     cr_items = (
         catalog_returns.join(item, left_on="cr_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk")
-        .join(selected_dates, on="d_date")
+        .join(
+            selected_dates,
+            left_on="d_date",
+            right_on="selected_date",
+            how="left",
+        )
+        .filter(pl.col("selected_date").is_not_null())
         .group_by("i_item_id")
         .agg(
             [
@@ -317,7 +332,13 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     wr_items = (
         web_returns.join(item, left_on="wr_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
-        .join(selected_dates, on="d_date")
+        .join(
+            selected_dates,
+            left_on="d_date",
+            right_on="selected_date",
+            how="left",
+        )
+        .filter(pl.col("selected_date").is_not_null())
         .group_by("i_item_id")
         .agg(
             [

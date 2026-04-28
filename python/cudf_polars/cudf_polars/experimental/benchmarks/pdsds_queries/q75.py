@@ -488,8 +488,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
 
     # SQL: curr_yr: all_sales WHERE d_year={year}; prev_yr: all_sales WHERE d_year={year}-1
-    curr_yr = all_sales.filter(pl.col("d_year") == year)
-    prev_yr = all_sales.filter(pl.col("d_year") == year - 1)
+    curr_yr = all_sales
+    prev_yr = all_sales
 
     sort_by = {"sales_cnt_diff": False, "sales_amt_diff": False}
     limit = 100
