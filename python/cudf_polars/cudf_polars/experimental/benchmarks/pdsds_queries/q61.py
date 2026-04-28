@@ -206,7 +206,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
-    # SQL: promotions — Sum(ss_ext_sales_price) FROM store_sales, store, promotion, date_dim, customer, customer_address, item
+    # SQL: FROM store_sales, store, promotion, date_dim, customer, customer_address, item
     promotional_sales = (
         # SQL: JOIN store ON ss_store_sk = s_store_sk
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
@@ -243,13 +243,20 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         )
     )
 
-    # SQL: total — same FROM/WHERE without promotion filter
+    # SQL: FROM store_sales, store, date_dim, customer, customer_address, item
     all_sales = (
+        # SQL: JOIN store ON ss_store_sk = s_store_sk
         store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
+        # SQL: JOIN date_dim ON ss_sold_date_sk = d_date_sk
         .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN customer ON ss_customer_sk = c_customer_sk
         .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+        # SQL: JOIN customer_address ON c_current_addr_sk = ca_address_sk
         .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        # SQL: JOIN item ON ss_item_sk = i_item_sk
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
+        # SQL: WHERE ca_gmt_offset = {gmt_offset} AND i_category = '{category}'
+        # SQL:   AND s_gmt_offset = {gmt_offset} AND d_year = {year} AND d_moy = {month}
         .filter(
             (pl.col("ca_gmt_offset") == gmt_offset)
             & (pl.col("i_category") == category)

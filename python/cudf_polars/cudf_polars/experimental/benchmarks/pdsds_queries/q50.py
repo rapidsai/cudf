@@ -238,15 +238,6 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    d1 = date_dim.select("d_date_sk")
-    d2 = date_dim.select(
-        [
-            pl.col("d_date_sk").alias("d2_date_sk"),
-            pl.col("d_year").alias("d2_year"),
-            pl.col("d_moy").alias("d2_moy"),
-        ]
-    )
-
     group_cols = [
         "s_store_name",
         "s_company_id",
@@ -275,11 +266,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         # SQL: JOIN store ON ss_store_sk = s_store_sk
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         # SQL: JOIN d1 (date_dim) ON ss_sold_date_sk = d_date_sk
-        .join(d1, left_on="ss_sold_date_sk", right_on="d_date_sk")
-        # SQL: JOIN d2 (date_dim) ON sr_returned_date_sk = d2_date_sk
-        .join(d2, left_on="sr_returned_date_sk", right_on="d2_date_sk")
-        # SQL: WHERE d2_year = {year} AND d2_moy = {month}
-        .filter((pl.col("d2_year") == year) & (pl.col("d2_moy") == month))
+        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        # SQL: JOIN d2 (date_dim) ON sr_returned_date_sk = d_date_sk
+        .join(
+            date_dim,
+            left_on="sr_returned_date_sk",
+            right_on="d_date_sk",
+            suffix="_d2",
+        )
+        # SQL: WHERE d2.d_year = {year} AND d2.d_moy = {month}
+        .filter((pl.col("d_year_d2") == year) & (pl.col("d_moy_d2") == month))
     )
 
     result = (
