@@ -4,9 +4,9 @@
  */
 
 #include "common.cuh"
-#include "partitioned_count_kernels.hpp"
 #include "dispatch.cuh"
 #include "join/join_common_utils.cuh"
+#include "partitioned_count_kernels.hpp"
 
 #include <cudf/detail/iterator.cuh>
 

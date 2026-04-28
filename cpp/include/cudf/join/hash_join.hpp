@@ -362,8 +362,8 @@ class hash_join {
    * previously created by calling full_join_match_context().
    *
    * @note This method does NOT include unmatched build rows (the complement).  After all
-   * partitions have been processed, pass the collected results to `finalize_partitioned_full_join()` to
-   * obtain the complete full join output.
+   * partitions have been processed, pass the collected results to
+   * `finalize_partitioned_full_join()` to obtain the complete full join output.
    *
    * The returned left_indices are relative to the original complete probe table.
    *
@@ -401,12 +401,13 @@ class hash_join {
    */
   [[nodiscard]] static std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                                  std::unique_ptr<rmm::device_uvector<size_type>>>
-  finalize_partitioned_full_join(cudf::host_span<cudf::device_span<size_type const> const> left_partials,
-                     cudf::host_span<cudf::device_span<size_type const> const> right_partials,
-                     size_type probe_table_num_rows,
-                     size_type build_table_num_rows,
-                     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  finalize_partitioned_full_join(
+    cudf::host_span<cudf::device_span<size_type const> const> left_partials,
+    cudf::host_span<cudf::device_span<size_type const> const> right_partials,
+    size_type probe_table_num_rows,
+    size_type build_table_num_rows,
+    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
  private:
   std::unique_ptr<impl_type const> _impl;

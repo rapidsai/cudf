@@ -3,39 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "ref_types.cuh"
 #include "partitioned_retrieve_kernels.cuh"
+#include "ref_types.cuh"
 
 namespace cudf::detail {
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                    std::unique_ptr<rmm::device_uvector<size_type>>>
 launch_partitioned_retrieve<false, primitive_count_ref_t>(probe_key_type const*,
-                                              cuda::std::int64_t,
-                                              size_type const*,
-                                              primitive_count_ref_t,
-                                              size_type,
-                                              rmm::cuda_stream_view,
-                                              rmm::device_async_resource_ref);
+                                                          cuda::std::int64_t,
+                                                          size_type const*,
+                                                          primitive_count_ref_t,
+                                                          size_type,
+                                                          rmm::cuda_stream_view,
+                                                          rmm::device_async_resource_ref);
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                    std::unique_ptr<rmm::device_uvector<size_type>>>
 launch_partitioned_retrieve<false, nested_count_ref_t>(probe_key_type const*,
-                                           cuda::std::int64_t,
-                                           size_type const*,
-                                           nested_count_ref_t,
-                                           size_type,
-                                           rmm::cuda_stream_view,
-                                           rmm::device_async_resource_ref);
+                                                       cuda::std::int64_t,
+                                                       size_type const*,
+                                                       nested_count_ref_t,
+                                                       size_type,
+                                                       rmm::cuda_stream_view,
+                                                       rmm::device_async_resource_ref);
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                    std::unique_ptr<rmm::device_uvector<size_type>>>
 launch_partitioned_retrieve<false, flat_count_ref_t>(probe_key_type const*,
-                                         cuda::std::int64_t,
-                                         size_type const*,
-                                         flat_count_ref_t,
-                                         size_type,
-                                         rmm::cuda_stream_view,
-                                         rmm::device_async_resource_ref);
+                                                     cuda::std::int64_t,
+                                                     size_type const*,
+                                                     flat_count_ref_t,
+                                                     size_type,
+                                                     rmm::cuda_stream_view,
+                                                     rmm::device_async_resource_ref);
 
 }  // namespace cudf::detail

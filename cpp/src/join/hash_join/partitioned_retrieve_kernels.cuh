@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 #pragma once
 
 #include "kernels_common.cuh"
@@ -62,12 +61,12 @@ namespace cudf::detail {
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   partitioned_retrieve_kernel(probe_key_type const* __restrict__ input_probe,
-                  cuda::std::int64_t n,
-                  size_type left_offset,
-                  size_type* __restrict__ left_output,
-                  size_type* __restrict__ right_output,
-                  size_type* __restrict__ output_counter,
-                  Ref ref)
+                              cuda::std::int64_t n,
+                              size_type left_offset,
+                              size_type* __restrict__ left_output,
+                              size_type* __restrict__ right_output,
+                              size_type* __restrict__ output_counter,
+                              Ref ref)
 {
   namespace cg = cooperative_groups;
 
@@ -219,12 +218,12 @@ template <bool IsOuter, typename Ref>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 launch_partitioned_retrieve(probe_key_type const* keys,
-                cuda::std::int64_t n,
-                size_type const* match_counts,
-                Ref ref,
-                size_type left_offset,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr)
+                            cuda::std::int64_t n,
+                            size_type const* match_counts,
+                            Ref ref,
+                            size_type left_offset,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr)
 {
   if (n == 0) {
     return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),

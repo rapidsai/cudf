@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 #pragma once
 
 #include "kernels_common.cuh"
@@ -40,9 +39,9 @@ namespace cudf::detail {
 template <bool IsOuter, typename Ref>
 CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
   partitioned_count_kernel(probe_key_type const* __restrict__ keys,
-                    cuda::std::int64_t n,
-                    size_type* __restrict__ output,
-                    Ref ref)
+                           cuda::std::int64_t n,
+                           size_type* __restrict__ output,
+                           Ref ref)
 {
   auto constexpr cg_size = DEFAULT_JOIN_CG_SIZE;
 
@@ -63,7 +62,9 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
         cooperative_groups::tiled_partition<cg_size>(cooperative_groups::this_thread_block());
       if constexpr (IsOuter) {
         auto temp_count = static_cast<size_type>(ref.count(tile, key));
-        if (tile.all(temp_count == 0)) { cooperative_groups::invoke_one(tile, [&]() { ++temp_count; }); }
+        if (tile.all(temp_count == 0)) {
+          cooperative_groups::invoke_one(tile, [&]() { ++temp_count; });
+        }
         auto const cnt =
           cooperative_groups::reduce(tile, temp_count, cooperative_groups::plus<size_type>());
         cooperative_groups::invoke_one(tile, [&]() { output[idx] = cnt; });
@@ -80,10 +81,10 @@ CUDF_KERNEL void __launch_bounds__(DEFAULT_JOIN_BLOCK_SIZE)
 
 template <bool IsOuter, typename Ref>
 void launch_partitioned_count(probe_key_type const* keys,
-                       cuda::std::int64_t n,
-                       size_type* output,
-                       Ref ref,
-                       rmm::cuda_stream_view stream)
+                              cuda::std::int64_t n,
+                              size_type* output,
+                              Ref ref,
+                              rmm::cuda_stream_view stream)
 {
   if (n == 0) { return; }
 

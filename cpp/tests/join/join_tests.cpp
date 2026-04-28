@@ -3400,11 +3400,11 @@ TEST_F(JoinTest, HashJoinPartitionedFullJoin)
 
   auto [final_left, final_right] =
     cudf::hash_join::finalize_partitioned_full_join(left_partials,
-                                        right_partials,
-                                        t0.select(left_on).num_rows(),
-                                        t1.select(right_on).num_rows(),
-                                        stream,
-                                        mr);
+                                                    right_partials,
+                                                    t0.select(left_on).num_rows(),
+                                                    t1.select(right_on).num_rows(),
+                                                    stream,
+                                                    mr);
 
   auto left_col  = cudf::column_view{cudf::device_span<cudf::size_type const>{*final_left}};
   auto right_col = cudf::column_view{cudf::device_span<cudf::size_type const>{*final_right}};

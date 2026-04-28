@@ -9,10 +9,10 @@
 namespace cudf::detail {
 
 template void launch_partitioned_count<true, primitive_count_ref_t>(probe_key_type const*,
-                                                             cuda::std::int64_t,
-                                                             size_type*,
-                                                             primitive_count_ref_t,
-                                                             rmm::cuda_stream_view);
+                                                                    cuda::std::int64_t,
+                                                                    size_type*,
+                                                                    primitive_count_ref_t,
+                                                                    rmm::cuda_stream_view);
 
 template void launch_partitioned_count<true, nested_count_ref_t>(
   probe_key_type const*, cuda::std::int64_t, size_type*, nested_count_ref_t, rmm::cuda_stream_view);
