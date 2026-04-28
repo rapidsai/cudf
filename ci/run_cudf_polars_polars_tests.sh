@@ -59,14 +59,12 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
-echo "Run polars tests with the streaming executor"
-CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
-CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
-    python -m pytest \
+echo "Run polars tests with injected in-memory GPU engine"
+python -m pytest \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
-       -p cudf_polars.testing.plugin \
+       -p cudf_polars.testing.inject_gpu_engine \
        -n 8 \
        --dist=worksteal \
        -vv \
@@ -74,18 +72,17 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \
-       --executor streaming
-
+       --inject-gpu-engine in-memory
 
 # TODO(ResourceWarning): https://github.com/rapidsai/cudf/issues/22181
-echo "Run polars tests with the streaming executor and rapidsmpf runtime"
+echo "Run polars tests with injected SPMD GPU engine, small blocksize"
 CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
 CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
-       -p cudf_polars.testing.plugin \
+       -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \
        -n 8 \
        --dist=worksteal \
@@ -94,21 +91,5 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
        $DESELECTED_TESTS_STR \
        "$@" \
        py-polars/tests \
-       --executor streaming \
-       --blocksize-mode small \
-       --runtime rapidsmpf
-
-echo "Run polars tests with the in-memory executor"
-python -m pytest \
-       --import-mode=importlib \
-       --cache-clear \
-       -m "" \
-       -p cudf_polars.testing.plugin \
-       -n 8 \
-       --dist=worksteal \
-       -vv \
-       --tb=native \
-       $DESELECTED_TESTS_STR \
-       "$@" \
-       py-polars/tests \
-       --executor in-memory
+       --inject-gpu-engine spmd \
+       --inject-gpu-engine-blocksize small
