@@ -182,7 +182,7 @@ TEST_P(ParquetSizedTest, DictionaryTest)
     [&source](auto const& page_location) { return read_dict_bits(source, page_location); });
 
   auto const max_bits = std::max_element(page_dict_bits.begin(), page_dict_bits.end());
-  EXPECT_NE(max_bits, page_dict_bits.end());
+  ASSERT_NE(max_bits, page_dict_bits.end());
   EXPECT_EQ(*max_bits, GetParam());
 }
 
