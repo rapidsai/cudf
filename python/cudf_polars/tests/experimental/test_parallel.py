@@ -15,6 +15,7 @@ from cudf_polars import Translator
 from cudf_polars.dsl.expressions.base import Col, NamedExpr
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.experimental.parallel import lower_ir_graph
+from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions
 
@@ -165,7 +166,9 @@ def test_preserve_partitioning(streaming_engine):
     )
     config_options = ConfigOptions.from_polars_engine(_engine)
     ir = Translator(q._ldf.visit(), _engine).translate_ir()
-    ir, partition_info, _ = lower_ir_graph(ir, config_options)
+    ir, partition_info = lower_ir_graph(
+        ir, config_options, collect_statistics(ir, config_options)
+    )
     expect_dtype = ir.schema["a"]
     expect_expr = (NamedExpr("a", Col(expect_dtype, "a")),)
     assert partition_info[ir].partitioned_on == expect_expr

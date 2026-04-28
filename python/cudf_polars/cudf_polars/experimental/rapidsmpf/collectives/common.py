@@ -39,7 +39,10 @@ def _get_new_collective_id() -> int:
                 "times in a single query."
             )
 
-        return _collective_id_vacancy.pop()
+        # All ranks must choose the same collective IDs during lowering.
+        collective_id = min(_collective_id_vacancy)
+        _collective_id_vacancy.discard(collective_id)
+        return collective_id
 
 
 def _release_collective_id(collective_id: int) -> None:
