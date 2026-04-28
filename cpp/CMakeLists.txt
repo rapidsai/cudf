@@ -813,6 +813,7 @@ add_library(
   src/structs/utilities.cu
   src/table/table.cpp
   src/table/table_device_view.cu
+  src/table/table_equal.cu
   src/table/table_view.cpp
   src/text/deduplicate.cu
   src/text/detokenize.cu
