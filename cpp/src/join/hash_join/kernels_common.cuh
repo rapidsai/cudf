@@ -3,11 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Ported from cuco's open_addressing kernels and ref_impl to give cudf direct
-// control over hash-join probe kernel launches.  The device-side probing logic
-// is identical to cuco's static_multiset::count / partitioned_count / retrieve /
-// partitioned_retrieve_outer.  We keep the cuco ref type for hash-table access (storage,
-// probing scheme, predicate) and only replace the host-side launch.
+// Custom hash-join probe kernels that give cudf direct control over kernel launches.
+// Uses the cuco ref type for hash-table access (storage, probing scheme, predicate).
 
 #pragma once
 

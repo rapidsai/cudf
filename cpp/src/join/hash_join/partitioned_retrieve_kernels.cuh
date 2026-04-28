@@ -3,9 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Hash join retrieve kernel ported from cuco's open_addressing retrieve.
-// Uses a shared-memory buffer per flushing tile (warp) to coalesce global
-// output writes and amortize the global atomic counter across many matches.
 
 #pragma once
 

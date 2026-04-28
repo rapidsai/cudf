@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Ported from cuco's open_addressing partitioned_count kernel.
 
 #pragma once
 

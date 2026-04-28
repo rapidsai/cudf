@@ -20,9 +20,8 @@ namespace cudf::detail {
 /**
  * @brief Probes the hash table for each key and writes matching index pairs.
  *
- * Internally computes per-row output offsets via exclusive scan on match_counts,
- * derives the total output size, allocates output buffers, and launches the
- * retrieve kernel. `left_offset` is added to each stored probe-row index when
+ * Reduces match_counts to derive the total output size, allocates output buffers,
+ * and launches the retrieve kernel. `left_offset` is added to each stored probe-row index when
  * writing to `left_indices`, so callers can produce indices in the full probe
  * table's coordinate space directly from a slice-local `keys` array.
  *

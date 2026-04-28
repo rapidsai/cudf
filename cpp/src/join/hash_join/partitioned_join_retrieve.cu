@@ -100,7 +100,7 @@ hash_join<Hasher>::partitioned_join_retrieve(join_kind join,
   // For FULL_JOIN, probe with LEFT_JOIN semantics (no complement here)
   bool const is_outer = (join != join_kind::INNER_JOIN);
 
-  // launch_partitioned_retrieve computes output size from match counts via exclusive scan
+  // launch_partitioned_retrieve reduces match counts to compute output size
   // (total = last_offset + last_count), allocates output buffers, and launches the kernel.
   auto const* partition_counts = match_ctx._match_counts->data() + left_start_idx;
   auto const n                 = static_cast<cuda::std::int64_t>(partition_size);
