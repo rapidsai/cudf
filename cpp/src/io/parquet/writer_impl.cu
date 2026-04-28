@@ -97,7 +97,9 @@ struct aggregate_writer_metadata {
       std::transform(kv_md[p].begin(),
                      kv_md[p].end(),
                      std::back_inserter(this->files[p].key_value_metadata),
-                     [](auto const& kv) { return KeyValue{kv.first, kv.second}; });
+                     [](auto const& kv) {
+                       return KeyValue{kv.first, kv.second};
+                     });
     }
 
     // Append arrow schema to the key-value metadata
@@ -1288,7 +1290,7 @@ size_t max_page_bytes(compression_type compression, size_t max_page_size_bytes)
 std::pair<std::vector<rmm::device_uvector<size_type>>, std::vector<rmm::device_uvector<size_type>>>
 build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
                          host_span<parquet_column_device_view const> col_desc,
-                         device_2dspan<PageFragment const> frags,
+                         device_2dspan<PageFragment> frags,
                          compression_type compression,
                          dictionary_policy dict_policy,
                          size_t max_dict_size,
@@ -1885,10 +1887,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
       auto& row_group = agg_meta->file(p).row_groups[global_r];
       auto const fragments_in_chunk =
         util::div_rounding_up_safe<uint32_t>(row_group.num_rows, max_page_fragment_size);
-      CUDF_EXPECTS(fragments_in_chunk <= static_cast<uint32_t>(MAX_FRAGMENTS_PER_BLOCK),
-                   "Number of fragments per column chunk exceeds the maximum supported by the "
-                   "parquet writer's dictionary collection kernel. Consider increasing the "
-                   "fragment size or reducing the row group size.");
       row_group.total_byte_size = 0;
       row_group.columns.resize(num_columns);
       for (int c = 0; c < num_columns; c++) {
@@ -1902,6 +1900,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         ck.start_row         = start_row;
         ck.num_rows          = (uint32_t)row_group.num_rows;
         ck.first_fragment    = c * num_fragments + f;
+        ck.num_fragments     = fragments_in_chunk;
         ck.encodings         = 0;
         auto chunk_fragments = row_group_fragments[c].subspan(f, fragments_in_chunk);
         // In fragment struct, add a pointer to the chunk it belongs to
@@ -1966,6 +1965,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
           ck.fragments       = page_fragments.device_ptr(frag_offset);
           ck.first_fragment  = frag_offset;
+          ck.num_fragments   = fragments_in_chunk;
 
           // update the chunk pointer here for each fragment in chunk.fragments
           for (uint32_t i = 0; i < fragments_in_chunk; i++) {

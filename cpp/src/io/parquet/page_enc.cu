@@ -642,7 +642,6 @@ CUDF_KERNEL void __launch_bounds__(128)
     uint32_t num_rows            = 0;
     uint32_t page_start          = 0;
     uint32_t page_offset         = ck_g.ck_stat_size;
-    uint32_t num_dict_entries    = 0;
     uint32_t comp_page_offset    = ck_g.ck_stat_size;
     uint32_t page_headers_size   = 0;
     uint32_t max_page_data_size  = 0;
@@ -897,7 +896,6 @@ CUDF_KERNEL void __launch_bounds__(128)
         max_stats_len       = 0;
       }
       max_stats_len = max(max_stats_len, minmax_len);
-      num_dict_entries += frag_g.num_dict_vals;
       page_size += fragment_data_size;
       // fragment_data_size includes the length indicator...remove it
       var_bytes_size += frag_g.fragment_data_size - frag_g.num_valid * sizeof(size_type);

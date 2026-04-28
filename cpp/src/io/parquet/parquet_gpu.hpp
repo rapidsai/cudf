@@ -530,7 +530,7 @@ struct PageFragment {
   uint32_t num_valid;        //<! Number of non-null leaf values
   size_type start_row;       //!< First row in fragment
   uint16_t num_rows;         //!< Number of rows in fragment
-  uint16_t num_dict_vals;    //!< Number of unique dictionary entries
+  size_type num_dict_vals;   //!< Number of unique dictionary entries
   EncColumnChunk* chunk;     //!< The chunk that this fragment belongs to
 };
 
@@ -578,6 +578,8 @@ struct EncColumnChunk {
   uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
+  uint32_t num_fragments;   //!< Number of fragments in chunk. Set host-side during row group setup
+                            //!< and consumed by `collect_map_entries_kernel` as the bucket count.
   EncPage* pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
   uint32_t num_pages;       //!< Number of pages in chunk

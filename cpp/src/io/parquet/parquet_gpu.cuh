@@ -44,9 +44,9 @@ auto constexpr VALUE_SENTINEL = mapped_type{-1};
 auto constexpr SCOPE          = cuda::thread_scope_block;
 
 using storage_type     = cuco::bucket_storage<slot_type,
-                                              bucket_size,
-                                              cuco::extent<std::size_t>,
-                                              rmm::mr::polymorphic_allocator<char>>;
+                                          bucket_size,
+                                          cuco::extent<std::size_t>,
+                                          rmm::mr::polymorphic_allocator<char>>;
 using storage_ref_type = typename storage_type::ref_type;
 
 /**
@@ -100,7 +100,7 @@ inline size_type __device__ row_to_value_idx(size_type idx,
  * @param stream CUDA stream to use
  */
 void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
-                              cudf::detail::device_2dspan<PageFragment const> frags,
+                              cudf::detail::device_2dspan<PageFragment> frags,
                               rmm::cuda_stream_view stream);
 
 /**
@@ -156,7 +156,6 @@ void get_dictionary_indices(device_span<slot_type> const map_storage,
  * @param pages  Device span of encoder pages. Field `dict_rle_bits` is written.
  * @param stream CUDA stream to use
  */
-void compute_per_page_dict_rle_bits(device_span<EncPage> pages,
-                                    rmm::cuda_stream_view stream);
+void compute_per_page_dict_rle_bits(device_span<EncPage> pages, rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail
