@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -81,37 +81,21 @@ def spmd_comm() -> Communicator:
 
 
 @pytest.fixture
-def blocksize_mode(request: pytest.FixtureRequest) -> Literal["default", "small"]:
-    """Blocksize mode for the streaming executor.
-
-    Defaults to ``"default"``. Tests can override this via ``indirect``
-    parametrization with ``["default", "small"]`` to run under both the
-    standard and small-partition configurations. In addition, the
-    ``engine="spmd-small"`` variant of the ``engine`` fixture implicitly
-    selects ``"small"`` mode so that every streaming-engine test exercises
-    tiny-partition / fallback paths without per-test opt-in. Explicit
-    indirect parametrization always wins over the implicit engine-derived
-    value.
-    """
-    if hasattr(request, "param"):
-        return request.param
-    callspec = getattr(request.node, "callspec", None)
-    if callspec is not None and callspec.params.get("engine") == "spmd-small":
-        return "small"
-    return "default"
-
-
-@pytest.fixture
 def streaming_engine_factory(
     spmd_comm: Communicator,
-    blocksize_mode: Literal["default", "small"],
 ) -> Generator[Callable[..., StreamingEngine], None, None]:
     """Yield a callable that constructs and manages :class:`StreamingEngine` lifetimes.
 
     Tests pass a :class:`StreamingOptions` describing only the fields they
-    care about; the factory layers test-suite defaults underneath, applies
-    ``blocksize_mode`` adjustments, and enters the engine context manager.
-    All produced engines are torn down at fixture teardown in reverse order.
+    care about; the factory layers the default blocksize baseline
+    underneath and enters the engine context manager. All produced engines
+    are torn down at fixture teardown in reverse order.
+
+    The factory always uses the ``"default"`` blocksize baseline. Tests that
+    need the tiny-partition / silent-fallback path either call the factory
+    with a fully-populated :class:`StreamingOptions` or use the
+    :func:`streaming_engine` fixture (which the ``engine`` fixture's
+    ``"spmd-small"`` variant resolves).
 
     Today the factory builds an :class:`SPMDEngine`, but it is typed as the
     abstract :class:`StreamingEngine` because future variants (``RayEngine``,
@@ -126,7 +110,7 @@ def streaming_engine_factory(
     engines: list[SPMDEngine] = []
 
     def factory(options: StreamingOptions | None = None) -> StreamingEngine:
-        baseline = create_streaming_options(blocksize_mode).to_dict()
+        baseline = create_streaming_options("default").to_dict()
         if options is not None:
             baseline.update(options.to_dict())
 
