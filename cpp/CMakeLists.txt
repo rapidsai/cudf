@@ -1151,6 +1151,12 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     endif()
 
     get_property(
+      cudart_path
+      TARGET CUDA::cudart
+      PROPERTY IMPORTED_LOCATION
+    )
+    message(STATUS "cudart: ${cudart_path}")
+    get_property(
       sanitizer_path
       TARGET CUDA::sanitizer
       PROPERTY IMPORTED_LOCATION
