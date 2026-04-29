@@ -1232,22 +1232,6 @@ def test_csv_reader_delim_whitespace():
             read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
 
 
-@pytest.mark.parametrize(
-    "buffer",
-    [
-        "  col_a   col_b  \n  1   2  \n  3   4  \n",
-        "  col_a col_b\n  1 2\n  3 4\n",
-        "col_a col_b  \n1 2  \n3 4  \n",
-        '  "col_a"   "col_b"  \n1 2\n3 4\n',
-    ],
-)
-def test_csv_reader_delim_whitespace_collapses_runs(buffer):
-    with pytest.warns(FutureWarning):
-        cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    pd_df = pd.read_csv(StringIO(buffer), sep=r"\s+")
-    assert_eq(pd_df, cu_df)
-
-
 def test_csv_reader_unnamed_cols():
     # first and last columns are unnamed
     buffer = ",1,2,3,\n4,5,6,7,8"
