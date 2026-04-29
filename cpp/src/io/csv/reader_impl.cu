@@ -165,8 +165,9 @@ std::vector<std::string> get_column_names(std::vector<char> const& row,
         --col_name_len;
       }
 
-      // In delim_whitespace mode (multi_delimiter), runs of whitespace collapse to a single
-      // delimiter and leading/trailing whitespace does not produce empty fields (pandas behavior).
+      // In delim_whitespace mode, leading/trailing/internal whitespace runs must not produce
+      // empty fields (pandas behavior). Internal runs are collapsed by the adjacent-delimiter
+      // skip loop below; this flag handles the leading/trailing empty-field cases here.
       bool const skip_empty_field = parse_opts.multi_delimiter && col_name_len == 0;
 
       if (!skip_empty_field) {
