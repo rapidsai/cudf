@@ -18,6 +18,7 @@
 #include <cooperative_groups/reduce.h>
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_map_ref.cuh>
+#include <cuco/utility/reduction_functors.cuh>
 #include <cuda/atomic>
 #include <cuda/functional>
 #include <cuda/std/bit>
@@ -98,9 +99,6 @@ struct map_insert_fn {
       auto const col                     = chunk->col_desc;
       column_device_view const& data_col = *col->leaf_column;
       __shared__ size_type total_num_dict_entries;
-      __shared__ size_type num_dict_vals;
-      if (t == 0) { num_dict_vals = 0; };
-      __syncthreads();
 
       using equality_fn_type = equality_functor<T>;
       using hash_fn_type     = hash_functor<T>;
@@ -116,8 +114,8 @@ struct map_insert_fn {
                                                cuco::thread_scope_block,
                                                storage_ref};
 
-      // Create a map ref with `cuco::insert` operator
-      auto map_insert_ref = hash_map_ref.rebind_operators(cuco::insert);
+      // Create a map ref with `cuco::insert_or_apply` operator
+      auto map_insert_ref = hash_map_ref.rebind_operators(cuco::insert_or_apply);
 
       // Create atomic refs to the current chunk's num_dict_entries and uniq_data_size
       cuda::atomic_ref<size_type, SCOPE> const chunk_num_dict_entries{chunk->num_dict_entries};
@@ -136,10 +134,9 @@ struct map_insert_fn {
         // Insert fragment index to hash map using a single thread (for best performance for now)
         // and count successful insertions.
         if (is_valid) {
-          // TODO(mh): Here we insert the fragment index of the CAS winner, which may not be the
-          // smallest one (relies on monotonic block scheduling). Switch to static_map's
-          // `insert_or_apply` with `cuco::op::min` for deterministic first-fragment semantics
-          is_unique = map_insert_ref.insert(slot_type{static_cast<key_type>(val_idx), frag_idx});
+          // Insert or ensure this is the smallest fragment index inserting this key
+          is_unique = map_insert_ref.insert_or_apply(
+            slot_type{static_cast<key_type>(val_idx), frag_idx}, cuco::reduce::min{});
           uniq_elem_size = [&]() -> size_type {
             if (not is_unique) { return 0; }
             switch (col->physical_type) {
@@ -175,13 +172,11 @@ struct map_insert_fn {
         auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
         __syncthreads();
         auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
-        // One thread atomically updates the number and data size of total unique values as well as
-        // the number of unique values inserted by this fragment.
+        // One thread atomically updates the number and data size of total unique values.
         if (t == 0) {
           total_num_dict_entries =
             chunk_num_dict_entries.fetch_add(num_unique, cuda::std::memory_order_relaxed);
           total_num_dict_entries += num_unique;
-          num_dict_vals += num_unique;
           chunk_uniq_data_size.fetch_add(uniq_data_size, cuda::std::memory_order_relaxed);
         }
         __syncthreads();
@@ -189,8 +184,6 @@ struct map_insert_fn {
         // Check if the num unique values in chunk has already exceeded max dict size and early exit
         if (total_num_dict_entries > MAX_DICT_SIZE) { break; }
       }  // for loop
-      // Flush the number of unique values inserted by this fragment
-      if (t == 0) { frag->num_dict_vals = num_dict_vals; };
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }
@@ -317,24 +310,40 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     auto const& col_frags = frags[col_idx];
     auto const frag_start = static_cast<size_type>(chunk.fragments - col_frags.data());
 
-    // Initialize fragment_offsets with prefix sum (exclusive) of number of dictionary values
-    // inserted by each fragment in this chunk.
+    // fragment_offsets will contain the prefix-sum of number of dictionary values first seen in
+    // each page fragment
     __shared__ size_type fragment_offsets[MAX_FRAGMENTS_PER_CHUNK];
-    {
-      using block_scan = cub::BlockScan<size_type, block_size>;
-      __shared__ typename block_scan::TempStorage scan_storage;
 
-      auto base_idx = 0;
-      while (base_idx < num_frags) {
-        auto const idx = base_idx + t;
-        auto const per_thread_count =
-          (idx < num_frags) ? col_frags[frag_start + idx].num_dict_vals : 0;
-        auto per_thread_offset = 0;
-        block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
-        if (idx < num_frags) { fragment_offsets[idx] = per_thread_offset; }
-        base_idx += block_size;
-        __syncthreads();
+    // Initialize all fragment offsets to 0
+    for (auto idx = t; idx < num_frags; idx += block_size) {
+      fragment_offsets[idx] = 0;
+    }
+    __syncthreads();
+
+    // Iterate over slots and count the number of dict values first seen page fragment
+    {
+      for (auto slot_idx = t; slot_idx < chunk.dict_map_size; slot_idx += block_size) {
+        auto const* slot = map_storage.data() + chunk.dict_map_offset + slot_idx;
+        if (slot->first != KEY_SENTINEL) {
+          auto const frag_loc = static_cast<size_type>(slot->second) - frag_start;
+          cudf_assert(frag_loc >= 0 && frag_loc < num_frags &&
+                      "fragment index in the slot is out of range of the chunk");
+          atomicAdd(&fragment_offsets[frag_loc], 1);
+        }
       }
+      __syncthreads();
+    }
+
+    // Exclusive scan to convert counts to offsets
+    using block_scan = cub::BlockScan<size_type, block_size>;
+    __shared__ typename block_scan::TempStorage scan_storage;
+
+    {
+      auto const per_thread_count = (t < num_frags) ? fragment_offsets[t] : 0;
+      auto per_thread_offset      = 0;
+      block_scan(scan_storage).ExclusiveSum(per_thread_count, per_thread_offset);
+      if (t < num_frags) { fragment_offsets[t] = per_thread_offset; }
+      __syncthreads();
     }
 
     // Iterate over slots and claim a dictionary index from the fragment offsets (spatial-locality
@@ -344,9 +353,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       auto const key = slot->first;
       if (key != KEY_SENTINEL) {
         auto const frag_loc = static_cast<size_type>(slot->second) - frag_start;
-        cudf_assert(frag_loc >= 0 && frag_loc < num_frags &&
-                    "populate stamped a fragment hint outside this chunk's fragment range");
-        auto const loc = atomicAdd(&fragment_offsets[frag_loc], 1);
+        auto const loc      = atomicAdd(&fragment_offsets[frag_loc], 1);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
         slot->second         = loc;

@@ -153,7 +153,6 @@ void __device__ init_frag_state(frag_init_state_s* const s,
   // smaller. num_rows is fixed but fragment size could be larger if the data is strings or
   // nested.
   s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
-  s->frag.num_dict_vals      = 0;
   s->frag.fragment_data_size = 0;
   s->frag.dict_data_size     = 0;
 
