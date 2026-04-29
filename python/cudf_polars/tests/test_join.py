@@ -165,19 +165,20 @@ def test_join_literal_key(engine: pl.GPUEngine, left, right, left_on, right_on):
     ],
 )
 @pytest.mark.parametrize("zlice", [None, (0, 5)])
-def test_join_where(in_memory_engine: pl.GPUEngine, left, right, conditions, zlice):
-    # ConditionalJoin not supported for multiple partitions, so this test
-    # only exercises the in-memory engine.
+@pytest.mark.skip_on_streaming_engine(
+    "ConditionalJoin not supported for multiple partitions"
+)
+def test_join_where(engine: pl.GPUEngine, left, right, conditions, zlice):
     q = left.join_where(right, *conditions)
 
-    assert_gpu_result_equal(q, engine=in_memory_engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
     if zlice is not None:
         q_len = q.slice(*zlice).select(pl.len())
         # Can't compare result, since row order is not guaranteed and
         # therefore we only check the length
 
-        assert_gpu_result_equal(q_len, engine=in_memory_engine)
+        assert_gpu_result_equal(q_len, engine=engine)
 
 
 def test_cross_join_empty_right_table(engine: pl.GPUEngine, request):
@@ -307,11 +308,12 @@ def test_join_maintain_order_with_slice(
         (pl.Decimal(15, 2), pl.Float64),
     ],
 )
+@pytest.mark.skip_on_streaming_engine(
+    "ConditionalJoin not supported for multiple partitions"
+)
 def test_cross_join_filter_with_decimals(
-    in_memory_engine: pl.GPUEngine, request, expr, left_dtype, right_dtype
+    engine: pl.GPUEngine, request, expr, left_dtype, right_dtype
 ):
-    # ConditionalJoin not supported for multiple partitions, so this test
-    # only exercises the in-memory engine.
     request.applymarker(
         pytest.mark.xfail(
             POLARS_VERSION_LT_132
@@ -345,7 +347,7 @@ def test_cross_join_filter_with_decimals(
 
     q = left.join(right, how="cross").filter(expr)
 
-    assert_gpu_result_equal(q, engine=in_memory_engine, check_row_order=False)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_conditional_join_predicate_pickle():

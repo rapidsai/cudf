@@ -298,11 +298,10 @@ def test_over_ternary(engine: pl.GPUEngine, df):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_over_broadcast_input_row_group_indices_aligned(
-    in_memory_engine: pl.GPUEngine,
-):
-    # GroupedWindow not supported for multiple partitions, so this test only
-    # exercises the in-memory engine.
+@pytest.mark.skip_on_streaming_engine(
+    "GroupedWindow not supported for multiple partitions"
+)
+def test_over_broadcast_input_row_group_indices_aligned(engine: pl.GPUEngine):
     num_rows, num_groups = 512, 64
 
     df = pl.LazyFrame(
@@ -313,7 +312,7 @@ def test_over_broadcast_input_row_group_indices_aligned(
     )
     q = df.select(pl.col("x").sum().over("g"))
 
-    assert_gpu_result_equal(q, engine=in_memory_engine)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])

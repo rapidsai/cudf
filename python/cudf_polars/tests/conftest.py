@@ -170,17 +170,6 @@ def engine(
 
 
 @pytest.fixture
-def in_memory_engine() -> pl.GPUEngine:
-    """Yield an in-memory :class:`polars.GPUEngine` with ``raise_on_fail=True``.
-
-    Use this for tests that exercise operations without a multi-partition
-    implementation — the test runs only against the in-memory executor and
-    is not parametrized over streaming variants.
-    """
-    return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
-
-
-@pytest.fixture
 def engine_raise_on_fail() -> pl.GPUEngine:
     """Yield a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
 
@@ -220,6 +209,14 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     import cudf_polars.testing.asserts
 
+    config.addinivalue_line(
+        "markers",
+        "skip_on_streaming_engine(reason): skip the test for streaming "
+        '``engine`` variants (e.g. ``"spmd"``, ``"spmd-small"``) while '
+        "still letting the in-memory variant run. Use this to track features "
+        "that have no multi-partition implementation",
+    )
+
     # Ray's internal subprocess management leaks `/dev/null` file handles, and
     # distributed's shutdown leaves unclosed sockets. Under Python 3.14 +
     # pytest 9, these surface as unraisable `ResourceWarning`s and — combined
@@ -248,3 +245,23 @@ def pytest_configure(config):
     cudf_polars.testing.asserts.DEFAULT_EXECUTOR = config.getoption("--executor")
     cudf_polars.testing.asserts.DEFAULT_RUNTIME = config.getoption("--runtime")
     cudf_polars.testing.asserts.DEFAULT_CLUSTER = config.getoption("--cluster")
+
+
+def pytest_collection_modifyitems(items):
+    """Apply ``skip_on_streaming_engine`` markers to streaming ``engine`` items."""
+    for item in items:
+        marker = item.get_closest_marker("skip_on_streaming_engine")
+        if marker is None:
+            continue
+        callspec = getattr(item, "callspec", None)
+        if callspec is None:
+            continue
+        engine_param = callspec.params.get("_all_engine_param")
+        if engine_param is None or engine_param == "in-memory":
+            continue
+        reason = (
+            marker.args[0]
+            if marker.args
+            else marker.kwargs.get("reason", "unsupported on streaming engine")
+        )
+        item.add_marker(pytest.mark.skip(reason=reason))
