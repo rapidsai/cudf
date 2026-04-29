@@ -16,6 +16,7 @@
 
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace cudf::test {
@@ -119,10 +120,11 @@ int main(int argc, char** argv)
   auto lsd = cudf::test::StringsLargeTest::get_ls_data();
 
   if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {
-    auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
-    cudf::set_current_device_resource(mr);
-    auto rc = RUN_ALL_TESTS();
+    auto mr      = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+    auto prev_mr = cudf::set_current_device_resource(mr);
+    auto rc      = RUN_ALL_TESTS();
     std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl;
+    cudf::set_current_device_resource(std::move(prev_mr));
     return rc;
   }
   return RUN_ALL_TESTS();
