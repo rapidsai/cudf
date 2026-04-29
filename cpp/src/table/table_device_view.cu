@@ -84,8 +84,7 @@ contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_stream_
   auto const h_span = host_span<int8_t const>{h_buffer}.subspan(
     static_cast<int8_t const*>(h_ptr) - h_buffer.data(), views_size_bytes);
   auto const d_span = device_span<int8_t>{static_cast<int8_t*>(d_ptr), views_size_bytes};
-  cudf::detail::cuda_memcpy_async(d_span, h_span, stream);
-  stream.synchronize();  // make sure h_buffer is copied before going out of scope
+  cudf::detail::cuda_memcpy(d_span, h_span, stream);
   return std::make_pair(std::move(descendant_storage), d_columns);
 }
 
