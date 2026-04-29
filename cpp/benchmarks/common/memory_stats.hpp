@@ -9,19 +9,15 @@
 
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
-#include <cuda/memory_resource>
-
 #include <cstddef>
-#include <utility>
 
 namespace cudf {
 
 class memory_stats_logger {
  public:
-  memory_stats_logger()
-    : statistics_mr(cudf::get_current_device_resource_ref()),
-      existing_mr(cudf::set_current_device_resource(statistics_mr))
+  memory_stats_logger() : statistics_mr(cudf::get_current_device_resource_ref())
   {
+    cudf::set_current_device_resource(statistics_mr);
   }
 
   ~memory_stats_logger()
@@ -36,7 +32,6 @@ class memory_stats_logger {
 
  private:
   rmm::mr::statistics_resource_adaptor statistics_mr;
-  cuda::mr::any_resource<cuda::mr::device_accessible> existing_mr;
 };
 
 }  // namespace cudf
