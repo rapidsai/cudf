@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import importlib
 import io
@@ -73,6 +74,8 @@ try:
     CUDF_POLARS_AVAILABLE = True
 except ImportError:
     CUDF_POLARS_AVAILABLE = False
+
+from cudf_polars.experimental.benchmarks.polars_naive_helpers import sql_semantics
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -908,7 +911,13 @@ def run_polars_query(
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
 ) -> QueryRunResult:
     """Run all iterations for a single query. Caller must wrap in try/except."""
-    query_result = getattr(benchmark, f"q{q_id}")(run_config)
+    _validating_against_duckdb = (
+        run_config.validation_method is not None
+        and run_config.validation_method.expected_source == "duckdb"
+    )
+    _ctx = sql_semantics() if _validating_against_duckdb else contextlib.nullcontext()
+    with _ctx:
+        query_result = getattr(benchmark, f"q{q_id}")(run_config)
     q = query_result.frame
 
     print_query_plan(q_id, q, args, run_config, engine, print_plans=args.print_plans)
