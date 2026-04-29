@@ -55,6 +55,11 @@ except ImportError as e:
     duckdb_err = e
 
 try:
+    import psutil
+except ImportError:
+    psutil = None
+
+try:
     import pynvml
 except ImportError:
     pynvml = None
@@ -324,10 +329,39 @@ class GPUInfo:
 
 
 @dataclasses.dataclass
+class CPUInfo:
+    """Information about the host CPU."""
+
+    model: str | None
+    physical_cores: int | None
+    logical_cores: int | None
+
+    @classmethod
+    def collect(cls) -> CPUInfo:
+        """Collect CPU information."""
+        model: str | None = None
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        model = line.split(":", 1)[1].strip()
+                        break
+        except OSError:
+            pass
+        physical_cores: int | None = None
+        logical_cores: int | None = None
+        if psutil is not None:
+            physical_cores = psutil.cpu_count(logical=False)
+            logical_cores = psutil.cpu_count(logical=True)
+        return cls(model=model, physical_cores=physical_cores, logical_cores=logical_cores)
+
+
+@dataclasses.dataclass
 class HardwareInfo:
     """Information about the hardware used to run the query."""
 
     gpus: list[GPUInfo]
+    cpu: CPUInfo
     # TODO: ucx
 
     @classmethod
@@ -339,7 +373,7 @@ class HardwareInfo:
         else:
             # No GPUs -- probably running in CPU mode
             gpus = []
-        return cls(gpus=gpus)
+        return cls(gpus=gpus, cpu=CPUInfo.collect())
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -560,6 +594,7 @@ class RunConfig:
             "suffix": self.suffix,
             "qualification": self.qualification,
             "executor": self.executor,
+            "runtime": "rapidsmpf" if self.executor == "streaming" else None,
             "frontend": self.frontend,
             "iterations": self.iterations,
             "io_mode": self.io_mode,
@@ -1104,6 +1139,28 @@ def _finalize_benchmark_run(
     args.output.write(json.dumps(run_config.serialize(engine=None)))
     args.output.write("\n")
     sys.exit(1 if (query_failures or validation_failures) else 0)
+
+
+def run_polars_cpu(
+    benchmark: Any,
+    args: argparse.Namespace,
+    run_config: RunConfig,
+    numeric_type: str,
+    date_type: str,
+    validation_files: dict[int, Path] | None,
+) -> None:
+    """Run benchmark queries using the Polars CPU engine."""
+    records, plans, validation_failures, query_failures = _run_query_loop(
+        benchmark,
+        args,
+        run_config,
+        engine=None,
+        numeric_type=numeric_type,
+        date_type=date_type,
+        validation_files=validation_files,
+    )
+    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    _finalize_benchmark_run(args, run_config, validation_failures, query_failures)
 
 
 def run_polars_spmd(
@@ -1705,13 +1762,14 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--frontend",
         required=True,
         type=str,
-        choices=["spmd", "ray", "dask", "duckdb"],
+        choices=["spmd", "ray", "dask", "duckdb", "cpu"],
         help=textwrap.dedent("""\
             Execution frontend:
                 - spmd   : SPMD execution via rrun launcher
                 - ray    : Ray actor-based multi-GPU execution
                 - dask   : Dask distributed multi-GPU execution
-                - duckdb : DuckDB CPU execution"""),
+                - duckdb : DuckDB CPU execution
+                - cpu    : Polars CPU execution (requires --executor cpu)"""),
     )
     parser.add_argument(
         "--connect",
@@ -1954,6 +2012,17 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     )
     numeric_type, date_type = check_input_data_type(run_config)
     match args.frontend:
+        case "cpu":
+            if run_config.executor != "cpu":
+                raise ValueError("--frontend cpu requires --executor cpu")
+            run_polars_cpu(
+                benchmark,
+                args,
+                run_config,
+                numeric_type,
+                date_type,
+                validation_files,
+            )
         case "spmd":
             run_polars_spmd(
                 benchmark,
