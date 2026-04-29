@@ -32,10 +32,15 @@ cache:
         cudf_ROOT="$(realpath ./cpp/build)"
         export cudf_ROOT
 
+        cmake_args=
+        for arg in $CMAKE_ARGS; do
+          cmake_args="$cmake_args \"$arg\""
+        done
+
         ./build.sh -n -v \
             libcudf libcudf_kafka benchmarks tests \
             --build_metrics --incl_cache_stats --allgpuarch \
-            --cmake-args="\"-DCUDF_ENABLE_ARROW_S3=ON\" $CMAKE_ARGS"
+            --cmake-args="\"-DCUDF_ENABLE_ARROW_S3=ON\" $cmake_args"
       secrets:
         - AWS_ACCESS_KEY_ID
         - AWS_SECRET_ACCESS_KEY
