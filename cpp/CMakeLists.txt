@@ -61,8 +61,16 @@ option(CUDA_WARNINGS_AS_ERRORS "Enable -Werror=all-warnings for all CUDA compila
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
-option(CUDF_BUILD_STREAMS_TEST_UTIL
-       "Whether to build the utilities for stream testing contained in libcudf" OFF
+set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL ON)
+
+if(NOT BUILD_SHARED_LIBS)
+  set(DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL OFF)
+endif()
+
+option(
+  CUDF_BUILD_STREAMS_TEST_UTIL
+  "Whether to build the utilities for stream testing contained in libcudf"
+  ${DEFAULT_CUDF_BUILD_STREAMS_TEST_UTIL}
 )
 mark_as_advanced(CUDF_BUILD_STREAMS_TEST_UTIL)
 option(CUDF_CLANG_TIDY "Enable clang-tidy during compilation" OFF)
@@ -1142,6 +1150,13 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       )
     endif()
 
+    get_property(
+      sanitizer_path
+      TARGET CUDA::sanitizer
+      PROPERTY IMPORTED_LOCATION
+    )
+    get_filename_component(sanitizer_dir "${sanitizer_path}" DIRECTORY)
+    file(RELATIVE_PATH sanitizer_dir_name "${CUDAToolkit_LIBRARY_ROOT}" "${sanitizer_dir}")
     set_target_properties(
       ${_tgt}
       PROPERTIES # set target compile options
@@ -1149,7 +1164,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
                  CXX_STANDARD_REQUIRED ON
                  POSITION_INDEPENDENT_CODE ON
                  BUILD_RPATH "\$ORIGIN"
-                 INSTALL_RPATH "\$ORIGIN;$ENV{CONDA_PREFIX}/compute-sanitizer"
+                 INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../${sanitizer_dir_name}"
     )
     target_compile_options(
       ${_tgt} PRIVATE "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>>"
