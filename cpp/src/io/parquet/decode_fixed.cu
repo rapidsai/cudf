@@ -182,8 +182,15 @@ __device__ inline void decode_fixed_width_split_values(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  Type const dtype      = s->col.physical_type;
-  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
+  Type const dtype    = s->col.physical_type;
+  auto const data_len = cuda::std::distance(s->data_start, s->data_end);
+
+  // Check malformed BYTE_STREAM_SPLIT pages
+  if (s->dtype_len_in <= 0 or data_len <= 0) {
+    if (t == 0) { s->set_error_code(decode_error::INVALID_BYTE_STREAM_SPLIT_SIZE); }
+    return;
+  }
+
   auto const num_values = data_len / s->dtype_len_in;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
