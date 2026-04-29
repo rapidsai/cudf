@@ -71,9 +71,7 @@ struct n_table_comparator {
     bool const lhs_is_batch = (lhs >= max_groups);
     bool const rhs_is_batch = (rhs >= max_groups);
 
-    if (lhs_is_batch && rhs_is_batch) {
-      return batch_self_eq(lhs - max_groups, rhs - max_groups);
-    }
+    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - max_groups, rhs - max_groups); }
     if (lhs_is_batch) { return cross_eqs[key_batch[rhs]](lhs - max_groups, key_row[rhs]); }
     if (rhs_is_batch) { return cross_eqs[key_batch[lhs]](rhs - max_groups, key_row[lhs]); }
     return lhs == rhs;
@@ -134,14 +132,15 @@ struct offset_cache_hasher {
  *   3. Record the dense ID in `_encoded_indices` for finalization.
  */
 struct finalize_new_key_fn {
-  size_type const* batch_local_indices;  ///< batch-local row indices of new keys [new_distinct_count]
-  size_type* const* slot_ptrs;           ///< slot pointer per batch row [batch_size]
-  size_type* key_batch;                  ///< companion: batch id at dense ID
-  size_type* key_row;                    ///< companion: row within compacted batch at dense ID
-  size_type* encoded_indices;            ///< encoded_indices[dense group] = dense ID (identity)
-  size_type max_groups;                  ///< for computing the expected transient value
-  size_type batch_id;                    ///< the index of this batch in _compacted_batches
-  size_type distinct_count_before;       ///< _distinct_count prior to this batch
+  size_type const*
+    batch_local_indices;            ///< batch-local row indices of new keys [new_distinct_count]
+  size_type* const* slot_ptrs;      ///< slot pointer per batch row [batch_size]
+  size_type* key_batch;             ///< companion: batch id at dense ID
+  size_type* key_row;               ///< companion: row within compacted batch at dense ID
+  size_type* encoded_indices;       ///< encoded_indices[dense group] = dense ID (identity)
+  size_type max_groups;             ///< for computing the expected transient value
+  size_type batch_id;               ///< the index of this batch in _compacted_batches
+  size_type distinct_count_before;  ///< _distinct_count prior to this batch
 
   __device__ void operator()(size_type r) const
   {

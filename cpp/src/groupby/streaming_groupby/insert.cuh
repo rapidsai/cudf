@@ -116,7 +116,7 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
       cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
 
     // Store the compacted batch.
-    auto const new_batch_id        = static_cast<size_type>(_compacted_batches.size());
+    auto const new_batch_id          = static_cast<size_type>(_compacted_batches.size());
     auto const distinct_count_before = _distinct_count;
     _compacted_batches.push_back(std::move(compacted));
     _preprocessed_batches.push_back(preprocessed_compacted);
