@@ -607,7 +607,12 @@ def names_to_indices(
     The column indices for each name in schema order.
     """
     keys = list(schema.keys())
-    str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
+    str_names = [
+        (n.value.name if isinstance(n.value, Col) else n.name)
+        if isinstance(n, NamedExpr)
+        else n
+        for n in names
+    ]
     return tuple(keys.index(n) for n in str_names)
 
 
