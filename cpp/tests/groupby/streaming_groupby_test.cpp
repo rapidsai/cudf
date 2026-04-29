@@ -1269,8 +1269,7 @@ TEST_F(StreamingGroupbyTest, CumulativeRowsCanExceedMaxGroups)
   EXPECT_EQ(streaming_agg.distinct_count(), 3);
 
   auto [keys, results] = streaming_agg.finalize();
-  verify_against_groupby(
-    keys, results, {batch, batch, batch, batch, batch}, KEY_COL, reqs);
+  verify_against_groupby(keys, results, {batch, batch, batch, batch, batch}, KEY_COL, reqs);
 }
 
 TEST_F(StreamingGroupbyTest, StructKeySumTwoBatches)
