@@ -177,6 +177,10 @@ void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
 
       if (runtime_cbdata->callbackSite == SANITIZER_API_ENTER) {
         switch (cbid) {
+          // `generated_cuda_runtime_api_meta.h` is provided by the CUDA Toolkit/Compute Sanitizer.
+          // It defines versioned callback parameter structs named like
+          // `cudaMemcpyAsync_v3020_params`, where the numeric suffix identifies the CUDA runtime
+          // API version associated with that parameter layout.
 #define CHECK_STREAM_ARG(call, version, field)                \
   case SANITIZER_CBID_RUNTIME_API_##call: {                   \
     using args_t = call##_v##version##_params;                \
@@ -206,6 +210,8 @@ void sanitizer_subscriber::callback(Sanitizer_CallbackDomain domain,
           CHECK_STREAM_ARG(cudaMemcpy2DAsync_ptsz, 7000, stream);
           CHECK_STREAM_ARG(cudaMemcpy2DFromArrayAsync, 3020, stream);
           CHECK_STREAM_ARG(cudaMemcpy2DFromArrayAsync_ptsz, 7000, stream);
+          CHECK_STREAM_ARG(cudaMemcpy2DToArrayAsync, 3020, stream);
+          CHECK_STREAM_ARG(cudaMemcpy2DToArrayAsync_ptsz, 7000, stream);
           CHECK_STREAM_ARG(cudaMemcpy3DAsync, 3020, stream);
           CHECK_STREAM_ARG(cudaMemcpy3DAsync_ptsz, 7000, stream);
           CHECK_STREAM_ARG(cudaMemcpy3DPeerAsync, 4000, stream);
