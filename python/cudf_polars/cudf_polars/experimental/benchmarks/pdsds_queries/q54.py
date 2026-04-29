@@ -144,11 +144,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
-    month_seq = date_dim.filter(
-        (pl.col("d_year") == year) & (pl.col("d_moy") == month)
-    ).select(
-        (pl.col("d_month_seq") + 1).alias("seq_start"),
-        (pl.col("d_month_seq") + 3).alias("seq_end"),
+    month_seq = (
+        date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        .select(
+            (pl.col("d_month_seq") + 1).alias("seq_start"),
+            (pl.col("d_month_seq") + 3).alias("seq_end"),
+        )
+        .unique()
     )
     valid_dates = (
         date_dim.join(month_seq, how="cross")
@@ -260,12 +262,16 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .unique()
     )
 
-    # SQL: valid_dates — date_dim WHERE d_month_seq BETWEEN month_seq+1 AND month_seq+3
-    month_seq = date_dim.filter(
-        (pl.col("d_year") == year) & (pl.col("d_moy") == month)
-    ).select(
-        (pl.col("d_month_seq") + 1).alias("seq_start"),
-        (pl.col("d_month_seq") + 3).alias("seq_end"),
+    # SQL: SELECT DISTINCT d_month_seq+1 AS seq_start, d_month_seq+3 AS seq_end
+    #      FROM date_dim WHERE d_year={year} AND d_moy={month}
+    # DISTINCT collapses all days in the month to a single (seq_start, seq_end) scalar.
+    month_seq = (
+        date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        .select(
+            (pl.col("d_month_seq") + 1).alias("seq_start"),
+            (pl.col("d_month_seq") + 3).alias("seq_end"),
+        )
+        .unique()
     )
     valid_dates = (
         date_dim.join(month_seq, how="cross")
@@ -288,9 +294,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .agg([pl.col("ss_ext_sales_price").sum().alias("revenue")])
     )
 
-    # SQL: segments = revenue / 50 (integer buckets)
+    # SQL: CAST((revenue / 50) AS INT) — DuckDB's CAST rounds (not truncates) for floats
     segments = my_revenue.select(
-        (pl.col("revenue") / 50).cast(pl.Int64()).alias("segment")
+        (pl.col("revenue") / 50).round(0).alias("segment")
     )
 
     sort_by = {"segment": False, "num_customers": False}
