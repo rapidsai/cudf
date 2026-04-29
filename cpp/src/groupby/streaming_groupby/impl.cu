@@ -13,7 +13,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
-#include <cudf/detail/gather.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -129,6 +129,15 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   _agg_results = detail::hash::create_results_table(
     _max_groups, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
 
+  // Cache the mutable_table_device_view once; the underlying table is fixed-size and
+  // never reallocated, so the device-side descriptor stays valid for the whole
+  // lifetime of this impl.
+  {
+    auto raii      = mutable_table_device_view::create(*_agg_results, stream);
+    _d_agg_results = decltype(_d_agg_results){
+      raii.release(), [](mutable_table_device_view* t) { t->destroy(); }};
+  }
+
   _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr);
 
   // Build column-index mapping from expanded agg columns to source data columns.
@@ -156,13 +165,8 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
     offset += static_cast<size_type>(detail::hash::get_simple_aggregations(ga, values_type).size());
   }
 
-  // Companion vectors: indexed by dense ID, one entry per distinct key.
-  _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
-  _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
-
-  // Group-to-agg-row map: identity in this scheme (dense IDs == agg row indices).
-  // Retained for compatibility with the existing gather-based finalization path.
-  _encoded_indices = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
+  // Companion vector: indexed by dense ID, one {batch_id, row} entry per distinct key.
+  _key_loc = std::make_unique<rmm::device_uvector<key_location_t>>(_max_groups, stream, mr);
 
   _initialized = true;
 }
@@ -195,14 +199,12 @@ void streaming_groupby::impl::update_nullable_state(table_view const& batch_keys
 std::unique_ptr<table> streaming_groupby::impl::gather_agg_results(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
 {
-  return cudf::detail::gather(
-    _agg_results->view(),
-    device_span<size_type const>{_encoded_indices->data(),
-                                 static_cast<std::size_t>(_distinct_count)},
-    out_of_bounds_policy::DONT_CHECK,
-    cudf::negative_index_policy::NOT_ALLOWED,
-    stream,
-    mr);
+  // Dense IDs are already row indices into _agg_results, so the meaningful
+  // result rows are exactly [0, _distinct_count).  A slice + table copy
+  // replaces what used to be a gather-by-identity-indices kernel.
+  auto const sliced =
+    cudf::detail::slice(_agg_results->view(), {0, _distinct_count}, stream).front();
+  return std::make_unique<table>(sliced, stream, mr);
 }
 
 std::unique_ptr<table> streaming_groupby::impl::gather_distinct_keys(

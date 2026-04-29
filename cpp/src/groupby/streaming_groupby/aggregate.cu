@@ -44,7 +44,6 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, rmm::cuda_str
 
   auto const values_view = data.select(_value_col_indices);
   auto const d_values    = table_device_view::create(values_view, stream);
-  auto d_results_ptr     = mutable_table_device_view::create(*_agg_results, stream);
 
   auto const temp_mr      = cudf::get_current_device_resource_ref();
   auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
@@ -53,7 +52,7 @@ void streaming_groupby::impl::do_aggregate(table_view const& data, rmm::cuda_str
     cuda::counting_iterator<int64_t>(0),
     static_cast<int64_t>(batch_size) * num_agg_cols,
     detail::hash::compute_single_pass_aggs_dense_output_fn{
-      result.target_indices.begin(), _d_agg_kinds.data(), *d_values, *d_results_ptr});
+      result.target_indices.begin(), _d_agg_kinds.data(), *d_values, *_d_agg_results});
 }
 
 }  // namespace cudf::groupby

@@ -15,6 +15,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -25,11 +26,20 @@
 #include <cuco/static_set.cuh>
 #include <cuda/atomic>
 #include <cuda/std/functional>
+#include <cuda/std/utility>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
 namespace cudf::groupby {
+
+/*
+ * Companion location for a stored dense ID: which compacted batch table the key
+ * lives in (`first`) and the row index within that table (`second`).  Packed into
+ * one 8-byte pair so the comparator does a single load instead of two.
+ */
+using key_location_t = cuda::std::pair<size_type, size_type>;
 
 // The actual comparator and hasher are always rebinded per-batch via
 // rebind_key_eq / rebind_hash_function, so the types used here are never invoked.
@@ -48,62 +58,75 @@ using streaming_set_t = cuco::static_set<cudf::size_type,
 /*
  * N-table comparator for the persistent hash set.
  *
- * Slot values < max_groups are "stored" dense IDs resolved via companion vectors
- * key_batch[id] and key_row[id] to (compacted_batch_table, row_within_batch).
- * Slot values >= max_groups are transient batch values: row index = value - max_groups
- * in the current batch table.  The transient encoding lives only for the duration
- * of one probe_and_insert call; new keys are rewritten to dense IDs before the
- * next batch's insertion.
+ * Slot values < max_groups are "stored" dense IDs resolved via the companion
+ * vector key_loc[id] = {batch_id, row_within_batch} to a (compacted_batch_table,
+ * row) location.  Slot values >= max_groups are transient batch values: row index
+ * = value - max_groups in the current batch table.  The transient encoding lives
+ * only for the duration of one probe_and_insert call; new keys are rewritten to
+ * dense IDs before the next batch's insertion.
  *
  * Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
  * and stored in a device array.  Self-comparisons use batch_self_eq.
  */
 template <typename RowEqT>
 struct n_table_comparator {
-  RowEqT batch_self_eq;        ///< Self-comparator on the current batch table
-  RowEqT const* cross_eqs;     ///< Device array [num_compacted_batches]: batch vs compacted[k]
-  size_type const* key_batch;  ///< Companion vector: compacted batch index per dense ID
-  size_type const* key_row;    ///< Companion vector: row within compacted batch per dense ID
-  size_type max_groups;        ///< Threshold: idx >= max_groups is a transient batch value
+  RowEqT batch_self_eq;             ///< Self-comparator on the current batch table
+  RowEqT const* cross_eqs;          ///< Device array [num_compacted_batches]: batch vs compacted[k]
+  key_location_t const* key_loc;    ///< {batch_id, row_in_compacted} per dense ID
+  size_type max_groups;             ///< Threshold: idx >= max_groups is a transient batch value
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
     bool const lhs_is_batch = (lhs >= max_groups);
     bool const rhs_is_batch = (rhs >= max_groups);
 
-    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - max_groups, rhs - max_groups); }
-    if (lhs_is_batch) { return cross_eqs[key_batch[rhs]](lhs - max_groups, key_row[rhs]); }
-    if (rhs_is_batch) { return cross_eqs[key_batch[lhs]](rhs - max_groups, key_row[lhs]); }
+    if (lhs_is_batch && rhs_is_batch) {
+      return batch_self_eq(lhs - max_groups, rhs - max_groups);
+    }
+    if (lhs_is_batch) {
+      auto const loc = key_loc[rhs];
+      return cross_eqs[loc.first](lhs - max_groups, loc.second);
+    }
+    if (rhs_is_batch) {
+      auto const loc = key_loc[lhs];
+      return cross_eqs[loc.first](rhs - max_groups, loc.second);
+    }
     return lhs == rhs;
   }
 };
 
 /*
- * insert_and_find on the main set for each batch row.
- * Inserts transient value `max_groups + batch_idx` and writes:
- *   target_indices[batch_idx] = stored value at the resident slot
- *   inserted_flags[batch_idx] = whether this row won the CAS
- *   slot_ptrs[batch_idx]      = pointer to the slot for later rewrite (only meaningful
- *                               for inserted rows; unused for non-inserted)
+ * insert_and_find on the main set for each batch row.  Returns the resident slot's
+ * value (consumed by `thrust::transform` as `target_indices[batch_idx]`) and writes
+ * two side-output arrays:
+ *   inserted_flags[batch_idx] = whether this row won the CAS (used as the stencil
+ *                               for the subsequent count + copy_if of winners)
+ *   slot_offsets[batch_idx]   = offset of the resident slot from `base`, or
+ *                               CUDF_SIZE_TYPE_SENTINEL for null/excluded rows
+ *
+ * If the batch produces no new keys, target_indices is already final and no further
+ * pass is required.  If new keys exist, Pass 2 rewrites the affected slots and the
+ * caller re-reads target_indices via slot_offsets in a single transform.
  */
 template <typename SetRef>
 struct insert_and_map_fn {
   mutable SetRef set_ref;
   bitmask_type const* row_bitmask;
   size_type max_groups;
+  size_type const* base;
   bool* inserted_flags;
-  size_type** slot_ptrs;
+  size_type* slot_offsets;
 
   __device__ size_type operator()(size_type batch_idx) const
   {
     if (row_bitmask && !cudf::bit_is_set(row_bitmask, batch_idx)) {
       inserted_flags[batch_idx] = false;
-      slot_ptrs[batch_idx]      = nullptr;
+      slot_offsets[batch_idx]   = cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
     }
     auto const [iter, inserted] = set_ref.insert_and_find(max_groups + batch_idx);
     inserted_flags[batch_idx]   = inserted;
-    slot_ptrs[batch_idx]        = iter;
+    slot_offsets[batch_idx]     = static_cast<size_type>(iter - base);
     return *iter;
   }
 };
@@ -111,8 +134,10 @@ struct insert_and_map_fn {
 /*
  * Hasher backed by a precomputed cache, indexed by `idx - offset`.
  * In streaming_groupby `offset = max_groups`, so transient batch values
- * `max_groups + batch_idx` resolve to `cache[batch_idx]`.  cuco invokes this
- * only on the inserted key, never on slot residents.
+ * `max_groups + batch_idx` resolve to `cache[batch_idx]`.  Caching is faster
+ * than inlining the row_hasher inside cuco's probe at high cardinality
+ * (measured: ~10% throughput drop without the cache) — the row_hasher's
+ * dispatch + nullable check inflates the cuco insert kernel.
  */
 struct offset_cache_hasher {
   hash_value_type const* cache;
@@ -124,56 +149,47 @@ struct offset_cache_hasher {
 };
 
 /*
- * For each newly discovered key (dense rank `r` within this batch), do three things:
- *   1. Rewrite its slot from transient encoding to its dense ID via atomic CAS.
- *      The CAS expected value is the transient `max_groups + batch_local`, which
- *      asserts the slot still holds the value we wrote in Pass 1.
- *   2. Scatter companion vectors at the dense ID.
- *   3. Record the dense ID in `_encoded_indices` for finalization.
+ * For each newly discovered key (dense rank `r` within this batch):
+ *   1. Rewrite its slot from transient encoding to its dense ID.  Pass 2 runs
+ *      after Pass 1's kernel completes and each slot has a single writer, so a
+ *      relaxed atomic store is sufficient (no CAS needed).
+ *   2. Write the (batch_id, row) pair to the companion vector at the dense ID.
  */
 struct finalize_new_key_fn {
-  size_type const*
-    batch_local_indices;            ///< batch-local row indices of new keys [new_distinct_count]
-  size_type* const* slot_ptrs;      ///< slot pointer per batch row [batch_size]
-  size_type* key_batch;             ///< companion: batch id at dense ID
-  size_type* key_row;               ///< companion: row within compacted batch at dense ID
-  size_type* encoded_indices;       ///< encoded_indices[dense group] = dense ID (identity)
-  size_type max_groups;             ///< for computing the expected transient value
-  size_type batch_id;               ///< the index of this batch in _compacted_batches
-  size_type distinct_count_before;  ///< _distinct_count prior to this batch
+  size_type const* batch_local_indices;  ///< batch-local row indices of new keys [new_distinct_count]
+  size_type* base;                       ///< hash set storage base
+  size_type const* slot_offsets;         ///< slot offset per batch row [batch_size]
+  key_location_t* key_loc;               ///< {batch_id, row_in_compacted} per dense ID
+  size_type batch_id;                    ///< the index of this batch in _compacted_batches
+  size_type distinct_count_before;       ///< _distinct_count prior to this batch
 
   __device__ void operator()(size_type r) const
   {
     auto const dense_id    = distinct_count_before + r;
     auto const batch_local = batch_local_indices[r];
-    auto expected          = max_groups + batch_local;
 
-    cuda::atomic_ref<size_type, cuda::thread_scope_device>{*slot_ptrs[batch_local]}
-      .compare_exchange_strong(expected, dense_id, cuda::std::memory_order_relaxed);
+    cuda::atomic_ref<size_type, cuda::thread_scope_device>{*(base + slot_offsets[batch_local])}
+      .store(dense_id, cuda::std::memory_order_relaxed);
 
-    key_batch[dense_id]                        = batch_id;
-    key_row[dense_id]                          = r;
-    encoded_indices[distinct_count_before + r] = dense_id;
+    key_loc[dense_id] = key_location_t{batch_id, r};
   }
 };
 
 /*
- * Convert mixed target_indices entries to dense IDs.
- *   - sentinel (null row): unchanged
- *   - value < max_groups (stored dense ID from a prior batch): unchanged
- *   - value >= max_groups (transient): map to dense ID via inverse table
- *     `dense = distinct_count_before + inverse[value - max_groups]`
+ * Read the dense ID at each batch row's resident slot, post-Pass-2.
+ * Returns CUDF_SIZE_TYPE_SENTINEL for null/excluded rows (slot_offsets sentinel).
  */
-struct fixup_target_indices_fn {
-  size_type max_groups;
-  size_type distinct_count_before;
-  size_type const* inverse;  ///< inverse[batch_local_winner] = rank r within new keys
+struct read_target_indices_fn {
+  size_type const* base;
+  size_type const* slot_offsets;
 
-  __device__ size_type operator()(size_type v) const
+  __device__ size_type operator()(size_type i) const
   {
-    if (v == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { return v; }
-    if (v < max_groups) { return v; }
-    return distinct_count_before + inverse[v - max_groups];
+    auto const off = slot_offsets[i];
+    if (off == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) {
+      return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
+    }
+    return *(base + off);
   }
 };
 
@@ -227,18 +243,9 @@ struct streaming_groupby::impl {
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>>
     _preprocessed_batches;
 
-  /// Companion vectors indexed by dense ID, sized to max_groups.
-  std::unique_ptr<rmm::device_uvector<size_type>> _key_batch;
-  std::unique_ptr<rmm::device_uvector<size_type>> _key_row;
-
-  /*
-   * For each dense group g, _encoded_indices[g] is the agg-results row index
-   * where that group's aggregation results live in _agg_results.
-   * Currently identity (g maps to g) since dense IDs and agg row indices coincide.
-   * Retained for compatibility with the existing gather-based finalization path;
-   * could be replaced with a slice in a follow-up.
-   */
-  std::unique_ptr<rmm::device_uvector<size_type>> _encoded_indices;
+  /// Companion vector indexed by dense ID, sized to max_groups.
+  /// Each entry is {batch_id, row_in_compacted_batch}.
+  std::unique_ptr<rmm::device_uvector<key_location_t>> _key_loc;
 
   std::vector<size_type> _request_first_agg_offset;
   std::vector<aggregation::Kind> _agg_kinds;
@@ -251,6 +258,16 @@ struct streaming_groupby::impl {
    * Indexed by dense ID (== row index).
    */
   std::unique_ptr<table> _agg_results;
+  /*
+   * Cached mutable_table_device_view of `_agg_results`.  `_agg_results` is allocated
+   * once at initialize() and never resized, so this device-side descriptor can be
+   * built once and reused on every aggregate() / merge() call rather than rebuilt
+   * (which requires a host->device cudaMemcpyAsync of the column metadata).
+   * Uses std::function as the type-erased deleter because the natural deleter
+   * returned by `create` is an unnamed lambda type.
+   */
+  std::unique_ptr<mutable_table_device_view, std::function<void(mutable_table_device_view*)>>
+    _d_agg_results;
   std::vector<size_type> _value_col_indices;
   rmm::device_uvector<aggregation::Kind> _d_agg_kinds;
 

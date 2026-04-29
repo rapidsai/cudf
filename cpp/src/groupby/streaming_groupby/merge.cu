@@ -124,14 +124,14 @@ void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view 
 
   // Merge aggregation values using dense target indices.
   auto const d_source = table_device_view::create(other_aggs->view(), stream);
-  auto d_target       = mutable_table_device_view::create(*_agg_results, stream);
 
   auto const num_agg_cols = static_cast<int64_t>(_agg_kinds.size());
-  thrust::for_each_n(rmm::exec_policy_nosync(stream, mr),
-                     cuda::counting_iterator<int64_t>(0),
-                     static_cast<int64_t>(num_other_groups) * num_agg_cols,
-                     merge_single_pass_aggs_fn{
-                       result.target_indices.begin(), _d_agg_kinds.data(), *d_source, *d_target});
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream, mr),
+    cuda::counting_iterator<int64_t>(0),
+    static_cast<int64_t>(num_other_groups) * num_agg_cols,
+    merge_single_pass_aggs_fn{
+      result.target_indices.begin(), _d_agg_kinds.data(), *d_source, *_d_agg_results});
 }
 
 }  // namespace cudf::groupby
