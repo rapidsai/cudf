@@ -73,6 +73,20 @@ def test_raises_inside_rrun() -> None:
         RayEngine()
 
 
+def test_num_ranks_requires_allow_gpu_sharing() -> None:
+    """num_ranks requires engine_options['allow_gpu_sharing']=True."""
+    with pytest.raises(ValueError, match="allow_gpu_sharing"):
+        RayEngine(num_ranks=2)
+    with pytest.raises(ValueError, match="allow_gpu_sharing"):
+        RayEngine(num_ranks=2, engine_options={"allow_gpu_sharing": False})
+
+
+def test_num_ranks_must_be_positive() -> None:
+    """num_ranks must be at least 1."""
+    with pytest.raises(ValueError, match="num_ranks"):
+        RayEngine(num_ranks=0, engine_options={"allow_gpu_sharing": True})
+
+
 # ---------------------------------------------------------------------------
 # GPU tests — share a single Ray cluster + actor set for the whole session
 # ---------------------------------------------------------------------------
@@ -177,3 +191,18 @@ def test_empty_dataframe(engine: RayEngine) -> None:
 def test_run(engine: RayEngine) -> None:
     result = engine._run(os.getpid)
     assert len(set(result)) == engine.nranks
+
+
+def test_num_ranks_oversubscribes() -> None:
+    """num_ranks creates the requested number of actors sharing GPU 0."""
+    n = 2
+    with RayEngine(
+        executor_options={"max_rows_per_partition": 10},
+        engine_options={"allow_gpu_sharing": True},
+        num_ranks=n,
+        ray_init_options={"include_dashboard": False},
+    ) as engine:
+        assert engine.nranks == n
+        assert len(engine.rank_actors) == n
+        result = pl.LazyFrame({"a": [1, 2, 3, 4]}).collect(engine=engine)
+        assert sorted(result["a"].to_list()) == [1, 2, 3, 4]
