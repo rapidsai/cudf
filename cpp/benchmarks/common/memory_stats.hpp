@@ -9,8 +9,6 @@
 
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
-#include <cstddef>
-
 namespace cudf {
 
 class memory_stats_logger {
