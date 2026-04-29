@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/operators/error.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -16,8 +17,6 @@
 
 namespace CUDF_EXPORT cudf {
 namespace ops {
-
-enum errc : int { OK = 0, OVERFLOW = 1, DIVISION_BY_ZERO = 2 };
 
 template <typename T>
 using optional = cuda::std::optional<T>;

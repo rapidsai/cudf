@@ -89,5 +89,45 @@ __device__ inline errc bit_xor(optional<T>* out, optional<T> const* a, optional<
   return errc::OK;
 }
 
+template <typename T>
+__device__ inline errc shift_left(T* out, T const* a, T const* b)
+{
+  *out = (*a << *b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc shift_left(optional<T>* out, optional<T> const* a, optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    T r;
+    shift_left(&r, &a->value(), &b->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc shift_right(T* out, T const* a, T const* b)
+{
+  *out = (*a >> *b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc shift_right(optional<T>* out, optional<T> const* a, optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    T r;
+    shift_right(&r, &a->value(), &b->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
 }  // namespace ops
 }  // namespace CUDF_EXPORT cudf

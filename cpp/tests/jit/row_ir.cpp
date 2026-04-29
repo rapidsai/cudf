@@ -33,24 +33,26 @@ TEST_F(RowIRCudaCodeGenTest, GetInput)
 
   {
     row_ir::instance_context ctx{};
-    row_ir::get_input get_input_0{0};
+    row_ir::code_sink sink;
+    row_ir::node get_input_0{row_ir::input_reference{0}};
     get_input_0.instantiate(ctx, info);
-    auto code = get_input_0.generate_code(ctx, target_info, info);
+    get_input_0.emit_code(ctx, target_info, info, sink);
 
     auto expected_code = "int32_t tmp_0 = in_0;";
 
-    EXPECT_EQ(code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 
   {
     row_ir::instance_context ctx{};
-    row_ir::get_input get_input_1{1};
+    row_ir::code_sink sink;
+    row_ir::node get_input_1{row_ir::input_reference{1}};
     get_input_1.instantiate(ctx, info);
-    auto null_code = get_input_1.generate_code(ctx, target_info, info);
+    get_input_1.emit_code(ctx, target_info, info, sink);
 
     auto expected_null_code = "float tmp_0 = in_1;";
 
-    EXPECT_EQ(null_code, expected_null_code);
+    EXPECT_EQ(sink.get_code(), expected_null_code);
   }
 }
 
@@ -67,30 +69,34 @@ TEST_F(RowIRCudaCodeGenTest, SetOutput)
 
   {
     row_ir::instance_context ctx{};
-    row_ir::set_output set_output_0{0, std::make_unique<row_ir::get_input>(0)};
+    row_ir::code_sink sink;
+    row_ir::node set_output_0{row_ir::output_reference{0},
+                              std::make_unique<row_ir::node>(row_ir::input_reference{0})};
     set_output_0.instantiate(ctx, info);
-    auto code = set_output_0.generate_code(ctx, target_info, info);
+    set_output_0.emit_code(ctx, target_info, info, sink);
 
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
 int32_t tmp_1 = tmp_0;
 *out_0 = tmp_1;)***";
 
-    EXPECT_EQ(code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 
   {
     row_ir::instance_context ctx{};
-    row_ir::set_output set_output_1{1, std::make_unique<row_ir::get_input>(1)};
+    row_ir::code_sink sink;
+    row_ir::node set_output_1{row_ir::output_reference{1},
+                              std::make_unique<row_ir::node>(row_ir::input_reference{1})};
     set_output_1.instantiate(ctx, info);
-    auto code = set_output_1.generate_code(ctx, target_info, info);
+    set_output_1.emit_code(ctx, target_info, info, sink);
 
     auto expected_code =
       R"***(float tmp_0 = in_1;
 float tmp_1 = tmp_0;
 *out_1 = tmp_1;)***";
 
-    EXPECT_EQ(code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 }
 
@@ -107,30 +113,32 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
 
   {
     row_ir::instance_context ctx{};
-    row_ir::operation op{row_ir::opcode::IDENTITY,
-                         row_ir::operation::operands(row_ir::get_input(0))};
+    row_ir::code_sink sink;
+    row_ir::node op{row_ir::opcode::IDENTITY, row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx, info);
-    auto code = op.generate_code(ctx, target_info, info);
+    op.emit_code(ctx, target_info, info, sink);
 
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
-int32_t tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, false>{}(tmp_0);)***";
+int32_t tmp_1;
+cudf::ops::identity(&tmp_1, &tmp_0);)***";
 
-    EXPECT_EQ(code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 
   {
     row_ir::instance_context ctx{};
-    row_ir::operation op{row_ir::opcode::IDENTITY,
-                         row_ir::operation::operands(row_ir::get_input(1))};
+    row_ir::code_sink sink;
+    row_ir::node op{row_ir::opcode::IDENTITY, row_ir::node{row_ir::input_reference{1}}};
     op.instantiate(ctx, info);
-    auto null_code = op.generate_code(ctx, target_info, info);
+    op.emit_code(ctx, target_info, info, sink);
 
     auto expected_null_code =
       R"***(numeric::decimal32 tmp_0 = in_1;
-numeric::decimal32 tmp_1 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::IDENTITY, false>{}(tmp_0);)***";
+numeric::decimal32 tmp_1;
+cudf::ops::identity(&tmp_1, &tmp_0);)***";
 
-    EXPECT_EQ(null_code, expected_null_code);
+    EXPECT_EQ(sink.get_code(), expected_null_code);
   }
 }
 
@@ -147,32 +155,38 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
 
   {
     row_ir::instance_context ctx{};
-    row_ir::operation op{row_ir::opcode::ADD,
-                         row_ir::operation::operands(row_ir::get_input(0), row_ir::get_input(0))};
+    row_ir::code_sink sink;
+    row_ir::node op{row_ir::opcode::ADD,
+                    row_ir::node{row_ir::input_reference{0}},
+                    row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx, info);
-    auto code = op.generate_code(ctx, target_info, info);
+    op.emit_code(ctx, target_info, info, sink);
 
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_0;
-int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);)***";
+int32_t tmp_2;
+cudf::ops::add(&tmp_2, &tmp_0, &tmp_1);)***";
 
-    EXPECT_EQ(code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 
   {
     row_ir::instance_context ctx{};
-    row_ir::operation op{row_ir::opcode::ADD,
-                         row_ir::operation::operands(row_ir::get_input(1), row_ir::get_input(1))};
+    row_ir::code_sink sink;
+    row_ir::node op{row_ir::opcode::ADD,
+                    row_ir::node{row_ir::input_reference{1}},
+                    row_ir::node{row_ir::input_reference{1}}};
     op.instantiate(ctx, info);
-    auto null_code = op.generate_code(ctx, target_info, info);
+    op.emit_code(ctx, target_info, info, sink);
 
     auto expected_null_code =
       R"***(numeric::decimal32 tmp_0 = in_1;
 numeric::decimal32 tmp_1 = in_1;
-numeric::decimal32 tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);)***";
+numeric::decimal32 tmp_2;
+cudf::ops::add(&tmp_2, &tmp_0, &tmp_1);)***";
 
-    EXPECT_EQ(null_code, expected_null_code);
+    EXPECT_EQ(sink.get_code(), expected_null_code);
   }
 }
 
@@ -195,44 +209,46 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     // This function generates the IR for the vector length operation:
     // length(v) = sqrt(x^2 + y^2)
     // where v = (x, y) and v is a 2D vector.
-    auto x2 = std::make_unique<row_ir::operation>(
-      row_ir::opcode::MUL,
-      row_ir::operation::operands(row_ir::get_input(input0), row_ir::get_input(input0)));
+    auto x2 = row_ir::node(row_ir::opcode::MUL,
+                           row_ir::node{row_ir::input_reference{input0}},
+                           row_ir::node{row_ir::input_reference{input0}});
 
-    auto y2 = std::make_unique<row_ir::operation>(
-      row_ir::opcode::MUL,
-      row_ir::operation::operands(row_ir::get_input(input1), row_ir::get_input(input1)));
+    auto y2 = row_ir::node(row_ir::opcode::MUL,
+                           row_ir::node{row_ir::input_reference{input1}},
+                           row_ir::node{row_ir::input_reference{input1}});
 
-    auto sum = std::make_unique<row_ir::operation>(
-      row_ir::opcode::ADD, row_ir::operation::operands(std::move(x2), std::move(y2)));
+    auto sum = row_ir::node(row_ir::opcode::ADD, std::move(x2), std::move(y2));
 
-    auto length = std::make_unique<row_ir::operation>(row_ir::opcode::SQRT,
-                                                      row_ir::operation::operands(std::move(sum)));
+    auto length = row_ir::node(row_ir::opcode::SQRT, std::move(sum));
 
-    return std::make_unique<row_ir::set_output>(output, std::move(length));
+    return std::make_unique<row_ir::node>(row_ir::opcode::SET_OUTPUT, std::move(length));
   };
 
   {
     row_ir::instance_context ctx{};
+    row_ir::code_sink sink;
 
     auto expr_ir = length_operation(0, 1, 0);
     expr_ir->instantiate(ctx, info);
-
-    auto code = expr_ir->generate_code(ctx, target_info, info);
+    expr_ir->emit_code(ctx, target_info, info, sink);
 
     auto expected_code =
       R"***(double tmp_0 = in_0;
 double tmp_1 = in_0;
-double tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_0, tmp_1);
+double tmp_2;
+cudf::ops::mul(&tmp_2, &tmp_0, &tmp_1);
 double tmp_3 = in_1;
 double tmp_4 = in_1;
-double tmp_5 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::MUL, false>{}(tmp_3, tmp_4);
-double tmp_6 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_2, tmp_5);
-double tmp_7 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::SQRT, false>{}(tmp_6);
+double tmp_5;
+cudf::ops::mul(&tmp_5, &tmp_3, &tmp_4);
+double tmp_6;
+cudf::ops::add(&tmp_6, &tmp_2, &tmp_5);
+double tmp_7;
+cudf::ops::sqrt(&tmp_7, &tmp_6);
 double tmp_8 = tmp_7;
 *out_0 = tmp_8;)***";
 
-    EXPECT_EQ(code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 }
 
@@ -287,7 +303,8 @@ __device__ void expression(int32_t* out_0, int32_t in_0, int32_t in_1)
 {
 int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_1;
-int32_t tmp_2 = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::ADD, false>{}(tmp_0, tmp_1);
+int32_t tmp_2;
+cudf::ops::add(&tmp_2, &tmp_0, &tmp_1);
 int32_t tmp_3 = tmp_2;
 *out_0 = tmp_3;
 
@@ -319,29 +336,35 @@ TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
 
   {
     row_ir::instance_context ctx{};
-    row_ir::filter_predicate filter_predicate(std::make_unique<row_ir::get_input>(0));
+    row_ir::code_sink sink;
+    row_ir::node filter_predicate(row_ir::opcode::PREDICATE,
+                                  std::make_unique<row_ir::node>(row_ir::input_reference{0}));
     filter_predicate.instantiate(ctx, info);
-    auto code = filter_predicate.generate_code(ctx, target_info, info);
+    filter_predicate.emit_code(ctx, target_info, info, sink);
 
     auto expected_code = R"***(bool tmp_0 = in_0;
-bool tmp_1 = cudf::ast::detail::flatten_predicate(tmp_0);
+bool tmp_1;
+cudf::ops::predicate(&tmp_1, &tmp_0);
 )***";
 
-    EXPECT_EQ(code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 
   {
     row_ir::instance_context ctx{};
-    row_ir::filter_predicate filter_predicate(std::make_unique<row_ir::get_input>(0));
+    row_ir::code_sink sink;
+    row_ir::node filter_predicate(row_ir::opcode::PREDICATE,
+                                  std::make_unique<row_ir::node>(row_ir::input_reference{0}));
     ctx.set_has_nulls(true);
     filter_predicate.instantiate(ctx, info);
-    auto null_code = filter_predicate.generate_code(ctx, target_info, info);
+    filter_predicate.emit_code(ctx, target_info, info, sink);
 
     auto expected_code = R"***(cuda::std::optional<bool> tmp_0 = in_0;
-bool tmp_1 = cudf::ast::detail::flatten_predicate(tmp_0);
+cuda::std::optional<bool> tmp_1;
+cudf::ops::predicate(&tmp_1, &tmp_0);
 )***";
 
-    EXPECT_EQ(null_code, expected_code);
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 }
 

@@ -10,6 +10,66 @@ namespace CUDF_EXPORT cudf {
 namespace ops {
 
 template <typename T>
+__device__ inline errc cast_to_b8(bool* out, T const* a)
+{
+  *out = static_cast<bool>(*a);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_b8(optional<bool>* out, optional<T> const* a)
+{
+  if (a->has_value()) {
+    bool r;
+    cast_to_b8(&r, &a->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_i8(int8_t* out, T const* a)
+{
+  *out = static_cast<int8_t>(*a);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_i8(optional<int8_t>* out, optional<T> const* a)
+{
+  if (a->has_value()) {
+    int8_t r;
+    cast_to_i8(&r, &a->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_i16(int16_t* out, T const* a)
+{
+  *out = static_cast<int16_t>(*a);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_i16(optional<int16_t>* out, optional<T> const* a)
+{
+  if (a->has_value()) {
+    int16_t r;
+    cast_to_i16(&r, &a->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
 __device__ inline errc cast_to_i32(int32_t* out, T const* a)
 {
   *out = static_cast<int32_t>(*a);
@@ -42,6 +102,46 @@ __device__ inline errc cast_to_i64(optional<int64_t>* out, optional<T> const* a)
   if (a->has_value()) {
     int64_t r;
     cast_to_i64(&r, &a->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_u8(uint8_t* out, T const* a)
+{
+  *out = static_cast<uint8_t>(*a);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_u8(optional<uint8_t>* out, optional<T> const* a)
+{
+  if (a->has_value()) {
+    uint8_t r;
+    cast_to_u8(&r, &a->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_u16(uint16_t* out, T const* a)
+{
+  *out = static_cast<uint16_t>(*a);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc cast_to_u16(optional<uint16_t>* out, optional<T> const* a)
+{
+  if (a->has_value()) {
+    uint16_t r;
+    cast_to_u16(&r, &a->value());
     *out = r;
   } else {
     *out = nullopt;
@@ -194,6 +294,28 @@ __device__ inline errc cast_to_dec128(optional<numeric::decimal128>* out,
   if (a->has_value()) {
     numeric::decimal128 r;
     cast_to_dec128(&r, &a->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
+template <typename R>
+__device__ inline errc rescale(decimal<R>* out, decimal<R> const* a, int32_t const* new_scale)
+{
+  *out = a->rescaled(new_scale);
+  return errc::OK;
+}
+
+template <typename R>
+__device__ inline errc rescale(optional<decimal<R>>* out,
+                               optional<decimal<R>> const* a,
+                               optional<int32_t> const* new_scale)
+{
+  if (a->has_value() && new_scale->has_value()) {
+    decimal<R> r;
+    rescale(&r, &a->value(), new_scale->value());
     *out = r;
   } else {
     *out = nullopt;

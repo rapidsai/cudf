@@ -11,6 +11,7 @@
 #include <cudf/operators/bitwise.cuh>
 #include <cudf/operators/casts.cuh>
 #include <cudf/operators/comparison.cuh>
+#include <cudf/operators/error.hpp>
 #include <cudf/operators/logic.cuh>
 #include <cudf/operators/math.cuh>
 #include <cudf/operators/null_handling.cuh>
@@ -27,6 +28,7 @@
 
 #include <jit/column_accessor.cuh>
 #include <jit/column_device_view_wrappers.cuh>
+#include <jit/error_sink.cuh>
 #include <jit/sync.cuh>
 #include <jit/type_list.cuh>
 
@@ -43,20 +45,39 @@
 namespace cudf {
 namespace jit {
 
-template <bool has_user_data, typename Args>
-__device__ void execute_transform_op(void* user_data, size_type element_idx, Args args)
+template <ops::error_mode mode, bool has_user_data, typename Args>
+__device__ void execute_transform_op(error_sink* __restrict__ error_sink,
+                                     void* user_data,
+                                     size_type element_idx,
+                                     Args args)
 {
   // TODO: static assert invocable
   if constexpr (has_user_data) {
-    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); },
-                     cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, args));
+    cuda::std::apply(
+      [&](auto... a) {
+        if constexpr (mode == ops::error_mode::IGNORE) {
+          GENERIC_TRANSFORM_OP(a...);
+        } else {
+          error_sink->report<mode>(GENERIC_TRANSFORM_OP(a...));
+        }
+      },
+      cuda::std::tuple_cat(cuda::std::tuple{user_data, element_idx}, args));
   } else {
-    cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); }, args);
+    cuda::std::apply(
+      [&](auto... a) {
+        if constexpr (mode == ops::error_mode::IGNORE) {
+          GENERIC_TRANSFORM_OP(a...);
+        } else {
+          error_sink->report<mode>(GENERIC_TRANSFORM_OP(a...));
+        }
+      },
+      args);
   }
 }
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
-template <null_aware is_null_aware,
+template <ops::error_mode error_mode,
+          null_aware is_null_aware,
           bool has_user_data,
           typename InputAccessors,
           typename OutputAccessors>
@@ -64,7 +85,8 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
                                   bitmask_type const* __restrict__ stencil,
                                   void* __restrict__ user_data,
                                   column_device_view_core const* __restrict__ input_cols,
-                                  mutable_column_device_view_core const* __restrict__ output_cols)
+                                  mutable_column_device_view_core const* __restrict__ output_cols,
+                                  error_sink* __restrict__ error_sink)
 {
   // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
   auto start  = detail::grid_1d::global_thread_id();
@@ -84,8 +106,8 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       auto out_ptrs =
         cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      execute_transform_op<has_user_data>(
-        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
+      execute_transform_op<error_mode, has_user_data>(
+        error_sink, user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
 
       OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, element_idx, cuda::std::get<A::index>(outs)), ...);
@@ -105,8 +127,8 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       auto out_ptrs =
         cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      execute_transform_op<has_user_data>(
-        user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
+      execute_transform_op<error_mode, has_user_data>(
+        error_sink, user_data, element_idx, cuda::std::tuple_cat(out_ptrs, ins));
 
       OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, element_idx, *cuda::std::get<A::index>(outs)), ...);

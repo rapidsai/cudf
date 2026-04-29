@@ -7,7 +7,8 @@
 #include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/operators/op_attributes.hpp>
+#include <cudf/operators/error.hpp>
+#include <cudf/operators/op_traits.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
@@ -16,7 +17,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
-#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -60,19 +60,40 @@ struct untyped_var_info {
 };
 
 /**
- * @brief The information needed to instantiate the IR nodes
- */
-struct instance_info {
-  std::span<var_info const> inputs;           ///< The input variables
-  std::span<untyped_var_info const> outputs;  ///< The output variables
-};
-
-/**
  * @brief The information about the target for which the IR is generated.
  */
 struct target_info {
   target id = target::CUDA;  ///< The target identifier
 };
+
+/**
+ * @brief A specification of an input column to the AST
+ */
+struct ast_column_input_spec {
+  ast::table_reference table = {};  ///< The table reference (LEFT or RIGHT)
+  int32_t column             = 0;   ///< The column index in the referenced table
+};
+
+/**
+ * @brief A specification of an input scalar to the AST
+ */
+struct ast_scalar_input_spec {
+  std::unique_ptr<column> scalar_column = nullptr;  ///< The broadcasted column, a column of size 1
+};
+
+/**
+ * @brief The AST input column arguments used to resolve the column expressions
+ */
+struct ast_args {
+  table_view table       = {};  ///< The table view containing the columns (single-table case)
+  table_view left_table  = {};  ///< The left table for join predicates
+  table_view right_table = {};  ///< The right table for join predicates
+};
+
+/**
+ * @brief An input specification for the AST
+ */
+using ast_input_spec = std::variant<ast_column_input_spec, ast_scalar_input_spec>;
 
 /**
  * @brief The context within which the IR is instantiated.
@@ -81,12 +102,33 @@ struct target_info {
  */
 struct [[nodiscard]] instance_context {
  private:
-  int32_t num_tmp_vars_   = 0;       ///< The number of temporary variables generated
-  std::string tmp_prefix_ = "tmp_";  ///< The prefix for temporary variable identifiers
-  bool has_nulls_         = false;   ///< If expressions involve null values
+  int32_t num_tmp_vars_   = 0;                 ///< The number of temporary variables generated
+  std::string tmp_prefix_ = "tmp_";            ///< The prefix for temporary variable identifiers
+  bool has_nulls_         = false;             ///< If expressions involve null values
+  std::vector<ast_input_spec> input_specs_;    ///< The input specs for the AST
+  std::vector<var_info> input_vars_;           ///< The input variables for the IR
+  std::vector<untyped_var_info> output_vars_;  ///< The output variables for the IR
+  rmm::cuda_stream_view
+    stream_;  ///< The CUDA stream for any device operations during IR generation
+  rmm::device_async_resource_ref
+    mr_;  ///< The device memory resource for any device memory allocation during IR generation
+
+ private:
+  void add_input_var(ast_column_input_spec const& in, ast_args const& args);
+
+  void add_input_var(ast_scalar_input_spec const& in, ast_args const& args);
+
+  void add_output_var();
+
+  [[nodiscard]] int32_t add_ast_input(ast_input_spec in);
 
  public:
-  instance_context() = default;  ///< Default constructor
+  friend struct ast_converter;
+
+  instance_context(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
+    : stream_(stream), mr_(mr)
+  {
+  }
 
   instance_context(instance_context const&) = delete;
 
@@ -114,6 +156,31 @@ struct [[nodiscard]] instance_context {
    * @param has_nulls True if expressions involve null values
    */
   void set_has_nulls(bool has_nulls);
+
+  /**
+   * @brief Get the input specifications for the AST
+   * @return A span of AST input specifications
+   */
+  [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
+
+  /**
+   * @brief Get the input variables for the IR
+   * @return A span of input variable information
+   */
+  [[nodiscard]] std::span<var_info const> get_inputs() const;
+
+  /**
+   * @brief Get the output variables for the IR
+   * @return A span of output variable information
+   */
+  [[nodiscard]] std::span<untyped_var_info const> get_outputs() const;
+
+  /**
+   * @brief Add a constant scalar value to the IR
+   * @param value The scalar value to add
+   * @return The identifier of the constant variable
+   */
+  [[nodiscard]] int32_t add_constant(cudf::scalar const& value);
 };
 
 struct [[nodiscard]] code_sink {
@@ -134,24 +201,66 @@ struct [[nodiscard]] output_reference {
   int32_t index = 0;  ///< The index of the output variable
 };
 
+struct [[nodiscard]] scalar_refernce {
+  int32_t index = 0;  ///< The index of the scalar variable
+};
+
 struct [[nodiscard]] node {
+ private:
   std::variant<std::monostate, input_reference, output_reference> reference_ =
-    std::monostate{};                           ///< The index of the input/output variable
-  opcode op_              = opcode::GET_INPUT;  ///< The operation code
-  std::vector<node> args_ = {};                 ///< The arguments of the operation
+    std::monostate{};  ///< The index of the input/output variable
+  opcode op_                               = opcode::GET_INPUT;  ///< The operation code
+  std::optional<int32_t> target_scale_     = std::nullopt;       ///< The target scale for decimal
+  std::vector<std::unique_ptr<node>> args_ = {};                 ///< The arguments of the operation
 
   data_type type_ = {};  ///< The resolved type information of the IR node
 
   std::string id_ = {};  ///< The identifier of the IR node
+  scalar_refernce
+    scale_reference_;  ///< The index of the scale variable for decimal rescaling if applicable
 
   /**
    * @brief Create a set of argument IR nodes
    */
   template <typename... T>
     requires(std::is_same_v<node, T> && ...)
-  static std::array<node, sizeof...(T)> arguments(T&&... args)
+  static std::vector<std::unique_ptr<node>> arguments(T... args)
   {
-    return {std::forward<T>(args)...};
+    std::vector<std::unique_ptr<node>> result;
+    (result.emplace_back(std::make_unique<node>(std::move(args))), ...);
+    return result;
+  }
+
+  /**
+   * @brief Create a set of argument IR nodes
+   */
+  template <typename... T>
+    requires(std::is_same_v<std::unique_ptr<node>, T> && ...)
+  static std::vector<std::unique_ptr<node>> arguments(T... args)
+  {
+    std::vector<std::unique_ptr<node>> result;
+    (result.emplace_back(std::move(args)), ...);
+    return result;
+  }
+
+ public:
+  /**
+   * @brief Construct a new operation IR node
+   * @param op The operation code
+   * @param args The arguments of the operation
+   */
+  node(opcode op, std::optional<int32_t> target_scale, std::vector<std::unique_ptr<node>> args);
+
+  /**
+   * @brief Construct a new operation IR node
+   * @param op The operation code
+   * @param args The arguments of the operation
+   */
+  template <typename... T>
+    requires(std::is_same_v<node, T> && ...)
+  node(opcode op, std::optional<int32_t> target_scale, T... args)
+    : node(op, target_scale, arguments(std::move(args)...))
+  {
   }
 
   /**
@@ -159,7 +268,12 @@ struct [[nodiscard]] node {
    * @param op The operation code
    * @param args The arguments of the operation
    */
-  node(opcode op, std::vector<node> args);
+  template <typename... T>
+    requires(std::is_same_v<node, T> && ...)
+  node(opcode op, std::optional<int32_t> target_scale, std::unique_ptr<T>... args)
+    : node(op, target_scale, arguments(std::move(args)...))
+  {
+  }
 
   /**
    * @brief Construct a new input reference IR node
@@ -172,11 +286,11 @@ struct [[nodiscard]] node {
    * @param output The index of the output variable
    * @param arg The argument node that produces the value to be set to the output variable
    */
-  node(output_reference reference, node arg);
+  node(output_reference reference, std::unique_ptr<node> arg);
 
-  node(node const& other)            = default;  ///< Copy constructor
+  node(node const& other)            = delete;
   node(node&& other)                 = default;  ///< Move constructor
-  node& operator=(node const& other) = default;  ///< Copy assignment operator
+  node& operator=(node const& other) = delete;
   node& operator=(node&& other)      = default;  ///< Move assignment operator
   ~node()                            = default;  ///< Destructor
 
@@ -193,6 +307,12 @@ struct [[nodiscard]] node {
   [[nodiscard]] data_type get_type() const;
 
   /**
+   * @brief Get the target scale for decimal rescaling if applicable
+   * @return The target scale for decimal rescaling if applicable, std::nullopt otherwise
+   */
+  [[nodiscard]] std::optional<int32_t> get_target_scale() const;
+
+  /**
    * @brief Get the operation code of the operation
    * @return The operation code of the operation
    */
@@ -201,7 +321,7 @@ struct [[nodiscard]] node {
   /** @brief Get the arguments of the operation
    * @return A span of unique pointers to the arguments of the operation
    */
-  [[nodiscard]] std::span<node const> get_args() const;
+  [[nodiscard]] std::span<std::unique_ptr<node> const> get_args() const;
 
   /**
    * @brief Returns `false` if this node forwards nulls from its inputs to its output.
@@ -230,7 +350,7 @@ struct [[nodiscard]] node {
    * @param ctx The context within which the IR is instantiated
    * @param info The instance information
    */
-  void instantiate(instance_context& ctx, instance_info const& info);
+  void instantiate(instance_context& ctx);
 
   /**
    * @brief Generate the code for the IR node based on the instance context and target information.
@@ -239,34 +359,8 @@ struct [[nodiscard]] node {
    * @param instance The instance information
    * @param sink The code sink to which the generated code is emitted
    */
-  void emit_code(instance_context& ctx,
-                 target_info const& info,
-                 instance_info const& instance,
-                 code_sink& sink) const;
+  void emit_code(instance_context& ctx, target_info const& info, code_sink& sink) const;
 };
-
-/**
- * @brief A specification of an input column to the AST
- */
-struct ast_column_input_spec {
-  ast::table_reference table = {};  ///< The table reference (LEFT or RIGHT)
-  int32_t column             = 0;   ///< The column index in the referenced table
-};
-
-/**
- * @brief A specification of an input scalar to the AST
- */
-struct ast_scalar_input_spec {
-  std::reference_wrapper<scalar const> ref;  ///< The scalar value
-  ast::generic_scalar_device_view view;      ///< The device view of the scalar value
-  std::unique_ptr<column> broadcast_column =
-    nullptr;  ///< The broadcasted column, a column of size 1
-};
-
-/**
- * @brief An input specification for the AST
- */
-using ast_input_spec = std::variant<ast_column_input_spec, ast_scalar_input_spec>;
 
 /**
  * @brief The arguments needed to invoke a `cudf::transform`
@@ -283,7 +377,9 @@ struct [[nodiscard]] transform_args {
   null_aware is_null_aware          = null_aware::NO;  ///< Whether the transform is null-aware
   output_nullability null_policy    = output_nullability::PRESERVE;  ///< Null-transformation policy
   std::optional<size_type> row_size = std::nullopt;  ///< The row size of the transform operation
-  std::vector<ast_input_spec> input_specs = {};      ///< The input specs (table ref + column index)
+  ops::error_mode error_mode =
+    ops::error_mode::IGNORE;                     ///< The error handling mode for the transform
+  std::vector<ast_input_spec> input_specs = {};  ///< The input specs (table ref + column index)
 };
 
 /**
@@ -301,16 +397,8 @@ struct [[nodiscard]] filter_args {
   null_aware is_null_aware          = null_aware::NO;  ///< Whether the filter is null-aware
   output_nullability predicate_nullability =
     output_nullability::PRESERVE;  ///< Null-transformation policy for the predicate output
+  ops::error_mode error_mode = ops::error_mode::IGNORE;  ///< The error handling mode for the filter
   std::vector<ast_input_spec> input_specs = {};  ///< The input specs (table ref + column index)
-};
-
-/**
- * @brief The AST input column arguments used to resolve the column expressions
- */
-struct ast_args {
-  table_view table       = {};  ///< The table view containing the columns (single-table case)
-  table_view left_table  = {};  ///< The left table for join predicates
-  table_view right_table = {};  ///< The right table for join predicates
 };
 
 /**
@@ -318,15 +406,12 @@ struct ast_args {
  */
 struct [[nodiscard]] ast_converter {
  private:
-  std::vector<ast_input_spec> input_specs_;    ///< The input specs for the AST
-  std::vector<var_info> input_vars_;           ///< The input variables for the IR
-  std::vector<untyped_var_info> output_vars_;  ///< The output variables for the IR
-  std::vector<node> output_irs_;               ///< The output IR nodes
-  std::string code_;                           ///< The generated code for the IR
+  std::vector<std::unique_ptr<row_ir::node>> output_irs_;  ///< The output IR nodes
   rmm::cuda_stream_view
     stream_;  ///< CUDA stream used for device memory operations and kernel launches.
   rmm::device_async_resource_ref
     mr_;  ///< Device memory resource used to allocate the returned table's device memory
+  instance_context instance_;  ///< The instance context used during the IR generation
 
  public:
   /**
@@ -335,7 +420,7 @@ struct [[nodiscard]] ast_converter {
    * @param mr Device memory resource used to allocate the returned table's device memory
    */
   ast_converter(rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr)
-    : stream_(std::move(stream)), mr_(std::move(mr))
+    : stream_(std::move(stream)), mr_(std::move(mr)), instance_(stream_, mr_)
   {
   }
 
@@ -353,27 +438,17 @@ struct [[nodiscard]] ast_converter {
   friend class ast::column_reference;
   friend class ast::operation;
   friend class ast::column_name_reference;
+  friend class ast::detail::predicate;
 
-  row_ir::node add_ir_node(ast::literal const& expr);
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::literal const& expr);
 
-  row_ir::node add_ir_node(ast::column_reference const& expr);
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::column_reference const& expr);
 
-  row_ir::node add_ir_node(ast::operation const& expr);
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::operation const& expr);
 
-  [[nodiscard]] std::span<ast_input_spec const> get_input_specs() const;
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::detail::predicate const& expr);
 
-  /**
-   * @brief add an AST input/input_reference and return its reference index
-   */
-  [[nodiscard]] int32_t add_ast_input(ast_input_spec in);
-
-  void add_input_var(ast_column_input_spec const& in, ast_args const& args);
-
-  void add_input_var(ast_scalar_input_spec const& in, ast_args const& args);
-
-  void add_output_var();
-
-  [[nodiscard]] std::tuple<null_aware, output_nullability, bool> generate_code(
+  [[nodiscard]] std::tuple<std::string, null_aware, output_nullability, bool> generate_code(
     target target, ast::expression const& expr, ast_args const& args);
 
  public:

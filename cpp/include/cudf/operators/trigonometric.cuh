@@ -259,6 +259,31 @@ __device__ inline errc sinh(optional<T>* out, optional<T> const* a)
   return errc::OK;
 }
 
+__device__ inline errc tan(float* out, float const* a)
+{
+  *out = ::tanf(*a);
+  return errc::OK;
+}
+
+__device__ inline errc tan(double* out, double const* a)
+{
+  *out = ::tan(*a);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc tan(optional<T>* out, optional<T> const* a)
+{
+  if (a->has_value()) {
+    T r;
+    tan(&r, &a->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
 __device__ inline errc tanh(float* out, float const* a)
 {
   *out = ::tanhf(*a);

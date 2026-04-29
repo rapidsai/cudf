@@ -6,11 +6,11 @@
 #pragma once
 #include <cudf/operators/opcodes.hpp>
 
-#include <array>
+#include <vector>
 
 namespace cudf::detail::row_ir {
 
-enum [[nodiscard]] typing : uint64_t {
+enum [[nodiscard]] type : uint64_t {
   NONE                   = 0x0,
   BOOL8                  = 0x1,
   INT8                   = 0x2,
@@ -53,9 +53,9 @@ enum [[nodiscard]] typing : uint64_t {
   INPUT                  = 0x20000000,
 };
 
-struct [[nodiscard]] op_typing {
-  typing output              = typing::NONE;
-  std::array<typing, 3> args = {typing::NONE, typing::NONE, typing::NONE};
+struct [[nodiscard]] op_type {
+  type output            = type::NONE;
+  std::vector<type> args = {};
 };
 
 /**
@@ -76,10 +76,11 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::IS_NULL: return "is_null";
     case opcode::NULLIFY_IF: return "nullify_if";
     case opcode::COALESCE: return "coalesce";
-    case opcode::REPLACE_NULLS: return "replace_nulls";
+    case opcode::PREDICATE: return "predicate";
     case opcode::ABS: return "abs";
     case opcode::ADD: return "add";
     case opcode::DIV: return "div";
+    case opcode::TRUE_DIV: return "true_div";
     case opcode::FLOOR_DIV: return "floor_div";
     case opcode::MOD: return "mod";
     case opcode::PYMOD: return "pymod";
@@ -93,7 +94,7 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::ANSI_MOD: return "ansi_mod";
     case opcode::ANSI_ABS: return "ansi_abs";
     case opcode::ANSI_NEG: return "ansi_neg";
-    case opcode::ANSI_PRECISION_CAST: return "ansi_precision_cast";
+    case opcode::ANSI_PRECISION_CHECK: return "ansi_precision_check";
     case opcode::ANSI_TRY_ADD: return "ansi_try_add";
     case opcode::ANSI_TRY_SUB: return "ansi_try_sub";
     case opcode::ANSI_TRY_MUL: return "ansi_try_mul";
@@ -101,13 +102,20 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::ANSI_TRY_MOD: return "ansi_try_mod";
     case opcode::ANSI_TRY_ABS: return "ansi_try_abs";
     case opcode::ANSI_TRY_NEG: return "ansi_try_neg";
-    case opcode::ANSI_TRY_PRECISION_CAST: return "ansi_try_precision_cast";
+    case opcode::ANSI_TRY_PRECISION_CHECK: return "ansi_try_precision_check";
     case opcode::BIT_AND: return "bit_and";
     case opcode::BIT_INVERT: return "bit_invert";
     case opcode::BIT_OR: return "bit_or";
     case opcode::BIT_XOR: return "bit_xor";
+    case opcode::SHIFT_LEFT: return "shift_left";
+    case opcode::SHIFT_RIGHT: return "shift_right";
+    case opcode::CAST_TO_B8: return "cast_to_b8";
+    case opcode::CAST_TO_I8: return "cast_to_i8";
+    case opcode::CAST_TO_I16: return "cast_to_i16";
     case opcode::CAST_TO_I32: return "cast_to_i32";
     case opcode::CAST_TO_I64: return "cast_to_i64";
+    case opcode::CAST_TO_U8: return "cast_to_u8";
+    case opcode::CAST_TO_U16: return "cast_to_u16";
     case opcode::CAST_TO_U32: return "cast_to_u32";
     case opcode::CAST_TO_U64: return "cast_to_u64";
     case opcode::CAST_TO_F32: return "cast_to_f32";
@@ -115,6 +123,7 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::CAST_TO_DEC32: return "cast_to_dec32";
     case opcode::CAST_TO_DEC64: return "cast_to_dec64";
     case opcode::CAST_TO_DEC128: return "cast_to_dec128";
+    case opcode::RESCALE: return "rescale";
     case opcode::EQUAL: return "equal";
     case opcode::NOT_EQUAL: return "not_equal";
     case opcode::GREATER: return "greater";
@@ -157,71 +166,7 @@ enum class [[nodiscard]] null_output : uint8_t {
   switch (op) {
     case opcode::IS_NULL:
     case opcode::NULL_EQUAL:
-    case opcode::REPLACE_NULLS: return null_output::ALWAYS_VALID;
-
-    case opcode::GET_INPUT:
-    case opcode::SET_OUTPUT:
-    case opcode::IDENTITY:
-    case opcode::LOGICAL_NOT:
-    case opcode::LOGICAL_AND:
-    case opcode::LOGICAL_OR:
-    case opcode::ABS:
-    case opcode::ADD:
-    case opcode::DIV:
-    case opcode::FLOOR_DIV:
-    case opcode::MOD:
-    case opcode::PYMOD:
-    case opcode::MUL:
-    case opcode::NEG:
-    case opcode::SUB:
-    case opcode::ANSI_ADD:
-    case opcode::ANSI_SUB:
-    case opcode::ANSI_MUL:
-    case opcode::ANSI_DIV:
-    case opcode::ANSI_MOD:
-    case opcode::ANSI_ABS:
-    case opcode::ANSI_NEG:
-    case opcode::ANSI_PRECISION_CAST:
-    case opcode::IF_ELSE:
-    case opcode::CBRT:
-    case opcode::CEIL:
-    case opcode::FLOOR:
-    case opcode::RINT:
-    case opcode::SQRT:
-    case opcode::POW:
-    case opcode::EXP:
-    case opcode::LOG:
-    case opcode::ARCCOS:
-    case opcode::ARCCOSH:
-    case opcode::ARCSIN:
-    case opcode::ARCSINH:
-    case opcode::ARCTAN:
-    case opcode::ARCTANH:
-    case opcode::COS:
-    case opcode::COSH:
-    case opcode::SIN:
-    case opcode::SINH:
-    case opcode::TAN:
-    case opcode::BIT_AND:
-    case opcode::BIT_INVERT:
-    case opcode::BIT_OR:
-    case opcode::BIT_XOR:
-    case opcode::CAST_TO_I32:
-    case opcode::CAST_TO_I64:
-    case opcode::CAST_TO_U32:
-    case opcode::CAST_TO_U64:
-    case opcode::CAST_TO_F32:
-    case opcode::CAST_TO_F64:
-    case opcode::CAST_TO_DEC32:
-    case opcode::CAST_TO_DEC64:
-    case opcode::CAST_TO_DEC128:
-    case opcode::EQUAL:
-    case opcode::NOT_EQUAL:
-    case opcode::GREATER:
-    case opcode::GREATER_EQUAL:
-    case opcode::LESS:
-    case opcode::LESS_EQUAL:
-    case opcode::TANH: return null_output::PROPAGATE;
+    case opcode::PREDICATE: return null_output::ALWAYS_VALID;
 
     case opcode::NULLIFY_IF:
     case opcode::COALESCE:
@@ -232,11 +177,11 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::ANSI_TRY_MOD:
     case opcode::ANSI_TRY_ABS:
     case opcode::ANSI_TRY_NEG:
-    case opcode::ANSI_TRY_PRECISION_CAST:
+    case opcode::ANSI_TRY_PRECISION_CHECK:
     case opcode::NULL_LOGICAL_AND:
     case opcode::NULL_LOGICAL_OR: return null_output::ALWAYS_NULLABLE;
 
-    default: CUDF_UNREACHABLE("Invalid opcode");
+    default: return null_output::PROPAGATE;
   }
 }
 
@@ -247,87 +192,14 @@ enum class [[nodiscard]] null_output : uint8_t {
 [[nodiscard]] inline bool get_op_requires_nulls(opcode op)
 {
   switch (op) {
-    case opcode::GET_INPUT:
-    case opcode::SET_OUTPUT:
-    case opcode::NULLIFY_IF:
-    case opcode::IDENTITY:
-    case opcode::ABS:
-    case opcode::ADD:
-    case opcode::DIV:
-    case opcode::FLOOR_DIV:
-    case opcode::MOD:
-    case opcode::PYMOD:
-    case opcode::MUL:
-    case opcode::NEG:
-    case opcode::SUB:
-    case opcode::ANSI_ADD:
-    case opcode::ANSI_SUB:
-    case opcode::ANSI_MUL:
-    case opcode::ANSI_DIV:
-    case opcode::ANSI_MOD:
-    case opcode::ANSI_ABS:
-    case opcode::ANSI_NEG:
-    case opcode::ANSI_PRECISION_CAST:
-    case opcode::ANSI_TRY_ADD:
-    case opcode::ANSI_TRY_SUB:
-    case opcode::ANSI_TRY_MUL:
-    case opcode::ANSI_TRY_DIV:
-    case opcode::ANSI_TRY_MOD:
-    case opcode::ANSI_TRY_ABS:
-    case opcode::ANSI_TRY_NEG:
-    case opcode::ANSI_TRY_PRECISION_CAST:
-    case opcode::BIT_AND:
-    case opcode::BIT_INVERT:
-    case opcode::BIT_OR:
-    case opcode::BIT_XOR:
-    case opcode::CAST_TO_I32:
-    case opcode::CAST_TO_I64:
-    case opcode::CAST_TO_U32:
-    case opcode::CAST_TO_U64:
-    case opcode::CAST_TO_F32:
-    case opcode::CAST_TO_F64:
-    case opcode::CAST_TO_DEC32:
-    case opcode::CAST_TO_DEC64:
-    case opcode::CAST_TO_DEC128:
-    case opcode::EQUAL:
-    case opcode::NOT_EQUAL:
-    case opcode::GREATER:
-    case opcode::GREATER_EQUAL:
-    case opcode::LESS:
-    case opcode::LESS_EQUAL:
-    case opcode::LOGICAL_NOT:
-    case opcode::LOGICAL_AND:
-    case opcode::LOGICAL_OR:
-    case opcode::IF_ELSE:
-    case opcode::CBRT:
-    case opcode::CEIL:
-    case opcode::FLOOR:
-    case opcode::RINT:
-    case opcode::SQRT:
-    case opcode::POW:
-    case opcode::EXP:
-    case opcode::LOG:
-    case opcode::ARCCOS:
-    case opcode::ARCCOSH:
-    case opcode::ARCSIN:
-    case opcode::ARCSINH:
-    case opcode::ARCTAN:
-    case opcode::ARCTANH:
-    case opcode::COS:
-    case opcode::COSH:
-    case opcode::SIN:
-    case opcode::SINH:
-    case opcode::TAN:
-    case opcode::TANH: return false;
-
     case opcode::COALESCE:
     case opcode::IS_NULL:
     case opcode::NULL_EQUAL:
     case opcode::NULL_LOGICAL_AND:
     case opcode::NULL_LOGICAL_OR:
-    case opcode::REPLACE_NULLS: return true;
+    case opcode::PREDICATE: return true;
 
-    default: CUDF_UNREACHABLE("Invalid opcode");
+    default: return false;
   }
 }
 
@@ -341,38 +213,37 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::ANSI_MOD:
     case opcode::ANSI_ABS:
     case opcode::ANSI_NEG:
-    case opcode::ANSI_PRECISION_CAST: return true;
+    case opcode::ANSI_PRECISION_CHECK: return true;
 
+    default: return false;
+  }
+}
+
+[[nodiscard]] inline int32_t get_output_decimal_scale(opcode op,
+                                                      std::span<int32_t const> arg_scales,
+                                                      std::optional<int32_t> output_scale)
+{
+  // TODO: finish up
+  switch (op) {
     case opcode::GET_INPUT:
     case opcode::SET_OUTPUT:
-    case opcode::IS_NULL:
     case opcode::IDENTITY:
-    case opcode::NULLIFY_IF:
     case opcode::COALESCE:
-    case opcode::REPLACE_NULLS:
+    case opcode::PREDICATE:
+    case opcode::IS_NULL:
     case opcode::ABS:
-    case opcode::ADD:
-    case opcode::DIV:
-    case opcode::FLOOR_DIV:
-    case opcode::MOD:
-    case opcode::PYMOD:
-    case opcode::MUL:
     case opcode::NEG:
-    case opcode::SUB:
-    case opcode::ANSI_TRY_ADD:
-    case opcode::ANSI_TRY_SUB:
-    case opcode::ANSI_TRY_MUL:
-    case opcode::ANSI_TRY_DIV:
-    case opcode::ANSI_TRY_MOD:
-    case opcode::ANSI_TRY_ABS:
+    case opcode::ANSI_ABS:
+    case opcode::ANSI_NEG:
     case opcode::ANSI_TRY_NEG:
-    case opcode::ANSI_TRY_PRECISION_CAST:
-    case opcode::BIT_AND:
-    case opcode::BIT_INVERT:
-    case opcode::BIT_OR:
-    case opcode::BIT_XOR:
+    case opcode::ANSI_TRY_ABS:
+    case opcode::CAST_TO_B8:
+    case opcode::CAST_TO_I8:
+    case opcode::CAST_TO_I16:
     case opcode::CAST_TO_I32:
     case opcode::CAST_TO_I64:
+    case opcode::CAST_TO_U8:
+    case opcode::CAST_TO_U16:
     case opcode::CAST_TO_U32:
     case opcode::CAST_TO_U64:
     case opcode::CAST_TO_F32:
@@ -380,12 +251,13 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::CAST_TO_DEC32:
     case opcode::CAST_TO_DEC64:
     case opcode::CAST_TO_DEC128:
+    case opcode::NULLIFY_IF:
     case opcode::EQUAL:
-    case opcode::NOT_EQUAL:
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
     case opcode::LESS_EQUAL:
+    case opcode::NOT_EQUAL:
     case opcode::NULL_EQUAL:
     case opcode::NULL_LOGICAL_AND:
     case opcode::NULL_LOGICAL_OR:
@@ -393,6 +265,26 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::LOGICAL_OR:
     case opcode::LOGICAL_NOT:
     case opcode::IF_ELSE:
+    case opcode::ARCCOS:
+    case opcode::ARCCOSH:
+    case opcode::ARCSIN:
+    case opcode::ARCSINH:
+    case opcode::ARCTAN:
+    case opcode::ARCTANH:
+    case opcode::COS:
+    case opcode::COSH:
+    case opcode::SIN:
+    case opcode::SINH:
+    case opcode::TAN:
+    case opcode::TANH:
+    case opcode::ANSI_PRECISION_CHECK:
+    case opcode::ANSI_TRY_PRECISION_CHECK:
+    case opcode::BIT_AND:
+    case opcode::BIT_INVERT:
+    case opcode::BIT_OR:
+    case opcode::BIT_XOR:
+    case opcode::SHIFT_LEFT:
+    case opcode::SHIFT_RIGHT:
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
@@ -400,109 +292,26 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::SQRT:
     case opcode::POW:
     case opcode::EXP:
-    case opcode::LOG:
-    case opcode::ARCCOS:
-    case opcode::ARCCOSH:
-    case opcode::ARCSIN:
-    case opcode::ARCSINH:
-    case opcode::ARCTAN:
-    case opcode::ARCTANH:
-    case opcode::COS:
-    case opcode::COSH:
-    case opcode::SIN:
-    case opcode::SINH:
-    case opcode::TAN:
-    case opcode::TANH: return false;
-
-    default: CUDF_UNREACHABLE("Invalid opcode");
-  }
-}
-
-[[nodiscard]] inline constexpr int32_t get_op_arity(opcode op)
-{
-  switch (op) {
-    case opcode::GET_INPUT: return 0;
-
-    case opcode::SET_OUTPUT:
-    case opcode::IS_NULL:
-    case opcode::NULLIFY_IF:
-    case opcode::IDENTITY:
-    case opcode::ABS:
-    case opcode::NEG:
-    case opcode::ANSI_ABS:
-    case opcode::ANSI_NEG:
-    case opcode::ANSI_TRY_ABS:
-    case opcode::ANSI_TRY_NEG:
-    case opcode::BIT_INVERT:
-    case opcode::CAST_TO_I32:
-    case opcode::CAST_TO_I64:
-    case opcode::CAST_TO_U32:
-    case opcode::CAST_TO_U64:
-    case opcode::CAST_TO_F32:
-    case opcode::CAST_TO_F64:
-    case opcode::CAST_TO_DEC32:
-    case opcode::CAST_TO_DEC64:
-    case opcode::CAST_TO_DEC128:
-    case opcode::LOGICAL_NOT:
-    case opcode::CBRT:
-    case opcode::CEIL:
-    case opcode::FLOOR:
-    case opcode::RINT:
-    case opcode::SQRT:
-    case opcode::EXP:
-    case opcode::LOG:
-    case opcode::ARCCOS:
-    case opcode::ARCCOSH:
-    case opcode::ARCSIN:
-    case opcode::ARCSINH:
-    case opcode::ARCTAN:
-    case opcode::ARCTANH:
-    case opcode::COS:
-    case opcode::COSH:
-    case opcode::SIN:
-    case opcode::SINH:
-    case opcode::TAN:
-    case opcode::TANH: return 1;
-
-    case opcode::COALESCE:
-    case opcode::REPLACE_NULLS:
-    case opcode::ADD:
-    case opcode::DIV:
+    case opcode::TRUE_DIV:
+    case opcode::LOG: return arg_scales[0];
     case opcode::FLOOR_DIV:
-    case opcode::MOD:
-    case opcode::PYMOD:
-    case opcode::MUL:
+    case opcode::ANSI_DIV:
+    case opcode::DIV:
+    case opcode::ANSI_TRY_DIV: return arg_scales[0] - arg_scales[1];
+    case opcode::ADD:
     case opcode::SUB:
     case opcode::ANSI_ADD:
     case opcode::ANSI_SUB:
-    case opcode::ANSI_MUL:
-    case opcode::ANSI_DIV:
-    case opcode::ANSI_MOD:
     case opcode::ANSI_TRY_ADD:
     case opcode::ANSI_TRY_SUB:
-    case opcode::ANSI_TRY_MUL:
-    case opcode::ANSI_TRY_DIV:
+    case opcode::MOD:
+    case opcode::ANSI_MOD:
     case opcode::ANSI_TRY_MOD:
-    case opcode::ANSI_PRECISION_CAST:
-    case opcode::ANSI_TRY_PRECISION_CAST:
-    case opcode::BIT_AND:
-    case opcode::BIT_OR:
-    case opcode::BIT_XOR:
-    case opcode::EQUAL:
-    case opcode::NOT_EQUAL:
-    case opcode::GREATER:
-    case opcode::GREATER_EQUAL:
-    case opcode::LESS:
-    case opcode::LESS_EQUAL:
-    case opcode::NULL_EQUAL:
-    case opcode::NULL_LOGICAL_OR:
-    case opcode::NULL_LOGICAL_AND:
-    case opcode::LOGICAL_AND:
-    case opcode::LOGICAL_OR:
-    case opcode::POW: return 2;
-
-    case opcode::IF_ELSE: return 3;
-
+    case opcode::PYMOD: return std::min(arg_scales[0], arg_scales[1]);
+    case opcode::MUL:
+    case opcode::ANSI_MUL:
+    case opcode::ANSI_TRY_MUL: return arg_scales[0] + arg_scales[1];
+    case opcode::RESCALE: return output_scale.value();
     default: CUDF_UNREACHABLE("Invalid opcode");
   }
 }
@@ -515,24 +324,25 @@ enum class [[nodiscard]] null_output : uint8_t {
  * @return An `op_typing` struct containing the expected output type and input types for the
  * operator
  */
-[[nodiscard]] inline op_typing get_op_typing(opcode op)
+[[nodiscard]] inline op_type get_op_typing(opcode op)
 {
+  // TODO: finish up
   switch (op) {
-    case opcode::GET_INPUT: return {typing::INPUT, {}};
-    case opcode::SET_OUTPUT: return {typing::NONE, {typing::ALL}};
-    case opcode::IDENTITY: return {typing::ARG0, {typing::ALL}};
-    case opcode::IS_NULL: return {typing::BOOL8, {typing::ALL}};
-    case opcode::NULLIFY_IF: return {typing::ARG1, {typing::BOOL8, typing::ALL}};
-    case opcode::COALESCE: return {typing::ARG0, {typing::ALL, typing::ARG0}};
-    case opcode::REPLACE_NULLS: return {typing::ARG0, {typing::ALL, typing::ARG0}};
+    case opcode::GET_INPUT: return {type::INPUT, {}};
+    case opcode::SET_OUTPUT: return {type::NONE, {type::ALL}};
+    case opcode::IDENTITY: return {type::ARG0, {type::ALL}};
+    case opcode::IS_NULL: return {type::BOOL8, {type::ALL}};
+    case opcode::NULLIFY_IF: return {type::ARG0, {type::ALL, type::BOOL8}};
+    case opcode::COALESCE: return {type::ARG0, {type::ALL, type::ARG0}};
+    case opcode::PREDICATE: return {type::ARG0, {type::BOOL8}};
     case opcode::ABS:
     case opcode::NEG:
     case opcode::ANSI_ABS:
     case opcode::ANSI_NEG:
     case opcode::ANSI_TRY_NEG:
-    case opcode::ANSI_TRY_ABS: return {typing::ARG0, {typing::ARITHMETIC}};
+    case opcode::ANSI_TRY_ABS: return {type::ARG0, {type::ARITHMETIC}};
     case opcode::FLOOR_DIV:
-      return {typing::ARG0, {typing{typing::FLOATS | typing::INTEGERS}, typing::ARG0}};
+    case opcode::TRUE_DIV: return {type::ARG0, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
     case opcode::ADD:
     case opcode::DIV:
     case opcode::MOD:
@@ -548,35 +358,43 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::ANSI_TRY_SUB:
     case opcode::ANSI_TRY_MUL:
     case opcode::ANSI_TRY_DIV:
-    case opcode::ANSI_TRY_MOD: return {typing::ARG0, {typing::ARITHMETIC, typing::ARG0}};
-    case opcode::ANSI_PRECISION_CAST:
-    case opcode::ANSI_TRY_PRECISION_CAST: return {typing::ARG0, {typing::DECIMALS, typing::INT32}};
+    case opcode::ANSI_TRY_MOD: return {type::ARG0, {type::ARITHMETIC, type::ARG0}};
+    case opcode::ANSI_PRECISION_CHECK:
+    case opcode::ANSI_TRY_PRECISION_CHECK: return {type::ARG0, {type::DECIMALS, type::INT32}};
     case opcode::BIT_AND:
     case opcode::BIT_INVERT:
     case opcode::BIT_OR:
-    case opcode::BIT_XOR: return {typing::ARG0, {typing::INTEGERS, typing::ARG0}};
-    case opcode::CAST_TO_I32:
-    case opcode::CAST_TO_I64:
-    case opcode::CAST_TO_U32:
-    case opcode::CAST_TO_U64:
-    case opcode::CAST_TO_F32:
-    case opcode::CAST_TO_F64: return {typing::ARG0, {typing{typing::INTEGERS | typing::FLOATS}}};
-    case opcode::CAST_TO_DEC32:
-    case opcode::CAST_TO_DEC64:
-    case opcode::CAST_TO_DEC128: return {typing::ARG0, {typing::DECIMALS}};
+    case opcode::BIT_XOR:
+    case opcode::SHIFT_LEFT:
+    case opcode::SHIFT_RIGHT: return {type::ARG0, {type::INTEGERS, type::ARG0}};
+    case opcode::CAST_TO_B8: return {type::BOOL8, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_I8: return {type::INT8, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_I16: return {type::INT16, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_I32: return {type::INT32, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_I64: return {type::INT64, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_U8: return {type::UINT8, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_U16: return {type::UINT16, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_U32: return {type::UINT32, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_U64: return {type::UINT64, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_F32: return {type::FLOAT32, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_F64: return {type::FLOAT64, {type{type::INTEGERS | type::FLOATS}}};
+    case opcode::CAST_TO_DEC32: return {type::DECIMAL32, {type::DECIMALS}};
+    case opcode::CAST_TO_DEC64: return {type::DECIMAL64, {type::DECIMALS}};
+    case opcode::CAST_TO_DEC128: return {type::DECIMAL128, {type::DECIMALS}};
+    case opcode::RESCALE: return {type::ARG0, {type::DECIMALS, type::INT32}};
     case opcode::EQUAL:
     case opcode::GREATER:
     case opcode::GREATER_EQUAL:
     case opcode::LESS:
-    case opcode::LESS_EQUAL: return {typing::BOOL8, {typing::ALL, typing::ARG0}};
+    case opcode::LESS_EQUAL: return {type::BOOL8, {type::ALL, type::ARG0}};
     case opcode::NOT_EQUAL:
-    case opcode::NULL_EQUAL: return {typing::BOOL8, {typing::ALL, typing::ARG0}};
+    case opcode::NULL_EQUAL: return {type::BOOL8, {type::ALL, type::ARG0}};
     case opcode::NULL_LOGICAL_AND:
     case opcode::NULL_LOGICAL_OR:
     case opcode::LOGICAL_AND:
-    case opcode::LOGICAL_OR: return {typing::BOOL8, {typing::BOOL8, typing::ARG0}};
-    case opcode::LOGICAL_NOT: return {typing::ARG0, {typing::BOOL8}};
-    case opcode::IF_ELSE: return {typing::ARG1, {typing::BOOL8, typing::ALL, typing::ARG0}};
+    case opcode::LOGICAL_OR: return {type::BOOL8, {type::BOOL8, type::ARG0}};
+    case opcode::LOGICAL_NOT: return {type::ARG0, {type::BOOL8}};
+    case opcode::IF_ELSE: return {type::ARG0, {type::ALL, type::ARG0, type::BOOL8}};
     case opcode::CBRT:
     case opcode::CEIL:
     case opcode::FLOOR:
@@ -596,9 +414,14 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::SIN:
     case opcode::SINH:
     case opcode::TAN:
-    case opcode::TANH: return {typing::ARG0, {typing::FLOATS}};
+    case opcode::TANH: return {type::ARG0, {type::FLOATS}};
     default: CUDF_UNREACHABLE("Invalid opcode");
   }
+}
+
+[[nodiscard]] inline int32_t get_op_arity(opcode op)
+{
+  return static_cast<int32_t>(get_op_typing(op).args.size());
 }
 
 }  // namespace cudf::detail::row_ir

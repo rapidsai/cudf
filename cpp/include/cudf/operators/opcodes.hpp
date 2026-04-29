@@ -21,13 +21,15 @@ enum class [[nodiscard]] opcode : int32_t {
   // Null handling operators
   IS_NULL,
   NULLIFY_IF,
+
   COALESCE,
-  REPLACE_NULLS,
+  PREDICATE,
 
   /// Arithmetic operators
   ABS,
   ADD,
   DIV,
+  TRUE_DIV,
   FLOOR_DIV,
   MOD,
   PYMOD,
@@ -43,7 +45,7 @@ enum class [[nodiscard]] opcode : int32_t {
   ANSI_MOD,
   ANSI_ABS,
   ANSI_NEG,
-  ANSI_PRECISION_CAST,
+  ANSI_PRECISION_CHECK,
 
   /// ANSI TRY arithmetic functions. return NULL instead of raising errors
   ANSI_TRY_ADD,
@@ -53,17 +55,24 @@ enum class [[nodiscard]] opcode : int32_t {
   ANSI_TRY_MOD,
   ANSI_TRY_ABS,
   ANSI_TRY_NEG,
-  ANSI_TRY_PRECISION_CAST,
+  ANSI_TRY_PRECISION_CHECK,
 
   /// Bitwise operators
   BIT_AND,
   BIT_INVERT,
   BIT_OR,
   BIT_XOR,
+  SHIFT_LEFT,
+  SHIFT_RIGHT,
 
   /// Type conversion operators
+  CAST_TO_B8,
+  CAST_TO_I8,
+  CAST_TO_I16,
   CAST_TO_I32,
   CAST_TO_I64,
+  CAST_TO_U8,
+  CAST_TO_U16,
   CAST_TO_U32,
   CAST_TO_U64,
   CAST_TO_F32,
@@ -71,8 +80,9 @@ enum class [[nodiscard]] opcode : int32_t {
   CAST_TO_DEC32,
   CAST_TO_DEC64,
   CAST_TO_DEC128,
+  RESCALE,
 
-  /// Comparison & Logical operators
+  /// Comparison & Logic operators
   EQUAL,
   NOT_EQUAL,
   GREATER,

@@ -25,8 +25,8 @@ __device__ inline errc is_null(optional<bool>* out, optional<T> const* a)
 
 template <typename T>
 __device__ inline errc nullify_if(optional<T>* out,
-                                  optional<bool> const* condition,
-                                  optional<T> const* a)
+                                  optional<T> const* a,
+                                  optional<bool> const* condition)
 {
   if (condition->has_value() && a->has_value()) {
     if (condition->value()) {
@@ -60,20 +60,18 @@ __device__ inline errc coalesce(optional<T>* out, optional<T> const* a, optional
   return errc::OK;
 }
 
-template <typename T>
-__device__ inline errc replace_nulls(T* out, T const* a, [[maybe_unused]] T const* replacement)
+__device__ inline errc predicate(bool* out, bool const* a)
 {
   *out = *a;
   return errc::OK;
 }
 
-template <typename T>
-__device__ inline errc replace_nulls(optional<T>* out, optional<T> const* a, T const* replacement)
+__device__ inline errc predicate(optional<bool>* out, optional<bool> const* a)
 {
   if (a->has_value()) {
     *out = a->value();
   } else {
-    *out = *replacement;
+    *out = false;
   }
   return errc::OK;
 }

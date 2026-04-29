@@ -449,35 +449,27 @@ __device__ inline errc ansi_neg(optional<T>* out, optional<T> const* a)
 }
 
 template <typename R>
-__device__ inline errc ansi_precision_cast(decimal<R>* out,
-                                           decimal<R> const* a,
-                                           int32_t const* precision)
+__device__ inline errc ansi_precision_check(decimal<R>* out,
+                                            decimal<R> const* a,
+                                            int32_t const* precision)
 {
-  auto current_scale = static_cast<int32_t>(a->scale());
-  auto allowed_scale = -(*precision);
+  if (*precision <= 0) { return errc::OVERFLOW; }
 
-  if (current_scale >= allowed_scale) {
-    *out = *a;
-    return errc::OK;
-  }
+  if (a->value() == cuda::std::numeric_limits<R>::min()) { return errc::OVERFLOW; }
 
-  auto extra_digits = allowed_scale - current_scale;
-
-  auto factor = detail::ipow10(static_cast<R>(extra_digits));
-
-  if (a->value() % factor != 0) { return errc::OVERFLOW; }
+  if (::abs(a->value()) >= detail::ipow10(static_cast<R>(*precision))) { return errc::OVERFLOW; }
 
   *out = *a;
   return errc::OK;
 }
 
 template <typename T>
-__device__ inline errc ansi_precision_cast(optional<T>* out,
-                                           optional<T> const* a,
-                                           optional<int32_t> const* precision)
+__device__ inline errc ansi_precision_check(optional<T>* out,
+                                            optional<T> const* a,
+                                            optional<int32_t> const* precision)
 {
   if (a->has_value()) {
-    return ansi_precision_cast(&out->value(), &a->value(), &precision->value());
+    return ansi_precision_check(&out->value(), &a->value(), &precision->value());
   } else {
     *out = nullopt;
     return errc::OK;
@@ -597,12 +589,12 @@ __device__ inline errc ansi_try_neg(optional<T>* out, optional<T> const* a)
 }
 
 template <typename R>
-__device__ inline errc ansi_try_precision_cast(optional<decimal<R>>* out,
-                                               optional<decimal<R>> const* a,
-                                               optional<int32_t> const* precision)
+__device__ inline errc ansi_try_precision_check(optional<decimal<R>>* out,
+                                                optional<decimal<R>> const* a,
+                                                optional<int32_t> const* precision)
 {
   if (a->has_value() && precision->has_value()) {
-    if (errc e = ansi_precision_cast(&out->value(), &a->value(), &precision->value());
+    if (errc e = ansi_precision_check(&out->value(), &a->value(), &precision->value());
         e != errc::OK) {
       *out = nullopt;
     } else {

@@ -24,6 +24,7 @@
 #include <cuda/iterator>
 
 #include <jit/cache.hpp>
+#include <jit/error_sink.cuh>
 #include <jit/helpers.hpp>
 #include <jit/parser.hpp>
 #include <jit/row_ir.hpp>
@@ -158,7 +159,8 @@ using handle        = std::variant<
 
 namespace jit_transform {
 
-jitify2::Kernel instantiate(null_aware is_null_aware,
+jitify2::Kernel instantiate(ops::error_mode error_handling_mode,
+                            null_aware is_null_aware,
                             bool has_user_data,
                             std::string const& ins,
                             std::string const& outs,
@@ -176,7 +178,7 @@ jitify2::Kernel instantiate(null_aware is_null_aware,
                        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
   auto kernel = jitify2::reflection::Template("cudf::jit::transform_kernel")
-                  .instantiate(is_null_aware, has_user_data, ins, outs);
+                  .instantiate(error_handling_mode, is_null_aware, has_user_data, ins, outs);
 
   return jit::get_udf_kernel(
     *transform_jit_kernel_cu_jit, kernel, cuda_source, {"-restrict", "--dopt=on"});
@@ -188,10 +190,11 @@ void launch(jitify2::Kernel const& kernel,
             void* user_data,
             column_device_view_core const* input_cols,
             mutable_column_device_view_core const* output_cols,
+            jit::error_sink* error_sink,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
+  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols, &error_sink};
   kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())->launch_raw(args);
 }
 
@@ -319,20 +322,23 @@ auto to_args(std::span<input_column_view const> inputs,
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
 
-void run(null_aware is_null_aware,
+void run(ops::error_mode error_handling_mode,
+         null_aware is_null_aware,
          bool has_user_data,
          size_type row_size,
          bitmask_type const* d_stencil,
          void* user_data,
          std::span<input_column_view const> inputs,
          std::span<output_column const> outputs,
+         jit::error_sink* d_error_sink,
          std::string const& udf,
          udf_source_type source_type,
          rmm::cuda_stream_view stream,
          rmm::device_async_resource_ref mr)
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
-  auto kernel                                             = instantiate(is_null_aware,
+  auto kernel                                             = instantiate(error_handling_mode,
+                            is_null_aware,
                             has_user_data,
                             in_types,
                             out_types,
@@ -344,7 +350,8 @@ void run(null_aware is_null_aware,
   auto* input_cols = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* output_cols =
     reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
-  return launch(kernel, row_size, d_stencil, user_data, input_cols, output_cols, stream);
+  return launch(
+    kernel, row_size, d_stencil, user_data, input_cols, output_cols, d_error_sink, stream);
 }
 
 }  // namespace jit_transform
@@ -797,6 +804,7 @@ auto finalize_outputs(null_aware is_null_aware,
 
 std::unique_ptr<table> execute_transform(std::string const& udf,
                                          udf_source_type source_type,
+                                         ops::error_mode error_handling_mode,
                                          null_aware is_null_aware,
                                          std::optional<size_type> in_row_size,
                                          std::optional<void*> user_data,
@@ -819,39 +827,67 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
 
   auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
   auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
-  jit_transform::run(is_null_aware,
+
+  std::optional<rmm::device_scalar<jit::error_sink>> d_error_sink = std::nullopt;
+
+  switch (error_handling_mode) {
+    case ops::error_mode::IGNORE: break;
+    case ops::error_mode::ANY_ROW:
+      d_error_sink = rmm::device_scalar<jit::error_sink>(jit::error_sink{}, stream);
+      break;
+  }
+
+  jit_transform::run(error_handling_mode,
+                     is_null_aware,
                      user_data.has_value(),
                      row_size,
                      stencil_has_nulls ? stencil_arg : nullptr,
                      user_data.value_or(nullptr),
                      inputs,
                      output_columns,
+                     d_error_sink.has_value() ? d_error_sink->data() : nullptr,
                      udf,
                      source_type,
                      stream,
                      mr);
 
   auto finalized = finalize_outputs(is_null_aware, row_size, std::move(output_columns), stream, mr);
+
+  switch (error_handling_mode) {
+    case ops::error_mode::IGNORE: {
+    } break;
+    case ops::error_mode::ANY_ROW: {
+      auto sink = d_error_sink->value(stream).any_error();
+      auto err  = sink->error();
+      CUDF_EXPECTS(err == ops::errc::OK,
+                   std::format("Error `{}` in transform UDF", ops::to_string(err)),
+                   std::runtime_error);
+    } break;
+  }
+
   return std::make_unique<table>(std::move(finalized));
 }
 
 }  // namespace
 
-std::unique_ptr<table> multi_transform(std::string const& udf,
-                                       udf_source_type source_type,
-                                       null_aware is_null_aware,
-                                       std::optional<void*> user_data,
-                                       std::span<transform_input const> inputs,
-                                       std::span<transform_output const> outputs,
-                                       std::vector<std::unique_ptr<column>>&& string_offsets,
-                                       std::optional<size_type> row_size,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::device_async_resource_ref mr)
+std::unique_ptr<table> multi_transform_extended(
+  std::string const& udf,
+  udf_source_type source_type,
+  null_aware is_null_aware,
+  std::optional<void*> user_data,
+  std::span<transform_input const> inputs,
+  std::span<transform_output const> outputs,
+  std::vector<std::unique_ptr<column>>&& string_offsets,
+  std::optional<size_type> row_size,
+  ops::error_mode error_handling_mode,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   perform_checks(source_type, is_null_aware, row_size, inputs, outputs, string_offsets);
   return execute_transform(udf,
                            source_type,
+                           error_handling_mode,
                            is_null_aware,
                            row_size,
                            user_data,

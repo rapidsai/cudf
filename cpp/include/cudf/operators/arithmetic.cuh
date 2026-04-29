@@ -253,5 +253,26 @@ __device__ inline errc sub(optional<T>* out, optional<T> const* a, optional<T> c
   return errc::OK;
 }
 
+template <typename T>
+  requires(cuda::std::is_floating_point_v<T> || cuda::std::is_integral_v<T>)
+__device__ inline errc true_div(double* out, T const* a, T const* b)
+{
+  *out = static_cast<double>(*a) / static_cast<double>(*b);
+  return errc::OK;
+}
+
+template <typename T>
+__device__ inline errc true_div(optional<double>* out, optional<T> const* a, optional<T> const* b)
+{
+  if (a->has_value() && b->has_value()) {
+    double r;
+    true_div(&r, &a->value(), &b->value());
+    *out = r;
+  } else {
+    *out = nullopt;
+  }
+  return errc::OK;
+}
+
 }  // namespace ops
 }  // namespace CUDF_EXPORT cudf
