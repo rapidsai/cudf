@@ -164,8 +164,11 @@ def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["medium", "small"]:
     if not is_streaming_engine(obj):
         return "medium"
 
-    # The blocksize mode is defined by the `max_rows_per_partition` value.
-    # Get the obj's execution options and compare it with a "small" blocksize.
+    # ``max_rows_per_partition`` is the defining signal for "small", it is
+    # what triggers multi-partition behavior. Other fields in the small
+    # baseline (``fallback_mode``, ``target_partition_size`` etc.) are
+    # deliberately ignored so callers that override them on top of the
+    # small baseline are still classified as ``"small"``.
     executor_options = obj.config["executor_options"]
     small_max_rows = create_streaming_options("small").max_rows_per_partition
     if executor_options.get("max_rows_per_partition") == small_max_rows:
