@@ -726,9 +726,9 @@ TEST_F(StreamingGroupbyTest, SingleRowBatches)
 }
 
 // Regression test for staging-offset corruption: when a batch has internal duplicate keys,
-// the last unique key's canonical position in the staging buffer equals the unique-key count,
-// not the end of the written range.  Without the fix, the next batch writes at the wrong
-// offset and corrupts the canonical entry for that key.
+// the last distinct key's canonical position in the staging buffer equals the distinct-key
+// count, not the end of the written range.  Without the fix, the next batch writes at the
+// wrong offset and corrupts the canonical entry for that key.
 TEST_F(StreamingGroupbyTest, InternalDuplicatesDoNotCorruptStaging)
 {
   using K = int32_t;
@@ -822,7 +822,7 @@ TEST_F(StreamingGroupbyTest, ExceedsDistinctKeyCapacityThrows)
   // max_groups=4: can hold at most 4 distinct keys.
   cudf::groupby::streaming_groupby streaming_agg(KEY_COL, reqs, 4);
 
-  // Batch with 4 unique keys fills distinct-key capacity.
+  // Batch with 4 distinct keys fills distinct-key capacity.
   cudf::test::fixed_width_column_wrapper<K> k1{0, 1, 2, 3};
   cudf::test::fixed_width_column_wrapper<V> v1{10, 20, 30, 40};
   streaming_agg.aggregate(cudf::table_view{{k1, v1}});
@@ -1269,7 +1269,8 @@ TEST_F(StreamingGroupbyTest, CumulativeRowsCanExceedMaxGroups)
   EXPECT_EQ(streaming_agg.distinct_count(), 3);
 
   auto [keys, results] = streaming_agg.finalize();
-  verify_against_groupby(keys, results, {batch, batch, batch, batch, batch}, KEY_COL, reqs);
+  verify_against_groupby(
+    keys, results, {batch, batch, batch, batch, batch}, KEY_COL, reqs);
 }
 
 TEST_F(StreamingGroupbyTest, StructKeySumTwoBatches)

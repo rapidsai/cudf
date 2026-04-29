@@ -426,14 +426,23 @@ struct streaming_aggregation_request {
 };
 
 /**
- * @brief Stateful streaming groupby that accumulates partial aggregates across batches
- * using a persistent hash table.
+ * @brief Stateful streaming groupby that accumulates partial aggregates across batches.
  *
- * Unlike `groupby`, which is stateless and computes results in a single pass,
- * `streaming_groupby` maintains a persistent hash table and aggregation state across
- * multiple batches. This avoids the need to repeatedly concatenate and re-groupby
- * accumulated results, as each batch does O(batch_size) work via direct hash table
- * insertion and in-place aggregation updates. Partial states from distributed workers
+ * `streaming_groupby` and the stateless `groupby` serve different use cases.  Use
+ * the stateless `groupby` for single-shot aggregation when all input fits in memory
+ * at once.  Use `streaming_groupby` when input arrives over multiple batches and
+ * memory efficiency matters: memory footprint scales with the number of *distinct*
+ * keys, not the number of *input* rows, because only the distinct keys seen so far
+ * and one aggregation slot per group are kept across batches.  Arbitrarily long
+ * high-duplicate streams therefore accumulate without running out of memory.
+ *
+ * If memory is not a concern, concatenating all batches and calling the stateless
+ * `groupby` once is also a valid choice.  Reach for `streaming_groupby` when
+ * (a) the cumulative input does not fit in memory, or (b) partial-state aggregation
+ * across distributed workers (`merge()`) is part of the workload.
+ *
+ * Per-batch cost is O(batch_size): each batch does direct hash table insertion
+ * and in-place aggregation updates against the persistent state. Partial states
  * can be combined via `merge()`, and final results are produced via `finalize()`.
  *
  * The `max_groups` parameter sets the upper bound on the number of distinct key
@@ -441,8 +450,9 @@ struct streaming_aggregation_request {
  * and aggregation results table are all pre-allocated to this capacity. Cumulative
  * input rows are not bounded — only cumulative distinct keys.
  *
- * Unique keys are accumulated incrementally — only newly discovered keys are stored,
- * and key storage grows proportionally to actual distinct keys rather than `max_groups`.
+ * Distinct keys are accumulated incrementally — only newly discovered keys are stored,
+ * and key storage grows proportionally to the number of distinct keys actually seen
+ * rather than `max_groups`.
  * All column types (including variable-width types such as strings, lists, and structs)
  * are supported for key columns. Only hash-based aggregation kinds are supported.
  *
@@ -545,7 +555,7 @@ class streaming_groupby {
    *
    * Returns 0 before any successful `aggregate()` or `merge()` call.
    *
-   * @return The current count of unique keys in the persistent hash table
+   * @return The current count of distinct keys in the persistent hash table
    */
   [[nodiscard]] size_type distinct_count() const noexcept;
 
