@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import pprint
-import statistics
 import sys
 import textwrap
 import time
@@ -23,6 +22,7 @@ import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
+from statistics import mean
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
 import nvtx
@@ -80,8 +80,6 @@ if TYPE_CHECKING:
     from cudf_polars.experimental.explain import SerializablePlan
     from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-
-
 POLARS_VALIDATION_OPTIONS = {
     "check_row_order": True,
     "check_column_order": True,
@@ -204,7 +202,7 @@ class SuccessRecord:
     query: int
     iteration: int
     duration: float
-    shuffle_stats: dict[str, dict[str, int | float]] | None = None
+    statistics: dict[str, Any] | None = None
     traces: list[dict[str, Any]] | None = None
     validation_result: ValidationResult | None = None
     status: Literal["success"] = "success"
@@ -215,7 +213,7 @@ class SuccessRecord:
         query: int,
         iteration: int,
         duration: float,
-        shuffle_stats: dict[str, dict[str, int | float]] | None = None,
+        statistics: dict[str, Any] | None = None,
         traces: list[dict[str, Any]] | None = None,
     ) -> SuccessRecord:
         """Create a Record from plain data."""
@@ -223,7 +221,7 @@ class SuccessRecord:
             query=query,
             iteration=iteration,
             duration=duration,
-            shuffle_stats=shuffle_stats,
+            statistics=statistics,
             traces=traces,
         )
 
@@ -254,12 +252,14 @@ class PackageVersions:
     polars: str
     python: str
     rapidsmpf: str | VersionInfo | None
+    duckdb: str | None
 
     @classmethod
     def collect(cls) -> PackageVersions:
         """Collect the versions of the software used to run the query."""
         packages = [
             "cudf_polars",
+            "duckdb",
             "polars",
             "rapidsmpf",
         ]
@@ -377,6 +377,7 @@ def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float
 class RunConfig:
     """Benchmark run configuration for SPMD / Ray / DuckDB frontends."""
 
+    engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
     # Query selection & dataset
     queries: list[int]
     query_set: str
@@ -407,6 +408,11 @@ class RunConfig:
 
     # Validation
     validation_method: ValidationMethod | None = None
+
+    # DuckDB configuration
+    duckdb_threads: int | None = None
+    duckdb_memory_limit: str | None = None
+    duckdb_temp_dir: str | None = None
 
     # Metadata / output (populated at runtime)
     n_workers: int = 1
@@ -502,7 +508,19 @@ class RunConfig:
         else:
             validation_method = None
 
+        engine_name: Literal["polars-cpu", "cudf-polars", "duckdb"]
+        if args.engine == "duckdb":
+            engine_name = "duckdb"
+        elif args.engine == "polars":
+            if args.executor == "cpu":
+                engine_name = "polars-cpu"
+            else:
+                engine_name = "cudf-polars"
+        else:
+            raise ValueError(f"Invalid engine: {args.engine}")
+
         return cls(
+            engine_name=engine_name,
             queries=args.query,
             query_set=name,
             dataset_path=path,
@@ -521,12 +539,16 @@ class RunConfig:
             num_gpus=args.num_gpus,
             validation_method=validation_method,
             extra_info=args.extra_info,
+            duckdb_threads=args.duckdb_threads,
+            duckdb_memory_limit=args.duckdb_memory_limit,
+            duckdb_temp_dir=args.duckdb_temp_dir,
         )
 
     def serialize(self, engine: pl.GPUEngine | None) -> dict:
         """Serialize the run config to a dictionary."""
         opts = self.streaming_options
         result: dict[str, Any] = {
+            "engine_name": self.engine_name,
             "queries": self.queries,
             "query_set": self.query_set,
             "dataset_path": str(self.dataset_path),
@@ -590,13 +612,13 @@ class RunConfig:
                 print("---------------------------------------")
                 print(f"min time : {min(valid_durations):0.4f}")
                 print(f"max time : {max(valid_durations):0.4f}")
-                print(f"mean time: {statistics.mean(valid_durations):0.4f}")
+                print(f"mean time: {mean(valid_durations):0.4f}")
                 print("=======================================")
         any_success = any(record.status == "success" for record in records)
 
         if any_success:
             total_mean_time = sum(
-                statistics.mean(
+                mean(
                     record.duration for record in records if record.status == "success"
                 )
                 for records in self.records.values()
@@ -810,13 +832,18 @@ class QueryResult:
     sort_keys: list[tuple[pl.Expr, bool]] | None = None
 
 
+def _collect_statistics(engine: StreamingEngine | None) -> dict[str, Any] | None:
+    """Gather + clear per-rank rapidsmpf statistics into a merged dict."""
+    return None if engine is None else engine.global_statistics(clear=True).to_dict()
+
+
 def run_polars_query_iteration(
     q_id: int,
     iteration: int,
     q: pl.LazyFrame,
     run_config: RunConfig,
     args: argparse.Namespace,
-    engine: pl.GPUEngine | None,
+    engine: StreamingEngine | None,
     expected: pl.DataFrame | None,
     query_result: Any,
     prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
@@ -835,10 +862,7 @@ def run_polars_query_iteration(
         # Once we support polars 1.40, we should remove this
         result = result.with_columns(*result_casts)
 
-    # TODO: shuffle stats collection is not yet wired up for the new
-    # frontends. The Dask-specific gather_shuffle_statistics API does
-    # not apply to SPMD/Ray; needs a generic rapidsmpf API first.
-    shuffle_stats = None
+    statistics = _collect_statistics(engine)
 
     if expected is not None:
         validation_result = validate_result(
@@ -866,7 +890,7 @@ def run_polars_query_iteration(
         query=q_id,
         iteration=iteration,
         duration=duration,
-        shuffle_stats=shuffle_stats,
+        statistics=statistics,
         validation_result=validation_result,
     )
 
@@ -912,6 +936,7 @@ def run_polars_query(
                 run_config.dataset_path,
                 query_set=duckdb_queries_cls.name,
                 suffix=run_config.suffix,
+                run_config=run_config,
             ).with_columns(*casts)
         else:
             raise ValueError(f"Invalid baseline: {args.baseline}")
@@ -1407,6 +1432,20 @@ PDSH_TABLE_NAMES: list[str] = [
 ]
 
 
+def _make_duckdb_config(run_config: RunConfig | None) -> dict[str, Any]:
+    """Build a DuckDB connection config dict from a RunConfig."""
+    config: dict[str, Any] = {
+        "threads": run_config.duckdb_threads
+        if (run_config and run_config.duckdb_threads is not None)
+        else os.cpu_count(),
+    }
+    if run_config and run_config.duckdb_memory_limit is not None:
+        config["memory_limit"] = run_config.duckdb_memory_limit
+    if run_config and run_config.duckdb_temp_dir is not None:
+        config["temp_directory"] = run_config.duckdb_temp_dir
+    return config
+
+
 def print_duckdb_plan(
     q_id: int,
     sql: str,
@@ -1414,6 +1453,7 @@ def print_duckdb_plan(
     suffix: str,
     query_set: str,
     args: argparse.Namespace,
+    run_config: RunConfig | None = None,
 ) -> None:
     """Print DuckDB query plan using EXPLAIN."""
     if duckdb is None:
@@ -1424,7 +1464,7 @@ def print_duckdb_plan(
     else:
         tbl_names = PDSH_TABLE_NAMES
 
-    with duckdb.connect() as conn:
+    with duckdb.connect(config=_make_duckdb_config(run_config)) as conn:
         for name in tbl_names:
             pattern = (Path(dataset_path) / name).as_posix() + suffix
             conn.execute(
@@ -1452,6 +1492,7 @@ def execute_duckdb_query(
     *,
     suffix: str = ".parquet",
     query_set: str = "pdsh",
+    run_config: RunConfig | None = None,
 ) -> pl.DataFrame:
     """Execute a query with DuckDB."""
     if duckdb is None:
@@ -1460,7 +1501,7 @@ def execute_duckdb_query(
         tbl_names = PDSDS_TABLE_NAMES
     else:
         tbl_names = PDSH_TABLE_NAMES
-    with duckdb.connect() as conn:
+    with duckdb.connect(config=_make_duckdb_config(run_config)) as conn:
         for name in tbl_names:
             pattern = (Path(dataset_path) / name).as_posix() + suffix
             conn.execute(
@@ -1492,6 +1533,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
                 suffix=run_config.suffix,
                 query_set=duckdb_queries_cls.name,
                 args=args,
+                run_config=run_config,
             )
 
         print(f"DuckDB Executing: {q_id}")
@@ -1506,6 +1548,7 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
                 run_config.dataset_path,
                 suffix=run_config.suffix,
                 query_set=duckdb_queries_cls.name,
+                run_config=run_config,
             )
             t1 = time.time()
             record = SuccessRecord(query=q_id, iteration=i, duration=t1 - t0)
@@ -1828,6 +1871,25 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=json.loads,
         default={},
         help="Extra information to add to the output file (must be JSON-serializable).",
+    )
+
+    parser.add_argument(
+        "--duckdb-threads",
+        type=int,
+        default=None,
+        help="Number of threads for DuckDB to use. Defaults to os.cpu_count().",
+    )
+    parser.add_argument(
+        "--duckdb-memory-limit",
+        type=str,
+        default=None,
+        help="DuckDB memory limit (e.g. '500GB'). If unset, DuckDB uses its default.",
+    )
+    parser.add_argument(
+        "--duckdb-temp-dir",
+        type=str,
+        default=None,
+        help="Directory for DuckDB to spill temporary data to disk.",
     )
 
     StreamingOptions._add_cli_args(parser)

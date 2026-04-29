@@ -119,9 +119,8 @@ int main(int argc, char** argv)
   auto lsd = cudf::test::StringsLargeTest::get_ls_data();
 
   if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {
-    auto mr = rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(
-      cudf::get_current_device_resource_ref());
-    cudf::set_current_device_resource(&mr);
+    auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+    cudf::set_current_device_resource(mr);
     auto rc = RUN_ALL_TESTS();
     std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl;
     return rc;
