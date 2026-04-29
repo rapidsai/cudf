@@ -28,7 +28,10 @@ timeout 15m python -m pytest \
   "${CUML_TESTS_DIR}/test_kneighbors_classifier.py" \
   "${CUML_TESTS_DIR}/test_kneighbors_regressor.py" \
   "${CUML_TESTS_DIR}/test_label_encoder.py" \
-  "${CUML_TESTS_DIR}/test_linear_model.py" \
+  "${CUML_TESTS_DIR}/test_elastic_net.py" \
+  "${CUML_TESTS_DIR}/test_linear_regression.py" \
+  "${CUML_TESTS_DIR}/test_logistic_regression.py" \
+  "${CUML_TESTS_DIR}/test_ridge.py" \
   "${CUML_TESTS_DIR}/test_metrics.py" \
   "${CUML_TESTS_DIR}/test_one_hot_encoder.py" \
   "${CUML_TESTS_DIR}/test_ordinal_encoder.py" \
