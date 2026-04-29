@@ -196,11 +196,14 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
             # SQL: WHERE d_date BETWEEN '{date}' AND date+60days AND ca_state = '{state}'
             # SQL:   AND web_company_name = '{web_company_name}'
+            # ws_warehouse_sk IS NOT NULL: EXISTS(...ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
+            # evaluates to NULL when ws1.ws_warehouse_sk IS NULL, implicitly excluding those rows.
             .filter(
                 (pl.col("d_date") >= start_date)
                 & (pl.col("d_date") <= end_date)
                 & (pl.col("ca_state") == state)
                 & (pl.col("web_company_name") == web_company_name)
+                & pl.col("ws_warehouse_sk").is_not_null()
             )
             # SQL: AND EXISTS ws_wh (orders shipped from multiple warehouses)
             .join(ws_wh, on="ws_order_number", how="inner")
