@@ -249,23 +249,23 @@ inline void init_cudf_test(int argc, char** argv, cudf::test::config const& conf
  * This `main` function is a wrapper around the google test generated `main`,
  * maintaining the original functionality.
  */
-#define CUDF_TEST_PROGRAM_MAIN()                                                                 \
-  int main(int argc, char** argv)                                                                \
-  {                                                                                              \
-    cudf::initialize();                                                                          \
-    ::testing::InitGoogleTest(&argc, argv);                                                      \
-    init_cudf_test(argc, argv);                                                                  \
-    if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {                                                 \
-      auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());   \
-      auto prev_mr = cudf::set_current_device_resource(mr);                                      \
-      auto rc      = RUN_ALL_TESTS();                                                            \
-      std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl; \
-      cudf::set_current_device_resource(std::move(prev_mr));                                     \
-      cudf::teardown();                                                                          \
-      return rc;                                                                                 \
-    } else {                                                                                     \
-      auto rc = RUN_ALL_TESTS();                                                                 \
-      cudf::teardown();                                                                          \
-      return rc;                                                                                 \
-    }                                                                                            \
+#define CUDF_TEST_PROGRAM_MAIN()                                                                    \
+  int main(int argc, char** argv)                                                                   \
+  {                                                                                                 \
+    cudf::initialize();                                                                             \
+    ::testing::InitGoogleTest(&argc, argv);                                                         \
+    init_cudf_test(argc, argv);                                                                     \
+    if (std::getenv("GTEST_CUDF_MEMORY_PEAK")) {                                                    \
+      auto mr      = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref()); \
+      auto prev_mr = cudf::set_current_device_resource(mr);                                         \
+      auto rc      = RUN_ALL_TESTS();                                                               \
+      std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl;    \
+      cudf::set_current_device_resource(std::move(prev_mr));                                        \
+      cudf::teardown();                                                                             \
+      return rc;                                                                                    \
+    } else {                                                                                        \
+      auto rc = RUN_ALL_TESTS();                                                                    \
+      cudf::teardown();                                                                             \
+      return rc;                                                                                    \
+    }                                                                                               \
   }
