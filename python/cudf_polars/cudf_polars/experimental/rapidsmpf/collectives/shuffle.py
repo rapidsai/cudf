@@ -105,12 +105,7 @@ class ShuffleManager:
         def insert_hash_with_keys(
             self, chunk: TableChunk, key_table: plc.Table
         ) -> None:
-            """
-            Partition chunk by hash using a separate key table and insert.
-
-            Uses ``hash_partition(input, key_table, ...)`` to support
-            non-``Col`` (e.g. expression-derived) shuffle keys.
-            """
+            """Partition chunk by hash using a pre-evaluated key table and insert."""
             partitioned_table, offsets = plc.partitioning.hash_partition(
                 chunk.table_view(),
                 key_table,
