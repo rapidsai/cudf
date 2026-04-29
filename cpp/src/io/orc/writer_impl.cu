@@ -1463,6 +1463,7 @@ encoded_footer_statistics finish_statistic_blobs(Footer const& footer,
     file_blobs[i].assign(stat_begin, stat_end);
   }
 
+  stream.synchronize();  // makes sure num_file_blobs is copied before going out of scope
   return {std::move(stripe_blobs), std::move(file_blobs)};
 }
 
