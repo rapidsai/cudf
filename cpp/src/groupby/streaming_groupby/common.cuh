@@ -70,19 +70,17 @@ using streaming_set_t = cuco::static_set<cudf::size_type,
  */
 template <typename RowEqT>
 struct n_table_comparator {
-  RowEqT batch_self_eq;             ///< Self-comparator on the current batch table
-  RowEqT const* cross_eqs;          ///< Device array [num_compacted_batches]: batch vs compacted[k]
-  key_location_t const* key_loc;    ///< {batch_id, row_in_compacted} per dense ID
-  size_type max_groups;             ///< Threshold: idx >= max_groups is a transient batch value
+  RowEqT batch_self_eq;           ///< Self-comparator on the current batch table
+  RowEqT const* cross_eqs;        ///< Device array [num_compacted_batches]: batch vs compacted[k]
+  key_location_t const* key_loc;  ///< {batch_id, row_in_compacted} per dense ID
+  size_type max_groups;           ///< Threshold: idx >= max_groups is a transient batch value
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
     bool const lhs_is_batch = (lhs >= max_groups);
     bool const rhs_is_batch = (rhs >= max_groups);
 
-    if (lhs_is_batch && rhs_is_batch) {
-      return batch_self_eq(lhs - max_groups, rhs - max_groups);
-    }
+    if (lhs_is_batch && rhs_is_batch) { return batch_self_eq(lhs - max_groups, rhs - max_groups); }
     if (lhs_is_batch) {
       auto const loc = key_loc[rhs];
       return cross_eqs[loc.first](lhs - max_groups, loc.second);
@@ -156,12 +154,13 @@ struct offset_cache_hasher {
  *   2. Write the (batch_id, row) pair to the companion vector at the dense ID.
  */
 struct finalize_new_key_fn {
-  size_type const* batch_local_indices;  ///< batch-local row indices of new keys [new_distinct_count]
-  size_type* base;                       ///< hash set storage base
-  size_type const* slot_offsets;         ///< slot offset per batch row [batch_size]
-  key_location_t* key_loc;               ///< {batch_id, row_in_compacted} per dense ID
-  size_type batch_id;                    ///< the index of this batch in _compacted_batches
-  size_type distinct_count_before;       ///< _distinct_count prior to this batch
+  size_type const*
+    batch_local_indices;            ///< batch-local row indices of new keys [new_distinct_count]
+  size_type* base;                  ///< hash set storage base
+  size_type const* slot_offsets;    ///< slot offset per batch row [batch_size]
+  key_location_t* key_loc;          ///< {batch_id, row_in_compacted} per dense ID
+  size_type batch_id;               ///< the index of this batch in _compacted_batches
+  size_type distinct_count_before;  ///< _distinct_count prior to this batch
 
   __device__ void operator()(size_type r) const
   {

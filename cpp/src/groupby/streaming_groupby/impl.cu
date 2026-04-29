@@ -133,9 +133,9 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   // never reallocated, so the device-side descriptor stays valid for the whole
   // lifetime of this impl.
   {
-    auto raii      = mutable_table_device_view::create(*_agg_results, stream);
-    _d_agg_results = decltype(_d_agg_results){
-      raii.release(), [](mutable_table_device_view* t) { t->destroy(); }};
+    auto raii = mutable_table_device_view::create(*_agg_results, stream);
+    _d_agg_results =
+      decltype(_d_agg_results){raii.release(), [](mutable_table_device_view* t) { t->destroy(); }};
   }
 
   _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr);
