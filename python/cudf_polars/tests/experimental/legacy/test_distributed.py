@@ -7,7 +7,6 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import DEFAULT_RUNTIME
 from cudf_polars.testing.io import make_lazy_frame
 
 
@@ -40,7 +39,6 @@ def test_simple_query_with_distributed_support(tmp_path, source_format) -> None:
         executor_options={
             "max_rows_per_partition": 2,
             "cluster": "distributed",
-            "runtime": DEFAULT_RUNTIME,
         },
     )
 

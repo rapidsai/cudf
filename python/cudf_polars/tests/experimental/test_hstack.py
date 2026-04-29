@@ -20,7 +20,6 @@ from cudf_polars.experimental.repartition import Repartition
 from cudf_polars.experimental.statistics import collect_statistics
 from cudf_polars.testing.asserts import (
     DEFAULT_CLUSTER,
-    DEFAULT_RUNTIME,
     assert_gpu_result_equal,
 )
 from cudf_polars.utils.config import ConfigOptions
@@ -34,7 +33,6 @@ def engine():
         executor_options={
             "max_rows_per_partition": 3,
             "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
         },
     )
 

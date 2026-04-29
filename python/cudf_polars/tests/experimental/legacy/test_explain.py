@@ -8,7 +8,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.experimental.explain import explain_query, serialize_query
-from cudf_polars.testing.asserts import DEFAULT_CLUSTER, DEFAULT_RUNTIME
+from cudf_polars.testing.asserts import DEFAULT_CLUSTER
 from cudf_polars.testing.io import make_partitioned_source
 
 
@@ -39,16 +39,11 @@ def test_explain_physical_plan(tmp_path, df):
         executor_options={
             "target_partition_size": 10_000,
             "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
         },
     )
 
     plan = explain_query(q, engine)
 
-    if DEFAULT_RUNTIME == "tasks":
-        # rapidsmpf runtime does not split Scan nodes at lowering time
-        assert "UNION" in plan
-        assert "SPLITSCAN" in plan
     assert "SELECT ('sum', 'y')" in plan or "PROJECTION ('sum', 'y')" in plan
 
 
@@ -64,8 +59,6 @@ def test_shuffle_properties():
         executor_options={
             "max_rows_per_partition": 1,
             "cluster": DEFAULT_CLUSTER,
-            "runtime": DEFAULT_RUNTIME,
-            "shuffle_method": DEFAULT_RUNTIME,
             "broadcast_join_limit": 1,
             "dynamic_planning": None,  # Requires static planning
         },
@@ -76,9 +69,7 @@ def test_shuffle_properties():
     assert len(shuffle_nodes) >= 1, "Expected at least one Shuffle node in lowered plan"
     node = shuffle_nodes[0]
 
-    if DEFAULT_RUNTIME == "tasks":
-        shuffle_method = "tasks"
-    elif DEFAULT_CLUSTER == "single":
+    if DEFAULT_CLUSTER == "single":
         shuffle_method = "rapidsmpf-single"
     else:
         shuffle_method = "rapidsmpf"

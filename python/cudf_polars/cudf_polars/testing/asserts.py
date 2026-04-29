@@ -30,7 +30,6 @@ __all__: list[str] = [
 # Will be overriden by `conftest.py` with the value from the `--executor`
 # and `--cluster` command-line arguments
 DEFAULT_EXECUTOR = "in-memory"
-DEFAULT_RUNTIME = "tasks"
 DEFAULT_CLUSTER = "single"
 
 
@@ -200,7 +199,6 @@ def get_default_engine(
     executor = executor or DEFAULT_EXECUTOR
     if executor == "streaming":
         executor_options["cluster"] = DEFAULT_CLUSTER
-        executor_options["runtime"] = DEFAULT_RUNTIME
 
     return GPUEngine(
         raise_on_fail=True,

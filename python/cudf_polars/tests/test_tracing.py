@@ -79,10 +79,6 @@ def test_import_without_structlog() -> None:
     subprocess.check_call([sys.executable, "-c", code])
 
 
-@pytest.mark.skipif(
-    cudf_polars.testing.asserts.DEFAULT_RUNTIME != "rapidsmpf",
-    reason="Requires 'rapidsmpf' runtime.",
-)
 def test_log_query_plan() -> None:
     """Test that log_query_plan emits a Query Plan event."""
     import os
