@@ -84,6 +84,7 @@ cache:
     host:
       - librmm =${{ minor_version }}
       - libkvikio =${{ minor_version }}
+      - cuda-cudart-dev
       - cuda-nvrtc-dev
       - cuda-nvtx-dev
       - cuda-sanitizer-api
