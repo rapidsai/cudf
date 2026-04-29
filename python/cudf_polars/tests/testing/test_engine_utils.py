@@ -14,13 +14,13 @@ from cudf_polars.testing.engine_utils import (
 def test_engine_fixture_param_in_memory():
     param = EngineFixtureParam("in-memory")
     assert param.engine_name == "in-memory"
-    assert param.blocksize_mode == "default"
+    assert param.blocksize_mode == "medium"
 
 
-def test_engine_fixture_param_default_blocksize():
+def test_engine_fixture_param_medium_blocksize():
     param = EngineFixtureParam("spmd")
     assert param.engine_name == "spmd"
-    assert param.blocksize_mode == "default"
+    assert param.blocksize_mode == "medium"
 
 
 def test_engine_fixture_param_small_blocksize():
@@ -29,9 +29,9 @@ def test_engine_fixture_param_small_blocksize():
     assert param.blocksize_mode == "small"
 
 
-def test_create_streaming_options_default():
+def test_create_streaming_options_medium():
     pytest.importorskip("rapidsmpf")
-    opts = create_streaming_options("default")
+    opts = create_streaming_options("medium")
     assert opts.max_rows_per_partition == 50
     assert opts.target_partition_size == 1_000_000
     assert opts.raise_on_fail is True
@@ -50,7 +50,7 @@ def test_create_streaming_options_overrides_merge():
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
     overrides = StreamingOptions(max_rows_per_partition=999)
-    merged = create_streaming_options("default", overrides)
+    merged = create_streaming_options("medium", overrides)
     # Override wins.
     assert merged.max_rows_per_partition == 999
     # Untouched baseline field is preserved.

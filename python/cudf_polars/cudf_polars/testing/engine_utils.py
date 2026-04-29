@@ -36,12 +36,12 @@ class EngineFixtureParam:
     engine_name
         Backend name (e.g. ``"in-memory"`` or ``"spmd"``).
     blocksize_mode
-        Block size mode, either ``"default"`` or ``"small"``.
+        Block size mode, either ``"medium"`` or ``"small"``.
     """
 
     full_name: str
     engine_name: str
-    blocksize_mode: Literal["default", "small"]
+    blocksize_mode: Literal["medium", "small"]
 
     def __init__(self, full_name: str):
         self.full_name = full_name
@@ -51,7 +51,7 @@ class EngineFixtureParam:
         else:
             # Covers ``"in-memory"`` and bare backend names like ``"spmd"``.
             self.engine_name = full_name
-            self.blocksize_mode = "default"
+            self.blocksize_mode = "medium"
 
 
 def is_streaming_engine(obj: Any) -> bool:
@@ -63,29 +63,8 @@ def is_streaming_engine(obj: Any) -> bool:
     return isinstance(obj, StreamingEngine)
 
 
-def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["default", "small"]:
-    """
-    Infer the block size mode used to configure an engine.
-
-    Parameters
-    ----------
-    obj
-        Engine instance to inspect.
-
-    Returns
-    -------
-    ``"small"`` if the engine's executor options match the small-partition
-    configuration (``max_rows_per_partition == 4``), otherwise ``"default"``.
-    Non-streaming engines always return ``"default"``.
-    """
-    if not is_streaming_engine(obj):
-        return "default"
-    executor_options = obj.config.get("executor_options", {})
-    return "small" if executor_options.get("max_rows_per_partition") == 4 else "default"
-
-
 def create_streaming_options(
-    blocksize_mode: Literal["default", "small"],
+    blocksize_mode: Literal["medium", "small"],
     overrides: StreamingOptions | None = None,
 ) -> StreamingOptions:
     """
@@ -94,7 +73,7 @@ def create_streaming_options(
     Parameters
     ----------
     blocksize_mode
-        Block size configuration. ``"default"`` uses moderate partition sizes,
+        Block size configuration. ``"medium"`` uses moderate partition sizes,
         while ``"small"`` uses very small partitions and sets
         ``fallback_mode=SILENT`` to avoid excessive warnings from CPU fallback.
     overrides
@@ -109,7 +88,7 @@ def create_streaming_options(
     from cudf_polars.utils.config import StreamingFallbackMode
 
     match blocksize_mode:
-        case "default":
+        case "medium":
             baseline = StreamingOptions(
                 max_rows_per_partition=50,
                 dynamic_planning={},
@@ -166,3 +145,29 @@ def build_streaming_engine(
             )
         case _:  # pragma: no cover
             raise AssertionError(f"Unknown streaming backend: {param.engine_name!r}")
+
+
+def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["medium", "small"]:
+    """
+    Infer the block size mode for a GPU engine.
+
+    Parameters
+    ----------
+    obj
+        Engine instance to inspect.
+
+    Returns
+    -------
+      - "small": Engine is configured with a reduced ``max_rows_per_partition``.
+      - "medium": Standard configuration, or non-streaming engine.
+    """
+    if not is_streaming_engine(obj):
+        return "medium"
+
+    # The blocksize mode is defined by the `max_rows_per_partition` value.
+    # Get the obj's execution options and compare it with a "small" blocksize.
+    executor_options = obj.config["executor_options"]
+    small_max_rows = create_streaming_options("small").max_rows_per_partition
+    if executor_options.get("max_rows_per_partition") == small_max_rows:
+        return "small"
+    return "medium"
