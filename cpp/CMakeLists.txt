@@ -1129,25 +1129,6 @@ endif()
 
 # * build cudf_identify_stream_usage --------------------------------------------------------------
 if(CUDF_BUILD_STREAMS_TEST_UTIL)
-  if(NOT TARGET CUDA::sanitizer)
-    # TODO: Take this out and vendor in FindCUDAToolkit.cmake once the following MRs are merged:
-    #
-    # https://gitlab.kitware.com/cmake/cmake/-/merge_requests/11968 - add CUDA::sanitizer
-    # https://gitlab.kitware.com/cmake/cmake/-/merge_requests/11971 - fix issue with
-    # CUDAToolkit_LIBRARY_ROOT in Conda environments
-    find_library(
-      CUDA_sanitizer_LIBRARY
-      NAMES sanitizer-public
-      HINTS $ENV{CONDA_PREFIX}/compute-sanitizer
-    )
-    if(CUDA_sanitizer_LIBRARY)
-      add_library(CUDA::sanitizer IMPORTED SHARED)
-      set_property(TARGET CUDA::sanitizer PROPERTY IMPORTED_LOCATION "${CUDA_sanitizer_LIBRARY}")
-      get_filename_component(sanitizer_dir "${CUDA_sanitizer_LIBRARY}" DIRECTORY)
-      target_include_directories(CUDA::sanitizer SYSTEM INTERFACE "${sanitizer_dir}/include")
-    endif()
-  endif()
-
   # Libraries for stream-related testing. We build the library twice, one with STREAM_MODE_TESTING
   # on and one with it set to off. Each test will then be configured to use the appropriate library
   # depending via ctest and whether it has been updated to expose public stream APIs.
