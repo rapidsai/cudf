@@ -25,6 +25,7 @@ set +e
 
 # Grab the Pandas source corresponding to the version
 # of Pandas installed.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
 echo "Running Pandas tests for version ${PANDAS_VERSION}"
@@ -52,21 +53,6 @@ if [ ! -d "pandas-tests" ]; then
     # pyproject.toml
     # tests/
     cp pandas/pandas/conftest.py pandas-tests/conftest.py
-    # Vendored from pandas/pyproject.toml
-    cat > pandas-tests/pyproject.toml << \EOF
-[tool.pytest.ini_options]
-xfail_strict = true
-markers = [
-  "single_cpu: tests that should run on a single cpu only",
-  "slow: mark a test as slow",
-  "network: mark a test as network",
-  "db: tests requiring a database (mysql or postgres)",
-  "clipboard: mark a pd.read_clipboard test",
-  "arm_slow: mark a test as slow for arm64 architecture",
-  "skip_ubsan: Tests known to fail UBSAN check",
-  "fails_arm_wheels: Tests known to fail on arm64 wheels",
-]
-EOF
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
@@ -91,14 +77,17 @@ EOF
     done
 fi
 
-# append the contents of patch-confest.py to conftest.py
-cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
+cp "${SCRIPT_DIR}/conftest_cudf_pandas.py" pandas-tests/conftest_cudf_pandas.py
 
 # Run the tests
 cd pandas-tests/
 
 
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
+    -p conftest_cudf_pandas \
+    -c ../pandas/pyproject.toml \
+    --override-ini="addopts=" \
+    --override-ini="testpaths=" \
     --import-mode=importlib \
     "$@"
 

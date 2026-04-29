@@ -3,12 +3,12 @@
 
 import contextlib
 import json
-import os
 import sys
 import traceback
 from collections import defaultdict
 from functools import wraps
 
+import pandas._testing as tm
 import pytest
 
 
@@ -34,7 +34,7 @@ def null_assert_warnings(*args, **kwargs):
 
 @pytest.fixture(scope="session", autouse=True)
 def patch_testing_functions():
-    tm.assert_produces_warning = null_assert_warnings  # noqa: F821
+    tm.assert_produces_warning = null_assert_warnings
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
@@ -48,10 +48,10 @@ FUNCTION_NAME = {"_slow_function_call", "_fast_function_call"}
 def find_pytest_file(frame) -> str | None:
     for frame in traceback.extract_stack():
         file = frame.filename
-        if "pandas-testing/pandas-tests/tests" in file and file.rsplit("/", 1)[
-            -1
-        ].startswith("test_"):
-            return str(file).rsplit("pandas-tests/", 1)[-1]
+        if "/pandas/tests/" in file and file.rsplit("/", 1)[-1].startswith(
+            "test_"
+        ):
+            return "tests/" + str(file).split("/pandas/tests/", 1)[-1]
     return None
 
 
@@ -6697,6 +6697,7 @@ NODEIDS_TO_SKIP: dict[str, str] = {
 }
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items):
     for item in items:
         if (reason := NODEIDS_TO_SKIP.get(item.nodeid, None)) is not None:
@@ -6714,6 +6715,3 @@ def pytest_collection_modifyitems(session, config, items):
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (reason := NODEIDS_THAT_FAIL.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.xfail(reason=reason))
-
-
-sys.path.append(os.path.dirname(__file__))

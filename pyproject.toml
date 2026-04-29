@@ -160,8 +160,6 @@ extend-unsafe-fixes = [
 # We demonstrate UDFs where numba doesn't support `zip(..., strict=True)` (or
 # any keywords) and we don't want to litter demo notebooks with noqas
 "docs/cudf/source/user_guide/guide-to-udfs.ipynb" = ["B905"]
-# Lots of pytest implicitly injected attributes in conftest-patch.py
-"python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
 "python/cudf/cudf/pandas/scripts/*" = ["D"]
 "python/cudf/cudf_pandas_tests/*" = ["D"]
 "ci/*" = ["T201"]
