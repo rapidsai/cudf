@@ -4028,7 +4028,15 @@ class DatetimeIndex(Index):
     ) -> pd.DatetimeIndex:
         result = super().to_pandas(nullable=nullable, arrow_type=arrow_type)
         if not arrow_type and self._freq is not None:
-            result.freq = self._freq._maybe_as_fast_pandas_offset()
+            # Operations like .take(...) shuffle the values but leave the
+            # cached _freq untouched. Pandas re-validates freq against the
+            # values on assignment; if it can't be inferred, drop the freq
+            # to match pandas's "freq is dropped on shuffle" semantics
+            # rather than propagating a stale freq.
+            try:
+                result.freq = self._freq._maybe_as_fast_pandas_offset()
+            except ValueError:
+                pass
         return result
 
     @_performance_tracking
