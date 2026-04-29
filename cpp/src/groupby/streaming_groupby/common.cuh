@@ -23,23 +23,13 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/atomic>
 #include <cuda/std/functional>
 
 #include <memory>
 #include <vector>
 
 namespace cudf::groupby {
-
-/// Encoding-buffer over-allocation factor for streaming_groupby.
-///
-/// The hash set and dense aggregation slot count are bounded by `max_groups`
-/// (the user-facing distinct-key capacity), but the encoding scheme reserves one
-/// slot per *input* row (whether or not it ends up being a new distinct key).
-/// To allow cumulative input rows to exceed `max_groups` without sacrificing
-/// runtime perf (no compaction, no translation lookup), companion vectors and
-/// the sparse aggregation results table are pre-allocated to
-/// `max_groups * STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER`.
-inline constexpr size_type STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER = 2;
 
 // The actual comparator and hasher are always rebinded per-batch via
 // rebind_key_eq / rebind_hash_function, so the types used here are never invoked.
@@ -55,59 +45,77 @@ using streaming_set_t = cuco::static_set<cudf::size_type,
                                          rmm::mr::polymorphic_allocator<char>,
                                          cuco::storage<detail::hash::GROUPBY_BUCKET_SIZE>>;
 
-/// N-table comparator for the persistent hash set.
-///
-/// Indices >= total_input_rows are "batch rows" (encoded as total_input_rows + batch_idx).
-/// Indices < total_input_rows are "stored groups" resolved via companion vectors
-/// key_batch[idx] and key_row[idx] to (compacted_batch_table, row_within_batch).
-///
-/// Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
-/// and stored in a device array.  Self-comparisons use batch_self_eq.
+/*
+ * N-table comparator for the persistent hash set.
+ *
+ * Slot values < max_groups are "stored" dense IDs resolved via companion vectors
+ * key_batch[id] and key_row[id] to (compacted_batch_table, row_within_batch).
+ * Slot values >= max_groups are transient batch values: row index = value - max_groups
+ * in the current batch table.  The transient encoding lives only for the duration
+ * of one probe_and_insert call; new keys are rewritten to dense IDs before the
+ * next batch's insertion.
+ *
+ * Cross-comparators are pre-built as device_row_comparator(batch, compacted[k])
+ * and stored in a device array.  Self-comparisons use batch_self_eq.
+ */
 template <typename RowEqT>
 struct n_table_comparator {
   RowEqT batch_self_eq;        ///< Self-comparator on the current batch table
   RowEqT const* cross_eqs;     ///< Device array [num_compacted_batches]: batch vs compacted[k]
-  size_type const* key_batch;  ///< Companion vector: compacted batch index per stored entry
-  size_type const* key_row;    ///< Companion vector: row index within compacted batch
-  size_type total_input_rows;  ///< Threshold: idx >= total_input_rows is a batch row
+  size_type const* key_batch;  ///< Companion vector: compacted batch index per dense ID
+  size_type const* key_row;    ///< Companion vector: row within compacted batch per dense ID
+  size_type max_groups;        ///< Threshold: idx >= max_groups is a transient batch value
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
-    bool const lhs_is_batch = (lhs >= total_input_rows);
-    bool const rhs_is_batch = (rhs >= total_input_rows);
+    bool const lhs_is_batch = (lhs >= max_groups);
+    bool const rhs_is_batch = (rhs >= max_groups);
 
     if (lhs_is_batch && rhs_is_batch) {
-      return batch_self_eq(lhs - total_input_rows, rhs - total_input_rows);
+      return batch_self_eq(lhs - max_groups, rhs - max_groups);
     }
-    if (lhs_is_batch) { return cross_eqs[key_batch[rhs]](lhs - total_input_rows, key_row[rhs]); }
-    if (rhs_is_batch) { return cross_eqs[key_batch[lhs]](rhs - total_input_rows, key_row[lhs]); }
+    if (lhs_is_batch) { return cross_eqs[key_batch[rhs]](lhs - max_groups, key_row[rhs]); }
+    if (rhs_is_batch) { return cross_eqs[key_batch[lhs]](rhs - max_groups, key_row[lhs]); }
     return lhs == rhs;
   }
 };
 
-/// insert_and_find on the main set for each batch row.
-/// Produces target_indices (stored encoded index) and insertion flags.
+/*
+ * insert_and_find on the main set for each batch row.
+ * Inserts transient value `max_groups + batch_idx` and writes:
+ *   target_indices[batch_idx] = stored value at the resident slot
+ *   inserted_flags[batch_idx] = whether this row won the CAS
+ *   slot_ptrs[batch_idx]      = pointer to the slot for later rewrite (only meaningful
+ *                               for inserted rows; unused for non-inserted)
+ */
 template <typename SetRef>
 struct insert_and_map_fn {
   mutable SetRef set_ref;
   bitmask_type const* row_bitmask;
-  size_type offset;
+  size_type max_groups;
   bool* inserted_flags;
+  size_type** slot_ptrs;
 
   __device__ size_type operator()(size_type batch_idx) const
   {
     if (row_bitmask && !cudf::bit_is_set(row_bitmask, batch_idx)) {
       inserted_flags[batch_idx] = false;
+      slot_ptrs[batch_idx]      = nullptr;
       return cudf::detail::CUDF_SIZE_TYPE_SENTINEL;
     }
-    auto const [iter, inserted] = set_ref.insert_and_find(offset + batch_idx);
+    auto const [iter, inserted] = set_ref.insert_and_find(max_groups + batch_idx);
     inserted_flags[batch_idx]   = inserted;
+    slot_ptrs[batch_idx]        = iter;
     return *iter;
   }
 };
 
-/// Hasher that uses a precomputed hash cache with an offset.
-/// Given index `idx`, returns `cache[idx - offset]`.
+/*
+ * Hasher backed by a precomputed cache, indexed by `idx - offset`.
+ * In streaming_groupby `offset = max_groups`, so transient batch values
+ * `max_groups + batch_idx` resolve to `cache[batch_idx]`.  cuco invokes this
+ * only on the inserted key, never on slot residents.
+ */
 struct offset_cache_hasher {
   hash_value_type const* cache;
   size_type offset;
@@ -117,22 +125,56 @@ struct offset_cache_hasher {
   }
 };
 
-/// For each newly discovered key, scatter companion vectors and record the
-/// encoded index for finalization.  Combines two operations in a single pass.
-struct scatter_new_key_metadata {
-  size_type const* batch_local_indices;  ///< batch-local row indices of new keys
-  size_type* key_batch;                  ///< companion: batch id at encoded index
-  size_type* key_row;                    ///< companion: row within compacted batch
-  size_type* encoded_indices;            ///< encoded_indices[dense_group] = encoded index
-  size_type encoding_offset;  ///< total_input_rows: added to batch-local index to get encoded
-  size_type batch_id;
-  size_type num_groups_before;
-  __device__ void operator()(size_type idx) const
+/*
+ * For each newly discovered key (dense rank `r` within this batch), do three things:
+ *   1. Rewrite its slot from transient encoding to its dense ID via atomic CAS.
+ *      The CAS expected value is the transient `max_groups + batch_local`, which
+ *      asserts the slot still holds the value we wrote in Pass 1.
+ *   2. Scatter companion vectors at the dense ID.
+ *   3. Record the dense ID in `_encoded_indices` for finalization.
+ */
+struct finalize_new_key_fn {
+  size_type const* batch_local_indices;  ///< batch-local row indices of new keys [new_distinct_count]
+  size_type* const* slot_ptrs;           ///< slot pointer per batch row [batch_size]
+  size_type* key_batch;                  ///< companion: batch id at dense ID
+  size_type* key_row;                    ///< companion: row within compacted batch at dense ID
+  size_type* encoded_indices;            ///< encoded_indices[dense group] = dense ID (identity)
+  size_type max_groups;                  ///< for computing the expected transient value
+  size_type batch_id;                    ///< the index of this batch in _compacted_batches
+  size_type distinct_count_before;       ///< _distinct_count prior to this batch
+
+  __device__ void operator()(size_type r) const
   {
-    auto const encoded_idx                   = batch_local_indices[idx] + encoding_offset;
-    key_batch[encoded_idx]                   = batch_id;
-    key_row[encoded_idx]                     = idx;
-    encoded_indices[num_groups_before + idx] = encoded_idx;
+    auto const dense_id    = distinct_count_before + r;
+    auto const batch_local = batch_local_indices[r];
+    auto expected          = max_groups + batch_local;
+
+    cuda::atomic_ref<size_type, cuda::thread_scope_device>{*slot_ptrs[batch_local]}
+      .compare_exchange_strong(expected, dense_id, cuda::std::memory_order_relaxed);
+
+    key_batch[dense_id]                        = batch_id;
+    key_row[dense_id]                          = r;
+    encoded_indices[distinct_count_before + r] = dense_id;
+  }
+};
+
+/*
+ * Convert mixed target_indices entries to dense IDs.
+ *   - sentinel (null row): unchanged
+ *   - value < max_groups (stored dense ID from a prior batch): unchanged
+ *   - value >= max_groups (transient): map to dense ID via inverse table
+ *     `dense = distinct_count_before + inverse[value - max_groups]`
+ */
+struct fixup_target_indices_fn {
+  size_type max_groups;
+  size_type distinct_count_before;
+  size_type const* inverse;  ///< inverse[batch_local_winner] = rank r within new keys
+
+  __device__ size_type operator()(size_type v) const
+  {
+    if (v == cudf::detail::CUDF_SIZE_TYPE_SENTINEL) { return v; }
+    if (v < max_groups) { return v; }
+    return distinct_count_before + inverse[v - max_groups];
   }
 };
 
@@ -169,19 +211,15 @@ struct streaming_groupby::impl {
   std::vector<size_type> _key_indices;
   std::vector<streaming_aggregation_request> _requests_clone;
   size_type _max_groups;
-  /// Capacity of the encoding buffer (companion vectors and sparse agg results table).
-  /// `_max_groups * STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER`. Bounds cumulative
-  /// input rows; distinct keys are still bounded by `_max_groups`.
-  size_type _encoding_capacity{0};
   null_policy _null_handling;
 
   bool _initialized{false};
+  /*
+   * Number of distinct keys accumulated so far.  Also serves as the high-water
+   * mark of dense IDs in the persistent hash set: stored slot values are in
+   * [0, _distinct_count).
+   */
   size_type _distinct_count{0};
-  /// High-water mark of encoded indices consumed.  Encoded batch indices are
-  /// [_total_input_rows, _total_input_rows + batch_size).  After each batch,
-  /// _total_input_rows advances by batch_size (the full encoding range, not
-  /// just distinct count). The sum of all batch sizes must not exceed max_groups.
-  size_type _total_input_rows{0};
   bool _has_nullable_keys{false};
   bool _has_nested_keys{false};
 
@@ -190,13 +228,17 @@ struct streaming_groupby::impl {
   std::vector<std::shared_ptr<cudf::detail::row::equality::preprocessed_table>>
     _preprocessed_batches;
 
-  /// Companion vectors indexed by encoded index (sparse, up to max_groups).
+  /// Companion vectors indexed by dense ID, sized to max_groups.
   std::unique_ptr<rmm::device_uvector<size_type>> _key_batch;
   std::unique_ptr<rmm::device_uvector<size_type>> _key_row;
 
-  /// For each dense group g, _encoded_indices[g] is the encoded index
-  /// where that group's aggregation results live in _agg_results.
-  /// Used at finalization to gather sparse agg results into dense output.
+  /*
+   * For each dense group g, _encoded_indices[g] is the agg-results row index
+   * where that group's aggregation results live in _agg_results.
+   * Currently identity (g maps to g) since dense IDs and agg row indices coincide.
+   * Retained for compatibility with the existing gather-based finalization path;
+   * could be replaced with a slice in a follow-up.
+   */
   std::unique_ptr<rmm::device_uvector<size_type>> _encoded_indices;
 
   std::vector<size_type> _request_first_agg_offset;
@@ -205,8 +247,10 @@ struct streaming_groupby::impl {
   std::vector<int8_t> _is_agg_intermediate;
   bool _has_compound_aggs{false};
 
-  /// Sparse agg results table, pre-allocated to max_groups rows.
-  /// Indexed by encoded index (not dense group index).
+  /*
+   * Aggregation results table, pre-allocated to max_groups rows.
+   * Indexed by dense ID (== row index).
+   */
   std::unique_ptr<table> _agg_results;
   std::vector<size_type> _value_col_indices;
   rmm::device_uvector<aggregation::Kind> _d_agg_kinds;
@@ -233,8 +277,10 @@ struct streaming_groupby::impl {
 
   batch_insert_result probe_and_insert(table_view const& batch_keys, rmm::cuda_stream_view stream);
 
-  /// Template implementation of probe_and_insert, split by has_nested.
-  /// Defined in insert.cuh, instantiated in insert.cu and insert_nested.cu.
+  /*
+   * Template implementation of probe_and_insert, split by has_nested.
+   * Defined in insert.cuh, instantiated in insert.cu and insert_nested.cu.
+   */
   template <bool has_nested>
   batch_insert_result probe_and_insert_impl(table_view const& batch_keys,
                                             rmm::cuda_stream_view stream);

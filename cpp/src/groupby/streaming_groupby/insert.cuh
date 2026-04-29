@@ -20,7 +20,9 @@
 #include <cuda/std/functional>
 #include <thrust/copy.h>
 #include <thrust/count.h>
+#include <thrust/fill.h>
 #include <thrust/for_each.h>
+#include <thrust/scatter.h>
 #include <thrust/transform.h>
 
 #include <string>
@@ -31,17 +33,9 @@ template <bool has_nested>
 streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_insert_impl(
   table_view const& batch_keys, rmm::cuda_stream_view stream)
 {
-  auto const batch_size       = batch_keys.num_rows();
-  auto const total_input_rows = _total_input_rows;
-  auto const temp_mr          = cudf::get_current_device_resource_ref();
-  auto const has_null         = cudf::nullate::DYNAMIC{_has_nullable_keys};
-
-  CUDF_EXPECTS(static_cast<int64_t>(total_input_rows) + batch_size <= _encoding_capacity,
-               "Cumulative batch rows (" + std::to_string(total_input_rows) + " + " +
-                 std::to_string(batch_size) + ") exceeds encoding-buffer capacity (" +
-                 std::to_string(_encoding_capacity) +
-                 "). Use smaller batches or increase max_groups.",
-               std::overflow_error);
+  auto const batch_size = batch_keys.num_rows();
+  auto const temp_mr    = cudf::get_current_device_resource_ref();
+  auto const has_null   = cudf::nullate::DYNAMIC{_has_nullable_keys};
 
   // Preprocess batch for row operators.
   auto preprocessed_batch = cudf::detail::row::hash::preprocessed_table::create(batch_keys, stream);
@@ -71,22 +65,25 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
     preprocessed_batch, _preprocessed_batches, has_null, stream);
 
   auto const comparator = n_table_comparator{
-    batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), total_input_rows};
-  auto const hasher = offset_cache_hasher{batch_hash_cache.data(), total_input_rows};
+    batch_self_eq, d_cross_eqs.data(), _key_batch->data(), _key_row->data(), _max_groups};
+  auto const hasher = offset_cache_hasher{batch_hash_cache.data(), _max_groups};
 
   auto set_ref =
     _key_set->ref(cuco::op::insert_and_find).rebind_key_eq(comparator).rebind_hash_function(hasher);
 
-  // insert_and_find for all batch rows.
+  // Pass 1 — insert_and_find with transient encoding `_max_groups + batch_idx`.
+  // Captures stored slot value (mixed dense/transient), inserted flag, and slot pointer.
   rmm::device_uvector<size_type> target_indices(batch_size, stream, temp_mr);
   rmm::device_uvector<bool> inserted_flags(batch_size, stream, temp_mr);
+  rmm::device_uvector<size_type*> slot_ptrs(batch_size, stream, temp_mr);
 
   thrust::transform(
     rmm::exec_policy_nosync(stream, temp_mr),
     cuda::counting_iterator<size_type>(0),
     cuda::counting_iterator<size_type>(batch_size),
     target_indices.begin(),
-    insert_and_map_fn{set_ref, batch_bitmask, total_input_rows, inserted_flags.data()});
+    insert_and_map_fn{
+      set_ref, batch_bitmask, _max_groups, inserted_flags.data(), slot_ptrs.data()});
 
   // Count newly inserted keys.
   auto const new_distinct_count = static_cast<size_type>(thrust::count(
@@ -119,27 +116,47 @@ streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_
       cudf::detail::row::hash::preprocessed_table::create(compacted->view(), stream);
 
     // Store the compacted batch.
-    auto const new_batch_id = static_cast<size_type>(_compacted_batches.size());
+    auto const new_batch_id        = static_cast<size_type>(_compacted_batches.size());
+    auto const distinct_count_before = _distinct_count;
     _compacted_batches.push_back(std::move(compacted));
     _preprocessed_batches.push_back(preprocessed_compacted);
 
-    // Scatter companion vectors and record encoded indices in a single pass.
+    // Pass 2 — fused: rewrite slots from transient to dense IDs (atomic CAS),
+    //                scatter companion vectors, append dense IDs to _encoded_indices.
     thrust::for_each_n(rmm::exec_policy_nosync(stream, temp_mr),
                        cuda::counting_iterator<size_type>(0),
                        new_distinct_count,
-                       scatter_new_key_metadata{batch_local_indices.data(),
-                                                _key_batch->data(),
-                                                _key_row->data(),
-                                                _encoded_indices->data(),
-                                                total_input_rows,
-                                                new_batch_id,
-                                                _distinct_count});
+                       finalize_new_key_fn{batch_local_indices.data(),
+                                           slot_ptrs.data(),
+                                           _key_batch->data(),
+                                           _key_row->data(),
+                                           _encoded_indices->data(),
+                                           _max_groups,
+                                           new_batch_id,
+                                           distinct_count_before});
+
+    // Build inverse table to map transient batch-local idx -> dense-rank `r` for fixup.
+    rmm::device_uvector<size_type> inverse(batch_size, stream, temp_mr);
+    thrust::fill(rmm::exec_policy_nosync(stream, temp_mr),
+                 inverse.begin(),
+                 inverse.end(),
+                 cudf::detail::CUDF_SIZE_TYPE_SENTINEL);
+    thrust::scatter(rmm::exec_policy_nosync(stream, temp_mr),
+                    cuda::counting_iterator<size_type>(0),
+                    cuda::counting_iterator<size_type>(new_distinct_count),
+                    batch_local_indices.begin(),
+                    inverse.begin());
+
+    // Fixup target_indices: convert any remaining transient values to dense IDs.
+    // (Existing-key rows already hold dense IDs; new-key rows hold transient until now.)
+    thrust::transform(rmm::exec_policy_nosync(stream, temp_mr),
+                      target_indices.begin(),
+                      target_indices.end(),
+                      target_indices.begin(),
+                      fixup_target_indices_fn{_max_groups, distinct_count_before, inverse.data()});
 
     _distinct_count += new_distinct_count;
   }
-
-  // Advance encoding offset by the full batch size.
-  _total_input_rows += batch_size;
 
   return batch_insert_result{
     std::move(target_indices), new_distinct_count, std::move(bitmask_buffer)};

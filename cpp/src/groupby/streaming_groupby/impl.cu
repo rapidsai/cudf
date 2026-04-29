@@ -75,11 +75,12 @@ streaming_groupby::impl::impl(host_span<size_type const> key_indices,
     _d_agg_kinds{0, rmm::cuda_stream_default, cudf::get_current_device_resource_ref()}
 {
   CUDF_EXPECTS(max_groups > 0, "max_groups must be positive.", std::invalid_argument);
-  CUDF_EXPECTS(static_cast<int64_t>(max_groups) * STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER <=
-                 std::numeric_limits<size_type>::max(),
-               "max_groups is too large: encoding-buffer capacity overflows size_type.",
+  // Slot values use [0, max_groups) for stored dense IDs and [max_groups, 2*max_groups)
+  // for transient batch encoding within a single insert; the upper bound 2*max_groups
+  // must fit in size_type.
+  CUDF_EXPECTS(static_cast<int64_t>(max_groups) * 2 <= std::numeric_limits<size_type>::max(),
+               "max_groups is too large: transient encoding overflows size_type.",
                std::invalid_argument);
-  _encoding_capacity = max_groups * STREAMING_GROUPBY_ENCODING_BUFFER_MULTIPLIER;
   if (!key_indices.empty()) { _key_indices.assign(key_indices.begin(), key_indices.end()); }
   validate_requests(requests);
 
@@ -126,7 +127,7 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
   }
 
   _agg_results = detail::hash::create_results_table(
-    _encoding_capacity, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
+    _max_groups, values_view, _agg_kinds, _is_agg_intermediate, stream, mr);
 
   _d_agg_kinds = cudf::detail::make_device_uvector_async(_agg_kinds, stream, mr);
 
@@ -155,12 +156,12 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
     offset += static_cast<size_type>(detail::hash::get_simple_aggregations(ga, values_type).size());
   }
 
-  // Companion vectors: sized to the encoding-buffer capacity to accommodate
-  // encoded indices in [0, total_input_rows), which can grow up to _encoding_capacity.
-  _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_encoding_capacity, stream, mr);
-  _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_encoding_capacity, stream, mr);
+  // Companion vectors: indexed by dense ID, one entry per distinct key.
+  _key_batch = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
+  _key_row   = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
 
-  // Group-to-encoded-index map: sized to max_groups (one entry per distinct key).
+  // Group-to-agg-row map: identity in this scheme (dense IDs == agg row indices).
+  // Retained for compatibility with the existing gather-based finalization path.
   _encoded_indices = std::make_unique<rmm::device_uvector<size_type>>(_max_groups, stream, mr);
 
   _initialized = true;

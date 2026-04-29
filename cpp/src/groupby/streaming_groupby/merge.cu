@@ -122,7 +122,7 @@ void streaming_groupby::impl::do_merge(impl const& other, rmm::cuda_stream_view 
 
   auto result = probe_and_insert(other_key_view, stream);
 
-  // Merge aggregation values using target indices (sparse encoded).
+  // Merge aggregation values using dense target indices.
   auto const d_source = table_device_view::create(other_aggs->view(), stream);
   auto d_target       = mutable_table_device_view::create(*_agg_results, stream);
 
