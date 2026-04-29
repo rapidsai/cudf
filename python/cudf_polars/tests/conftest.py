@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import pytest
 
 import polars as pl
 
 import cudf_polars.callback
-from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -37,30 +36,6 @@ def clear_memory_resource_cache():
     cudf_polars.callback.default_memory_resource.cache_clear()
     yield
     cudf_polars.callback.default_memory_resource.cache_clear()
-
-
-def is_streaming_engine(obj: Any) -> bool:
-    """True when ``obj`` is a :class:`StreamingEngine`."""
-    try:
-        from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    except ImportError:
-        return False
-    return isinstance(obj, StreamingEngine)
-
-
-def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["default", "small"]:
-    """Recover the blocksize mode an engine was configured with.
-
-    Inspects ``max_rows_per_partition`` in the engine's executor options
-    and returns ``"small"`` if it matches the value set by the
-    ``blocksize_mode == "small"`` branch of ``streaming_engine_factory``,
-    otherwise ``"default"``. Non-streaming engines have no blocksize mode
-    and always return ``"default"``.
-    """
-    if not is_streaming_engine(obj):
-        return "default"
-    executor_options = obj.config.get("executor_options", {})
-    return "small" if executor_options.get("max_rows_per_partition") == 4 else "default"
 
 
 @pytest.fixture(autouse=True)
@@ -146,23 +121,12 @@ def streaming_engine_factory(
     """
     from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    from cudf_polars.testing.engine_utils import create_streaming_options
 
     engines: list[SPMDEngine] = []
 
     def factory(options: StreamingOptions | None = None) -> StreamingEngine:
-        baseline: dict[str, Any] = {
-            "max_rows_per_partition": 50,
-            "dynamic_planning": {},
-            "target_partition_size": 1_000_000,
-            "raise_on_fail": True,
-        }
-        if blocksize_mode == "small":
-            baseline.update(
-                max_rows_per_partition=4,
-                target_partition_size=10,
-                # We expect many tests to fall back, so silence the warnings
-                fallback_mode=StreamingFallbackMode.SILENT,
-            )
+        baseline = create_streaming_options(blocksize_mode).to_dict()
         if options is not None:
             baseline.update(options.to_dict())
 

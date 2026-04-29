@@ -7,7 +7,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from tests.conftest import is_streaming_engine
+from cudf_polars.testing.engine_utils import is_streaming_engine
 
 
 @pytest.mark.parametrize("descending", [True, False])

@@ -17,13 +17,13 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_131,
     POLARS_VERSION_LT_135,
     POLARS_VERSION_LT_138,
 )
-from tests.conftest import is_streaming_engine
 
 if TYPE_CHECKING:
     from pathlib import Path

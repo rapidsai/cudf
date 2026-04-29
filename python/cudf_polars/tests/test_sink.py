@@ -10,8 +10,8 @@ from cudf_polars.testing.asserts import (
     assert_sink_ir_translation_raises,
     assert_sink_result_equal,
 )
+from cudf_polars.testing.engine_utils import get_blocksize_mode
 from cudf_polars.utils.versions import POLARS_VERSION_LT_138
-from tests.conftest import get_blocksize_mode
 
 
 @pytest.fixture(scope="module")
