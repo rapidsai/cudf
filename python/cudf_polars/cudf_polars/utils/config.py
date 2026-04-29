@@ -699,6 +699,7 @@ class StreamingExecutor:
         The method to use for shuffling data between workers. Defaults to
         'rapidsmpf' for distributed cluster if available (otherwise 'tasks'),
         and 'tasks' for single-GPU cluster.
+
         .. deprecated::
             The ``shuffle_method`` option is deprecated. The shuffle method is now
             determined automatically based on the cluster configuration. This argument
