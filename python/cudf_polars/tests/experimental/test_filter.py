@@ -13,8 +13,10 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 @pytest.fixture
 def engine(streaming_engine_factory):
+    # ``fallback_mode="warn"`` overrides the small-blocksize baseline (which
+    # sets SILENT) so ``test_filter_non_pointwise`` can assert on the warning.
     return streaming_engine_factory(
-        StreamingOptions(max_rows_per_partition=3),
+        StreamingOptions(max_rows_per_partition=3, fallback_mode="warn"),
     )
 
 
