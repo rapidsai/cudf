@@ -13,11 +13,11 @@ import cudf_polars.callback
 from cudf_polars.utils.config import StreamingFallbackMode
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
 
     from rapidsmpf.communicator.communicator import Communicator
 
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
 
 @pytest.fixture(params=[False, True], ids=["no_nulls", "nulls"], scope="session")
@@ -114,49 +114,68 @@ def blocksize_mode(request: pytest.FixtureRequest) -> Literal["default", "small"
 
 
 @pytest.fixture
-def streaming_engine(
-    request: pytest.FixtureRequest,
+def streaming_engine_factory(
     spmd_comm: Communicator,
     blocksize_mode: Literal["default", "small"],
-) -> Generator[StreamingEngine, None, None]:
-    """Yield an :class:`SPMDEngine` configured for streaming-only tests.
+) -> Generator[Callable[..., SPMDEngine], None, None]:
+    """Yield a callable that constructs and manages :class:`SPMDEngine` lifetimes.
 
-    Options can be overridden via ``indirect`` parametrization by passing
-    a dict with any of the keys ``"executor_options"``,
-    ``"engine_options"``, or ``"rapidsmpf_options"``.
+    Tests pass a :class:`StreamingOptions` describing only the fields they
+    care about; the factory layers test-suite defaults underneath, applies
+    ``blocksize_mode`` adjustments, and enters the engine context manager.
+    All produced engines are torn down at fixture teardown in reverse order.
     """
-    from rapidsmpf.config import Options
-
+    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
     from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
 
-    params: dict[str, Any] = getattr(request, "param", {}) or {}
-    executor_options: dict[str, Any] = {
-        "max_rows_per_partition": 50,
-        "dynamic_planning": {},
-        "target_partition_size": 1_000_000,
-    }
-    if blocksize_mode == "small":
-        executor_options.update(
-            max_rows_per_partition=4,
-            target_partition_size=10,
-            # We expect many tests to fall back, so silence the warnings
-            fallback_mode=StreamingFallbackMode.SILENT,
+    engines: list[SPMDEngine] = []
+
+    def factory(options: StreamingOptions | None = None) -> SPMDEngine:
+        baseline: dict[str, Any] = {
+            "max_rows_per_partition": 50,
+            "dynamic_planning": {},
+            "target_partition_size": 1_000_000,
+            "raise_on_fail": True,
+        }
+        if blocksize_mode == "small":
+            baseline.update(
+                max_rows_per_partition=4,
+                target_partition_size=10,
+                # We expect many tests to fall back, so silence the warnings
+                fallback_mode=StreamingFallbackMode.SILENT,
+            )
+        if options is not None:
+            baseline.update(options.to_dict())
+
+        merged = StreamingOptions(**baseline)
+        engine = SPMDEngine(
+            comm=spmd_comm,
+            rapidsmpf_options=merged.to_rapidsmpf_options(),
+            executor_options=merged.to_executor_options(),
+            engine_options=merged.to_engine_options(),
         )
-    executor_options.update(params.get("executor_options", {}))
-    rapidsmpf_options = (
-        Options(params.get("rapidsmpf_options"))
-        if "rapidsmpf_options" in params
-        else None
-    )
-    engine_options: dict[str, Any] = {"raise_on_fail": True}
-    engine_options.update(params.get("engine_options", {}))
-    with SPMDEngine(
-        comm=spmd_comm,
-        rapidsmpf_options=rapidsmpf_options,
-        executor_options=executor_options,
-        engine_options=engine_options,
-    ) as engine:
-        yield engine
+        engine.__enter__()
+        engines.append(engine)
+        return engine
+
+    yield factory
+
+    for engine in reversed(engines):
+        engine.__exit__(None, None, None)
+
+
+@pytest.fixture
+def streaming_engine(
+    streaming_engine_factory: Callable[..., SPMDEngine],
+) -> SPMDEngine:
+    """Default-configured :class:`SPMDEngine` (no per-test overrides).
+
+    Kept as a thin wrapper because the ``engine`` fixture's spmd /
+    spmd-small branches resolve it via ``request.getfixturevalue("streaming_engine")``.
+    Tests that need to customize options should use
+    :func:`streaming_engine_factory` directly with a :class:`StreamingOptions`.
+    """
+    return streaming_engine_factory()
 
 
 _ENGINE_PARAMS = ["in-memory"]

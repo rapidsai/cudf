@@ -17,6 +17,7 @@ from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 import pylibcudf as plc
 
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 from cudf_polars.experimental.rapidsmpf.utils import (
     make_spill_function,
 )
@@ -37,24 +38,29 @@ def create_test_table(nbytes: int, stream: Stream) -> plc.Table:
 
 
 @pytest.mark.parametrize(
-    "streaming_engine,spilled_host_mem_type",
+    "pinned_memory,spilled_host_mem_type",
     [
         pytest.param(
-            {"rapidsmpf_options": {"pinned_memory": "true"}},
+            True,
             MemoryType.PINNED_HOST,
             marks=pytest.mark.skipif(
                 not is_pinned_memory_resources_supported(),
                 reason="Pinned memory requires CUDA 12.6+ driver and runtime",
             ),
         ),
-        ({"rapidsmpf_options": {"pinned_memory": "false"}}, MemoryType.HOST),
+        (False, MemoryType.HOST),
     ],
-    indirect=["streaming_engine"],
 )
 def test_make_spill_function(
-    streaming_engine: SPMDEngine, spilled_host_mem_type: MemoryType
+    streaming_engine_factory,
+    *,
+    pinned_memory: bool,
+    spilled_host_mem_type: MemoryType,
 ) -> None:
     """Test that spilling prioritizes longest queues and newest messages."""
+    streaming_engine: SPMDEngine = streaming_engine_factory(
+        StreamingOptions(pinned_memory=pinned_memory),
+    )
     context = streaming_engine.context
 
     if spilled_host_mem_type == MemoryType.PINNED_HOST:

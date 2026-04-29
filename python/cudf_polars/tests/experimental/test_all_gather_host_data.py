@@ -13,6 +13,7 @@ from cudf_polars.experimental.rapidsmpf.frontend.core import (
     ClusterInfo,
     all_gather_host_data,
 )
+from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
 
 pytestmark = pytest.mark.spmd
 
@@ -74,11 +75,9 @@ def test_cluster_info_cuda_visible_devices_unset(monkeypatch) -> None:
     assert ClusterInfo.local().cuda_visible_devices is None
 
 
-@pytest.mark.parametrize(
-    "streaming_engine",
-    [{"engine_options": {"allow_gpu_sharing": True}}],
-    indirect=True,
-)
-def test_allow_gpu_sharing(streaming_engine) -> None:
+def test_allow_gpu_sharing(streaming_engine_factory) -> None:
     """Engine init succeeds with allow_gpu_sharing=True."""
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(allow_gpu_sharing=True),
+    )
     assert streaming_engine.nranks >= 1
