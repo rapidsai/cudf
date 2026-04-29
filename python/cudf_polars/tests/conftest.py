@@ -209,14 +209,6 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
-        "--runtime",
-        action="store",
-        default="tasks",
-        choices=("tasks", "rapidsmpf"),
-        help="Runtime to use for the 'streaming' executor.",
-    )
-
-    parser.addoption(
         "--cluster",
         action="store",
         default="single",
