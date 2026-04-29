@@ -24,7 +24,7 @@ class memory_stats_logger {
   {
   }
 
-  ~memory_stats_logger() { cudf::set_current_device_resource(std::move(existing_mr)); }
+  ~memory_stats_logger() { cudf::set_current_device_resource(statistics_mr.get_upstream_resource()); }
 
   [[nodiscard]] size_t peak_memory_usage() const noexcept
   {
