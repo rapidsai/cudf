@@ -313,6 +313,7 @@ outputs:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - libcurand
+        - cuda-sanitizer-api
       ignore_run_exports:
         from_package:
           - libcurand-dev
