@@ -17,6 +17,7 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_132,
+    POLARS_VERSION_LT_134,
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_1321,
 )
@@ -411,12 +412,21 @@ def test_groupby_sum_all_null_group_returns_null(engine: pl.GPUEngine):
     ids=["sum", "mean", "median", "quantile-0.5"],
 )
 def test_groupby_aggs_keep_unsupported_as_null(
-    engine: pl.GPUEngine, request, df: pl.LazyFrame, agg_expr
+    engine: pl.GPUEngine, using_streaming_engine, request, df: pl.LazyFrame, agg_expr
 ) -> None:
     request.applymarker(
         pytest.mark.xfail(
             condition="sum" in str(agg_expr) and not POLARS_VERSION_LT_136,
             reason="polars raises now",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition="quantile" in str(agg_expr)
+            and not POLARS_VERSION_LT_132
+            and POLARS_VERSION_LT_134
+            and using_streaming_engine,
+            reason="Decimal precision mismatch (9 vs 38)",
         )
     )
     lf = df.filter(pl.col("datetime") == date(2004, 12, 1))
