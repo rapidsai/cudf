@@ -36,8 +36,6 @@ def engine() -> Iterator[DaskEngine]:
 
 
 pytestmark = [
-    # distributed's shutdown leaves unclosed sockets; suppress the noise.
-    pytest.mark.filterwarnings("ignore::ResourceWarning"),
     pytest.mark.skipif(
         is_running_with_rrun(),
         reason="DaskEngine must not be created from within an rrun cluster",
@@ -80,6 +78,13 @@ def test_gather_cluster_info(engine: DaskEngine) -> None:
         assert isinstance(info.hostname, str)
     # Each worker runs in its own process.
     assert len({info.pid for info in infos}) == engine.nranks
+
+
+def test_worker_host_memory_limit(engine: DaskEngine) -> None:
+    """Memory limit is respected."""
+    scheduler_info = engine._dask_ctx.client.scheduler_info(n_workers=-1)
+    worker = next(iter(scheduler_info["workers"].values()))
+    assert worker["memory_limit"] == distributed.system.MEMORY_LIMIT
 
 
 def test_from_options_creates_engine() -> None:

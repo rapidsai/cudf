@@ -9,7 +9,7 @@ import polars as pl
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 
 
-def test_gather():
+def test_gather(engine: pl.GPUEngine):
     ldf = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -18,10 +18,10 @@ def test_gather():
     )
 
     query = ldf.select(pl.col("a").gather(pl.col("b")))
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_gather_with_nulls():
+def test_gather_with_nulls(engine: pl.GPUEngine):
     ldf = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -31,10 +31,10 @@ def test_gather_with_nulls():
 
     query = ldf.select(pl.col("a").gather(pl.col("b")))
 
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_gather_empty_indices():
+def test_gather_empty_indices(engine: pl.GPUEngine):
     ldf = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5],
@@ -42,11 +42,11 @@ def test_gather_empty_indices():
     )
 
     query = ldf.select(pl.col("a").gather(pl.lit(pl.Series("idx", [], dtype=pl.Int64))))
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
 @pytest.mark.parametrize("negative", [False, True])
-def test_gather_out_of_bounds(negative):
+def test_gather_out_of_bounds(engine_raise_on_fail: pl.GPUEngine, negative):
     ldf = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -57,7 +57,7 @@ def test_gather_out_of_bounds(negative):
     query = ldf.select(pl.col("a").gather(pl.col("b")))
 
     with pytest.raises(ValueError, match="gather indices are out of bounds"):
-        query.collect(engine="gpu")
+        query.collect(engine=engine_raise_on_fail)
 
 
 @pytest.mark.parametrize(
@@ -83,6 +83,7 @@ def test_gather_out_of_bounds(negative):
     ],
 )
 def test_gather_on_literal(
+    engine: pl.GPUEngine,
     lit: pl.Expr,
     idx: pl.Expr,
 ) -> None:
@@ -96,4 +97,4 @@ def test_gather_on_literal(
     )
 
     q = df.select(lit.gather(idx))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
