@@ -58,7 +58,7 @@ def is_streaming_engine(obj: Any) -> bool:
     """Return ``True`` if ``obj`` is a :class:`StreamingEngine`."""
     try:
         from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    except ImportError:
+    except ImportError:  # pragma: no cover; only triggered without rapidsmpf
         return False
     return isinstance(obj, StreamingEngine)
 
@@ -124,7 +124,7 @@ def create_streaming_options(
                 raise_on_fail=True,
                 fallback_mode=StreamingFallbackMode.SILENT,
             )
-        case _:
+        case _:  # pragma: no cover
             raise ValueError(f"Unknown blocksize_mode: {blocksize_mode!r}")
     if overrides is None:
         return baseline
@@ -164,5 +164,5 @@ def build_streaming_engine(
                 executor_options=streaming_options.to_executor_options(),
                 engine_options=streaming_options.to_engine_options(),
             )
-        case _:
+        case _:  # pragma: no cover
             raise AssertionError(f"Unknown streaming backend: {param.engine_name!r}")

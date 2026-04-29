@@ -89,11 +89,13 @@ def spmd_comm() -> Communicator:
 
 @pytest.fixture(params=STREAMING_ENGINE_FIXTURE_PARAMS)
 def _streaming_engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
+    """Parametrization helper to run tests for each streaming engine variant."""
     return EngineFixtureParam(full_name=request.param)
 
 
 @pytest.fixture(params=ALL_ENGINE_FIXTURE_PARAMS)
 def _all_engine_param(request: pytest.FixtureRequest) -> EngineFixtureParam:
+    """Parametrization helper to run tests for each engine variant."""
     return EngineFixtureParam(full_name=request.param)
 
 
@@ -102,18 +104,24 @@ def streaming_engine_factory(
     _streaming_engine_param: EngineFixtureParam,
     spmd_comm: Communicator,
 ) -> Generator[Callable[..., StreamingEngine], None, None]:
-    """Yield a callable that constructs and manages :class:`StreamingEngine` lifetimes.
+    """
+    Yield a factory that constructs :class:`StreamingEngine` instances for tests.
 
-    Parametrized over :data:`STREAMING_ENGINE_FIXTURE_PARAMS` (today: ``"spmd"`` and
-    ``"spmd-small"``). Tests pass a :class:`StreamingOptions` describing only
-    the fields they care about; the factory layers the parametrized
-    blocksize baseline underneath and tracks engines for teardown.
+    The fixture is parametrized over :data:`STREAMING_ENGINE_FIXTURE_PARAMS`.
+    Created engines are tracked and automatically shut down after the test.
 
-    Today the factory builds an :class:`SPMDEngine`, but it is typed as the
-    abstract :class:`StreamingEngine` because future variants (``RayEngine``,
-    ``DaskEngine``) will plug in here. Tests that genuinely need
-    SPMDEngine-specific attributes (``comm``, ``context``) should construct
-    an :class:`SPMDEngine` directly using the ``spmd_comm`` fixture.
+    Parameters
+    ----------
+    _streaming_engine_param
+        Parametrized engine descriptor controlling backend and block size mode.
+    spmd_comm
+        Communicator used when constructing SPMD-based engines.
+
+    Yields
+    ------
+    Factory function that creates :class:`StreamingEngine` instances. The
+    factory accepts optional :class:`StreamingOptions`, which are merged on
+    top of the parametrized blocksize baseline.
     """
     engines: list[StreamingEngine] = []
 
@@ -132,11 +140,22 @@ def streaming_engine_factory(
 def streaming_engine(
     streaming_engine_factory: Callable[..., StreamingEngine],
 ) -> StreamingEngine:
-    """Default-configured :class:`StreamingEngine` (no per-test overrides).
+    """
+    Return a default-configured :class:`StreamingEngine`.
 
-    Inherits :func:`streaming_engine_factory`'s parametrization, so tests
-    using this fixture run once per ``(backend, blocksize_mode)``
+    Inherits the parametrization of :func:`streaming_engine_factory`, so
+    tests using this fixture run once per ``(backend, blocksize_mode)``
     combination.
+
+    Parameters
+    ----------
+    streaming_engine_factory
+        Factory fixture used to construct streaming engines.
+
+    Returns
+    -------
+    A streaming engine created with the parametrized baseline and no
+    per-test overrides.
     """
     return streaming_engine_factory()
 
@@ -146,15 +165,24 @@ def engine(
     request: pytest.FixtureRequest,
     _all_engine_param: EngineFixtureParam,
 ) -> Generator[pl.GPUEngine, None, None]:
-    """Yield a :class:`polars.GPUEngine` for each engine variant under test.
+    """
+    Yield a :class:`polars.GPUEngine` for each engine variant under test.
 
-    Iterates over ``"in-memory"`` and (when ``rapidsmpf`` is installed) the
-    streaming variants from :data:`STREAMING_ENGINE_FIXTURE_PARAMS` (``"spmd"`` and
-    ``"spmd-small"``). Streaming engines are built inline via
-    :func:`build_streaming_engine` so that ``engine="in-memory"`` does not
-    pull in :func:`spmd_comm` (which would skip on rapidsmpf-less envs).
+    Parameters
+    ----------
+    request
+        Pytest fixture request object used to access dependent fixtures.
+    _all_engine_param
+        Parametrized engine descriptor covering both in-memory and streaming
+        variants.
 
-    For tests that need a :class:`StreamingEngine` only, use the
+    Yields
+    ------
+    Engine instance matching the parametrized variant.
+
+    Notes
+    -----
+    For tests that require a :class:`StreamingEngine` only, use the
     :func:`streaming_engine` fixture instead.
     """
     if _all_engine_param.engine_name == "in-memory":
@@ -171,11 +199,18 @@ def engine(
 
 @pytest.fixture
 def engine_raise_on_fail() -> pl.GPUEngine:
-    """Yield a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
+    """
+    Return a default :class:`polars.GPUEngine` with ``raise_on_fail=True``.
 
+    Returns
+    -------
+    In-memory engine configured to raise exceptions on failure.
+
+    Notes
+    -----
     Intended for error-path tests that assert specific exceptions propagate
-    from ``.collect()``. Uses the default (in-memory) executor so errors are
-    not wrapped by a streaming task group.
+    from ``.collect()``. Uses the in-memory executor so errors are not wrapped
+    by a streaming task group.
     """
     return pl.GPUEngine(raise_on_fail=True)
 
