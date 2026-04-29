@@ -1150,6 +1150,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       )
     endif()
 
+    message(STATUS "CUDAToolkit_LIBRARY_ROOT: ${CUDAToolkit_LIBRARY_ROOT}")
     get_property(
       sanitizer_path
       TARGET CUDA::sanitizer
