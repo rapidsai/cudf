@@ -416,7 +416,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_join.py::test_join_panic_on_binary_expr_5915": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/operations/test_join.py::test_join_rewrite_panic_23307": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
-    "tests/unit/operations/test_top_k.py::test_top_k_non_elementwise_by_24163": "https://github.com/rapidsai/cudf/issues/22074",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
     "tests/unit/sql/test_joins.py::test_join_anti_semi[SELECT * FROM tbl_a LEFT SEMI JOIN tbl_b USING (a)-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df10-df20-df1.category = df2.category AND (df1.code * 2) = df2.code_doubled-df1.name, df1.code, df2.type-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
@@ -433,15 +432,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_joins.py::test_join_on_reversed_constraint_order[df12-df22-(df1.a + df1.a) = df2.b-df2.b = (df1.a + df1.a)-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df11-df21-x + y = sum-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
     "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df12-df22-LENGTH(name) = len-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[above_avg]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[equals_max]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_constraints[compound_expr]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_distinct": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[sum_window]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_matches_all_rows[count_window]": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_multiple_clauses": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_with_internal_cumulative_sum": "https://github.com/rapidsai/cudf/issues/22050",
-    "tests/unit/sql/test_qualify.py::test_qualify_with_where_clause": "https://github.com/rapidsai/cudf/issues/22050",
 }
 
 
