@@ -1150,12 +1150,9 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
       )
     endif()
 
-    get_property(
-      cudart_path
-      TARGET CUDA::cudart
-      PROPERTY IMPORTED_LOCATION
-    )
-    message(STATUS "cudart: ${cudart_path}")
+    message(STATUS "nvcc -v output:")
+    execute_process(COMMAND ${CMAKE_CUDA_COMPILER} -v __debug)
+    message(STATUS "CUDAToolkit_LIBRARY_ROOT: ${CUDAToolkit_LIBRARY_ROOT}")
     get_property(
       sanitizer_path
       TARGET CUDA::sanitizer
