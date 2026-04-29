@@ -199,6 +199,20 @@ namespace gpu {
  * @return Pointer to the last character in the field, including the
  *  delimiter(s) following the field data
  */
+/**
+ * @brief Advances past a run of delimiter characters at the start of a field.
+ */
+__device__ __inline__ char const* skip_leading_delimiter_run(char const* begin,
+                                                             char const* end,
+                                                             parse_options_view const& opts)
+{
+  if (!opts.multi_delimiter) { return begin; }
+  while (begin < end && *begin == opts.delimiter) {
+    ++begin;
+  }
+  return begin;
+}
+
 __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  char const* end,
                                                  parse_options_view const& opts,

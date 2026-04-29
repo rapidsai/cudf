@@ -187,11 +187,9 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 
   // Going through all the columns of a given record
   while (col < column_flags.size() && field_start < row_end) {
-    // In delim_whitespace mode (multi_delimiter), skip leading delimiter runs so leading
-    // whitespace does not produce empty leading fields (matches pandas behavior).
-    while (opts.multi_delimiter && field_start < row_end && *field_start == opts.delimiter) {
-      ++field_start;
-    }
+    // In delim_whitespace mode, collapse leading delimiter runs so leading whitespace does
+    // not produce empty fields (matches pandas behavior).
+    field_start = cudf::io::gpu::skip_leading_delimiter_run(field_start, row_end, opts);
     if (field_start >= row_end) break;
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
@@ -339,14 +337,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   int actual_col  = 0;
 
   while (col < column_flags.size() && field_start < row_end) {
-    // In delim_whitespace mode (multi_delimiter), skip leading delimiter runs so leading
-    // whitespace does not produce empty leading fields (matches pandas behavior).
-    while (options.multi_delimiter && field_start < row_end && *field_start == options.delimiter) {
-      ++field_start;
-    }
-    next_field = field_start;
+    // In delim_whitespace mode, collapse leading delimiter runs so leading whitespace does
+    // not produce empty fields (matches pandas behavior).
+    field_start = cudf::io::gpu::skip_leading_delimiter_run(field_start, row_end, options);
     if (field_start >= row_end) break;
-    auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
+    next_field          = field_start;
+    auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, options);
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
