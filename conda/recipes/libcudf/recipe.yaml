@@ -81,6 +81,7 @@ cache:
       - libkvikio =${{ minor_version }}
       - cuda-nvrtc-dev
       - cuda-nvtx-dev
+      - cuda-sanitizer-api
       - libcurand-dev
       - libnvjitlink-dev
       - if: linux and x86_64
