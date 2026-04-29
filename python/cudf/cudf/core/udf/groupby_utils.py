@@ -80,32 +80,6 @@ def _get_frame_groupby_type(dtype, index_dtype):
     return GroupByJITDataFrame(fields, offset, _is_aligned_struct)
 
 
-def _groupby_apply_kernel_string_from_template(frame, args):
-    """
-    Function to write numba kernels for `Groupby.apply` as a string.
-    Workaround until numba supports functions that use `*args`
-    """
-    # Create argument list for kernel
-    frame = _supported_cols_from_frame(
-        frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
-    )
-    input_columns = ", ".join([f"input_col_{i}" for i in range(len(frame))])
-    extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
-
-    # Generate the initializers for each device function argument
-    initializers = []
-    for i, colname in enumerate(frame.keys()):
-        initializers.append(
-            group_initializer_template.format(idx=i, name=colname)
-        )
-
-    return groupby_apply_kernel_template.format(
-        input_columns=input_columns,
-        extra_args=extra_args,
-        group_initializers="\n".join(initializers),
-    )
-
-
 @_performance_tracking
 def jit_groupby_apply(offsets, grouped_values, function, *args):
     """
@@ -220,19 +194,13 @@ class GroupByApplyKernel(ApplyKernelBase):
         frame = _supported_cols_from_frame(
             self.frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
         )
-        input_columns = ", ".join(
-            [f"input_col_{i}" for i in range(len(frame))]
-        )
-        extra_args = ", ".join(
-            [f"extra_arg_{i}" for i in range(len(self.args))]
-        )
+        input_columns = self._format_arg_list("input_col", len(frame))
+        extra_args = self._format_arg_list("extra_arg", len(self.args))
 
         # Generate the initializers for each device function argument
         initializers = []
         for i, colname in enumerate(frame.keys()):
-            initializers.append(
-                group_initializer_template.format(idx=i, name=colname)
-            )
+            initializers.append(group_initializer_template.format(idx=i))
 
         return groupby_apply_kernel_template.format(
             input_columns=input_columns,
@@ -243,11 +211,17 @@ class GroupByApplyKernel(ApplyKernelBase):
     @cache
     def _get_kernel_string_exec_context(self):
         dataframe_group_type = self._get_frame_type()
+        col_names = tuple(
+            _supported_cols_from_frame(
+                self.frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
+            ).keys()
+        )
         global_exec_context = {
             "cuda": cuda,
             "Group": Group,
             "dataframe_group_type": dataframe_group_type,
             "types": types,
+            "_col_names": col_names,
         }
         return global_exec_context
 
