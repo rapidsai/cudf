@@ -177,58 +177,51 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
     start_date_obj = date(year, month, 1)
     end_date_obj = start_date_obj + timedelta(days=60)
 
-    # SQL: FROM catalog_sales cs1, date_dim, customer_address, call_center
-    base_sales = (
-        # SQL: JOIN date_dim ON cs_ship_date_sk = d_date_sk
-        catalog_sales.join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
-        # SQL: JOIN customer_address ON cs_ship_addr_sk = ca_address_sk
-        .join(customer_address, left_on="cs_ship_addr_sk", right_on="ca_address_sk")
-        # SQL: JOIN call_center ON cs_call_center_sk = cc_call_center_sk
-        .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
-    )
-
-    # SQL: EXISTS (SELECT * FROM catalog_sales cs2 WHERE cs1.cs_order_number = cs2.cs_order_number
+    # SQL: EXISTS (SELECT * FROM catalog_sales cs2
+    # SQL:   WHERE cs1.cs_order_number = cs2.cs_order_number
     # SQL:   AND cs1.cs_warehouse_sk <> cs2.cs_warehouse_sk)
-    exists_order = (
-        base_sales.with_row_index("row_id")
-        .select(["row_id", "cs_order_number", "cs_warehouse_sk"])
-        .join(
+    # NULL warehouses: SQL <> evaluates to NULL when either operand is NULL, so
+    # rows with NULL cs_warehouse_sk never satisfy EXISTS and are implicitly excluded.
+    exists_orders = (
+        catalog_sales.join(
             catalog_sales.select(["cs_order_number", "cs_warehouse_sk"]).rename(
                 {"cs_warehouse_sk": "cs_warehouse_sk_other"}
             ),
             on="cs_order_number",
         )
         .filter(pl.col("cs_warehouse_sk") != pl.col("cs_warehouse_sk_other"))
-        .select("row_id")
+        .select("cs_order_number")
         .unique()
     )
 
     # SQL: NOT EXISTS (SELECT * FROM catalog_returns WHERE cs_order_number = cr_order_number)
     returned_orders = catalog_returns.select("cr_order_number").unique()
-    filtered_without_returns = (
-        base_sales.with_row_index("row_id")
-        .join(exists_order, on="row_id")
-        .join(
-            returned_orders,
-            left_on="cs_order_number",
-            right_on="cr_order_number",
-            how="anti",
-        )
-        # SQL: WHERE d_date BETWEEN '{start_date}' AND date+60days
-        # SQL:   AND ca_state = '{state}' AND cc_county IN (county)
-        .filter(
-            pl.col("d_date").is_between(
-                pl.lit(start_date_obj), pl.lit(end_date_obj), closed="both"
-            )
-            & (pl.col("ca_state") == state)
-            & pl.col("cc_county").is_in(county)
-        )
-    )
 
     return QueryResult(
         frame=(
+            # SQL: FROM catalog_sales cs1, date_dim, customer_address, call_center
+            catalog_sales.join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
+            .join(customer_address, left_on="cs_ship_addr_sk", right_on="ca_address_sk")
+            .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
+            # SQL: AND EXISTS (...)
+            .join(exists_orders, on="cs_order_number", how="semi")
+            # SQL: AND NOT EXISTS (...)
+            .join(
+                returned_orders,
+                left_on="cs_order_number",
+                right_on="cr_order_number",
+                how="anti",
+            )
+            # SQL: WHERE d_date BETWEEN '{start_date}' AND date+60days AND ca_state='{state}' AND cc_county IN (county)
+            .filter(
+                pl.col("d_date").is_between(
+                    pl.lit(start_date_obj), pl.lit(end_date_obj), closed="both"
+                )
+                & (pl.col("ca_state") == state)
+                & pl.col("cc_county").is_in(county)
+            )
             # SQL: SELECT Count(DISTINCT cs_order_number), Sum(cs_ext_ship_cost), Sum(cs_net_profit)
-            filtered_without_returns.select(
+            .select(
                 [
                     pl.col("cs_order_number").n_unique().alias("order count"),
                     pl.col("cs_ext_ship_cost").sum().alias("total shipping cost"),
