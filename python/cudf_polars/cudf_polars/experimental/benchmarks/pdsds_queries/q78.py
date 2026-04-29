@@ -145,18 +145,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["ws_item_sk", "ws_bill_customer_sk"])
         .agg(
             [
-                pl.when(pl.col("ws_quantity").count() > 0)
-                .then(pl.col("ws_quantity").sum())
-                .otherwise(None)
-                .alias("ws_qty"),
-                pl.when(pl.col("ws_wholesale_cost").count() > 0)
-                .then(pl.col("ws_wholesale_cost").sum())
-                .otherwise(None)
-                .alias("ws_wc"),
-                pl.when(pl.col("ws_sales_price").count() > 0)
-                .then(pl.col("ws_sales_price").sum())
-                .otherwise(None)
-                .alias("ws_sp"),
+                pl.col("ws_quantity").sum().alias("ws_qty"),
+                pl.col("ws_wholesale_cost").sum().alias("ws_wc"),
+                pl.col("ws_sales_price").sum().alias("ws_sp"),
             ]
         )
         .rename({"ws_bill_customer_sk": "ws_customer_sk"})
@@ -172,18 +163,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["cs_item_sk", "cs_bill_customer_sk"])
         .agg(
             [
-                pl.when(pl.col("cs_quantity").count() > 0)
-                .then(pl.col("cs_quantity").sum())
-                .otherwise(None)
-                .alias("cs_qty"),
-                pl.when(pl.col("cs_wholesale_cost").count() > 0)
-                .then(pl.col("cs_wholesale_cost").sum())
-                .otherwise(None)
-                .alias("cs_wc"),
-                pl.when(pl.col("cs_sales_price").count() > 0)
-                .then(pl.col("cs_sales_price").sum())
-                .otherwise(None)
-                .alias("cs_sp"),
+                pl.col("cs_quantity").sum().alias("cs_qty"),
+                pl.col("cs_wholesale_cost").sum().alias("cs_wc"),
+                pl.col("cs_sales_price").sum().alias("cs_sp"),
             ]
         )
         .rename({"cs_bill_customer_sk": "cs_customer_sk"})
@@ -199,18 +181,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["ss_item_sk", "ss_customer_sk"])
         .agg(
             [
-                pl.when(pl.col("ss_quantity").count() > 0)
-                .then(pl.col("ss_quantity").sum())
-                .otherwise(None)
-                .alias("ss_qty"),
-                pl.when(pl.col("ss_wholesale_cost").count() > 0)
-                .then(pl.col("ss_wholesale_cost").sum())
-                .otherwise(None)
-                .alias("ss_wc"),
-                pl.when(pl.col("ss_sales_price").count() > 0)
-                .then(pl.col("ss_sales_price").sum())
-                .otherwise(None)
-                .alias("ss_sp"),
+                pl.col("ss_quantity").sum().alias("ss_qty"),
+                pl.col("ss_wholesale_cost").sum().alias("ss_wc"),
+                pl.col("ss_sales_price").sum().alias("ss_sp"),
             ]
         )
     )
@@ -324,18 +297,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .group_by(["d_year", "ws_item_sk", "ws_bill_customer_sk"])
         .agg(
             [
-                pl.when(pl.col("ws_quantity").count() > 0)
-                .then(pl.col("ws_quantity").sum())
-                .otherwise(None)
-                .alias("ws_qty"),
-                pl.when(pl.col("ws_wholesale_cost").count() > 0)
-                .then(pl.col("ws_wholesale_cost").sum())
-                .otherwise(None)
-                .alias("ws_wc"),
-                pl.when(pl.col("ws_sales_price").count() > 0)
-                .then(pl.col("ws_sales_price").sum())
-                .otherwise(None)
-                .alias("ws_sp"),
+                pl.col("ws_quantity").sum().alias("ws_qty"),
+                pl.col("ws_wholesale_cost").sum().alias("ws_wc"),
+                pl.col("ws_sales_price").sum().alias("ws_sp"),
             ]
         )
         .rename(
@@ -360,18 +324,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .group_by(["d_year", "cs_item_sk", "cs_bill_customer_sk"])
         .agg(
             [
-                pl.when(pl.col("cs_quantity").count() > 0)
-                .then(pl.col("cs_quantity").sum())
-                .otherwise(None)
-                .alias("cs_qty"),
-                pl.when(pl.col("cs_wholesale_cost").count() > 0)
-                .then(pl.col("cs_wholesale_cost").sum())
-                .otherwise(None)
-                .alias("cs_wc"),
-                pl.when(pl.col("cs_sales_price").count() > 0)
-                .then(pl.col("cs_sales_price").sum())
-                .otherwise(None)
-                .alias("cs_sp"),
+                pl.col("cs_quantity").sum().alias("cs_qty"),
+                pl.col("cs_wholesale_cost").sum().alias("cs_wc"),
+                pl.col("cs_sales_price").sum().alias("cs_sp"),
             ]
         )
         .rename(
@@ -396,18 +351,9 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .group_by(["d_year", "ss_item_sk", "ss_customer_sk"])
         .agg(
             [
-                pl.when(pl.col("ss_quantity").count() > 0)
-                .then(pl.col("ss_quantity").sum())
-                .otherwise(None)
-                .alias("ss_qty"),
-                pl.when(pl.col("ss_wholesale_cost").count() > 0)
-                .then(pl.col("ss_wholesale_cost").sum())
-                .otherwise(None)
-                .alias("ss_wc"),
-                pl.when(pl.col("ss_sales_price").count() > 0)
-                .then(pl.col("ss_sales_price").sum())
-                .otherwise(None)
-                .alias("ss_sp"),
+                pl.col("ss_quantity").sum().alias("ss_qty"),
+                pl.col("ss_wholesale_cost").sum().alias("ss_wc"),
+                pl.col("ss_sales_price").sum().alias("ss_sp"),
             ]
         )
         .rename({"d_year": "ss_sold_year"})

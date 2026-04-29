@@ -113,16 +113,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["cr_returning_customer_sk", "ca_state"])
         .agg(
             [
-                pl.col("cr_return_amt_inc_tax").count().alias("ctr_total_return_count"),
-                pl.col("cr_return_amt_inc_tax").sum().alias("ctr_total_return_sum"),
+                pl.col("cr_return_amt_inc_tax").sum().alias("ctr_total_return"),
             ]
         )
         .with_columns(
             [
-                pl.when(pl.col("ctr_total_return_count") == 0)
-                .then(None)
-                .otherwise(pl.col("ctr_total_return_sum"))
-                .alias("ctr_total_return"),
                 pl.col("cr_returning_customer_sk").alias("ctr_customer_sk"),
                 pl.col("ca_state").alias("ctr_state"),
             ]

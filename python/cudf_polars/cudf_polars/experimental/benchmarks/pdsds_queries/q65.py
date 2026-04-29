@@ -90,15 +90,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["ss_store_sk", "ss_item_sk"])
         .agg(
             [
-                pl.col("ss_sales_price").count().alias("revenue_count"),
-                pl.col("ss_sales_price").sum().alias("revenue_sum"),
+                pl.col("ss_sales_price").sum().alias("revenue"),
             ]
-        )
-        .with_columns(
-            pl.when(pl.col("revenue_count") == 0)
-            .then(None)
-            .otherwise(pl.col("revenue_sum"))
-            .alias("revenue")
         )
         .select(["ss_store_sk", "ss_item_sk", "revenue"])
     )
@@ -173,19 +166,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
         # SQL: GROUP BY ss_store_sk, ss_item_sk
         .group_by(["ss_store_sk", "ss_item_sk"])
-        # SQL: Sum(ss_sales_price) AS revenue (null-safe: if count=0 then null)
-        .agg(
-            [
-                pl.col("ss_sales_price").sum().alias("revenue"),
-                pl.col("ss_sales_price").count().alias("revenue_count"),
-            ]
-        )
-        .with_columns(
-            pl.when(pl.col("revenue_count") == 0)
-            .then(None)
-            .otherwise(pl.col("revenue"))
-            .alias("revenue")
-        )
+        # SQL: Sum(ss_sales_price) AS revenue
+        .agg([pl.col("ss_sales_price").sum().alias("revenue")])
         .select(["ss_store_sk", "ss_item_sk", "revenue"])
     )
     # SQL: sb derives from sa — Avg(revenue) per store

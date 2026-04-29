@@ -117,19 +117,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .group_by(["ca_zip", "ca_state"])
             .agg(
                 [
-                    pl.col("ws_sales_price").sum().alias("sales_sum"),
-                    pl.col("ws_sales_price").count().alias("sales_count"),
+                    pl.col("ws_sales_price").sum().alias("sum(ws_sales_price)"),
                 ]
             )
-            .with_columns(
-                [
-                    pl.when(pl.col("sales_count") > 0)
-                    .then(pl.col("sales_sum"))
-                    .otherwise(None)
-                    .alias("sum(ws_sales_price)")
-                ]
-            )
-            .drop(["sales_sum", "sales_count"])
             .sort(sort_by.keys(), nulls_last=True)
             .select(["ca_zip", "ca_state", "sum(ws_sales_price)"])
             .limit(limit)

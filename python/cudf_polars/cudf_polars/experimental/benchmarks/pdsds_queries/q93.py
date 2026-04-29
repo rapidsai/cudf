@@ -103,21 +103,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .group_by("ss_customer_sk")
-            .agg(
-                [
-                    pl.col("act_sales").count().alias("sumsales_count"),
-                    pl.col("act_sales").sum().alias("sumsales_sum"),
-                ]
-            )
-            .select(
-                [
-                    "ss_customer_sk",
-                    pl.when(pl.col("sumsales_count") == 0)
-                    .then(None)
-                    .otherwise(pl.col("sumsales_sum"))
-                    .alias("sumsales"),
-                ]
-            )
+            .agg(pl.col("act_sales").sum().alias("sumsales"))
             .sort(["sumsales", "ss_customer_sk"], nulls_last=True)
             .limit(100)
         ),
@@ -186,22 +172,8 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
         frame=(
             # SQL: GROUP BY ss_customer_sk
             base.group_by("ss_customer_sk")
-            # SQL: Sum(act_sales) AS sumsales (null if no non-null values)
-            .agg(
-                [
-                    pl.col("act_sales").count().alias("sumsales_count"),
-                    pl.col("act_sales").sum().alias("sumsales_sum"),
-                ]
-            )
-            .select(
-                [
-                    "ss_customer_sk",
-                    pl.when(pl.col("sumsales_count") == 0)
-                    .then(None)
-                    .otherwise(pl.col("sumsales_sum"))
-                    .alias("sumsales"),
-                ]
-            )
+            # SQL: Sum(act_sales) AS sumsales
+            .agg(pl.col("act_sales").sum().alias("sumsales"))
             # SQL: ORDER BY sumsales, ss_customer_sk
             .sort(["sumsales", "ss_customer_sk"], nulls_last=True)
             # SQL: LIMIT 100

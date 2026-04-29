@@ -139,19 +139,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
         .agg(
             [
-                pl.col("ss_sales_price").sum().alias("sales_sum"),
-                pl.col("ss_sales_price").count().alias("sales_count"),
+                pl.col("ss_sales_price").sum().alias("sum_sales"),
             ]
         )
-        .with_columns(
-            [
-                pl.when(pl.col("sales_count") > 0)
-                .then(pl.col("sales_sum"))
-                .otherwise(None)
-                .alias("sum_sales")
-            ]
-        )
-        .drop(["sales_sum", "sales_count"])
         .with_columns(
             [
                 # Window function: AVG over partition by category, brand, store, company, year

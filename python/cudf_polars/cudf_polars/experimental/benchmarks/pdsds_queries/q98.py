@@ -97,20 +97,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     "i_current_price",
                 ]
             )
-            .agg(
-                [
-                    pl.col("ss_ext_sales_price").count().alias("itemrevenue_count"),
-                    pl.col("ss_ext_sales_price").sum().alias("itemrevenue_sum"),
-                ]
-            )
-            .with_columns(
-                [
-                    pl.when(pl.col("itemrevenue_count") == 0)
-                    .then(None)
-                    .otherwise(pl.col("itemrevenue_sum"))
-                    .alias("itemrevenue")
-                ]
-            )
+            .agg([pl.col("ss_ext_sales_price").sum().alias("itemrevenue")])
             .with_columns(
                 [
                     (
@@ -188,19 +175,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
                 ]
             )
             # SQL: Sum(ss_ext_sales_price) AS itemrevenue
-            .agg(
-                [
-                    pl.col("ss_ext_sales_price").count().alias("itemrevenue_count"),
-                    pl.col("ss_ext_sales_price").sum().alias("itemrevenue_sum"),
-                ]
-            )
-            # SQL: itemrevenue = NULL-safe Sum(ss_ext_sales_price)
-            .with_columns(
-                pl.when(pl.col("itemrevenue_count") == 0)
-                .then(None)
-                .otherwise(pl.col("itemrevenue_sum"))
-                .alias("itemrevenue")
-            )
+            .agg([pl.col("ss_ext_sales_price").sum().alias("itemrevenue")])
             # SQL: revenueratio = Sum(ss_ext_sales_price)*100 / Sum(ss_ext_sales_price) OVER (PARTITION BY i_class)
             .with_columns(
                 (

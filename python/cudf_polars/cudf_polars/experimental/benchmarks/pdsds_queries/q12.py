@@ -97,10 +97,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .agg(
                 [
-                    pl.when(pl.col("ws_ext_sales_price").count() > 0)
-                    .then(pl.col("ws_ext_sales_price").sum())
-                    .otherwise(None)
-                    .alias("itemrevenue")
+                    pl.col("ws_ext_sales_price").sum().alias("itemrevenue")
                 ]
             )
             .with_columns(
@@ -108,10 +105,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     (
                         pl.col("itemrevenue")
                         * 100
-                        / pl.when(pl.col("itemrevenue").count() > 0)
-                        .then(pl.col("itemrevenue").sum())
-                        .otherwise(None)
-                        .over("i_class")
+                        / pl.col("itemrevenue").sum().over("i_class")
                     ).alias("revenueratio")
                 ]
             )

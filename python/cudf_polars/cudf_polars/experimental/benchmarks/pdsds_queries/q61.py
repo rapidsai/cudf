@@ -123,14 +123,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             & (pl.col("d_year") == year)
             & (pl.col("d_moy") == month)
         )
-        .select(
-            [
-                pl.when(pl.count() > 0)
-                .then(pl.col("ss_ext_sales_price").sum())
-                .otherwise(None)
-                .alias("promotions")
-            ]
-        )
+        .select([pl.col("ss_ext_sales_price").sum().alias("promotions")])
     )
 
     # All sales (no promotion filters)
@@ -147,14 +140,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             & (pl.col("d_year") == year)
             & (pl.col("d_moy") == month)
         )
-        .select(
-            [
-                pl.when(pl.count() > 0)
-                .then(pl.col("ss_ext_sales_price").sum())
-                .otherwise(None)
-                .alias("total")
-            ]
-        )
+        .select([pl.col("ss_ext_sales_price").sum().alias("total")])
     )
     sort_by = {"promotions": False, "total": False}
     limit = 100
@@ -235,12 +221,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             & (pl.col("d_year") == year)
             & (pl.col("d_moy") == month)
         )
-        .select(
-            pl.when(pl.count() > 0)
-            .then(pl.col("ss_ext_sales_price").sum())
-            .otherwise(None)
-            .alias("promotions")
-        )
+        .select(pl.col("ss_ext_sales_price").sum().alias("promotions"))
     )
 
     # SQL: FROM store_sales, store, date_dim, customer, customer_address, item
@@ -264,12 +245,7 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             & (pl.col("d_year") == year)
             & (pl.col("d_moy") == month)
         )
-        .select(
-            pl.when(pl.count() > 0)
-            .then(pl.col("ss_ext_sales_price").sum())
-            .otherwise(None)
-            .alias("total")
-        )
+        .select(pl.col("ss_ext_sales_price").sum().alias("total"))
     )
 
     sort_by = {"promotions": False, "total": False}
