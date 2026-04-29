@@ -127,6 +127,13 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
+  auto [fp, literal] = prog.get_literal_fast_path();
+  if (fp == regex_program::literal_fast_path::LITERAL_ONLY) {
+    auto const target =
+      cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
+    return count(input, target, stream, mr);
+  }
+
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);

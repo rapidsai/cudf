@@ -1224,9 +1224,7 @@ std::string reprog::literal_only() const
   auto const count = static_cast<size_type>(_insts.size());
   if (count < 2) { return literal; }
   auto inst = _insts[_startinst_id];
-  while (inst.type == CHAR) {
-    if (inst.u1.c == 0) { break; }
-
+  while (inst.type == CHAR && inst.u1.c != 0) {
     char utf8[5];  // max 4 bytes plus null terminator
     utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
     literal += utf8;
@@ -1248,8 +1246,7 @@ std::string reprog::starts_with_only() const
   auto inst = _insts[_startinst_id];
   if (inst.type != BOL) { return literal; }
   inst = _insts[inst.u2.next_id];
-  while (inst.type == CHAR) {
-    if (inst.u1.c == 0) { break; }
+  while (inst.type == CHAR && inst.u1.c != 0) {
     char utf8[5];  // max 4 bytes plus null terminator
     utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
     literal += utf8;
@@ -1269,8 +1266,7 @@ std::string reprog::ends_with_only() const
   auto const count = static_cast<size_type>(_insts.size());
   if (count < 3) { return literal; }
   auto inst = _insts[_startinst_id];
-  while (inst.type == CHAR) {
-    if (inst.u1.c == 0) { break; }
+  while (inst.type == CHAR && inst.u1.c != 0) {
     char utf8[5];  // max 4 bytes plus null terminator
     utf8[from_char_utf8(inst.u1.c, utf8)] = 0;
     literal += utf8;
