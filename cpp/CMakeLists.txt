@@ -1151,7 +1151,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     endif()
 
     message(STATUS "CUDAToolkit_LIBRARY_ROOT: ${CUDAToolkit_LIBRARY_ROOT}")
-    file(GLOB_RECURSE sanitizer_files "${CUDAToolkit_LIBRARY_ROOT}/compute-sanitizer")
+    file(GLOB_RECURSE sanitizer_files "${CUDAToolkit_LIBRARY_ROOT}/compute-sanitizer/*")
     foreach(file IN LISTS sanitizer_files)
       message(STATUS "Sanitizer file: ${file}")
     endforeach()
