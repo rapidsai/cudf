@@ -1716,7 +1716,8 @@ aggregate_reader_metadata::select_columns(
           child_col_name_info, schema_elem.children_idx[0], out_col_array, has_list_parent);
       }
 
-      auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
+      auto const& parent_schema = get_schema(schema_elem.parent_idx);
+      auto const one_level_list = schema_elem.is_one_level_list(parent_schema);
 
       // if we're at the root, this is a new output column
       auto const col_type =
@@ -1783,20 +1784,15 @@ aggregate_reader_metadata::select_columns(
         // pop off the extra nesting element.
         if (one_level_list) { nesting.pop_back(); }
 
-        path_is_valid = true;  // If we're able to reach leaf then path is valid
-      }
-
-      // Flag the `metadata` / `value` BYTE_ARRAY children of a VARIANT group so
-      // that column_buffer surfaces them as `list<uint8>` instead of strings.
-      if (schema_elem.num_children == 0 and schema_elem.parent_idx >= 0 and
-          schema_elem.type == Type::BYTE_ARRAY) {
-        auto const& parent = get_schema(schema_elem.parent_idx);
-        if (parent.logical_type.has_value() and
-            parent.logical_type->type == LogicalType::VARIANT and
-            (are_column_paths_equal(schema_elem.name, "metadata", false) or
-             are_column_paths_equal(schema_elem.name, "value", false))) {
-          output_col.user_data |= PARQUET_COLUMN_BUFFER_FLAG_VARIANT_BINARY;
+        // Flag the `metadata` / `value` BYTE_ARRAY children of a VARIANT group so that
+        // `make_column` materializes them as `list<uint8>` instead of strings.
+        if (schema_elem.type == Type::BYTE_ARRAY && parent_schema.logical_type.has_value() &&
+            parent_schema.logical_type->type == LogicalType::VARIANT &&
+            (schema_elem.name == "metadata" || schema_elem.name == "value")) {
+          output_col.user_data |= cudf::io::detail::COLUMN_BUFFER_FLAG_FORCE_BINARY;
         }
+
+        path_is_valid = true;  // If we're able to reach leaf then path is valid
       }
 
       if (path_is_valid) { out_col_array.push_back(std::move(output_col)); }
