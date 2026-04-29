@@ -1244,8 +1244,7 @@ def test_csv_reader_delim_whitespace():
 def test_csv_reader_delim_whitespace_collapses_runs(buffer):
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    with expect_warning_if(PANDAS_GE_220):
-        pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
+    pd_df = pd.read_csv(StringIO(buffer), sep=r"\s+")
     assert_eq(pd_df, cu_df)
 
 
