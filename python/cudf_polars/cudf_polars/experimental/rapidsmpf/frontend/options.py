@@ -228,14 +228,6 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE``.
         Default: auto.
         Category: executor.
-    groupby_n_ary
-        Factor by which the number of partitions is decreased when performing
-        a groupby on a partitioned column. For example, with 64 partitions and
-        a factor of 32 the column is first reduced to ``ceil(64 / 32) = 2``
-        partitions.
-        Env: ``CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY``.
-        Default: ``32``.
-        Category: executor.
     dynamic_planning
         Dynamic planning config, dict or
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions`. ``None`` disables.
@@ -336,9 +328,6 @@ class StreamingOptions:
     )
     target_partition_size: int | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", int
-    )
-    groupby_n_ary: int | Unspecified = _opt(
-        "executor", "CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY", int
     )
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
         _opt("executor")
@@ -525,7 +514,6 @@ class StreamingOptions:
             max_rows_per_partition=_get("max_rows_per_partition"),
             broadcast_join_limit=_get("broadcast_join_limit"),
             target_partition_size=target_partition_size,
-            groupby_n_ary=_get("groupby_n_ary"),
             dynamic_planning=dynamic_planning,
             unique_fraction=_get("unique_fraction"),
             raise_on_fail=_get("raise_on_fail"),
@@ -713,16 +701,6 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Target IO partition size in bytes. 0 = auto.
                 Env: CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE. Built-in default: auto."""),
-        )
-        g.add_argument(
-            "--groupby-n-ary",
-            dest="groupby_n_ary",
-            default=None,
-            type=int,
-            help=textwrap.dedent("""\
-                Factor by which the number of partitions is decreased during a
-                partitioned groupby (e.g. 64 partitions → ceil(64/32) = 2).
-                Env: CUDF_POLARS__EXECUTOR__GROUPBY_N_ARY. Built-in default: 32."""),
         )
         g.add_argument(
             "--dynamic-planning",

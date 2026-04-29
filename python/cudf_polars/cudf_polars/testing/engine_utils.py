@@ -46,7 +46,7 @@ class EngineFixtureParam:
     def __init__(self, full_name: str):
         self.full_name = full_name
         if full_name.endswith("-small"):
-            self.engine_name = full_name[: -len("-small")]
+            self.engine_name = full_name.removesuffix("-small")
             self.blocksize_mode = "small"
         else:
             # Covers ``"in-memory"`` and bare backend names like ``"spmd"``.

@@ -273,7 +273,6 @@ def test_groupby_agg_config_options(df, op, keys, streaming_engine_factory):
         StreamingOptions(
             max_rows_per_partition=4,
             unique_fraction={"z": 0.5},
-            groupby_n_ary=8,
         ),
     )
     agg = getattr(pl.col("x"), op)()
