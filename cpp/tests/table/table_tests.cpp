@@ -24,6 +24,7 @@ template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 using s_col_wrapper       = cudf::test::strings_column_wrapper;
+using lists_col_wrapper   = cudf::test::lists_column_wrapper<int32_t>;
 using structs_col_wrapper = cudf::test::structs_column_wrapper;
 
 using CVector     = std::vector<std::unique_ptr<cudf::column>>;
@@ -261,7 +262,37 @@ TEST_F(TableTest, TablesEqualThrowsForNonEqualityComparableTypes)
     column{cudf::data_type{cudf::type_id::EMPTY}, 3, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
   EXPECT_THROW(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}),
-               std::invalid_argument);
+               cudf::logic_error);
+}
+
+TEST_F(TableTest, TablesEqualListColumns)
+{
+  lists_col_wrapper left{{1, 2}, {3}, {}};
+  lists_col_wrapper right{{1, 2}, {3}, {}};
+  lists_col_wrapper different_values{{1, 2}, {4}, {}};
+  lists_col_wrapper different_offsets{{1}, {2, 3}, {}};
+
+  EXPECT_TRUE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{different_values}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{different_offsets}}));
+}
+
+TEST_F(TableTest, TablesEqualStructColumnsWithLists)
+{
+  column_wrapper<int32_t> left_id{{1, 2, 3}};
+  lists_col_wrapper left_list{{1, 2}, {3}, {}};
+  structs_col_wrapper left{{left_id, left_list}};
+
+  column_wrapper<int32_t> right_id{{1, 2, 3}};
+  lists_col_wrapper right_list{{1, 2}, {3}, {}};
+  structs_col_wrapper right{{right_id, right_list}};
+
+  column_wrapper<int32_t> different_id{{1, 2, 3}};
+  lists_col_wrapper different_list{{1, 2}, {4}, {}};
+  structs_col_wrapper different{{different_id, different_list}};
+
+  EXPECT_TRUE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{different}}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
