@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,6 +59,10 @@ inline rmm::device_buffer create_data(data_type type,
 }
 
 using string_index_pair = cuda::std::pair<char const*, size_type>;
+
+// `column_buffer::user_data` flag: force a STRING/BYTE_ARRAY-backed buffer to be materialized
+// as a `list<uint8>` column instead of being converted to strings
+constexpr uint32_t COLUMN_BUFFER_FLAG_FORCE_BINARY = (1u << 26);
 
 // forward declare friend functions
 template <typename string_policy>
