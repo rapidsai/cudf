@@ -96,7 +96,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    # web_v1: daily sums -> cumulative sum per (item, ordered by date)
+    # web_v1: SUM(SUM(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ROWS UNBOUNDED PRECEDING)
+    # SQL window SUM skips NULLs (all-null group contributes 0 to the running total),
+    # so fill_null(0) right after the inner SUM matches that behaviour in one chain.
     web_v1 = (
         web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter(
@@ -104,21 +106,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             & pl.col("ws_item_sk").is_not_null()
         )
         .group_by(["ws_item_sk", "d_date"])
-        .agg(pl.col("ws_sales_price").sum().alias("daily_sum"))
-        .with_columns(
-            pl.col("daily_sum")
-            .cum_sum()
-            .over(partition_by="ws_item_sk", order_by="d_date")
-            .alias("cume_sales")
-        )
+        .agg(pl.col("ws_sales_price").sum().fill_null(0.0).alias("daily_sum"))
         .select(
             pl.col("ws_item_sk").alias("item_sk"),
             "d_date",
-            pl.col("cume_sales").alias("web_sales"),
+            pl.col("daily_sum")
+            .cum_sum()
+            .over(partition_by="ws_item_sk", order_by="d_date")
+            .alias("web_sales"),
         )
     )
 
-    # store_v1: daily sums -> cumulative sum per (item, ordered by date)
+    # store_v1: SUM(SUM(ss_sales_price)) OVER (PARTITION BY ss_item_sk ORDER BY d_date ROWS UNBOUNDED PRECEDING)
     store_v1 = (
         store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
         .filter(
@@ -126,17 +125,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             & pl.col("ss_item_sk").is_not_null()
         )
         .group_by(["ss_item_sk", "d_date"])
-        .agg(pl.col("ss_sales_price").sum().alias("daily_sum"))
-        .with_columns(
-            pl.col("daily_sum")
-            .cum_sum()
-            .over(partition_by="ss_item_sk", order_by="d_date")
-            .alias("cume_sales")
-        )
+        .agg(pl.col("ss_sales_price").sum().fill_null(0.0).alias("daily_sum"))
         .select(
             pl.col("ss_item_sk").alias("item_sk"),
             "d_date",
-            pl.col("cume_sales").alias("store_sales"),
+            pl.col("daily_sum")
+            .cum_sum()
+            .over(partition_by="ss_item_sk", order_by="d_date")
+            .alias("store_sales"),
         )
     )
 
@@ -218,21 +214,18 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ws_item_sk").is_not_null()
         )
-        # SQL: GROUP BY ws_item_sk, d_date
+        # SQL: GROUP BY ws_item_sk, d_date; SUM(SUM(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ROWS UNBOUNDED PRECEDING)
+        # fill_null(0) after sum() matches SQL window SUM which skips NULLs (null daily total contributes 0 to running sum)
         .group_by(["ws_item_sk", "d_date"])
-        .agg(pl.col("ws_sales_price").sum().alias("daily_sum"))
-        # SQL: Sum(Sum(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ROWS UNBOUNDED PRECEDING) AS cume_sales
-        .with_columns(
-            pl.col("daily_sum")
-            .cum_sum()
-            .over(partition_by="ws_item_sk", order_by="d_date")
-            .alias("cume_sales")
-        )
+        .agg(pl.col("ws_sales_price").sum().fill_null(0.0).alias("daily_sum"))
         .select(
             [
                 pl.col("ws_item_sk").alias("item_sk"),
                 pl.col("d_date"),
-                pl.col("cume_sales").alias("web_sales"),
+                pl.col("daily_sum")
+                .cum_sum()
+                .over(partition_by="ws_item_sk", order_by="d_date")
+                .alias("web_sales"),
             ]
         )
     )
@@ -244,20 +237,17 @@ def polars_impl_naive(run_config: RunConfig) -> QueryResult:
             pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ss_item_sk").is_not_null()
         )
-        # SQL: GROUP BY ss_item_sk, d_date; Sum(Sum(ss_sales_price)) OVER (...) AS cume_sales
+        # SQL: GROUP BY ss_item_sk, d_date; SUM(SUM(ss_sales_price)) OVER (PARTITION BY ss_item_sk ORDER BY d_date ROWS UNBOUNDED PRECEDING)
         .group_by(["ss_item_sk", "d_date"])
-        .agg(pl.col("ss_sales_price").sum().alias("daily_sum"))
-        .with_columns(
-            pl.col("daily_sum")
-            .cum_sum()
-            .over(partition_by="ss_item_sk", order_by="d_date")
-            .alias("cume_sales")
-        )
+        .agg(pl.col("ss_sales_price").sum().fill_null(0.0).alias("daily_sum"))
         .select(
             [
                 pl.col("ss_item_sk").alias("item_sk"),
                 pl.col("d_date"),
-                pl.col("cume_sales").alias("store_sales"),
+                pl.col("daily_sum")
+                .cum_sum()
+                .over(partition_by="ss_item_sk", order_by="d_date")
+                .alias("store_sales"),
             ]
         )
     )
