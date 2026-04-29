@@ -76,12 +76,12 @@ cache:
       - cmake ${{ cmake_version }}
       - ninja
       - ${{ stdlib("c") }}
+      - cuda-sanitizer-api
     host:
       - librmm =${{ minor_version }}
       - libkvikio =${{ minor_version }}
       - cuda-nvrtc-dev
       - cuda-nvtx-dev
-      - cuda-sanitizer-api
       - libcurand-dev
       - libnvjitlink-dev
       - if: linux and x86_64
@@ -301,13 +301,13 @@ outputs:
       build:
         - cmake ${{ cmake_version }}
         - ${{ stdlib("c") }}
+        - cuda-sanitizer-api
       host:
         - ${{ pin_subpackage("libcudf", exact=True) }}
         - ${{ pin_subpackage("libcudf_kafka", exact=True) }}
         - cuda-version =${{ cuda_version }}
         - libcurand-dev
         - cuda-cudart-dev
-        - cuda-sanitizer-api
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
         - ${{ pin_subpackage("libcudf", exact=True) }}
