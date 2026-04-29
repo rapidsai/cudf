@@ -423,7 +423,7 @@ class RayEngine(StreamingEngine):
         one rank is created per available GPU using Ray's GPU scheduling,
         which provides placement guarantees and topology-aware hardware
         binding.
-        When set, bypasses Ray's GPU resource accounting (``num_gpus=0``)
+        When set, bypasses Ray's GPU resource accounting
         so that actors do not contend for GPU resource slots. This allows
         multiple ``RayEngine`` instances to share a single Ray cluster
         and enables oversubscribed execution on limited GPU hardware.
