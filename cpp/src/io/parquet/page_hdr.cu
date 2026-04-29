@@ -577,7 +577,7 @@ void __launch_bounds__(decode_page_headers_block_size)
     warp.sync();
 
     while (values_found < num_values and bs->cur < bs->end) {
-      int index_out          = -1;
+      int index_out = -1;
 
       cg::invoke_one(warp, [&] {
         // this computation is only valid for flat schemas. for nested schemas,
@@ -640,6 +640,7 @@ void __launch_bounds__(decode_page_headers_block_size)
           bs->cur = bs->end;
         }
         if (index_out >= 0 and index_out < max_num_pages) { page_info[index_out] = bs->page; }
+      });
       values_found = shuffle(values_found);
       warp.sync();
     }
