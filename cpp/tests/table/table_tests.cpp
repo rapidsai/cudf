@@ -18,6 +18,7 @@
 
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
@@ -260,7 +261,7 @@ TEST_F(TableTest, TablesEqualThrowsForNonEqualityComparableTypes)
     column{cudf::data_type{cudf::type_id::EMPTY}, 3, rmm::device_buffer{}, rmm::device_buffer{}, 0};
 
   EXPECT_THROW(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}),
-               cudf::logic_error);
+               std::invalid_argument);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

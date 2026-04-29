@@ -19,7 +19,7 @@ namespace CUDF_EXPORT cudf {
  * matching column types, and every row in `left` compares equal to the row at the same index in
  * `right`. Null equality is controlled by `nulls_equal`. Floating point NaN values compare equal.
  *
- * @throws cudf::logic_error if the tables contain non-equality-comparable column types.
+ * @throws cudf::logic_error if the tables contain `EMPTY` types.
  *
  * @param left The first table to compare
  * @param right The second table to compare
