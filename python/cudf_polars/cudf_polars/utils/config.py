@@ -114,15 +114,6 @@ def get_total_device_memory() -> int | None:
 
 
 @functools.cache
-def rapidsmpf_single_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a single-process shuffle method."""
-    try:
-        return importlib.util.find_spec("rapidsmpf.integrations.single") is not None
-    except (ImportError, ValueError):
-        return False
-
-
-@functools.cache
 def rapidsmpf_distributed_available() -> bool:  # pragma: no cover
     """Query whether rapidsmpf is available as a distributed shuffle method."""
     try:
@@ -878,6 +869,10 @@ class StreamingExecutor:
         # Resolve shuffle_method from cluster when not explicitly set
         if self.shuffle_method is None:
             if self.cluster == "distributed":
+                if not rapidsmpf_distributed_available():
+                    raise ValueError(
+                        "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
+                    )
                 object.__setattr__(self, "shuffle_method", "rapidsmpf")
             else:
                 object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
