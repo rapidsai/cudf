@@ -236,7 +236,7 @@ def test_join_and_slice(zlice, streaming_engine):
     if zlice == (2, 2):
         with pytest.warns(
             UserWarning,
-            match="does not support a multi-partition slice with an offset.",
+            match="This slice not supported for multiple partitions.",
         ):
             assert_gpu_result_equal(q, engine=streaming_engine)
     else:
