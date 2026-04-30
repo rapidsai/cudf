@@ -9,6 +9,8 @@ on: # zizmor: ignore[dangerous-triggers]
     # Only runs if the PR is open (we don't want to update the status of a closed PR)
     types: [opened, edited, synchronize]
 
+permissions: {}
+
 jobs:
     get-project-id:
       uses: rapidsai/shared-workflows/.github/workflows/project-get-item-id.yaml@main
@@ -25,6 +27,9 @@ jobs:
       uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
+      permissions:
+        contents: read
+        id-token: write
       with:
         PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
         SINGLE_SELECT_FIELD_ID: "PVTSSF_lADOAp2shc4AiNzlzgaxNac"
@@ -40,6 +45,8 @@ jobs:
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: get-project-id
       runs-on: ubuntu-latest
+      permissions:
+        contents: read
       outputs:
         release: ${{ steps.get-release.outputs.release }}
       steps:
@@ -60,6 +67,9 @@ jobs:
       uses: rapidsai/shared-workflows/.github/workflows/project-get-set-single-select-field.yaml@main
       if: ${{ github.event.pull_request.state == 'open' && needs.get-project-id.outputs.ITEM_PROJECT_ID != '' }}
       needs: [get-project-id, get-release]
+      permissions:
+        contents: read
+        id-token: write
       with:
         PROJECT_ID: "PVT_kwDOAp2shc4AiNzl"
         SINGLE_SELECT_FIELD_ID: "PVTSSF_lADOAp2shc4AiNzlzgg52UQ"

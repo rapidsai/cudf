@@ -9,9 +9,14 @@ on:
     - cron: '0 10 * * 6'  # Weekly on Saturday at 10:00 UTC
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   trigger-racecheck:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -24,6 +29,9 @@ jobs:
             -f tool_name="racecheck"
   trigger-synccheck:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - uses: actions/checkout@v5
         with:

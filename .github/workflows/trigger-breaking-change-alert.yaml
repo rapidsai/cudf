@@ -11,6 +11,8 @@ on: # zizmor: ignore[dangerous-triggers]
 jobs:
   trigger-notifier:
     if: contains(github.event.pull_request.labels.*.name, 'breaking')
+    permissions:
+      contents: read
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/breaking-change-alert.yaml@main
     with:

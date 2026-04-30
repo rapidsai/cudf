@@ -32,8 +32,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   telemetry-setup:
+    permissions:
+      id-token: write
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
@@ -46,6 +50,9 @@ jobs:
         uses: rapidsai/shared-actions/telemetry-dispatch-stash-base-env-vars@main
   cpp-build:
     needs: [telemetry-setup]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@main
     with:
@@ -57,6 +64,9 @@ jobs:
       sha: ${{ inputs.sha }}
   python-build:
     needs: [telemetry-setup, cpp-build]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
@@ -69,6 +79,9 @@ jobs:
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   python-build-noarch:
     needs: [telemetry-setup, cpp-build, python-build]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@main
     with:
@@ -80,6 +93,9 @@ jobs:
       pure-conda: cuda_major
   upload-conda:
     needs: [cpp-build, python-build, python-build-noarch]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-upload-packages.yaml@main
     with:
@@ -90,6 +106,9 @@ jobs:
   docs-build:
     if: github.ref_type == 'branch'
     needs: [python-build, python-build-noarch]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
     with:
@@ -103,6 +122,9 @@ jobs:
       sha: ${{ inputs.sha }}
   wheel-build-libcudf:
     needs: [telemetry-setup]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -118,6 +140,9 @@ jobs:
       package-type: cpp
   wheel-publish-libcudf:
     needs: wheel-build-libcudf
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -129,6 +154,9 @@ jobs:
       package-type: cpp
   wheel-build-pylibcudf:
     needs: [telemetry-setup, wheel-build-libcudf]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -144,6 +172,9 @@ jobs:
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-publish-pylibcudf:
     needs: wheel-build-pylibcudf
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -156,6 +187,9 @@ jobs:
       publish-wheel-search-key: pylibcudf_wheel_python_abi3
   wheel-build-cudf:
     needs: [telemetry-setup, wheel-build-pylibcudf]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -171,6 +205,9 @@ jobs:
       matrix_filter: group_by({CUDA_VER, ARCH}) | map(min_by(.PY_VER | split(".") | map(tonumber)))
   wheel-publish-cudf:
     needs: wheel-build-cudf
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -183,6 +220,9 @@ jobs:
       publish-wheel-search-key: cudf_wheel_python_abi3
   wheel-build-dask-cudf:
     needs: [telemetry-setup, wheel-build-cudf]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -199,6 +239,9 @@ jobs:
       pure-wheel: true
   wheel-publish-dask-cudf:
     needs: wheel-build-dask-cudf
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -210,6 +253,9 @@ jobs:
       package-type: python
   wheel-build-cudf-polars:
     needs: [telemetry-setup, wheel-build-pylibcudf]
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
     with:
@@ -226,6 +272,9 @@ jobs:
       pure-wheel: true
   wheel-publish-cudf-polars:
     needs: wheel-build-cudf-polars
+    permissions:
+      contents: read
+      id-token: write
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
     with:
@@ -238,6 +287,9 @@ jobs:
   trigger-pandas-tests:
     if: inputs.build_type == 'nightly'
     needs: wheel-build-cudf
+    permissions:
+      actions: write
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code repo
@@ -259,6 +311,8 @@ jobs:
   telemetry-summarize:
     # This job must use a self-hosted runner to record telemetry traces.
     runs-on: linux-amd64-cpu4
+    permissions:
+      id-token: write
     needs:
       - docs-build
       - upload-conda

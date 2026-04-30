@@ -18,9 +18,14 @@ on:
         required: true
         type: string
 
+permissions: {}
+
 jobs:
   pandas-tests:
       # run the Pandas unit tests
+      permissions:
+        contents: read
+        id-token: write
       secrets: inherit
       uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
       with:
