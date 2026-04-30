@@ -2787,6 +2787,48 @@ public class ColumnVectorTest extends CudfTestBase {
         assertColumnsAreEqual(expected, result);
       }
     }
+
+    // Edge cases: empty/null outer rows — inner column has 0 rows (rapidsai/cudf#22146).
+    // These exercise the child.size()==0 early-exit guard added to concatenate_list_elements.
+
+    // flatten([]) — 1 row: valid but empty list-of-lists; child.size()==0 triggers guard.
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+           Collections.emptyList());
+         ColumnVector result = input.flattenLists();
+         ColumnVector expected = ColumnVector.fromLists(listType,
+           Collections.emptyList())) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // flatten(null_row, []) — 2 rows: null outer row + valid empty outer row.
+    // Both rows contribute 0 inner lists so child.size()==0; verifies outer null mask is preserved.
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+           (List<List<Integer>>) null,    // row 0: null outer row
+           Collections.emptyList());      // row 1: [] valid-but-empty outer row
+         ColumnVector result = input.flattenLists();
+         ColumnVector expected = ColumnVector.fromLists(listType,
+           null,                          // row 0: null preserved
+           Collections.emptyList())) {    // row 1: []
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Regression: flatten([[]])  and flatten([[],[],[]]) do NOT crash in isolation
+    // (child.size()>0; guard does not apply). They appeared to crash only when run after
+    // flatten([]) because the deferred CUDA error from that call poisoned the next allocation.
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+           Collections.singletonList(Collections.emptyList()));
+         ColumnVector result = input.flattenLists();
+         ColumnVector expected = ColumnVector.fromLists(listType,
+           Collections.emptyList())) {
+      assertColumnsAreEqual(expected, result);
+    }
+    try (ColumnVector input = ColumnVector.fromLists(listOfListsType,
+           Arrays.asList(Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
+         ColumnVector result = input.flattenLists();
+         ColumnVector expected = ColumnVector.fromLists(listType,
+           Collections.emptyList())) {
+      assertColumnsAreEqual(expected, result);
+    }
   }
 
   @Test
@@ -3914,6 +3956,27 @@ public class ColumnVectorTest extends CudfTestBase {
           c.close();
         }
       }
+    }
+  }
+
+  @Test
+  void testStringContainsPerRow() {
+    // Aligns with libcudf StringsFindTest.Contains column-target case (find_tests.cpp).
+    try (ColumnVector haystack = ColumnVector.fromStrings(
+             "Héllo", "thesé", null, "lease", "tést strings", "", "eé", "éte");
+         ColumnVector targets = ColumnVector.fromStrings("Hello", "é", "e", "x", "", null, "n", "t");
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(
+             false, true, null, false, true, false, false, true);
+         ColumnVector result = haystack.stringContainsPerRow(targets)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringContainsPerRowRowCountMismatch() {
+    try (ColumnVector haystack = ColumnVector.fromStrings("a", "b");
+         ColumnVector targets = ColumnVector.fromStrings("a")) {
+      assertThrows(AssertionError.class, () -> haystack.stringContainsPerRow(targets).close());
     }
   }
 
