@@ -280,7 +280,7 @@ struct streaming_groupby::impl {
    * Cached mutable_table_device_view of `_agg_results`.  `_agg_results` is allocated
    * once at initialize() and never resized, so this device-side descriptor can be
    * built once and reused on every aggregate() / merge() call rather than rebuilt
-   * (which requires a host->device cudaMemcpyAsync of the column metadata).
+   * (which requires a host-to-device copy of the column metadata).
    * Uses std::function as the type-erased deleter because the natural deleter
    * returned by `create` is an unnamed lambda type.
    */
